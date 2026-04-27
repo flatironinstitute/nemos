@@ -1,213 +1,267 @@
-"""Newton-Cholesky solver sketch for GLMs.
+"""Newton-based optimization solvers.
 
-Standalone class — not yet wired to the NeMoS solver protocol.
-
-Interface
----------
-func : (params, *args) -> scalar    penalized loss (gradient will be computed separately)
-hess : (params, *args) -> (d, d)    full Hessian of func in flat-param space;
-                                    defaults to jax.hessian(func)
-
-The caller owns all loss-specific structure (1/n scaling, X_aug, regularization).
-The solver is fully generic.
-
-
-Notes
------
-## Linear Solver
-
-For a general newton step we need to deal with the case of a non-positive (semi-)definite
-hessian matrix. That is not happening for a GLM, but it may be the case for non-convex problems.
-For example if the algorithm is moving towards a saddle
-point instead of a local minimum.
-
-The Cholevsky solve implemented here requires the hessian to be positive (or negative) semi-definite,
- this makes the solve more efficient.
-
-I think we need to implement two solvers, that are basically the same but have a different `linear_solver` attribute.
-Each solver we can deal with different linear operator (hessian matrix) structures:
-
-- A Newton-Cholesky solver, as in `scikit-learn` for convex problems:
-    - Use Lineax Cholesky (already a dependency): https://docs.kidger.site/lineax/api/solvers/#lineax.Cholesky
-
-- A Newton general solver:
-    - Use Lineax LU or SVD (for ill-posed or indefinite problems);
-
-
-According to the structure, we could pick one of the linear solver options in Lineax (which is already a
-dependency via optimistix). If you look into the docs below you can already see a decision tree on which solvers are
-available:
-
-- https://docs.kidger.site/lineax/api/solvers/#lineax.AutoLinearSolver
-  This auto-selects the solver based on the structure of the matrix. This auto selection have to inspect
-  the matrix, so it may be not what we want, we should know the problem structure on a model by model basis.
-
-
-For this PR, we should focus on newton-cholesky only but we should predispose it so that the linear solve is an
-attribute, so it is trivial to extend. What I would do:
-
-class BaseNewton:
-    linear_solver: lineax.AbstractLinearSolver = None
-
-    ... implementation of the newton algorithm
-
-
-class NewtonCholesky(BaseNewton):
-    linear_solver: lineax.Cholesky()
-
-
-# for the future
-class Newton(BaseNewton):
-    def __init__(self, is_singular: bool):
-        if is_singular:
-            self.linear_solver = lineax.LU()
-        else:
-            self.linear_solver = lineax.SVD()
-
-
-## Line search
-
-Line searches are steps that are triggered after a parameter updated and should prevent overfitting and guarantee
-convergence when the solver is near the optimum. Here I implemented directly the Amijo line search but it is readily
-available in optax and optimistix:
-
-- https://optax.readthedocs.io/en/latest/api/transformations.html#optax.scale_by_backtracking_linesearch
-- https://docs.kidger.site/optimistix/api/searches/searches/#optimistix.BacktrackingArmijo
-
-
-In my experience, optax is straight-forward to implement, while optimistix requires you to reuse some of their
-machinery, it will be clear if you look at the signature of the two implementations.
-
-If you choose to go with optax, you can use the `chain` mechanism to chain together the newton step followed by
-the line search:
-
-- https://optax.readthedocs.io/en/latest/api/combining_optimizers.html
-
-Overall, we do not need any of the two, all we need is to have a solver that compiles and execute fast. Using optax,
-or optimistix would maybe make the code cleaner but I don't care as much.
-
-## While loop
-
-The run method runs a while loop; the choice of the while loop makes the solver more or less flexible:
-
-- jit compiled or not
-- differentiable (forward or backward)
-- unrolled vs non-unrolled loop
-
-I like how the old jaxopt did things, they had a single entry point while loop with some configurations which
-gives flexibility, then one can pass parameters to the solver to define the loop
-(`jit=True/False, unrolled=True/False` etc.):
-
-- https://github.com/google/jaxopt/blob/main/jaxopt/_src/loop.py
-
-The jit compilation is interesting because we may not need the compilation for small problems, and exposing the
-parameter will allow that.
+This module provides second-order optimization routines based on Newton's method,
+with optional line search and pluggable linear solvers via ``lineax``. The
+implementations operate on arbitrary parameter pytrees and are optionally jit-able.
 """
 
 from functools import wraps
-from typing import Callable, NamedTuple, Optional
+from typing import Any, Callable, NamedTuple, Optional
 
 import jax
-import jax.scipy.linalg as jsl
+import jax.numpy as jnp
 from jax.flatten_util import ravel_pytree
 
-from nemos.glm import GLM
+import lineax
+import optax
+from ._abstract_solver import AbstractSolver, OptimizationInfo, SolverAdapterState
 
 
-class NewtonCholState(NamedTuple):
+class NewtonState(NamedTuple):
+    """State of the Newton optimization process.
+
+    Attributes
+    ----------
+    iter_num :
+        Number of Newton iterations performed.
+    converged :
+        Whether the convergence criterion was satisfied.
+    grad_norm :
+        L2 norm of the gradient at the final iterate.
+    """
+
     iter_num: int
     converged: bool
     grad_norm: float
 
 
-class NewtonCholesky:
+class BaseNewton:
+    """Generic Newton optimizer operating on arbitrary parameter pytrees.
+
+    This class implements a full Newton optimization loop, including gradient
+    and Hessian evaluation, linear system solves, and optional line search. It
+    serves as a reusable base for specific Newton variants that differ only in
+    how the linear system is solved.
+
+    Subclasses specify a ``linear_solver`` (from ``lineax``) and may override
+    :meth:`_solve_linear_system` to enforce additional structure such as symmetry
+    or positive definiteness.
+
+    Parameters
+    ----------
+    func :
+        Scalar-valued objective function with signature ``(params, *args)``.
+    hess :
+        Optional callable returning the Hessian in flattened parameter space.
+        If ``None``, the Hessian is computed automatically using
+        :func:`jax.hessian`.
+    maxiter :
+        Maximum number of Newton iterations.
+    tol :
+        Convergence tolerance on the gradient L2 norm.
+    line_search :
+        Optax-compatible line search transformation. If ``None``, a default
+        backtracking line search is used. Passing ``optax.identity()``
+        disables line search.
+    jit :
+        Whether to JIT-compile the optimization loop.
+
+    Notes
+    -----
+    The optimization is performed in flattened parameter space using
+    :func:`jax.flatten_util.ravel_pytree`, but inputs and outputs remain
+    structured as pytrees.
+    """
+
+    # Subclasses override this.
+    linear_solver: lineax.AbstractLinearSolver = None
+
     def __init__(
         self,
         func: Callable,
-        grad: Optional[Callable] = None,
         hess: Optional[Callable] = None,
         maxiter: int = 30,
         tol: float = 1e-6,
-        armijo_c: float = 1e-4,
-        armijo_rho: float = 0.5,
+        line_search: optax.GradientTransformation | None = None,
+        jit: bool = True,
     ):
         self.func = func
         self.hess = hess
         self.maxiter = maxiter
         self.tol = tol
-        self.c = armijo_c
-        self.rho = armijo_rho
+        self.line_search = (
+            line_search
+            if line_search is not None
+            else optax.scale_by_backtracking_linesearch(max_backtracking_steps=30)
+        )
+        self.jit = jit
 
-    def run(self, init_params, *args):
+    def _solve_linear_system(self, H: jnp.ndarray, g_flat: jnp.ndarray) -> jnp.ndarray:
+        """Solve ``H @ step = -g`` using :attr:`linear_solver`.
+
+        The base implementation wraps the Hessian in a
+        :class:`lineax.MatrixLinearOperator` and delegates to
+        :attr:`linear_solver`.  Subclasses may override this to enforce
+        structural properties (e.g. symmetry) before factorisation.
+        """
+        operator = lineax.MatrixLinearOperator(H)
+        solution = lineax.linear_solve(operator, -g_flat, solver=self.linear_solver)
+        return solution.value
+
+    def run(self, init_params, *args) -> tuple[Any, NewtonState]:
         func = self.func
-        # important trick
-        # (more efficient than calling the func and
-        # the gradient separately, since it re-uses the forward pass and the tape
-        # to compute the gradient).
         val_and_grad = jax.value_and_grad(func)
-        hess_fn = self.hess
-        c, rho = self.c, self.rho
         tol = self.tol
         maxiter = self.maxiter
+        line_search = self.line_search
 
         params_flat, unravel = ravel_pytree(init_params)
 
-        def hessian(params_flat):
-            if hess_fn is not None:
-                return hess_fn(unravel(params_flat), *args)
-            return jax.hessian(lambda p: func(unravel(p), *args))(params_flat)
+        # value_fn in flat space — needed by optax linesearches
+        def value_fn_flat(p_flat):
+            return func(unravel(p_flat), *args)
 
-        def newton_step(params_flat):
-            params = unravel(params_flat)
+        # Hessian in flat space
+        hess_fn = self.hess
+
+        def hessian_flat(p_flat):
+            if hess_fn is not None:
+                return hess_fn(unravel(p_flat), *args)
+            return jax.hessian(value_fn_flat)(p_flat)
+
+        # Single Newton step: returns (descent_direction, gradient, f0)
+        def newton_step(p_flat):
+            params = unravel(p_flat)
             f0, g_tree = val_and_grad(params, *args)
             g_flat, _ = ravel_pytree(g_tree)
-            H = hessian(params_flat)
-            step_flat = -jsl.cho_solve(jsl.cho_factor(H), g_flat)
-            return step_flat, g_flat, f0
+            H = hessian_flat(p_flat)
+            step = self._solve_linear_system(H, g_flat)
+            return step, g_flat, f0
 
-        def armijo(params_flat, step_flat, f0, slope):
-            def cond(alpha):
-                return (
-                    func(unravel(params_flat + alpha * step_flat), *args)
-                    > f0 + c * alpha * slope
-                )
+        # Optax linesearch state initialisation
+        # init() requires a sample params pytree; we use the flat array directly
+        # since our entire loop operates in flat space.
+        ls_init_state = line_search.init(params_flat)
 
-            return jax.lax.while_loop(cond, lambda a: a * rho, jnp.array(1.0))
-
+        # While-loop body and condition
         def body(carry):
-            params_flat, i, _converged, _gnorm = carry
-            step_flat, g_flat, f0 = newton_step(params_flat)
-            slope = g_flat @ step_flat
-            alpha = armijo(params_flat, step_flat, f0, slope)
-            new_flat = params_flat + alpha * step_flat
-            grad_norm = jnp.linalg.norm(g_flat)
-            return new_flat, i + 1, grad_norm < tol, grad_norm
+            p_flat, ls_state, i, _converged, _gnorm = carry
+            step, g_flat, f0 = newton_step(p_flat)
+
+            # optax convention: pass *updates* (the raw descent direction)
+            # and let the linesearch scale them.  Extra kwargs carry the
+            # information the linesearch needs to evaluate the Armijo / Wolfe
+            # conditions without a redundant forward pass.
+            # When line_search=optax.identity(), scales by 1.
+            scaled_step, new_ls_state = line_search.update(
+                step,
+                ls_state,
+                p_flat,
+                value=f0,
+                grad=g_flat,
+                value_fn=value_fn_flat,
+            )
+            new_flat = p_flat + scaled_step
+
+            gnorm = jnp.linalg.norm(g_flat)
+            return new_flat, new_ls_state, i + 1, gnorm < tol, gnorm
 
         def cond(carry):
-            _, i, converged, _ = carry
-            return ~converged & (i < maxiter)
+            _, _ls, i, converged, _ = carry
+            return (~converged) & (i < maxiter)
 
+        # Initialise carry
         _, g0_tree = val_and_grad(init_params, *args)
         g0_flat, _ = ravel_pytree(g0_tree)
         init_carry = (
             params_flat,
+            ls_init_state,
             jnp.array(0),
             jnp.array(False),
             jnp.linalg.norm(g0_flat),
         )
 
-        final_flat, n_iter, converged, grad_norm = jax.lax.while_loop(
-            cond, body, init_carry
+        # ------------------------------------------------------------------
+        # Run loop (optionally JIT-compiled)
+        # ------------------------------------------------------------------
+        while_loop = jax.lax.while_loop
+        if not self.jit:
+            # Pure-Python fallback: mimics while_loop semantics but stays eager.
+            def while_loop(cond_fn, body_fn, init_val):  # noqa: F811
+                val = init_val
+                while cond_fn(val):
+                    val = body_fn(val)
+                return val
+
+        final_flat, _, n_iter, converged, grad_norm = while_loop(cond, body, init_carry)
+
+        state = NewtonState(
+            iter_num=int(n_iter),
+            converged=bool(converged),
+            grad_norm=float(grad_norm),
         )
-        return unravel(final_flat), NewtonCholState(n_iter, converged, grad_norm)
+        return unravel(final_flat), state
+
+
+class _NewtonCholesky(BaseNewton):
+    """Newton optimizer using a Cholesky factorization for the linear subproblem.
+
+    This implementation assumes that the Hessian is symmetric positive-definite,
+    which is typically satisfied for convex objectives such as generalized
+    linear models. Under this assumption, Cholesky decomposition provides an
+    efficient and numerically stable solution to the Newton system.
+
+    The Hessian is symmetrized prior to factorization to mitigate numerical
+    asymmetries.
+
+    Notes
+    -----
+    This class is intended as a low-level numerical backend and does not implement
+    any solver interface directly.
+    """
+
+    linear_solver: lineax.AbstractLinearSolver = lineax.Cholesky()
+
+    def _solve_linear_system(self, H: jnp.ndarray, g_flat: jnp.ndarray) -> jnp.ndarray:
+        # Symmetrise to suppress floating-point asymmetry before factorisation.
+        H_sym = (H + H.T) / 2.0
+        operator = lineax.MatrixLinearOperator(H_sym, lineax.positive_semidefinite_tag)
+        solution = lineax.linear_solve(operator, -g_flat, solver=self.linear_solver)
+        return solution.value
+
+
+class NewtonLU(BaseNewton):
+    """Newton optimizer using LU decomposition for the linear subproblem.
+
+    This variant is suitable for problems where the Hessian may be indefinite or
+    non-symmetric, such as non-convex objectives or regions near saddle points.
+
+    Compared to Cholesky-based methods, LU decomposition is more general but may
+    be less efficient for well-conditioned positive-definite systems.
+    """
+
+    linear_solver: lineax.AbstractLinearSolver = lineax.LU()
 
 
 # ---------------------------------------------------------------------------
-# GLM-specific Hessian factory
+# GLM-specific analytic Hessian factory
 # ---------------------------------------------------------------------------
 
 
-def elementwise_derivative(f):
+def _elementwise_derivative(f: Callable) -> Callable:
+    """Construct the element-wise derivative of a function using forward-mode AD.
+
+    Parameters
+    ----------
+    f :
+        A function acting element-wise on an array.
+
+    Returns
+    -------
+    Callable
+        A function that computes the derivative of ``f`` evaluated element-wise.
+    """
+
     @wraps(f)
     def df(x):
         _, grad = jax.jvp(f, (x,), (jnp.ones_like(x),))
@@ -216,26 +270,65 @@ def elementwise_derivative(f):
     return df
 
 
-def _var_func_of_mu(model):
+def _var_func_of_mu(model) -> Callable:
+    """Return the variance function V(mu) for a GLM observation model.
+
+    Parameters
+    ----------
+    model :
+        A GLM instance with an ``observation_model`` attribute.
+
+    Returns
+    -------
+    Callable
+        A function mapping the mean ``mu`` to the variance ``V(mu)``.
+
+    Raises
+    ------
+    NotImplementedError
+        If the observation model is not recognized.
+    """
     obs_name = model.observation_model.__class__.__name__
     var_funcs = {
         "PoissonObservations": lambda mu: mu,
         "GammaObservations": lambda mu: mu**2,
         "GaussianObservations": lambda mu: jnp.ones_like(mu),
-        "BernoulliObservations": lambda mu: mu * (1 - mu),
+        "BernoulliObservations": lambda mu: mu * (1.0 - mu),
     }
     if obs_name not in var_funcs:
-        raise NotImplementedError(f"No variance function defined for {obs_name}")
+        raise NotImplementedError(f"No variance function defined for {obs_name!r}")
     return var_funcs[obs_name]
 
 
-def define_hess(model: GLM, regularizer_strength: float = 0.0) -> Callable:
-    """Return the full Fisher-scoring Hessian of the penalized mean log-likelihood.
+def define_hess(model, regularizer_strength: float = 0.0) -> Callable:
+    """Construct the analytic Fisher-scoring Hessian for a GLM.
 
-    Returned callable: (params, *args) -> (d, d) matrix, d = n_features + 1.
-    Caller passes this as `hess` to NewtonCholesky.
+    This function returns a callable that computes the Hessian of the penalized
+    mean log-likelihood for a generalized linear model using the Fisher scoring
+    approximation. This avoids the computational cost of automatic
+    differentiation-based Hessian evaluation.
+
+    Parameters
+    ----------
+    model :
+        A GLM instance providing an inverse link function and observation model.
+    regularizer_strength :
+        Strength of L2 regularization applied to the model coefficients. The
+        intercept term is not regularized.
+
+    Returns
+    -------
+    Callable
+        A function with signature ``(params, X, *args) -> (d, d)`` returning the
+        Hessian matrix in flattened parameter space, where ``d`` is the number of
+        parameters (including intercept).
+
+    Notes
+    -----
+    The returned Hessian corresponds to the Fisher information matrix scaled by
+    the number of samples, consistent with a mean loss formulation.
     """
-    gprime = elementwise_derivative(model.inverse_link_function)
+    gprime = _elementwise_derivative(model.inverse_link_function)
     var_of_mu = _var_func_of_mu(model)
     lam = regularizer_strength
 
@@ -244,147 +337,111 @@ def define_hess(model: GLM, regularizer_strength: float = 0.0) -> Callable:
         n, p = X.shape
         eta = X @ params.coef + params.intercept
         mu = model.inverse_link_function(eta)
-        w = gprime(eta) ** 2 / var_of_mu(mu) / n  # (n,) — 1/n matches mean loss
+        # Fisher weights: (g'(eta))^2 / V(mu) / n  — 1/n matches the mean loss.
+        w = gprime(eta) ** 2 / var_of_mu(mu) / n
         X_aug = jnp.concatenate([X, jnp.ones((n, 1))], axis=1)
         H = X_aug.T @ (w[:, None] * X_aug)
-        # add ridge on coef only (intercept is not regularized)
-        H = H.at[:p, :p].add(lam * jnp.eye(p))
+        # L2 regularisation on coefficients only.
+        if lam > 0.0:
+            H = H.at[:p, :p].add(lam * jnp.eye(p))
         return H
 
     return hess
 
 
 # ---------------------------------------------------------------------------
-# NeMoS solver protocol adapter
+# NeMoS adapters
 # ---------------------------------------------------------------------------
 
 
-class NewtonCholeskySolver:
+class NewtonCholesky(AbstractSolver):
+    """Adapter that wires :class:`NewtonCholesky` into the NeMoS solver protocol.
+
+    Parameters
+    ----------
+    unregularized_loss :
+        Base loss function before regularization.
+    regularizer :
+        Object providing a ``penalized_loss`` method.
+    regularizer_strength :
+        Strength of the regularization penalty.
+    has_aux :
+        Whether the loss returns auxiliary outputs. Currently unsupported.
+    init_params :
+        Initial parameter values, used to construct the penalized loss.
+    hess :
+        Optional analytic Hessian function. If not provided, the Hessian is
+        computed using automatic differentiation.
+    maxiter :
+        Maximum number of Newton iterations.
+    tol :
+        Convergence tolerance on the gradient norm.
+    line_search :
+        Optax-compatible line search transformation. If ``None``, a default
+        backtracking line search is used.
+    jit :
+        Whether to JIT-compile the optimization loop.
+    unroll :
+        Whether to unroll the loop for reverse-mode differentiation.
+
+    Notes
+    -----
+    This solver performs full-batch optimization via :meth:`run`. Incremental
+    updates via :meth:`update` are not supported.
+    """
+
     def __init__(
         self,
-        unregularized_loss,
+        unregularized_loss: Callable,
         regularizer,
-        regularizer_strength,
-        has_aux,
+        regularizer_strength: float,
+        has_aux: bool,
         init_params,
         hess: Optional[Callable] = None,
         maxiter: int = 30,
         tol: float = 1e-6,
+        line_search: optax.GradientTransformation | None = None,
+        jit: bool = True,
+        unroll: bool = False,
+        mode: str = "analytic",
     ):
-        assert not has_aux, "aux output not supported"
+        if has_aux:
+            raise ValueError("Auxiliary output from the loss is not supported.")
+
         penalized = regularizer.penalized_loss(
             unregularized_loss, init_params, regularizer_strength
         )
-        self._solver = NewtonCholesky(
+        self.penalized_loss = penalized
+        self._solver = _NewtonCholesky(
             func=penalized,
             hess=hess,
             maxiter=maxiter,
             tol=tol,
+            line_search=line_search,
+            jit=jit,
         )
 
     @classmethod
-    def get_accepted_arguments(cls):
-        return {"hess", "maxiter", "tol"}
+    def get_accepted_arguments(cls) -> set[str]:
+        return {"hess", "maxiter", "tol", "line_search", "jit", "unroll"}
 
-    def init_state(self, init_params, *args):
-        return NewtonCholState(0, False, float("inf"))
+    def init_state(self, init_params, *args) -> NewtonState:
+        # dummy state, solver does not use this
+        return NewtonState(iter_num=0, converged=False, grad_norm=float("inf"))
 
-    def run(self, init_params, *args):
+    def run(self, init_params, *args) -> tuple[Any, NewtonState, None]:
         params, state = self._solver.run(init_params, *args)
         return params, state, None
 
     def update(self, params, state, *args):
-        raise NotImplementedError("use run()")
+        raise NotImplementedError(
+            "NewtonCholeskySolver does not support incremental updates; use run()."
+        )
 
-
-# ---------------------------------------------------------------------------
-# Quick-and-dirty test subclass
-# ---------------------------------------------------------------------------
-
-
-class NewtonGLM(GLM):
-    def fit(self, X, y):
-        lam = self.regularizer_strength or 0.0
-        h = define_hess(self, regularizer_strength=lam)
-        self.solver_kwargs = {**(self.solver_kwargs or {}), "hess": h}
-        return super().fit(X, y)
-
-
-# ---------------------------------------------------------------------------
-# smoke test
-# ---------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    import sys
-
-    sys.path.append("/Users/ebalzani/Code/nemos/scripts/benchmarking/")
-    from time import perf_counter
-
-    import jax.numpy as jnp
-    import numpy as np
-    import pynapple as nap
-    from sklearn.linear_model import PoissonRegressor
-
-    import nemos as nmo
-
-    jax.config.update("jax_enable_x64", True)
-
-    nmo.solvers.register("NewtonCholesky", NewtonCholeskySolver, backend="custom")
-    nmo.regularizer.Ridge.allow_solver("NewtonCholesky")
-    nmo.regularizer.UnRegularized.allow_solver("NewtonCholesky")
-    nmo.solvers.set_default_backend("NewtonCholesky", "custom")
-
-    def get_data():
-        """Model design."""
-        path = nmo.fetch.fetch_data("Mouse32-140822.nwb")
-        data = nap.load_file(path)
-        spikes = data["units"]
-        epochs = data["epochs"]
-        wake_ep = epochs[epochs.tags == "wake"]
-        spikes = spikes.getby_category("location")["adn"]
-        spikes = spikes.restrict(wake_ep).getby_threshold("rate", 1.0)
-        y = spikes.count(0.01, ep=wake_ep)
-        X = nmo.basis.RaisedCosineLogConv(5, window_size=80).compute_features(y)
-        X, y = X.d, y.d
-        keep = np.all(~np.isnan(X), axis=1)
-        return X[keep], y[keep]
-
-    X, y = get_data()
-    skl = PoissonRegressor(alpha=0.01, solver="newton-cholesky", max_iter=1000)
-    XX, yy = np.array(X), np.array(y[:, 0])
-    t0 = perf_counter()
-    skl.fit(XX, yy)
-    t1 = perf_counter()
-    print("skl:", t1 - t0)
-    for label, mdl in [
-        (
-            "BFGS",
-            nmo.glm.GLM(
-                regularizer="Ridge", regularizer_strength=0.01, solver_name="LBFGS"
-            ),
-        ),
-        (
-            "NewtonCholesky",
-            NewtonGLM(
-                regularizer="Ridge",
-                regularizer_strength=0.01,
-                solver_name="NewtonCholesky",
-            ),
-        ),
-    ]:
-        y0 = y[:, 0]
-        t0 = perf_counter()
-        mdl.fit(X, y0)
-        t1 = perf_counter()
-        state = mdl.solver_state_
-        if hasattr(state, "stats"):  # optimistix-based
-            converged = bool(state.stats.converged)
-            n_iter = int(state.stats.num_steps)
-            extra = ""
-        else:  # NewtonCholState
-            converged = bool(state.converged)
-            n_iter = int(state.iter_num)
-            extra = f"  grad_norm: {state.grad_norm:.2e}"
-        print(
-            f"{label:20s}  {t1-t0:.3f}s  converged: {converged}  iters: {n_iter}{extra}"
+    def _get_optim_info(self, state: NewtonState, **kwargs) -> OptimizationInfo:
+        return OptimizationInfo(
+            function_val=None,
+            num_steps=state.iter_num,
+            converged=jnp.array(state.converged),
+            reached_max_steps=jnp.array(state.iter_num >= self.maxiter),
         )

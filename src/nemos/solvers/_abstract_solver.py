@@ -116,7 +116,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
 
     @abc.abstractmethod
     def _get_optim_info(self, state: SolverState, **kwargs) -> OptimizationInfo:
-        """Extract some commong info about the optimization process.
+        """Extract some common info about the optimization process.
 
         Currently, the following info is extracted:
         - final function value (where available)
