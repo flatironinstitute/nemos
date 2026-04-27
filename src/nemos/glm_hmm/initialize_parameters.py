@@ -39,10 +39,10 @@ class InitFunctionGLM(Protocol):
         X: DESIGN_INPUT_TYPE,
         y: NDArray | jnp.ndarray,
         inverse_link_function: Callable,
-        random_key: jax.random.PRNGKey,
+        random_key: jax.Array,
         **kwargs: Any,
     ) -> jnp.ndarray:
-        """Initialize HMM probabilities."""
+        """Initialize GLM parameters and scale."""
         ...
 
 
@@ -79,22 +79,25 @@ def random_glm_params_init(
 
     Returns
     -------
-    coef : jnp.ndarray
-        Coefficient matrix of shape (n_features, n_neurons, n_states).
+    coef : Any
+        Coefficient, a pytree with the same structure as X with leaves
+         of shape (n_features, n_neurons, n_states).
     intercept : jnp.ndarray
         Intercept array of shape (n_neurons, n_states).
     """
-    n_features = X.shape[1]
     is_one_dim = y.ndim == 1
     n_neurons = 1 if is_one_dim else y.shape[1]
-
     # small random noisy coef
-    coef = std_dev * jax.random.normal(random_key, (n_features, n_neurons, n_states))
+    coef = jax.tree_util.tree_map(
+        lambda x: std_dev
+        * jax.random.normal(random_key, (x.shape[1], n_neurons, n_states)),
+        X,
+    )
     # mean-rate
     intercept = initialize_intercept_matching_mean_rate(inverse_link_function, y)
     intercept = jnp.tile(intercept[:, jnp.newaxis], (1, n_states))
     if is_one_dim:
-        coef = jnp.squeeze(coef, axis=1)
+        coef = jax.tree_util.tree_map(lambda x: jnp.squeeze(x, axis=1), coef)
         intercept = jnp.squeeze(intercept, axis=0)
     return coef, intercept
 
@@ -149,7 +152,7 @@ class KMeansInitializerGLM(KMeansInitializer):
             minimum_prob=minimum_prob,
             random_key=random_key,
         )
-        self._X = jnp.asarray(X)
+        self._X = jax.tree_util.tree_map(jnp.asarray, X)
         self._y = jnp.asarray(y)
         self.inverse_link_function = inverse_link_function
         self.glm_kwargs = glm_kwargs if glm_kwargs is not None else {}
@@ -179,7 +182,9 @@ class KMeansInitializerGLM(KMeansInitializer):
             model = self._glm_models[i]
             X_state, y_state = self._X[state_mask], self._y[state_mask]
             model.fit(X_state, y_state)
-            coef = coef.at[:, i].set(model.coef_)
+            coef = jax.tree_util.tree_map(
+                lambda c, mc: c.at[:, i].set(mc), coef, model.coef_
+            )
             intercept = intercept.at[i : i + 1].set(model.intercept_)
 
         return coef, intercept
@@ -512,7 +517,7 @@ def generate_glm_hmm_initial_params(
     inverse_link_function: Callable,
     random_key: int | jax.Array = 123,
     init_funcs: Optional[dict] = None,
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
+) -> Tuple[Any, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """
     Generate initial HMM parameters using the provided initialization functions.
 
