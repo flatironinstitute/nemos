@@ -857,32 +857,56 @@ class TestValidateCustomGLMParamsOutput:
 
 
 class TestValidateCustomScaleOutput:
-    """Test _validate_custom_scale_output directly."""
+    """Test custom scale output validation via generate_glm_hmm_initial_params."""
 
     @pytest.mark.parametrize("n_neurons", [1, 3])
     def test_valid_output(self, n_neurons):
         n_states = 3
+        X = jnp.ones((10, 5))
         y = jnp.ones((10, n_neurons)) if n_neurons > 1 else jnp.ones(10)
         scale = jnp.ones((n_states, n_neurons) if n_neurons > 1 else (n_states,))
-        _validate_custom_scale_output(scale, n_states, y)
+
+        def custom_scale(n_states, X, y, inverse_link_function, random_key, **kwargs):
+            return scale
+
+        init_funcs = setup_glm_hmm_initialization(scale_init=custom_scale)
+        generate_glm_hmm_initial_params(n_states, X, y, jnp.exp, init_funcs=init_funcs)
 
     @pytest.mark.parametrize("n_neurons", [1, 3])
     def test_wrong_shape_raises(self, n_neurons):
         n_states = 3
+        X = jnp.ones((10, 5))
         y = jnp.ones((10, n_neurons)) if n_neurons > 1 else jnp.ones(10)
         scale = jnp.ones(n_states + 1)
 
+        def custom_scale(n_states, X, y, inverse_link_function, random_key, **kwargs):
+            return scale
+
+        init_funcs = setup_glm_hmm_initialization(scale_init=custom_scale)
         with pytest.raises(ValueError, match="incorrect shape"):
-            _validate_custom_scale_output(scale, n_states, y)
+            generate_glm_hmm_initial_params(n_states, X, y, jnp.exp, init_funcs=init_funcs)
 
     def test_wrong_type_raises(self):
+        n_states = 3
+        X = jnp.ones((10, 5))
+        y = jnp.ones(10)
+
+        def custom_scale(n_states, X, y, inverse_link_function, random_key, **kwargs):
+            return "not_an_array"
+
+        init_funcs = setup_glm_hmm_initialization(scale_init=custom_scale)
         with pytest.raises(TypeError, match="must return an array"):
-            _validate_custom_scale_output("not_an_array", 3, jnp.ones(10))
+            generate_glm_hmm_initial_params(n_states, X, y, jnp.exp, init_funcs=init_funcs)
 
     def test_error_message_shows_expected_shape(self):
         n_states = 3
+        X = jnp.ones((10, 5))
         y = jnp.ones(10)
         scale = jnp.ones(n_states + 2)
 
+        def custom_scale(n_states, X, y, inverse_link_function, random_key, **kwargs):
+            return scale
+
+        init_funcs = setup_glm_hmm_initialization(scale_init=custom_scale)
         with pytest.raises(ValueError, match=rf"\({n_states},\)"):
-            _validate_custom_scale_output(scale, n_states, y)
+            generate_glm_hmm_initial_params(n_states, X, y, jnp.exp, init_funcs=init_funcs)
