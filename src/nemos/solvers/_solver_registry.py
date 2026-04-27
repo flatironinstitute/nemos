@@ -10,6 +10,7 @@ from ._optax_optimistix_solvers import (
     OptimistixOptaxGradientDescent,
     OptimistixOptaxLBFGS,
 )
+from ._newton import NewtonCholesky
 from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
 from ._svrg import WrappedProxSVRG, WrappedSVRG
 from ._validation import validate_solver_class
@@ -339,7 +340,7 @@ register("BFGS", OptimistixBFGS, "optimistix", default=True)
 register("NonlinearCG", OptimistixNonlinearCG, "optimistix", default=True)
 register("SVRG", WrappedSVRG, "nemos", default=True)
 register("ProxSVRG", WrappedProxSVRG, "nemos", default=True)
-
+register("NewtonCholesky", NewtonCholesky, "nemos", default=True)
 register(
     "GradientDescent", OptimistixOptaxGradientDescent, "optax+optimistix", default=False
 )

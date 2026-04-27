@@ -481,6 +481,7 @@ class Ridge(Regularizer):
         "ProximalGradient",
         "SVRG",
         "ProxSVRG",
+        "NewtonCholesky",
     )
 
     _default_solver = "LBFGS"
