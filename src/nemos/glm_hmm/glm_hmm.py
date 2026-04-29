@@ -186,6 +186,7 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
     """
 
     _validator_class = GLMHMMValidator
+    _default_init_dict = GLMHMM_INITIALIZATION_FN_DICT
 
     def __init__(
         self,
