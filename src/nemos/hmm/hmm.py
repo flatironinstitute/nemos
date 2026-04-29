@@ -363,7 +363,7 @@ class BaseHMM(
             X,
             y,
             is_new_session,
-            random_keys=hmm_keys,
+            random_key_pair=hmm_keys,
         )
         model_params, validate_model = self._model_params_initialization(
             X,
