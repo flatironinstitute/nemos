@@ -31,6 +31,7 @@ from .algorithm_configs import prepare_estep_log_likelihood, prepare_mstep_updat
 from .initialize_parameters import (
     DEFAULT_INIT_FUNCTIONS_GLMHMM,
     GLMHMM_INITIALIZATION_FN_DICT,
+    generate_glm_hmm_initial_model_params,
     KMeansInitializerGLM,
     kmeans_glm_params_init,
     kmeans_scale_init,
@@ -197,12 +198,6 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
 
     _validator_class = GLMHMMValidator
     _default_init_dict = DEFAULT_INIT_FUNCTIONS_GLMHMM
-    _kmeans_init_funcs: tuple[tuple[str, Callable]] = (
-        *BaseHMM._kmeans_init_funcs,
-        kmeans_scale_init,
-        kmeans_glm_params_init,
-    )
-    _kmeans_init_class = KMeansInitializerGLM
 
     def __init__(
         self,
