@@ -221,7 +221,7 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams]):
             maxiter=maxiter,
             tol=tol,
             seed=seed,
-            hmm_initialization_funcs="ciao",
+            hmm_initialization_funcs=initialization_funcs,
         )
         self.observation_model = observation_model
         self.inverse_link_function = inverse_link_function
