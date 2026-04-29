@@ -504,13 +504,14 @@ def setup_glm_hmm_initialization(
     scale_init_kwargs:
         Kwargs of the initialization function for the scale of the observation model.
     init_funcs :
-        Existing dictionary of initialization functions to update. If None, a new dictionary will be created.
-        If the dictionary is missing any keys, they will be backfilled with defaults.
+        Existing dictionary of initialization functions to update. If None, a fresh copy of
+        ``DEFAULT_INIT_FUNCTIONS_GLMHMM`` is used. Keys must already be validated before calling
+        this function; use the class ``initialization_funcs`` setter for key validation.
 
     Returns
     -------
     init_funcs :
-        Updated or initialized dictionary based on provided inputs.
+        Updated dictionary of initialization functions based on provided inputs.
     """
 
     if init_funcs is None:
@@ -571,11 +572,12 @@ def generate_glm_hmm_initial_model_params(
     init_funcs: Optional[dict] = None,
 ) -> Tuple[Any, jnp.ndarray, jnp.ndarray]:
     """
-    Generate initial GLM-HMM parameters using the provided initialization functions.
+    Generate initial GLM model parameters for a GLM-HMM.
 
-    Calls the specified initialization functions for GLM coefficients, intercept, scale,
-    initial state probabilities, and transition probabilities, splitting the random key
-    to ensure independent random states for each component.
+    Calls the specified initialization functions for GLM coefficients, intercept, and scale,
+    splitting the random key to ensure independent random states for each component.
+    HMM parameters (initial and transition probabilities) are initialized separately via
+    :meth:`~nemos.hmm.BaseHMM._hmm_params_initialization`.
 
     Parameters
     ----------
@@ -588,29 +590,25 @@ def generate_glm_hmm_initial_model_params(
     inverse_link_function :
         Inverse link function of the GLM, passed to GLM parameter and scale initialization functions.
     is_new_session :
-        Boolean array of shape (n_samples,) indicating the start of new sessions. Passed to all
-        initialization functions. If None, a single session is assumed.
+        Boolean array of shape (n_samples,) indicating the start of new sessions. If None, a single
+        session is assumed.
     random_key :
-        Key for random number generation. Split into three independent subkeys for GLM params,
-        scale, and HMM probabilities respectively.
+        Key for random number generation. Split into two independent subkeys for GLM params
+        and scale respectively.
     init_funcs :
-        Dictionary containing initialization functions and their kwargs for all GLM-HMM parameters.
-        Can be constructed with :func:`setup_glm_hmm_initialization`. Missing keys are backfilled
-        with defaults.
+        Dictionary containing initialization functions and their kwargs for GLM parameters.
+        Can be constructed with :func:`setup_glm_hmm_initialization`. GLM-specific keys missing
+        from the dict fall back to ``GLM_INIT_FUNCS`` defaults.
 
     Returns
     -------
     coef :
         GLM coefficients, a pytree matching the structure of X with leaves of shape
-        (n_features, n_neurons, n_states) or (n_features, n_states) for single-neuron.
+        ``(n_features, n_neurons, n_states)`` or ``(n_features, n_states)`` for single-neuron.
     intercept :
-        Intercept array of shape (n_neurons, n_states) or (n_states,) for single-neuron.
+        Intercept array of shape ``(n_neurons, n_states)`` or ``(n_states,)`` for single-neuron.
     scale :
-        Scale array of shape (n_states,) for single-neuron or (n_neurons, n_states) for population.
-    initial_probs :
-        Initial state probability vector of shape (n_states,) that sums to 1.
-    transition_matrix :
-        Transition probability matrix of shape (n_states, n_states) where each row sums to 1.
+        Scale array of shape ``(n_states,)`` for single-neuron or ``(n_neurons, n_states)`` for population.
 
     See Also
     --------
