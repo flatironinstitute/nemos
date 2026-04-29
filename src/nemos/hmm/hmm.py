@@ -319,8 +319,9 @@ class BaseHMM(
         """
         Set the dictionary of initialization functions for HMM parameters.
 
-        This should only be called by __init__ for sklearn cloning, users should
-        use the `setup` method to set initialization functions.
+        Validates keys against the model-specific ``_default_init_dict`` and merges
+        with defaults before storing. Calls :meth:`setup` afterward to apply any
+        function/kwargs updates. May be called directly or via ``__init__``.
         """
         # always key validated in a model dependent way
         self._initialization_funcs = _validate_init_funcs_keys(
@@ -335,7 +336,28 @@ class BaseHMM(
         is_new_session: jnp.ndarray,
         random_key_pair: jax.Array,
     ) -> Tuple[HMMUserParams, bool]:
-        """HMM parameter initialization."""
+        """
+        Initialize HMM parameters (initial and transition probabilities).
+
+        Parameters
+        ----------
+        X :
+            Design matrix.
+        y :
+            Target observations.
+        is_new_session :
+            Boolean array marking the start of new sessions.
+        random_key_pair :
+            Pair of JAX PRNG keys passed to the initial-prob and transition-prob
+            initialization functions respectively.
+
+        Returns
+        -------
+        :
+            Tuple of ``(hmm_params, validate_params)`` where ``hmm_params`` is an
+            ``HMMUserParams`` and ``validate_params`` is True when custom initialization
+            functions were used (requiring downstream parameter validation).
+        """
         hmm_params = generate_hmm_initial_params(
             self._n_states,
             X,
@@ -354,9 +376,22 @@ class BaseHMM(
         """
         Model-specific parameter initialization.
 
-        Should return a tuple of (model_params, validate_model) where model_params is the
-        initialized model parameters and validate_model is a boolean indicating whether the
-        initialized parameters need to be validated.
+        Parameters
+        ----------
+        X :
+            Design matrix.
+        y :
+            Target observations.
+        is_new_session :
+            Boolean array marking the start of new sessions.
+        random_key :
+            JAX PRNG key for any stochastic initialization.
+
+        Returns
+        -------
+        :
+            Tuple of ``(model_params, validate_model)`` where ``validate_model`` is True
+            when the initialized parameters require downstream validation.
         """
         pass
 

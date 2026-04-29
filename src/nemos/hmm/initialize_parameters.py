@@ -650,13 +650,17 @@ def setup_hmm_initialization(
     transition_proba_init_kwargs :
         Keyword arguments to pass to the transition probability initialization function.
     init_funcs :
-        Existing dictionary of initialization functions to update. If None, a new dictionary will be created.
-        If the dictionary is missing any keys, they will be backfilled with defaults.
+        Existing dictionary of initialization functions to update. If None, a fresh copy of
+        ``default_init_dict`` is used. Keys must already be validated before calling this function;
+        use :func:`_validate_init_funcs_keys` upstream (e.g., in the class setter).
+    default_init_dict :
+        Model-specific dictionary of default initialization functions. Defaults to
+        ``DEFAULT_INIT_FUNCTIONS`` when None.
 
     Returns
     -------
     init_funcs :
-        Updated or initialized dictionary based on provided inputs.
+        Updated dictionary of initialization functions based on provided inputs.
     """
     if default_init_dict is None:
         default_init_dict = DEFAULT_INIT_FUNCTIONS.copy()
@@ -890,10 +894,10 @@ def generate_hmm_initial_params(
 
     Returns
     -------
-    initial_probs :
-        Initial state probability vector of shape (n_states,) that sums to 1.
-    transition_matrix :
-        Transition probability matrix of shape (n_states, n_states) where each row sums to 1.
+    :
+        ``HMMUserParams`` tuple of ``(initial_probs, transition_matrix)`` where
+        ``initial_probs`` has shape ``(n_states,)`` summing to 1, and
+        ``transition_matrix`` has shape ``(n_states, n_states)`` with rows summing to 1.
 
     See Also
     --------
