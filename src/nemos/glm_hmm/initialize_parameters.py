@@ -623,9 +623,9 @@ def generate_glm_hmm_initial_model_params(
     glm_params_key, scale_key = jax.random.split(random_key, 2)
 
     glm_params_init = (
-        glm_init_funcs["glm_params_init"] or GLM_INIT_FUNCS["glm_params_init"]
+        glm_init_funcs.get("glm_params_init") or GLM_INIT_FUNCS["glm_params_init"]
     )
-    glm_params_init_kwargs = glm_init_funcs["glm_params_init_kwargs"] or {}
+    glm_params_init_kwargs = glm_init_funcs.get("glm_params_init_kwargs") or {}
 
     coef, intercept = glm_params_init(
         n_states=n_states,
@@ -637,8 +637,8 @@ def generate_glm_hmm_initial_model_params(
         **glm_params_init_kwargs,
     )
 
-    scale_init_fn = glm_init_funcs["scale_init"] or GLM_INIT_FUNCS["scale_init"]
-    scale_init_kwargs = glm_init_funcs["scale_init_kwargs"] or {}
+    scale_init_fn = glm_init_funcs.get("scale_init") or GLM_INIT_FUNCS["scale_init"]
+    scale_init_kwargs = glm_init_funcs.get("scale_init_kwargs") or {}
 
     scale = scale_init_fn(
         n_states=n_states,
