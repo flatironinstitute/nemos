@@ -475,7 +475,7 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
                 )
 
         params = self._get_model_params()
-        coef = params.glm_params.coef
+        coef = params.model_params.coef
         if coef.ndim == 3:
             n_neurons = coef.shape[1]
         else:
@@ -634,7 +634,7 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
             observation_model=self._observation_model,
             inverse_link_function=self._inverse_link_function,
             setup_solver=self._instantiate_solver,
-            init_params=init_params,
+            init_params=init_params.model_params,
         )
 
         # cannot wrap is_new_session, that's to be calculated at each update form the provided X and y.
