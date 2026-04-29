@@ -694,11 +694,14 @@ def setup_hmm_initialization(
 
 def _validate_init_funcs_keys(
     init_funcs: dict | INITIALIZATION_FN_DICT,
+    valid_funcs: dict | None = None,
 ) -> INITIALIZATION_FN_DICT:
     """Validate that the keys in the init_funcs dictionary are as expected. Set missing values to defaults."""
-    unexpected_keys = init_funcs.keys() - DEFAULT_INIT_FUNCTIONS.keys()
+    if valid_funcs is None:
+        valid_funcs = DEFAULT_INIT_FUNCTIONS
+    unexpected_keys = init_funcs.keys() - valid_funcs.keys()
     if unexpected_keys:
-        suggested_keys = _suggest_keys(unexpected_keys, DEFAULT_INIT_FUNCTIONS.keys())
+        suggested_keys = _suggest_keys(unexpected_keys, valid_funcs.keys())
         error_msg = (
             (
                 f" Unexpected key: '{key}'. Did you mean '{suggestion}'?"
@@ -845,6 +848,7 @@ def generate_hmm_initial_params(
     is_new_session: NDArray | jnp.ndarray,
     random_key_pair: jax.Array = jax.random.split(jax.random.PRNGKey(1234), 2),
     init_funcs: Optional[dict] = None,
+    valid_funcs: Optional[dict] = None,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
     Generate initial HMM parameters using the provided initialization functions.
@@ -870,6 +874,8 @@ def generate_hmm_initial_params(
         Dictionary containing the initialization functions and their kwargs for both initial state probabilities
         and transition probabilities. This dictionary can be set up using the `setup_hmm_initialization` function.
         If not provided, or if specific functions are missing, defaults will be used.
+    valid_funcs :
+        Dictionary containing the valid initialization functions dictionary. This may be model specific.
 
     Returns
     -------
@@ -887,7 +893,7 @@ def generate_hmm_initial_params(
     init_funcs = (
         DEFAULT_INIT_FUNCTIONS.copy()
         if init_funcs is None
-        else _validate_init_funcs_keys(init_funcs)
+        else _validate_init_funcs_keys(init_funcs, valid_funcs=valid_funcs)
     )
 
     # grab initial probability initialization function
