@@ -32,6 +32,7 @@ from .algorithm_configs import prepare_estep_log_likelihood, prepare_mstep_updat
 from .initialize_parameters import (
     DEFAULT_INIT_FUNCTIONS_GLMHMM,
     GLMHMM_INITIALIZATION_FN_DICT,
+    generate_glm_hmm_initial_model_params,
     KMeansInitializerGLM,
     kmeans_glm_params_init,
     kmeans_scale_init,
