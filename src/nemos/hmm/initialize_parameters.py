@@ -696,13 +696,14 @@ def setup_hmm_initialization(
 
 
 def _validate_init_funcs_keys(
-    init_funcs: dict | INITIALIZATION_FN_DICT,
+    init_funcs: dict | INITIALIZATION_FN_DICT | None,
     default_init_dict: Optional[dict[str, Callable]] = None,
-) -> INITIALIZATION_FN_DICT:
+) -> INITIALIZATION_FN_DICT | None:
     """Validate that the keys in the init_funcs dictionary are as expected. Set missing values to defaults."""
     if default_init_dict is None:
         default_init_dict = DEFAULT_INIT_FUNCTIONS.copy()
-
+    if init_funcs is None:
+        return
     unexpected_keys = init_funcs.keys() - default_init_dict.keys()
     if unexpected_keys:
         suggested_keys = _suggest_keys(unexpected_keys, default_init_dict.keys())

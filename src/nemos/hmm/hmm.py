@@ -25,7 +25,7 @@ from ..typing import (
     DESIGN_INPUT_TYPE,
 )
 from .initialize_parameters import (
-    INITIALIZATION_FN_DICT,
+    DEFAULT_INIT_FUNCTIONS,
     _resolve_dirichlet_priors,
     _validate_init_funcs_keys,
     generate_hmm_initial_params,
@@ -89,7 +89,7 @@ class BaseHMM(
     """
 
     _validator_class: type[HMMValidator[HMMUserProvidedParamsT, HMMModelParamsT]]
-    _default_init_dict: dict = INITIALIZATION_FN_DICT
+    _default_init_dict: dict = DEFAULT_INIT_FUNCTIONS
 
     def __init__(
         self,
