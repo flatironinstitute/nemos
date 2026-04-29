@@ -174,8 +174,18 @@ class KMeansInitializerGLM(KMeansInitializer):
             }
             self._is_population = True
 
+    def fit(self) -> "KMeansInitializerGLM":
+        """Fit one GLM per state on samples assigned to that state by KMeans."""
+        states = self.states.astype(bool)
+        for state_mask, model in zip(states.T, self._glm_models.values()):
+            X_state, y_state = self._X[state_mask], self._y[state_mask]
+            model.fit(X_state, y_state)
+        return self
+
     def glm_params(self) -> GLMUserParams:
-        """Generate glm parameters for initialization."""
+        """Generate GLM parameters for initialization."""
+        if self._glm_models[0].coef_ is None:
+            self.fit()
         key = jax.random.PRNGKey(self.random_key)
         states = self.states.astype(bool)
         coef, intercept = random_glm_params_init(
@@ -186,38 +196,30 @@ class KMeansInitializerGLM(KMeansInitializer):
             std_dev=0.0,
             random_key=key,
         )
-        # initialize
-        for i, state_mask in enumerate(states.T):
-            model = self._glm_models[i]
-            X_state, y_state = self._X[state_mask], self._y[state_mask]
-            model.fit(X_state, y_state)
+        for i, m in enumerate(self._glm_models.values()):
             coef = jax.tree_util.tree_map(
-                lambda c, mc: c.at[..., i].set(mc), coef, model.coef_
+                lambda c, mc: c.at[..., i].set(mc), coef, m.coef_
             )
             if self._is_population:
-                intercept = intercept.at[..., i].set(model.intercept_)
+                intercept = intercept.at[..., i].set(m.intercept_)
             else:
-                intercept = intercept.at[i : i + 1].set(model.intercept_)
-
+                intercept = intercept.at[i : i + 1].set(m.intercept_)
         return coef, intercept
 
     def scale(self) -> jnp.ndarray:
         """KMeans-based scale estimate."""
         is_population = self._y.ndim > 1
-        # initialize scale
         if is_population:
             n_neurons = self._y.shape[1]
             scale = jnp.ones((self.n_states, n_neurons))
         else:
             scale = jnp.ones((self.n_states,))
 
-        # return fast for fixed scale
         if has_fixed_scale(self._glm_models[0].observation_model):
             return scale
 
-        # if not fitted, run a fit
         if self._glm_models[0].scale_ is None:
-            self.glm_params()
+            self.fit()
         for i, m in enumerate(self._glm_models.values()):
             scale = scale.at[i].set(m.scale_)
         return scale
