@@ -201,139 +201,57 @@ class TestGLMHMMInit:
 
 
 # =============================================================================
-# TestGLMHMMSetup — setup() method, parametrized over all four func names
+# TestGLMHMMSetup — setup() method: arg routing and result storage
 # =============================================================================
 
 
-@pytest.mark.parametrize("func_name", FUNC_NAMES)
 class TestGLMHMMSetup:
 
-    def test_setup_with_no_input_uses_defaults(self, func_name):
-        model = GLMHMM(n_states=2)
-        model.setup()
-        assert model.initialization_funcs == DEFAULT_INIT_FUNCTIONS_GLMHMM
-
-    def test_setup_function_by_string(self, func_name):
-        model = GLMHMM(n_states=2)
-        model.setup(**{func_name: VALID_STRINGS[func_name]})
-        assert (
-            model.initialization_funcs[func_name]
-            is VALID_STRINGS_EXPECTED_FUNCS[func_name]
-        )
-        assert model.initialization_funcs[func_name + "_custom"] is False
-
-    def test_setup_function_by_callable(self, func_name):
+    @pytest.mark.parametrize("func_name", FUNC_NAMES)
+    def test_setup_forwards_args_and_stores_result(self, func_name):
         mock_func = _get_mock_func(func_name)
+        mock_result = MagicMock()
         model = GLMHMM(n_states=2)
-        model.setup(**{func_name: mock_func})
-        assert model.initialization_funcs[func_name] is mock_func
-        assert model.initialization_funcs[func_name + "_custom"] is True
+        with patch("nemos.glm_hmm.glm_hmm.setup_glm_hmm_initialization") as mock_setup:
+            mock_setup.return_value = mock_result
+            model.setup(**{func_name: mock_func, func_name + "_kwargs": MOCK_VALID_KWARGS})
+        assert mock_setup.call_args.kwargs[func_name] is mock_func
+        assert mock_setup.call_args.kwargs[func_name + "_kwargs"] == MOCK_VALID_KWARGS
+        assert model.initialization_funcs is mock_result
 
-    def test_setup_function_by_callable_with_kwargs(self, func_name):
-        mock_func = _get_mock_func(func_name)
+    @pytest.mark.parametrize(
+        "provided_names",
+        [
+            list(combo)
+            for r in range(2, len(FUNC_NAMES) + 1)
+            for combo in itertools.combinations(FUNC_NAMES, r)
+        ],
+    )
+    def test_setup_partial_args_forwarded(self, provided_names):
+        mock_funcs = {fn: _get_mock_func(fn) for fn in provided_names}
+        mock_result = MagicMock()
         model = GLMHMM(n_states=2)
-        model.setup(**{func_name: mock_func, func_name + "_kwargs": MOCK_VALID_KWARGS})
-        assert model.initialization_funcs[func_name] is mock_func
-        assert model.initialization_funcs[func_name + "_kwargs"] == MOCK_VALID_KWARGS
-
-    def test_setup_kwargs_only_validated_against_current_func(self, func_name):
-        mock_func = _get_mock_func(func_name)
-        model = GLMHMM(n_states=2)
-        model.setup(**{func_name: mock_func})
-        model.setup(**{func_name + "_kwargs": MOCK_VALID_KWARGS})
-        assert model.initialization_funcs[func_name + "_kwargs"] == MOCK_VALID_KWARGS
-
-    def test_setup_invalid_string_raises(self, func_name):
-        model = GLMHMM(n_states=2)
-        with pytest.raises(ValueError, match="Invalid initialization"):
-            model.setup(**{func_name: "not_a_valid_string"})
-
-    def test_setup_custom_function_missing_required_params_raises(self, func_name):
-        model = GLMHMM(n_states=2)
-        with pytest.raises(
-            ValueError, match="Custom initialization function must have"
-        ):
-            model.setup(**{func_name: lambda x: x})
-
-    def test_setup_invalid_kwargs_raises(self, func_name):
-        mock_func = _get_mock_func(func_name)
-        model = GLMHMM(n_states=2)
-        with pytest.raises(ValueError, match="Invalid keyword argument"):
-            model.setup(
-                **{func_name: mock_func, func_name + "_kwargs": {"bad_param": 99}}
-            )
-
-    def test_setup_function_resets_kwargs(self, func_name):
-        mock_func_a = _get_mock_func(func_name)
-        mock_func_b = _get_mock_func(func_name)
-        model = GLMHMM(n_states=2)
-        model.setup(
-            **{func_name: mock_func_a, func_name + "_kwargs": MOCK_VALID_KWARGS}
-        )
-        model.setup(**{func_name: mock_func_b})
-        assert model.initialization_funcs[func_name + "_kwargs"] == {}
-
-    def test_setup_does_not_affect_other_funcs(self, func_name):
-        mock_func = _get_mock_func(func_name)
-        model = GLMHMM(n_states=2)
-        model.setup(**{func_name: mock_func})
-        for other in FUNC_NAMES:
-            if other != func_name:
-                assert (
-                    model.initialization_funcs[other]
-                    is DEFAULT_INIT_FUNCTIONS_GLMHMM[other]
-                )
-
-
-# =============================================================================
-# TestGLMHMMSetupMultiple — setup() with multiple functions at once
-# =============================================================================
-
-
-class TestGLMHMMSetupMultiple:
-
-    def test_setup_all_funcs_at_once(self):
-        mock_registry = _get_mock_registry()
-        setup_kwargs = {}
+        with patch("nemos.glm_hmm.glm_hmm.setup_glm_hmm_initialization") as mock_setup:
+            mock_setup.return_value = mock_result
+            model.setup(**{fn: mock_funcs[fn] for fn in provided_names})
+        for fn in provided_names:
+            assert mock_setup.call_args.kwargs[fn] is mock_funcs[fn]
         for fn in FUNC_NAMES:
-            setup_kwargs[fn] = mock_registry[fn]
-            setup_kwargs[fn + "_kwargs"] = MOCK_VALID_KWARGS
-        model = GLMHMM(n_states=2)
-        model.setup(**setup_kwargs)
-        for fn in FUNC_NAMES:
-            assert model.initialization_funcs[fn] is mock_registry[fn]
-            assert model.initialization_funcs[fn + "_kwargs"] == MOCK_VALID_KWARGS
+            if fn not in provided_names:
+                assert mock_setup.call_args.kwargs[fn] is None
+        assert model.initialization_funcs is mock_result
 
-    def test_setup_all_pairs(self):
-        for fn1, fn2 in itertools.combinations(FUNC_NAMES, 2):
-            mock1, mock2 = _get_mock_func(fn1), _get_mock_func(fn2)
-            model = GLMHMM(n_states=2)
-            model.setup(
-                **{
-                    fn1: mock1,
-                    fn1 + "_kwargs": MOCK_VALID_KWARGS,
-                    fn2: mock2,
-                    fn2 + "_kwargs": MOCK_VALID_KWARGS,
-                }
-            )
-            assert model.initialization_funcs[fn1] is mock1
-            assert model.initialization_funcs[fn2] is mock2
-            for other in FUNC_NAMES:
-                if other not in (fn1, fn2):
-                    assert model.initialization_funcs[other + "_kwargs"] == {}
-
-    def test_setup_consecutive_calls_accumulate(self):
-        mock_glm = _get_mock_func("glm_params_init")
-        mock_scale = _get_mock_func("scale_init")
+    def test_setup_consecutive_calls_pass_accumulated_result_as_init_funcs(self):
+        first_result = MagicMock()
+        second_result = MagicMock()
         model = GLMHMM(n_states=2)
-        model.setup(glm_params_init=mock_glm)
-        model.setup(scale_init=mock_scale)
-        assert model.initialization_funcs["glm_params_init"] is mock_glm
-        assert model.initialization_funcs["scale_init"] is mock_scale
-        assert (
-            model.initialization_funcs["initial_proba_init"]
-            is DEFAULT_INIT_FUNCTIONS_GLMHMM["initial_proba_init"]
-        )
+        with patch("nemos.glm_hmm.glm_hmm.setup_glm_hmm_initialization") as mock_setup:
+            mock_setup.return_value = first_result
+            model.setup(glm_params_init=_get_mock_func("glm_params_init"))
+        with patch("nemos.glm_hmm.glm_hmm.setup_glm_hmm_initialization") as mock_setup:
+            mock_setup.return_value = second_result
+            model.setup(scale_init=_get_mock_func("scale_init"))
+        assert mock_setup.call_args.kwargs["init_funcs"] is first_result
 
 
 # =============================================================================
