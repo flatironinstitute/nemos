@@ -11,6 +11,7 @@ from numpy.typing import NDArray
 from ..type_casting import is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE
 from ..validation import _suggest_keys
+from .params import HMMUserParams
 from .utils import initialize_is_new_session
 
 sklearn = lazy.load("sklearn")
@@ -858,7 +859,7 @@ def generate_hmm_initial_params(
     is_new_session: NDArray | jnp.ndarray,
     random_key_pair: jax.Array = jax.random.split(jax.random.PRNGKey(1234), 2),
     init_funcs: Optional[dict] = None,
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
+) -> HMMUserParams:
     """
     Generate initial HMM parameters using the provided initialization functions.
 
