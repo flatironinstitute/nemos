@@ -17,7 +17,6 @@ from ..hmm.initialize_parameters import (
     InitFunctionHMM,
     KMeansInitializer,
     _get_protocol_parameters,
-    _validate_init_funcs_keys,
     _validate_init_funcs_kwargs,
     setup_hmm_initialization,
 )
