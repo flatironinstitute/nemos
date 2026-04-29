@@ -19,7 +19,6 @@ from ..hmm.initialize_parameters import (
     _get_protocol_parameters,
     _validate_init_funcs_keys,
     _validate_init_funcs_kwargs,
-    generate_hmm_initial_params,
     setup_hmm_initialization,
 )
 from ..pytrees import FeaturePytree
@@ -567,7 +566,7 @@ def setup_glm_hmm_initialization(
     return glm_init_funcs
 
 
-def generate_glm_hmm_initial_params(
+def generate_glm_hmm_initial_model_params(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
@@ -575,7 +574,7 @@ def generate_glm_hmm_initial_params(
     is_new_session: Optional[NDArray | jnp.ndarray] = None,
     random_key: int | jax.Array = 123,
     init_funcs: Optional[dict] = None,
-) -> Tuple[Any, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+) -> Tuple[Any, jnp.ndarray, jnp.ndarray]:
     """
     Generate initial GLM-HMM parameters using the provided initialization functions.
 
@@ -625,12 +624,10 @@ def generate_glm_hmm_initial_params(
     """
     init_funcs = {} if init_funcs is None else init_funcs
     glm_init_funcs = {k: v for k, v in init_funcs.items() if k in GLM_INIT_FUNCS}
-    hmm_init_funcs = {k: v for k, v in init_funcs.items() if k not in GLM_INIT_FUNCS}
-
     if isinstance(random_key, int):
         random_key = jax.random.PRNGKey(random_key)
 
-    glm_params_key, scale_key, hmm_key = jax.random.split(random_key, 3)
+    glm_params_key, scale_key = jax.random.split(random_key, 2)
 
     glm_init_funcs = _validate_init_funcs_keys(
         glm_init_funcs, default_init_dict=GLM_INIT_FUNCS
@@ -664,13 +661,4 @@ def generate_glm_hmm_initial_params(
         **scale_init_kwargs,
     )
 
-    initial_probs, transition_matrix = generate_hmm_initial_params(
-        n_states,
-        X,
-        y,
-        is_new_session,
-        hmm_key,
-        hmm_init_funcs,
-    )
-
-    return coef, intercept, scale, initial_probs, transition_matrix
+    return coef, intercept, scale
