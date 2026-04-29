@@ -743,7 +743,6 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
         # for consistency, do not make a partial of that argument in run as well.
         self._optimization_run = eqx.Partial(
             em_hmm,
-            inverse_link_function=self.inverse_link_function,
             log_likelihood_func=self._log_likelihood,
             m_step_fn_model_params=m_step_update,
             maxiter=self.maxiter,
@@ -752,7 +751,6 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
 
         self._optimization_update = eqx.Partial(
             em_step,
-            inverse_link_function=self.inverse_link_function,
             log_likelihood_func=self._log_likelihood,
             m_step_fn_model_params=m_step_update,
         )
