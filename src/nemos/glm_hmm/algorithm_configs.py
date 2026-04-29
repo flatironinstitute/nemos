@@ -477,12 +477,17 @@ def prepare_mstep_update_fn(
     objective_param = prepare_mstep_nll_objective_param(
         is_population_glm, observation_model, inverse_link_function
     )
-    params_update_fn = setup_solver(objective_param, init_params=init_params).run
 
     # if scale is separable and needs to be optimized, get update function for optimizing scale
     if observation_model._separable_scale and (
         type(observation_model) not in _NO_SCALE
     ):
+        # GLM params solver only needs coef and intercept — exclude log_scale
+        glm_init_params = GLMParams(init_params.coef, init_params.intercept)
+        params_update_fn = setup_solver(
+            objective_param, init_params=glm_init_params
+        ).run
+
         scale_update_fn = get_analytical_scale_update(
             observation_model, is_population_glm
         )
@@ -501,19 +506,20 @@ def prepare_mstep_update_fn(
 
         # combine param and scale updates into a single function for use in M-step
         def update_fn(params, X, y, posteriors):
-            new_model_params, state_params, aux_params = params_update_fn(
-                params, X, y, posteriors
+            glm_params = GLMParams(params.coef, params.intercept)
+            new_glm_params, state_params, aux_params = params_update_fn(
+                glm_params, X, y, posteriors
             )
             predicted_rate = compute_rate_per_state(
-                X, new_model_params, inverse_link_function=inverse_link_function
+                X, new_glm_params, inverse_link_function=inverse_link_function
             )
             new_scale, state_scale, aux_scale = scale_update_fn(
                 params.log_scale, y, predicted_rate, posteriors
             )
             return (
                 GLMHMMModelParams(
-                    new_model_params.coef,
-                    new_model_params.intercept,
+                    new_glm_params.coef,
+                    new_glm_params.intercept,
                     new_scale,
                 ),
                 (state_params, state_scale),
@@ -523,4 +529,6 @@ def prepare_mstep_update_fn(
         return update_fn
 
     else:
+        # scale is not separable: joint objective over all params including scale
+        params_update_fn = setup_solver(objective_param, init_params=init_params).run
         return params_update_fn
