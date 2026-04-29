@@ -14,7 +14,7 @@ from nemos.glm_hmm.initialize_parameters import (
     GLM_INIT_FUNCS,
     KMeansInitializerGLM,
     constant_scale_init,
-    generate_glm_hmm_initial_params,
+    generate_glm_hmm_initial_model_params,
     kmeans_glm_params_init,
     kmeans_scale_init,
     random_glm_params_init,
@@ -574,12 +574,12 @@ class TestSetupGLMHMMInitializationKwargs:
 
 
 # =============================================================================
-# Tests for generate_glm_hmm_initial_params
+# Tests for generate_glm_hmm_initial_model_params
 # =============================================================================
 
 
 class TestGenerateGLMHMMInitialParams:
-    """Test generate_glm_hmm_initial_params function."""
+    """Test generate_glm_hmm_initial_model_params function."""
 
     @pytest.mark.parametrize("n_states", [1, 2, 3, 5])
     @pytest.mark.parametrize("n_neurons", [1, 3])
@@ -589,7 +589,7 @@ class TestGenerateGLMHMMInitialParams:
         y = jnp.ones((50, n_neurons)) if n_neurons > 1 else jnp.ones(50)
 
         coef, intercept, scale, initial_probs, transition_matrix = (
-            generate_glm_hmm_initial_params(n_states, X, y, jnp.exp)
+            generate_glm_hmm_initial_model_params(n_states, X, y, jnp.exp)
         )
 
         if n_neurons == 1:
@@ -608,7 +608,7 @@ class TestGenerateGLMHMMInitialParams:
             assert isinstance(arr, jnp.ndarray)
 
     def test_returns_five_elements(self):
-        result = generate_glm_hmm_initial_params(
+        result = generate_glm_hmm_initial_model_params(
             2, jnp.ones((10, 3)), jnp.ones(10), lambda x: x
         )
         assert isinstance(result, tuple)
@@ -627,7 +627,7 @@ class TestGenerateGLMHMMInitialParams:
     )
     def test_init_funcs_key_validation(self, init_funcs, expectation):
         with expectation:
-            generate_glm_hmm_initial_params(
+            generate_glm_hmm_initial_model_params(
                 3,
                 jnp.ones((10, 5)),
                 jnp.ones(10),
@@ -639,7 +639,7 @@ class TestGenerateGLMHMMInitialParams:
         X = jnp.ones((50, 5))
         y = jnp.full(50, 2.0)
         coef, intercept, scale, initial_probs, transition_matrix = (
-            generate_glm_hmm_initial_params(3, X, y, lambda x: x)
+            generate_glm_hmm_initial_model_params(3, X, y, lambda x: x)
         )
         assert jnp.abs(coef).max() < 0.01
         assert jnp.allclose(intercept, 2.0)
@@ -651,6 +651,6 @@ class TestGenerateGLMHMMInitialParams:
         """Different random keys produce different GLM coefficient initializations."""
         X = jnp.ones((50, 5))
         y = jnp.ones(50)
-        coef1, *_ = generate_glm_hmm_initial_params(3, X, y, lambda x: x, random_key=1)
-        coef2, *_ = generate_glm_hmm_initial_params(3, X, y, lambda x: x, random_key=2)
+        coef1, *_ = generate_glm_hmm_initial_model_params(3, X, y, lambda x: x, random_key=1)
+        coef2, *_ = generate_glm_hmm_initial_model_params(3, X, y, lambda x: x, random_key=2)
         assert not jnp.allclose(coef1, coef2)
