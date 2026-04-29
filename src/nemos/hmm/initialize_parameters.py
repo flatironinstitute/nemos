@@ -843,7 +843,7 @@ def generate_hmm_initial_params(
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
     is_new_session: NDArray | jnp.ndarray,
-    random_key: int | jax.Array = 123,
+    random_key_pair: jax.Array = jax.random.split(jax.random.PRNGKey(1234), 2),
     init_funcs: Optional[dict] = None,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
@@ -862,9 +862,10 @@ def generate_hmm_initial_params(
         Output data (e.g., neural activity) of shape (n_samples,).
     is_new_session :
         Boolean array of shape (n_samples,) indicating the start of new sessions.
-    random_key :
-        Optional key for random number generation, if needed by the initialization functions. The key is split to
-        ensure different random states for initial probabilities and transition probabilities.
+    random_key_pair :
+        Optional pair of keys for random number generation, if needed by the initialization functions.
+        This function assumes already formatted keys as contract, preventing silent bugs such as keys
+        not being formatted appropriately by upstream models.
     init_funcs :
         Dictionary containing the initialization functions and their kwargs for both initial state probabilities
         and transition probabilities. This dictionary can be set up using the `setup_hmm_initialization` function.
@@ -889,9 +890,6 @@ def generate_hmm_initial_params(
         else _validate_init_funcs_keys(init_funcs)
     )
 
-    if isinstance(random_key, int):
-        random_key = jax.random.PRNGKey(random_key)
-
     # grab initial probability initialization function
     # fallback to defaults if set to None
     initial_proba_init = (
@@ -907,15 +905,12 @@ def generate_hmm_initial_params(
     )
     transition_proba_init_kwargs = init_funcs["transition_proba_init_kwargs"] or {}
 
-    # split seed into two random keys
-    # compute probabilities and validate if custom functions are used
-    keys = jax.random.split(random_key, 2)
     initial_probs = initial_proba_init(
         n_states=n_states,
         X=X,
         y=y,
         is_new_session=is_new_session,
-        random_key=keys[0],
+        random_key=random_key_pair[0],
         **initial_proba_init_kwargs,
     )
     transition_matrix = transition_proba_init(
@@ -923,7 +918,7 @@ def generate_hmm_initial_params(
         X=X,
         y=y,
         is_new_session=is_new_session,
-        random_key=keys[1],
+        random_key=random_key_pair[1],
         **transition_proba_init_kwargs,
     )
 

@@ -326,6 +326,7 @@ class BaseHMM(
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         is_new_session: jnp.ndarray,
+        random_key_pair: jax.Array,
     ) -> Tuple[HMMUserParams, bool]:
         """HMM parameter initialization."""
         hmm_params = generate_hmm_initial_params(
@@ -333,7 +334,7 @@ class BaseHMM(
             X,
             y,
             is_new_session,
-            random_key=self._seed,
+            random_key_pair=random_key_pair,
             init_funcs=self._initialization_funcs,
         )
         validate_params = self._initialization_funcs.get(
@@ -342,7 +343,7 @@ class BaseHMM(
         return hmm_params, validate_params
 
     @abc.abstractmethod
-    def _model_params_initialization(self, X, y, is_new_session):
+    def _model_params_initialization(self, X, y, is_new_session, random_key: jax.Array):
         """
         Model-specific parameter initialization.
 
@@ -354,15 +355,21 @@ class BaseHMM(
 
     def _model_specific_initialization(self, X, y, is_new_session):
         """Model-specific initialization."""
+        keys = jax.random.split(self._seed, 3)
+        hmm_keys = keys[:2]
+        # the model needs to figure out how to split the key internally
+        model_key = keys[2]
         hmm_params, validate_hmm = self._hmm_params_initialization(
             X,
             y,
             is_new_session,
+            random_keys=hmm_keys,
         )
         model_params, validate_model = self._model_params_initialization(
             X,
             y,
             is_new_session,
+            random_key=model_key,
         )
         user_params = self._validator.wrap_user_params(
             model_params
