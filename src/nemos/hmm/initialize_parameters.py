@@ -11,7 +11,6 @@ from numpy.typing import NDArray
 from ..type_casting import is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE
 from ..validation import _suggest_keys
-from .params import HMMUserParams
 from .utils import initialize_is_new_session
 
 sklearn = lazy.load("sklearn")
