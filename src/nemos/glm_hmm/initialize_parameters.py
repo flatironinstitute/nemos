@@ -476,12 +476,13 @@ def setup_glm_hmm_initialization(
     init_funcs: Optional[dict | GLMHMM_INITIALIZATION_FN_DICT] = None,
 ) -> GLMHMM_INITIALIZATION_FN_DICT:
     """
-    Set up HMM initialization functions based on user input, merging with defaults.
+    Set up GLM-HMM initialization functions based on user input, merging with defaults.
 
     This function takes user-specified initialization functions (either as strings for built-in functions or callables
-    for custom functions) for both initial state probabilities and transition probabilities, validates them, and merges
+    for custom functions) for both initial state probabilities and transition probabilities, and merges
     them with default initialization functions for ones that are not provided. It ensures that the provided functions
     and kwargs are valid and conform to expected signatures.
+    Note that this function assumes pre-validated function keys, this is convenient because keys are model specific.
 
     Parameters
     ----------
@@ -518,11 +519,6 @@ def setup_glm_hmm_initialization(
         glm_init_funcs = GLM_INIT_FUNCS.copy()
     else:
         glm_init_funcs = {k: v for k, v in init_funcs.items() if k in GLM_INIT_FUNCS}
-        # check for unexpected/unknown keys in init_funcs and backfill with defaults
-        # note that the hmm init function validation will be done in the setup
-        init_funcs = _validate_init_funcs_keys(
-            init_funcs, DEFAULT_INIT_FUNCTIONS_GLMHMM
-        )
 
     hmm_init_funcs = {k: v for k, v in init_funcs.items() if k not in GLM_INIT_FUNCS}
     hmm_init_funcs = setup_hmm_initialization(
@@ -628,10 +624,6 @@ def generate_glm_hmm_initial_model_params(
         random_key = jax.random.PRNGKey(random_key)
 
     glm_params_key, scale_key = jax.random.split(random_key, 2)
-
-    glm_init_funcs = _validate_init_funcs_keys(
-        glm_init_funcs, default_init_dict=GLM_INIT_FUNCS
-    )
 
     glm_params_init = (
         glm_init_funcs["glm_params_init"] or GLM_INIT_FUNCS["glm_params_init"]
