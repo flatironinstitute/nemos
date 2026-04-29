@@ -240,16 +240,6 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
         """Compute the log-likelihood of the data given the model parameters."""
         pass
 
-    @property
-    def initialization_funcs(self):
-        """Dictionary of initialization functions for model parameters."""
-        return self._initialization_funcs
-
-    @initialization_funcs.setter
-    def initialization_funcs(self, initialization_funcs: GLMHMM_INITIALIZATION_FN_DICT):
-        self._initialization_funcs = initialization_funcs
-        self.setup()
-
     def setup(
         self,
         initial_proba_init: Optional[str | Callable] = None,
