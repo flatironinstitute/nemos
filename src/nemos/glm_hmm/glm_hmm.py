@@ -1,8 +1,10 @@
 """API for the GLM-HMM model."""
 
+import warnings
 from pathlib import Path
 from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import pynapple as nap
@@ -10,11 +12,14 @@ from numpy.typing import ArrayLike, NDArray
 
 from .. import observation_models as obs
 from .._observation_model_builder import instantiate_observation_model
+from ..hmm.expectation_maximization import EMState, em_hmm, em_step
 from ..hmm.hmm import BaseHMM
+from ..hmm.utils import initialize_is_new_session
 from ..hmm.initialize_parameters import HMM_INITIALIZATION_FN_DICT
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
-from ..regularizer import Regularizer
+from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
+from ..tree_utils import pytree_map_and_reduce
 from ..type_casting import support_pynapple
 from ..typing import (
     DESIGN_INPUT_TYPE,
@@ -23,6 +28,7 @@ from ..typing import (
     StepResult,
 )
 from ..utils import format_repr
+from .algorithm_configs import prepare_estep_log_likelihood, prepare_mstep_update_fn
 from .initialize_parameters import (
     DEFAULT_INIT_FUNCTIONS_GLMHMM,
     GLMHMM_INITIALIZATION_FN_DICT,
@@ -232,11 +238,28 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
         self.scale_: jnp.ndarray | None = None
         self.dof_resid_: int | None = None
 
+        # please the type checkers
+        self._validator: GLMHMMValidator = (
+            self._validator
+        )  # Why is this not automatically recognized?
+        # cache the log-like
+        self._log_like_cache = {}
+
     def _log_likelihood(
         self, params: GLMHMMParams, X: DESIGN_INPUT_TYPE, y: ArrayLike
     ) -> jnp.ndarray:
-        """Compute the log-likelihood of the data given the model parameters."""
-        pass
+        """Compute the log-likelihood of the data given the model parameters.
+
+        Use cached values to avoid unnecessary computations.
+        """
+        ll_func = self._log_like_cache.get(
+            (y.ndim > 1, self._observation_model, self._inverse_link_function)
+        )
+        if ll_func is None:
+            ll_func = prepare_estep_log_likelihood(
+                y.ndim > 1, self._observation_model, self._inverse_link_function
+            )
+        return ll_func(params, X, y)
 
     def setup(
         self,
@@ -435,38 +458,158 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
             "observation_model": self.observation_model,
         }
 
-    def _model_specific_initialization(
+    def _model_params_initialization(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         is_new_session: jnp.ndarray,
-    ) -> GLMHMMParams:
+    ) -> Tuple[GLMHMMUserParams, bool]:
         """GLM-HMM initialization."""
-        pass
-
-    def _initialize_optimization_and_state(
-        self,
-        X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
-        init_params: GLMHMMParams,
-    ) -> SolverState:
-        """Initialize the EM functions."""
-        pass
+        user_params = generate_glm_hmm_initial_params(
+            self._n_states,
+            X,
+            y,
+            inverse_link_function=self._inverse_link_function,
+            is_new_session=is_new_session,
+            random_key=self._seed,
+            init_funcs=self._initialization_funcs,
+        )
+        validate_params = any(
+            self._initialization_funcs.get(s, True)
+            for s in [
+                "initial_proba_init_custom",
+                "transition_proba_init_custom",
+                "glm_params_init_custom",
+                "glm_scale_init_custom",
+            ]
+        )
+        return user_params, validate_params
 
     def fit(
         self,
         X: DESIGN_INPUT_TYPE,
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
         init_params: Optional[GLMHMMUserParams] = None,
+        is_new_session: Optional[jnp.ndarray] = None,
     ) -> "GLMHMM":
         """Fit the GLM-HMM model to the data."""
-        pass
+        self._validator.validate_inputs(X=X, y=y)
+        # this validates or initialize the new session
+        is_new_session = initialize_is_new_session(X, y, is_new_session)
+
+        # validate the inputs & initialize solver
+        # initialize params if no params are provided
+        if init_params is None:
+            init_params = self._model_specific_initialization(X, y, is_new_session)
+        else:
+            init_params = self._validator.validate_and_cast_params(init_params)
+            self._validator.validate_consistency(init_params, X=X, y=y)
+
+        self._validator.feature_mask_consistency(
+            getattr(self, "_feature_mask", None), init_params
+        )
+
+        # filter for non-nans, grab data if needed
+        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+
+        # make sure is_new_session starts with a 1
+        is_new_session = is_new_session.at[0].set(True)
+
+        # set up optimization
+        self._initialize_optimizer_and_state(data, y, init_params)
+
+        # run EM
+        (
+            fit_params,
+            self.solver_state_,
+        ) = self._optimization_run(
+            init_params, X=data, y=y, is_new_session=is_new_session
+        )
+
+        if self.solver_state_.iterations == self.maxiter:
+            warnings.warn(
+                "The fit did not converge. "
+                "Consider the following:"
+                "\n1) Enable float64 with ``jax.config.update('jax_enable_x64', True)``"
+                "\n2) Increase the ``maxiter`` parameter (max number of iterations of the EM) "
+                "or increase the ``tol`` parameter (tolerance).",
+                RuntimeWarning,
+            )
+
+        # assign fit attributes
+        self._set_model_params(fit_params)
+        self.dof_resid_ = self._estimate_resid_degrees_of_freedom(data)
+        return self
 
     def _estimate_resid_degrees_of_freedom(
         self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None
     ):
-        """Estimate the degrees of freedom of the residuals."""
-        pass
+        """
+        Estimate the degrees of freedom of the residuals.
+
+        Parameters
+        ----------
+        self :
+            A fitted GLM model.
+        X :
+            The design matrix.
+        n_samples :
+            The number of samples observed. If not provided, n_samples is set to ``X.shape[0]``. If the fit is
+            batched, the n_samples could be larger than ``X.shape[0]``.
+
+        Returns
+        -------
+        :
+            An estimate of the degrees of freedom of the residuals.
+        """
+        # Convert a pytree to a design-matrix with pytrees
+        X = jnp.hstack(jax.tree_util.tree_leaves(X))
+
+        if n_samples is None:
+            n_samples = X.shape[0]
+        else:
+            if not isinstance(n_samples, int):
+                raise TypeError(
+                    "`n_samples` must either `None` or of type `int`. Type {type(n_sample)} provided "
+                    "instead!"
+                )
+
+        params = self._get_model_params()
+        coef = params.glm_params.coef
+        if coef.ndim == 3:
+            n_neurons = coef.shape[1]
+        else:
+            n_neurons = 1
+
+        dof_intercept_and_hmm = (
+            self._n_states * n_neurons  # intercept
+            + (
+                self._n_states - 1
+            )  # init prob (n values but sum to 1, so n-1 free values)
+            + (self._n_states - 1) * self._n_states
+        )  # transition n n-dim vectors that sum to 1
+
+        # if the regularizer is lasso use the non-zero
+        # coef as an estimate of the dof
+        # see https://arxiv.org/abs/0712.0881
+        if isinstance(self.regularizer, (GroupLasso, Lasso)):
+            resid_dof = sum(
+                pytree_map_and_reduce(
+                    lambda x: ~jnp.isclose(x, jnp.zeros_like(x)),
+                    lambda x: sum([jnp.sum(i, axis=0) for i in x]),
+                    coef,
+                )
+            )
+            return n_samples - resid_dof - dof_intercept_and_hmm
+        elif isinstance(self.regularizer, Ridge):
+            # for Ridge, use the tot parameters (X.shape[1] + intercept)
+            return (
+                n_samples - (X.shape[1] * self.n_states) - dof_intercept_and_hmm
+            ) * jnp.ones(n_neurons)
+        else:
+            # for UnRegularized, use the rank
+            rank = jnp.linalg.matrix_rank(X)
+            return (n_samples - rank - dof_intercept_and_hmm) * jnp.ones(n_neurons)
 
     def score(
         self,
@@ -584,8 +727,43 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
         y: jnp.ndarray,
     ) -> SolverState:
         """Initialize the optimizer and state of the model."""
-        pass
+        # glm params m-step setup
+        is_population = y.ndim > 1
+        m_step_update = prepare_mstep_update_fn(
+            is_population_glm=is_population,
+            observation_model=self._observation_model,
+            inverse_link_function=self._inverse_link_function,
+            setup_solver=self._instantiate_solver,
+            init_params=init_params,
+        )
 
-    def _model_params_initialization(self, X, y, is_new_session):
-        """Initialize the model parameters."""
-        pass
+        # cannot wrap is_new_session, that's to be calculated at each update form the provided X and y.
+        # for consistency, do not make a partial of that argument in run as well.
+        self._optimization_run = eqx.Partial(
+            em_hmm,
+            inverse_link_function=self.inverse_link_function,
+            log_likelihood_func=self._log_likelihood,
+            m_step_fn_model_params=m_step_update,
+            maxiter=self.maxiter,
+            tol=self.tol,
+        )
+
+        self._optimization_update = eqx.Partial(
+            em_step,
+            inverse_link_function=self.inverse_link_function,
+            log_likelihood_func=self._log_likelihood,
+            m_step_fn_model_params=m_step_update,
+        )
+
+        def init_state_fn(*args, **kwargs) -> SolverState:
+            state = EMState(
+                data_log_likelihood=-jnp.array(jnp.inf),
+                previous_data_log_likelihood=-jnp.array(jnp.inf),
+                log_likelihood_history=jnp.full(self.maxiter, jnp.nan),
+                iterations=0,
+                converged=False,
+            )
+            return state
+
+        self._optimization_init_state = init_state_fn
+        return init_state_fn()
