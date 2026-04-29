@@ -663,6 +663,8 @@ def setup_hmm_initialization(
 
     if init_funcs is None:
         init_funcs = default_init_dict
+    else:
+        init_funcs = init_funcs.copy()
 
     # update functions and kwargs for init prob and transition prob
     # if a function is passed but not kwargs, kwargs will be reset

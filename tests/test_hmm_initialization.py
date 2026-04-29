@@ -636,27 +636,6 @@ class TestSetupHMMInitialization:
 class TestGenerateHMMInitParams:
     """Test generate_hmm_initial_params function"""
 
-    @pytest.mark.parametrize(
-        "init_funcs, expectation",
-        [
-            ({}, does_not_raise()),
-            ({"initial_proba_init": random_initial_proba_init}, does_not_raise()),
-            (
-                {"invalid_key": None},
-                pytest.raises(KeyError, match="Unexpected or unknown keys"),
-            ),
-            (
-                {"initial_prob_init": random_initial_proba_init},
-                pytest.raises(KeyError, match="Did you mean"),
-            ),
-        ],
-    )
-    def test_init_funcs_keys(self, init_funcs, expectation):
-        with expectation:
-            generate_hmm_initial_params(
-                n_states=3, X=None, y=None, is_new_session=None, init_funcs=init_funcs
-            )
-
     def test_init_funcs_none_values(self):
         """Test that None values in init_funcs are replaced by defaults."""
         init_funcs = {

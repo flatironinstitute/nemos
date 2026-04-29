@@ -144,7 +144,7 @@ class MockHMM(BaseHMM[MockHMMParams, MockHMMUserParams, INITIALIZATION_FN_DICT])
     def _log_likelihood(self, params, X, y):
         return jnp.zeros((y.shape[0], self.n_states))
 
-    def _model_params_initialization(self, X, y, is_new_session):
+    def _model_params_initialization(self, X, y, is_new_session, random_key=None):
         return (
             jnp.arange(self._n_states),
             False,
@@ -377,10 +377,42 @@ class TestHMMInit:
         model = MockHMM(n_states=2, initialization_funcs=init_funcs)
         assert model.initialization_funcs == DEFAULT_INIT_FUNCTIONS | init_funcs
 
-    def test_initialization_funcs_invalid_key(self):
-        """Test that invalid registry keys raise KeyError."""
-        with pytest.raises(KeyError, match="unknown key"):
-            MockHMM(n_states=2, initialization_funcs={"invalid_key": lambda: None})
+    @pytest.mark.parametrize(
+        "init_funcs, expectation",
+        [
+            (
+                {"invalid_key": None},
+                pytest.raises(KeyError, match="[Uu]nknown key"),
+            ),
+            (
+                {"initial_prob_init": None},
+                pytest.raises(KeyError, match="Did you mean"),
+            ),
+        ],
+    )
+    def test_initialization_funcs_invalid_key_via_init(self, init_funcs, expectation):
+        """Test that invalid/misspelled keys raise KeyError when passed via constructor."""
+        with expectation:
+            MockHMM(n_states=2, initialization_funcs=init_funcs)
+
+    @pytest.mark.parametrize(
+        "init_funcs, expectation",
+        [
+            (
+                {"invalid_key": None},
+                pytest.raises(KeyError, match="[Uu]nknown key"),
+            ),
+            (
+                {"initial_prob_init": None},
+                pytest.raises(KeyError, match="Did you mean"),
+            ),
+        ],
+    )
+    def test_initialization_funcs_invalid_key_via_setter(self, init_funcs, expectation):
+        """Test that invalid/misspelled keys raise KeyError when assigned via setter."""
+        model = MockHMM(n_states=2)
+        with expectation:
+            model.initialization_funcs = init_funcs
 
     # -------------------------------------------------------------------------
     # Default values tests
@@ -656,7 +688,12 @@ class TestHMMInitialParams:
         model = MockHMM(n_states=3)
 
         (initial_prob, transition_prob), validate_params = (
-            model._hmm_params_initialization(None, None, None)
+            model._hmm_params_initialization(
+                None,
+                None,
+                None,
+                random_key_pair=jax.random.split(jax.random.PRNGKey(0), 2),
+            )
         )
 
         assert jnp.allclose(
@@ -676,7 +713,7 @@ class TestHMMInitialParams:
             / n_states
         )
         (initial_prob, _), validate_params = model._hmm_params_initialization(
-            None, None, None
+            None, None, None, random_key_pair=jax.random.split(jax.random.PRNGKey(0), 2)
         )
         assert jnp.allclose(initial_prob, jnp.full((3,), 1.0) / 3)
         assert validate_params is True
@@ -689,7 +726,7 @@ class TestHMMInitialParams:
             / n_states
         )
         (_, transition_prob), validate_params = model._hmm_params_initialization(
-            None, None, None
+            None, None, None, random_key_pair=jax.random.split(jax.random.PRNGKey(0), 2)
         )
         assert jnp.allclose(transition_prob, jnp.full((3, 3), 1.0) / 3)
         assert validate_params is True
