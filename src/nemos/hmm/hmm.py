@@ -5,7 +5,7 @@ from __future__ import annotations
 import abc
 import warnings
 from numbers import Number
-from typing import Any, Callable, Literal, Optional, Tuple, TypeVar, Union
+from typing import Any, Callable, Generic, Literal, Optional, Tuple, TypeVar, Union
 
 import jax
 import jax.numpy as jnp
@@ -25,7 +25,6 @@ from ..typing import (
     DESIGN_INPUT_TYPE,
 )
 from .initialize_parameters import (
-    INITIALIZATION_FN_DICT,
     _resolve_dirichlet_priors,
     generate_hmm_initial_params,
     setup_hmm_initialization,
@@ -37,7 +36,10 @@ from .validation import HMMValidator
 INITIALIZATION_FN_DICT_T = TypeVar("INITIALIZATION_FN_DICT_T")
 
 
-class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
+class BaseHMM(
+    BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT],
+    Generic[HMMModelParamsT, HMMUserProvidedParamsT, INITIALIZATION_FN_DICT_T],
+):
     """Base class for HMM models.
 
     This class implements the core functionality for HMMs, handling tasks related to HMM parameters that are common
@@ -304,12 +306,12 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         self._seed = value
 
     @property
-    def initialization_funcs(self):
+    def initialization_funcs(self) -> INITIALIZATION_FN_DICT_T | None:
         """Dictionary of initialization functions for HMM parameters."""
         return self._initialization_funcs
 
     @initialization_funcs.setter
-    def initialization_funcs(self, value: INITIALIZATION_FN_DICT | None):
+    def initialization_funcs(self, value: INITIALIZATION_FN_DICT_T | None):
         """
         Set the dictionary of initialization functions for HMM parameters.
 

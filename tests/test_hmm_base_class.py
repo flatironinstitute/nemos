@@ -76,7 +76,7 @@ class MockHMMValidator(HMMValidator[MockHMMUserParams, MockHMMParams]):
         return True
 
 
-class MockHMM(BaseHMM[MockHMMParams, MockHMMUserParams]):
+class MockHMM(BaseHMM[MockHMMParams, MockHMMUserParams, INITIALIZATION_FN_DICT]):
     _validator_class = MockHMMValidator
 
     def __init__(
@@ -357,12 +357,12 @@ class TestHMMInit:
             MockHMM(n_states=3, dirichlet_transition_proba=alphas)
 
     # -------------------------------------------------------------------------
-    # hmm_initialization_funcs setter tests
+    # initialization_funcs setter tests
     # -------------------------------------------------------------------------
     def test_initialization_funcs_none_uses_defaults(self):
         """Test that no setting uses default initialization functions."""
         model = MockHMM(n_states=2)
-        assert model.hmm_initialization_funcs == DEFAULT_INIT_FUNCTIONS
+        assert model.initialization_funcs == DEFAULT_INIT_FUNCTIONS
 
     def test_initialization_funcs_modified(self):
         """Test that modified initialization funcs are preserved."""
@@ -375,7 +375,7 @@ class TestHMMInit:
             "initial_proba_init_kwargs": {"extra_arg": "value"},
         }
         model = MockHMM(n_states=2, initialization_funcs=init_funcs)
-        assert model.hmm_initialization_funcs == DEFAULT_INIT_FUNCTIONS | init_funcs
+        assert model.initialization_funcs == DEFAULT_INIT_FUNCTIONS | init_funcs
 
     def test_initialization_funcs_invalid_key(self):
         """Test that invalid registry keys raise KeyError."""
@@ -408,9 +408,9 @@ class TestHMMSetup:
     def test_setup_with_no_input(self):
         """Test that setup leaves everything as default."""
         model = MockHMM(n_states=3)
-        assert model.hmm_initialization_funcs == DEFAULT_INIT_FUNCTIONS
+        assert model.initialization_funcs == DEFAULT_INIT_FUNCTIONS
         model.setup()
-        assert model.hmm_initialization_funcs == DEFAULT_INIT_FUNCTIONS
+        assert model.initialization_funcs == DEFAULT_INIT_FUNCTIONS
 
     @pytest.mark.parametrize(
         "func_name, func, kwargs, expectation",
@@ -420,7 +420,7 @@ class TestHMMSetup:
             (
                 "kmeans",
                 kmeans_initial_proba_init,
-                {"is_new_session": jnp.zeros(10)},
+                None,
                 does_not_raise(),
             ),
             (
@@ -437,14 +437,14 @@ class TestHMMSetup:
             ),
             (
                 "custom",
-                lambda n_states, X, y, random_key, extra_arg: jnp.full((n_states,), 1.0)
+                lambda n_states, X, y, is_new_session, random_key, extra_arg: jnp.full((n_states,), 1.0)
                 / n_states,
                 {"extra_arg": "value"},
                 does_not_raise(),
             ),
             (
                 "custom",
-                lambda n_states, X, y, random_key: jnp.full((n_states,), 1.0)
+                lambda n_states, X, y, is_new_session, random_key: jnp.full((n_states,), 1.0)
                 / n_states,
                 {"extra_arg": "value"},
                 pytest.raises(ValueError, match="Invalid keyword argument"),
@@ -458,23 +458,23 @@ class TestHMMSetup:
             if func_name == "custom":
                 model.setup(initial_proba_init=func, initial_proba_init_kwargs=kwargs)
                 assert (
-                    model.hmm_initialization_funcs["initial_proba_init_custom"] is True
+                    model.initialization_funcs["initial_proba_init_custom"] is True
                 )
             else:
                 model.setup(
                     initial_proba_init=func_name, initial_proba_init_kwargs=kwargs
                 )
                 assert (
-                    model.hmm_initialization_funcs["initial_proba_init_custom"] is False
+                    model.initialization_funcs["initial_proba_init_custom"] is False
                 )
 
-            assert model.hmm_initialization_funcs["initial_proba_init"] == func
+            assert model.initialization_funcs["initial_proba_init"] == func
 
             if kwargs is None:
-                assert model.hmm_initialization_funcs["initial_proba_init_kwargs"] == {}
+                assert model.initialization_funcs["initial_proba_init_kwargs"] == {}
             else:
                 assert (
-                    model.hmm_initialization_funcs["initial_proba_init_kwargs"]
+                    model.initialization_funcs["initial_proba_init_kwargs"]
                     == kwargs
                 )
 
@@ -487,7 +487,7 @@ class TestHMMSetup:
             (
                 "kmeans",
                 kmeans_transition_proba_init,
-                {"is_new_session": jnp.zeros(10)},
+                None,
                 does_not_raise(),
             ),
             (
@@ -504,7 +504,7 @@ class TestHMMSetup:
             ),
             (
                 "custom",
-                lambda n_states, X, y, random_key, extra_arg: jnp.full(
+                lambda n_states, X, y, is_new_session, random_key, extra_arg: jnp.full(
                     (n_states, n_states), 1.0
                 )
                 / n_states,
@@ -513,7 +513,7 @@ class TestHMMSetup:
             ),
             (
                 "custom",
-                lambda n_states, X, y, random_key: jnp.full((n_states, n_states), 1.0)
+                lambda n_states, X, y, is_new_session, random_key: jnp.full((n_states, n_states), 1.0)
                 / n_states,
                 {"extra_arg": "value"},
                 pytest.raises(ValueError, match="Invalid keyword argument"),
@@ -529,7 +529,7 @@ class TestHMMSetup:
                     transition_proba_init=func, transition_proba_init_kwargs=kwargs
                 )
                 assert (
-                    model.hmm_initialization_funcs["transition_proba_init_custom"]
+                    model.initialization_funcs["transition_proba_init_custom"]
                     is True
                 )
             else:
@@ -537,61 +537,61 @@ class TestHMMSetup:
                     transition_proba_init=func_name, transition_proba_init_kwargs=kwargs
                 )
                 assert (
-                    model.hmm_initialization_funcs["transition_proba_init_custom"]
+                    model.initialization_funcs["transition_proba_init_custom"]
                     is False
                 )
 
-            assert model.hmm_initialization_funcs["transition_proba_init"] == func
+            assert model.initialization_funcs["transition_proba_init"] == func
 
             if kwargs is None:
                 assert (
-                    model.hmm_initialization_funcs["transition_proba_init_kwargs"] == {}
+                    model.initialization_funcs["transition_proba_init_kwargs"] == {}
                 )
             else:
                 assert (
-                    model.hmm_initialization_funcs["transition_proba_init_kwargs"]
+                    model.initialization_funcs["transition_proba_init_kwargs"]
                     == kwargs
                 )
 
     def test_setup_set_all(self):
         init_funcs = {
             "initial_proba_init": kmeans_initial_proba_init,
-            "initial_proba_init_kwargs": {"is_new_session": jnp.zeros(10)},
+            "initial_proba_init_kwargs": {"minimum_prob": 0.01},
             "transition_proba_init": kmeans_transition_proba_init,
-            "transition_proba_init_kwargs": {"is_new_session": jnp.zeros(10)},
+            "transition_proba_init_kwargs": {"minimum_prob": 0.01},
         }
 
         model = MockHMM(n_states=3)
         model.setup(
             initial_proba_init="kmeans",
-            initial_proba_init_kwargs={"is_new_session": jnp.zeros(10)},
+            initial_proba_init_kwargs={"minimum_prob": 0.01},
             transition_proba_init="kmeans",
-            transition_proba_init_kwargs={"is_new_session": jnp.zeros(10)},
+            transition_proba_init_kwargs={"minimum_prob": 0.01},
         )
         expected_funcs = DEFAULT_INIT_FUNCTIONS | init_funcs
         assert (
-            model.hmm_initialization_funcs[key] == expected_funcs[key]
+            model.initialization_funcs[key] == expected_funcs[key]
             for key in expected_funcs
         )
 
     def test_setup_consecutive_calls(self):
         init_funcs = {
             "initial_proba_init": kmeans_initial_proba_init,
-            "initial_proba_init_kwargs": {"is_new_session": jnp.zeros(10)},
+            "initial_proba_init_kwargs": {"minimum_prob": 0.01},
             "transition_proba_init": kmeans_transition_proba_init,
-            "transition_proba_init_kwargs": {"is_new_session": jnp.zeros(10)},
+            "transition_proba_init_kwargs": {"minimum_prob": 0.01},
         }
 
         model = MockHMM(n_states=3)
         model.setup(initial_proba_init="kmeans")
         # updated
         assert (
-            model.hmm_initialization_funcs["initial_proba_init"]
+            model.initialization_funcs["initial_proba_init"]
             == init_funcs["initial_proba_init"]
         )
         # default
         assert (
-            model.hmm_initialization_funcs[key] == DEFAULT_INIT_FUNCTIONS[key]
+            model.initialization_funcs[key] == DEFAULT_INIT_FUNCTIONS[key]
             for key in [
                 "initial_proba_init_kwargs",
                 "transition_proba_init",
@@ -599,10 +599,10 @@ class TestHMMSetup:
             ]
         )
 
-        model.setup(initial_proba_init_kwargs={"is_new_session": jnp.ones(10)})
+        model.setup(initial_proba_init_kwargs={"minimum_prob": 0.01})
         # updated
         assert (
-            model.hmm_initialization_funcs[key] == init_funcs[key]
+            model.initialization_funcs[key] == init_funcs[key]
             for key in [
                 "initial_proba_init",
                 "initial_proba_init_kwargs",
@@ -610,7 +610,7 @@ class TestHMMSetup:
         )
         # default
         assert (
-            model.hmm_initialization_funcs[key] == DEFAULT_INIT_FUNCTIONS[key]
+            model.initialization_funcs[key] == DEFAULT_INIT_FUNCTIONS[key]
             for key in [
                 "transition_proba_init",
                 "transition_proba_init_kwargs",
@@ -620,7 +620,7 @@ class TestHMMSetup:
         model.setup(transition_proba_init="kmeans")
         # updated
         assert (
-            model.hmm_initialization_funcs[key] == init_funcs[key]
+            model.initialization_funcs[key] == init_funcs[key]
             for key in [
                 "initial_proba_init",
                 "initial_proba_init_kwargs",
@@ -629,14 +629,14 @@ class TestHMMSetup:
         )
         # default
         assert (
-            model.hmm_initialization_funcs["transition_proba_init_kwargs"]
+            model.initialization_funcs["transition_proba_init_kwargs"]
             == DEFAULT_INIT_FUNCTIONS["transition_proba_init_kwargs"]
         )
 
-        model.setup(transition_proba_init_kwargs={"is_new_session": jnp.zeros(10)})
+        model.setup(transition_proba_init_kwargs={"minimum_prob": 0.01})
         # updated
         assert (
-            model.hmm_initialization_funcs[key] == init_funcs[key]
+            model.initialization_funcs[key] == init_funcs[key]
             for key in [
                 "initial_proba_init",
                 "initial_proba_init_kwargs",
@@ -649,12 +649,12 @@ class TestHMMSetup:
     def test_setup_reset_kwargs(self, key):
         """Test that kwargs are reset if method is set to something else."""
         model = MockHMM(n_states=3)
-        model.setup(**{key: "kmeans", key + "_kwargs": {"is_new_session": 1.0}})
-        assert model.hmm_initialization_funcs[key + "_kwargs"] == {
-            "is_new_session": 1.0
+        model.setup(**{key: "kmeans", key + "_kwargs": {"minimum_prob": 0.01}})
+        assert model.initialization_funcs[key + "_kwargs"] == {
+            "minimum_prob": 0.01
         }
         model.setup(**{key: "random"})
-        assert model.hmm_initialization_funcs[key + "_kwargs"] == {}
+        assert model.initialization_funcs[key + "_kwargs"] == {}
 
 
 class TestHMMInitialParams:
@@ -678,7 +678,7 @@ class TestHMMInitialParams:
     def test__hmm_params_initialization_custom_validation(self):
         model = MockHMM(n_states=3)
         model.setup(
-            initial_proba_init=lambda n_states, X, y, random_key: jnp.full(
+            initial_proba_init=lambda n_states, X, y, is_new_session, random_key: jnp.full(
                 (n_states,), 1.0
             )
             / n_states
@@ -691,7 +691,7 @@ class TestHMMInitialParams:
 
         model = MockHMM(n_states=3)
         model.setup(
-            transition_proba_init=lambda n_states, X, y, random_key: jnp.full(
+            transition_proba_init=lambda n_states, X, y, is_new_session, random_key: jnp.full(
                 (n_states, n_states), 1.0
             )
             / n_states
