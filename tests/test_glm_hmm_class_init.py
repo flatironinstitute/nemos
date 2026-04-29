@@ -153,9 +153,16 @@ class TestGLMHMMInit:
         model = GLMHMM(n_states=2, initialization_funcs=None)
         assert model.initialization_funcs == DEFAULT_INIT_FUNCTIONS_GLMHMM
 
-    def test_initialization_funcs_invalid_key(self):
-        with pytest.raises(KeyError, match="[Uu]nknown key|[Uu]nexpected"):
-            GLMHMM(n_states=2, initialization_funcs={"invalid_key": lambda: None})
+    def test_initialization_funcs_custom_callable_calls_setup(self):
+        mock_func = _get_mock_func("glm_params_init")
+        input_dict = {"glm_params_init": mock_func}
+        with patch(
+            "nemos.glm_hmm.glm_hmm.setup_glm_hmm_initialization"
+        ) as mock_setup:
+            mock_setup.return_value = DEFAULT_INIT_FUNCTIONS_GLMHMM
+            GLMHMM(n_states=2, initialization_funcs=input_dict)
+        mock_setup.assert_called_once()
+        assert mock_setup.call_args.kwargs["init_funcs"] == input_dict
 
     # -------------------------------------------------------------------------
     # Default values and fit attributes
@@ -182,10 +189,14 @@ class TestGLMHMMInit:
     # -------------------------------------------------------------------------
     # repr
     # -------------------------------------------------------------------------
-    def test_repr(self):
-        model = GLMHMM(n_states=3, observation_model="Poisson")
+    @pytest.mark.parametrize(
+        "obs_model", ["Poisson", "Bernoulli", "Gamma", "Gaussian", "NegativeBinomial"]
+    )
+    def test_repr(self, obs_model):
+        model = GLMHMM(n_states=3, observation_model=obs_model)
         repr_str = repr(model)
-        assert "GLMHMM" in repr_str
+        assert repr_str.startswith("GLMHMM(")
+        assert obs_model in repr_str
         assert "n_states" in repr_str
 
 
