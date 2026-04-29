@@ -156,9 +156,7 @@ class TestGLMHMMInit:
     def test_initialization_funcs_custom_callable_calls_setup(self):
         mock_func = _get_mock_func("glm_params_init")
         input_dict = {"glm_params_init": mock_func}
-        with patch(
-            "nemos.glm_hmm.glm_hmm.setup_glm_hmm_initialization"
-        ) as mock_setup:
+        with patch("nemos.glm_hmm.glm_hmm.setup_glm_hmm_initialization") as mock_setup:
             mock_setup.return_value = DEFAULT_INIT_FUNCTIONS_GLMHMM
             GLMHMM(n_states=2, initialization_funcs=input_dict)
         mock_setup.assert_called_once()
@@ -214,7 +212,9 @@ class TestGLMHMMSetup:
         model = GLMHMM(n_states=2)
         with patch("nemos.glm_hmm.glm_hmm.setup_glm_hmm_initialization") as mock_setup:
             mock_setup.return_value = mock_result
-            model.setup(**{func_name: mock_func, func_name + "_kwargs": MOCK_VALID_KWARGS})
+            model.setup(
+                **{func_name: mock_func, func_name + "_kwargs": MOCK_VALID_KWARGS}
+            )
         assert mock_setup.call_args.kwargs[func_name] is mock_func
         assert mock_setup.call_args.kwargs[func_name + "_kwargs"] == MOCK_VALID_KWARGS
         assert model.initialization_funcs is mock_result
