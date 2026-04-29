@@ -477,12 +477,12 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
             init_funcs=self._initialization_funcs,
         )
         validate_params = any(
-            self._initialization_funcs.get(s, True)
+            self._initialization_funcs[s]
             for s in [
                 "initial_proba_init_custom",
                 "transition_proba_init_custom",
                 "glm_params_init_custom",
-                "glm_scale_init_custom",
+                "scale_init_custom",
             ]
         )
         return user_params, validate_params
@@ -518,7 +518,7 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
         is_new_session = is_new_session.at[0].set(True)
 
         # set up optimization
-        self._initialize_optimizer_and_state(data, y, init_params)
+        self._initialize_optimizer_and_state(init_params, data, y)
 
         # run EM
         (
