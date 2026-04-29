@@ -25,7 +25,9 @@ from ..typing import (
     DESIGN_INPUT_TYPE,
 )
 from .initialize_parameters import (
+    INITIALIZATION_FN_DICT,
     _resolve_dirichlet_priors,
+    _validate_init_funcs_keys,
     generate_hmm_initial_params,
     setup_hmm_initialization,
 )
@@ -87,7 +89,7 @@ class BaseHMM(
     """
 
     _validator_class: type[HMMValidator[HMMUserProvidedParamsT, HMMModelParamsT]]
-    _default_init_dict: Optional[dict] = None
+    _default_init_dict: dict = INITIALIZATION_FN_DICT
 
     def __init__(
         self,
@@ -180,6 +182,7 @@ class BaseHMM(
             transition_proba_init=transition_proba_init,
             transition_proba_init_kwargs=transition_proba_init_kwargs,
             init_funcs=self._initialization_funcs,
+            default_init_dict=self._default_init_dict,
         )
 
     @property
@@ -319,7 +322,10 @@ class BaseHMM(
         This should only be called by __init__ for sklearn cloning, users should
         use the `setup` method to set initialization functions.
         """
-        self._initialization_funcs = value
+        # always key validated in a model dependent way
+        self._initialization_funcs = _validate_init_funcs_keys(
+            value, self._default_init_dict
+        )
         self.setup()
 
     def _hmm_params_initialization(
@@ -337,7 +343,6 @@ class BaseHMM(
             is_new_session,
             random_key_pair=random_key_pair,
             init_funcs=self._initialization_funcs,
-            default_init_dict=self._default_init_dict,
         )
         validate_params = self._initialization_funcs.get(
             "initial_proba_init_custom", True
