@@ -521,7 +521,9 @@ def setup_glm_hmm_initialization(
         glm_init_funcs = {k: v for k, v in init_funcs.items() if k in GLM_INIT_FUNCS}
         # check for unexpected/unknown keys in init_funcs and backfill with defaults
         # note that the hmm init function validation will be done in the setup
-        init_funcs = _validate_init_funcs_keys(init_funcs, DEFAULT_INIT_FUNCTIONS_GLMHMM)
+        init_funcs = _validate_init_funcs_keys(
+            init_funcs, DEFAULT_INIT_FUNCTIONS_GLMHMM
+        )
 
     hmm_init_funcs = {k: v for k, v in init_funcs.items() if k not in GLM_INIT_FUNCS}
     hmm_init_funcs = setup_hmm_initialization(
