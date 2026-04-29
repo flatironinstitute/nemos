@@ -195,8 +195,3 @@ class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
     def get_empty_params(self, X, y) -> GLMHMMParams:
         """Return the param shape given the input data."""
         pass
-
-    @staticmethod
-    def validate_init_funcs(init_funcs: dict):
-        """Validate the keys of the initialization funcs provided."""
-        pass

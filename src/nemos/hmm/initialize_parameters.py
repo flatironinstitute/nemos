@@ -624,14 +624,17 @@ def setup_hmm_initialization(
     transition_proba_init: Optional[str | Callable] = None,
     transition_proba_init_kwargs: Optional[dict] = None,
     init_funcs: Optional[dict | INITIALIZATION_FN_DICT] = None,
+    default_init_dict: Optional[dict] = None,
 ) -> INITIALIZATION_FN_DICT:
     """
     Set up HMM initialization functions based on user input, merging with defaults.
 
     This function takes user-specified initialization functions (either as strings for built-in functions or callables
-    for custom functions) for both initial state probabilities and transition probabilities, validates them, and merges
+    for custom functions) for both initial state probabilities and transition probabilities, and merges
     them with default initialization functions for ones that are not provided. It ensures that the provided functions
     and kwargs are valid and conform to expected signatures.
+    The function assumes that the function keys are pre-validated, this is convenient because
+    different model require different keys.
 
     Parameters
     ----------
@@ -654,12 +657,11 @@ def setup_hmm_initialization(
     init_funcs :
         Updated or initialized dictionary based on provided inputs.
     """
+    if default_init_dict is None:
+        default_init_dict = DEFAULT_INIT_FUNCTIONS.copy()
 
     if init_funcs is None:
-        init_funcs = DEFAULT_INIT_FUNCTIONS.copy()
-    else:
-        # check for unexpected/unknown keys in init_funcs and backfill with defaults
-        init_funcs = _validate_init_funcs_keys(init_funcs)
+        init_funcs = default_init_dict
 
     # update functions and kwargs for init prob and transition prob
     # if a function is passed but not kwargs, kwargs will be reset
@@ -856,7 +858,6 @@ def generate_hmm_initial_params(
     is_new_session: NDArray | jnp.ndarray,
     random_key_pair: jax.Array = jax.random.split(jax.random.PRNGKey(1234), 2),
     init_funcs: Optional[dict] = None,
-    default_init_dict: Optional[dict] = None,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
     Generate initial HMM parameters using the provided initialization functions.
@@ -882,8 +883,6 @@ def generate_hmm_initial_params(
         Dictionary containing the initialization functions and their kwargs for both initial state probabilities
         and transition probabilities. This dictionary can be set up using the `setup_hmm_initialization` function.
         If not provided, or if specific functions are missing, defaults will be used.
-    default_init_dict :
-        Dictionary containing the valid initialization functions dictionary. This may be model specific.
 
     Returns
     -------
@@ -898,11 +897,7 @@ def generate_hmm_initial_params(
         Function to set up the initialization functions and their kwargs based on user input.
     """
     # check for unexpected/unknown keys in init_funcs if user provided dictionary not made by setup_hmm_initialization
-    init_funcs = (
-        DEFAULT_INIT_FUNCTIONS.copy()
-        if init_funcs is None
-        else _validate_init_funcs_keys(init_funcs, default_init_dict=default_init_dict)
-    )
+    init_funcs = DEFAULT_INIT_FUNCTIONS.copy() if init_funcs is None else init_funcs
 
     # grab initial probability initialization function
     # fallback to defaults if set to None

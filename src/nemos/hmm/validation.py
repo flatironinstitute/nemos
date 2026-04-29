@@ -11,7 +11,6 @@ from .. import validation
 from ..base_validator import RegressorValidator
 from ..type_casting import is_pynapple_tsd
 from ..typing import DESIGN_INPUT_TYPE, ArrayLike
-from .initialize_parameters import INITIALIZATION_FN_DICT, _validate_init_funcs_keys
 from .params import HMMModelParamsT, HMMParams, HMMUserParams, HMMUserProvidedParamsT
 from .utils import (
     initialize_is_new_session,
@@ -221,8 +220,3 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
     def get_empty_params(self, X, y) -> HMMModelParamsT:
         """Return the param shape given the input data."""
         pass
-
-    @staticmethod
-    def validate_init_funcs(init_funcs: dict):
-        """Validate the keys of the initialization funcs provided."""
-        _validate_init_funcs_keys(init_funcs, INITIALIZATION_FN_DICT)
