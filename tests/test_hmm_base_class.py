@@ -89,7 +89,7 @@ class MockHMM(BaseHMM[MockHMMParams, MockHMMUserParams]):
         maxiter: int = 1000,
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
-        hmm_initialization_funcs: INITIALIZATION_FN_DICT = None,
+        initialization_funcs: INITIALIZATION_FN_DICT = None,
         model_initialization_funcs: INITIALIZATION_FN_DICT = None,
     ):
         BaseHMM.__init__(
@@ -100,7 +100,7 @@ class MockHMM(BaseHMM[MockHMMParams, MockHMMUserParams]):
             maxiter=maxiter,
             tol=tol,
             seed=seed,
-            hmm_initialization_funcs=hmm_initialization_funcs,
+            initialization_funcs=initialization_funcs,
         )
         self.param_: jnp.ndarray | None = None
         self.model_initialization_funcs = {}
@@ -374,13 +374,13 @@ class TestHMMInit:
             "initial_proba_init": custom_func,
             "initial_proba_init_kwargs": {"extra_arg": "value"},
         }
-        model = MockHMM(n_states=2, hmm_initialization_funcs=init_funcs)
+        model = MockHMM(n_states=2, initialization_funcs=init_funcs)
         assert model.hmm_initialization_funcs == DEFAULT_INIT_FUNCTIONS | init_funcs
 
     def test_initialization_funcs_invalid_key(self):
         """Test that invalid registry keys raise KeyError."""
         with pytest.raises(KeyError, match="unknown key"):
-            MockHMM(n_states=2, hmm_initialization_funcs={"invalid_key": lambda: None})
+            MockHMM(n_states=2, initialization_funcs={"invalid_key": lambda: None})
 
     # -------------------------------------------------------------------------
     # Default values tests
@@ -767,7 +767,7 @@ class TestHMMInitialParams:
         model = MockHMM(n_states=3)
         model.setup(**{key: value})
         with expectation:
-            model_params = model._model_specific_initialization(None, None, None)
+            model._model_specific_initialization(None, None, None)
 
 
 class TestHMMNewSession:

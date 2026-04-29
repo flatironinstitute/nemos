@@ -5,7 +5,7 @@ from __future__ import annotations
 import abc
 import warnings
 from numbers import Number
-from typing import Any, Callable, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Literal, Optional, Tuple, TypeVar, Union
 
 import jax
 import jax.numpy as jnp
@@ -33,6 +33,8 @@ from .initialize_parameters import (
 from .params import HMMModelParamsT, HMMUserParams, HMMUserProvidedParamsT
 from .utils import _check_state_format
 from .validation import HMMValidator
+
+INITIALIZATION_FN_DICT_T = TypeVar("INITIALIZATION_FN_DICT_T")
 
 
 class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
@@ -75,7 +77,7 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
     seed :
         JAX PRNG key for random number generation during initialization. Default is
         ``jax.random.PRNGKey(123)``.
-    hmm_initialization_funcs :
+    initialization_funcs :
         Dictionary specifying the initialization functions for the HMM parameters. This parameter is
         included at initialization for scikit-learn compatibility; however, users should set up the
         initialization functions using the :meth:`~nemos.hmm.hmm.BaseHMM.setup` method after model
@@ -100,7 +102,7 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         maxiter: int = 1000,
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
-        hmm_initialization_funcs: Optional[INITIALIZATION_FN_DICT] = None,
+        initialization_funcs: Optional[INITIALIZATION_FN_DICT_T] = None,
     ):
         super().__init__(
             regularizer=regularizer,
@@ -121,7 +123,7 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         self.transition_prob_: Optional[jnp.ndarray] = None
         self.initial_prob_: Optional[jnp.ndarray] = None
 
-        self.hmm_initialization_funcs = hmm_initialization_funcs
+        self.initialization_funcs = initialization_funcs
 
     def setup(
         self,
@@ -169,12 +171,12 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         transition_proba_init_kwargs :
             A dictionary of keyword arguments to pass to the transition probability initialization function.
         """
-        self._hmm_initialization_funcs = setup_hmm_initialization(
+        self._initialization_funcs = setup_hmm_initialization(
             initial_proba_init=initial_proba_init,
             initial_proba_init_kwargs=initial_proba_init_kwargs,
             transition_proba_init=transition_proba_init,
             transition_proba_init_kwargs=transition_proba_init_kwargs,
-            init_funcs=self._hmm_initialization_funcs,
+            init_funcs=self._initialization_funcs,
         )
 
     @property
@@ -302,19 +304,19 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
         self._seed = value
 
     @property
-    def hmm_initialization_funcs(self):
+    def initialization_funcs(self):
         """Dictionary of initialization functions for HMM parameters."""
-        return self._hmm_initialization_funcs
+        return self._initialization_funcs
 
-    @hmm_initialization_funcs.setter
-    def hmm_initialization_funcs(self, value: INITIALIZATION_FN_DICT | None):
+    @initialization_funcs.setter
+    def initialization_funcs(self, value: INITIALIZATION_FN_DICT | None):
         """
         Set the dictionary of initialization functions for HMM parameters.
 
         This should only be called by __init__ for sklearn cloning, users should
         use the `setup` method to set initialization functions.
         """
-        self._hmm_initialization_funcs = value
+        self._initialization_funcs = value
         self.setup()
 
     def _hmm_params_initialization(
@@ -330,11 +332,11 @@ class BaseHMM(BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT]):
             y,
             is_new_session,
             random_key=self._seed,
-            init_funcs=self._hmm_initialization_funcs,
+            init_funcs=self._initialization_funcs,
         )
-        validate_params = self._hmm_initialization_funcs.get(
+        validate_params = self._initialization_funcs.get(
             "initial_proba_init_custom", True
-        ) or self._hmm_initialization_funcs.get("transition_proba_init_custom", True)
+        ) or self._initialization_funcs.get("transition_proba_init_custom", True)
         return hmm_params, validate_params
 
     @abc.abstractmethod
