@@ -464,6 +464,7 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         is_new_session: jnp.ndarray,
+        random_key: jax.Array,
     ) -> Tuple[GLMHMMUserParams, bool]:
         """GLM-HMM initialization."""
         user_params = generate_glm_hmm_initial_params(
@@ -472,7 +473,7 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
             y,
             inverse_link_function=self._inverse_link_function,
             is_new_session=is_new_session,
-            random_key=self._seed,
+            random_key=random_key,
             init_funcs=self._initialization_funcs,
         )
         validate_params = any(
