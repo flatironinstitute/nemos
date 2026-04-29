@@ -17,6 +17,7 @@ from ..regularizer import Regularizer
 from ..type_casting import support_pynapple
 from ..typing import (
     DESIGN_INPUT_TYPE,
+    ModelParamsT,
     SolverState,
     StepResult,
 )
@@ -50,7 +51,7 @@ def _check_state_format(state_format: str) -> None:
         )
 
 
-class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams]):
+class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DICT]):
     r"""Generalized Linear Model with Hidden Markov Model (GLM-HMM).
 
     This model combines a Generalized Linear Model (GLM) with a Hidden Markov Model (HMM) to capture
@@ -221,13 +222,10 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams]):
             maxiter=maxiter,
             tol=tol,
             seed=seed,
-            hmm_initialization_funcs=initialization_funcs,
+            initialization_funcs=initialization_funcs,
         )
         self.observation_model = observation_model
         self.inverse_link_function = inverse_link_function
-
-        # assign defaults to initialization functions
-        self.initialization_funcs = initialization_funcs
 
         # fit attributes
         self.coef_: jnp.ndarray | None = None
@@ -467,3 +465,26 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams]):
         return format_repr(
             self, multiline=True, use_name_keys=["inverse_link_function"]
         )
+
+    def _compute_loss(
+        self,
+        params: ModelParamsT,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        **kwargs,
+    ):
+        pass
+
+    def _initialize_optimizer_and_state(
+        self,
+        init_params: ModelParamsT,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+    ) -> SolverState:
+        """Initialize the optimizer and state of the model."""
+        pass
+
+    def _model_params_initialization(self, X, y, is_new_session):
+        """Initialize the model parameters."""
+        pass
