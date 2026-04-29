@@ -87,7 +87,7 @@ class BaseHMM(
     """
 
     _validator_class: type[HMMValidator[HMMUserProvidedParamsT, HMMModelParamsT]]
-    _valid_init_funcs: Optional[dict] = None
+    _default_init_dict: Optional[dict] = None
 
     def __init__(
         self,
@@ -337,7 +337,7 @@ class BaseHMM(
             is_new_session,
             random_key_pair=random_key_pair,
             init_funcs=self._initialization_funcs,
-            valid_funcs=self._valid_init_funcs,
+            default_init_dict=self._default_init_dict,
         )
         validate_params = self._initialization_funcs.get(
             "initial_proba_init_custom", True

@@ -11,6 +11,7 @@ from numpy.typing import NDArray
 from ..type_casting import is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE
 from ..validation import _suggest_keys
+from .params import HMMUserParams
 from .utils import initialize_is_new_session
 
 sklearn = lazy.load("sklearn")
@@ -25,7 +26,7 @@ class InitFunctionHMM(Protocol):
         X: DESIGN_INPUT_TYPE,
         y: NDArray | jnp.ndarray,
         is_new_session: NDArray | jnp.ndarray,
-        random_key: jax.random.PRNGKey,
+        random_key: jax.Array,
         **kwargs: Any,
     ) -> jnp.ndarray:
         """Initialize HMM probabilities."""
@@ -551,7 +552,7 @@ def kmeans_transition_proba_init(
     y: NDArray | jnp.ndarray,
     is_new_session: Optional[jnp.ndarray] = None,
     minimum_prob: float = 0.02,
-    random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
+    random_key: jax.Array = jax.random.PRNGKey(123),
     initializer: Optional[KMeansInitializer] = None,
 ):
     """
@@ -694,14 +695,15 @@ def setup_hmm_initialization(
 
 def _validate_init_funcs_keys(
     init_funcs: dict | INITIALIZATION_FN_DICT,
-    valid_funcs: dict | None = None,
+    default_init_dict: Optional[dict[str, Callable]] = None,
 ) -> INITIALIZATION_FN_DICT:
     """Validate that the keys in the init_funcs dictionary are as expected. Set missing values to defaults."""
-    if valid_funcs is None:
-        valid_funcs = DEFAULT_INIT_FUNCTIONS
-    unexpected_keys = init_funcs.keys() - valid_funcs.keys()
+    if default_init_dict is None:
+        default_init_dict = DEFAULT_INIT_FUNCTIONS.copy()
+
+    unexpected_keys = init_funcs.keys() - default_init_dict.keys()
     if unexpected_keys:
-        suggested_keys = _suggest_keys(unexpected_keys, valid_funcs.keys())
+        suggested_keys = _suggest_keys(unexpected_keys, default_init_dict.keys())
         error_msg = (
             (
                 f" Unexpected key: '{key}'. Did you mean '{suggestion}'?"
@@ -715,12 +717,15 @@ def _validate_init_funcs_keys(
             + "\n".join(error_msg)
         )
     # resolve with defaults and make copy
-    init_funcs = DEFAULT_INIT_FUNCTIONS | init_funcs
+    init_funcs = default_init_dict | init_funcs
     return init_funcs
 
 
 def _resolve_init_funcs(
-    key: str, value: str | Callable, kwargs: Optional[dict] = None
+    key: str,
+    value: str | Callable,
+    kwargs: Optional[dict] = None,
+    available_init_funcs: dict[str, Callable] = None,
 ) -> Tuple[InitFunctionHMM, dict, bool]:
     """
     Validate a provided initialization function.
@@ -737,6 +742,8 @@ def _resolve_init_funcs(
         callable.
     kwargs :
         Optional keyword arguments to pass to the initialization function.
+    available_init_funcs:
+        Dictionary of available initialization functions and their kwargs (if any) to be used for initialization.
 
     Returns
     -------
@@ -751,16 +758,16 @@ def _resolve_init_funcs(
     TypeError
         If the provided value is neither a string nor a callable function.
     """
+    if available_init_funcs is None:
+        available_init_funcs = AVAILABLE_INIT_FUNCTIONS
     if isinstance(value, str):
-        if value not in AVAILABLE_INIT_FUNCTIONS[key]:
+        if value not in available_init_funcs[key]:
             raise ValueError(
                 f"Invalid initialization function name '{value}' for '{key}'. "
-                f"Available options are: {list(AVAILABLE_INIT_FUNCTIONS[key].keys())}."
+                f"Available options are: {list(available_init_funcs[key].keys())}."
             )
-        kwargs = _validate_init_funcs_kwargs(
-            AVAILABLE_INIT_FUNCTIONS[key][value], kwargs
-        )
-        return AVAILABLE_INIT_FUNCTIONS[key][value], kwargs, False
+        kwargs = _validate_init_funcs_kwargs(available_init_funcs[key][value], kwargs)
+        return available_init_funcs[key][value], kwargs, False
     elif callable(value):
         return _validate_custom_init_func(value, kwargs)
     else:
@@ -770,12 +777,14 @@ def _resolve_init_funcs(
         )
 
 
-def _validate_init_funcs_kwargs(func: InitFunctionHMM, kwargs: dict | None) -> dict:
+def _validate_init_funcs_kwargs(
+    func: InitFunctionHMM, kwargs: dict | None, protocol=InitFunctionHMM
+) -> dict:
     """Validate that the provided kwargs match the expected signature of the initialization functions."""
     if kwargs is None:
         return {}
 
-    reserved_params = _get_protocol_parameters(InitFunctionHMM)
+    reserved_params = _get_protocol_parameters(protocol)
     for key in reserved_params:
         if key in kwargs:
             raise ValueError(
@@ -848,7 +857,7 @@ def generate_hmm_initial_params(
     is_new_session: NDArray | jnp.ndarray,
     random_key_pair: jax.Array = jax.random.split(jax.random.PRNGKey(1234), 2),
     init_funcs: Optional[dict] = None,
-    valid_funcs: Optional[dict] = None,
+    default_init_dict: Optional[dict] = None,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
     Generate initial HMM parameters using the provided initialization functions.
@@ -874,7 +883,7 @@ def generate_hmm_initial_params(
         Dictionary containing the initialization functions and their kwargs for both initial state probabilities
         and transition probabilities. This dictionary can be set up using the `setup_hmm_initialization` function.
         If not provided, or if specific functions are missing, defaults will be used.
-    valid_funcs :
+    default_init_dict :
         Dictionary containing the valid initialization functions dictionary. This may be model specific.
 
     Returns
@@ -893,7 +902,7 @@ def generate_hmm_initial_params(
     init_funcs = (
         DEFAULT_INIT_FUNCTIONS.copy()
         if init_funcs is None
-        else _validate_init_funcs_keys(init_funcs, valid_funcs=valid_funcs)
+        else _validate_init_funcs_keys(init_funcs, default_init_dict=default_init_dict)
     )
 
     # grab initial probability initialization function
