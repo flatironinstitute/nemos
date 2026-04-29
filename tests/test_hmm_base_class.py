@@ -437,14 +437,18 @@ class TestHMMSetup:
             ),
             (
                 "custom",
-                lambda n_states, X, y, is_new_session, random_key, extra_arg: jnp.full((n_states,), 1.0)
+                lambda n_states, X, y, is_new_session, random_key, extra_arg: jnp.full(
+                    (n_states,), 1.0
+                )
                 / n_states,
                 {"extra_arg": "value"},
                 does_not_raise(),
             ),
             (
                 "custom",
-                lambda n_states, X, y, is_new_session, random_key: jnp.full((n_states,), 1.0)
+                lambda n_states, X, y, is_new_session, random_key: jnp.full(
+                    (n_states,), 1.0
+                )
                 / n_states,
                 {"extra_arg": "value"},
                 pytest.raises(ValueError, match="Invalid keyword argument"),
@@ -457,26 +461,19 @@ class TestHMMSetup:
         with expectation:
             if func_name == "custom":
                 model.setup(initial_proba_init=func, initial_proba_init_kwargs=kwargs)
-                assert (
-                    model.initialization_funcs["initial_proba_init_custom"] is True
-                )
+                assert model.initialization_funcs["initial_proba_init_custom"] is True
             else:
                 model.setup(
                     initial_proba_init=func_name, initial_proba_init_kwargs=kwargs
                 )
-                assert (
-                    model.initialization_funcs["initial_proba_init_custom"] is False
-                )
+                assert model.initialization_funcs["initial_proba_init_custom"] is False
 
             assert model.initialization_funcs["initial_proba_init"] == func
 
             if kwargs is None:
                 assert model.initialization_funcs["initial_proba_init_kwargs"] == {}
             else:
-                assert (
-                    model.initialization_funcs["initial_proba_init_kwargs"]
-                    == kwargs
-                )
+                assert model.initialization_funcs["initial_proba_init_kwargs"] == kwargs
 
     @pytest.mark.parametrize(
         "func_name, func, kwargs, expectation",
@@ -513,7 +510,9 @@ class TestHMMSetup:
             ),
             (
                 "custom",
-                lambda n_states, X, y, is_new_session, random_key: jnp.full((n_states, n_states), 1.0)
+                lambda n_states, X, y, is_new_session, random_key: jnp.full(
+                    (n_states, n_states), 1.0
+                )
                 / n_states,
                 {"extra_arg": "value"},
                 pytest.raises(ValueError, match="Invalid keyword argument"),
@@ -529,28 +528,23 @@ class TestHMMSetup:
                     transition_proba_init=func, transition_proba_init_kwargs=kwargs
                 )
                 assert (
-                    model.initialization_funcs["transition_proba_init_custom"]
-                    is True
+                    model.initialization_funcs["transition_proba_init_custom"] is True
                 )
             else:
                 model.setup(
                     transition_proba_init=func_name, transition_proba_init_kwargs=kwargs
                 )
                 assert (
-                    model.initialization_funcs["transition_proba_init_custom"]
-                    is False
+                    model.initialization_funcs["transition_proba_init_custom"] is False
                 )
 
             assert model.initialization_funcs["transition_proba_init"] == func
 
             if kwargs is None:
-                assert (
-                    model.initialization_funcs["transition_proba_init_kwargs"] == {}
-                )
+                assert model.initialization_funcs["transition_proba_init_kwargs"] == {}
             else:
                 assert (
-                    model.initialization_funcs["transition_proba_init_kwargs"]
-                    == kwargs
+                    model.initialization_funcs["transition_proba_init_kwargs"] == kwargs
                 )
 
     def test_setup_set_all(self):
@@ -650,9 +644,7 @@ class TestHMMSetup:
         """Test that kwargs are reset if method is set to something else."""
         model = MockHMM(n_states=3)
         model.setup(**{key: "kmeans", key + "_kwargs": {"minimum_prob": 0.01}})
-        assert model.initialization_funcs[key + "_kwargs"] == {
-            "minimum_prob": 0.01
-        }
+        assert model.initialization_funcs[key + "_kwargs"] == {"minimum_prob": 0.01}
         model.setup(**{key: "random"})
         assert model.initialization_funcs[key + "_kwargs"] == {}
 
