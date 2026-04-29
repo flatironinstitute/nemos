@@ -329,6 +329,7 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
+        is_new_session: jnp.ndarray,
     ) -> GLMHMMParams:
         """GLM-HMM initialization."""
         pass
