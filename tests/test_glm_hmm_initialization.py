@@ -20,11 +20,47 @@ from nemos.glm_hmm.initialize_parameters import (
     random_glm_params_init,
     setup_glm_hmm_initialization,
 )
+from nemos.glm_hmm.validation import GLMHMMValidator
+from nemos.hmm.hmm import BaseHMM
 from nemos.hmm.initialize_parameters import (
     sticky_transition_proba_init,
     uniform_initial_proba_init,
 )
 from nemos.inverse_link_function_utils import resolve_inverse_link_function
+
+# =============================================================================
+# Minimal GLMHMM mock for key-validation tests (exercises initialization_funcs setter)
+# =============================================================================
+
+
+class MockGLMHMM(BaseHMM):
+    _validator_class = GLMHMMValidator
+    _default_init_dict = DEFAULT_INIT_FUNCTIONS_GLMHMM
+
+    def __init__(self, n_states, initialization_funcs=None):
+        BaseHMM.__init__(self, n_states=n_states, initialization_funcs=initialization_funcs)
+        self.coef_ = self.intercept_ = self.scale_ = None
+
+    def setup(self, **kwargs):
+        self._initialization_funcs = setup_glm_hmm_initialization(
+            init_funcs=self._initialization_funcs,
+        )
+
+    def _check_model_is_fit(self): pass
+    def _get_model_params(self): pass
+    def _set_model_params(self, params): pass
+    def _log_likelihood(self, params, X, y): pass
+    def _model_params_initialization(self, X, y, is_new_session, random_key=None): pass
+    def fit(self, *a, **kw): pass
+    def _initialize_optimizer_and_state(self, *a, **kw): pass
+    def _compute_loss(self, *a, **kw): pass
+    def _get_optimal_solver_params_config(self, *a, **kw): pass
+    def predict(self, *a, **kw): pass
+    def simulate(self, *a, **kw): pass
+    def save_params(self, *a, **kw): pass
+    def update(self, *a, **kw): pass
+    def score(self, *a, **kw): pass
+
 
 # =============================================================================
 # Mock infrastructure
@@ -491,7 +527,7 @@ class TestSetupGLMHMMInitialization:
 
     def test_unknown_init_funcs_key(self):
         with pytest.raises(KeyError, match="Unexpected or unknown keys"):
-            setup_glm_hmm_initialization(init_funcs={"totally_invalid_key": None})
+            MockGLMHMM(n_states=2, initialization_funcs={"totally_invalid_key": None})
 
     @pytest.mark.parametrize(
         "key, init_str, kwargs_key, kwargs_val",
@@ -588,8 +624,8 @@ class TestGenerateGLMHMMInitialParams:
         X = jnp.ones((50, n_features))
         y = jnp.ones((50, n_neurons)) if n_neurons > 1 else jnp.ones(50)
 
-        coef, intercept, scale, initial_probs, transition_matrix = (
-            generate_glm_hmm_initial_model_params(n_states, X, y, jnp.exp)
+        coef, intercept, scale = generate_glm_hmm_initial_model_params(
+            n_states, X, y, jnp.exp
         )
 
         if n_neurons == 1:
@@ -601,28 +637,21 @@ class TestGenerateGLMHMMInitialParams:
             assert intercept.shape == (n_neurons, n_states)
             assert scale.shape == (n_neurons, n_states)
 
-        assert initial_probs.shape == (n_states,)
-        assert transition_matrix.shape == (n_states, n_states)
-
-        for arr in [coef, intercept, scale, initial_probs, transition_matrix]:
+        for arr in [coef, intercept, scale]:
             assert isinstance(arr, jnp.ndarray)
 
-    def test_returns_five_elements(self):
+    def test_returns_three_elements(self):
         result = generate_glm_hmm_initial_model_params(
             2, jnp.ones((10, 3)), jnp.ones(10), lambda x: x
         )
         assert isinstance(result, tuple)
-        assert len(result) == 5
+        assert len(result) == 3
 
     @pytest.mark.parametrize(
         "init_funcs, expectation",
         [
             ({}, does_not_raise()),
             ({"glm_params_init": random_glm_params_init}, does_not_raise()),
-            (
-                {"totally_invalid_key": None},
-                pytest.raises(KeyError, match="Unexpected or unknown keys"),
-            ),
         ],
     )
     def test_init_funcs_key_validation(self, init_funcs, expectation):
@@ -635,17 +664,19 @@ class TestGenerateGLMHMMInitialParams:
                 init_funcs=init_funcs,
             )
 
+    def test_init_funcs_unknown_key_raises(self):
+        with pytest.raises(KeyError, match="Unexpected or unknown keys"):
+            MockGLMHMM(n_states=2, initialization_funcs={"totally_invalid_key": None})
+
     def test_none_init_funcs_uses_defaults(self):
         X = jnp.ones((50, 5))
         y = jnp.full(50, 2.0)
-        coef, intercept, scale, initial_probs, transition_matrix = (
-            generate_glm_hmm_initial_model_params(3, X, y, lambda x: x)
+        coef, intercept, scale = generate_glm_hmm_initial_model_params(
+            3, X, y, lambda x: x
         )
         assert jnp.abs(coef).max() < 0.01
         assert jnp.allclose(intercept, 2.0)
         assert jnp.all(scale == 1.0)
-        assert jnp.allclose(initial_probs, 1.0 / 3)
-        assert jnp.allclose(jnp.diag(transition_matrix), 0.95)
 
     def test_random_key_affects_output(self):
         """Different random keys produce different GLM coefficient initializations."""
