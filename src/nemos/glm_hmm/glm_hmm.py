@@ -23,6 +23,7 @@ from ..typing import (
 )
 from ..utils import format_repr
 from .initialize_parameters import (
+    DEFAULT_INIT_FUNCTIONS_GLMHMM,
     GLMHMM_INITIALIZATION_FN_DICT,
     setup_glm_hmm_initialization,
 )
@@ -186,7 +187,7 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
     """
 
     _validator_class = GLMHMMValidator
-    _default_init_dict = GLMHMM_INITIALIZATION_FN_DICT
+    _default_init_dict = DEFAULT_INIT_FUNCTIONS_GLMHMM
 
     def __init__(
         self,
