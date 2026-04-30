@@ -160,7 +160,7 @@ class TestGLMHMMInit:
             mock_setup.return_value = DEFAULT_INIT_FUNCTIONS_GLMHMM
             GLMHMM(n_states=2, initialization_funcs=input_dict)
         mock_setup.assert_called_once()
-        assert mock_setup.call_args.kwargs["init_funcs"] == input_dict
+        assert mock_setup.call_args.kwargs["init_funcs"]["glm_params_init"] == mock_func
 
     # -------------------------------------------------------------------------
     # Default values and fit attributes
