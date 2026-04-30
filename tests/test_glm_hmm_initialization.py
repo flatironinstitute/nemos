@@ -38,7 +38,9 @@ class MockGLMHMM(BaseHMM):
     _default_init_dict = DEFAULT_INIT_FUNCTIONS_GLMHMM
 
     def __init__(self, n_states, initialization_funcs=None):
-        BaseHMM.__init__(self, n_states=n_states, initialization_funcs=initialization_funcs)
+        BaseHMM.__init__(
+            self, n_states=n_states, initialization_funcs=initialization_funcs
+        )
         self.coef_ = self.intercept_ = self.scale_ = None
 
     def setup(self, **kwargs):
@@ -46,20 +48,47 @@ class MockGLMHMM(BaseHMM):
             init_funcs=self._initialization_funcs,
         )
 
-    def _check_model_is_fit(self): pass
-    def _get_model_params(self): pass
-    def _set_model_params(self, params): pass
-    def _log_likelihood(self, params, X, y): pass
-    def _model_params_initialization(self, X, y, is_new_session, random_key=None): pass
-    def fit(self, *a, **kw): pass
-    def _initialize_optimizer_and_state(self, *a, **kw): pass
-    def _compute_loss(self, *a, **kw): pass
-    def _get_optimal_solver_params_config(self, *a, **kw): pass
-    def predict(self, *a, **kw): pass
-    def simulate(self, *a, **kw): pass
-    def save_params(self, *a, **kw): pass
-    def update(self, *a, **kw): pass
-    def score(self, *a, **kw): pass
+    def _check_model_is_fit(self):
+        pass
+
+    def _get_model_params(self):
+        pass
+
+    def _set_model_params(self, params):
+        pass
+
+    def _log_likelihood(self, params, X, y):
+        pass
+
+    def _model_params_initialization(self, X, y, is_new_session, random_key=None):
+        pass
+
+    def fit(self, *a, **kw):
+        pass
+
+    def _initialize_optimizer_and_state(self, *a, **kw):
+        pass
+
+    def _compute_loss(self, *a, **kw):
+        pass
+
+    def _get_optimal_solver_params_config(self, *a, **kw):
+        pass
+
+    def predict(self, *a, **kw):
+        pass
+
+    def simulate(self, *a, **kw):
+        pass
+
+    def save_params(self, *a, **kw):
+        pass
+
+    def update(self, *a, **kw):
+        pass
+
+    def score(self, *a, **kw):
+        pass
 
 
 # =============================================================================
@@ -682,6 +711,10 @@ class TestGenerateGLMHMMInitialParams:
         """Different random keys produce different GLM coefficient initializations."""
         X = jnp.ones((50, 5))
         y = jnp.ones(50)
-        coef1, *_ = generate_glm_hmm_initial_model_params(3, X, y, lambda x: x, random_key=1)
-        coef2, *_ = generate_glm_hmm_initial_model_params(3, X, y, lambda x: x, random_key=2)
+        coef1, *_ = generate_glm_hmm_initial_model_params(
+            3, X, y, lambda x: x, random_key=1
+        )
+        coef2, *_ = generate_glm_hmm_initial_model_params(
+            3, X, y, lambda x: x, random_key=2
+        )
         assert not jnp.allclose(coef1, coef2)
