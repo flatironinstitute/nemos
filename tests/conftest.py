@@ -102,65 +102,105 @@ def mock_glm_fit(monkeypatch):
     monkeypatch.setattr(nmo.glm.PopulationGLM, "fit", _fit)
 
 
-@pytest.fixture
-def mock_glm_optimizer_run(monkeypatch):
-    """Bypass the JAX solver in fit() while keeping all validation logic.
+# No-op _optimizer_run per model class. Only models whose fit() unpacks _optimizer_run
+# differently from the default 3-tuple (params, state, aux) need an entry here.
+# The sole model-specific detail is return arity: GLM expects (params, state, aux),
+# GLMHMM expects (params, state) and checks state.iterations to detect non-convergence.
+_NOOP_OPTIMIZER_RUN = {
+    nmo.glm_hmm.GLMHMM: lambda p, *a, **kw: (
+        p,
+        SimpleNamespace(iterations=1, converged=True),
+    ),
+}
+_DEFAULT_NOOP_OPTIMIZER_RUN = lambda p, *a, **kw: (  # noqa: E731
+    p,
+    SimpleNamespace(converged=True),
+    None,
+)
 
-    Patches _initialize_optimizer_and_state to inject a no-op _optimizer_run
-    that returns init_params unchanged with a converged state. Use in tests
-    that only care about pipeline routing or fit side-effects (coef_/intercept_
-    shape, validation errors) and do not check solution quality.
+
+def _make_optimizer_run_patch(monkeypatch, model_cls):
+    """Patch _initialize_optimizer_and_state on any BaseRegressor subclass.
+
+    After the real initializer runs, replaces _optimizer_run with a no-op that
+    returns init_params unchanged and a converged state. All validation logic
+    executes normally; only the solver iterations are skipped.
     """
-    _real_init = nmo.glm.GLM._initialize_optimizer_and_state
+    real_init = model_cls._initialize_optimizer_and_state
+    noop = _NOOP_OPTIMIZER_RUN.get(model_cls, _DEFAULT_NOOP_OPTIMIZER_RUN)
 
-    def _patched_init(self, init_params, data, y):
-        result = _real_init(self, init_params, data, y)
-        self._optimizer_run = lambda p, d, t: (p, SimpleNamespace(converged=True), None)
+    def _patched(self, init_params, data, y):
+        result = real_init(self, init_params, data, y)
+        self._optimizer_run = noop
         return result
 
-    monkeypatch.setattr(nmo.glm.GLM, "_initialize_optimizer_and_state", _patched_init)
+    monkeypatch.setattr(model_cls, "_initialize_optimizer_and_state", _patched)
+
+
+@pytest.fixture
+def patch_optimizer_run(monkeypatch):
+    """Fixture factory: call with a model class to bypass its JAX solver.
+
+    Returns a callable ``patch(model_cls)`` that patches
+    ``_initialize_optimizer_and_state`` on *model_cls* so that ``_optimizer_run``
+    becomes a no-op returning init_params unchanged with a converged state.
+    Can be called multiple times in one test to patch several classes.
+    """
+    return lambda model_cls: _make_optimizer_run_patch(monkeypatch, model_cls)
+
+
+@pytest.fixture
+def mock_glm_optimizer_run(monkeypatch):
+    """Bypass the JAX solver in GLM.fit() while keeping all validation logic."""
+    _make_optimizer_run_patch(monkeypatch, nmo.glm.GLM)
 
 
 @pytest.fixture
 def mock_glm_hmm_optimizer_run(monkeypatch):
-    """Bypass the JAX solver in fit() while keeping all validation logic.
+    """Bypass the JAX solver in GLMHMM.fit() while keeping all validation logic."""
+    _make_optimizer_run_patch(monkeypatch, nmo.glm_hmm.GLMHMM)
 
-    Patches _initialize_optimizer_and_state to inject a no-op _optimizer_run
-    that returns init_params unchanged with a converged state. Use in tests
-    that only care about pipeline routing or fit side-effects (coef_/intercept_
-    shape, validation errors) and do not check solution quality.
+
+# No-op _optimizer_update per model class. Default covers all current models (3-tuple).
+# Add an entry only when a model's update() unpacks _optimizer_update differently.
+_NOOP_OPTIMIZER_UPDATE = {}
+_DEFAULT_NOOP_OPTIMIZER_UPDATE = lambda p, s, *a, **kw: (p, s, None)  # noqa: E731
+
+
+def _make_optimizer_update_patch(monkeypatch, model_cls):
+    """Patch _initialize_optimizer_and_state on any BaseRegressor subclass.
+
+    After the real initializer runs, replaces _optimizer_update with a no-op
+    that returns params and state unchanged. All validation logic executes
+    normally; only the solver step is skipped.
     """
-    _real_init = nmo.glm_hmm.GLMHMM._initialize_optimizer_and_state
+    real_init = model_cls._initialize_optimizer_and_state
+    noop = _NOOP_OPTIMIZER_UPDATE.get(model_cls, _DEFAULT_NOOP_OPTIMIZER_UPDATE)
 
-    def _patched_init(self, init_params, data, y):
-        result = _real_init(self, init_params, data, y)
-        self._optimizer_run = lambda p, *args, **kwargs: (
-            p,
-            SimpleNamespace(iterations=1, converged=True),
-        )
+    def _patched(self, init_params, data, y):
+        result = real_init(self, init_params, data, y)
+        self._optimizer_update = noop
         return result
 
-    monkeypatch.setattr(
-        nmo.glm_hmm.GLMHMM, "_initialize_optimizer_and_state", _patched_init
-    )
+    monkeypatch.setattr(model_cls, "_initialize_optimizer_and_state", _patched)
+
+
+@pytest.fixture
+def patch_optimizer_update(monkeypatch):
+    """Fixture factory: call with a model class to bypass its JAX solver step.
+
+    Returns a callable ``patch(model_cls)`` that patches
+    ``_initialize_optimizer_and_state`` on *model_cls* so that
+    ``_optimizer_update`` becomes a no-op returning params and state unchanged.
+    Can be called multiple times in one test to patch several classes.
+    """
+    return lambda model_cls: _make_optimizer_update_patch(monkeypatch, model_cls)
 
 
 @pytest.fixture
 def mock_optimizer_update(monkeypatch):
-    """Bypass the JAX solver step in update() while keeping all validation logic.
-
-    Patches _initialize_optimizer_and_state to inject a no-op _optimizer_update
-    that returns the current params and state unchanged. Do NOT use in tests
-    that assert parameters actually changed after calling update().
-    """
-    _real_init = nmo.glm.GLM._initialize_optimizer_and_state
-
-    def _patched_init(self, init_params, data, y):
-        result = _real_init(self, init_params, data, y)
-        self._optimizer_update = lambda p, s, d, t, *a, **kw: (p, s, None)
-        return result
-
-    monkeypatch.setattr(nmo.glm.GLM, "_initialize_optimizer_and_state", _patched_init)
+    """Bypass the JAX solver step in GLM.update() while keeping all validation logic."""
+    _make_optimizer_update_patch(monkeypatch, nmo.glm.GLM)
 
 
 # Named tuple for model fixture returns (clearer than tuple indexing)
