@@ -434,7 +434,7 @@ class TestGLM:
         model_instantiation_type,
         expectation,
         init_params_by_model,
-            mock_glm_optimizer_run,
+        mock_glm_optimizer_run,
     ):
         """
         Test the `fit` method with various types of initial parameters. Ensure that the provided initial parameters
@@ -463,7 +463,7 @@ class TestGLM:
         request,
         glm_class_type,
         model_instantiation_type,
-            mock_glm_optimizer_run,
+        mock_glm_optimizer_run,
     ):
         """
         Test the `fit` method for inconsistencies between data features and initial weights provided.
@@ -2244,7 +2244,7 @@ class TestGLMObservationModel:
         request,
         glm_type,
         model_instantiation,
-            mock_glm_optimizer_run,
+        mock_glm_optimizer_run,
     ):
         """model.coef_ tree structure matches X structure after fit with pytree X."""
         _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
