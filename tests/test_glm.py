@@ -176,7 +176,7 @@ def model_instantiation_type(glm_class_type):
 @pytest.mark.solver_related
 @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
 def test_get_fit_attrs(
-    request, glm_class_type, model_instantiation_type, mock_optimizer_run
+    request, glm_class_type, model_instantiation_type, mock_glm_optimizer_run
 ):
     X, y, model = request.getfixturevalue(model_instantiation_type)[:3]
     expected_state = {
@@ -243,7 +243,7 @@ class TestGLM:
         request,
         glm_class_type,
         model_instantiation_type,
-        mock_optimizer_run,
+        mock_glm_optimizer_run,
     ):
         """
         Test the `fit` method with weight matrices of different dimensionalities.
@@ -278,7 +278,7 @@ class TestGLM:
         request,
         glm_class_type,
         model_instantiation_type,
-        mock_optimizer_run,
+        mock_glm_optimizer_run,
     ):
         """
         Test the `fit` method with intercepts of different dimensionalities. Check for correct dimensionality.
@@ -434,7 +434,7 @@ class TestGLM:
         model_instantiation_type,
         expectation,
         init_params_by_model,
-        mock_optimizer_run,
+            mock_glm_optimizer_run,
     ):
         """
         Test the `fit` method with various types of initial parameters. Ensure that the provided initial parameters
@@ -463,7 +463,7 @@ class TestGLM:
         request,
         glm_class_type,
         model_instantiation_type,
-        mock_optimizer_run,
+            mock_glm_optimizer_run,
     ):
         """
         Test the `fit` method for inconsistencies between data features and initial weights provided.
@@ -2244,7 +2244,7 @@ class TestGLMObservationModel:
         request,
         glm_type,
         model_instantiation,
-        mock_optimizer_run,
+            mock_glm_optimizer_run,
     ):
         """model.coef_ tree structure matches X structure after fit with pytree X."""
         _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
@@ -2355,7 +2355,7 @@ class TestGLMObservationModel:
     @pytest.mark.solver_related
     @pytest.mark.requires_x64
     def test_fit_mask_grouplasso(
-        self, glm_type, model_instantiation, request, mock_optimizer_run
+        self, glm_type, model_instantiation, request, mock_glm_optimizer_run
     ):
         """Test that the group lasso fit goes through"""
         X, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
@@ -2776,7 +2776,7 @@ class TestPopulationGLM:
         ],
     )
     def test_metadata_pynapple_fit(
-        self, model_suffix, request, model_instantiation, mock_optimizer_run
+        self, model_suffix, request, model_instantiation, mock_glm_optimizer_run
     ):
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation + model_suffix
@@ -2797,7 +2797,7 @@ class TestPopulationGLM:
         ],
     )
     def test_metadata_pynapple_is_deepcopied(
-        self, model_suffix, model_instantiation, request, mock_optimizer_run
+        self, model_suffix, model_instantiation, request, mock_glm_optimizer_run
     ):
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation + model_suffix
@@ -2821,7 +2821,7 @@ class TestPopulationGLM:
         ],
     )
     def test_metadata_pynapple_predict(
-        self, model_suffix, model_instantiation, request, mock_optimizer_run
+        self, model_suffix, model_instantiation, request, mock_glm_optimizer_run
     ):
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation + model_suffix

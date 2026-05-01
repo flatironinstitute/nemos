@@ -34,6 +34,13 @@ from nemos.basis._basis_mixin import BasisMixin
 from nemos.basis._transformer_basis import TransformerBasis
 from nemos.glm.params import GLMParams
 from nemos.glm.validation import GLMValidator
+from nemos.glm_hmm.initialize_parameters import random_glm_params_init
+from nemos.glm_hmm.params import GLMHMMModelParams, GLMHMMParams
+from nemos.hmm.initialize_parameters import (
+    sticky_transition_proba_init,
+    uniform_initial_proba_init,
+)
+from nemos.hmm.params import HMMParams
 from nemos.tree_utils import tree_full_like
 
 _totals = defaultdict(float)
@@ -96,7 +103,7 @@ def mock_glm_fit(monkeypatch):
 
 
 @pytest.fixture
-def mock_optimizer_run(monkeypatch):
+def mock_glm_optimizer_run(monkeypatch):
     """Bypass the JAX solver in fit() while keeping all validation logic.
 
     Patches _initialize_optimizer_and_state to inject a no-op _optimizer_run
@@ -112,6 +119,30 @@ def mock_optimizer_run(monkeypatch):
         return result
 
     monkeypatch.setattr(nmo.glm.GLM, "_initialize_optimizer_and_state", _patched_init)
+
+
+@pytest.fixture
+def mock_glm_hmm_optimizer_run(monkeypatch):
+    """Bypass the JAX solver in fit() while keeping all validation logic.
+
+    Patches _initialize_optimizer_and_state to inject a no-op _optimizer_run
+    that returns init_params unchanged with a converged state. Use in tests
+    that only care about pipeline routing or fit side-effects (coef_/intercept_
+    shape, validation errors) and do not check solution quality.
+    """
+    _real_init = nmo.glm_hmm.GLMHMM._initialize_optimizer_and_state
+
+    def _patched_init(self, init_params, data, y):
+        result = _real_init(self, init_params, data, y)
+        self._optimizer_run = lambda p, *args, **kwargs: (
+            p,
+            SimpleNamespace(iterations=1, converged=True),
+        )
+        return result
+
+    monkeypatch.setattr(
+        nmo.glm_hmm.GLMHMM, "_initialize_optimizer_and_state", _patched_init
+    )
 
 
 @pytest.fixture
@@ -1582,6 +1613,135 @@ def instantiate_population_classifier_glm_func(
     )
 
 
+def run_simulation_glm_hmm(
+    design_matrix: jnp.ndarray, model: nmo.glm_hmm.GLMHMM, seed: int
+):
+    n_timepoints = design_matrix.shape[0]
+    coef, intercept = model.coef_, model.intercept_
+    n_neurons = coef.shape[1] if coef.ndim > 2 else 1
+    n_states = intercept.shape[-1]
+    initial_prob = model.initial_prob_
+    transition_prob = model.transition_prob_
+
+    glm = nmo.glm.PopulationGLM(
+        observation_model=model.observation_model,
+        inverse_link_function=model.inverse_link_function,
+    )
+
+    latent_states = np.zeros((n_timepoints, n_states), dtype=int)
+    rates = np.zeros((n_timepoints, n_neurons))
+    counts = np.zeros((n_timepoints, n_neurons))
+
+    np.random.seed(seed)
+    init_prob_arr = np.asarray(initial_prob, dtype=float)
+    initial_state = np.random.choice(n_states, p=init_prob_arr / init_prob_arr.sum())
+    latent_states[0, initial_state] = 1
+
+    glm.coef_ = coef[..., initial_state].reshape(coef.shape[0], n_neurons)
+    glm.intercept_ = intercept[..., initial_state].reshape((n_neurons,))
+    glm.scale_ = 1.0
+
+    key = jax.random.PRNGKey(seed)
+    counts[0], rates[0] = glm.simulate(key, design_matrix[:1])
+
+    for t in range(1, n_timepoints):
+        key, subkey = jax.random.split(key)
+        prev_state_vec = latent_states[t - 1]
+        transition_probs = transition_prob.T @ prev_state_vec
+        next_state = jax.random.choice(subkey, jnp.arange(n_states), p=transition_probs)
+        latent_states[t, next_state] = 1
+
+        glm.coef_ = coef[..., next_state].reshape(coef.shape[0], n_neurons)
+        glm.intercept_ = intercept[..., next_state].reshape((n_neurons,))
+        key, subkey = jax.random.split(key)
+        counts[t], rates[t] = glm.simulate(subkey, design_matrix[t : t + 1])
+
+    counts = jnp.squeeze(counts)
+    rates = jnp.squeeze(rates)
+    return counts, rates, latent_states
+
+
+def instantiate_glm_hmm_func(
+    n_states: int = 3,
+    obs_model: (
+        Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+        | nmo.observation_models.Observations
+    ) = "Bernoulli",
+    regularizer: str = "UnRegularized",
+    solver_name: str = None,
+    simulate: bool = False,
+    solver_kwargs=None,
+    maxiter: int = 2,
+):
+    np.random.seed(123)
+    if solver_kwargs is None:
+        solver_kwargs = {"maxiter": 1}
+
+    model = nmo.glm_hmm.GLMHMM(
+        n_states=n_states,
+        observation_model=obs_model,
+        regularizer=regularizer,
+        solver_name=solver_name,
+        solver_kwargs=solver_kwargs,
+        maxiter=maxiter,
+    )
+    n_features = 2
+    X = np.ones((500, n_features))
+    X[:250, 0] = 0
+    X[np.arange(500) % 2 == 1, 1] = 0
+    y = np.zeros(X.shape[0])
+    y[np.random.choice(y.shape[0], size=y.shape[0] // 3, replace=False)] = 1
+
+    coef, intercept = random_glm_params_init(
+        n_states=n_states,
+        X=X,
+        y=y,
+        inverse_link_function=model.inverse_link_function,
+        is_new_session=None,
+        random_key=jax.random.PRNGKey(123),
+    )
+    coef = jnp.squeeze(coef)
+    intercept = jnp.squeeze(intercept)
+    transition_prob = sticky_transition_proba_init(n_states)
+    init_prob = uniform_initial_proba_init(n_states, random_key=jax.random.PRNGKey(124))
+    scale = jnp.ones_like(intercept)
+
+    if simulate:
+        model.coef_ = coef
+        model.intercept_ = intercept
+        model.scale_ = scale
+        model.initial_prob_ = init_prob
+        model.transition_prob_ = transition_prob
+        y, rates, latent_states = run_simulation_glm_hmm(X, model, seed=1234)
+        # reset fit attributes so fixture.model is unfitted
+        model.coef_ = None
+        model.intercept_ = None
+        model.scale_ = None
+        model.initial_prob_ = None
+        model.transition_prob_ = None
+    else:
+        rates, latent_states = None, None
+
+    return ModelFixture(
+        X=X,
+        y=y,
+        model=model,
+        params=GLMHMMParams(
+            model_params=GLMHMMModelParams(
+                coef=coef,
+                intercept=intercept,
+                log_scale=scale,
+            ),
+            hmm_params=HMMParams(
+                log_initial_prob=jnp.log(init_prob),
+                log_transition_prob=jnp.log(transition_prob),
+            ),
+        ),
+        rates=rates,
+        extra=latent_states,
+    )
+
+
 _MODEL_CACHE = {}
 
 
@@ -1602,6 +1762,10 @@ MODEL_CONFIG = {
     "ClassifierPopulationGLM": {
         "is_population": True,
         "default_y_shape": (500, 3),
+    },
+    "GLMHMM": {
+        "is_population": False,
+        "default_y_shape": (500,),
     },
 }
 
@@ -1641,6 +1805,8 @@ def instantiate_base_regressor_subclass(request):
             result = instantiate_classifier_glm_func(simulate=simulate)
         elif model_name == "ClassifierPopulationGLM":
             result = instantiate_population_classifier_glm_func(simulate=simulate)
+        elif model_name == "GLMHMM":
+            result = instantiate_glm_hmm_func(obs_model=obs_model, simulate=simulate)
         else:
             raise ValueError("model_name {} unknown".format(model_name))
         _MODEL_CACHE[cache_key] = result
