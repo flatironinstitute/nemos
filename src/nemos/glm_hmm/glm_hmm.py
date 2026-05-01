@@ -422,9 +422,7 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
         (
             fit_params,
             self.solver_state_,
-        ) = self._optimization_run(
-            init_params, X=data, y=y, is_new_session=is_new_session
-        )
+        ) = self._optimizer_run(init_params, X=data, y=y, is_new_session=is_new_session)
 
         if self.solver_state_.iterations == self.maxiter:
             warnings.warn(
@@ -639,7 +637,7 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
 
         # cannot wrap is_new_session, that's to be calculated at each update form the provided X and y.
         # for consistency, do not make a partial of that argument in run as well.
-        self._optimization_run = eqx.Partial(
+        self._optimizer_run = eqx.Partial(
             em_hmm,
             log_likelihood_func=self._log_likelihood,
             m_step_fn_model_params=m_step_update,
@@ -647,7 +645,7 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
             tol=self.tol,
         )
 
-        self._optimization_update = eqx.Partial(
+        self._optimizer_update = eqx.Partial(
             em_step,
             log_likelihood_func=self._log_likelihood,
             m_step_fn_model_params=m_step_update,
@@ -663,5 +661,5 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
             )
             return state
 
-        self._optimization_init_state = init_state_fn
+        self._optimizer_init_state = init_state_fn
         return init_state_fn()
