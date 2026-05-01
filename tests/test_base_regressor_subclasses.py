@@ -17,7 +17,6 @@ import nemos as nmo
 # Import helpers from conftest
 from conftest import MockRegressor, is_population_model
 from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
-from nemos.glm.params import GLMParams
 from nemos.glm.validation import (
     ClassifierGLMValidator,
     GLMValidator,
@@ -137,6 +136,14 @@ DEFAULTS = {
     "GLMHMM": {"n_states": 3},
 }
 
+# Maps model name to a function that extracts the params seen by the GLM solver
+# (i.e. what the regularizer/proximal operator operates on).
+# Default (no entry) = identity: the full model_params IS the solver-level params.
+# Add an entry only for models whose solver receives a nested sub-structure.
+SOLVER_PARAMS_REGISTRY = {
+    "GLMHMM": lambda p: p.model_params,
+}
+
 
 INSTANTIATE_MODEL_ONLY = [
     {"model": m, "obs_model": o, "simulate": False}
@@ -218,8 +225,29 @@ def _valid_init_params(fixture):
     return VALIDATOR_REGISTRY[model_name].from_model_params(fixture.params)
 
 
+def _solver_params(model_params, model_name):
+    """Return the params at the level seen by the GLM solver / regularizer.
+
+    For flat models (GLM, PopulationGLM) this is model_params itself.
+    For nested models (GLMHMM) the EM params wrap a GLM-level sub-pytree;
+    SOLVER_PARAMS_REGISTRY provides the extractor for those cases.
+    """
+    return SOLVER_PARAMS_REGISTRY.get(model_name, lambda p: p)(model_params)
+
+
 class TestModelVsPytree:
     """Test that public model API accepts arbitrary pytree X inputs."""
+
+    @pytest.fixture(autouse=True)
+    def _patch_optimizer(
+        self,
+        patch_optimizer_run,
+        patch_optimizer_update,
+        instantiate_base_regressor_subclass,
+    ):
+        model_cls = instantiate_base_regressor_subclass.model.__class__
+        patch_optimizer_run(model_cls)
+        patch_optimizer_update(model_cls)
 
     @pytest.mark.parametrize(
         "instantiate_base_regressor_subclass, pytree_x",
@@ -562,20 +590,28 @@ class TestModelCommons:
         y = _add_zeros(y)
         n_groups = 2
         n_features = X.shape[1]
+        model_name = model.__class__.__name__
 
-        # Create mask with proper shape for GLM (2D) or PopulationGLM (3D)
-        if is_population_model(model):
-            n_neurons = y.shape[1]
-            mask_array = np.ones((n_groups, n_features, n_neurons), dtype=float)
-            mask_array[0, : n_features // 2, :] = 0
-            mask_array[1, n_features // 2 :, :] = 0
-        else:
-            mask_array = np.ones((n_groups, n_features), dtype=float)
-            mask_array[0, : n_features // 2] = 0
-            mask_array[1, n_features // 2 :] = 0
-
-        # Wrap mask in GLMParams structure
-        mask = GLMParams(jnp.asarray(mask_array, dtype=jnp.float32), None)
+        # Build mask at the level the GLM solver / regularizer operates on.
+        # For flat models this is the full model_params; for nested models (GLMHMM)
+        # the solver only sees the GLM sub-params. SOLVER_PARAMS_REGISTRY encodes
+        # that difference so no model-specific branching is needed here.
+        full_params = VALIDATOR_REGISTRY[model_name].to_model_params(
+            _valid_init_params(fixture)
+        )
+        sp = _solver_params(full_params, model_name)
+        struct = jax.tree_util.tree_structure(sp)
+        mask = jax.tree_util.tree_unflatten(struct, [None] * struct.num_leaves)
+        for where in sp.regularizable_subtrees():
+            leaf = jnp.asarray(where(sp))
+            mask_arr = (
+                jnp.ones((n_groups, *leaf.shape), dtype=jnp.float32)
+                .at[0, : n_features // 2]
+                .set(0)
+                .at[1, n_features // 2 :]
+                .set(0)
+            )
+            mask = eqx.tree_at(where, mask, mask_arr, is_leaf=lambda m: m is None)
 
         model.set_params(
             regularizer=nmo.regularizer.GroupLasso(mask=mask),
@@ -1053,6 +1089,12 @@ class TestObservationModel:
     indirect=True,
 )
 class TestModelSimulation:
+    @pytest.fixture(autouse=True)
+    def _patch_optimizer(
+        self, patch_optimizer_run, instantiate_base_regressor_subclass
+    ):
+        patch_optimizer_run(instantiate_base_regressor_subclass.model.__class__)
+
     @pytest.mark.parametrize(
         "n_params",
         list(range(max(INIT_PARAM_LENGTH.values()) + 2)),
