@@ -395,7 +395,7 @@ class BaseHMM(
         """
         pass
 
-    def _model_specific_initialization(self, X, y, is_new_session):
+    def _model_specific_initialization(self, X, y, is_new_session=None):
         """Model-specific initialization."""
         keys = jax.random.split(self._seed, 3)
         hmm_keys = keys[:2]

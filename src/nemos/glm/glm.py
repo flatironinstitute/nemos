@@ -630,6 +630,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
+        **kwargs,
     ) -> GLMParams:
         """Initialize the parameters based on the structure and dimensions X and y.
 
