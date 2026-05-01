@@ -24,6 +24,7 @@ from nemos.glm.validation import (
     PopulationClassifierGLMValidator,
     PopulationGLMValidator,
 )
+from nemos.glm_hmm.validation import GLMHMMValidator
 from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
 from nemos.solvers._fista import OptimistixNAG
 from nemos.solvers._optax_optimistix_solvers import OptimistixOptaxGradientDescent
@@ -32,6 +33,7 @@ MODEL_REGISTRY = {
     "GLM": nmo.glm.GLM,
     "ClassifierGLM": nmo.glm.ClassifierGLM,
     "PopulationGLM": nmo.glm.PopulationGLM,
+    "GLMHMM": nmo.glm_hmm.GLMHMM,
 }
 
 VALIDATOR_REGISTRY = {
@@ -41,6 +43,7 @@ VALIDATOR_REGISTRY = {
         extra_params={"n_classes": 4}
     ),
     "PopulationGLM": PopulationGLMValidator(),
+    "GLMHMM": GLMHMMValidator(n_states=3),  # n_states=3 matches the fixture default
 }
 
 INIT_PARAM_LENGTH = {
@@ -48,6 +51,7 @@ INIT_PARAM_LENGTH = {
     "ClassifierGLM": 2,
     "ClassifierPopulationGLM": 2,
     "PopulationGLM": 2,
+    "GLMHMM": 5,
 }
 
 DEFAULT_OBS_SHAPE = {
@@ -55,6 +59,7 @@ DEFAULT_OBS_SHAPE = {
     "ClassifierGLM": (500,),
     "ClassifierPopulationGLM": (500, 3),
     "PopulationGLM": (500, 3),
+    "GLMHMM": (500,),
 }
 
 HARD_CODED_GET_PARAMS_KEYS = {
@@ -91,6 +96,21 @@ HARD_CODED_GET_PARAMS_KEYS = {
         "solver_name",
         "feature_mask",
     },
+    "GLMHMM": {
+        "dirichlet_initial_proba",
+        "dirichlet_transition_proba",
+        "initialization_funcs",
+        "inverse_link_function",
+        "maxiter",
+        "n_states",
+        "observation_model",
+        "regularizer",
+        "regularizer_strength",
+        "seed",
+        "solver_kwargs",
+        "solver_name",
+        "tol",
+    },
 }
 
 OBSERVATION_PER_MODEL = {
@@ -98,14 +118,15 @@ OBSERVATION_PER_MODEL = {
     "ClassifierGLM": ["Categorical"],
     "ClassifierPopulationGLM": ["Categorical"],
     "PopulationGLM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
+    "GLMHMM": ["Bernoulli"],
 }
 
-# as of now, all models are glm type... in the future this may change.
 MODEL_WITH_LINK_FUNCTION_REGISTRY = {
     "GLM": nmo.glm.GLM,
     "ClassifierGLM": nmo.glm.ClassifierGLM,
     "ClassifierPopulationGLM": nmo.glm.ClassifierPopulationGLM,
     "PopulationGLM": nmo.glm.PopulationGLM,
+    "GLMHMM": nmo.glm_hmm.GLMHMM,
 }
 
 DEFAULTS = {
@@ -113,6 +134,7 @@ DEFAULTS = {
     "PopulationGLM": dict(),
     "ClassifierGLM": dict(),
     "ClassifierPopulationGLM": dict(),
+    "GLMHMM": {"n_states": 3},
 }
 
 
@@ -184,6 +206,16 @@ _MODEL_PYTREE_X_CASES = [
     for model, obs_model in _MODEL_CONFIGS
     for pytree_id, factory in _PYTREE_X_FACTORIES.items()
 ]
+
+
+def _valid_init_params(fixture):
+    """Return the canonical user-facing init_params tuple for any model fixture.
+
+    Uses VALIDATOR_REGISTRY so the returned tuple has the right length and
+    structure for the model (e.g. 2-tuple for GLM, 5-tuple for GLMHMM).
+    """
+    model_name = fixture.model.__class__.__name__
+    return VALIDATOR_REGISTRY[model_name].from_model_params(fixture.params)
 
 
 class TestModelVsPytree:
@@ -1023,7 +1055,7 @@ class TestObservationModel:
 class TestModelSimulation:
     @pytest.mark.parametrize(
         "n_params",
-        [0, 1, 2, 3, 4],
+        list(range(max(INIT_PARAM_LENGTH.values()) + 2)),
     )
     @pytest.mark.solver_related
     def test_fit_param_length(self, n_params, instantiate_base_regressor_subclass):
@@ -1032,25 +1064,22 @@ class TestModelSimulation:
         Check for correct number of parameters.
         """
         fixture = instantiate_base_regressor_subclass
-        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        X, y, model = fixture.X, fixture.y, fixture.model
         model_name = model.__class__.__name__
         expectation = (
             pytest.raises(
                 ValueError,
-                match="Params must have length.|GLM-HMM requires three parameters",
+                match="Params must have length.",
             )
             if n_params != INIT_PARAM_LENGTH[model_name]
             else does_not_raise()
         )
 
+        full_params = _valid_init_params(fixture)
         if n_params < INIT_PARAM_LENGTH[model_name]:
-            # Convert GLMParams to tuple for slicing
-            params_tuple = (true_params.coef, true_params.intercept)
-            init_params = params_tuple[:n_params]
+            init_params = full_params[:n_params]
         else:
-            # Convert GLMParams to tuple for concatenation
-            params_tuple = (true_params.coef, true_params.intercept)
-            init_params = params_tuple + (true_params.coef,) * (
+            init_params = full_params + (full_params[0],) * (
                 n_params - INIT_PARAM_LENGTH[model_name]
             )
         with expectation:
@@ -1072,13 +1101,13 @@ class TestModelSimulation:
         Test the `fit` method with X input data of different dimensionalities. Ensure correct dimensionality for X.
         """
         fixture = instantiate_base_regressor_subclass
-        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        X, y, model = fixture.X, fixture.y, fixture.model
         if delta_dim == -1:
             X = np.zeros((X.shape[0],))
         elif delta_dim == 1:
             X = np.zeros((X.shape[0], 1, X.shape[1]))
         with expectation:
-            model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
+            model.fit(X, y, init_params=_valid_init_params(fixture))
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
@@ -1102,7 +1131,7 @@ class TestModelSimulation:
         Test the `fit` method with y target data of different dimensionalities. Ensure correct dimensionality for y.
         """
         fixture = instantiate_base_regressor_subclass
-        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        X, y, model = fixture.X, fixture.y, fixture.model
         if is_population_model(model):
             if delta_dim == -1:
                 y = y[:, 0]
@@ -1118,7 +1147,7 @@ class TestModelSimulation:
                 for i in range(getattr(model, "n_classes", 0)):
                     y[i] = i
         with expectation:
-            model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
+            model.fit(X, y, init_params=_valid_init_params(fixture))
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -1140,13 +1169,13 @@ class TestModelSimulation:
         Ensure the number of features in X aligns.
         """
         fixture = instantiate_base_regressor_subclass
-        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        X, y, model = fixture.X, fixture.y, fixture.model
         if delta_n_features == 1:
             X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
         elif delta_n_features == -1:
             X = X[..., :-1]
         with expectation:
-            model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
+            model.fit(X, y, init_params=_valid_init_params(fixture))
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -1174,10 +1203,10 @@ class TestModelSimulation:
         Test the `fit` method for inconsistencies in time-points in data X. Ensure the correct number of time-points.
         """
         fixture = instantiate_base_regressor_subclass
-        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        X, y, model = fixture.X, fixture.y, fixture.model
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
         with expectation:
-            model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
+            model.fit(X, y, init_params=_valid_init_params(fixture))
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -1206,12 +1235,12 @@ class TestModelSimulation:
         Test the `fit` method for inconsistencies in time-points in y. Ensure the correct number of time-points.
         """
         fixture = instantiate_base_regressor_subclass
-        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        X, y, model = fixture.X, fixture.y, fixture.model
         n_samples = y.shape[0] + delta_tp
         y_samp = min(n_samples, y.shape[0])
         y = jnp.zeros((n_samples,) + y.shape[1:]).at[:y_samp].set(y[:y_samp])
         with expectation:
-            model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
+            model.fit(X, y, init_params=_valid_init_params(fixture))
 
     @pytest.mark.parametrize(
         "fill_val, expectation",
@@ -1250,7 +1279,7 @@ class TestModelSimulation:
 class TestModelValidator:
     @pytest.mark.parametrize(
         "n_params",
-        [0, 1, 2, 3, 4],
+        list(range(max(INIT_PARAM_LENGTH.values()) + 2)),
     )
     @pytest.mark.solver_related
     def test_validate_param_length(self, n_params, instantiate_base_regressor_subclass):
@@ -1259,7 +1288,7 @@ class TestModelValidator:
         Check for correct number of parameters.
         """
         fixture = instantiate_base_regressor_subclass
-        X, model, true_params = fixture.X, fixture.model, fixture.params
+        X, model = fixture.X, fixture.model
 
         # TODO: remove in next PR when GLM is compatible with categorical
         if isinstance(
@@ -1278,14 +1307,11 @@ class TestModelValidator:
             else does_not_raise()
         )
 
+        full_params = _valid_init_params(fixture)
         if n_params < INIT_PARAM_LENGTH[model_name]:
-            # Convert GLMParams to tuple for slicing
-            params_tuple = (true_params.coef, true_params.intercept)
-            init_params = params_tuple[:n_params]
+            init_params = full_params[:n_params]
         else:
-            # Convert GLMParams to tuple for concatenation
-            params_tuple = (true_params.coef, true_params.intercept)
-            init_params = params_tuple + (true_params.coef,) * (
+            init_params = full_params + (full_params[0],) * (
                 n_params - INIT_PARAM_LENGTH[model_name]
             )
         validator = VALIDATOR_REGISTRY[model_name]
