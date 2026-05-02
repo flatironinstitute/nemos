@@ -611,18 +611,6 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
             rank = jnp.linalg.matrix_rank(X)
             return (n_samples - rank - dof_intercept_and_hmm) * jnp.ones(n_neurons)
 
-    def score(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: ArrayLike,
-        score_type: Literal[
-            "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
-        ] = "log-likelihood",
-        null_model: Optional[Literal["constant", "glm"]] = None,
-    ) -> jnp.ndarray:
-        """Compute the model score."""
-        pass
-
     @support_pynapple(conv_type="jax")
     def simulate(
         self,
@@ -631,31 +619,6 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
         state_format: Literal["one-hot", "index"] = "index",
     ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
         """Simulate neural activity and hidden states from the model."""
-        pass
-
-    def smooth_proba(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: Union[NDArray, jnp.ndarray, nap.Tsd],
-    ) -> jnp.ndarray | nap.TsdFrame:
-        """Compute smoothing posterior probabilities over hidden states."""
-        pass
-
-    def filter_proba(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: Union[NDArray, jnp.ndarray, nap.Tsd],
-    ) -> jnp.ndarray | nap.TsdFrame:
-        """Compute filtering posterior probabilities over hidden states."""
-        pass
-
-    def decode_state(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: ArrayLike,
-        state_format: Literal["one-hot", "index"] = "one-hot",
-    ) -> jnp.ndarray | nap.TsdFrame:
-        """Compute the most likely hidden state sequence (Viterbi decoding)."""
         pass
 
     def save_params(
