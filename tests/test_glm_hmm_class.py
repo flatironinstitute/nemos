@@ -11,6 +11,7 @@ import pynapple as nap
 import pytest
 
 from nemos.glm_hmm.glm_hmm import GLMHMM
+from nemos.glm_hmm.initialize_parameters import kmeans_glm_params_init
 from nemos.glm_hmm.validation import GLMHMMValidator
 from nemos.pytrees import FeaturePytree
 
@@ -565,3 +566,90 @@ class TestSolverConfiguration:
             and "did not converge" in str(w.message)
         ]
         assert len(convergence_warns) == 0
+
+
+# ---------------------------------------------------------------------------
+# TestSetParams — set_params joint-initialization path
+# ---------------------------------------------------------------------------
+
+
+class TestSetParams:
+    """Cover the set_params override that orders initialization_funcs before initialization_kwargs."""
+
+    def test_joint_initialization_sets_funcs_first(self, glm_hmm_data):
+        """initialization_funcs is applied before initialization_kwargs when both are passed.
+
+        The second call raises because initialization_kwargs is not a valid sklearn param;
+        but initialization_funcs must already have been updated at that point.
+        """
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        # Build funcs that are provably different from the current ones
+        new_funcs = dict(**model.initialization_funcs)
+        new_funcs["glm_params_init"] = kmeans_glm_params_init
+        assert (
+            model.initialization_funcs["glm_params_init"] is not kmeans_glm_params_init
+        )
+
+        with pytest.raises(
+            ValueError, match="Invalid parameter 'initialization_kwargs'"
+        ):
+            model.set_params(
+                initialization_funcs=new_funcs, initialization_kwargs="unused"
+            )
+
+        # initialization_funcs was updated before the error
+        assert model.initialization_funcs["glm_params_init"] is kmeans_glm_params_init
+
+
+# ---------------------------------------------------------------------------
+# TestEstimateResidDegreesOfFreedom — exceptions and Lasso branch
+# ---------------------------------------------------------------------------
+
+
+class TestEstimateResidDegreesOfFreedom:
+    """Cover the exception path and Lasso dof branch of _estimate_resid_degrees_of_freedom."""
+
+    def test_non_int_n_samples_raises(self, glm_hmm_data, mock_glm_hmm_optimizer_run):
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+        with pytest.raises(
+            TypeError, match="`n_samples` must either `None` or of type `int`"
+        ):
+            model._estimate_resid_degrees_of_freedom(glm_hmm_data["X"], n_samples="bad")
+
+    def test_lasso_dof_uses_nonzero_coef(self, glm_hmm_data, monkeypatch):
+        """Lasso branch estimates dof from non-zero coef entries."""
+        model = GLMHMM(
+            n_states=glm_hmm_data["n_states"],
+            regularizer="Lasso",
+            solver_name="ProximalGradient",
+            regularizer_strength=1.0,
+        )
+        real_init = GLMHMM._initialize_optimizer_and_state
+        noop = lambda p, *_, **__: (
+            p,
+            SimpleNamespace(iterations=1, converged=True),
+        )  # noqa: E731
+
+        def patched(self, init_params, data, y):
+            result = real_init(self, init_params, data, y)
+            self._optimizer_run = noop
+            return result
+
+        monkeypatch.setattr(GLMHMM, "_initialize_optimizer_and_state", patched)
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+        # Noop optimizer leaves coef at zeros → resid_dof=0.
+        # dof_intercept_and_hmm = n_states*1 + (n_states-1) + (n_states-1)*n_states = 3+2+6 = 11
+        n_states = glm_hmm_data["n_states"]
+        n_samples = glm_hmm_data["X"].shape[0]
+        dof_intercept_and_hmm = n_states + (n_states - 1) + (n_states - 1) * n_states
+        expected = n_samples - 0 - dof_intercept_and_hmm
+        assert model.dof_resid_ == expected
