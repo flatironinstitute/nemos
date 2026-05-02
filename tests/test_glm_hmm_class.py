@@ -10,7 +10,6 @@ import numpy as np
 import pynapple as nap
 import pytest
 
-import nemos as nmo
 from nemos.glm_hmm.glm_hmm import GLMHMM
 from nemos.glm_hmm.validation import GLMHMMValidator
 from nemos.pytrees import FeaturePytree
