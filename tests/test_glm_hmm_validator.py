@@ -187,7 +187,41 @@ class TestCheckInitAndTransitionProbSumTo1:
 
 class TestValidateInputs:
     """NaN validation: NaNs at epoch boundaries are allowed, NaNs in the middle
-    are rejected."""
+    are rejected. Also covers X/y dimensionality and sample-count consistency."""
+
+    @pytest.mark.parametrize(
+        "X_ndim, expectation",
+        [
+            (1, pytest.raises(ValueError, match="X must be 2-dimensional")),
+            (2, does_not_raise()),
+            (3, pytest.raises(ValueError, match="X must be 2-dimensional")),
+        ],
+    )
+    def test_X_wrong_ndim_raises(self, validator, X_ndim, expectation):
+        n = 5
+        shape = {1: (n,), 2: (n, 1), 3: (n, 1, 1)}[X_ndim]
+        X = np.ones(shape)
+        y = np.zeros(n)
+        with expectation:
+            validator.validate_inputs(X, y)
+
+    @pytest.mark.parametrize(
+        "y_ndim, expectation",
+        [
+            (2, pytest.raises(ValueError, match="y must be 1-dimensional")),
+            (1, does_not_raise()),
+        ],
+    )
+    def test_y_wrong_ndim_raises(self, validator, y_ndim, expectation):
+        n = 5
+        X = np.ones((n, 1))
+        y = np.zeros((n, 1)) if y_ndim == 2 else np.zeros(n)
+        with expectation:
+            validator.validate_inputs(X, y)
+
+    def test_X_y_sample_mismatch_raises(self, validator):
+        with pytest.raises(ValueError, match="same number of samples"):
+            validator.validate_inputs(np.ones((5, 1)), np.zeros(6))
 
     @pytest.mark.parametrize(
         "X, y, expectation",
@@ -345,7 +379,7 @@ class TestValidateAndCastIsNewSession:
     def test_bool_array_wrong_length_raises(self, validator, simple_data):
         X, y = simple_data
         bad_ns = np.zeros(len(y) + 1, dtype=bool)
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Boolean is_new_session must have shape"):
             validator.validate_and_cast_is_new_session(X, y, is_new_session=bad_ns)
 
     def test_int_array_cast_succeeds(self, validator, simple_data):
@@ -355,6 +389,45 @@ class TestValidateAndCastIsNewSession:
         is_ns[0] = 1
         result = validator.validate_and_cast_is_new_session(X, y, is_new_session=is_ns)
         assert result.shape == (n,)
+
+    def test_int_index_array_marks_sessions(self, validator, simple_data):
+        X, y = simple_data
+        n = len(y)
+        # Integer array interpreted as indices of session starts (not a 0/1 mask)
+        is_ns = np.array([0, n // 2], dtype=int)
+        result = validator.validate_and_cast_is_new_session(X, y, is_new_session=is_ns)
+        assert result.shape == (n,)
+        assert result[0]
+        assert result[n // 2]
+        assert not result[1]
+
+    def test_int_index_array_out_of_range_raises(self, validator, simple_data):
+        X, y = simple_data
+        n = len(y)
+        is_ns = np.array([0, n + 5], dtype=int)  # max >= n_samples
+        with pytest.raises(ValueError, match="Integer is_new_session values must be between"):
+            validator.validate_and_cast_is_new_session(X, y, is_new_session=is_ns)
+
+    def test_2d_bool_array_raises(self, validator, simple_data):
+        X, y = simple_data
+        n = len(y)
+        is_ns = np.zeros((n, 1), dtype=bool)
+        with pytest.raises(ValueError, match="Boolean is_new_session must have shape"):
+            validator.validate_and_cast_is_new_session(X, y, is_new_session=is_ns)
+
+    def test_float_dtype_raises(self, validator, simple_data):
+        X, y = simple_data
+        n = len(y)
+        is_ns = np.zeros(n, dtype=float)
+        with pytest.raises(TypeError, match="is_new_session must be a boolean or integer array"):
+            validator.validate_and_cast_is_new_session(X, y, is_new_session=is_ns)
+
+    def test_unsupported_type_raises(self, validator, simple_data):
+        X, y = simple_data
+        n = len(y)
+        is_ns = [0] * n  # plain list has no .dtype
+        with pytest.raises(TypeError, match="is_new_session must be a boolean or integer array"):
+            validator.validate_and_cast_is_new_session(X, y, is_new_session=is_ns)
 
 
 # ---------------------------------------------------------------------------
