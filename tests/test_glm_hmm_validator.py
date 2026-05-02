@@ -389,6 +389,7 @@ class TestValidateAndCastIsNewSession:
         is_ns[0] = 1
         result = validator.validate_and_cast_is_new_session(X, y, is_new_session=is_ns)
         assert result.shape == (n,)
+        assert np.issubdtype(result.dtype, bool)
 
     def test_int_index_array_marks_sessions(self, validator, simple_data):
         X, y = simple_data
@@ -401,11 +402,14 @@ class TestValidateAndCastIsNewSession:
         assert result[n // 2]
         assert not result[1]
 
-    def test_int_index_array_out_of_range_raises(self, validator, simple_data):
+    @pytest.mark.parametrize("delta", [(0, 5), (-5, 0), (-1, 1)])
+    def test_int_index_array_out_of_range_raises(self, validator, simple_data, delta):
         X, y = simple_data
         n = len(y)
-        is_ns = np.array([0, n + 5], dtype=int)  # max >= n_samples
-        with pytest.raises(ValueError, match="Integer is_new_session values must be between"):
+        is_ns = np.array([delta[0], n + delta[1]], dtype=int)  # max >= n_samples
+        with pytest.raises(
+            ValueError, match="Integer is_new_session values must be between"
+        ):
             validator.validate_and_cast_is_new_session(X, y, is_new_session=is_ns)
 
     def test_2d_bool_array_raises(self, validator, simple_data):
@@ -419,14 +423,18 @@ class TestValidateAndCastIsNewSession:
         X, y = simple_data
         n = len(y)
         is_ns = np.zeros(n, dtype=float)
-        with pytest.raises(TypeError, match="is_new_session must be a boolean or integer array"):
+        with pytest.raises(
+            TypeError, match="is_new_session must be a boolean or integer array"
+        ):
             validator.validate_and_cast_is_new_session(X, y, is_new_session=is_ns)
 
     def test_unsupported_type_raises(self, validator, simple_data):
         X, y = simple_data
         n = len(y)
         is_ns = [0] * n  # plain list has no .dtype
-        with pytest.raises(TypeError, match="is_new_session must be a boolean or integer array"):
+        with pytest.raises(
+            TypeError, match="is_new_session must be a boolean or integer array"
+        ):
             validator.validate_and_cast_is_new_session(X, y, is_new_session=is_ns)
 
 
