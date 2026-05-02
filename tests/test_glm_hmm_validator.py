@@ -13,6 +13,7 @@ import numpy as np
 import pynapple as nap
 import pytest
 
+from nemos.glm_hmm.params import GLMHMMParams
 from nemos.glm_hmm.validation import GLMHMMValidator
 
 # ---------------------------------------------------------------------------
@@ -470,7 +471,9 @@ class TestValidateAndCastFeatureMask:
 
     def test_non_binary_values_raises(self, validator):
         mask = np.array([[1, 2], [0, 1]], dtype=float)
-        with pytest.raises(ValueError, match="feature_mask.*must contain only 0s and 1s"):
+        with pytest.raises(
+            ValueError, match="feature_mask.*must contain only 0s and 1s"
+        ):
             validator.validate_and_cast_feature_mask(mask)
 
     def test_valid_dict_mask_no_error(self, validator):
@@ -480,7 +483,9 @@ class TestValidateAndCastFeatureMask:
 
     def test_invalid_dict_mask_raises(self, validator):
         mask = {"a": np.array([[1, 0]]), "b": np.array([[0, 3]])}
-        with pytest.raises(ValueError, match="feature_mask.*must contain only 0s and 1s"):
+        with pytest.raises(
+            ValueError, match="feature_mask.*must contain only 0s and 1s"
+        ):
             validator.validate_and_cast_feature_mask(mask)
 
 
@@ -568,8 +573,6 @@ class TestGetEmptyParams:
         return validator.get_empty_params(X, y)
 
     def test_returns_glm_hmm_params(self, empty):
-        from nemos.glm_hmm.params import GLMHMMParams
-
         assert isinstance(empty, GLMHMMParams)
 
     def test_coef_shape(self, empty):
