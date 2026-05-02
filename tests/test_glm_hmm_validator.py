@@ -94,6 +94,20 @@ class TestCheckModelParamsShape:
         with pytest.raises(ValueError, match="Params must have length 5"):
             validator.validate_and_cast_params(bad_input)
 
+    def test_coef_wrong_n_states_raises(self, validator, valid_user_params):
+        # Right ndim (2) but wrong last axis — hits check_model_params_shape, not check_array_dimensions
+        coef = jnp.zeros((N_FEATURES, N_STATES + 1))
+        params = (coef, *valid_user_params[1:])
+        with pytest.raises(ValueError, match="GLM coef must be of shape"):
+            validator.validate_and_cast_params(params)
+
+    def test_intercept_wrong_n_states_raises(self, validator, valid_user_params):
+        # Right ndim (1) but wrong size — hits check_model_params_shape, not check_array_dimensions
+        intercept = jnp.zeros((N_STATES + 1,))
+        params = (valid_user_params[0], intercept, *valid_user_params[2:])
+        with pytest.raises(ValueError, match="GLM intercept must be of shape"):
+            validator.validate_and_cast_params(params)
+
     def test_string_coef_raises_type_error(self, validator, valid_user_params):
         params = ("bad_coef", *valid_user_params[1:])
         with pytest.raises(TypeError):
@@ -436,6 +450,38 @@ class TestValidateAndCastIsNewSession:
             TypeError, match="is_new_session must be a boolean or integer array"
         ):
             validator.validate_and_cast_is_new_session(X, y, is_new_session=is_ns)
+
+
+# ---------------------------------------------------------------------------
+# validate_and_cast_feature_mask
+# ---------------------------------------------------------------------------
+
+
+class TestValidateAndCastFeatureMask:
+    """Feature mask validation and casting (delegates to GLMValidator)."""
+
+    def test_none_returns_none(self, validator):
+        assert validator.validate_and_cast_feature_mask(None) is None
+
+    def test_valid_binary_array_no_error(self, validator):
+        mask = np.array([[1, 0], [0, 1]], dtype=float)
+        result = validator.validate_and_cast_feature_mask(mask)
+        assert result is not None
+
+    def test_non_binary_values_raises(self, validator):
+        mask = np.array([[1, 2], [0, 1]], dtype=float)
+        with pytest.raises(ValueError, match="feature_mask.*must contain only 0s and 1s"):
+            validator.validate_and_cast_feature_mask(mask)
+
+    def test_valid_dict_mask_no_error(self, validator):
+        mask = {"a": np.array([[1, 0]]), "b": np.array([[0, 1]])}
+        result = validator.validate_and_cast_feature_mask(mask)
+        assert result is not None
+
+    def test_invalid_dict_mask_raises(self, validator):
+        mask = {"a": np.array([[1, 0]]), "b": np.array([[0, 3]])}
+        with pytest.raises(ValueError, match="feature_mask.*must contain only 0s and 1s"):
+            validator.validate_and_cast_feature_mask(mask)
 
 
 # ---------------------------------------------------------------------------
