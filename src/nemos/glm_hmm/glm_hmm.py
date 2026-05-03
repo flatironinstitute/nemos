@@ -14,13 +14,11 @@ from .. import observation_models as obs
 from .._observation_model_builder import instantiate_observation_model
 from ..hmm.expectation_maximization import EMState, em_hmm, em_step
 from ..hmm.hmm import BaseHMM
-from ..hmm.utils import initialize_is_new_session
 from ..hmm.initialize_parameters import HMM_INITIALIZATION_FN_DICT
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
 from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
 from ..tree_utils import pytree_map_and_reduce
-from ..type_casting import support_pynapple
 from ..typing import (
     DESIGN_INPUT_TYPE,
     ModelParamsT,
@@ -39,6 +37,7 @@ from .initialize_parameters import (
     setup_glm_hmm_initialization,
 )
 from .params import GLMHMMParams, GLMHMMUserParams
+from .utils import compute_rate_per_state
 from .validation import GLMHMMValidator
 
 
@@ -496,8 +495,10 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
     ) -> "GLMHMM":
         """Fit the GLM-HMM model to the data."""
         self._validator.validate_inputs(X=X, y=y)
-        # this validates or initialize the new session
-        is_new_session = initialize_is_new_session(X, y, is_new_session)
+        # validate and cast session boundaries, shifting markers off NaN samples
+        is_new_session = self._validator.validate_and_cast_is_new_session(
+            X, y, is_new_session=is_new_session
+        )
 
         # validate the inputs & initialize solver
         # initialize params if no params are provided
@@ -611,15 +612,178 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
             rank = jnp.linalg.matrix_rank(X)
             return (n_samples - rank - dof_intercept_and_hmm) * jnp.ones(n_neurons)
 
-    @support_pynapple(conv_type="jax")
     def simulate(
         self,
         random_key: jax.Array,
         feedforward_input: DESIGN_INPUT_TYPE,
         state_format: Literal["one-hot", "index"] = "index",
+        is_new_session: Optional[jax.Array] = None,
     ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-        """Simulate neural activity and hidden states from the model."""
-        pass
+        """Simulate neural activity and hidden states from the model.
+
+        Simulates a trajectory through the hidden state space according to the
+        HMM dynamics, then generates observations from the GLM emission model
+        conditioned on each state.
+
+        Parameters
+        ----------
+        random_key :
+            JAX random key for reproducible simulation.
+        feedforward_input :
+            Design matrix of shape ``(n_time_bins, n_features)``. If a pynapple
+            Tsd/TsdFrame is provided, session boundaries are detected from
+            ``time_support`` and the hidden state chain is reset at each session start.
+        state_format :
+            Format for the returned states:
+
+            - ``"index"``: Integer array of shape ``(n_time_bins,)`` with state indices.
+            - ``"one-hot"``: Binary array of shape ``(n_time_bins, n_states)``.
+
+        Returns
+        -------
+        simulated_activity :
+            Simulated observations from the emission model. Shape ``(n_time_bins,)``
+            for single neuron or ``(n_time_bins, n_neurons)`` for population models.
+        firing_rates :
+            Predicted firing rates conditioned on the simulated states.
+            Shape ``(n_time_bins,)`` or ``(n_time_bins, n_neurons)``.
+        simulated_states :
+            Simulated hidden state trajectory. Shape depends on ``state_format``.
+        is_new_session :
+            TODO: fill
+
+        Raises
+        ------
+        ValueError
+            If the model has not been fit.
+
+        Examples
+        --------
+        >>> import jax
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> np.random.seed(123)
+        >>> X = np.random.randn(100, 3)
+        >>> y = np.random.binomial(1, 0.5, 100)
+        >>> model = nmo.glm.GLMHMM(n_states=2, observation_model="Bernoulli")
+        >>> model = model.fit(X, y)
+        >>> key = jax.random.key(0)
+        >>> X_new = np.random.randn(50, 3)
+        >>> activity, rates, states = model.simulate(key, X_new)
+        >>> activity.shape
+        (50,)
+        >>> states.shape
+        (50,)
+
+        See Also
+        --------
+        decode_state : Infer most likely state sequence from observations.
+        smooth_proba : Compute posterior state probabilities.
+        """
+        params, feedforward_input, _, is_new_session = (
+            self._validate_and_prepare_inputs(feedforward_input, None, is_new_session)
+        )
+
+        # preprocess inputs (drop nans, extract data)
+        data, _, is_new_session = self._preprocess_inputs(
+            feedforward_input, jnp.zeros(feedforward_input.shape[0]), is_new_session
+        )
+
+        # ensure first time point is a session start
+        is_new_session = is_new_session.at[0].set(True)
+
+        # run simulation
+        simulated_activity, firing_rates, simulated_states = self._simulate(
+            random_key, params, data, is_new_session
+        )
+
+        # format state output
+        if state_format == "one-hot":
+            simulated_states = jax.nn.one_hot(
+                simulated_states, self._n_states, dtype=jnp.int32
+            )
+
+        return simulated_activity, firing_rates, simulated_states
+
+    def _simulate(
+        self,
+        random_key: jax.Array,
+        params: GLMHMMParams,
+        X: jnp.ndarray,
+        is_new_session: jnp.ndarray,
+    ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+        """Simulate activity vis jax.lax.scan.
+
+        Parameters
+        ----------
+        random_key :
+            JAX random key.
+        params :
+            Model parameters.
+        X :
+            Design matrix of shape ``(n_time_bins, n_features)``.
+        is_new_session :
+            Boolean array marking session starts.
+
+        Returns
+        -------
+        simulated_activity :
+            Simulated observations.
+        firing_rates :
+            Predicted rates conditioned on simulated states.
+        simulated_states :
+            State indices at each time point.
+        """
+        # unpack log probabilities directly (avoid exp then log in categorical)
+        log_initial_prob = params.hmm_params.log_initial_prob
+        log_transition_prob = params.hmm_params.log_transition_prob
+        scale = jnp.exp(params.model_params.log_scale)
+
+        # pre-compute rates for all states: (n_time_bins, n_states) or (n_time_bins, n_neurons, n_states)
+        all_rates = compute_rate_per_state(
+            X, params.model_params, self._inverse_link_function
+        )
+
+        # pre-generate random keys for all time steps
+        n_time_bins = X.shape[0]
+        all_keys = jax.random.split(random_key, n_time_bins * 2)
+        state_keys = all_keys[:n_time_bins]
+        obs_keys = all_keys[n_time_bins:]
+
+        def simulate_step(carry, inputs):
+            """Single simulation step."""
+            prev_state_idx = carry
+            rates_t, is_new_sess, state_key, obs_key = inputs
+
+            # sample state: log_initial_prob if new session, else log transition from prev
+            log_state_probs = jax.lax.cond(
+                is_new_sess,
+                lambda: log_initial_prob,
+                lambda: log_transition_prob[prev_state_idx],
+            )
+            state_idx = jax.random.categorical(state_key, log_state_probs)
+
+            # get rate and scale for sampled state
+            # handles both (n_states,) and (n_neurons, n_states)
+            rate = rates_t[..., state_idx]
+            state_scale = scale[..., state_idx]
+
+            # sample observation
+            y_t = self._observation_model.sample_generator(
+                key=obs_key, predicted_rate=rate, scale=state_scale
+            )
+
+            return state_idx, (y_t, rate, state_idx)
+
+        # initialize carry (state will be overwritten at first step since is_new_session[0]=True)
+        init_carry = jnp.array(0)
+
+        # run scan
+        _, (simulated_activity, firing_rates, simulated_states) = jax.lax.scan(
+            simulate_step, init_carry, (all_rates, is_new_session, state_keys, obs_keys)
+        )
+
+        return simulated_activity, firing_rates, simulated_states
 
     def save_params(
         self,
