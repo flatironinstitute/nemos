@@ -431,7 +431,7 @@ class NewtonCholesky(AbstractSolver):
 
     def update(self, params, state, *args):
         raise NotImplementedError(
-            "NewtonCholeskySolver does not support incremental updates; use run()."
+            "NewtonCholeskydoes not support incremental updates; use run()."
         )
 
     def _get_optim_info(self, state: NewtonState, **kwargs) -> OptimizationInfo:
