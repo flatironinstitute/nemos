@@ -5,15 +5,20 @@ from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
 from types import SimpleNamespace
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pynapple as nap
 import pytest
 
+from nemos.glm.params import GLMParams
 from nemos.glm_hmm.glm_hmm import GLMHMM
 from nemos.glm_hmm.initialize_parameters import kmeans_glm_params_init
+from nemos.glm_hmm.params import GLMHMMModelParams
 from nemos.glm_hmm.validation import GLMHMMValidator
+from nemos.hmm.expectation_maximization import EMState
 from nemos.pytrees import FeaturePytree
+from nemos.regularizer import Ridge, UnRegularized
 
 # ---------------------------------------------------------------------------
 # Parametrize lists: GLMHMM only, single obs_model (Bernoulli).
@@ -72,8 +77,21 @@ def test_get_fit_attrs(instantiate_base_regressor_subclass, mock_glm_hmm_optimiz
     }
     assert fixture.model._get_fit_state() == expected_state
     fixture.model.fit(fixture.X, fixture.y)
-    assert all(val is not None for val in fixture.model._get_fit_state().values())
-    assert fixture.model._get_fit_state().keys() == expected_state.keys()
+    state = fixture.model._get_fit_state()
+    assert state.keys() == expected_state.keys()
+    n_features = fixture.X.shape[1]
+    assert state["coef_"].shape == (n_features, N_STATES)
+    assert state["intercept_"].shape == (N_STATES,)
+    assert state["scale_"].shape == (N_STATES,)
+    assert jnp.all(state["scale_"] > 0)
+    assert state["initial_prob_"].shape == (N_STATES,)
+    assert jnp.allclose(state["initial_prob_"].sum(), 1.0)
+    assert state["transition_prob_"].shape == (N_STATES, N_STATES)
+    assert jnp.allclose(state["transition_prob_"].sum(axis=-1), jnp.ones(N_STATES))
+    assert float(jnp.squeeze(state["dof_resid_"])) > 0
+    # mock returns SimpleNamespace(iterations=1, converged=True)
+    assert state["solver_state_"].iterations == 1
+    assert state["solver_state_"].converged is True
 
 
 # ---------------------------------------------------------------------------
@@ -102,7 +120,18 @@ class TestGLMHMM:
         # Pynapple TSD/TsdFrame input accepted; all fit attributes set afterwards
         model_pynap = fixture.model
         model_pynap.fit(X_nap, y_nap, init_params=init_params)
-        assert all(v is not None for v in model_pynap._get_fit_state().values())
+        state = model_pynap._get_fit_state()
+        n_features = X_np.shape[1]
+        assert state["coef_"].shape == (n_features, N_STATES)
+        assert state["intercept_"].shape == (N_STATES,)
+        assert state["scale_"].shape == (N_STATES,)
+        assert jnp.all(state["scale_"] > 0)
+        assert state["initial_prob_"].shape == (N_STATES,)
+        assert jnp.allclose(state["initial_prob_"].sum(), 1.0)
+        assert state["transition_prob_"].shape == (N_STATES, N_STATES)
+        assert jnp.allclose(state["transition_prob_"].sum(axis=-1), jnp.ones(N_STATES))
+        assert float(jnp.squeeze(state["dof_resid_"])) > 0
+        assert isinstance(state["solver_state_"], EMState)
 
         # Providing an extra session boundary changes the M-step for initial_prob.
         model_single = deepcopy(fixture.model)
@@ -352,44 +381,77 @@ def glm_hmm_data():
     )
 
 
+def _spy_instantiate_solver(monkeypatch):
+    """Wrap GLMHMM._instantiate_solver to capture each call's resolved args.
+
+    Returns a list; each entry has resolved ``solver_name``, ``regularizer``,
+    and the ``init_params`` passed to the call.
+    """
+    calls = []
+    real = GLMHMM._instantiate_solver
+
+    def spy(self, loss, init_params, solver_name=None, regularizer=None, **kw):
+        calls.append(
+            {
+                "solver_name": (
+                    solver_name
+                    if solver_name is not None
+                    else self.solver_spec.full_name
+                ),
+                "regularizer": (
+                    regularizer if regularizer is not None else self.regularizer
+                ),
+                "init_params": init_params,
+            }
+        )
+        return real(
+            self,
+            loss,
+            init_params,
+            solver_name=solver_name,
+            regularizer=regularizer,
+            **kw,
+        )
+
+    monkeypatch.setattr(GLMHMM, "_instantiate_solver", spy)
+    return calls
+
+
 class TestSolverConfiguration:
     """Verify that _initialize_optimizer_and_state wires EM correctly."""
 
     @pytest.mark.parametrize(
-        "regularizer, solver_name",
+        "regularizer, solver_name, expected_regularizer_type",
         [
-            ("UnRegularized", "LBFGS"),
-            ("Ridge", "LBFGS"),
+            ("UnRegularized", "LBFGS", UnRegularized),
+            ("Ridge", "LBFGS", Ridge),
         ],
     )
     def test_valid_solver_regularizer_combo_smoke(
-        self, regularizer, solver_name, glm_hmm_data, monkeypatch
+        self,
+        regularizer,
+        solver_name,
+        expected_regularizer_type,
+        glm_hmm_data,
+        mock_glm_hmm_optimizer_run,
+        monkeypatch,
     ):
-        """Valid regularizer+solver pairs initialise without error."""
+        """Valid regularizer+solver pairs wire _instantiate_solver with the right type and name."""
         model = GLMHMM(
             n_states=glm_hmm_data["n_states"],
             regularizer=regularizer,
             solver_name=solver_name,
         )
-        # Patch so the real _initialize_optimizer_and_state runs but EM is skipped.
-        real_init = GLMHMM._initialize_optimizer_and_state
-        noop = lambda p, *_, **__: (
-            p,
-            SimpleNamespace(iterations=1, converged=True),
-        )  # noqa: E731
-
-        def patched(self, init_params, data, y):
-            result = real_init(self, init_params, data, y)
-            self._optimizer_run = noop
-            return result
-
-        monkeypatch.setattr(GLMHMM, "_initialize_optimizer_and_state", patched)
+        calls = _spy_instantiate_solver(monkeypatch)
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
             init_params=glm_hmm_data["init_params"],
         )
-        assert callable(model._optimizer_run)
+        assert len(calls) >= 1
+        primary = calls[0]
+        assert isinstance(primary["regularizer"], expected_regularizer_type)
+        assert solver_name in primary["solver_name"]
 
     def test_mismatched_solver_raises(self, glm_hmm_data):
         """Lasso regularizer with LBFGS solver raises ValueError."""
@@ -401,30 +463,26 @@ class TestSolverConfiguration:
                 regularizer_strength=1.0,
             )
 
-    def test_bernoulli_single_solver_smoke(self, glm_hmm_data, monkeypatch):
-        """Bernoulli (fixed scale) initialises with a single solver path."""
+    def test_bernoulli_single_solver_smoke(
+        self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
+    ):
+        """Bernoulli (fixed scale) routes through the joint path: one solver call with full params."""
         model = GLMHMM(n_states=glm_hmm_data["n_states"], observation_model="Bernoulli")
-        real_init = GLMHMM._initialize_optimizer_and_state
-        noop = lambda p, *_, **__: (
-            p,
-            SimpleNamespace(iterations=1, converged=True),
-        )  # noqa: E731
-
-        def patched(self, init_params, data, y):
-            result = real_init(self, init_params, data, y)
-            self._optimizer_run = noop
-            return result
-
-        monkeypatch.setattr(GLMHMM, "_initialize_optimizer_and_state", patched)
+        calls = _spy_instantiate_solver(monkeypatch)
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
             init_params=glm_hmm_data["init_params"],
         )
-        assert callable(model._optimizer_run)
+        # Fixed scale → else branch in prepare_mstep_update_fn → exactly one solver call.
+        assert len(calls) == 1
+        # Joint path passes full GLMHMMModelParams (coef, intercept, log_scale) to the solver.
+        assert isinstance(calls[0]["init_params"], GLMHMMModelParams)
 
-    def test_gaussian_separable_scale_smoke(self, glm_hmm_data, monkeypatch):
-        """Gaussian (separable scale + analytical update) initialises without error."""
+    def test_gaussian_separable_scale_smoke(
+        self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
+    ):
+        """Gaussian (separable scale + analytical update) routes through the separable path."""
         rng = np.random.default_rng(1)
         n, k, s = 100, 2, 3
         X = np.ones((n, k))
@@ -432,20 +490,12 @@ class TestSolverConfiguration:
         init_params = glm_hmm_data["init_params"]
 
         model = GLMHMM(n_states=s, observation_model="Gaussian")
-        real_init = GLMHMM._initialize_optimizer_and_state
-        noop = lambda p, *_, **__: (
-            p,
-            SimpleNamespace(iterations=1, converged=True),
-        )  # noqa: E731
-
-        def patched(self, init_params, data, yy):
-            result = real_init(self, init_params, data, yy)
-            self._optimizer_run = noop
-            return result
-
-        monkeypatch.setattr(GLMHMM, "_initialize_optimizer_and_state", patched)
+        calls = _spy_instantiate_solver(monkeypatch)
         model.fit(X, y, init_params=init_params)
-        assert callable(model._optimizer_run)
+        # Separable path with analytical scale update → one solver call (params only, no scale).
+        assert len(calls) == 1
+        # Separable path strips scale from init_params → GLMParams(coef, intercept).
+        assert isinstance(calls[0]["init_params"], GLMParams)
 
     @pytest.mark.parametrize(
         "instantiate_base_regressor_subclass",
@@ -453,7 +503,10 @@ class TestSolverConfiguration:
         indirect=True,
     )
     def test_is_new_session_forwarded_to_initialization(
-        self, instantiate_base_regressor_subclass, monkeypatch
+        self,
+        instantiate_base_regressor_subclass,
+        mock_glm_hmm_optimizer_run,
+        monkeypatch,
     ):
         """is_new_session passed to fit() reaches _model_specific_initialization."""
         fixture = instantiate_base_regressor_subclass
@@ -471,21 +524,9 @@ class TestSolverConfiguration:
             captured["is_new_session"] = is_new_session
             return original_model_init(self, X, y, is_new_session)
 
-        real_init_opt = GLMHMM._initialize_optimizer_and_state
-        noop = lambda p, *_, **__: (
-            p,
-            SimpleNamespace(iterations=1, converged=True),
-        )  # noqa: E731
-
-        def patched_init_opt(self, init_params, data, yy):
-            result = real_init_opt(self, init_params, data, yy)
-            self._optimizer_run = noop
-            return result
-
         monkeypatch.setattr(
             GLMHMM, "_model_specific_initialization", capturing_model_init
         )
-        monkeypatch.setattr(GLMHMM, "_initialize_optimizer_and_state", patched_init_opt)
 
         fixture.model.fit(X, y, is_new_session=is_ns)
 
@@ -525,6 +566,8 @@ class TestSolverConfiguration:
                 fixture.y,
                 init_params=_init_params_from_fixture(fixture),
             )
+        assert fixture.model.solver_state_.iterations == maxiter
+        assert fixture.model.solver_state_.converged is False
 
     @pytest.mark.parametrize(
         "instantiate_base_regressor_subclass",
@@ -566,6 +609,60 @@ class TestSolverConfiguration:
             and "did not converge" in str(w.message)
         ]
         assert len(convergence_warns) == 0
+        assert fixture.model.solver_state_.iterations == maxiter - 1
+        assert fixture.model.solver_state_.converged is True
+
+
+# ---------------------------------------------------------------------------
+# TestFitDelegation — fit() calls validate_and_cast_is_new_session
+# ---------------------------------------------------------------------------
+
+
+class TestFitDelegation:
+    """fit() and simulate() must delegate session-boundary handling to validate_and_cast_is_new_session."""
+
+    def test_fit_calls_validate_and_cast_is_new_session(
+        self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
+    ):
+        from unittest.mock import MagicMock
+
+        n = glm_hmm_data["X"].shape[0]
+        default_is_new_session = jnp.zeros(n, dtype=bool).at[0].set(True)
+        mock = MagicMock(return_value=default_is_new_session)
+        monkeypatch.setattr(GLMHMMValidator, "validate_and_cast_is_new_session", mock)
+
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+
+        mock.assert_called_once()
+
+    def test_simulate_calls_validate_and_cast_is_new_session(
+        self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
+    ):
+        from unittest.mock import MagicMock
+
+        n = glm_hmm_data["X"].shape[0]
+        X = glm_hmm_data["X"]
+
+        # fit first so _check_is_fit() passes inside _validate_and_prepare_inputs
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        model.fit(X, glm_hmm_data["y"], init_params=glm_hmm_data["init_params"])
+
+        default_is_new_session = jnp.zeros(n, dtype=bool).at[0].set(True)
+        mock = MagicMock(return_value=default_is_new_session)
+        monkeypatch.setattr(GLMHMMValidator, "validate_and_cast_is_new_session", mock)
+
+        # _simulate is unfinished; stub it to return dummy arrays
+        dummy = jnp.zeros(n)
+        monkeypatch.setattr(GLMHMM, "_simulate", lambda *_, **__: (dummy, dummy, dummy))
+
+        model.simulate(jax.random.key(0), X)
+
+        mock.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -621,7 +718,9 @@ class TestEstimateResidDegreesOfFreedom:
         ):
             model._estimate_resid_degrees_of_freedom(glm_hmm_data["X"], n_samples="bad")
 
-    def test_lasso_dof_uses_nonzero_coef(self, glm_hmm_data, monkeypatch):
+    def test_lasso_dof_uses_nonzero_coef(
+        self, glm_hmm_data, mock_glm_hmm_optimizer_run
+    ):
         """Lasso branch estimates dof from non-zero coef entries."""
         model = GLMHMM(
             n_states=glm_hmm_data["n_states"],
@@ -629,18 +728,6 @@ class TestEstimateResidDegreesOfFreedom:
             solver_name="ProximalGradient",
             regularizer_strength=1.0,
         )
-        real_init = GLMHMM._initialize_optimizer_and_state
-        noop = lambda p, *_, **__: (
-            p,
-            SimpleNamespace(iterations=1, converged=True),
-        )  # noqa: E731
-
-        def patched(self, init_params, data, y):
-            result = real_init(self, init_params, data, y)
-            self._optimizer_run = noop
-            return result
-
-        monkeypatch.setattr(GLMHMM, "_initialize_optimizer_and_state", patched)
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
