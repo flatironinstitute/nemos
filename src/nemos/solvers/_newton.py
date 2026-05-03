@@ -381,8 +381,6 @@ class NewtonCholesky(AbstractSolver):
         backtracking line search is used.
     jit :
         Whether to JIT-compile the optimization loop.
-    unroll :
-        Whether to unroll the loop for reverse-mode differentiation.
 
     Notes
     -----
@@ -402,7 +400,6 @@ class NewtonCholesky(AbstractSolver):
         tol: float = 1e-6,
         line_search: optax.GradientTransformation | None = None,
         jit: bool = True,
-        unroll: bool = False,
         mode: str = "analytic",
     ):
         if has_aux:
@@ -423,7 +420,7 @@ class NewtonCholesky(AbstractSolver):
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
-        return {"hess", "maxiter", "tol", "line_search", "jit", "unroll"}
+        return {"hess", "maxiter", "tol", "line_search", "jit"}
 
     def init_state(self, init_params, *args) -> NewtonState:
         return NewtonState(iter_num=0, converged=False, grad_norm=float("inf"))
