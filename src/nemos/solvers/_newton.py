@@ -230,7 +230,7 @@ class _NewtonCholesky(BaseNewton):
         return solution.value
 
 
-class NewtonLU(BaseNewton):
+class _NewtonLU(BaseNewton):
     """Newton optimizer using LU decomposition for the linear subproblem.
 
     This variant is suitable for problems where the Hessian may be indefinite or
@@ -426,7 +426,6 @@ class NewtonCholesky(AbstractSolver):
         return {"hess", "maxiter", "tol", "line_search", "jit", "unroll"}
 
     def init_state(self, init_params, *args) -> NewtonState:
-        # dummy state, solver does not use this
         return NewtonState(iter_num=0, converged=False, grad_norm=float("inf"))
 
     def run(self, init_params, *args) -> tuple[Any, NewtonState, None]:
