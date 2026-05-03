@@ -830,6 +830,8 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
     y[~np.isnan(log_mu)] = np.random.poisson(
         np.exp(log_mu[~np.isnan(log_mu)] - np.nanmean(log_mu))
     )
+    # make sure that not all vals are the same
+    y[-1] = 1 if y[~np.isnan(log_mu)][0] != 1 else 2
     model = nmo.glm.GLM(
         regularizer="Ridge", regularizer_strength=0.001, solver_kwargs={"maxiter": 1}
     ).fit(X, y)

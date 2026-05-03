@@ -1,6 +1,6 @@
 """Validation classes for GLMHMM and PopulationGLMHMM models."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Optional, Tuple, Union
 
 import jax
@@ -8,11 +8,9 @@ import jax.numpy as jnp
 from jax.typing import DTypeLike
 from pynapple import Tsd, TsdFrame
 
-from .. import validation
 from ..base_validator import RegressorValidator
-from ..glm.params import GLMParams, GLMUserParams
 from ..glm.validation import GLMValidator
-from ..hmm.params import HMMParams
+from ..hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
 from ..type_casting import is_pynapple_tsd
 from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMHMMModelParams, GLMHMMParams, GLMHMMUserParams
@@ -48,7 +46,7 @@ def to_glm_hmm_params(user_params: GLMHMMUserParams) -> GLMHMMParams:
     """
     return GLMHMMParams(
         model_params=GLMHMMModelParams(user_params[:3]),
-        hmm_params=HMMParams(*(jnp.log(p) for p in user_params[3:])),
+        hmm_params=to_hmm_params(user_params[3:]),
     )
 
 
@@ -58,11 +56,7 @@ def from_glm_hmm_params(params: GLMHMMParams) -> GLMHMMUserParams:
     Converts internal model parameters (log_scale and log probabilities)
     to user-facing parameters (scale and probabilities in regular space).
     """
-    # exponentiate and re-normalize
-    initial_prob = jnp.exp(params.hmm_params.log_initial_prob)
-    initial_prob /= initial_prob.sum()
-    transition_prob = jnp.exp(params.hmm_params.log_transition_prob)
-    transition_prob /= transition_prob.sum(axis=1, keepdims=True)
+    initial_prob, transition_prob = from_hmm_params(params.hmm_params)
     return (
         params.model_params.coef,
         params.model_params.intercept,
@@ -73,17 +67,23 @@ def from_glm_hmm_params(params: GLMHMMParams) -> GLMHMMUserParams:
 
 
 @dataclass(frozen=True, repr=False)
-class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
+class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
     """Validate GLM-HMM parameters and inputs."""
 
-    n_states: int = field(kw_only=True)  # keyword only and required.
     expected_param_dims: Tuple[int] = (
         2,
         1,
         1,
-        1,
-        2,
+        *HMMValidator.expected_param_dims,
     )  # (coef.ndim, intercept.ndim, scale.ndim, init_prob.ndim, transition_prob.ndim)
+    initial_prob_ind: int = 3
+    transition_prob_ind: int = 4
+    model_param_names: Tuple[str] = (
+        "coef",
+        "intercept",
+        "scale",
+        *HMMValidator.model_param_names,
+    )
     to_model_params: Callable[[GLMHMMUserParams], GLMHMMParams] = to_glm_hmm_params
     from_model_params: Callable[[GLMHMMParams], GLMHMMUserParams] = from_glm_hmm_params
     model_class: str = "GLMHMM"
@@ -106,65 +106,10 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
                 "instead."
             ),
         ),
-        ("check_init_and_transition_prob_shape", None),
-        ("check_init_and_transition_prob_sum_to_1", None),
         ("check_model_params_shape", None),
+        *HMMValidator.params_validation_sequence,
         *RegressorValidator.params_validation_sequence[3:],
     )
-
-    def check_array_dimensions(
-        self,
-        params: GLMHMMUserParams,
-        err_msg: Optional[str] = None,
-        err_message_format: str = None,
-    ) -> GLMHMMUserParams:
-        """
-        Check array dimensions with custom error formatting for GLM parameters.
-
-        Overrides the base implementation to provide GLM-specific error messages
-        that include the actual shapes of the provided coefficient and intercept arrays.
-
-        Parameters
-        ----------
-        params : GLMUserParams
-            User-provided parameters as a tuple (coef, intercept).
-        err_msg : str, optional
-            Custom error message (unused, overridden by err_message_format).
-        err_message_format : str, optional
-            Format string for error message that takes two shape arguments.
-
-        Returns
-        -------
-        GLMUserParams
-            The validated parameters.
-
-        Raises
-        ------
-        ValueError
-            If arrays have incorrect dimensionality.
-        """
-        wrapped = self.wrap_user_params(params)
-        shapes = tuple(jax.tree_util.tree_map(lambda x: x.shape, p) for p in wrapped)
-        err_msg = err_message_format.format(*shapes)
-        return super().check_array_dimensions(params, err_msg=err_msg)
-
-    def check_init_and_transition_prob_shape(
-        self, params: GLMHMMUserParams
-    ) -> GLMHMMUserParams:
-        """Check initial and transition probabilities shape."""
-        wrapped = self.wrap_user_params(params)
-        initial_prob, transition_prob = wrapped[-2:]
-        if initial_prob.shape != (self.n_states,):
-            raise ValueError(
-                f"initial_prob must be a 1-dimensional array of shape ``({self.n_states},)``. "
-                f"Provided initial_prob is of shape ``{initial_prob.shape}`` instead."
-            )
-        if transition_prob.shape != (self.n_states, self.n_states):
-            raise ValueError(
-                f"transition_prob must be a 2-dimensional array of shape ``({self.n_states}, {self.n_states})``."
-                f"Provided transition_prob is of shape ``{transition_prob.shape}`` instead."
-            )
-        return params
 
     def check_model_params_shape(self, params: GLMHMMUserParams) -> GLMHMMUserParams:
         """Check the length of the glm parameters state axis."""
@@ -184,61 +129,6 @@ class GLMHMMValidator(RegressorValidator[GLMUserParams, GLMParams]):
             raise ValueError(
                 "GLM intercept must be of shape ``(n_states,)``. "
                 f"n_states is {self.n_states} but coef has shape ``{intercept.shape}``."
-            )
-        return params
-
-    def check_init_and_transition_prob_sum_to_1(
-        self, params: GLMHMMUserParams
-    ) -> GLMHMMUserParams:
-        """Check that initial and transition probability sum to 1."""
-        wrapped = self.wrap_user_params(params)
-        initial_prob, transition_prob = wrapped[-2:]
-        if not jnp.allclose(initial_prob.sum(), 1):
-            raise ValueError(
-                f"initial_prob must sum to 1, but got sum = {initial_prob.sum()}. "
-            )
-        if not jnp.allclose(jnp.sum(transition_prob, axis=1), 1):
-            row_sums = jnp.sum(transition_prob, axis=1)
-            raise ValueError(
-                f"transition_prob matrix rows must sum to 1 over columns, but got sum = {row_sums}. "
-                f"Each row i represents the probability distribution of transitioning from state i"
-                f"and must sum to 1. "
-            )
-        return params
-
-    def check_user_params_structure(
-        self, params: GLMUserParams, **kwargs
-    ) -> GLMUserParams:
-        """
-        Validate that user parameters are a two-element structure.
-
-        Parameters
-        ----------
-        params : GLMUserParams
-            User-provided parameters (should be a tuple/list of length 2).
-        **kwargs
-            Additional keyword arguments (unused).
-
-        Returns
-        -------
-        GLMUserParams
-            The validated parameters.
-
-        Raises
-        ------
-        ValueError
-            If parameters do not have length two.
-        """
-        validation.check_length(
-            params,
-            5,
-            "Params must have length 5: "
-            "(coef, intercept, scale, initial_prob, transition_prob).",
-        )
-        if not isinstance(params, (tuple, list)):
-            raise TypeError(
-                "GLMHMM params must be a tuple/list of length 5, "
-                "(coef, intercept, scale, initial_prob, transition_prob)."
             )
         return params
 
