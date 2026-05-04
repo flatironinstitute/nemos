@@ -223,4 +223,7 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
 
     def get_empty_params(self, X, y) -> HMMModelParamsT:
         """Return the param shape given the input data."""
-        pass
+        return HMMParams(
+            log_initial_prob=jnp.empty((self.n_states,)),
+            log_transition_prob=jnp.empty((self.n_states, self.n_states)),
+        )
