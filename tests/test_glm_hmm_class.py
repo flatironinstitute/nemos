@@ -4,6 +4,7 @@ import warnings
 from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import jax
 import jax.numpy as jnp
@@ -614,6 +615,23 @@ class TestSolverConfiguration:
 
 
 # ---------------------------------------------------------------------------
+# Shared stub: replace GLMHMM._simulate with a no-op returning dummy arrays.
+# Used by delegation tests that need simulate() to complete without running EM.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def stub_glmhmm_simulate(monkeypatch):
+    """Return a factory that patches GLMHMM._simulate to return dummy arrays of size n."""
+
+    def _stub(n):
+        dummy = jnp.zeros(n)
+        monkeypatch.setattr(GLMHMM, "_simulate", lambda *_, **__: (dummy, dummy, dummy))
+
+    return _stub
+
+
+# ---------------------------------------------------------------------------
 # TestFitDelegation — fit() calls validate_and_cast_is_new_session
 # ---------------------------------------------------------------------------
 
@@ -624,8 +642,6 @@ class TestFitDelegation:
     def test_fit_calls_validate_and_cast_is_new_session(
         self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
     ):
-        from unittest.mock import MagicMock
-
         n = glm_hmm_data["X"].shape[0]
         default_is_new_session = jnp.zeros(n, dtype=bool).at[0].set(True)
         mock = MagicMock(return_value=default_is_new_session)
@@ -641,24 +657,18 @@ class TestFitDelegation:
         mock.assert_called_once()
 
     def test_simulate_calls_validate_and_cast_is_new_session(
-        self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
+        self, glm_hmm_data, mock_glm_hmm_optimizer_run, stub_glmhmm_simulate, monkeypatch
     ):
-        from unittest.mock import MagicMock
-
         n = glm_hmm_data["X"].shape[0]
         X = glm_hmm_data["X"]
 
-        # fit first so _check_is_fit() passes inside _validate_and_prepare_inputs
         model = GLMHMM(n_states=glm_hmm_data["n_states"])
         model.fit(X, glm_hmm_data["y"], init_params=glm_hmm_data["init_params"])
 
         default_is_new_session = jnp.zeros(n, dtype=bool).at[0].set(True)
         mock = MagicMock(return_value=default_is_new_session)
         monkeypatch.setattr(GLMHMMValidator, "validate_and_cast_is_new_session", mock)
-
-        # _simulate is unfinished; stub it to return dummy arrays
-        dummy = jnp.zeros(n)
-        monkeypatch.setattr(GLMHMM, "_simulate", lambda *_, **__: (dummy, dummy, dummy))
+        stub_glmhmm_simulate(n)
 
         model.simulate(jax.random.key(0), X)
 
@@ -740,3 +750,158 @@ class TestEstimateResidDegreesOfFreedom:
         dof_intercept_and_hmm = n_states + (n_states - 1) + (n_states - 1) * n_states
         expected = n_samples - 0 - dof_intercept_and_hmm
         assert model.dof_resid_ == expected
+
+
+# ---------------------------------------------------------------------------
+# TestSimulate — GLMHMM.simulate() method tests
+# ---------------------------------------------------------------------------
+
+
+class TestSimulate:
+    """Tests for GLMHMM.simulate()."""
+
+    def test_simulate_calls_validate_and_prepare_inputs_with_y_none(
+        self, glm_hmm_data, mock_glm_hmm_optimizer_run, stub_glmhmm_simulate, monkeypatch
+    ):
+        """simulate() delegates to _validate_and_prepare_inputs with y=None."""
+        X = glm_hmm_data["X"]
+        n = X.shape[0]
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        model.fit(X, glm_hmm_data["y"], init_params=glm_hmm_data["init_params"])
+
+        is_new_session = jnp.zeros(n, dtype=bool).at[0].set(True)
+        mock_vapi = MagicMock(
+            return_value=(model._get_model_params(), jnp.asarray(X), None, is_new_session)
+        )
+        monkeypatch.setattr(GLMHMM, "_validate_and_prepare_inputs", mock_vapi)
+        stub_glmhmm_simulate(n)
+
+        model.simulate(jax.random.key(0), X)
+
+        mock_vapi.assert_called_once()
+        assert mock_vapi.call_args.args[1] is None  # y must be None, not a fake zeros array
+
+    @pytest.mark.parametrize(
+        "state_format, expectation",
+        [
+            ("index", does_not_raise()),
+            ("one-hot", does_not_raise()),
+            ("invalid", pytest.raises(ValueError, match="Invalid state_format")),
+        ],
+    )
+    def test_simulate_state_format(
+        self, state_format, expectation, glm_hmm_data, mock_glm_hmm_optimizer_run
+    ):
+        """Valid state formats run cleanly; invalid raises ValueError before any computation."""
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+        with expectation:
+            model.simulate(
+                jax.random.key(0), glm_hmm_data["X"], state_format=state_format
+            )
+
+    def test_simulate_output_shapes(self, glm_hmm_data, mock_glm_hmm_optimizer_run):
+        """simulate() returns arrays with correct shapes for both state formats."""
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+        X = glm_hmm_data["X"]
+        n, n_states = X.shape[0], glm_hmm_data["n_states"]
+
+        activity, rates, states = model.simulate(jax.random.key(0), X, state_format="index")
+        assert activity.shape[0] == n
+        assert rates.shape[0] == n
+        assert states.shape == (n,)
+
+        _, _, states_oh = model.simulate(jax.random.key(0), X, state_format="one-hot")
+        assert states_oh.shape == (n, n_states)
+        assert jnp.all(states_oh.sum(axis=1) == 1)
+
+    def test_simulate_is_deterministic(self, glm_hmm_data, mock_glm_hmm_optimizer_run):
+        """Same random key produces identical outputs."""
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+        X = glm_hmm_data["X"]
+        key = jax.random.key(42)
+        act1, rate1, state1 = model.simulate(key, X)
+        act2, rate2, state2 = model.simulate(key, X)
+        assert jnp.array_equal(state1, state2)
+        assert jnp.array_equal(rate1, rate2)
+        assert jnp.array_equal(act1, act2)
+
+    def test_simulate_requires_fit(self, glm_hmm_data):
+        """simulate() raises ValueError if called before fit."""
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        with pytest.raises(ValueError, match="not fitted"):
+            model.simulate(jax.random.key(0), glm_hmm_data["X"])
+
+    def test_simulate_forces_first_bin_new_session(
+        self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
+    ):
+        """is_new_session[0] is always True regardless of what the user passes."""
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+        X = glm_hmm_data["X"]
+        n = X.shape[0]
+        captured = {}
+
+        def capturing_simulate(self_inner, key, params, data, is_new_session):
+            captured["is_new_session"] = is_new_session
+            return jnp.zeros(n), jnp.zeros(n), jnp.zeros(n, dtype=int)
+
+        monkeypatch.setattr(GLMHMM, "_simulate", capturing_simulate)
+        model.simulate(jax.random.key(0), X, is_new_session=jnp.zeros(n, dtype=bool))
+
+        assert bool(captured["is_new_session"][0]) is True
+
+    def test_simulate_sample_generator_receives_key_rate_scale(
+        self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
+    ):
+        """_simulate calls obs model sample_generator with scalar key, rate, and scale per step.
+
+        all_rates has shape (n_time_bins, n_states) before the scan; inside simulate_step
+        the selected-state slice reduces each to a scalar.  Disable JIT so the scan
+        body runs as a Python loop and the spy sees concrete values.
+        """
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+        X_short = jnp.ones((2, glm_hmm_data["X"].shape[1]))
+
+        obs_model = model._observation_model
+        original = obs_model.sample_generator
+        calls = []
+
+        def spy(key, predicted_rate, scale):
+            calls.append(dict(key=key, predicted_rate=predicted_rate, scale=scale))
+            return original(key=key, predicted_rate=predicted_rate, scale=scale)
+
+        monkeypatch.setattr(obs_model, "sample_generator", spy)
+
+        with jax.disable_jit():
+            model.simulate(jax.random.key(0), X_short)
+
+        assert len(calls) == 2
+        for call in calls:
+            # after state selection inside simulate_step, each is a scalar
+            assert call["key"].ndim == 0
+            assert call["predicted_rate"].ndim == 0
+            assert call["scale"].ndim == 0
