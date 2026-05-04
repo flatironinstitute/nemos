@@ -186,18 +186,22 @@ def shift_nan_is_new_session(
     :
         Updated boolean session-start indicators, shape ``(n_samples,)``.
     """
-    n_samples = is_new_session.shape[0]
-    indices = jnp.arange(n_samples)
+    n = is_new_session.shape[0]
+    valid = jnp.arange(n)[~is_nan]  # non-NaN indices
+    invalid_session_idx = jnp.arange(n)[is_nan & is_new_session]  # misplaced markers
 
-    def body(carry, x):
-        is_nan_i, idx = x
-        next_valid = jnp.where(is_nan_i, carry, idx)
-        return next_valid, next_valid
+    # Append sentinel n: searchsorted returning len(valid) (no valid sample after
+    # the markebuwr) then maps to n, which mode="drop" discards. The append copies
+    # valid but avoids any clip/where logic and handles empty valid correctly.
+    pos = jnp.searchsorted(valid, invalid_session_idx, side="left")
+    shifted_idx = jnp.append(valid, n)[pos]
 
-    # next_valid will contain the index of the next valid sample for each position, or the position itself if it's valid
-    _, next_valid = jax.lax.scan(body, n_samples, (is_nan, indices), reverse=True)
-    new_idx = next_valid[is_new_session]
-    return jnp.zeros(n_samples, dtype=bool).at[new_idx].set(True, mode="drop")
+    return (
+        is_new_session.at[invalid_session_idx]
+        .set(False)
+        .at[shifted_idx]
+        .set(True, mode="drop")
+    )
 
 
 def _check_state_format(state_format: str) -> None:
