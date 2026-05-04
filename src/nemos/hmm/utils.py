@@ -13,7 +13,7 @@ Array = NDArray | jax.numpy.ndarray
 
 def initialize_is_new_session(
     X: DESIGN_INPUT_TYPE,
-    y: ArrayLike,
+    y: ArrayLike | None,
     is_new_session: ArrayLike | nap.IntervalSet | None = None,
 ):
     """
@@ -32,6 +32,7 @@ def initialize_is_new_session(
     y :
         Output data/observations, shape ``(n_samples, n_observations)``. Used to get
         n_samples and to infer session boundaries if is_new_session is a pynapple.IntervalSet.
+        If None (e.g. during simulation), n_samples is inferred from X.
     is_new_session :
         Optional array indicating user-provided session boundaries. Can be:
         - a boolean array or integer array of 1s and 0s indicating session starts, shape ``(n_samples,)``
@@ -52,7 +53,9 @@ def initialize_is_new_session(
     the forward and backward message passing at session starts, preventing
     information leakage between independent experimental sessions or trials.
     """
-    n_samples = y.shape[0]
+    n_samples = (
+        y.shape[0] if y is not None else jax.tree_util.tree_leaves(X)[0].shape[0]
+    )
     # If new_sess is not provided, assume one session
     if is_new_session is None:
         # default: all False, but first time bin must be True (set at end)

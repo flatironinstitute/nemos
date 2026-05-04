@@ -214,8 +214,12 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
 
         # shift any True values that fall on NaN samples to the next valid sample
         nan_x = jnp.any(jnp.isnan(jnp.asarray(X)).reshape(X.shape[0], -1), axis=1)
-        nan_y = jnp.any(jnp.isnan(jnp.asarray(y)).reshape(y.shape[0], -1), axis=1)
-        return shift_nan_is_new_session(is_new_session, nan_x | nan_y)
+        if y is not None:
+            nan_y = jnp.any(jnp.isnan(jnp.asarray(y)).reshape(y.shape[0], -1), axis=1)
+            combined_nans = nan_x | nan_y
+        else:
+            combined_nans = nan_x
+        return shift_nan_is_new_session(is_new_session, combined_nans)
 
     def get_empty_params(self, X, y) -> HMMModelParamsT:
         """Return the param shape given the input data."""
