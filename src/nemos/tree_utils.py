@@ -222,5 +222,8 @@ def has_matching_axis_pytree(*pytree: Any, axis: int = 0):
 
 def drop_nans(*trees):
     """Drop all NaNs from trees."""
-    is_valid = get_valid_multitree(*trees)
-    return [jax.tree_util.tree_map(lambda x: x[is_valid], par) for par in trees]
+    is_valid = get_valid_multitree(*[t for t in trees if t is not None])
+    return [
+        jax.tree_util.tree_map(lambda x: x[is_valid], par) if par is not None else None
+        for par in trees
+    ]
