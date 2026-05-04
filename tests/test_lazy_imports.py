@@ -259,6 +259,7 @@ PYNAPPLE_FREE_MODULES = [
     "nemos.solvers",
     "nemos.regularizer",
     "nemos.glm",
+    "nemos.hmm",
 ]
 
 

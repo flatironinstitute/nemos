@@ -1,14 +1,21 @@
 """Utilities for HMM."""
 
+from typing import TYPE_CHECKING
+
 import jax
 import jax.numpy as jnp
-import pynapple as nap
+import lazy_loader as lazy
 from numpy.typing import ArrayLike, NDArray
 
 from ..type_casting import is_pynapple_tsd
 from ..typing import DESIGN_INPUT_TYPE
 
 Array = NDArray | jax.numpy.ndarray
+
+nap = lazy.load("pynapple")
+
+if TYPE_CHECKING:
+    import pynapple as nap
 
 
 def initialize_is_new_session(
@@ -60,7 +67,7 @@ def initialize_is_new_session(
     if is_new_session is None:
         # default: all False, but first time bin must be True (set at end)
         is_new_session = jnp.zeros(n_samples, dtype=bool)
-    elif isinstance(is_new_session, nap.IntervalSet):
+    elif hasattr(is_new_session, "start") and hasattr(is_new_session, "end"):
         is_new_session = compute_is_new_session_from_pynapple(X, y, is_new_session)
     elif hasattr(is_new_session, "dtype"):
         if jnp.issubdtype(is_new_session.dtype, jnp.bool_):
