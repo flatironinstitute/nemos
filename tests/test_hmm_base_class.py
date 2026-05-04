@@ -26,6 +26,8 @@ from nemos.hmm.utils import initialize_is_new_session
 from nemos.hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
 from nemos.params import ModelParams
 
+import inspect
+
 
 class MockHMMModelParams(ModelParams):
     param: jnp.ndarray
@@ -1202,7 +1204,43 @@ class TestHMMNewSession:
             )
 
 
+def all_subclasses(cls):
+    seen = set()
+    stack = list(cls.__subclasses__())
+    while stack:
+        sub = stack.pop()
+        if sub in seen:
+            continue
+        seen.add(sub)
+        stack.extend(sub.__subclasses__())
+    return seen
+
+
 class TestHMMValidator:
+    """Test suite for input validation logic in HMMValidator."""
+
+    def test_user_param_order(self) -> None:
+        """Meta-test.
+
+        Tests that any subclasses of HMMValidator have the correct user parameter order
+        """
+        import importlib
+        import pkgutil
+        import nemos
+
+        # Import every submodule so all HMMValidator subclasses get registered.
+        for _, modname, _ in pkgutil.walk_packages(nemos.__path__, prefix="nemos."):
+            importlib.import_module(modname)
+
+        # Filter the classes that are subclasses of 'SuperClass'.
+        subclasses = all_subclasses(HMMValidator)
+
+        for validator in subclasses:
+            n_params = len(validator.model_param_names)
+            user_par = [0.0] * (n_params - 2) + [1.0, 1.0]
+            params = validator.to_model_params(user_par)
+            assert np.all(params.hmm_params.log_initial_prob == 0.0)
+            assert np.all(params.hmm_params.log_transition_prob == 0.0)
 
     @pytest.mark.parametrize(
         "X, y, expectation",

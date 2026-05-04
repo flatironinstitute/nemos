@@ -14,28 +14,6 @@ from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMHMMModelParams, GLMHMMParams, GLMHMMUserParams
 
 
-def has_nans_only_at_border(arr):
-    """Check if NaNs appear only at the start and end along axis=0."""
-    # Check which rows have any NaN values
-    is_nan = jnp.any(jnp.isnan(arr.reshape(arr.shape[0], -1)), axis=1)
-
-    # If no NaNs, it's valid
-    if not jnp.any(is_nan):
-        return True
-
-    # If all NaNs, it's valid
-    if jnp.all(is_nan):
-        return True
-
-    # Find first and last non-NaN positions
-    non_nan_indices = jnp.where(~is_nan)[0]
-    first_valid = non_nan_indices[0]
-    last_valid = non_nan_indices[-1]
-
-    # Check if there are any NaNs between first and last valid values
-    return not jnp.any(is_nan[first_valid : last_valid + 1])
-
-
 def to_glm_hmm_params(user_params: GLMHMMUserParams) -> GLMHMMParams:
     """Map from GLMHMMUserParams to GLMHMMParams.
 
@@ -43,7 +21,7 @@ def to_glm_hmm_params(user_params: GLMHMMUserParams) -> GLMHMMParams:
     to internal model parameters (log_scale and log probabilities).
     """
     return GLMHMMParams(
-        model_params=GLMHMMModelParams(user_params[:3]),
+        model_params=GLMHMMModelParams(*user_params[:3]),
         hmm_params=to_hmm_params(user_params[3:]),
     )
 
