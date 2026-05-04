@@ -14,6 +14,7 @@ from .. import observation_models as obs
 from .._observation_model_builder import instantiate_observation_model
 from ..hmm.expectation_maximization import EMState, em_hmm, em_step
 from ..hmm.hmm import BaseHMM
+from ..hmm.utils import _check_state_format
 from ..hmm.initialize_parameters import HMM_INITIALIZATION_FN_DICT
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
@@ -638,6 +639,11 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
 
             - ``"index"``: Integer array of shape ``(n_time_bins,)`` with state indices.
             - ``"one-hot"``: Binary array of shape ``(n_time_bins, n_states)``.
+        is_new_session :
+            Boolean array of shape ``(n_time_bins,)`` marking session starts with
+            ``True``. If ``None``, the entire input is treated as a single session.
+            Ignored when ``feedforward_input`` is a pynapple object (boundaries are
+            inferred from ``time_support``).
 
         Returns
         -------
@@ -649,8 +655,6 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
             Shape ``(n_time_bins,)`` or ``(n_time_bins, n_neurons)``.
         simulated_states :
             Simulated hidden state trajectory. Shape depends on ``state_format``.
-        is_new_session :
-            TODO: fill
 
         Raises
         ------
@@ -680,13 +684,15 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
         decode_state : Infer most likely state sequence from observations.
         smooth_proba : Compute posterior state probabilities.
         """
+        _check_state_format(state_format)
+
         params, feedforward_input, _, is_new_session = (
             self._validate_and_prepare_inputs(feedforward_input, None, is_new_session)
         )
 
         # preprocess inputs (drop nans, extract data)
         data, _, is_new_session = self._preprocess_inputs(
-            feedforward_input, jnp.zeros(feedforward_input.shape[0]), is_new_session
+            feedforward_input, None, is_new_session
         )
 
         # ensure first time point is a session start
