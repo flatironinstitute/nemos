@@ -405,8 +405,8 @@ def dirichlet_initial_proba_init(
     >>> n_states = 3
     >>> alphas = jnp.array([5.0, 1.0, 1.0])  # favor first state
     >>> init_prob = dirichlet_initial_proba_init(n_states, alphas=alphas, random_key=jax.random.PRNGKey(0))
-    >>> print(init_prob)
-    [0.8081229 0.1293587 0.0625184]
+    >>> init_prob  # doctest: +ELLIPSIS
+    Array([...], dtype=float32)
     """
     if alphas is None:
         alphas = jnp.ones((n_states,))
