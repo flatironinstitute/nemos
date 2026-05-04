@@ -1274,6 +1274,41 @@ class TestHMMValidator:
         with expectation:
             model._validator.validate_inputs(X, y)
 
+    @pytest.mark.parametrize(
+        "X, y, expectation",
+        [
+            # nan border y
+            (
+                np.ones((5, 1)),
+                np.array([np.nan, 1, 2, 3, np.nan]),
+                does_not_raise(),
+            ),
+            # nan border x
+            (
+                np.array([[np.nan], [2], [3], [np.nan]]),
+                np.array([0, 1, 3, 4]),
+                does_not_raise(),
+            ),
+            # nan middle y
+            (
+                np.ones((5, 1)),
+                np.array([np.nan, 1, np.nan, 2, 3]),
+                pytest.raises(ValueError, match="HMM requires continuous"),
+            ),
+            # nan middle x
+            (
+                np.array([[np.nan], [2], [np.nan], [3]]),
+                np.array([0, 1, 3, 4]),
+                pytest.raises(ValueError, match="HMM requires continuous"),
+            ),
+        ],
+    )
+    def test_nans_only_at_border(self, X, y, expectation):
+        """Test that validate_inputs allows NaNs only at the borders of the data."""
+        model = MockHMM(n_states=3)
+        with expectation:
+            model._validator.validate_inputs(X, y)
+
 
 class TestHMMInference:
     """Test suite for inference methods (smooth_proba, filter_proba, decode_state)."""
