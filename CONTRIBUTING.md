@@ -72,7 +72,7 @@ git checkout development
 git pull origin development
 # sync your local copy with upstream development
 git pull upstream development
-# update your fork's development branch with any changs from upstream
+# update your fork's development branch with any changes from upstream
 git push origin development
 # create and switch to a new branch, where you'll work on your new feature
 git checkout -b my_feature_branch
@@ -214,20 +214,27 @@ properly documented as outlined below.
 
     If your changes are significant (add a new functionality or drastically change the current codebase), then the current examples may need to be updated or a new example may need to be added.
 
-    All examples live within the `docs/` subfolder of `nemos`. These are written as `.py` files but are converted to notebooks by [`mkdocs-gallery`](https://smarie.github.io/mkdocs-gallery/), and have a special syntax, as demonstrated in this [example gallery](https://smarie.github.io/mkdocs-gallery/generated/gallery/).
+    All examples live within the `docs/` subfolder of `nemos`. These are written as `.md` files, are built by [`Sphinx`](https://www.sphinx-doc.org/en/master/usage/quickstart.html) and are converted to notebooks by [`myst-nb`](https://myst-nb.readthedocs.io/en/latest/authoring/basics.html#authoring-intro). The notebooks have a special syntax as explained in this    
+    [basics page](https://myst-nb.readthedocs.io/en/latest/authoring/basics.html#authoring-intro) and this [page on text-based notebooks](https://myst-nb.readthedocs.io/en/latest/authoring/text-notebooks.html#authoring-text-notebooks). You can also look at some notebook examples [here](https://myst-nb.readthedocs.io/en/v0.9.0/examples/index.html).
 
-    We avoid using `.ipynb` notebooks directly because their JSON-based format makes them difficult to read, interpret, and resolve merge conflicts in version control.
+    We avoid using `.ipynb` notebooks directly because their JSON-based format makes them difficult to read, interpret, and resolve merge conflicts in version control. A possible way out if you still would like to work with a `.ipynb` notebook is to pair it with a text-based format and put the text-based file in version control. This last part can be easily done using [Jupytext](https://jupytext.readthedocs.io/en/latest/). Do not push `.ipynb` notebooks to NeMoS.
 
     To see if changes you have made break the current documentation, you can build the documentation locally.
 
     ```
+    # get inside the docs folder
+    cd docs
     # Clear the cached documentation pages
-    # This step is only necessary if your changes affected the src/ directory
-    rm -r docs/generated
+    # It deletes the docs/_build/ folder. 
+    # Only needed when you want to force a completely fresh build,
+    # as make html on its own only rebuilds files that have changed.
+    make clean
     # build the docs within the nemos repo
-    mkdocs build
+    make html
+    # Run the build locally
+    sphinx-autobuild . _build/html
     ```
-
+    
     If the build fails, you will see line-specific errors that prompted the failure.
 
 3. **Doctest: Test the example code in your docs**
