@@ -6,18 +6,20 @@ implementations operate on arbitrary parameter pytrees and are optionally jit-ab
 """
 
 from functools import wraps
-from typing import Any, Callable, NamedTuple, Optional
+from typing import Any, Callable, Optional
 
 import jax
 import jax.numpy as jnp
 from jax.flatten_util import ravel_pytree
 
+import equinox as eqx
 import lineax
 import optax
-from ._abstract_solver import AbstractSolver, OptimizationInfo, SolverAdapterState
+from ._abstract_solver import AbstractSolver, OptimizationInfo
+from ..typing import Params, StepResult
 
 
-class NewtonState(NamedTuple):
+class NewtonState(eqx.Module):
     """State of the Newton optimization process.
 
     Attributes
@@ -28,219 +30,350 @@ class NewtonState(NamedTuple):
         Whether the convergence criterion was satisfied.
     grad_norm :
         L2 norm of the gradient at the final iterate.
+    params :
+        Current parameter values (flattened array, for incremental updates).
+    ls_state :
+        Optax line search state (for incremental updates).
     """
 
     iter_num: int
     converged: bool
     grad_norm: float
+    params: Optional[jnp.ndarray] = None
+    ls_state: Optional[Any] = None
 
 
-class BaseNewton:
-    """Generic Newton optimizer operating on arbitrary parameter pytrees.
+class Newton(AbstractSolver[NewtonState]):
+    """Newton optimizer operating on arbitrary parameter pytrees.
 
     This class implements a full Newton optimization loop, including gradient
-    and Hessian evaluation, linear system solves, and optional line search. It
-    serves as a reusable base for specific Newton variants that differ only in
-    how the linear system is solved.
+    and Hessian evaluation, linear system solves, and optional line search.
+    The linear solver is configured per-problem via the ``setup_hessian`` method,
+    allowing different Hessian solution strategies without creating subclasses.
 
-    Subclasses specify a ``linear_solver`` (from ``lineax``) and may override
-    :meth:`_solve_linear_system` to enforce additional structure such as symmetry
-    or positive definiteness.
+    This class also implements the NeMoS ``AbstractSolver`` interface, enabling
+    integration with the full NeMoS framework for model fitting.
 
     Parameters
     ----------
     func :
         Scalar-valued objective function with signature ``(params, *args)``.
-    hess :
-        Optional callable returning the Hessian in flattened parameter space.
-        If ``None``, the Hessian is computed automatically using
-        :func:`jax.hessian`.
     maxiter :
         Maximum number of Newton iterations.
     tol :
         Convergence tolerance on the gradient L2 norm.
-    line_search :
-        Optax-compatible line search transformation. If ``None``, a default
-        backtracking line search is used. Passing ``optax.identity()``
-        disables line search.
     jit :
         Whether to JIT-compile the optimization loop.
+    force_autodiff_hessian :
+        If ``True``, always use automatic differentiation to compute the Hessian,
+        even if one is configured via ``setup_hessian``. Default is ``False``,
+        which uses the configured Hessian function if available, falling back
+        to autodiff if not.
 
     Notes
     -----
     The optimization is performed in flattened parameter space using
     :func:`jax.flatten_util.ravel_pytree`, but inputs and outputs remain
     structured as pytrees.
-    """
 
-    # Subclasses override this.
-    linear_solver: lineax.AbstractLinearSolver = None
+    The Hessian and linear solver strategy should be configured via
+    ``setup_hessian()`` before calling ``run()``.
+    """
 
     def __init__(
         self,
         func: Callable,
-        hess: Optional[Callable] = None,
         maxiter: int = 30,
         tol: float = 1e-6,
-        line_search: optax.GradientTransformation | None = None,
         jit: bool = True,
+        force_autodiff_hessian: bool = False,
     ):
         self.func = func
-        self.hess = hess
         self.maxiter = maxiter
         self.tol = tol
-        self.line_search = (
-            line_search
-            if line_search is not None
-            else optax.scale_by_backtracking_linesearch(max_backtracking_steps=30)
-        )
         self.jit = jit
+        self.force_autodiff_hessian = force_autodiff_hessian
+
+        # Cache val_and_grad to avoid recomputation each step
+        self._val_and_grad = jax.value_and_grad(func)
+
+        # Internal line search (backtracking by default)
+        self._line_search = optax.scale_by_backtracking_linesearch(
+            max_backtracking_steps=30
+        )
+
+        # Hessian configuration — initialized to None, set via setup_hessian()
+        self._hess_fn = None
+        self._hess_tag = None
+        self._linear_solver = None
+
+    def setup_hessian(
+        self,
+        hess_fn: Optional[Callable] = None,
+        hess_tag: Optional[lineax.AbstractTag] = None,
+    ) -> None:
+        """Configure the Hessian computation and linear solver strategy.
+
+        Parameters
+        ----------
+        hess_fn :
+            Optional callable returning the Hessian in flattened parameter space.
+            If ``None`` or if ``force_autodiff_hessian`` is ``True``, the Hessian
+            is computed automatically using :func:`jax.hessian`.
+        hess_tag :
+            Optional lineax tag indicating structure of the Hessian (e.g.,
+            ``lineax.positive_semidefinite_tag`` for Cholesky, ``None`` for general).
+            This influences the choice of linear solver.
+
+        Notes
+        -----
+        If ``hess_tag`` is ``None``, an LU-based solver is used for general matrices.
+        If ``hess_tag`` indicates positive-semidefiniteness, a Cholesky solver is used.
+        """
+        self._hess_fn = hess_fn
+        self._hess_tag = hess_tag
+
+        # Select linear solver based on Hessian structure tag
+        if hess_tag is lineax.positive_semidefinite_tag:
+            self._linear_solver = lineax.Cholesky()
+        else:
+            # Default to LU for general or unspecified Hessians
+            self._linear_solver = lineax.LU()
 
     def _solve_linear_system(self, H: jnp.ndarray, g_flat: jnp.ndarray) -> jnp.ndarray:
-        """Solve ``H @ step = -g`` using :attr:`linear_solver`.
+        """Solve ``H @ step = -g`` using the configured linear solver.
 
-        The base implementation wraps the Hessian in a
-        :class:`lineax.MatrixLinearOperator` and delegates to
-        :attr:`linear_solver`.  Subclasses may override this to enforce
-        structural properties (e.g. symmetry) before factorisation.
+        The Hessian may be wrapped with a tag before factorization to indicate
+        structural properties (e.g., symmetry or positive-definiteness).
         """
-        operator = lineax.MatrixLinearOperator(H)
-        solution = lineax.linear_solve(operator, -g_flat, solver=self.linear_solver)
+        if self._linear_solver is None:
+            raise RuntimeError(
+                "Linear solver not configured. Call setup_hessian() before run()."
+            )
+
+        # Wrap the Hessian operator with the configured tag
+        if self._hess_tag is not None:
+            operator = lineax.MatrixLinearOperator(H, self._hess_tag)
+        else:
+            operator = lineax.MatrixLinearOperator(H)
+
+        solution = lineax.linear_solve(operator, -g_flat, solver=self._linear_solver)
         return solution.value
 
-    def run(self, init_params, *args) -> tuple[Any, NewtonState]:
-        func = self.func
-        val_and_grad = jax.value_and_grad(func)
-        tol = self.tol
-        maxiter = self.maxiter
-        line_search = self.line_search
+    def run(self, init_params: Params, *args: Any) -> StepResult:
+        """Run the Newton optimization loop.
 
-        params_flat, unravel = ravel_pytree(init_params)
+        Parameters
+        ----------
+        init_params :
+            Initial parameter values (arbitrary pytree).
+        *args :
+            Additional arguments passed to the objective function.
+
+        Returns
+        -------
+        tuple[Any, NewtonState]
+            Optimized parameters and final solver state.
+
+        Raises
+        ------
+        RuntimeError
+            If ``setup_hessian()`` has not been called.
+        """
+        if self._linear_solver is None:
+            raise RuntimeError(
+                "Linear solver not configured. Call setup_hessian() before run()."
+            )
+
+        maxiter = self.maxiter
+
+        # Initialize state
+        state = self.init_state(init_params, *args)
+        params = init_params
+
+        # Run the optimization loop (optionally JIT-compiled)
+        if self.jit:
+            # JIT-compiled loop using eqx.internal.while_loop
+            def cond(carry):
+                state, _ = carry
+                return (~state.converged) & (state.iter_num < maxiter)
+
+            def body(carry):
+                _, params = carry
+                params, state, _ = self.update(params, state, *args)
+                return state, params
+
+            init_carry = (state, params)
+            final_state, final_params = eqx.internal.while_loop(
+                cond, body, init_carry, kind=None
+            )
+        else:
+            # Pure-Python loop (eager execution)
+            for _ in range(maxiter):
+                params, state, _ = self.update(params, state, *args)
+                if state.converged:
+                    break
+
+            final_params = params
+            final_state = state
+
+        return final_params, final_state, None
+
+    @classmethod
+    def get_accepted_arguments(cls) -> set[str]:
+        """Return the set of keyword arguments accepted by the solver.
+
+        Returns
+        -------
+        set[str]
+            Keywords that can be passed to configure the solver.
+        """
+        return {"hess", "maxiter", "tol", "jit", "force_autodiff_hessian"}
+
+    def init_state(self, init_params: Any, *args: Any) -> NewtonState:
+        """Initialize solver state for the given parameters.
+
+        This prepares the solver state for incremental updates via ``update()``.
+        The returned state can be passed to ``update()`` along with the initial
+        parameters to perform the first Newton step.
+
+        Parameters
+        ----------
+        init_params :
+            Initial parameters (pytree).
+        *args :
+            Additional arguments passed to the objective function (unused).
+
+        Returns
+        -------
+        NewtonState
+            Initialized state with flattened parameters and line search state.
+        """
+        if self._linear_solver is None:
+            raise RuntimeError(
+                "Linear solver not configured. Call setup_hessian() before init_state()."
+            )
+
+        params_flat, _ = ravel_pytree(init_params)
+        ls_init_state = self._line_search.init(params_flat)
+
+        return NewtonState(
+            iter_num=0,
+            converged=False,
+            grad_norm=float("inf"),
+            params=params_flat,
+            ls_state=ls_init_state,
+        )
+
+    def update(self, params: Params, state: NewtonState, *args: Any) -> StepResult:
+        """Perform a single Newton iteration (incremental update).
+
+        Continues the optimization from the state returned by the previous
+        ``run()`` or ``update()`` call, performing one additional Newton step.
+
+        Parameters
+        ----------
+        params :
+            Current parameters (ignored; state contains flattened version).
+        state :
+            The `NewtonState` from the previous ``run()`` or ``update()``.
+        *args :
+            Additional arguments passed to the objective function.
+
+        Returns
+        -------
+        tuple[Any, NewtonState]
+            Updated parameters and state after one Newton iteration.
+
+        Raises
+        ------
+        RuntimeError
+            If ``setup_hessian()`` has not been called or if state was not
+            initialized with ``init_state()`` or a prior ``run()``/``update()``.
+        """
+        if self._linear_solver is None:
+            raise RuntimeError(
+                "Linear solver not configured. Call setup_hessian() before update()."
+            )
+
+        if state.params is None or state.ls_state is None:
+            raise RuntimeError(
+                "State not properly initialized. Use init_state() or run() first."
+            )
+
+        func = self.func
+        tol = self.tol
+
+        # Unravel the stored flat parameters
+        p_flat = state.params
+        _, unravel = ravel_pytree(params)  # Use the pytree structure from input
 
         # value_fn in flat space — needed by optax linesearches
         def value_fn_flat(p_flat):
             return func(unravel(p_flat), *args)
 
         # Hessian in flat space
-        hess_fn = self.hess
+        hess_fn = self._hess_fn
+        force_autodiff = self.force_autodiff_hessian
 
         def hessian_flat(p_flat):
-            if hess_fn is not None:
+            if not force_autodiff and hess_fn is not None:
                 return hess_fn(unravel(p_flat), *args)
             return jax.hessian(value_fn_flat)(p_flat)
 
-        # Single Newton step: returns (descent_direction, gradient, f0)
-        def newton_step(p_flat):
-            params = unravel(p_flat)
-            f0, g_tree = val_and_grad(params, *args)
-            g_flat, _ = ravel_pytree(g_tree)
-            H = hessian_flat(p_flat)
-            step = self._solve_linear_system(H, g_flat)
-            return step, g_flat, f0
+        # Single Newton step — use cached val_and_grad
+        params_tree = unravel(p_flat)
+        f0, g_tree = self._val_and_grad(params_tree, *args)
+        g_flat, _ = ravel_pytree(g_tree)
+        H = hessian_flat(p_flat)
+        step = self._solve_linear_system(H, g_flat)
 
-        # Optax linesearch state initialisation
-        # init() requires a sample params pytree; we use the flat array directly
-        # since our entire loop operates in flat space.
-        ls_init_state = line_search.init(params_flat)
-
-        # While-loop body and condition
-        def body(carry):
-            p_flat, ls_state, i, _converged, _gnorm = carry
-            step, g_flat, f0 = newton_step(p_flat)
-
-            # optax convention: pass *updates* (the raw descent direction)
-            # and let the linesearch scale them.  Extra kwargs carry the
-            # information the linesearch needs to evaluate the Armijo / Wolfe
-            # conditions without a redundant forward pass.
-            # When line_search=optax.identity(), scales by 1.
-            scaled_step, new_ls_state = line_search.update(
-                step,
-                ls_state,
-                p_flat,
-                value=f0,
-                grad=g_flat,
-                value_fn=value_fn_flat,
-            )
-            new_flat = p_flat + scaled_step
-
-            gnorm = jnp.linalg.norm(g_flat)
-            return new_flat, new_ls_state, i + 1, gnorm < tol, gnorm
-
-        def cond(carry):
-            _, _ls, i, converged, _ = carry
-            return (~converged) & (i < maxiter)
-
-        # Initialise carry
-        _, g0_tree = val_and_grad(init_params, *args)
-        g0_flat, _ = ravel_pytree(g0_tree)
-        init_carry = (
-            params_flat,
-            ls_init_state,
-            jnp.array(0),
-            jnp.array(False),
-            jnp.linalg.norm(g0_flat),
+        # Apply line search
+        scaled_step, new_ls_state = self._line_search.update(
+            step,
+            state.ls_state,
+            p_flat,
+            value=f0,
+            grad=g_flat,
+            value_fn=value_fn_flat,
         )
+        new_p_flat = p_flat + scaled_step
 
-        # ------------------------------------------------------------------
-        # Run loop (optionally JIT-compiled)
-        # ------------------------------------------------------------------
-        while_loop = jax.lax.while_loop
-        if not self.jit:
-            # Pure-Python fallback: mimics while_loop semantics but stays eager.
-            def while_loop(cond_fn, body_fn, init_val):  # noqa: F811
-                val = init_val
-                while cond_fn(val):
-                    val = body_fn(val)
-                return val
+        # Compute gradient norm for convergence check
+        gnorm = jnp.linalg.norm(g_flat)
+        converged = gnorm < tol
 
-        final_flat, _, n_iter, converged, grad_norm = while_loop(cond, body, init_carry)
-
-        state = NewtonState(
-            iter_num=int(n_iter),
+        new_state = NewtonState(
+            iter_num=state.iter_num + 1,
             converged=bool(converged),
-            grad_norm=float(grad_norm),
+            grad_norm=float(gnorm),
+            params=new_p_flat,
+            ls_state=new_ls_state,
         )
-        return unravel(final_flat), state
 
+        return unravel(new_p_flat), new_state, None
 
-class _NewtonCholesky(BaseNewton):
-    """Newton optimizer using a Cholesky factorization for the linear subproblem.
+    def _get_optim_info(self, state: NewtonState, **kwargs: Any) -> OptimizationInfo:
+        """Extract optimization information from the Newton solver state.
 
-    This implementation assumes that the Hessian is symmetric positive-definite,
-    which is typically satisfied for convex objectives such as generalized
-    linear models. Under this assumption, Cholesky decomposition provides an
-    efficient and numerically stable solution to the Newton system.
+        Parameters
+        ----------
+        state :
+            The NewtonState returned by the solver.
+        **kwargs :
+            Unused keyword arguments.
 
-    The Hessian is symmetrized prior to factorization to mitigate numerical
-    asymmetries.
-
-    Notes
-    -----
-    This class is intended as a low-level numerical backend and does not implement
-    any solver interface directly.
-    """
-
-    linear_solver: lineax.AbstractLinearSolver = lineax.Cholesky()
-
-    def _solve_linear_system(self, H: jnp.ndarray, g_flat: jnp.ndarray) -> jnp.ndarray:
-        # Symmetrise to suppress floating-point asymmetry before factorisation.
-        H_sym = (H + H.T) / 2.0
-        operator = lineax.MatrixLinearOperator(H_sym, lineax.positive_semidefinite_tag)
-        solution = lineax.linear_solve(operator, -g_flat, solver=self.linear_solver)
-        return solution.value
-
-
-class _NewtonLU(BaseNewton):
-    """Newton optimizer using LU decomposition for the linear subproblem.
-
-    This variant is suitable for problems where the Hessian may be indefinite or
-    non-symmetric, such as non-convex objectives or regions near saddle points.
-
-    Compared to Cholesky-based methods, LU decomposition is more general but may
-    be less efficient for well-conditioned positive-definite systems.
-    """
-
-    linear_solver: lineax.AbstractLinearSolver = lineax.LU()
+        Returns
+        -------
+        OptimizationInfo
+            Summary of the optimization run.
+        """
+        return OptimizationInfo(
+            function_val=None,
+            num_steps=state.iter_num,
+            converged=jnp.array(state.converged),
+            reached_max_steps=jnp.array(state.iter_num >= self.maxiter),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -347,97 +480,3 @@ def define_hess(model, regularizer_strength: float = 0.0) -> Callable:
         return H
 
     return hess
-
-
-# ---------------------------------------------------------------------------
-# NeMoS adapters
-# ---------------------------------------------------------------------------
-
-
-class NewtonCholesky(AbstractSolver):
-    """Adapter that wires :class:`NewtonCholesky` into the NeMoS solver protocol.
-
-    Parameters
-    ----------
-    unregularized_loss :
-        Base loss function before regularization.
-    regularizer :
-        Object providing a ``penalized_loss`` method.
-    regularizer_strength :
-        Strength of the regularization penalty.
-    has_aux :
-        Whether the loss returns auxiliary outputs. Currently unsupported.
-    init_params :
-        Initial parameter values, used to construct the penalized loss.
-    hess :
-        Optional analytic Hessian function. If not provided, the Hessian is
-        computed using automatic differentiation.
-    maxiter :
-        Maximum number of Newton iterations.
-    tol :
-        Convergence tolerance on the gradient norm.
-    line_search :
-        Optax-compatible line search transformation. If ``None``, a default
-        backtracking line search is used.
-    jit :
-        Whether to JIT-compile the optimization loop.
-
-    Notes
-    -----
-    This solver performs full-batch optimization via :meth:`run`. Incremental
-    updates via :meth:`update` are not supported.
-    """
-
-    def __init__(
-        self,
-        unregularized_loss: Callable,
-        regularizer,
-        regularizer_strength: float,
-        has_aux: bool,
-        init_params,
-        hess: Optional[Callable] = None,
-        maxiter: int = 30,
-        tol: float = 1e-6,
-        line_search: optax.GradientTransformation | None = None,
-        jit: bool = True,
-        mode: str = "analytic",
-    ):
-        if has_aux:
-            raise ValueError("Auxiliary output from the loss is not supported.")
-
-        penalized = regularizer.penalized_loss(
-            unregularized_loss, init_params, regularizer_strength
-        )
-        self.penalized_loss = penalized
-        self._solver = _NewtonCholesky(
-            func=penalized,
-            hess=hess,
-            maxiter=maxiter,
-            tol=tol,
-            line_search=line_search,
-            jit=jit,
-        )
-
-    @classmethod
-    def get_accepted_arguments(cls) -> set[str]:
-        return {"hess", "maxiter", "tol", "line_search", "jit"}
-
-    def init_state(self, init_params, *args) -> NewtonState:
-        return NewtonState(iter_num=0, converged=False, grad_norm=float("inf"))
-
-    def run(self, init_params, *args) -> tuple[Any, NewtonState, None]:
-        params, state = self._solver.run(init_params, *args)
-        return params, state, None
-
-    def update(self, params, state, *args):
-        raise NotImplementedError(
-            "NewtonCholeskydoes not support incremental updates; use run()."
-        )
-
-    def _get_optim_info(self, state: NewtonState, **kwargs) -> OptimizationInfo:
-        return OptimizationInfo(
-            function_val=None,
-            num_steps=state.iter_num,
-            converged=jnp.array(state.converged),
-            reached_max_steps=jnp.array(state.iter_num >= self.maxiter),
-        )
