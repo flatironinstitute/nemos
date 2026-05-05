@@ -223,11 +223,11 @@ properly documented as outlined below.
     ```
     # get inside the docs folder
     cd docs
-    # Clear the cached documentation pages if needed
+    # clear the cached documentation pages if needed
     make clean
     # build the docs within the nemos repo
     make html
-    # Run the build locally
+    # run the build locally
     sphinx-autobuild . _build/html
     ```
     
