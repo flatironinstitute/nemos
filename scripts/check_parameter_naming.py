@@ -135,6 +135,8 @@ VALID_PAIRS = [
     {"hmm_initialization_funcs", "initialization_funcs"},
     {"glm_params_init", "glm_params_init_kwargs"},
     {"random_key_pair", "random_key"},
+    {"func", "_func"},
+    {"funcs", "_func"},
 ]
 
 
