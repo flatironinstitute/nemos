@@ -1,8 +1,9 @@
-import lineax as lx
 from functools import wraps
+from typing import Callable
+
 import jax
 import jax.numpy as jnp
-from typing import Callable
+import lineax as lx
 
 IMPLIES = {
     lx.unit_diagonal_tag: {
