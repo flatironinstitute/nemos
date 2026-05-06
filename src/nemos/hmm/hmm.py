@@ -415,12 +415,13 @@ class BaseHMM(
         kmeans_kwargs = {}
 
         # Only iterate over the canonical kmeans init funcs
+        has_kmeans = False
         for func_name, func in self._kmeans_init_funcs:
             registered_func = self._initialization_funcs.get(func_name)
 
             if registered_func is not func:
                 continue  # skip anything that doesn't match expected function
-
+            has_kmeans = True
             kwargs = self._initialization_funcs.get(f"{func_name}_kwargs", {})
 
             for k, v in kwargs.items():
@@ -432,27 +433,27 @@ class BaseHMM(
                         )
                 else:
                     kmeans_kwargs[k] = v
+        if has_kmeans:
+            # Resolve initializer
+            initializer = kmeans_kwargs.get(
+                "initializer",
+                self._kmeans_init_class(
+                    self.n_states,
+                    X,
+                    y,
+                    is_new_session=is_new_session,
+                    random_key=random_key,
+                    **self._kmeans_extra_kwargs(),
+                    **kmeans_kwargs,
+                ),
+            )
 
-        # Resolve initializer
-        initializer = kmeans_kwargs.get(
-            "initializer",
-            self._kmeans_init_class(
-                self.n_states,
-                X,
-                y,
-                is_new_session=is_new_session,
-                random_key=random_key,
-                **self._kmeans_extra_kwargs(),
-                **kmeans_kwargs,
-            ),
-        )
-
-        # Inject initializer back only into relevant funcs
-        for func_name, func in self._kmeans_init_funcs:
-            if self._initialization_funcs.get(func_name) is func:
-                self._initialization_funcs[f"{func_name}_kwargs"][
-                    "initializer"
-                ] = initializer
+            # Inject initializer back only into relevant funcs
+            for func_name, func in self._kmeans_init_funcs:
+                if self._initialization_funcs.get(func_name) is func:
+                    self._initialization_funcs[f"{func_name}_kwargs"][
+                        "initializer"
+                    ] = initializer
 
     def _model_specific_initialization(self, X, y, is_new_session=None):
         """Model-specific initialization."""
