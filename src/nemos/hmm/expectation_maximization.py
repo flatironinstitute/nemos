@@ -13,7 +13,7 @@ from .m_step_analytical_updates import (
     _analytical_m_step_log_transition_prob,
 )
 from .params import HMMParams
-from .utils import Array, initialize_new_session
+from .utils import Array
 
 
 class EMState(eqx.Module):
@@ -257,10 +257,14 @@ def forward_pass(
     log_transition_prob = params.hmm_params.log_transition_prob
 
     # Initialize variables
-    is_new_session = initialize_new_session(y.shape[0], is_new_session)
+    is_new_session = (
+        is_new_session
+        if is_new_session is not None
+        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
+    )
 
     # Compute log-likelihoods
-    log_conditionals = log_likelihood_func(X, y, model_params)
+    log_conditionals = log_likelihood_func(model_params, X, y)
 
     # Compute forward pass
     log_alphas, log_normalizers = _forward_pass(
@@ -444,10 +448,14 @@ def forward_backward(
 
     # Initialize variables
     n_time_bins = y.shape[0]
-    is_new_session = initialize_new_session(y.shape[0], is_new_session)
+    is_new_session = (
+        is_new_session
+        if is_new_session is not None
+        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
+    )
 
     # Compute log-likelihoods
-    log_conditionals = log_likelihood_func(X, y, model_params)
+    log_conditionals = log_likelihood_func(model_params, X, y)
 
     # Compute forward pass
     log_alphas, log_normalization = _forward_pass(
@@ -507,8 +515,8 @@ def run_m_step(
     m_step_fn_model_params: Callable[
         [ModelParamsT, Array, Array, Array], Tuple[ModelParamsT, SolverState, Aux]
     ],
-    dirichlet_prior_alphas_init_prob: Array | None = None,
-    dirichlet_prior_alphas_transition: Array | None = None,
+    dirichlet_initial_proba: Array | None = None,
+    dirichlet_transition_proba: Array | None = None,
 ) -> Tuple[ModelParamsT, SolverState]:
     r"""
     Perform the M-step of the EM algorithm for an HMM.
@@ -535,9 +543,9 @@ def run_m_step(
         Callable that performs the M-step update for model parameters (e.g., coefficients and intercepts for a GLM).
         Should have signature: ``f(model_params, X, y, posteriors) -> (updated_params, state, aux)``.
         The regularizer/prior for the parameters should be configured within this callable.
-    dirichlet_prior_alphas_init_prob :
+    dirichlet_initial_proba :
         Prior for the initial states, shape ``(n_states,)``.
-    dirichlet_prior_alphas_transition :
+    dirichlet_transition_proba :
         Prior for the transition probabilities, shape ``(n_states, n_states)``.
 
     Returns
@@ -559,10 +567,10 @@ def run_m_step(
     log_initial_prob = _analytical_m_step_log_initial_prob(
         log_posteriors,
         is_new_session=is_new_session,
-        dirichlet_prior_alphas=dirichlet_prior_alphas_init_prob,
+        dirichlet_prior_alphas=dirichlet_initial_proba,
     )
     log_transition_prob = _analytical_m_step_log_transition_prob(
-        log_joint_posterior, dirichlet_prior_alphas=dirichlet_prior_alphas_transition
+        log_joint_posterior, dirichlet_prior_alphas=dirichlet_transition_proba
     )
 
     # Minimize negative log-likelihood to update model parameters
@@ -800,7 +808,11 @@ def em_hmm(
     state :
         Final EMState containing all parameters and diagnostics.
     """
-    is_new_session = initialize_new_session(y.shape[0], is_new_session)
+    is_new_session = (
+        is_new_session
+        if is_new_session is not None
+        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
+    )
 
     state = EMState(
         data_log_likelihood=-jnp.array(jnp.inf),
@@ -897,9 +909,13 @@ def max_sum(
     n_states = log_init.shape[0]
 
     # initialize new session
-    is_new_session = initialize_new_session(y.shape[0], is_new_session)
+    is_new_session = (
+        is_new_session
+        if is_new_session is not None
+        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
+    )
 
-    log_emission = log_likelihood_func(X, y, model_params)
+    log_emission = log_likelihood_func(model_params, X, y)
 
     # Forward pass: similar to forward-backward, scan over all time points
     def forward_max_sum(omega_prev, xs):

@@ -51,6 +51,7 @@ jobs:
         uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 #v7.3.1
         with:
           enable-cache: true
+          cache-suffix: "v2"
 
       - name: Run tox
         run: uvx --with tox-uv tox -e skip_solver_related
@@ -85,6 +86,7 @@ jobs:
         uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 #v7.3.1
         with:
           enable-cache: true
+          cache-suffix: "v2"
 
       - name: Run solver-dependent tests with JAXopt backend
         run: uvx --with tox-uv tox -e backend-jaxopt
@@ -119,6 +121,7 @@ jobs:
         uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 #v7.3.1
         with:
           enable-cache: true
+          cache-suffix: "v2"
 
       - name: Run solver-dependent tests with Optimistix backend
         run: uvx --with tox-uv tox -e backend-optimistix
@@ -148,6 +151,7 @@ jobs:
         uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 #v7.3.1
         with:
           enable-cache: true
+          cache-suffix: "v2"
 
       - name: Run tox
         run: uvx --with tox-uv tox -e check

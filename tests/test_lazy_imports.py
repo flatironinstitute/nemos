@@ -264,8 +264,9 @@ PYNAPPLE_FREE_IMPORTS = [
     "from nemos.solvers import OptimistixFISTA, SVRG, OptimistixOptaxLBFGS",
     "import nemos.regularizer",
     "from nemos.glm import GLM, PopulationGLM, ClassifierGLM, ClassifierPopulationGLM",
-    "from nemos.hmm.utils import *",
+    "from nemos.hmm.hmm import *",  # this eagerly import the hmm module
     "from nemos.type_casting import *",
+    "import nemos.hmm",
 ]
 
 
