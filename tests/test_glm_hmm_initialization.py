@@ -394,45 +394,65 @@ class TestConstantScaleInitialization:
 
 
 @pytest.fixture
-def kmeans_mock(monkeypatch):
+def kmeans_mock(monkeypatch, request):
     """Patch GLM.fit to avoid slow JAX optimization. Uses small data so sklearn KMeans is fast."""
     n_states = 3
     n_samples = 30
     n_features = 4
+    n_neurons = getattr(request, "param", 1)
 
     rng = np.random.default_rng(0)
     X = rng.standard_normal((n_samples, n_features))
-    y = np.ones(n_samples)
+    if n_neurons == 1:
+        y = np.ones(n_samples)
 
-    def fake_glm_fit(self, X, y, **kwargs):
-        n_feat = X.shape[1]
-        self.coef_ = jnp.zeros(n_feat)
-        self.intercept_ = jnp.array([0.0])
+        def fake_glm_fit(self, X, y, **kwargs):
+            n_feat = X.shape[1]
+            self.coef_ = jnp.zeros(n_feat)
+            self.intercept_ = jnp.array([0.0])
+
+        expected_scale_shape = (n_states,)
+
+    else:
+        y = np.ones((n_samples, n_neurons))
+
+        def fake_glm_fit(self, X, y, **kwargs):
+            n_feat = X.shape[1]
+            self.coef_ = jnp.zeros((n_feat, n_neurons))
+            self.intercept_ = jnp.array([0.0] * n_neurons)
+
+        expected_scale_shape = (n_neurons, n_states)
 
     monkeypatch.setattr(GLM, "fit", fake_glm_fit)
-    return n_states, X, y, n_features
+    return n_states, X, y, n_features, expected_scale_shape
 
 
 class TestKMeansInitializerGLM:
     """Test KMeans-based GLM parameter initialization."""
 
     def test_glm_params_output_shape(self, kmeans_mock):
-        n_states, X, y, n_features = kmeans_mock
+        n_states, X, y, n_features, _ = kmeans_mock
         initializer = KMeansInitializerGLM(n_states, X, y, jnp.exp, random_key=0)
         coef, intercept = initializer.glm_params()
         assert coef.shape == (n_features, n_states)
         assert intercept.shape == (n_states,)
 
+    @pytest.mark.parametrize(
+        "kmeans_mock",
+        [1, 5],
+        indirect=True,
+        ids=["n_neurons=1", "n_neurons=5"],
+    )
     def test_scale_output_shape(self, kmeans_mock):
         """Poisson GLM has fixed scale=1, so scale() returns ones without fitting."""
-        n_states, X, y, _ = kmeans_mock
+        n_states, X, y, _, expected_shape = kmeans_mock
         initializer = KMeansInitializerGLM(n_states, X, y, jnp.exp, random_key=0)
         scale = initializer.scale()
-        assert scale.shape == (n_states,)
+        assert scale.shape == expected_shape
 
     def test_shared_initializer(self, kmeans_mock):
         """Providing a pre-built initializer skips creating a new one."""
-        n_states, X, y, _ = kmeans_mock
+        n_states, X, y, _, _ = kmeans_mock
         initializer = KMeansInitializerGLM(n_states, X, y, jnp.exp, random_key=7)
         result = kmeans_glm_params_init(
             n_states, X, y, jnp.exp, initializer=initializer

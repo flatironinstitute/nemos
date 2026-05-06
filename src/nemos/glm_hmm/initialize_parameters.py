@@ -52,7 +52,7 @@ def random_glm_params_init(
     y: jnp.ndarray,
     inverse_link_function: Callable,
     is_new_session: Optional[NDArray | jnp.ndarray] = None,
-    random_key=jax.random.PRNGKey(123),
+    random_key: Optional[jax.Array] = None,
     std_dev=0.001,
 ) -> GLMUserParams:
     """
@@ -88,6 +88,8 @@ def random_glm_params_init(
     intercept : jnp.ndarray
         Intercept array of shape (n_neurons, n_states).
     """
+    if random_key is None:
+        random_key = jax.random.PRNGKey(123)
     is_one_dim = y.ndim == 1
     n_neurons = 1 if is_one_dim else y.shape[1]
     if isinstance(X, FeaturePytree):
@@ -209,7 +211,7 @@ class KMeansInitializerGLM(KMeansInitializer):
         is_population = self._y.ndim > 1
         if is_population:
             n_neurons = self._y.shape[1]
-            scale = jnp.ones((self.n_states, n_neurons))
+            scale = jnp.ones((n_neurons, self.n_states))
         else:
             scale = jnp.ones((self.n_states,))
 
@@ -218,8 +220,9 @@ class KMeansInitializerGLM(KMeansInitializer):
 
         if self._glm_models[0].scale_ is None:
             self.fit()
+
         for i, m in enumerate(self._glm_models.values()):
-            scale = scale.at[i].set(m.scale_)
+            scale = scale.at[..., i].set(m.scale_)
         return scale
 
 
@@ -231,7 +234,7 @@ def kmeans_glm_params_init(
     is_new_session: Optional[jnp.ndarray] = None,
     glm_kwargs: Optional[dict] = None,
     minimum_prob: float = 0.02,
-    random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
+    random_key: Optional[jax.Array] = None,
     initializer: Optional[KMeansInitializer] = None,
 ):
     """
@@ -266,6 +269,8 @@ def kmeans_glm_params_init(
     coef, intercept :
         The glm coefficients and intercept.
     """
+    if random_key is None:
+        random_key = jax.random.PRNGKey(123)
     if initializer is None:
         initializer = KMeansInitializerGLM(
             n_states,
@@ -288,7 +293,7 @@ def kmeans_scale_init(
     is_new_session: Optional[jnp.ndarray] = None,
     glm_kwargs: Optional[dict] = None,
     minimum_prob: float = 0.02,
-    random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
+    random_key: Optional[jax.Array] = None,
     initializer: Optional[KMeansInitializer] = None,
 ):
     """
@@ -323,6 +328,8 @@ def kmeans_scale_init(
     scale :
         The inital scale.
     """
+    if random_key is None:
+        random_key = jax.random.PRNGKey(123)
     if initializer is None:
         initializer = KMeansInitializerGLM(
             n_states,
