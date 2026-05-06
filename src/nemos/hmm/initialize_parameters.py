@@ -1,6 +1,7 @@
 """Initialization functions and related utility functions for HMMs."""
 
 import inspect
+from types import MappingProxyType
 from typing import Any, Callable, Literal, Optional, Protocol, Tuple
 
 import jax
@@ -591,30 +592,38 @@ def kmeans_transition_proba_init(
     return initializer.transition_probability()
 
 
-AVAILABLE_INIT_FUNCTIONS = {
-    "initial_proba_init": {
-        "uniform": uniform_initial_proba_init,
-        "random": random_initial_proba_init,
-        "dirichlet": dirichlet_initial_proba_init,
-        "kmeans": kmeans_initial_proba_init,
-    },
-    "transition_proba_init": {
-        "sticky": sticky_transition_proba_init,
-        "uniform": uniform_transition_proba_init,
-        "random": random_transition_proba_init,
-        "dirichlet": dirichlet_transition_proba_init,
-        "kmeans": kmeans_transition_proba_init,
-    },
-}
+AVAILABLE_INIT_FUNCTIONS = MappingProxyType(
+    {
+        "initial_proba_init": MappingProxyType(
+            {
+                "uniform": uniform_initial_proba_init,
+                "random": random_initial_proba_init,
+                "dirichlet": dirichlet_initial_proba_init,
+                "kmeans": kmeans_initial_proba_init,
+            }
+        ),
+        "transition_proba_init": MappingProxyType(
+            {
+                "sticky": sticky_transition_proba_init,
+                "uniform": uniform_transition_proba_init,
+                "random": random_transition_proba_init,
+                "dirichlet": dirichlet_transition_proba_init,
+                "kmeans": kmeans_transition_proba_init,
+            }
+        ),
+    }
+)
 
-DEFAULT_INIT_FUNCTIONS: INITIALIZATION_FN_DICT = {
-    "initial_proba_init": uniform_initial_proba_init,
-    "initial_proba_init_kwargs": {},
-    "initial_proba_init_custom": False,
-    "transition_proba_init": sticky_transition_proba_init,
-    "transition_proba_init_kwargs": {},
-    "transition_proba_init_custom": False,
-}
+DEFAULT_INIT_FUNCTIONS: INITIALIZATION_FN_DICT = MappingProxyType(
+    {
+        "initial_proba_init": uniform_initial_proba_init,
+        "initial_proba_init_kwargs": {},
+        "initial_proba_init_custom": False,
+        "transition_proba_init": sticky_transition_proba_init,
+        "transition_proba_init_kwargs": {},
+        "transition_proba_init_custom": False,
+    }
+)
 
 
 def setup_hmm_initialization(
