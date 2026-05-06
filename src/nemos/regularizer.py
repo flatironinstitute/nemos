@@ -13,6 +13,7 @@ from typing import Any, Callable, Tuple, Union
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+import lineax as lx
 import numpy as np
 
 from . import tree_utils
@@ -178,6 +179,7 @@ class Regularizer(Base, abc.ABC):
     _allowed_solvers: Tuple[str]
     _default_solver: str
     _proximal_operator: Callable
+    _hess_tag: str | None = None
 
     @property
     def allowed_solvers(self) -> Tuple[str]:
@@ -458,6 +460,7 @@ class UnRegularized(Regularizer):
 
     _default_solver = "LBFGS"
     _proximal_operator = staticmethod(prox_none)
+    _hess_tag = lx.positive_semidefinite_tag
 
     def _penalty_on_subtree(self, subtree, **kwargs) -> jnp.ndarray:
         return jnp.array(0.0)
@@ -488,6 +491,7 @@ class Ridge(Regularizer):
     _default_solver = "LBFGS"
 
     _proximal_operator = staticmethod(prox_ridge)
+    _hess_tag = lx.diagonal_tag
 
     def _penalty_on_subtree(self, subtree, strength: Any, **kwargs) -> jnp.ndarray:
         """
