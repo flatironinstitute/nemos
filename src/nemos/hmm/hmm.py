@@ -9,7 +9,7 @@ from typing import Any, Callable, Generic, Literal, Optional, Tuple, TypeVar, Un
 
 import jax
 import jax.numpy as jnp
-import pynapple as nap
+import lazy_loader as lazy
 from numpy.typing import ArrayLike, NDArray
 
 from .. import tree_utils
@@ -34,6 +34,8 @@ from .initialize_parameters import (
 from .params import HMMModelParamsT, HMMUserParams, HMMUserProvidedParamsT
 from .utils import _check_state_format
 from .validation import HMMValidator
+
+nap = lazy.load("pynapple")
 
 INITIALIZATION_FN_DICT_T = TypeVar("INITIALIZATION_FN_DICT_T")
 

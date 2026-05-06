@@ -1,10 +1,12 @@
 """Validation mixin class for HMM-based models."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Any, Optional, Tuple
 
 import jax.numpy as jnp
-import pynapple as nap
+import lazy_loader as lazy
 from pynapple import Tsd, TsdFrame
 
 from .. import validation
@@ -16,6 +18,8 @@ from .utils import (
     initialize_is_new_session,
     shift_nan_is_new_session,
 )
+
+nap = lazy.load("pynapple")
 
 
 def has_nans_only_at_border(arr):

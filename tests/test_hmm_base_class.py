@@ -26,8 +26,6 @@ from nemos.hmm.utils import initialize_is_new_session
 from nemos.hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
 from nemos.params import ModelParams
 
-import inspect
-
 
 class MockHMMModelParams(ModelParams):
     param: jnp.ndarray
@@ -1226,6 +1224,7 @@ class TestHMMValidator:
         """
         import importlib
         import pkgutil
+
         import nemos
 
         # Import every submodule so all HMMValidator subclasses get registered.
