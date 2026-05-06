@@ -327,6 +327,9 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
                 "set the missing attributes."
             )
 
+    def _kmeans_extra_kwargs(self) -> dict:
+        return {"inverse_link_function": self.inverse_link_function}
+
     def _model_specific_initialization(
         self,
         X: DESIGN_INPUT_TYPE,
