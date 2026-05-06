@@ -3,30 +3,18 @@
 This module provides second-order optimization routines based on Newton's method.
 """
 
-from numpy.ma import ravel
-
-from typing import Any, Callable, Optional, Generic, Protocol, runtime_checkable
-
-import jax
-import jax.numpy as jnp
-from jax.flatten_util import ravel_pytree
-from ._aux_helpers import (
-    drop_aux,
-    pack_args,
-    wrap_aux,
-)
-
+from typing import Any, Callable, Generic, Optional, Protocol, runtime_checkable
 
 import equinox as eqx
+import jax
+import jax.numpy as jnp
 import lineax as lx
 import optax
-from ._abstract_solver import (
-    AbstractSolver,
-    OptimizationInfo,
-    SolverProtocol,
-    SolverState,
-)
-from ..typing import Params, StepResult
+from jax.flatten_util import ravel_pytree
+
+from ..typing import Params
+from ._abstract_solver import SolverProtocol, SolverState
+from ._aux_helpers import wrap_aux
 
 
 @runtime_checkable
@@ -34,7 +22,7 @@ class NewtonSolverProtocol(SolverProtocol[SolverState], Protocol, Generic[Solver
     def setup_hessian(
         self,
         hess_fn: Callable | None,
-        hess_tag: lx.AbstractLinearOperator | None,
+        hess_tag: str | None,
     ) -> None: ...
 
 
@@ -79,10 +67,12 @@ class _Newton:
         self.jit = jit
         self._val_and_grad = jax.value_and_grad(func)
 
+        self._hess_tag: str | None = None
         self._hess_fn: Callable | None = None
         self._line_search = optax.scale_by_backtracking_linesearch(
             max_backtracking_steps=30
         )
+        self._linear_solver: lx.AbstractLinearSolver = lx.LU()
 
     def init_state(self, init_params, *args):
         params_flat, _ = ravel_pytree(init_params)
@@ -118,7 +108,9 @@ class _Newton:
                 if not self.force_autodiff_hessian and self._hess_fn is not None
                 else jax.hessian(value_fn_flat)(params_flat)
             )
-            step = jnp.linalg.solve(H, -g_flat)
+            operator = lx.MatrixLinearOperator(H, self._hess_tag)
+            solution = lx.linear_solve(operator, -g_flat, solver=self._linear_solver)
+            step = solution.value
 
             if self._line_search is not None:
                 step, new_ls_state = self._line_search.update(
@@ -207,11 +199,13 @@ class Newton(NewtonSolverProtocol[NewtonState]):
         self._solver = _Newton(self.fun, **solver_kwargs)
 
     def setup_hessian(
-        self,
-        hess_fn: Optional[Callable] = None,
-        hess_tag: lx.AbstractLinearOperator | None = None,
+        self, hess_fn: Optional[Callable] = None, hess_tag: str | None = None
     ):
         self._solver._hess_fn = hess_fn
+        self._solver._hess_tag = hess_tag
+
+        if hess_tag is lx.positive_semidefinite_tag:
+            self._solver._linear_solver = lx.Cholesky()
 
     def init_state(self, init_params: Params, *args):
         return self._solver.init_state(init_params, *args)

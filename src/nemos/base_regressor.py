@@ -2,7 +2,6 @@
 
 # required to get ArrayLike to render correctly
 from __future__ import annotations
-from nemos.solvers._hess import _combine_hess_tags
 
 import abc
 import warnings
@@ -10,12 +9,11 @@ from abc import abstractmethod
 from copy import deepcopy
 from functools import wraps
 from pathlib import Path
-from typing import Any, Generic, Optional, Tuple, Type, Union, Callable
+from typing import Any, Callable, Generic, Optional, Tuple, Type, Union
 
 import jax
 import jax.numpy as jnp
 import numpy as np
-import lineax as lx
 from numpy.typing import NDArray
 
 from . import solvers, tree_utils, utils
@@ -26,8 +24,8 @@ from .glm.params import GLMParams
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
-from .solvers._newton import NewtonSolverProtocol
 from .solvers._hess import _combine_hess_tags
+from .solvers._newton import NewtonSolverProtocol
 from .type_casting import cast_to_jax
 from .typing import (
     DESIGN_INPUT_TYPE,
