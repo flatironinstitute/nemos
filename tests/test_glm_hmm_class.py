@@ -4,7 +4,7 @@ import warnings
 from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import jax
 import jax.numpy as jnp
@@ -14,7 +14,9 @@ import pytest
 
 from nemos.glm.params import GLMParams
 from nemos.glm_hmm.glm_hmm import GLMHMM
-from nemos.glm_hmm.initialize_parameters import kmeans_glm_params_init
+from nemos.glm_hmm.initialize_parameters import (
+    kmeans_glm_params_init,
+)
 from nemos.glm_hmm.params import GLMHMMModelParams
 from nemos.glm_hmm.validation import GLMHMMValidator
 from nemos.hmm.expectation_maximization import EMState
@@ -331,6 +333,32 @@ class TestGLMHMM:
                 # For the valid case, also run consistency check
                 if isinstance(init_params, tuple) and len(init_params) == 5:
                     validator.validate_consistency(validated, X=fixture.X, y=fixture.y)
+
+    def test_kmeans_initialized_once(
+        self, mock_glm_hmm_optimizer_run, instantiate_base_regressor_subclass
+    ):
+        fixture = instantiate_base_regressor_subclass
+        fixture.model.setup(
+            scale_init="kmeans",
+            glm_params_init="kmeans",
+            initial_proba_init="kmeans",
+            transition_proba_init="kmeans",
+        )
+        with patch.object(GLMHMM, "_kmeans_init_class") as MockClass:
+            inst = MockClass.return_value
+            inst.glm_params.return_value = (
+                fixture.params.model_params.coef,
+                fixture.params.model_params.intercept,
+            )
+            inst.scale.return_value = jnp.exp(fixture.params.model_params.log_scale)
+            inst.initial_probability.return_value = jnp.exp(
+                fixture.params.hmm_params.log_initial_prob
+            )
+            inst.transition_probability.return_value = jnp.exp(
+                fixture.params.hmm_params.log_transition_prob
+            )
+            fixture.model.fit(fixture.X, fixture.y)
+            assert MockClass.call_count == 1
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -657,7 +685,11 @@ class TestFitDelegation:
         mock.assert_called_once()
 
     def test_simulate_calls_validate_and_cast_is_new_session(
-        self, glm_hmm_data, mock_glm_hmm_optimizer_run, stub_glmhmm_simulate, monkeypatch
+        self,
+        glm_hmm_data,
+        mock_glm_hmm_optimizer_run,
+        stub_glmhmm_simulate,
+        monkeypatch,
     ):
         n = glm_hmm_data["X"].shape[0]
         X = glm_hmm_data["X"]
@@ -761,7 +793,11 @@ class TestSimulate:
     """Tests for GLMHMM.simulate()."""
 
     def test_simulate_calls_validate_and_prepare_inputs_with_y_none(
-        self, glm_hmm_data, mock_glm_hmm_optimizer_run, stub_glmhmm_simulate, monkeypatch
+        self,
+        glm_hmm_data,
+        mock_glm_hmm_optimizer_run,
+        stub_glmhmm_simulate,
+        monkeypatch,
     ):
         """simulate() delegates to _validate_and_prepare_inputs with y=None."""
         X = glm_hmm_data["X"]
@@ -771,7 +807,12 @@ class TestSimulate:
 
         is_new_session = jnp.zeros(n, dtype=bool).at[0].set(True)
         mock_vapi = MagicMock(
-            return_value=(model._get_model_params(), jnp.asarray(X), None, is_new_session)
+            return_value=(
+                model._get_model_params(),
+                jnp.asarray(X),
+                None,
+                is_new_session,
+            )
         )
         monkeypatch.setattr(GLMHMM, "_validate_and_prepare_inputs", mock_vapi)
         stub_glmhmm_simulate(n)
@@ -779,7 +820,9 @@ class TestSimulate:
         model.simulate(jax.random.key(0), X)
 
         mock_vapi.assert_called_once()
-        assert mock_vapi.call_args.args[1] is None  # y must be None, not a fake zeros array
+        assert (
+            mock_vapi.call_args.args[1] is None
+        )  # y must be None, not a fake zeros array
 
     @pytest.mark.parametrize(
         "state_format, expectation",
@@ -815,7 +858,9 @@ class TestSimulate:
         X = glm_hmm_data["X"]
         n, n_states = X.shape[0], glm_hmm_data["n_states"]
 
-        activity, rates, states = model.simulate(jax.random.key(0), X, state_format="index")
+        activity, rates, states = model.simulate(
+            jax.random.key(0), X, state_format="index"
+        )
         assert activity.shape[0] == n
         assert rates.shape[0] == n
         assert states.shape == (n,)
