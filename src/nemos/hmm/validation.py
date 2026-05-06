@@ -7,7 +7,6 @@ from typing import Any, Optional, Tuple
 
 import jax.numpy as jnp
 import lazy_loader as lazy
-from pynapple import Tsd, TsdFrame
 
 from .. import validation
 from ..base_validator import RegressorValidator
@@ -157,7 +156,7 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
     def validate_inputs(
         self,
         X: Optional[DESIGN_INPUT_TYPE] = None,
-        y: Optional[jnp.ndarray | Tsd | TsdFrame] = None,
+        y: Optional[jnp.ndarray | nap.Tsd | nap.TsdFrame] = None,
     ):
         """Validate inputs for HMM model."""
         super().validate_inputs(X, y)
