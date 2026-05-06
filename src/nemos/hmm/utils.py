@@ -191,7 +191,7 @@ def shift_nan_is_new_session(
     invalid_session_idx = jnp.arange(n)[is_nan & is_new_session]  # misplaced markers
 
     # Append sentinel n: searchsorted returning len(valid) (no valid sample after
-    # the markebuwr) then maps to n, which mode="drop" discards. The append copies
+    # the marker) then maps to n, which mode="drop" discards. The append copies
     # valid but avoids any clip/where logic and handles empty valid correctly.
     pos = jnp.searchsorted(valid, invalid_session_idx, side="left")
     shifted_idx = jnp.append(valid, n)[pos]
