@@ -2,6 +2,7 @@
 
 from ._basis import AdditiveBasis, MultiplicativeBasis
 from ._custom_basis import CustomBasis
+from ._fourier_basis import FourierSEBasis
 from ._transformer_basis import TransformerBasis
 from .basis import (
     BSplineConv,
@@ -32,6 +33,7 @@ __all__ = [
     "CyclicBSplineConv",
     "CyclicBSplineEval",
     "FourierEval",
+    "FourierSEBasis",
     "HistoryConv",
     "IdentityEval",
     "MSplineConv",

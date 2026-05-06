@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import itertools
+import math
 import warnings
 from numbers import Number
-from typing import TYPE_CHECKING, Any, Callable, List, Literal, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Generator, List, Literal, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -20,7 +21,7 @@ from ..type_casting import is_at_least_1d_numpy_array_like, support_pynapple
 from ..typing import FeatureMatrix
 from ..utils import format_repr
 from ._basis import Basis, check_transform_input, min_max_rescale_samples
-from ._basis_mixin import AtomicBasisMixin
+from ._basis_mixin import AtomicBasisMixin, EvalBasisMixin
 
 FREQUENCY_ERROR_MSGS = {
     "has_negative_values": "The provided frequencies contain negative values. Valid frequencies must be"
@@ -710,6 +711,290 @@ class FourierBasis(AtomicBasisMixin, Basis):
                 return super().set_params(**params)
         else:
             return super().set_params(**params)
+
+    def __repr__(self):
+        return format_repr(self, exclude_keys=["fill_value"])
+
+
+# ---------------------------------------------------------------------------
+# Squared-exponential Fourier basis
+#
+# Builds a 1d real-valued Fourier basis whose implied prior on coefficients (i.i.d.
+# standard normal) yields a Gaussian process with squared-exponential
+# covariance. The frequencies and weights follow the equispaced (the same
+# construction used in the ``efgp_jax`` package).
+# ---------------------------------------------------------------------------
+
+
+def _se_quadrature(
+    lengthscale: float, variance: float, eps: float, L: float
+) -> Tuple[jnp.ndarray, jnp.ndarray, float, int]:
+    """Equispaced Fourier quadrature for a 1-D squared-exponential kernel.
+
+    Returns the non-negative frequency grid ``xi_j = j * h`` for
+    ``j = 0, 1, ..., m``, the weights corresponding to each column
+    (also prior standard deviations from the GP perspective) in
+    ``[cos columns, sin columns]`` so that an i.i.d. ``N(0, 1)`` prior
+    on coefficients gives a approximate squared-exponential covariance
+    structure, the frequency spacing ``h``, and the half-width ``m``.
+
+    The formula for the quadrature is derived in --
+    https://www.sciencedirect.com/science/article/pii/S1063520324000174
+
+    Parameters
+    ----------
+    lengthscale, variance :
+        se kernel hyperparameters.
+    eps :
+        error tolerance on kernel approximation
+    L :
+        time domain length ``t1 - t0``.
+
+    Returns
+    -------
+    xis :
+        non-negative frequencies of shape ``(m + 1,)``.
+    weights :
+        weights of shape ``(2 * m + 1,)`` corresponding to the columns
+        ``[cos columns, sin columns]``: cos columns first
+        (``j = 0, 1, ..., m``), then sin columns (``j = 1, ..., m``).
+    h :
+        spacing between frequencies
+    m :
+        number of positive frequencies
+    """
+    l = float(lengthscale)
+    var = float(variance)
+    eps_use = float(eps) / var
+
+    # Heuristic from get_xis_se with dim = 1: 4 * dim * 3**dim = 12 and
+    # dim * 4**(dim + 1) = 16.
+    h = 1.0 / (L + l * math.sqrt(2.0 * math.log(12.0 / eps_use)))
+    m = math.ceil(math.sqrt(math.log(16.0 / eps_use) / 2.0) / math.pi / l / h)
+
+    j = jnp.arange(m + 1, dtype=float)
+    xis = j * h
+
+    # 1-D SE spectral density: S(xi) = var * sqrt(2*pi*l^2) * exp(-2*pi^2*l^2*xi^2)
+    prefactor = var * math.sqrt(2.0 * math.pi * l ** 2)
+    S = prefactor * jnp.exp(-2.0 * (math.pi * l) ** 2 * xis ** 2)
+    w = jnp.sqrt(S * h)  # EFGP per-mode weight, shape (m + 1,)
+
+    # convert standard efgp xis with +/- modes into a positive-only modes.
+    sqrt2 = math.sqrt(2.0)
+    w_cos = w.at[1:].multiply(sqrt2)   # cos columns: w_0, sqrt(2)*w_1, ...
+    w_sin = sqrt2 * w[1:]              # sin columns: sqrt(2)*w_1, ...
+    weights = jnp.concatenate([w_cos, w_sin])
+    return xis, weights, h, m
+
+
+class FourierSEBasis(EvalBasisMixin, AtomicBasisMixin, Basis):
+    """1d Fourier basis with squared-exponential implied covariance.
+
+    Generates real ``cos`` and ``sin`` basis functions on a chosen domain
+    ``[t0, t1]`` whose frequencies and weights are picked so that
+    an i.i.d. ``N(0, 1)`` prior on the basis coefficients is equivalent to a
+    Gaussian process prior with squared-exponential (se) covariance:
+
+    .. code-block:: text
+
+        k(r) = variance * exp(-r^2 / (2 * lengthscale^2))
+
+    The equispaced frequency grid is from the equispaced Fourier discretization of
+    this paper -- https://epubs.siam.org/doi/full/10.1137/23M1565310. For ``m``
+    chosen automatically from ``eps``, the basis has ``2*m + 1`` functions: cosines
+    at frequencies ``j*h`` for ``j = 0, ..., m`` and sines at ``j*h`` for
+    ``j = 1, ..., m``. Each column is multiplied by a fixed weight derived
+    from the SE spectral density so that, with standard-normal coefficients,
+    the implied covariance approximates the SE kernel up to ``eps`` error.
+
+    Unlike :class:`FourierEval`, this basis evaluates samples directly rather
+    than through a min/max rescaling: ``cos`` and ``sin`` are evaluated at
+    ``2 * pi * xi_j * (x - xcen)`` where ``xcen = (t0 + t1) / 2``. As a
+    consequence ``bounds`` are unused; the construction domain ``[t0, t1]`` is
+    fixed at construction time.
+
+    Parameters
+    ----------
+    lengthscale :
+        SE kernel lengthscale, in the same units as ``domain``.
+    domain :
+        Pair ``(t0, t1)`` with ``t0 < t1`` defining the construction domain.
+    eps :
+        kernel approximation error tolerance.
+    variance :
+        SE kernel variance (prefactor). Default is ``1.0``.
+    label :
+        descriptive label for the basis. Defaults to the class name.
+    """
+
+    _is_complex = True
+    # Fourier basis is defined over the entire real line; out-of-bounds
+    # samples should not be filled with a sentinel value.
+    _apply_bounds_fill = False
+
+    def __init__(
+        self,
+        lengthscale: float,
+        domain: Tuple[float, float],
+        eps: float,
+        variance: float = 1.0,
+        label: Optional[str] = None,
+    ) -> None:
+        self._n_inputs = 1
+
+        lengthscale = float(lengthscale)
+        variance = float(variance)
+        eps = float(eps)
+        if lengthscale <= 0:
+            raise ValueError(
+                f"``lengthscale`` must be positive, got {lengthscale}."
+            )
+        if variance <= 0:
+            raise ValueError(f"``variance`` must be positive, got {variance}.")
+        if eps <= 0:
+            raise ValueError(f"``eps`` must be positive, got {eps}.")
+        if not (isinstance(domain, (tuple, list)) and len(domain) == 2):
+            raise TypeError(
+                "``domain`` must be a 2-element tuple ``(t0, t1)``; "
+                f"got {domain!r}."
+            )
+        t0, t1 = float(domain[0]), float(domain[1])
+        if not t0 < t1:
+            raise ValueError(
+                f"``domain`` must satisfy ``t0 < t1``; got ({t0}, {t1})."
+            )
+
+        self._lengthscale = lengthscale
+        self._variance = variance
+        self._eps = eps
+        self._domain = (t0, t1)
+        self._xcen = 0.5 * (t0 + t1)
+
+        L = t1 - t0
+        xis, weights, h, m = _se_quadrature(lengthscale, variance, eps, L)
+        self._xis = xis
+        self._weights = weights
+        self._h = float(h)
+        self._m = int(m)
+
+        Basis.__init__(self)
+        AtomicBasisMixin.__init__(self, n_basis_funcs=2 * m + 1, label=label)
+        EvalBasisMixin.__init__(self, bounds=None)
+
+    @property
+    def lengthscale(self) -> float:
+        """SE kernel lengthscale."""
+        return self._lengthscale
+
+    @property
+    def variance(self) -> float:
+        """SE kernel variance (prefactor)."""
+        return self._variance
+
+    @property
+    def eps(self) -> float:
+        """Spectral truncation tolerance."""
+        return self._eps
+
+    @property
+    def domain(self) -> Tuple[float, float]:
+        """Construction domain ``(t0, t1)``."""
+        return self._domain
+
+    @property
+    def xis(self) -> jnp.ndarray:
+        """Non-negative frequencies ``j*h`` for ``j = 0, ..., m``."""
+        return self._xis
+
+    @property
+    def weights(self) -> jnp.ndarray:
+        """Per-output-column weights applied inside :meth:`evaluate`."""
+        return self._weights
+
+    @property
+    def ndim(self) -> int:
+        """Dimensionality of the basis (always 1)."""
+        return 1
+
+    @support_pynapple(conv_type="numpy")
+    @check_transform_input
+    def evaluate(
+        self,
+        *sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor,
+    ) -> FeatureMatrix:
+        """Evaluate the SE Fourier basis at sample points.
+
+        Parameters
+        ----------
+        sample_pts :
+            A single array of sample points, with samples on the first axis.
+        """
+        if len(sample_pts) != 1:
+            raise ValueError(
+                "FourierSEBasis is 1D and expects a single sample array; "
+                f"received {len(sample_pts)}."
+            )
+        x = jnp.asarray(sample_pts[0])
+        shape = x.shape
+        x_flat = x.reshape(-1)
+
+        t0, t1 = self._domain
+        x_np = np.asarray(x_flat)
+        if x_np.size and (np.any(x_np < t0) or np.any(x_np > t1)):
+            warnings.warn(
+                f"FourierSEBasis evaluated at points outside the specified "
+                f"domain [{t0}, {t1}].",
+                UserWarning,
+            )
+
+        phases = (
+            2.0 * jnp.pi * (x_flat - self._xcen)[:, None] * self._xis[None, :]
+        )  # (N, m + 1)
+        cos_part = jnp.cos(phases)            # (N, m + 1), includes j = 0
+        sin_part = jnp.sin(phases[:, 1:])     # (N, m), drops j = 0
+        out = jnp.concatenate([cos_part, sin_part], axis=-1)
+        out = out * self._weights[None, :]
+        return out.reshape(*shape, out.shape[-1])
+
+    def sample(
+        self,
+        x: ArrayLike,
+        key: jax.Array,
+        n_samples: int = 1,
+    ) -> jnp.ndarray:
+        """Draw samples from the SE Gaussian process prior at ``x``.
+
+        With basis matrix ``Phi = self.evaluate(x)`` and ``z ~ N(0, I_M)``,
+        each sample is ``f(x) = Phi @ z``. Repeated calls with the same
+        ``key`` produce the same samples (JAX PRNG semantics).
+
+        Parameters
+        ----------
+        x :
+            evaluation points.
+        key :
+            JAX PRNG key.
+        n_samples :
+            Number of independent prior samples to draw. Default is ``1``.
+
+        Returns
+        -------
+        :
+            Samples of shape ``(n_samples, *x.shape)``, or ``x.shape`` when
+            ``n_samples == 1``.
+        """
+        Phi = self.evaluate(x)  # (..., n_basis_funcs)
+        z = jax.random.normal(key, shape=(self.n_basis_funcs, n_samples))
+        samples = jnp.moveaxis(Phi @ z, -1, 0)  # (n_samples, ...)
+        if n_samples == 1:
+            return samples[0]
+        return samples
+
+    def _get_samples(self, *n_samples: int) -> Generator[NDArray, None, None]:
+        """Produce equi-spaced samples over the construction domain."""
+        t0, t1 = self._domain
+        return (np.linspace(t0, t1, n_samples[0]),)
 
     def __repr__(self):
         return format_repr(self, exclude_keys=["fill_value"])
