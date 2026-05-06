@@ -624,6 +624,7 @@ def setup_hmm_initialization(
     transition_proba_init_kwargs: Optional[dict] = None,
     init_funcs: Optional[dict | INITIALIZATION_FN_DICT] = None,
     default_init_dict: Optional[dict] = None,
+    n_states: Optional[int] = None,
 ) -> INITIALIZATION_FN_DICT:
     """
     Set up HMM initialization functions based on user input, merging with defaults.
@@ -654,6 +655,9 @@ def setup_hmm_initialization(
     default_init_dict :
         Model-specific dictionary of default initialization functions. Defaults to
         ``DEFAULT_INIT_FUNCTIONS`` when None.
+    n_states :
+        Number of HMM states. When provided, ``alphas`` in the init kwargs is validated
+        via :func:`_resolve_dirichlet_priors` (same check as the model property setter).
 
     Returns
     -------
@@ -683,6 +687,10 @@ def setup_hmm_initialization(
         init_funcs["initial_proba_init_kwargs"] = _validate_init_funcs_kwargs(
             init_funcs["initial_proba_init"], initial_proba_init_kwargs
         )
+    if n_states is not None and "alphas" in init_funcs["initial_proba_init_kwargs"]:
+        init_funcs["initial_proba_init_kwargs"]["alphas"] = _resolve_dirichlet_priors(
+            init_funcs["initial_proba_init_kwargs"]["alphas"], (n_states,)
+        )
     if transition_proba_init is not None:
         (
             init_funcs["transition_proba_init"],
@@ -694,6 +702,13 @@ def setup_hmm_initialization(
     elif transition_proba_init_kwargs is not None:
         init_funcs["transition_proba_init_kwargs"] = _validate_init_funcs_kwargs(
             init_funcs["transition_proba_init"], transition_proba_init_kwargs
+        )
+    if n_states is not None and "alphas" in init_funcs["transition_proba_init_kwargs"]:
+        init_funcs["transition_proba_init_kwargs"]["alphas"] = (
+            _resolve_dirichlet_priors(
+                init_funcs["transition_proba_init_kwargs"]["alphas"],
+                (n_states, n_states),
+            )
         )
 
     return init_funcs

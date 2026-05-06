@@ -595,7 +595,7 @@ class TestHMMSetup:
             transition_proba_init_kwargs={"minimum_prob": 0.01},
         )
         expected_funcs = DEFAULT_INIT_FUNCTIONS | init_funcs
-        assert (
+        assert all(
             model.initialization_funcs[key] == expected_funcs[key]
             for key in expected_funcs
         )
@@ -616,7 +616,7 @@ class TestHMMSetup:
             == init_funcs["initial_proba_init"]
         )
         # default
-        assert (
+        assert all(
             model.initialization_funcs[key] == DEFAULT_INIT_FUNCTIONS[key]
             for key in [
                 "initial_proba_init_kwargs",
@@ -627,7 +627,7 @@ class TestHMMSetup:
 
         model.setup(initial_proba_init_kwargs={"minimum_prob": 0.01})
         # updated
-        assert (
+        assert all(
             model.initialization_funcs[key] == init_funcs[key]
             for key in [
                 "initial_proba_init",
@@ -635,7 +635,7 @@ class TestHMMSetup:
             ]
         )
         # default
-        assert (
+        assert all(
             model.initialization_funcs[key] == DEFAULT_INIT_FUNCTIONS[key]
             for key in [
                 "transition_proba_init",
@@ -645,7 +645,7 @@ class TestHMMSetup:
 
         model.setup(transition_proba_init="kmeans")
         # updated
-        assert (
+        assert all(
             model.initialization_funcs[key] == init_funcs[key]
             for key in [
                 "initial_proba_init",
@@ -661,7 +661,7 @@ class TestHMMSetup:
 
         model.setup(transition_proba_init_kwargs={"minimum_prob": 0.01})
         # updated
-        assert (
+        assert all(
             model.initialization_funcs[key] == init_funcs[key]
             for key in [
                 "initial_proba_init",

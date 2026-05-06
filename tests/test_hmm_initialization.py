@@ -632,6 +632,42 @@ class TestSetupHMMInitialization:
         init_funcs = setup_hmm_initialization()
         assert init_funcs == DEFAULT_INIT_FUNCTIONS
 
+    @pytest.mark.parametrize("n_states", [2, 3, 5])
+    @pytest.mark.parametrize(
+        "init_key, kwargs_key, wrong_alphas_factory",
+        [
+            # initial proba expects (n_states,); pass 2D → wrong
+            ("initial_proba_init", "initial_proba_init_kwargs", lambda n: jnp.ones((n, n))),
+            # transition proba expects (n_states, n_states); pass 1D → wrong
+            ("transition_proba_init", "transition_proba_init_kwargs", lambda n: jnp.ones(n)),
+        ],
+    )
+    def test_alphas_wrong_shape_via_setup(
+        self, n_states, init_key, kwargs_key, wrong_alphas_factory
+    ):
+        """Wrong alphas shape in init_kwargs raises ValueError through setup_hmm_initialization."""
+        with pytest.raises(ValueError, match="must have shape"):
+            setup_hmm_initialization(
+                **{init_key: "dirichlet", kwargs_key: {"alphas": wrong_alphas_factory(n_states)}},
+                n_states=n_states,
+            )
+
+    @pytest.mark.parametrize("n_states", [2, 3])
+    def test_alphas_correct_shape_via_setup(self, n_states):
+        """Correctly shaped alphas accepted without error through setup_hmm_initialization."""
+        init_funcs = setup_hmm_initialization(
+            initial_proba_init="dirichlet",
+            initial_proba_init_kwargs={"alphas": jnp.ones(n_states)},
+            transition_proba_init="dirichlet",
+            transition_proba_init_kwargs={"alphas": jnp.ones((n_states, n_states))},
+            n_states=n_states,
+        )
+        assert init_funcs["initial_proba_init_kwargs"]["alphas"].shape == (n_states,)
+        assert init_funcs["transition_proba_init_kwargs"]["alphas"].shape == (
+            n_states,
+            n_states,
+        )
+
 
 class TestGenerateHMMInitParams:
     """Test generate_hmm_initial_params function"""
