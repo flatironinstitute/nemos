@@ -10,7 +10,6 @@ from typing import Any, Callable, Literal, Optional, Tuple, Union
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-import lineax as lx
 from numpy.typing import ArrayLike
 from sklearn.utils import InputTags, TargetTags
 
@@ -23,7 +22,13 @@ from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
-from ..solvers._hess import _elementwise_derivative
+from ..solvers._hess import (
+    BlockDiagonal,
+    Full,
+    HessianTag,
+    PositiveDefinite,
+    _elementwise_derivative,
+)
 from ..type_casting import cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, SolverState, StepResult
 from ..utils import format_repr
@@ -246,7 +251,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
     _invalid_observation_types = (obs.CategoricalObservations,)
     _validator_class = GLMValidator
-    _hess_tag = lx.positive_semidefinite_tag
+    _hess_tag: HessianTag = HessianTag(structure=Full, property=PositiveDefinite)
 
     def __init__(
         self,
@@ -1454,6 +1459,9 @@ class PopulationGLM(GLM):
     """
 
     _validator_class = PopulationGLMValidator
+    _hess_tag: HessianTag = HessianTag(
+        structure=BlockDiagonal, property=PositiveDefinite
+    )
 
     def __init__(
         self,

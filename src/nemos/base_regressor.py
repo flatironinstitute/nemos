@@ -23,7 +23,7 @@ from .base_validator import RegressorValidator
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
-from .solvers._hess import _combine_hess_tags
+from .solvers._hess import HessianTag, combine_hessian_tags
 from .solvers._newton import NewtonSolverProtocol
 from .type_casting import cast_to_jax
 from .typing import (
@@ -109,8 +109,8 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     - [`PopulationGLM`](../glm/#nemos.glm.PopulationGLM): A population GLM implementation.
     """
 
-    _validator: RegressorValidator = None
-    _hess_tag: str | None = None
+    _validator: RegressorValidator | None = None
+    _hess_tag: HessianTag | None = None
 
     # overwrite this in subclasses if their objective functions return aux
     _has_aux: bool = False
@@ -411,7 +411,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
 
         if isinstance(solver, NewtonSolverProtocol):
             if self.regularizer is not None:
-                _hess_tag = _combine_hess_tags(
+                _hess_tag = combine_hessian_tags(
                     self._hess_tag, self.regularizer._hess_tag
                 )
             else:
