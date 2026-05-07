@@ -15,6 +15,7 @@ from jax.flatten_util import ravel_pytree
 from ..typing import Params
 from ._abstract_solver import SolverProtocol, SolverState
 from ._aux_helpers import wrap_aux
+from ._hess import BlockDiagonal, Full, HessianTag, PositiveDefinite
 
 
 @runtime_checkable
@@ -22,7 +23,7 @@ class NewtonSolverProtocol(SolverProtocol[SolverState], Protocol, Generic[Solver
     def setup_hessian(
         self,
         hess_fn: Callable | None,
-        hess_tag: str | None,
+        hess_tag: HessianTag | None,
     ) -> None: ...
 
 
@@ -66,8 +67,7 @@ class _Newton:
         self.force_autodiff_hessian = force_autodiff_hessian
         self.jit = jit
         self._val_and_grad = jax.value_and_grad(func)
-
-        self._hess_tag: str | None = None
+        self._hess_tag: HessianTag | None = None
         self._hess_fn: Callable | None = None
         self._line_search = optax.scale_by_backtracking_linesearch(
             max_backtracking_steps=30
@@ -90,6 +90,19 @@ class _Newton:
             ls_state=ls_state,
         )
 
+    def newton_solve(self, H, g, tag: HessianTag):
+        if tag.structure is BlockDiagonal:
+            return jax.vmap(
+                lambda h, gi: self.newton_solve(h, gi, HessianTag(Full, tag.property))
+            )(H, g)
+        if tag.structure is PositiveDefinite:
+            return lx.linear_solve(
+                lx.MatrixLinearOperator(H, lx.positive_semidefinite_tag),
+                g,
+                lx.Cholesky(),
+            ).value
+        return lx.linear_solve(lx.MatrixLinearOperator(H), g, lx.LU()).value
+
     def update(self, params, state: NewtonState, *args):
         params_flat, unravel = ravel_pytree(params)
 
@@ -108,9 +121,7 @@ class _Newton:
                 if not self.force_autodiff_hessian and self._hess_fn is not None
                 else jax.hessian(value_fn_flat)(params_flat)
             )
-            operator = lx.MatrixLinearOperator(H, self._hess_tag)
-            solution = lx.linear_solve(operator, -g_flat, solver=self._linear_solver)
-            step = solution.value
+            step = self.newton_solve(H, -g_flat, self._hess_tag)
 
             if self._line_search is not None:
                 step, new_ls_state = self._line_search.update(
@@ -199,13 +210,12 @@ class Newton(NewtonSolverProtocol[NewtonState]):
         self._solver = _Newton(self.fun, **solver_kwargs)
 
     def setup_hessian(
-        self, hess_fn: Optional[Callable] = None, hess_tag: str | None = None
+        self,
+        hess_fn: Optional[Callable] = None,
+        hess_tag: HessianTag | None = None,
     ):
         self._solver._hess_fn = hess_fn
         self._solver._hess_tag = hess_tag
-
-        if hess_tag is lx.positive_semidefinite_tag:
-            self._solver._linear_solver = lx.Cholesky()
 
     def init_state(self, init_params: Params, *args):
         return self._solver.init_state(init_params, *args)
