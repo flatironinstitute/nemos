@@ -254,14 +254,15 @@ def print_commands(args, dsb_paths: dict[str, Path], n_tasks: dict[str, int]) ->
         var_names[device] = var
         print(f"\n  # {device.upper()}")
         print(f"  {var}=$({cmd} | awk '{{print $NF}}')")
-    agg_cmd = _build_aggregation_sbatch_command(
-        args, [f"${v}" for v in var_names.values()]
-    )
-    print(f"\n  # Aggregation (runs after all device jobs succeed)")
-    print(f"  AGG_JID=$({agg_cmd} | awk '{{print $NF}}')")
-    combine_cmd = _build_combine_sbatch_command(args, "$AGG_JID")
-    print(f"\n  # Summary statistics (runs after aggregation succeeds)")
-    print(f"  {combine_cmd}")
+    if not args.no_publish:
+        agg_cmd = _build_aggregation_sbatch_command(
+            args, [f"${v}" for v in var_names.values()]
+        )
+        print(f"\n  # Aggregation (runs after all device jobs succeed)")
+        print(f"  AGG_JID=$({agg_cmd} | awk '{{print $NF}}')")
+        combine_cmd = _build_combine_sbatch_command(args, "$AGG_JID")
+        print(f"\n  # Summary statistics (runs after aggregation succeeds)")
+        print(f"  {combine_cmd}")
 
 
 def submit_jobs(args, dsb_paths: dict[str, Path], n_tasks: dict[str, int]) -> None:
@@ -276,6 +277,10 @@ def submit_jobs(args, dsb_paths: dict[str, Path], n_tasks: dict[str, int]) -> No
         job_id = result.stdout.strip().split()[-1]
         print(f"  -> job ID: {job_id}")
         job_ids.append(job_id)
+
+    if args.no_publish:
+        print("\nSkipping aggregation and summary jobs (--no-publish).")
+        return
 
     agg_cmd = _build_aggregation_sbatch_command(args, job_ids)
     print(f"\nSubmitting aggregation job (depends on {job_ids}):\n  {agg_cmd}")
