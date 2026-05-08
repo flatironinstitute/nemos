@@ -434,6 +434,13 @@ def _parse_args() -> argparse.Namespace:
         default=False,
         help="Skip real-data (NWB) configs; benchmark synthetic data only.",
     )
+    parser.add_argument(
+        "--no-publish",
+        dest="no_publish",
+        action="store_true",
+        default=False,
+        help="Skip aggregation and summary-statistics jobs; results stay in TEMP_DIR only.",
+    )
 
     args = parser.parse_args()
 
