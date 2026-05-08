@@ -88,6 +88,7 @@ def mock_glm_fit(monkeypatch):
         else:
             self.coef_ = jnp.zeros((n_features, y_arr.shape[1]))
             self.intercept_ = jnp.zeros(y_arr.shape[1])
+        self.scale_ = jnp.ones_like(self.intercept_)
         return self
 
     monkeypatch.setattr(nmo.glm.GLM, "fit", _fit)
