@@ -92,6 +92,7 @@ def generate_configs(args) -> list:
         solver_names=args.solver_names,
         devices=args.devices,
         packages=args.packages,
+        include_real_data=not args.no_real_data,
     )
     config_path = base_dir / "configs.json"
     config_path.write_text(json.dumps(configs, indent=2))
@@ -421,6 +422,13 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--devices", type=str, nargs="+", default=DEFAULT_DEVICES)
     parser.add_argument("--packages", type=str, nargs="+", default=DEFAULT_PACKAGES)
+    parser.add_argument(
+        "--no-real-data",
+        dest="no_real_data",
+        action="store_true",
+        default=False,
+        help="Skip real-data (NWB) configs; benchmark synthetic data only.",
+    )
 
     args = parser.parse_args()
 

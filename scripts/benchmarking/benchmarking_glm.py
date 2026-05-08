@@ -66,6 +66,7 @@ def generate_glm_configs(
     solver_names: List[str],
     devices: List[str],
     packages: Optional[Literal["nemos", "sklearn"]] = None,
+    include_real_data: bool = True,
 ) -> List[dict]:
     """
     Generate GLM configurations to benchmark.
@@ -157,6 +158,9 @@ def generate_glm_configs(
             }
             fit_config["file_name"] = f"cpu_{dict_to_filename(fit_config)}.json"
             configs.append(fit_config)
+
+    if not include_real_data:
+        return configs
 
     # add HD dataset
     path = nmo.fetch.fetch_data("Mouse32-140822.nwb")
