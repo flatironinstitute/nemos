@@ -9,14 +9,7 @@ from abc import abstractmethod
 from copy import deepcopy
 from functools import wraps
 from pathlib import Path
-from typing import (
-    Any,
-    Generic,
-    Optional,
-    Tuple,
-    Type,
-    Union,
-)
+from typing import Any, Callable, Generic, Optional, Tuple, Type, Union
 
 import jax
 import jax.numpy as jnp
@@ -31,6 +24,8 @@ from .glm.params import GLMParams
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
+from .solvers._hess import HessianTag, combine_hessian_tags
+from .solvers._newton import NewtonSolverProtocol
 from .type_casting import cast_to_jax
 from .typing import (
     DESIGN_INPUT_TYPE,
@@ -115,7 +110,8 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     - [`PopulationGLM`](../glm/#nemos.glm.PopulationGLM): A population GLM implementation.
     """
 
-    _validator: RegressorValidator = None
+    _validator: RegressorValidator | None = None
+    _hess_tag: HessianTag | None = None
 
     # overwrite this in subclasses if their objective functions return aux
     _has_aux: bool = False
@@ -334,6 +330,14 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
             )
 
+    def _get_hess_fn(self, *args, **kwargs) -> Callable | None:
+        """
+        Provide an analytic Hessian callable for models that have one.
+
+        Returns None to fall back to autodiff.
+        """
+        return None
+
     def _instantiate_solver(
         self,
         loss,
@@ -405,6 +409,15 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             init_params=init_params,
             **solver_kwargs,
         )
+
+        if isinstance(solver, NewtonSolverProtocol):
+            if self.regularizer is not None:
+                _hess_tag = combine_hessian_tags(
+                    self._hess_tag, self.regularizer._hess_tag
+                )
+            else:
+                _hess_tag = self._hess_tag
+            solver.setup_hessian(self._get_hess_fn(), _hess_tag)
 
         # nemos's solvers store a .fun attribute, but it's not necessary for a solver to work.
         # A test relies on having _solver_loss_fun saved, so still check and save it if possible.

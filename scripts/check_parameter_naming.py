@@ -128,6 +128,7 @@ VALID_PAIRS = [
     {"initial_proba_init", "initial_proba_init_kwargs"},
     {"transition_proba_init", "transition_proba_init_kwargs"},
     {"initial_proba_init_kwargs", "transition_proba_init_kwargs"},
+    {"tag", "tags"},
     {"is_nan", "is_nap"},
     {"dirichlet_initial_proba", "dirichlet_transition_proba"},
     {"random_key_pair", "random_key"},

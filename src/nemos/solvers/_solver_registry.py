@@ -6,6 +6,7 @@ from typing import Type
 
 from ._abstract_solver import SolverProtocol
 from ._fista import OptimistixFISTA, OptimistixNAG
+from ._newton import Newton
 from ._optax_optimistix_solvers import (
     OptimistixOptaxGradientDescent,
     OptimistixOptaxLBFGS,
@@ -339,7 +340,7 @@ register("BFGS", OptimistixBFGS, "optimistix", default=True)
 register("NonlinearCG", OptimistixNonlinearCG, "optimistix", default=True)
 register("SVRG", WrappedSVRG, "nemos", default=True)
 register("ProxSVRG", WrappedProxSVRG, "nemos", default=True)
-
+register("Newton", Newton, "nemos", default=True)
 register(
     "GradientDescent", OptimistixOptaxGradientDescent, "optax+optimistix", default=False
 )

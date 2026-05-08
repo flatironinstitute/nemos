@@ -22,6 +22,13 @@ from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
+from ..solvers._hess import (
+    BlockDiagonal,
+    Full,
+    HessianTag,
+    PositiveDefinite,
+    _elementwise_derivative,
+)
 from ..type_casting import cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, SolverState, StepResult
 from ..utils import format_repr
@@ -244,6 +251,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
     _invalid_observation_types = (obs.CategoricalObservations,)
     _validator_class = GLMValidator
+    _hess_tag: HessianTag = HessianTag(structure=Full, property=PositiveDefinite)
 
     def __init__(
         self,
@@ -963,6 +971,47 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             rank = jnp.linalg.matrix_rank(X)
             return (n_samples - rank - 1) * jnp.ones_like(params.intercept)
 
+    def _get_hess_fn(self) -> Callable:
+        """Construct the analytic Fisher-scoring Hessian for a GLM.
+
+        This function returns a callable that computes the Hessian of the penalized
+        mean log-likelihood for a generalized linear model using the Fisher scoring
+        approximation. This avoids the computational cost of automatic
+        differentiation-based Hessian evaluation.
+
+        Returns
+        -------
+        Callable
+            A function with signature ``(params, X, *args) -> (d, d)`` returning the
+            Hessian matrix in flattened parameter space, where ``d`` is the number of
+            parameters (including intercept).
+
+        Notes
+        -----
+        The Hessian is currently only used with the Newton solver.
+        The returned Hessian corresponds to the Fisher information matrix scaled by
+        the number of samples, consistent with a mean loss formulation.
+        """
+        gprime = _elementwise_derivative(self.inverse_link_function)
+        var_of_mu = _var_func_of_mu(self)
+        lam = self.regularizer_strength
+
+        def hess(params, *args):
+            X = args[0]
+            n, p = X.shape
+            eta = X @ params.coef + params.intercept
+            mu = self.inverse_link_function(eta)
+            # Fisher weights: (g'(eta))^2 / V(mu) / n  — 1/n matches the mean loss.
+            w = gprime(eta) ** 2 / var_of_mu(mu) / n
+            X_aug = jnp.concatenate([X, jnp.ones((n, 1))], axis=1)
+            H = X_aug.T @ (w[:, None] * X_aug)
+            # L2 regularisation on coefficients only.
+            if lam > 0.0:
+                H = H.at[:p, :p].add(lam * jnp.eye(p))
+            return H
+
+        return hess
+
     def _initialize_optimizer_and_state(
         self,
         init_params: GLMParams,
@@ -1200,6 +1249,36 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self._save_params(filename, fit_attrs, string_attrs)
 
 
+def _var_func_of_mu(model) -> Callable:
+    """Return the variance function V(mu) for a GLM observation model.
+
+    Parameters
+    ----------
+    model :
+        A GLM instance with an ``observation_model`` attribute.
+
+    Returns
+    -------
+    Callable
+        A function mapping the mean ``mu`` to the variance ``V(mu)``.
+
+    Raises
+    ------
+    NotImplementedError
+        If the observation model is not recognized.
+    """
+    obs_name = model.observation_model.__class__.__name__
+    var_funcs = {
+        "PoissonObservations": lambda mu: mu,
+        "GammaObservations": lambda mu: mu**2,
+        "GaussianObservations": lambda mu: jnp.ones_like(mu),
+        "BernoulliObservations": lambda mu: mu * (1.0 - mu),
+    }
+    if obs_name not in var_funcs:
+        raise NotImplementedError(f"No variance function defined for {obs_name!r}")
+    return var_funcs[obs_name]
+
+
 class PopulationGLM(GLM):
     """
     Population Generalized Linear Model.
@@ -1380,6 +1459,9 @@ class PopulationGLM(GLM):
     """
 
     _validator_class = PopulationGLMValidator
+    _hess_tag: HessianTag = HessianTag(
+        structure=BlockDiagonal, property=PositiveDefinite
+    )
 
     def __init__(
         self,
