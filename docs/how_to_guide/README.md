@@ -278,4 +278,16 @@ custom_solvers.md
 
 :::
 
+
+:::{grid-item-card}
+
+
+```{toctree}
+:maxdepth: 3
+
+solver_selection.md
+```
+
+:::
+
 ::::
