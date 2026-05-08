@@ -2483,6 +2483,53 @@ def test_grouplasso_mask_wrapping_and_refit(
 
 
 @pytest.mark.parametrize(
+    "make_X, make_mask, expectation",
+    [
+        pytest.param(
+            lambda arr: arr,
+            lambda arr: arr,
+            does_not_raise(),
+            id="array_X-array_mask-match",
+        ),
+        pytest.param(
+            lambda arr: arr,
+            lambda arr: [arr],
+            pytest.raises(ValueError, match="Mask pytree structure"),
+            id="array_X-list_mask-mismatch",
+        ),
+        pytest.param(
+            lambda arr: [arr],
+            lambda arr: [arr],
+            does_not_raise(),
+            id="list_X-list_mask-match",
+        ),
+        pytest.param(
+            lambda arr: [arr],
+            lambda arr: arr,
+            pytest.raises(ValueError, match="Mask pytree structure"),
+            id="list_X-array_mask-mismatch",
+        ),
+    ],
+)
+def test_grouplasso_mask_structure_mismatch(
+    make_X, make_mask, expectation, mock_optimizer_run
+):
+    """Mask pytree structure must mirror X; mismatch raises ValueError before shape checks."""
+    rng = np.random.default_rng(0)
+    n_samples, n_features, n_groups = 50, 4, 2
+    X = make_X(rng.standard_normal((n_samples, n_features)))
+    y = rng.poisson(1, size=n_samples)
+    mask = make_mask(_make_valid_group_mask(n_groups, n_features))
+
+    model = nmo.glm.GLM(
+        regularizer=nmo.regularizer.GroupLasso(mask=mask),
+        regularizer_strength=1.0,
+    )
+    with expectation:
+        model.fit(X, y)
+
+
+@pytest.mark.parametrize(
     "model_instantiation",
     [
         "population_poissonGLM_model_instantiation",

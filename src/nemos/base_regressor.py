@@ -30,7 +30,7 @@ from .base_validator import RegressorValidator
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
-from .type_casting import cast_to_jax
+from .type_casting import cast_to_jax, is_numpy_array_like
 from .typing import (
     DESIGN_INPUT_TYPE,
     ModelParamsT,
@@ -632,45 +632,64 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         data = X.data if isinstance(X, FeaturePytree) else X
 
         if isinstance(self.regularizer, GroupLasso):
-            if self.regularizer.mask is None and not isinstance(data, dict):
-                # User is calling GroupLasso but not using the FeaturePytree to
-                # group variables nor providing mask.
+            if self.regularizer.mask is None and is_numpy_array_like(data)[1]:
                 warnings.warn(
                     "Mask has not been set. Defaulting to a single group for all parameters. "
                     "Please see the documentation on GroupLasso regularization for defining a mask."
                 )
             elif self.regularizer.mask is not None:
-                import equinox as eqx
-
-                model_pars = self._validator.get_empty_params(data, y)
-                # Skip if mask is already in the internal structured format.
-                if not isinstance(self.regularizer.mask, type(model_pars)):
-                    select_subtrees = (
-                        model_pars.regularizable_subtrees()
-                        if hasattr(model_pars, "regularizable_subtrees")
-                        else [lambda p: p]
-                    )
-                    if len(select_subtrees) == 1:
-                        # Single regularizable param: mask matches its pytree structure (e.g. coef_).
-                        mask_list = [self.regularizer.mask]
-                    else:
-                        mask_list = list(self.regularizer.mask)
-                        if len(mask_list) != len(select_subtrees):
-                            raise ValueError(
-                                f"{type(self).__name__} has {len(select_subtrees)} regularizable "
-                                f"parameters but {len(mask_list)} masks were provided."
-                            )
-                    struct = jax.tree_util.tree_structure(model_pars)
-                    mask_tree = jax.tree_util.tree_unflatten(
-                        struct, [None] * struct.num_leaves
-                    )
-                    for where, m in zip(select_subtrees, mask_list):
-                        mask_tree = eqx.tree_at(
-                            where, mask_tree, m, is_leaf=lambda x: x is None
-                        )
-                    self.regularizer.mask = mask_tree
+                self._wrap_grouplasso_mask(data, y)
 
         return data, y, *args
+
+    def _wrap_grouplasso_mask(
+        self,
+        data: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+    ) -> None:
+        """Convert a user-provided GroupLasso mask into the internal structured format.
+
+        Mutates ``self.regularizer.mask`` in place. No-op if the mask is already
+        in the structured format (i.e. already an instance of the params type).
+        """
+        import equinox as eqx
+
+        model_pars = self._validator.get_empty_params(data, y)
+        if isinstance(self.regularizer.mask, type(model_pars)):
+            return
+
+        select_subtrees = (
+            model_pars.regularizable_subtrees()
+            if hasattr(model_pars, "regularizable_subtrees")
+            else [lambda p: p]
+        )
+        if len(select_subtrees) == 1:
+            mask_list = [self.regularizer.mask]
+        else:
+            mask_list = jax.tree_util.tree_leaves(self.regularizer.mask)
+            if len(mask_list) != len(select_subtrees):
+                raise ValueError(
+                    f"{type(self).__name__} has {len(select_subtrees)} regularizable "
+                    f"parameters but the mask pytree has {len(mask_list)} leaves; "
+                    f"provide a pytree with one leaf per regularizable parameter."
+                )
+
+        for where, m in zip(select_subtrees, mask_list):
+            expected = jax.tree_util.tree_structure(where(model_pars))
+            actual = jax.tree_util.tree_structure(m)
+            if expected != actual:
+                raise ValueError(
+                    f"Mask pytree structure {actual} does not match the expected "
+                    f"parameter structure {expected}. The mask must mirror the "
+                    f"structure of the corresponding parameter (e.g. if X is a "
+                    f"list, the mask must also be a list)."
+                )
+
+        struct = jax.tree_util.tree_structure(model_pars)
+        mask_tree = jax.tree_util.tree_unflatten(struct, [None] * struct.num_leaves)
+        for where, m in zip(select_subtrees, mask_list):
+            mask_tree = eqx.tree_at(where, mask_tree, m, is_leaf=lambda x: x is None)
+        self.regularizer.mask = mask_tree
 
     @abc.abstractmethod
     def _initialize_optimizer_and_state(
