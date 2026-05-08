@@ -43,6 +43,7 @@ DEFAULT_SOLVER_NAMES = [
     "BFGS[optimistix]",
     "GradientDescent[optimistix]",
     "SVRG[nemos]",
+    "Newton[nemos]",
     # non-smooth — benchmarked against Lasso only (filtered below)
     "ProximalGradient[optimistix]",
     "ProxSVRG[nemos]",
