@@ -236,8 +236,8 @@ class TestAnalyticMStepScale:
             log_xis,
             is_new_session=new_sess,
             m_step_fn_model_params=analytical_update_fn,
-            dirichlet_prior_alphas_transition=None,
-            dirichlet_prior_alphas_init_prob=None,
+            dirichlet_transition_proba=None,
+            dirichlet_initial_proba=None,
         )
 
         def numerical_update_fn(params, X, y, posteriors):
@@ -269,8 +269,8 @@ class TestAnalyticMStepScale:
             log_xis,
             is_new_session=new_sess,
             m_step_fn_model_params=numerical_update_fn,
-            dirichlet_prior_alphas_transition=None,
-            dirichlet_prior_alphas_init_prob=None,
+            dirichlet_transition_proba=None,
+            dirichlet_initial_proba=None,
         )
         np.testing.assert_allclose(
             numerical_update.model_params.log_scale,
