@@ -2425,16 +2425,16 @@ def _make_valid_group_mask(n_groups, n_features):
             id="list_mask-list_X",
         ),
         pytest.param(
-                lambda arr, _: nmo.glm.params.GLMParams(
-                    coef=jnp.asarray(arr), intercept=None
-                ),
-                lambda X: X,
-                # already-structured GLMParams: coef slot is unchanged, same 2-D array
-                lambda coef, n_groups, n_features: (
-                    hasattr(coef, "shape") and coef.shape == (n_groups, n_features)
-                ),
-                id="already_structured_glmparams_mask",
+            lambda arr, _: nmo.glm.params.GLMParams(
+                coef=jnp.asarray(arr), intercept=None
             ),
+            lambda X: X,
+            # already-structured GLMParams: coef slot is unchanged, same 2-D array
+            lambda coef, n_groups, n_features: (
+                hasattr(coef, "shape") and coef.shape == (n_groups, n_features)
+            ),
+            id="already_structured_glmparams_mask",
+        ),
     ],
 )
 def test_grouplasso_mask_wrapping_and_refit(
@@ -2464,9 +2464,9 @@ def test_grouplasso_mask_wrapping_and_refit(
     model.fit(X, y)
 
     # After first fit, mask must be wrapped into the internal GLMParams structure.
-    assert isinstance(model.regularizer.mask, nmo.glm.params.GLMParams), (
-        "mask must be a GLMParams pytree after fit"
-    )
+    assert isinstance(
+        model.regularizer.mask, nmo.glm.params.GLMParams
+    ), "mask must be a GLMParams pytree after fit"
     assert model.regularizer.mask.intercept is None
     assert check_coef(model.regularizer.mask.coef, n_groups, n_features)
     mask_coef_after_first = model.regularizer.mask.coef
