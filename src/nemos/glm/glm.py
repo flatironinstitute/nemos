@@ -57,6 +57,34 @@ REGRESSION_GLM_TYPES = Union[
 ]
 
 
+def _glm_hessian_block(
+    X,
+    eta,
+    inverse_link_function,
+    var_of_mu,
+    lam=0.0,
+):
+    n_samples, n_features = X.shape
+
+    gprime = _elementwise_derivative(inverse_link_function)
+
+    mu = inverse_link_function(eta)
+
+    w = gprime(eta) ** 2 / var_of_mu(mu) / n_samples
+
+    X_aug = jnp.concatenate(
+        [X, jnp.ones((n_samples, 1))],
+        axis=1,
+    )
+
+    H = X_aug.T @ (w[:, None] * X_aug)
+
+    if lam > 0:
+        H = H.at[:-1, :-1].add(lam * jnp.eye(n_features))
+
+    return H
+
+
 class GLM(BaseRegressor[GLMUserParams, GLMParams]):
     r"""Generalized Linear Model (GLM) for neural activity data.
 
@@ -992,23 +1020,21 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         The returned Hessian corresponds to the Fisher information matrix scaled by
         the number of samples, consistent with a mean loss formulation.
         """
-        gprime = _elementwise_derivative(self.inverse_link_function)
         var_of_mu = _var_func_of_mu(self)
         lam = self.regularizer_strength
 
         def hess(params, *args):
             X = args[0]
-            n, p = X.shape
+
             eta = X @ params.coef + params.intercept
-            mu = self.inverse_link_function(eta)
-            # Fisher weights: (g'(eta))^2 / V(mu) / n  — 1/n matches the mean loss.
-            w = gprime(eta) ** 2 / var_of_mu(mu) / n
-            X_aug = jnp.concatenate([X, jnp.ones((n, 1))], axis=1)
-            H = X_aug.T @ (w[:, None] * X_aug)
-            # L2 regularisation on coefficients only.
-            if lam > 0.0:
-                H = H.at[:p, :p].add(lam * jnp.eye(p))
-            return H
+
+            return _glm_hessian_block(
+                X,
+                eta,
+                self.inverse_link_function,
+                var_of_mu,
+                lam,
+            )
 
         return hess
 
@@ -1652,6 +1678,39 @@ class PopulationGLM(GLM):
             )
             + params.intercept
         )
+
+    def _get_hess_fn(self):
+        var_of_mu = _var_func_of_mu(self)
+        lam = self.regularizer_strength
+
+        def hess(params, *args):
+            X = args[0]
+            n_neurons = params.intercept.shape[0]
+
+            eta = X @ params.coef + params.intercept
+
+            blocks = []
+
+            for neuron_idx in range(n_neurons):
+                if self._feature_mask is not None:
+                    active = self._feature_mask[:, neuron_idx] == 1
+                    X_neuron = X[:, active]
+                else:
+                    X_neuron = X
+
+                block = _glm_hessian_block(
+                    X_neuron,
+                    eta[:, neuron_idx],
+                    self.inverse_link_function,
+                    var_of_mu,
+                    lam,
+                )
+
+                blocks.append(block)
+
+            return jnp.stack(blocks, axis=0)
+
+        return hess
 
     def __sklearn_clone__(self) -> PopulationGLM:
         """Clone the PopulationGLM, dropping feature_mask."""

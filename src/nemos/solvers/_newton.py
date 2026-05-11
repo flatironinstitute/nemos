@@ -13,7 +13,7 @@ import optax
 from jax.flatten_util import ravel_pytree
 
 from ..typing import Params
-from ._abstract_solver import SolverProtocol, SolverState
+from ._abstract_solver import OptimizationInfo, SolverProtocol, SolverState
 from ._aux_helpers import wrap_aux
 from ._hess import BlockDiagonal, Full, HessianTag, PositiveDefinite
 
@@ -94,8 +94,8 @@ class _Newton:
         if tag.structure is BlockDiagonal:
             return jax.vmap(
                 lambda h, gi: self.newton_solve(h, gi, HessianTag(Full, tag.property))
-            )(H, g)
-        if tag.structure is PositiveDefinite:
+            )(H, jnp.reshape(g, (len(H), -1))).flatten()
+        if tag.property is PositiveDefinite:
             return lx.linear_solve(
                 lx.MatrixLinearOperator(H, lx.positive_semidefinite_tag),
                 g,
@@ -229,3 +229,11 @@ class Newton(NewtonSolverProtocol[NewtonState]):
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
         return {"maxiter", "tol", "force_autodiff_hessian", "jit"}
+
+    def _get_optim_info(self, state: NewtonState, **kwargs) -> OptimizationInfo:
+        return OptimizationInfo(
+            function_val=None,
+            num_steps=jnp.array(state.iter_num),
+            converged=jnp.array(state.converged),
+            reached_max_steps=jnp.array(state.iter_num >= self.maxiter),
+        )
