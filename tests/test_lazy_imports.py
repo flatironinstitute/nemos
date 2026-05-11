@@ -189,29 +189,29 @@ print('IMPORTED' if imported else 'NOT_IMPORTED')
 # Test 3: Modules that don't need sklearn should not import it
 # =============================================================================
 
-# These modules should work without loading sklearn
-SKLEARN_FREE_MODULES = [
-    "nemos.utils",
-    "nemos.simulation",
-    "nemos.identifiability_constraints",
-    "nemos.convolve",
-    "nemos.exceptions",
-    "nemos.pytrees",
-    "nemos.tree_utils",
-    "nemos.type_casting",
-    "nemos.fetch",
-    "nemos.solvers",
+# These import statements should not load sklearn.
+# For lazy-stub subpackages (nemos.fetch, nemos.solvers) we use direct attribute
+# imports so that lazy_loader is forced to actually load the submodule files.
+SKLEARN_FREE_IMPORTS = [
+    "import nemos.utils",
+    "import nemos.simulation",
+    "import nemos.identifiability_constraints",
+    "import nemos.convolve",
+    "import nemos.exceptions",
+    "import nemos.pytrees",
+    "import nemos.tree_utils",
+    "import nemos.type_casting",
+    "from nemos.fetch import fetch_data",
+    "from nemos.solvers import OptimistixFISTA, SVRG, OptimistixOptaxLBFGS",
 ]
 
 
-@pytest.mark.parametrize("module_path", SKLEARN_FREE_MODULES)
-def test_sklearn_not_loaded(module_path: str):
+@pytest.mark.parametrize("import_stmt", SKLEARN_FREE_IMPORTS)
+def test_sklearn_not_loaded(import_stmt: str):
     """Test that modules that don't need sklearn don't import it."""
-    is_lazy, error_msg = _check_module_not_imported_after(
-        f"import {module_path}", "sklearn"
-    )
+    is_lazy, error_msg = _check_module_not_imported_after(import_stmt, "sklearn")
     assert is_lazy, (
-        f"sklearn was imported by `import {module_path}`.\n"
+        f"sklearn was imported by `{import_stmt}`.\n"
         f"This module should not depend on sklearn.\n"
         f"{error_msg}"
     )
@@ -221,21 +221,21 @@ def test_sklearn_not_loaded(module_path: str):
 # Test 4: Modules that don't need jax should not import it
 # =============================================================================
 
-# These modules should work without loading jax
-JAX_FREE_MODULES = [
-    "nemos.fetch",
-    "nemos.exceptions",
+# These import statements should not load jax.
+# For lazy-stub subpackages (nemos.fetch) we use direct attribute imports so that
+# lazy_loader is forced to actually load the submodule files.
+JAX_FREE_IMPORTS = [
+    "from nemos.fetch import fetch_data",
+    "import nemos.exceptions",
 ]
 
 
-@pytest.mark.parametrize("module_path", JAX_FREE_MODULES)
-def test_jax_not_loaded(module_path: str):
+@pytest.mark.parametrize("import_stmt", JAX_FREE_IMPORTS)
+def test_jax_not_loaded(import_stmt: str):
     """Test that modules that don't need jax don't import it."""
-    is_lazy, error_msg = _check_module_not_imported_after(
-        f"import {module_path}", "jax"
-    )
+    is_lazy, error_msg = _check_module_not_imported_after(import_stmt, "jax")
     assert is_lazy, (
-        f"jax was imported by `import {module_path}`.\n"
+        f"jax was imported by `{import_stmt}`.\n"
         f"This module should not depend on jax.\n"
         f"{error_msg}"
     )
@@ -245,36 +245,70 @@ def test_jax_not_loaded(module_path: str):
 # Test 5: Modules that don't need pynapple should not fully load it
 # =============================================================================
 
-# These modules should work without fully loading pynapple
-# We check for numba (pynapple's heavy dependency) rather than pynapple itself
-PYNAPPLE_FREE_MODULES = [
-    "nemos.utils",
-    "nemos.simulation",
-    "nemos.identifiability_constraints",
-    "nemos.convolve",
-    "nemos.exceptions",
-    "nemos.pytrees",
-    "nemos.tree_utils",
-    "nemos.fetch",
-    "nemos.solvers",
-    "nemos.regularizer",
-    "nemos.glm",
+# These import statements should not fully load pynapple.
+# We check for numba (pynapple's heavy dependency) rather than pynapple itself,
+# because lazy.load() adds a lazy wrapper to sys.modules but doesn't execute
+# pynapple's code until an attribute is accessed.
+# For lazy-stub subpackages (nemos.glm, nemos.solvers, nemos.fetch) we use direct
+# attribute imports so that lazy_loader is forced to actually load the submodule
+# files rather than stopping at the stub wrapper.
+PYNAPPLE_FREE_IMPORTS = [
+    "import nemos.utils",
+    "import nemos.simulation",
+    "import nemos.identifiability_constraints",
+    "import nemos.convolve",
+    "import nemos.exceptions",
+    "import nemos.pytrees",
+    "import nemos.tree_utils",
+    "from nemos.fetch import fetch_data",
+    "from nemos.solvers import OptimistixFISTA, SVRG, OptimistixOptaxLBFGS",
+    "import nemos.regularizer",
+    "from nemos.glm import GLM, PopulationGLM, ClassifierGLM, ClassifierPopulationGLM",
+    "from nemos.hmm.hmm import *",  # this eagerly import the hmm module
+    "from nemos.type_casting import *",
+    "import nemos.hmm",
 ]
 
 
-@pytest.mark.parametrize("module_path", PYNAPPLE_FREE_MODULES)
-def test_pynapple_not_loaded(module_path: str):
+@pytest.mark.parametrize("import_stmt", PYNAPPLE_FREE_IMPORTS)
+def test_pynapple_not_loaded(import_stmt: str):
     """Test that modules that don't need pynapple don't fully load it.
 
     We check for numba (pynapple's heavy dependency) rather than pynapple itself,
     because lazy.load() adds a lazy wrapper to sys.modules but doesn't execute
     pynapple's code until an attribute is accessed.
     """
-    is_lazy, error_msg = _check_module_not_imported_after(
-        f"import {module_path}", "numba"
-    )
+    is_lazy, error_msg = _check_module_not_imported_after(import_stmt, "numba")
     assert is_lazy, (
-        f"pynapple was fully loaded (numba in sys.modules) by `import {module_path}`.\n"
+        f"pynapple was fully loaded (numba in sys.modules) by `{import_stmt}`.\n"
         f"This module should not depend on pynapple.\n"
+        f"{error_msg}"
+    )
+
+
+# =============================================================================
+# Test 6: Modules that don't need scipy should not fully load it
+# =============================================================================
+
+# We check for scipy.stats rather than scipy itself, because lazy.load("scipy")
+# adds a lazy wrapper to sys.modules but doesn't execute scipy's code until an
+# attribute (e.g. scipy.stats) is actually accessed at runtime.
+SCIPY_FREE_IMPORTS = [
+    "import nemos.simulation",
+]
+
+
+@pytest.mark.parametrize("import_stmt", SCIPY_FREE_IMPORTS)
+def test_scipy_not_loaded(import_stmt: str):
+    """Test that modules that don't need scipy at import time don't fully load it.
+
+    We check for scipy.stats rather than scipy itself, because lazy.load("scipy")
+    adds a lazy wrapper to sys.modules but doesn't execute scipy's code until an
+    attribute is accessed.
+    """
+    is_lazy, error_msg = _check_module_not_imported_after(import_stmt, "scipy.stats")
+    assert is_lazy, (
+        f"scipy was fully loaded (scipy.stats in sys.modules) by `{import_stmt}`.\n"
+        f"This module should not depend on scipy at import time.\n"
         f"{error_msg}"
     )

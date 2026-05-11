@@ -12,6 +12,8 @@ from nemos.hmm.initialize_parameters import (
     DEFAULT_INIT_FUNCTIONS,
     KMeansInitializer,
     _resolve_dirichlet_priors,
+    dirichlet_initial_proba_init,
+    dirichlet_transition_proba_init,
     generate_hmm_initial_params,
     kmeans_initial_proba_init,
     kmeans_transition_proba_init,
@@ -35,6 +37,7 @@ def use_method_for_test(method, method_subset):
     [
         uniform_initial_proba_init,
         random_initial_proba_init,
+        dirichlet_initial_proba_init,
     ],
 )
 class TestInitialProbaInitialization:
@@ -89,7 +92,9 @@ class TestInitialProbaInitialization:
         # Should be identical regardless of random key
         assert jnp.allclose(initial_prob1, initial_prob2)
 
-    @pytest.mark.parametrize("method_subset", [[random_initial_proba_init]])
+    @pytest.mark.parametrize(
+        "method_subset", [[random_initial_proba_init, dirichlet_initial_proba_init]]
+    )
     def test_non_deterministic(self, method, method_subset, use_method_for_test):
         """Test that output is non-deterministic (different across different calls)."""
         n_states = 3
@@ -99,6 +104,18 @@ class TestInitialProbaInitialization:
 
         assert not jnp.allclose(initial_prob1, initial_prob2)
 
+    @pytest.mark.parametrize("method_subset", [[dirichlet_initial_proba_init]])
+    @pytest.mark.parametrize("n_states", [2, 3, 5])
+    def test_dirichlet_alphas_is_used(
+        self, method, method_subset, use_method_for_test, n_states
+    ):
+        """Test that dirichlet_initial_proba_init uses the provided alphas."""
+        alphas = jnp.ones(n_states)
+        alphas = alphas.at[n_states - 1].set(100.0)  # Make the last state most likely
+
+        initial_prob = method(n_states, random_key=jax.random.PRNGKey(0), alphas=alphas)
+        assert jnp.argmax(initial_prob) == n_states - 1
+
 
 @pytest.mark.parametrize(
     "method",
@@ -106,6 +123,7 @@ class TestInitialProbaInitialization:
         sticky_transition_proba_init,
         uniform_transition_proba_init,
         random_transition_proba_init,
+        dirichlet_transition_proba_init,
     ],
 )
 class TestTransitionProbaInitialization:
@@ -209,6 +227,24 @@ class TestTransitionProbaInitialization:
         transition_prob2 = method(n_states, random_key=jax.random.PRNGKey(999))
 
         assert not jnp.allclose(transition_prob1, transition_prob2)
+
+    @pytest.mark.parametrize("method_subset", [[dirichlet_transition_proba_init]])
+    @pytest.mark.parametrize("n_states", [2, 3, 5])
+    def test_dirichlet_alphas_is_used(
+        self, method, method_subset, use_method_for_test, n_states
+    ):
+        """Test that dirichlet_initial_proba_init uses the provided alphas."""
+        alphas = jnp.ones((n_states, n_states))
+        for i in range(n_states):
+            alphas = alphas.at[i, n_states - 1].set(
+                100.0
+            )  # Make the last state most likely
+
+        transition_prob = method(
+            n_states, random_key=jax.random.PRNGKey(0), alphas=alphas
+        )
+        for i in range(n_states):
+            assert jnp.argmax(transition_prob[i]) == n_states - 1
 
 
 def generate_kmeans_data(n_states=3, min_prob=0.02):
@@ -385,7 +421,8 @@ class TestSetupHMMInitialization:
         "init_func, expectation",
         [
             (
-                lambda n_states, X, y, random_key: jnp.ones((n_states,)) / n_states,
+                lambda n_states, X, y, is_new_session, random_key: jnp.ones((n_states,))
+                / n_states,
                 does_not_raise(),
             ),
             (
@@ -425,7 +462,9 @@ class TestSetupHMMInitialization:
         "init_func, expectation",
         [
             (
-                lambda n_states, X, y, random_key: jnp.ones((n_states, n_states))
+                lambda n_states, X, y, is_new_session, random_key: jnp.ones(
+                    (n_states, n_states)
+                )
                 / n_states,
                 does_not_raise(),
             ),
@@ -455,7 +494,7 @@ class TestSetupHMMInitialization:
     def custom_init_func(self, init_func, key):
         if init_func:
             return (
-                lambda n_states, X, y, random_key, extra_key=2: jnp.ones(
+                lambda n_states, X, y, is_new_session, random_key, extra_key=2: jnp.ones(
                     shape=((n_states, n_states) if "transition" in key else (n_states,))
                 )
                 / n_states
@@ -514,7 +553,7 @@ class TestSetupHMMInitialization:
                 "initial_proba_init",
                 "kmeans",
                 "initial_proba_init_kwargs",
-                {"is_new_session": None},
+                {"minimum_prob": 0.1},
             ),
             (
                 "transition_proba_init",
@@ -524,14 +563,16 @@ class TestSetupHMMInitialization:
             ),
             (
                 "initial_proba_init",
-                lambda n_states, X, y, random_key, extra_kwarg=1: jnp.ones((n_states,))
+                lambda n_states, X, y, is_new_session, random_key, extra_kwarg=1: jnp.ones(
+                    (n_states,)
+                )
                 / n_states,
                 "initial_proba_init_kwargs",
                 {"extra_kwarg": 2},
             ),
             (
                 "transition_proba_init",
-                lambda n_states, X, y, random_key, extra_kwarg=1: jnp.ones(
+                lambda n_states, X, y, is_new_session, random_key, extra_kwarg=1: jnp.ones(
                     (n_states, n_states)
                 )
                 / n_states,
@@ -565,21 +606,24 @@ class TestSetupHMMInitialization:
             ),
             (
                 "initial_proba_init",
-                lambda n_states, X, y, random_key: jnp.ones((n_states,)) / n_states,
+                lambda n_states, X, y, is_new_session, random_key: jnp.ones((n_states,))
+                / n_states,
             ),
             (
                 "transition_proba_init",
-                lambda n_states, X, y, random_key: jnp.ones((n_states, n_states))
+                lambda n_states, X, y, is_new_session, random_key: jnp.ones(
+                    (n_states, n_states)
+                )
                 / n_states,
             ),
         ],
     )
     def test_reset_init_kwargs(self, key, value):
         first_dict = setup_hmm_initialization(
-            **{key: "kmeans", key + "_kwargs": {"is_new_session": None}}
+            **{key: "kmeans", key + "_kwargs": {"minimum_prob": 0.1}}
         )
         second_dict = setup_hmm_initialization(**{key: value}, init_funcs=first_dict)
-        assert first_dict[key + "_kwargs"] == {"is_new_session": None}
+        assert first_dict[key + "_kwargs"] == {"minimum_prob": 0.1}
         assert second_dict[key + "_kwargs"] == {}
 
     def test_default_initialization(self):
@@ -588,30 +632,56 @@ class TestSetupHMMInitialization:
         init_funcs = setup_hmm_initialization()
         assert init_funcs == DEFAULT_INIT_FUNCTIONS
 
-
-class TestGenerateHMMInitParams:
-    """Test generate_hmm_initial_params function"""
-
+    @pytest.mark.parametrize("n_states", [2, 3, 5])
     @pytest.mark.parametrize(
-        "init_funcs, expectation",
+        "init_key, kwargs_key, wrong_alphas_factory",
         [
-            ({}, does_not_raise()),
-            ({"initial_proba_init": random_initial_proba_init}, does_not_raise()),
+            # initial proba expects (n_states,); pass 2D → wrong
             (
-                {"invalid_key": None},
-                pytest.raises(ValueError, match="Unexpected or unknown keys"),
+                "initial_proba_init",
+                "initial_proba_init_kwargs",
+                lambda n: jnp.ones((n, n)),
             ),
+            # transition proba expects (n_states, n_states); pass 1D → wrong
             (
-                {"initial_prob_init": random_initial_proba_init},
-                pytest.raises(ValueError, match="Did you mean"),
+                "transition_proba_init",
+                "transition_proba_init_kwargs",
+                lambda n: jnp.ones(n),
             ),
         ],
     )
-    def test_init_funcs_keys(self, init_funcs, expectation):
-        with expectation:
-            generate_hmm_initial_params(
-                n_states=3, X=None, y=None, init_funcs=init_funcs
+    def test_alphas_wrong_shape_via_setup(
+        self, n_states, init_key, kwargs_key, wrong_alphas_factory
+    ):
+        """Wrong alphas shape in init_kwargs raises ValueError through setup_hmm_initialization."""
+        with pytest.raises(ValueError, match="must have shape"):
+            setup_hmm_initialization(
+                **{
+                    init_key: "dirichlet",
+                    kwargs_key: {"alphas": wrong_alphas_factory(n_states)},
+                },
+                n_states=n_states,
             )
+
+    @pytest.mark.parametrize("n_states", [2, 3])
+    def test_alphas_correct_shape_via_setup(self, n_states):
+        """Correctly shaped alphas accepted without error through setup_hmm_initialization."""
+        init_funcs = setup_hmm_initialization(
+            initial_proba_init="dirichlet",
+            initial_proba_init_kwargs={"alphas": jnp.ones(n_states)},
+            transition_proba_init="dirichlet",
+            transition_proba_init_kwargs={"alphas": jnp.ones((n_states, n_states))},
+            n_states=n_states,
+        )
+        assert init_funcs["initial_proba_init_kwargs"]["alphas"].shape == (n_states,)
+        assert init_funcs["transition_proba_init_kwargs"]["alphas"].shape == (
+            n_states,
+            n_states,
+        )
+
+
+class TestGenerateHMMInitParams:
+    """Test generate_hmm_initial_params function"""
 
     def test_init_funcs_none_values(self):
         """Test that None values in init_funcs are replaced by defaults."""
@@ -622,69 +692,24 @@ class TestGenerateHMMInitParams:
             "transition_proba_init_kwargs": None,
         }
         result1 = generate_hmm_initial_params(
-            n_states=3, X=None, y=None, init_funcs=init_funcs
+            n_states=3, X=None, y=None, is_new_session=None, init_funcs=init_funcs
         )
-        result2 = generate_hmm_initial_params(n_states=3, X=None, y=None)
+        result2 = generate_hmm_initial_params(
+            n_states=3, X=None, y=None, is_new_session=None
+        )
         assert jnp.allclose(jnp.vstack(result1), jnp.vstack(result2))
 
     @pytest.mark.parametrize("n_states", [1, 2, 3, 5])
     def test_output_shapes_and_types(self, n_states):
         """Test that output shapes and types are correct."""
         initial_prob, transition_prob = generate_hmm_initial_params(
-            n_states=n_states, X=None, y=None
+            n_states=n_states, X=None, y=None, is_new_session=None
         )
 
         assert initial_prob.shape == (n_states,)
         assert transition_prob.shape == (n_states, n_states)
         assert isinstance(initial_prob, jnp.ndarray)
         assert isinstance(transition_prob, jnp.ndarray)
-
-    @pytest.mark.parametrize(
-        "key, value, expectation",
-        [
-            (
-                "initial_proba_init",
-                lambda n_states, X, y, random_key: jnp.ones((n_states,)) / n_states,
-                does_not_raise(),
-            ),
-            (
-                "transition_proba_init",
-                lambda n_states, X, y, random_key: jnp.ones((n_states, n_states))
-                / n_states,
-                does_not_raise(),
-            ),
-            (
-                "initial_proba_init",
-                lambda n_states, X, y, random_key: jnp.ones((n_states - 1,)),
-                pytest.raises(ValueError, match="must return an array of shape"),
-            ),
-            (
-                "transition_proba_init",
-                lambda n_states, X, y, random_key: jnp.ones(
-                    (n_states - 1, n_states - 1)
-                ),
-                pytest.raises(ValueError, match="must return an array of shape"),
-            ),
-            (
-                "initial_proba_init",
-                lambda n_states, X, y, random_key: jnp.ones((n_states,)),
-                pytest.raises(ValueError, match="must sum to 1"),
-            ),
-            (
-                "transition_proba_init",
-                lambda n_states, X, y, random_key: jnp.ones((n_states, n_states)),
-                pytest.raises(ValueError, match="rows that sum to 1"),
-            ),
-        ],
-    )
-    def test_validate_custom_func_output(self, key, value, expectation):
-        with expectation:
-            generate_hmm_initial_params(
-                n_states=3,
-                X=None,
-                y=None,
-                init_funcs={key: value, key + "_custom": True},
-            )
 
 
 class TestResolveDirichletPriors:

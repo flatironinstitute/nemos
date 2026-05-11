@@ -800,7 +800,7 @@ class TestForwardBackward:
         )
         xis = jnp.exp(log_xis)
         np.testing.assert_array_almost_equal(
-            np.array([[log_alphas.shape[0] - sum(new_sess)]]).astype(xis), xis
+            np.array([[log_alphas.shape[0] - sum(new_sess)]]).astype(xis.dtype), xis
         )
 
 
@@ -1002,7 +1002,7 @@ class TestMStep:
             inverse_link_function=obs.default_inverse_link_function,
         )
         log_conditionals = log_likelihood(
-            X, y, GLMHMMModelParams(coef, jnp.ones(coef.shape[-1]))
+            GLMHMMModelParams(coef, jnp.ones(coef.shape[-1])), X, y
         )
         new_sess = np.zeros(10)
         new_sess[0] = 1
@@ -1130,8 +1130,8 @@ class TestMStep:
             log_xis,
             is_new_session=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
-            dirichlet_prior_alphas_transition=alphas_transition,
-            dirichlet_prior_alphas_init_prob=alphas_init,
+            dirichlet_transition_proba=alphas_transition,
+            dirichlet_initial_proba=alphas_init,
         )
 
         # Convert back to probability space for gradient checks
@@ -1229,8 +1229,8 @@ class TestMStep:
             log_xis,
             is_new_session=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
-            dirichlet_prior_alphas_transition=alphas_transition,
-            dirichlet_prior_alphas_init_prob=alphas_init,
+            dirichlet_transition_proba=alphas_transition,
+            dirichlet_initial_proba=alphas_init,
         )
         # Convert back to probability space
         new_initial_prob = np.exp(new_params.hmm_params.log_initial_prob)
@@ -1293,8 +1293,8 @@ class TestMStep:
             log_xis,
             is_new_session=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
-            dirichlet_prior_alphas_transition=alphas_transition,
-            dirichlet_prior_alphas_init_prob=alphas_init,
+            dirichlet_transition_proba=alphas_transition,
+            dirichlet_initial_proba=alphas_init,
         )
         # Convert back to probability space
         new_initial_prob = np.exp(new_params.hmm_params.log_initial_prob)
@@ -1353,8 +1353,8 @@ class TestMStep:
             log_xis,
             is_new_session=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
-            dirichlet_prior_alphas_transition=alphas_transition,
-            dirichlet_prior_alphas_init_prob=alphas_init,
+            dirichlet_transition_proba=alphas_transition,
+            dirichlet_initial_proba=alphas_init,
         )
         (
             new_params_no_prior,
@@ -1367,8 +1367,8 @@ class TestMStep:
             log_xis,
             is_new_session=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
-            dirichlet_prior_alphas_transition=alphas_transition,
-            dirichlet_prior_alphas_init_prob=None,
+            dirichlet_transition_proba=alphas_transition,
+            dirichlet_initial_proba=None,
         )
         np.testing.assert_array_almost_equal(
             new_params_no_prior.hmm_params.log_initial_prob,
@@ -1436,8 +1436,8 @@ class TestMStep:
             log_xis,
             is_new_session=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
-            dirichlet_prior_alphas_transition=alphas_transition,
-            dirichlet_prior_alphas_init_prob=alphas_init,
+            dirichlet_transition_proba=alphas_transition,
+            dirichlet_initial_proba=alphas_init,
         )
         (
             new_params_no_prior,
@@ -1450,8 +1450,8 @@ class TestMStep:
             log_xis,
             is_new_session=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
-            dirichlet_prior_alphas_transition=None,
-            dirichlet_prior_alphas_init_prob=alphas_init,
+            dirichlet_transition_proba=None,
+            dirichlet_initial_proba=alphas_init,
         )
         np.testing.assert_array_almost_equal(
             new_params_no_prior.hmm_params.log_initial_prob,
@@ -1542,8 +1542,8 @@ class TestMStep:
             np.log(xis),
             is_new_session=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
-            dirichlet_prior_alphas_init_prob=dirichlet_prior_initial_prob,
-            dirichlet_prior_alphas_transition=dirichlet_prior_transition_prob,
+            dirichlet_initial_proba=dirichlet_prior_initial_prob,
+            dirichlet_transition_proba=dirichlet_prior_transition_prob,
         )
 
         # Convert back to probability space for comparison with reference
@@ -1691,8 +1691,8 @@ class TestMStep:
                 None,
                 dummy_aux,
             ),
-            dirichlet_prior_alphas_init_prob=alphas_init,
-            dirichlet_prior_alphas_transition=alphas_trans,
+            dirichlet_initial_proba=alphas_init,
+            dirichlet_transition_proba=alphas_trans,
         )
 
         # Compare to reference
@@ -2209,8 +2209,8 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
         log_xis,
         is_new_session=new_sess.astype(bool),
         m_step_fn_model_params=update_fn,
-        dirichlet_prior_alphas_transition=alphas_transition,
-        dirichlet_prior_alphas_init_prob=alphas_init,
+        dirichlet_transition_proba=alphas_transition,
+        dirichlet_initial_proba=alphas_init,
     )
 
 
@@ -2237,7 +2237,7 @@ class TestViterbi:
         )
 
         # to be in the correct for for max_sum
-        def log_like_func_max_sum(X, y, params):
+        def log_like_func_max_sum(params, X, y):
             predicted_rate = inverse_link_function(X @ params.coef + params.intercept)
             return log_like_func(y, predicted_rate)
 
@@ -2285,7 +2285,7 @@ class TestViterbi:
         )
 
         # to be in the correct for for max_sum
-        def log_like_func_max_sum(X, y, params):
+        def log_like_func_max_sum(params, X, y):
             predicted_rate = inverse_link_function(X @ params.coef + params.intercept)
             return log_like_func(y, predicted_rate)
 
@@ -2862,8 +2862,8 @@ class TestCompilation:
             log_xis,
             is_new_session,
             m_step_fn_model_params,
-            dirichlet_prior_alphas_init_prob=None,
-            dirichlet_prior_alphas_transition=None,
+            dirichlet_initial_proba=None,
+            dirichlet_transition_proba=None,
         ):
             # This increment only runs during tracing (compilation)
             compilation_counter["n_compilations"] += 1
@@ -2876,8 +2876,8 @@ class TestCompilation:
                 log_xis,
                 is_new_session=is_new_session,
                 m_step_fn_model_params=m_step_fn_model_params,
-                dirichlet_prior_alphas_transition=dirichlet_prior_alphas_transition,
-                dirichlet_prior_alphas_init_prob=dirichlet_prior_alphas_init_prob,
+                dirichlet_transition_proba=dirichlet_transition_proba,
+                dirichlet_initial_proba=dirichlet_initial_proba,
             )
 
             return new_params, new_state
@@ -2900,8 +2900,8 @@ class TestCompilation:
             log_xis,
             is_new_session=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
-            dirichlet_prior_alphas_transition=None,
-            dirichlet_prior_alphas_init_prob=None,
+            dirichlet_transition_proba=None,
+            dirichlet_initial_proba=None,
         )
         assert compilation_counter["n_compilations"] == 1, "First call should compile"
 
@@ -2914,8 +2914,8 @@ class TestCompilation:
             log_xis,
             is_new_session=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
-            dirichlet_prior_alphas_transition=None,
-            dirichlet_prior_alphas_init_prob=None,
+            dirichlet_transition_proba=None,
+            dirichlet_initial_proba=None,
         )
         assert compilation_counter["n_compilations"] == 1, "None prior not cached!"
 
@@ -2928,8 +2928,8 @@ class TestCompilation:
             log_xis,
             is_new_session=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
-            dirichlet_prior_alphas_transition=np.ones(transition_prob.shape),
-            dirichlet_prior_alphas_init_prob=np.ones(initial_prob.shape),
+            dirichlet_transition_proba=np.ones(transition_prob.shape),
+            dirichlet_initial_proba=np.ones(initial_prob.shape),
         )
         assert (
             compilation_counter["n_compilations"] == 2
@@ -2944,8 +2944,8 @@ class TestCompilation:
             log_xis,
             is_new_session=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
-            dirichlet_prior_alphas_transition=2 * np.ones(transition_prob.shape),
-            dirichlet_prior_alphas_init_prob=2 * np.ones(initial_prob.shape),
+            dirichlet_transition_proba=2 * np.ones(transition_prob.shape),
+            dirichlet_initial_proba=2 * np.ones(initial_prob.shape),
         )
         assert compilation_counter["n_compilations"] == 2, "Array prior not cached!"
 

@@ -1,6 +1,7 @@
 """Initialization functions and related utility functions for HMMs."""
 
 import inspect
+from types import MappingProxyType
 from typing import Any, Callable, Literal, Optional, Protocol, Tuple
 
 import jax
@@ -11,7 +12,8 @@ from numpy.typing import NDArray
 from ..type_casting import is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE
 from ..validation import _suggest_keys
-from .utils import initialize_new_session
+from .params import HMMUserParams
+from .utils import initialize_is_new_session
 
 sklearn = lazy.load("sklearn")
 
@@ -24,7 +26,8 @@ class InitFunctionHMM(Protocol):
         n_states: int,
         X: DESIGN_INPUT_TYPE,
         y: NDArray | jnp.ndarray,
-        random_key: jax.random.PRNGKey,
+        is_new_session: NDArray | jnp.ndarray,
+        random_key: jax.Array,
         **kwargs: Any,
     ) -> jnp.ndarray:
         """Initialize HMM probabilities."""
@@ -61,10 +64,11 @@ INITIALIZATION_FN_DICT = dict[
 
 def sticky_transition_proba_init(
     n_states: int,
+    prob_stay: float = 0.95,
     X: Optional[DESIGN_INPUT_TYPE] = None,
     y: Optional[NDArray | jnp.ndarray] = None,
+    is_new_session: Optional[NDArray | jnp.ndarray] = None,
     random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
-    prob_stay: float = 0.95,
 ) -> jnp.ndarray:
     """
     Initialize transition probabilities with sticky dynamics.
@@ -78,14 +82,17 @@ def sticky_transition_proba_init(
     ----------
     n_states :
         Number of HMM states. Must be greater than 1.
+    prob_stay :
+        Probability of staying in the current state. Default is 0.95.
     X :
         Optional predictor data. Unused for this particular initialization, but added for API consistency.
     y :
         Optional output data. Unused for this particular initialization, but added for API consistency.
+    is_new_session :
+        Optional boolean array of shape (n_samples,) indicating the start of new sessions. Unused for this
+        particular initialization, but added for API consistency.
     random_key :
         Random key, unused for this particular initialization, but added for API consistency.
-    prob_stay :
-        Probability of staying in the current state. Default is 0.95.
 
     Returns
     -------
@@ -119,6 +126,7 @@ def uniform_transition_proba_init(
     n_states: int,
     X: Optional[DESIGN_INPUT_TYPE] = None,
     y: Optional[NDArray | jnp.ndarray] = None,
+    is_new_session: Optional[NDArray | jnp.ndarray] = None,
     random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
 ) -> jnp.ndarray:
     """
@@ -135,6 +143,9 @@ def uniform_transition_proba_init(
         Optional predictor data. Unused for this particular initialization, but added for API consistency.
     y :
         Optional output data. Unused for this particular initialization, but added for API consistency.
+    is_new_session :
+        Optional boolean array of shape (n_samples,) indicating the start of new sessions. Unused for this
+        particular initialization, but added for API consistency.
     random_key :
         Random key, unused for this particular initialization, but added for API consistency.
 
@@ -160,9 +171,10 @@ def uniform_transition_proba_init(
 
 def random_transition_proba_init(
     n_states: int,
+    random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
     X: Optional[DESIGN_INPUT_TYPE] = None,
     y: Optional[NDArray | jnp.ndarray] = None,
-    random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
+    is_new_session: Optional[NDArray | jnp.ndarray] = None,
 ) -> jnp.ndarray:
     """
     Initialize transition probabilities randomly.
@@ -174,12 +186,15 @@ def random_transition_proba_init(
     ----------
     n_states :
         Number of HMM states. Must be greater than 1.
+    random_key :
+        Random key for reproducibility of random initialization.
     X :
         Optional predictor data. Unused for this particular initialization, but added for API consistency.
     y :
         Optional output data. Unused for this particular initialization, but added for API consistency.
-    random_key :
-        Random key for reproducibility of random initialization.
+    is_new_session :
+        Optional boolean array of shape (n_samples,) indicating the start of new sessions. Unused for this
+        particular initialization, but added for API consistency.
 
     Returns
     -------
@@ -203,10 +218,61 @@ def random_transition_proba_init(
     return prob_transition / prob_transition.sum(axis=1, keepdims=True)
 
 
+def dirichlet_transition_proba_init(
+    n_states: int,
+    alphas: Optional[float | NDArray | jnp.ndarray] = None,
+    random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
+    X: Optional[DESIGN_INPUT_TYPE] = None,
+    y: Optional[NDArray | jnp.ndarray] = None,
+    is_new_session: Optional[NDArray | jnp.ndarray] = None,
+) -> jnp.ndarray:
+    """
+    Initialize transition probabilities by sampling from a Dirichlet distribution.
+
+    Generates a random transition probability matrix by sampling each row from a Dirichlet distribution with
+    specified concentration parameters (alphas).
+
+    Parameters
+    ----------
+    n_states :
+        Number of HMM states. Must be greater than 1.
+    alphas :
+        Concentration parameters for the Dirichlet distribution. Must be an array of shape (n_states, n_states)
+        specifying the alpha for each transition. If None, defaults to 1.0 for all transitions (uniform).
+    random_key :
+        Random key for reproducibility of random initialization.
+    X :
+        Optional predictor data. Unused for this particular initialization, but added for API consistency.
+    y :
+        Optional output data. Unused for this particular initialization, but added for API consistency.
+    is_new_session :
+        Optional boolean array of shape (n_samples,) indicating the start of new sessions. Unused for this
+        particular initialization, but added for API consistency.
+
+    Examples
+    --------
+    >>> import jax
+    >>> import jax.numpy as jnp
+    >>> from nemos.hmm.initialize_parameters import dirichlet_transition_proba_init
+    >>>
+    >>> # Generate transition probabilities for 3 states with Dirichlet initialization
+    >>> n_states = 3
+    >>> alphas = jnp.array([[5.0, 1.0, 1.0],[1.0, 5.0, 1.0],[1.0, 1.0, 5.0]])  # favor self-transitions
+    >>> transition_matrix = dirichlet_transition_proba_init(n_states, alphas=alphas, random_key=jax.random.PRNGKey(0))
+    >>> transition_matrix  # doctest: +ELLIPSIS
+    Array(...)
+    """
+    if alphas is None:
+        alphas = jnp.ones((n_states, n_states))
+    prob = jax.random.dirichlet(random_key, alphas)
+    return prob / prob.sum(axis=1, keepdims=True)
+
+
 def uniform_initial_proba_init(
     n_states: int,
     X: Optional[DESIGN_INPUT_TYPE] = None,
     y: Optional[NDArray | jnp.ndarray] = None,
+    is_new_session: Optional[NDArray | jnp.ndarray] = None,
     random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
 ) -> jnp.ndarray:
     """
@@ -223,6 +289,9 @@ def uniform_initial_proba_init(
         Optional predictor data. Unused for this particular initialization, but added for API consistency.
     y :
         Optional output data. Unused for this particular initialization, but added for API consistency.
+    is_new_session :
+        Optional boolean array of shape (n_samples,) indicating the start of new sessions. Unused for this
+        particular initialization, but added for API consistency.
     random_key :
         Random key, unused for this particular initialization, but added for API consistency.
 
@@ -247,9 +316,10 @@ def uniform_initial_proba_init(
 
 def random_initial_proba_init(
     n_states: int,
+    random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
     X: Optional[DESIGN_INPUT_TYPE] = None,
     y: Optional[NDArray | jnp.ndarray] = None,
-    random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
+    is_new_session: Optional[NDArray | jnp.ndarray] = None,
 ) -> jnp.ndarray:
     """
     Randomly initialize initial state probabilities.
@@ -261,12 +331,15 @@ def random_initial_proba_init(
     ----------
     n_states :
         Number of HMM states.
+    random_key :
+        Random key for reproducibility of random initialization.
     X :
         Optional predictor data. Unused for this particular initialization, but added for API consistency.
     y :
         Optional output data. Unused for this particular initialization, but added for API consistency.
-    random_key :
-        Random key for reproducibility of random initialization.
+    is_new_session :
+        Optional boolean array of shape (n_samples,) indicating the start of new sessions. Unused for this
+        particular initialization, but added for API consistency.
 
     Returns
     -------
@@ -288,6 +361,56 @@ def random_initial_proba_init(
     """
     prob = jax.random.uniform(random_key, (n_states,), dtype=float)
     return prob / jnp.sum(prob)
+
+
+def dirichlet_initial_proba_init(
+    n_states: int,
+    alphas: Optional[float | NDArray | jnp.ndarray] = None,
+    random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
+    X: Optional[DESIGN_INPUT_TYPE] = None,
+    y: Optional[NDArray | jnp.ndarray] = None,
+    is_new_session: Optional[NDArray | jnp.ndarray] = None,
+) -> jnp.ndarray:
+    """
+    Initialize initial state probabilities by sampling from a Dirichlet distribution.
+
+    Generates random initial state probabilities by sampling from a Dirichlet distribution with specified
+    concentration parameters (alphas).
+
+    Parameters
+    ----------
+    n_states :
+        Number of HMM states. Must be greater than 1.
+    alphas :
+        Concentration parameters for the Dirichlet distribution. Must be an array of shape (n_states,)
+        specifying the alpha for each state. If None, defaults to 1.0 for all states (uniform).
+    random_key :
+        Random key for reproducibility of random initialization.
+    X :
+        Optional predictor data. Unused for this particular initialization, but added for API consistency.
+    y :
+        Optional output data. Unused for this particular initialization, but added for API consistency.
+    is_new_session :
+        Optional boolean array of shape (n_samples,) indicating the start of new sessions. Unused for this
+        particular initialization, but added for API consistency.
+
+    Examples
+    --------
+    >>> import jax
+    >>> import jax.numpy as jnp
+    >>> from nemos.hmm.initialize_parameters import dirichlet_initial_proba_init
+    >>>
+    >>> # Generate initial state probabilities for 3 states with Dirichlet initialization
+    >>> n_states = 3
+    >>> alphas = jnp.array([5.0, 1.0, 1.0])  # favor first state
+    >>> init_prob = dirichlet_initial_proba_init(n_states, alphas=alphas, random_key=jax.random.PRNGKey(0))
+    >>> init_prob  # doctest: +ELLIPSIS
+    Array(...)
+    """
+    if alphas is None:
+        alphas = jnp.ones((n_states,))
+    prob = jax.random.dirichlet(random_key, alphas)
+    return prob / prob.sum()
 
 
 class KMeansInitializer:
@@ -332,7 +455,7 @@ class KMeansInitializer:
         self.n_states = n_states
         self.minimum_prob = minimum_prob
         self.random_key = random_key
-        self.is_new_session = initialize_new_session(y.shape[0], is_new_session)
+        self.is_new_session = initialize_is_new_session(X, y, is_new_session)
         self.model = sklearn.cluster.KMeans(
             n_clusters=n_states, random_state=random_key
         )
@@ -428,7 +551,7 @@ def kmeans_transition_proba_init(
     y: NDArray | jnp.ndarray,
     is_new_session: Optional[jnp.ndarray] = None,
     minimum_prob: float = 0.02,
-    random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
+    random_key: jax.Array = jax.random.PRNGKey(123),
     initializer: Optional[KMeansInitializer] = None,
 ):
     """
@@ -469,28 +592,38 @@ def kmeans_transition_proba_init(
     return initializer.transition_probability()
 
 
-AVAILABLE_INIT_FUNCTIONS = {
-    "initial_proba_init": {
-        "uniform": uniform_initial_proba_init,
-        "random": random_initial_proba_init,
-        "kmeans": kmeans_initial_proba_init,
-    },
-    "transition_proba_init": {
-        "sticky": sticky_transition_proba_init,
-        "uniform": uniform_transition_proba_init,
-        "random": random_transition_proba_init,
-        "kmeans": kmeans_transition_proba_init,
-    },
-}
+AVAILABLE_INIT_FUNCTIONS = MappingProxyType(
+    {
+        "initial_proba_init": MappingProxyType(
+            {
+                "uniform": uniform_initial_proba_init,
+                "random": random_initial_proba_init,
+                "dirichlet": dirichlet_initial_proba_init,
+                "kmeans": kmeans_initial_proba_init,
+            }
+        ),
+        "transition_proba_init": MappingProxyType(
+            {
+                "sticky": sticky_transition_proba_init,
+                "uniform": uniform_transition_proba_init,
+                "random": random_transition_proba_init,
+                "dirichlet": dirichlet_transition_proba_init,
+                "kmeans": kmeans_transition_proba_init,
+            }
+        ),
+    }
+)
 
-DEFAULT_INIT_FUNCTIONS: INITIALIZATION_FN_DICT = {
-    "initial_proba_init": uniform_initial_proba_init,
-    "initial_proba_init_kwargs": {},
-    "initial_proba_init_custom": False,
-    "transition_proba_init": sticky_transition_proba_init,
-    "transition_proba_init_kwargs": {},
-    "transition_proba_init_custom": False,
-}
+DEFAULT_INIT_FUNCTIONS: INITIALIZATION_FN_DICT = MappingProxyType(
+    {
+        "initial_proba_init": uniform_initial_proba_init,
+        "initial_proba_init_kwargs": {},
+        "initial_proba_init_custom": False,
+        "transition_proba_init": sticky_transition_proba_init,
+        "transition_proba_init_kwargs": {},
+        "transition_proba_init_custom": False,
+    }
+)
 
 
 def setup_hmm_initialization(
@@ -499,14 +632,18 @@ def setup_hmm_initialization(
     transition_proba_init: Optional[str | Callable] = None,
     transition_proba_init_kwargs: Optional[dict] = None,
     init_funcs: Optional[dict | INITIALIZATION_FN_DICT] = None,
+    default_init_dict: Optional[dict] = None,
+    n_states: Optional[int] = None,
 ) -> INITIALIZATION_FN_DICT:
     """
     Set up HMM initialization functions based on user input, merging with defaults.
 
     This function takes user-specified initialization functions (either as strings for built-in functions or callables
-    for custom functions) for both initial state probabilities and transition probabilities, validates them, and merges
+    for custom functions) for both initial state probabilities and transition probabilities, and merges
     them with default initialization functions for ones that are not provided. It ensures that the provided functions
     and kwargs are valid and conform to expected signatures.
+    The function assumes that the function keys are pre-validated, this is convenient because
+    different model require different keys.
 
     Parameters
     ----------
@@ -521,20 +658,28 @@ def setup_hmm_initialization(
     transition_proba_init_kwargs :
         Keyword arguments to pass to the transition probability initialization function.
     init_funcs :
-        Existing dictionary of initialization functions to update. If None, a new dictionary will be created.
-        If the dictionary is missing any keys, they will be backfilled with defaults.
+        Existing dictionary of initialization functions to update. If None, a fresh copy of
+        ``default_init_dict`` is used. Keys must already be validated before calling this function;
+        use :func:`_validate_init_funcs_keys` upstream (e.g., in the class setter).
+    default_init_dict :
+        Model-specific dictionary of default initialization functions. Defaults to
+        ``DEFAULT_INIT_FUNCTIONS`` when None.
+    n_states :
+        Number of HMM states. When provided, ``alphas`` in the init kwargs is validated
+        via :func:`_resolve_dirichlet_priors` (same check as the model property setter).
 
     Returns
     -------
     init_funcs :
-        Updated or initialized dictionary based on provided inputs.
+        Updated dictionary of initialization functions based on provided inputs.
     """
+    if default_init_dict is None:
+        default_init_dict = DEFAULT_INIT_FUNCTIONS.copy()
 
     if init_funcs is None:
-        init_funcs = DEFAULT_INIT_FUNCTIONS.copy()
+        init_funcs = default_init_dict
     else:
-        # check for unexpected/unknown keys in init_funcs and backfill with defaults
-        init_funcs = _validate_init_funcs_keys(init_funcs)
+        init_funcs = init_funcs.copy()
 
     # update functions and kwargs for init prob and transition prob
     # if a function is passed but not kwargs, kwargs will be reset
@@ -551,6 +696,10 @@ def setup_hmm_initialization(
         init_funcs["initial_proba_init_kwargs"] = _validate_init_funcs_kwargs(
             init_funcs["initial_proba_init"], initial_proba_init_kwargs
         )
+    if n_states is not None and "alphas" in init_funcs["initial_proba_init_kwargs"]:
+        init_funcs["initial_proba_init_kwargs"]["alphas"] = _resolve_dirichlet_priors(
+            init_funcs["initial_proba_init_kwargs"]["alphas"], (n_states,)
+        )
     if transition_proba_init is not None:
         (
             init_funcs["transition_proba_init"],
@@ -563,17 +712,29 @@ def setup_hmm_initialization(
         init_funcs["transition_proba_init_kwargs"] = _validate_init_funcs_kwargs(
             init_funcs["transition_proba_init"], transition_proba_init_kwargs
         )
+    if n_states is not None and "alphas" in init_funcs["transition_proba_init_kwargs"]:
+        init_funcs["transition_proba_init_kwargs"]["alphas"] = (
+            _resolve_dirichlet_priors(
+                init_funcs["transition_proba_init_kwargs"]["alphas"],
+                (n_states, n_states),
+            )
+        )
 
     return init_funcs
 
 
 def _validate_init_funcs_keys(
-    init_funcs: dict | INITIALIZATION_FN_DICT,
-) -> INITIALIZATION_FN_DICT:
+    init_funcs: dict | INITIALIZATION_FN_DICT | None,
+    default_init_dict: Optional[dict[str, Callable]] = None,
+) -> INITIALIZATION_FN_DICT | None:
     """Validate that the keys in the init_funcs dictionary are as expected. Set missing values to defaults."""
-    unexpected_keys = init_funcs.keys() - DEFAULT_INIT_FUNCTIONS.keys()
+    if default_init_dict is None:
+        default_init_dict = DEFAULT_INIT_FUNCTIONS.copy()
+    if init_funcs is None:
+        return
+    unexpected_keys = init_funcs.keys() - default_init_dict.keys()
     if unexpected_keys:
-        suggested_keys = _suggest_keys(unexpected_keys, DEFAULT_INIT_FUNCTIONS.keys())
+        suggested_keys = _suggest_keys(unexpected_keys, default_init_dict.keys())
         error_msg = (
             (
                 f" Unexpected key: '{key}'. Did you mean '{suggestion}'?"
@@ -582,18 +743,21 @@ def _validate_init_funcs_keys(
             )
             for key, suggestion in suggested_keys
         )
-        raise ValueError(
+        raise KeyError(
             "Unexpected or unknown keys found in 'init_funcs' dictionary. \n"
             + "\n".join(error_msg)
         )
     # resolve with defaults and make copy
-    init_funcs = DEFAULT_INIT_FUNCTIONS | init_funcs
+    init_funcs = default_init_dict | init_funcs
     return init_funcs
 
 
 def _resolve_init_funcs(
-    key: str, value: str | Callable, kwargs: Optional[dict] = None
-) -> Tuple[InitFunctionHMM, dict]:
+    key: str,
+    value: str | Callable,
+    kwargs: Optional[dict] = None,
+    available_init_funcs: dict[str, Callable] = None,
+) -> Tuple[InitFunctionHMM, dict, bool]:
     """
     Validate a provided initialization function.
 
@@ -609,6 +773,8 @@ def _resolve_init_funcs(
         callable.
     kwargs :
         Optional keyword arguments to pass to the initialization function.
+    available_init_funcs:
+        Dictionary of available initialization functions and their kwargs (if any) to be used for initialization.
 
     Returns
     -------
@@ -623,16 +789,16 @@ def _resolve_init_funcs(
     TypeError
         If the provided value is neither a string nor a callable function.
     """
+    if available_init_funcs is None:
+        available_init_funcs = AVAILABLE_INIT_FUNCTIONS
     if isinstance(value, str):
-        if value not in AVAILABLE_INIT_FUNCTIONS[key]:
+        if value not in available_init_funcs[key]:
             raise ValueError(
                 f"Invalid initialization function name '{value}' for '{key}'. "
-                f"Available options are: {list(AVAILABLE_INIT_FUNCTIONS[key].keys())}."
+                f"Available options are: {list(available_init_funcs[key].keys())}."
             )
-        kwargs = _validate_init_funcs_kwargs(
-            AVAILABLE_INIT_FUNCTIONS[key][value], kwargs
-        )
-        return AVAILABLE_INIT_FUNCTIONS[key][value], kwargs, False
+        kwargs = _validate_init_funcs_kwargs(available_init_funcs[key][value], kwargs)
+        return available_init_funcs[key][value], kwargs, False
     elif callable(value):
         return _validate_custom_init_func(value, kwargs)
     else:
@@ -642,12 +808,14 @@ def _resolve_init_funcs(
         )
 
 
-def _validate_init_funcs_kwargs(func: InitFunctionHMM, kwargs: dict | None) -> dict:
+def _validate_init_funcs_kwargs(
+    func: InitFunctionHMM, kwargs: dict | None, protocol=InitFunctionHMM
+) -> dict:
     """Validate that the provided kwargs match the expected signature of the initialization functions."""
     if kwargs is None:
         return {}
 
-    reserved_params = _get_protocol_parameters(InitFunctionHMM)
+    reserved_params = _get_protocol_parameters(protocol)
     for key in reserved_params:
         if key in kwargs:
             raise ValueError(
@@ -668,7 +836,7 @@ def _validate_init_funcs_kwargs(func: InitFunctionHMM, kwargs: dict | None) -> d
 
 def _validate_custom_init_func(
     func: Callable, kwargs: Optional[dict] = None
-) -> Tuple[InitFunctionHMM, dict]:
+) -> Tuple[InitFunctionHMM, dict, bool]:
     """
     Validate a custom initialization function against the expected signature.
 
@@ -713,37 +881,14 @@ def _validate_custom_init_func(
     return func, kwargs, True
 
 
-def _validate_custom_init_output(proba: jnp.ndarray, n_states: int, key: str):
-    """Validate the output of a custom initialization function to ensure it has the correct shape and properties."""
-    if key == "initial_proba_init":
-        if proba.shape != (n_states,):
-            raise ValueError(
-                f"Custom initial state probability initialization function must return an array of shape "
-                f"({n_states},), but got {proba.shape}."
-            )
-        if not jnp.isclose(proba.sum(), 1.0):
-            raise ValueError(
-                f"Custom initial state probabilities must sum to 1, but got sum={proba.sum()}."
-            )
-    elif key == "transition_proba_init":
-        if proba.shape != (n_states, n_states):
-            raise ValueError(
-                f"Custom transition probability initialization function must return an array of shape "
-                f"({n_states}, {n_states}), but got {proba.shape}."
-            )
-        if not jnp.allclose(proba.sum(axis=1), 1.0):
-            raise ValueError(
-                f"Custom transition probabilities must have rows that sum to 1, but got row sums={proba.sum(axis=1)}."
-            )
-
-
 def generate_hmm_initial_params(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
-    random_key: int | jax.Array = 123,
+    is_new_session: NDArray | jnp.ndarray,
+    random_key_pair: jax.Array = jax.random.split(jax.random.PRNGKey(1234), 2),
     init_funcs: Optional[dict] = None,
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
+) -> HMMUserParams:
     """
     Generate initial HMM parameters using the provided initialization functions.
 
@@ -758,9 +903,12 @@ def generate_hmm_initial_params(
         Predictor data (e.g., model design for GLM) of shape (n_samples, n_features).
     y :
         Output data (e.g., neural activity) of shape (n_samples,).
-    random_key :
-        Optional key for random number generation, if needed by the initialization functions. The key is split to
-        ensure different random states for initial probabilities and transition probabilities.
+    is_new_session :
+        Boolean array of shape (n_samples,) indicating the start of new sessions.
+    random_key_pair :
+        Optional pair of keys for random number generation, if needed by the initialization functions.
+        This function assumes already formatted keys as contract, preventing silent bugs such as keys
+        not being formatted appropriately by upstream models.
     init_funcs :
         Dictionary containing the initialization functions and their kwargs for both initial state probabilities
         and transition probabilities. This dictionary can be set up using the `setup_hmm_initialization` function.
@@ -768,10 +916,10 @@ def generate_hmm_initial_params(
 
     Returns
     -------
-    initial_probs :
-        Initial state probability vector of shape (n_states,) that sums to 1.
-    transition_matrix :
-        Transition probability matrix of shape (n_states, n_states) where each row sums to 1.
+    :
+        ``HMMUserParams`` tuple of ``(initial_probs, transition_matrix)`` where
+        ``initial_probs`` has shape ``(n_states,)`` summing to 1, and
+        ``transition_matrix`` has shape ``(n_states, n_states)`` with rows summing to 1.
 
     See Also
     --------
@@ -779,11 +927,7 @@ def generate_hmm_initial_params(
         Function to set up the initialization functions and their kwargs based on user input.
     """
     # check for unexpected/unknown keys in init_funcs if user provided dictionary not made by setup_hmm_initialization
-    init_funcs = {} if init_funcs is None else init_funcs
-    init_funcs = _validate_init_funcs_keys(init_funcs)
-
-    if isinstance(random_key, int):
-        random_key = jax.random.PRNGKey(random_key)
+    init_funcs = DEFAULT_INIT_FUNCTIONS.copy() if init_funcs is None else init_funcs
 
     # grab initial probability initialization function
     # fallback to defaults if set to None
@@ -800,22 +944,22 @@ def generate_hmm_initial_params(
     )
     transition_proba_init_kwargs = init_funcs["transition_proba_init_kwargs"] or {}
 
-    # split seed into two random keys
-    # compute probabilities and validate if custom functions are used
-    keys = jax.random.split(random_key, 2)
     initial_probs = initial_proba_init(
-        n_states=n_states, X=X, y=y, random_key=keys[0], **initial_proba_init_kwargs
+        n_states=n_states,
+        X=X,
+        y=y,
+        is_new_session=is_new_session,
+        random_key=random_key_pair[0],
+        **initial_proba_init_kwargs,
     )
-    if init_funcs["initial_proba_init_custom"]:
-        _validate_custom_init_output(initial_probs, n_states, "initial_proba_init")
-
     transition_matrix = transition_proba_init(
-        n_states=n_states, X=X, y=y, random_key=keys[1], **transition_proba_init_kwargs
+        n_states=n_states,
+        X=X,
+        y=y,
+        is_new_session=is_new_session,
+        random_key=random_key_pair[1],
+        **transition_proba_init_kwargs,
     )
-    if init_funcs["transition_proba_init_custom"]:
-        _validate_custom_init_output(
-            transition_matrix, n_states, "transition_proba_init"
-        )
 
     return initial_probs, transition_matrix
 

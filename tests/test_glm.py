@@ -2465,6 +2465,98 @@ def test_grouplasso_fit_twice_different_pytree_structure():
     model.fit(X_dict, y)
 
 
+def _make_valid_group_mask(n_groups, n_features):
+    """Binary group mask: each group owns a contiguous slice of features."""
+    mask = np.zeros((n_groups, n_features))
+    split = n_features // n_groups
+    for i in range(n_groups):
+        start = i * split
+        end = (i + 1) * split if i < n_groups - 1 else n_features
+        mask[i, start:end] = 1.0
+    return mask
+
+
+@pytest.mark.parametrize(
+    "make_mask, make_X, check_coef",
+    [
+        pytest.param(
+            lambda arr, _: arr,
+            lambda X: X,
+            # flat array: coef slot should be a single 2-D array (n_groups, n_features)
+            lambda coef, n_groups, n_features: (
+                hasattr(coef, "shape") and coef.shape == (n_groups, n_features)
+            ),
+            id="flat_array_mask-2d_X",
+        ),
+        pytest.param(
+            lambda arr, _: [arr],
+            lambda X: [X],
+            # list mask with list X: coef slot should be a list of one 2-D array
+            lambda coef, n_groups, n_features: (
+                isinstance(coef, list)
+                and len(coef) == 1
+                and coef[0].shape == (n_groups, n_features)
+            ),
+            id="list_mask-list_X",
+        ),
+        pytest.param(
+            lambda arr, _: nmo.glm.params.GLMParams(
+                coef=jnp.asarray(arr), intercept=None
+            ),
+            lambda X: X,
+            # already-structured GLMParams: coef slot is unchanged, same 2-D array
+            lambda coef, n_groups, n_features: (
+                hasattr(coef, "shape") and coef.shape == (n_groups, n_features)
+            ),
+            id="already_structured_glmparams_mask",
+        ),
+    ],
+)
+def test_grouplasso_mask_wrapping_and_refit(
+    make_mask, make_X, check_coef, mock_optimizer_run
+):
+    """User-provided mask wraps into GLMParams on first fit; re-fit leaves it unchanged.
+
+    Regression test for three mask formats:
+    - flat array: mask has same shape as coef_ (mirrors X).
+    - list of one array: mask mirrors list-structured X.
+    - already-structured GLMParams: isinstance guard prevents double-wrapping.
+    """
+    rng = np.random.default_rng(0)
+    n_samples, n_features, n_groups = 50, 4, 2
+    X_arr = rng.standard_normal((n_samples, n_features))
+    y = rng.poisson(1, size=n_samples)
+
+    mask_arr = _make_valid_group_mask(n_groups, n_features)
+    mask = make_mask(mask_arr, n_features)
+    X = make_X(X_arr)
+
+    model = nmo.glm.GLM(
+        regularizer=nmo.regularizer.GroupLasso(mask=mask),
+        regularizer_strength=1.0,
+    )
+
+    model.fit(X, y)
+
+    # After first fit, mask must be wrapped into the internal GLMParams structure.
+    assert isinstance(
+        model.regularizer.mask, nmo.glm.params.GLMParams
+    ), "mask must be a GLMParams pytree after fit"
+    assert model.regularizer.mask.intercept is None
+    assert check_coef(model.regularizer.mask.coef, n_groups, n_features)
+    mask_coef_after_first = model.regularizer.mask.coef
+
+    # Re-fit: isinstance guard must prevent double-wrapping; coef content unchanged.
+    model.fit(X, y)
+    assert isinstance(model.regularizer.mask, nmo.glm.params.GLMParams)
+    assert model.regularizer.mask.intercept is None
+    jax.tree_util.tree_map(
+        lambda a, b: np.testing.assert_array_equal(a, b),
+        mask_coef_after_first,
+        model.regularizer.mask.coef,
+    )
+
+
 @pytest.mark.parametrize(
     "model_instantiation",
     [
