@@ -1685,16 +1685,25 @@ class PopulationGLM(GLM):
 
         def hess(params, *args):
             X = args[0]
+
             n_neurons = params.intercept.shape[0]
 
-            eta = X @ params.coef + params.intercept
+            coef = params.coef
+
+            # Match prediction function exactly
+            if self._feature_mask is not None:
+                coef = coef * self._feature_mask
+
+            eta = X @ coef + params.intercept
 
             blocks = []
 
             for neuron_idx in range(n_neurons):
                 if self._feature_mask is not None:
-                    active = self._feature_mask[:, neuron_idx] == 1
-                    X_neuron = X[:, active]
+                    mask = self._feature_mask[:, neuron_idx]
+
+                    # preserve dimensionality
+                    X_neuron = X * mask[None, :]
                 else:
                     X_neuron = X
 

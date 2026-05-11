@@ -18,6 +18,27 @@ from ._aux_helpers import wrap_aux
 from ._hess import BlockDiagonal, Full, HessianTag, PositiveDefinite
 
 
+def pack_grad(g):
+    # g.coef: (D, K)
+    # g.intercept: (K,)
+    blocks = [
+        jnp.concatenate([g.coef[:, i], g.intercept[i : i + 1]])
+        for i in range(g.coef.shape[1])
+    ]
+    return jnp.stack(blocks, axis=0)
+
+
+def unpack_grad(g_flat):
+    # g_flat: (K, D+1)
+    coef = g_flat[:, :-1]  # (K, D)
+    intercept = g_flat[:, -1]  # (K,)
+
+    return jnp.concatenate(
+        [coef.T.reshape(-1), intercept],
+        axis=0,
+    )
+
+
 @runtime_checkable
 class NewtonSolverProtocol(SolverProtocol[SolverState], Protocol, Generic[SolverState]):
     def setup_hessian(
@@ -28,21 +49,7 @@ class NewtonSolverProtocol(SolverProtocol[SolverState], Protocol, Generic[Solver
 
 
 class NewtonState(eqx.Module):
-    """State of the Newton optimization process.
-
-    Attributes
-    ----------
-    iter_num :
-        Number of Newton iterations performed.
-    converged :
-        Whether the convergence criterion was satisfied.
-    grad_norm :
-        L2 norm of the gradient at the final iterate.
-    params :
-        Current parameter values (flattened array, for incremental updates).
-    ls_state :
-        Optax line search state (for incremental updates).
-    """
+    """State of the Newton optimization process."""
 
     iter_num: int
     converged: bool
@@ -67,12 +74,16 @@ class _Newton:
         self.tol = tol
         self.force_autodiff_hessian = force_autodiff_hessian
         self.jit = jit
+
         self._val_and_grad = jax.value_and_grad(func)
+
         self._hess_tag: HessianTag | None = None
         self._hess_fn: Callable | None = None
+
         self._line_search = optax.scale_by_backtracking_linesearch(
             max_backtracking_steps=30
         )
+
         self._linear_solver: lx.AbstractLinearSolver = lx.LU()
 
     def init_state(self, init_params, *args):
@@ -83,12 +94,13 @@ class _Newton:
             if self._line_search is not None
             else None
         )
+
         return NewtonState(
-            iter_num=0,
-            converged=False,
-            grad_norm=jnp.inf,
+            iter_num=jnp.array(0),
+            converged=jnp.array(False),
+            grad_norm=jnp.array(jnp.inf),
             stats=OptimizationInfo(
-                function_val=jnp.nan,
+                function_val=jnp.array(jnp.nan),
                 num_steps=jnp.array(0),
                 converged=jnp.array(False),
                 reached_max_steps=jnp.array(False),
@@ -96,18 +108,35 @@ class _Newton:
             ls_state=ls_state,
         )
 
-    def newton_solve(self, H, g, tag: HessianTag):
+    def newton_solve(self, H, g_flat, g_tree, tag: HessianTag):
+        """Solve Hx = g."""
+
         if tag.structure is BlockDiagonal:
-            return jax.vmap(
-                lambda h, gi: self.newton_solve(h, gi, HessianTag(Full, tag.property))
-            )(H, jnp.reshape(g, (len(H), -1))).flatten()
+            g = pack_grad(g_tree)
+
+            return unpack_grad(
+                jax.vmap(
+                    lambda h, gi: self.newton_solve(
+                        h,
+                        gi,
+                        None,
+                        HessianTag(Full, tag.property),
+                    )
+                )(H, g)
+            )
+
         if tag.property is PositiveDefinite:
             return lx.linear_solve(
                 lx.MatrixLinearOperator(H, lx.positive_semidefinite_tag),
-                g,
+                g_flat,
                 lx.Cholesky(),
             ).value
-        return lx.linear_solve(lx.MatrixLinearOperator(H), g, lx.LU()).value
+
+        return lx.linear_solve(
+            lx.MatrixLinearOperator(H),
+            g_flat,
+            lx.LU(),
+        ).value
 
     def update(self, params, state: NewtonState, *args):
         params_flat, unravel = ravel_pytree(params)
@@ -119,37 +148,53 @@ class _Newton:
         g_flat, _ = ravel_pytree(g_tree)
 
         gnorm = jnp.linalg.norm(g_flat)
-        converged = gnorm < self.tol
-
-        new_stats = OptimizationInfo(
-            function_val=f,
-            num_steps=state.iter_num + 1,
-            converged=converged,
-            reached_max_steps=(state.iter_num + 1) >= self.maxiter,
-        )
+        converged = gnorm <= self.tol
 
         def do_step(_):
             H = (
                 self._hess_fn(params, *args)
-                if not self.force_autodiff_hessian and self._hess_fn is not None
+                if (not self.force_autodiff_hessian and self._hess_fn is not None)
                 else jax.hessian(value_fn_flat)(params_flat)
             )
-            step = self.newton_solve(H, -g_flat, self._hess_tag)
 
-            if self._line_search is not None:
-                step, new_ls_state = self._line_search.update(
-                    step,
-                    state.ls_state,
-                    params_flat,
-                    value=f,
-                    grad=g_flat,
-                    value_fn=value_fn_flat,
-                )
-            else:
-                new_ls_state = state.ls_state
+            step = self.newton_solve(
+                H,
+                -g_flat,
+                jax.tree_util.tree_map(lambda x: -x, g_tree),
+                self._hess_tag,
+            )
 
-            new_params_flat = params_flat + step
-            return new_params_flat, new_ls_state
+            # Optional safeguard against ascent directions
+            descent = jnp.dot(g_flat, step) < 0.0
+
+            def accept_step(_):
+                if self._line_search is not None:
+                    updates, new_ls_state = self._line_search.update(
+                        step,
+                        state.ls_state,
+                        params_flat,
+                        value=f,
+                        grad=g_flat,
+                        value_fn=value_fn_flat,
+                    )
+                else:
+                    updates = step
+                    new_ls_state = state.ls_state
+
+                new_params_flat = params_flat + updates
+
+                return new_params_flat, new_ls_state
+
+            def reject_step(_):
+                # fallback to no update
+                return params_flat, state.ls_state
+
+            return jax.lax.cond(
+                descent,
+                accept_step,
+                reject_step,
+                operand=None,
+            )
 
         def no_step(_):
             return params_flat, state.ls_state
@@ -161,8 +206,21 @@ class _Newton:
             operand=None,
         )
 
+        new_iter = jnp.where(
+            converged,
+            state.iter_num,
+            state.iter_num + 1,
+        )
+
+        new_stats = OptimizationInfo(
+            function_val=f,
+            num_steps=new_iter,
+            converged=converged,
+            reached_max_steps=new_iter >= self.maxiter,
+        )
+
         new_state = NewtonState(
-            iter_num=state.iter_num + 1,
+            iter_num=new_iter,
             converged=converged,
             grad_norm=gnorm,
             stats=new_stats,
@@ -178,23 +236,35 @@ class _Newton:
         if self.jit:
 
             def cond(carry):
-                state, _ = carry
+                params, state = carry
+
                 return (~state.converged) & (state.iter_num < self.maxiter)
 
             def body(carry):
-                state, params = carry
-                params, state, _ = self.update(params, state, *args)
-                return state, params
+                params, state = carry
 
-            state, params = eqx.internal.while_loop(
+                params, state, _ = self.update(
+                    params,
+                    state,
+                    *args,
+                )
+
+                return params, state
+
+            params, state = eqx.internal.while_loop(
                 cond,
                 body,
-                (state, params),
+                (params, state),
                 kind="lax",
             )
+
         else:
             for _ in range(self.maxiter):
-                params, state, _ = self.update(params, state, *args)
+                params, state, _ = self.update(
+                    params,
+                    state,
+                    *args,
+                )
                 if state.converged:
                     break
 
@@ -216,12 +286,16 @@ class Newton(NewtonSolverProtocol[NewtonState]):
             params=init_params,
             strength=regularizer_strength,
         )
+
         self.regularizer_strength = regularizer_strength
 
         self.fun = loss_fn
         self.fun_with_aux = wrap_aux(self.fun)
 
-        self._solver = _Newton(self.fun, **solver_kwargs)
+        self._solver = _Newton(
+            self.fun,
+            **solver_kwargs,
+        )
 
     def setup_hessian(
         self,
@@ -242,12 +316,21 @@ class Newton(NewtonSolverProtocol[NewtonState]):
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
-        return {"maxiter", "tol", "force_autodiff_hessian", "jit"}
+        return {
+            "maxiter",
+            "tol",
+            "force_autodiff_hessian",
+            "jit",
+        }
 
-    def _get_optim_info(self, state: NewtonState, **kwargs) -> OptimizationInfo:
+    def _get_optim_info(
+        self,
+        state: NewtonState,
+        **kwargs,
+    ) -> OptimizationInfo:
         return OptimizationInfo(
-            function_val=None,
-            num_steps=jnp.array(state.iter_num),
-            converged=jnp.array(state.converged),
-            reached_max_steps=jnp.array(state.iter_num >= self.maxiter),
+            function_val=state.stats.function_val,
+            num_steps=state.stats.num_steps,
+            converged=state.stats.converged,
+            reached_max_steps=state.stats.reached_max_steps,
         )
