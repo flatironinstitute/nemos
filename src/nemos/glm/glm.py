@@ -79,7 +79,7 @@ def _glm_hessian_block(
 
     H = X_aug.T @ (w[:, None] * X_aug)
 
-    if lam > 0:
+    if lam is not None and lam > 0:
         H = H.at[:-1, :-1].add(lam * jnp.eye(n_features))
 
     return H
