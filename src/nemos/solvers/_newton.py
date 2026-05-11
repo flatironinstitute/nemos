@@ -47,6 +47,7 @@ class NewtonState(eqx.Module):
     iter_num: int
     converged: bool
     grad_norm: float
+    stats: OptimizationInfo
     ls_state: Optional[Any] = None
 
 
@@ -82,11 +83,16 @@ class _Newton:
             if self._line_search is not None
             else None
         )
-
         return NewtonState(
             iter_num=0,
             converged=False,
             grad_norm=jnp.inf,
+            stats=OptimizationInfo(
+                function_val=jnp.nan,
+                num_steps=jnp.array(0),
+                converged=jnp.array(False),
+                reached_max_steps=jnp.array(False),
+            ),
             ls_state=ls_state,
         )
 
@@ -114,6 +120,13 @@ class _Newton:
 
         gnorm = jnp.linalg.norm(g_flat)
         converged = gnorm < self.tol
+
+        new_stats = OptimizationInfo(
+            function_val=f,
+            num_steps=state.iter_num + 1,
+            converged=converged,
+            reached_max_steps=(state.iter_num + 1) >= self.maxiter,
+        )
 
         def do_step(_):
             H = (
@@ -152,6 +165,7 @@ class _Newton:
             iter_num=state.iter_num + 1,
             converged=converged,
             grad_norm=gnorm,
+            stats=new_stats,
             ls_state=new_ls_state,
         )
 
