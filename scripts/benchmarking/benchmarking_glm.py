@@ -66,6 +66,7 @@ def generate_glm_configs(
     solver_names: List[str],
     devices: List[str],
     packages: Optional[Literal["nemos", "sklearn"]] = None,
+    include_real_data: bool = True,
 ) -> List[dict]:
     """
     Generate GLM configurations to benchmark.
@@ -125,7 +126,7 @@ def generate_glm_configs(
                     continue
                 if base_name in _prox_solvers and reg in _smooth_regs:
                     continue
-                solver_kw = {"maxiter": 1000, "tol": 1e-6}
+                solver_kw = {"maxiter": 3000, "tol": 1e-6}
                 if base_name in _svrg_solvers:
                     solver_kw["batch_size"] = max(1, samp // 10)
                 fit_config = {
@@ -158,6 +159,9 @@ def generate_glm_configs(
             fit_config["file_name"] = f"cpu_{dict_to_filename(fit_config)}.json"
             configs.append(fit_config)
 
+    if not include_real_data:
+        return configs
+
     # add HD dataset
     path = nmo.fetch.fetch_data("Mouse32-140822.nwb")
     kwargs = {
@@ -179,7 +183,7 @@ def generate_glm_configs(
                     continue
                 if base_name in _prox_solvers and reg in _smooth_regs:
                     continue
-                solver_kw = {"maxiter": 1000, "tol": 1e-6}
+                solver_kw = {"maxiter": 3000, "tol": 1e-6}
                 if base_name in _svrg_solvers:
                     solver_kw["batch_size"] = max(1, X.shape[0] // 10)
                 configs.append(
@@ -239,10 +243,10 @@ def generate_data(
     samp, feat = config["input_shapes"]["X"]
     y_shape = config["input_shapes"]["y"]
     n_neurons = y_shape[1] if len(y_shape) > 1 else 1
-    X = jax.random.normal(keys[0], shape=(samp, feat))
-    w = 0.1 * jax.random.normal(keys[1], shape=(feat, n_neurons))
+    X = jax.random.normal(keys[0], shape=(samp, feat), dtype=jnp.float64)
+    w = 0.1 * jax.random.normal(keys[1], shape=(feat, n_neurons), dtype=jnp.float64)
     weights = w[:, 0] if n_neurons == 1 else w
-    intercept = -0.1 * jnp.ones(n_neurons)
+    intercept = -0.1 * jnp.ones(n_neurons, dtype=jnp.float64)
     if not isinstance(model, list):
         mdl = model.__sklearn_clone__()
     else:
@@ -277,7 +281,7 @@ def get_hd_data(
     X = nmo.basis.RaisedCosineLogConv(
         n_basis_funcs, window_size=window_size
     ).compute_features(y)
-    X, y = jnp.asarray(X.d), jnp.asarray(y.d)
+    X, y = jnp.asarray(X.d, dtype=jnp.float64), jnp.asarray(y.d, dtype=jnp.float64)
     keep = jnp.all(~jnp.isnan(X), axis=1)
     return X[keep], y[keep]
 
@@ -315,7 +319,7 @@ def get_data(config: dict, path: str = ".") -> Tuple[jnp.ndarray, jnp.ndarray]:
         return get_hd_data(config["file_name"], **config["get_hd_data_kwargs"])
     file_path = Path(path) / (dict_to_filename(config["input_shapes"]) + ".npz")
     npz = jnp.load(str(file_path))
-    return jnp.asarray(npz["X"]), jnp.asarray(npz["y"])
+    return jnp.asarray(npz["X"], dtype=jnp.float64), jnp.asarray(npz["y"], dtype=jnp.float64)
 
 
 def _get_git_commit() -> str:
