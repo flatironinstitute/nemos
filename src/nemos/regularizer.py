@@ -15,7 +15,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from nemos.solvers._hess import Diagonal, Full, General, HessianTag, PositiveDefinite
+from nemos.solvers._hess import Diagonal, HessianTag, PositiveDefinite
 
 from . import tree_utils
 from .base_class import Base
@@ -461,7 +461,7 @@ class UnRegularized(Regularizer):
 
     _default_solver = "LBFGS"
     _proximal_operator = staticmethod(prox_none)
-    _hess_tag = HessianTag(structure=Full, property=General)
+    _hess_tag = HessianTag(structure=Diagonal, property=PositiveDefinite)
 
     def _penalty_on_subtree(self, subtree, **kwargs) -> jnp.ndarray:
         return jnp.array(0.0)
