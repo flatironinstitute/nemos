@@ -600,11 +600,15 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
         """
         self._check_is_fit()
-        if self.scale_ is None:
+        if (
+            score_type in {"log-likelihood", "pseudo-r2-McFadden"}
+            and self.scale_ is None
+            and not self._has_constant_scale()
+        ):
             raise ValueError(
                 "`score()` requires `scale_`, which is not set. This happens after `stochastic_fit()`"
                 " with an observation model whose scale depends on the data (e.g., Gamma, Gaussian)."
-                " Workaround: use `compute_loss(X, y)` for model comparison as it does not depend on `scale_`)."
+                " Workaround: use `compute_loss(X, y)` for model comparison as it does not depend on `scale_`."
             )
         params = self._get_model_params()
 
