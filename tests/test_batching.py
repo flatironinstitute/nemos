@@ -461,8 +461,8 @@ class TestLazyArrayDataLoader(DataLoaderCommonTests):
         y2 = jnp.concatenate([y_b for _, y_b in loader])
 
         # both cover all samples
-        np.testing.assert_array_equal(jnp.sort(y1), np.arange(len(y)))
-        np.testing.assert_array_equal(jnp.sort(y2), np.arange(len(y)))
+        np.testing.assert_array_equal(jnp.sort(y1), np.arange(y.shape[0]))
+        np.testing.assert_array_equal(jnp.sort(y2), np.arange(y.shape[0]))
         # but in different order
         assert not np.array_equal(y1, y2)
 
