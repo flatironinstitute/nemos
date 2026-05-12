@@ -14,6 +14,8 @@ from numpy.typing import ArrayLike, NDArray
 
 from .. import tree_utils
 from ..base_regressor import BaseRegressor
+from ..batching import DataLoader
+from ..callbacks import Callback
 from ..hmm.expectation_maximization import (
     forward_backward,
     forward_pass,
@@ -882,11 +884,11 @@ class BaseHMM(
 
     def stochastic_fit(
         self,
-        data: "DataLoader",
+        data: DataLoader,
         *,
         init_params: Optional[HMMUserProvidedParamsT] = None,
         num_epochs: int = 1,
-        callbacks: "Callback | list[Callback] | None" = None,
+        callbacks: Callback | list[Callback] | None = None,
     ) -> BaseRegressor[HMMUserProvidedParamsT, HMMModelParamsT]:
         """Not supported for HMM models and raises NotImplementedError."""
         raise NotImplementedError(
