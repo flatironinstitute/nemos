@@ -517,7 +517,8 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         pass
 
     def get_model_params(self) -> UserProvidedParamsT:
-        """Return the fitted model parameters in user-facing form.
+        """
+        Return the fitted model parameters in user-facing form.
 
         The exact structure depends on the concrete subclass (e.g.
         ``(coef, intercept)`` for a GLM), matching what

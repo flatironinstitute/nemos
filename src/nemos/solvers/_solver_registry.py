@@ -333,7 +333,8 @@ def list_available_algorithms() -> list[str]:
 
 
 def supports_stochastic(solver_name: str) -> bool:
-    """Check if a solver supports stochastic optimization.
+    """
+    Check if a solver supports stochastic optimization.
 
     Parameters
     ----------
@@ -365,7 +366,8 @@ def supports_stochastic(solver_name: str) -> bool:
 
 
 def list_stochastic_solvers() -> list[SolverSpec]:
-    """List solvers that support stochastic optimization.
+    """
+    List solvers that support stochastic optimization.
 
     Returns
     -------
