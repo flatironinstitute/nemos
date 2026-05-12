@@ -99,10 +99,14 @@ class _Newton:
         # Recursive block-diagonal case
         #
         if tag.structure is BlockDiagonal:
-            step_coef, step_intercept = jax.vmap(
+            step_tree = jax.vmap(
                 lambda h, gc, gi: self.newton_step(
                     h,
-                    (gc, gi),
+                    eqx.tree_at(
+                        lambda p: (p.coef, p.intercept),
+                        g,
+                        (gc, gi),
+                    ),
                     HessianTag(Full, tag.property),
                 )
             )(
@@ -113,22 +117,22 @@ class _Newton:
 
             return eqx.tree_at(
                 lambda p: (p.coef, p.intercept),
-                g,
+                step_tree,
                 (
-                    step_coef.T,
-                    step_intercept,
+                    step_tree.coef.T,
+                    step_tree.intercept,
                 ),
             )
-
         #
         # Base case: full matrix
         #
-        g_coef, g_intercept = g
+        g_coef = g.coef
+        g_intercept = g.intercept
 
         g_flat = jnp.concatenate(
             [
-                g_coef,
-                g_intercept[None],
+                jnp.ravel(g_coef),
+                jnp.ravel(g_intercept),
             ]
         )
 
@@ -149,9 +153,13 @@ class _Newton:
                 lx.LU(),
             ).value
 
-        return (
-            step_flat[:-1],
-            step_flat[-1],
+        return eqx.tree_at(
+            lambda p: (p.coef, p.intercept),
+            g,
+            (
+                step_flat[:-1],
+                step_flat[-1],
+            ),
         )
 
     def update(self, params, state: NewtonState, *args):
