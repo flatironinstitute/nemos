@@ -938,43 +938,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         # TODO: Add a streaming version setting the right step- and batch size for SVRG that uses the full data
         # Initialize solver (using preprocessed sample batch)
         self._initialize_optimizer_and_state(init_params, sample_X, sample_y)
-
-        batch_size_estimated_for_svrg = False
-        if (
-            "svrg" in self.solver_name.lower()
-            and self.inverse_link_function in (jax.nn.softplus, softplus)
-            and isinstance(self.observation_model, obs.PoissonObservations)
-            and self.solver_kwargs.get("stepsize", None) is None
-        ):
-            parameters_set = "stepsize"
-            if (
-                isinstance(self.regularizer, Ridge)
-                and self.solver_kwargs.get("batch_size", None) is None
-            ):
-                parameters_set += " and batch size"
-                batch_size_estimated_for_svrg = True
-
-            warnings.warn(
-                f"Attempted to set the optimal {parameters_set} for {self.solver_name} using the loader's"
-                " sample batch instead of the full data, which may be inaccurate."
-                " A way to calculate the optimal SVRG parameters on a full out-of-memory dataset"
-                " will be provided in the future."
-                " As a workaround, calling `model._optimize_solver_params` on the largest possible"
-                " chunk of data might provide better estimates."
-            )
-
-        batch_size_given_for_svrg = (
-            "svrg" in self.solver_name.lower()
-            and self.solver_kwargs.get("batch_size", None) is not None
-        )
-
-        if batch_size_given_for_svrg or batch_size_estimated_for_svrg:
-            batch_size_source = "given" if batch_size_given_for_svrg else "estimated"
-            warnings.warn(
-                f'{self.solver_name} does not use the {batch_size_source} "batch_size"'
-                " solver argument for stochastic optimization."
-                " Effective batch size is determined by the data loader."
-            )
+        self._warn_about_estimated_svrg_settings()
 
         # Run stochastic optimization
         ctx = TrainingContext(model=self, solver=self._solver)
@@ -1017,6 +981,46 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self.dof_resid_ = None
 
         return self
+
+    def _warn_about_estimated_svrg_settings(self):
+        """Warn if SVRG settings are estimated on sample data instead of the full dataset."""
+
+        batch_size_estimated_for_svrg = False
+        if (
+            "svrg" in self.solver_name.lower()
+            and self.inverse_link_function in (jax.nn.softplus, softplus)
+            and isinstance(self.observation_model, obs.PoissonObservations)
+            and self.solver_kwargs.get("stepsize", None) is None
+        ):
+            parameters_set = "stepsize"
+            if (
+                isinstance(self.regularizer, Ridge)
+                and self.solver_kwargs.get("batch_size", None) is None
+            ):
+                parameters_set += " and batch size"
+                batch_size_estimated_for_svrg = True
+
+            warnings.warn(
+                f"Attempted to set the optimal {parameters_set} for {self.solver_name} using the loader's"
+                " sample batch instead of the full data, which may be inaccurate."
+                " A way to calculate the optimal SVRG parameters on a full out-of-memory dataset"
+                " will be provided in the future."
+                " As a workaround, calling `model._optimize_solver_params` on the largest possible"
+                " chunk of data might provide better estimates."
+            )
+
+        batch_size_given_for_svrg = (
+            "svrg" in self.solver_name.lower()
+            and self.solver_kwargs.get("batch_size", None) is not None
+        )
+
+        if batch_size_given_for_svrg or batch_size_estimated_for_svrg:
+            batch_size_source = "given" if batch_size_given_for_svrg else "estimated"
+            warnings.warn(
+                f'{self.solver_name} does not use the {batch_size_source} "batch_size"'
+                " solver argument for stochastic optimization."
+                " Effective batch size is determined by the data loader."
+            )
 
     def _has_constant_scale(self) -> bool:
         """
