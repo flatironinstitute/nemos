@@ -20,7 +20,7 @@ from ..base_regressor import BaseRegressor, strip_metadata
 from ..batching import DataLoader, _PreprocessedDataLoader, is_data_loader
 from ..callbacks import Callback, TrainingContext, _normalize_callbacks
 from ..exceptions import NotFittedError
-from ..inverse_link_function_utils import resolve_inverse_link_function
+from ..inverse_link_function_utils import resolve_inverse_link_function, softplus
 from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers import list_stochastic_solvers
@@ -935,10 +935,46 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         # Wrap data loader to preprocess each batch from now on
         preprocessed_loader = _PreprocessedDataLoader(loader, self._preprocess_inputs)
 
-        # TODO: This can be problematic for setting the right step- and batch size for SVRG
-        # Ideally that uses the full data
+        # TODO: Add a streaming version setting the right step- and batch size for SVRG that uses the full data
         # Initialize solver (using preprocessed sample batch)
         self._initialize_optimizer_and_state(init_params, sample_X, sample_y)
+
+        batch_size_estimated_for_svrg = False
+        if (
+            "svrg" in self.solver_name.lower()
+            and self.inverse_link_function in (jax.nn.softplus, softplus)
+            and isinstance(self.observation_model, obs.PoissonObservations)
+            and self.solver_kwargs.get("stepsize", None) is None
+        ):
+            parameters_set = "stepsize"
+            if (
+                isinstance(self.regularizer, Ridge)
+                and self.solver_kwargs.get("batch_size", None) is None
+            ):
+                parameters_set += " and batch size"
+                batch_size_estimated_for_svrg = True
+
+            warnings.warn(
+                f"Attempted to set the optimal {parameters_set} for {self.solver_name} using the loader's"
+                " sample batch instead of the full data, which may be inaccurate."
+                " A way to calculate the optimal SVRG parameters on a full out-of-memory dataset"
+                " will be provided in the future."
+                " As a workaround, calling `model._optimize_solver_params` on the largest possible"
+                " chunk of data might provide better estimates."
+            )
+
+        batch_size_given_for_svrg = (
+            "svrg" in self.solver_name.lower()
+            and self.solver_kwargs.get("batch_size", None) is not None
+        )
+
+        if batch_size_given_for_svrg or batch_size_estimated_for_svrg:
+            batch_size_source = "given" if batch_size_given_for_svrg else "estimated"
+            warnings.warn(
+                f'{self.solver_name} does not use the {batch_size_source} "batch_size"'
+                " solver argument for stochastic optimization."
+                " Effective batch size is determined by the data loader."
+            )
 
         # Run stochastic optimization
         ctx = TrainingContext(model=self, solver=self._solver)

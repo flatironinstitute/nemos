@@ -1,5 +1,7 @@
 """Tests for the stochastic optimization interface."""
 
+from contextlib import nullcontext as does_not_raise
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -336,6 +338,193 @@ class TestGLMStochasticFit:
         )
 
         with pytest.raises(ValueError, match="does not support stochastic"):
+            model.stochastic_fit(loader)
+
+    @pytest.mark.parametrize(
+        "solver, link, solver_kwargs, regularizer, expectation",
+        [
+            # UnRegularized or Lasso: message mentions stepsize only.
+            (
+                "SVRG",
+                jax.nn.softplus,
+                {"stepsize": None},
+                "UnRegularized",
+                pytest.warns(match=r"optimal stepsize for"),
+            ),
+            (
+                "SVRG",
+                jax.nn.softplus,
+                None,
+                "UnRegularized",
+                pytest.warns(match=r"optimal stepsize for"),
+            ),
+            (
+                "ProxSVRG",
+                jax.nn.softplus,
+                {"stepsize": None},
+                "Lasso",
+                pytest.warns(match=r"optimal stepsize for"),
+            ),
+            # Ridge + no user-set batch_size: message mentions stepsize and batch size.
+            (
+                "SVRG",
+                jax.nn.softplus,
+                {"stepsize": None},
+                "Ridge",
+                pytest.warns(match=r"optimal stepsize and batch size for"),
+            ),
+            (
+                "SVRG",
+                jax.nn.softplus,
+                None,
+                "Ridge",
+                pytest.warns(match=r"optimal stepsize and batch size for"),
+            ),
+            # Ridge + user-set batch_size: only stepsize is estimated.
+            (
+                "SVRG",
+                jax.nn.softplus,
+                {"stepsize": None, "batch_size": 32},
+                "Ridge",
+                pytest.warns(match=r"optimal stepsize for"),
+            ),
+            # User-set stepsize.
+            (
+                "SVRG",
+                jax.nn.softplus,
+                {"stepsize": 0.001},
+                "UnRegularized",
+                does_not_raise(),
+            ),
+            # exp inverse link (no Poisson smoothness available)
+            (
+                "SVRG",
+                "exp",
+                {"stepsize": 0.001},
+                "UnRegularized",
+                does_not_raise(),
+            ),
+            (
+                "SVRG",
+                "exp",
+                None,
+                "UnRegularized",
+                does_not_raise(),
+            ),
+            (
+                "SVRG",
+                "exp",
+                None,
+                "Ridge",
+                does_not_raise(),
+            ),
+            # other solvers should not warn
+            (
+                "GradientDescent",
+                jax.nn.softplus,
+                {"stepsize": 0.001, "acceleration": False},
+                "UnRegularized",
+                does_not_raise(),
+            ),
+        ],
+    )
+    def test_stochastic_fit_warns_about_svrg_stepsize(
+        self, simple_data, solver, link, solver_kwargs, regularizer, expectation
+    ):
+        """Test that stochastic_fit warns when optimizing SVRG stepsize."""
+        X, y = simple_data
+        loader = ArrayDataLoader(X, y, batch_size=32)
+
+        model_kwargs = dict(
+            solver_name=solver,
+            inverse_link_function=link,
+            solver_kwargs=solver_kwargs,
+            regularizer=regularizer,
+        )
+        if regularizer != "UnRegularized":
+            model_kwargs["regularizer_strength"] = 0.1
+        model = nmo.glm.GLM(**model_kwargs)
+
+        with expectation:
+            model.stochastic_fit(loader)
+
+    @pytest.mark.parametrize(
+        "solver, link, solver_kwargs, regularizer, expectation",
+        [
+            # User-set batch_size: warning identifies it as "given".
+            (
+                "SVRG",
+                "exp",
+                {"batch_size": 32, "stepsize": 0.001},
+                "UnRegularized",
+                pytest.warns(match=r'given "batch_size"'),
+            ),
+            # Ridge + user-set batch_size: still "given".
+            (
+                "SVRG",
+                "exp",
+                {"batch_size": 32, "stepsize": 0.001},
+                "Ridge",
+                pytest.warns(match=r'given "batch_size"'),
+            ),
+            # Ridge without user-set batch_size: warning identifies it as "estimated".
+            (
+                "SVRG",
+                jax.nn.softplus,
+                None,
+                "Ridge",
+                pytest.warns(match=r'estimated "batch_size"'),
+            ),
+            # No Ridge, no user-set batch_size: no batch_size warning.
+            (
+                "SVRG",
+                jax.nn.softplus,
+                None,
+                "UnRegularized",
+                does_not_raise(),
+            ),
+            (
+                "SVRG",
+                jax.nn.softplus,
+                {"stepsize": 0.001},
+                "UnRegularized",
+                does_not_raise(),
+            ),
+            (
+                "ProxSVRG",
+                jax.nn.softplus,
+                {"stepsize": 0.001},
+                "Lasso",
+                does_not_raise(),
+            ),
+            # Non-SVRG solver: no batch_size warning regardless.
+            (
+                "GradientDescent",
+                jax.nn.softplus,
+                {"stepsize": 0.001, "acceleration": False},
+                "Ridge",
+                does_not_raise(),
+            ),
+        ],
+    )
+    def test_stochastic_fit_warns_about_svrg_batch_size(
+        self, simple_data, solver, link, solver_kwargs, regularizer, expectation
+    ):
+        """Test that stochastic_fit warns when batch_size is set or estimated for SVRG."""
+        X, y = simple_data
+        loader = ArrayDataLoader(X, y, batch_size=32)
+
+        model_kwargs = dict(
+            solver_name=solver,
+            inverse_link_function=link,
+            solver_kwargs=solver_kwargs,
+            regularizer=regularizer,
+        )
+        if regularizer != "UnRegularized":
+            model_kwargs["regularizer_strength"] = 0.1
+        model = nmo.glm.GLM(**model_kwargs)
+
+        with expectation:
             model.stochastic_fit(loader)
 
     @pytest.mark.parametrize(
