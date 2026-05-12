@@ -72,4 +72,5 @@ Helper classes for running stochastic optimization.
 
     DataLoader
     ArrayDataLoader
+    LazyArrayDataLoader
 
