@@ -28,7 +28,6 @@ from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularize
 from .base_class import Base
 from .base_validator import RegressorValidator
 from .callbacks import Callback
-from .glm.params import GLMParams
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
