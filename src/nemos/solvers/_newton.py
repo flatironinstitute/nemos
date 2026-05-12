@@ -18,27 +18,6 @@ from ._aux_helpers import wrap_aux
 from ._hess import BlockDiagonal, Full, HessianTag, PositiveDefinite
 
 
-def pack_grad(g):
-    # g.coef: (D, K)
-    # g.intercept: (K,)
-    blocks = [
-        jnp.concatenate([g.coef[:, i], g.intercept[i : i + 1]])
-        for i in range(g.coef.shape[1])
-    ]
-    return jnp.stack(blocks, axis=0)
-
-
-def unpack_grad(g_flat):
-    # g_flat: (K, D+1)
-    coef = g_flat[:, :-1]  # (K, D)
-    intercept = g_flat[:, -1]  # (K,)
-
-    return jnp.concatenate(
-        [coef.T.reshape(-1), intercept],
-        axis=0,
-    )
-
-
 @runtime_checkable
 class NewtonSolverProtocol(SolverProtocol[SolverState], Protocol, Generic[SolverState]):
     def setup_hessian(
@@ -108,86 +87,120 @@ class _Newton:
             ls_state=ls_state,
         )
 
-    def newton_solve(self, H, g_flat, g_tree, tag: HessianTag):
-        """Solve Hx = g."""
+    def newton_step(
+        self,
+        H,
+        g,
+        tag: HessianTag,
+    ):
+        """Compute Newton step matching structure of g."""
 
+        #
+        # Recursive block-diagonal case
+        #
         if tag.structure is BlockDiagonal:
-            g = pack_grad(g_tree)
-
-            return unpack_grad(
-                jax.vmap(
-                    lambda h, gi: self.newton_solve(
-                        h,
-                        gi,
-                        None,
-                        HessianTag(Full, tag.property),
-                    )
-                )(H, g)
+            step_coef, step_intercept = jax.vmap(
+                lambda h, gc, gi: self.newton_step(
+                    h,
+                    (gc, gi),
+                    HessianTag(Full, tag.property),
+                )
+            )(
+                H,
+                g.coef.T,
+                g.intercept,
             )
 
+            return eqx.tree_at(
+                lambda p: (p.coef, p.intercept),
+                g,
+                (
+                    step_coef.T,
+                    step_intercept,
+                ),
+            )
+
+        #
+        # Base case: full matrix
+        #
+        g_coef, g_intercept = g
+
+        g_flat = jnp.concatenate(
+            [
+                g_coef,
+                g_intercept[None],
+            ]
+        )
+
         if tag.property is PositiveDefinite:
-            return lx.linear_solve(
-                lx.MatrixLinearOperator(H, lx.positive_semidefinite_tag),
-                g_flat,
+            step_flat = lx.linear_solve(
+                lx.MatrixLinearOperator(
+                    H,
+                    lx.positive_semidefinite_tag,
+                ),
+                -g_flat,
                 lx.Cholesky(),
             ).value
 
-        return lx.linear_solve(
-            lx.MatrixLinearOperator(H),
-            g_flat,
-            lx.LU(),
-        ).value
+        else:
+            step_flat = lx.linear_solve(
+                lx.MatrixLinearOperator(H),
+                -g_flat,
+                lx.LU(),
+            ).value
+
+        return (
+            step_flat[:-1],
+            step_flat[-1],
+        )
 
     def update(self, params, state: NewtonState, *args):
-        params_flat, unravel = ravel_pytree(params)
-
-        def value_fn_flat(p):
-            return self.func(unravel(p), *args)
+        def value_fn(p):
+            return self.func(p, *args)
 
         f, g_tree = self._val_and_grad(params, *args)
-        g_flat, _ = ravel_pytree(g_tree)
 
-        gnorm = jnp.linalg.norm(g_flat)
+        gnorm = jnp.sqrt(optax.tree_utils.tree_vdot(g_tree, g_tree))
         converged = gnorm <= self.tol
 
         def do_step(_):
             H = (
                 self._hess_fn(params, *args)
                 if (not self.force_autodiff_hessian and self._hess_fn is not None)
-                else jax.hessian(value_fn_flat)(params_flat)
+                else jax.hessian(value_fn)(params)
             )
 
-            step = self.newton_solve(
-                H,
-                -g_flat,
-                jax.tree_util.tree_map(lambda x: -x, g_tree),
-                self._hess_tag,
-            )
+            step_tree = self.newton_step(H, g_tree, self._hess_tag)
 
-            # Optional safeguard against ascent directions
-            descent = jnp.dot(g_flat, step) < 0.0
+            #
+            # Descent check
+            #
+            descent = optax.tree_utils.tree_vdot(g_tree, step_tree) < 0.0
 
             def accept_step(_):
                 if self._line_search is not None:
                     updates, new_ls_state = self._line_search.update(
-                        step,
+                        step_tree,
                         state.ls_state,
-                        params_flat,
+                        params,
                         value=f,
-                        grad=g_flat,
-                        value_fn=value_fn_flat,
+                        grad=g_tree,
+                        value_fn=value_fn,
                     )
                 else:
-                    updates = step
+                    updates = step_tree
                     new_ls_state = state.ls_state
 
-                new_params_flat = params_flat + updates
+                new_params = jax.tree_util.tree_map(
+                    lambda p, u: p + u,
+                    params,
+                    updates,
+                )
 
-                return new_params_flat, new_ls_state
+                return new_params, new_ls_state
 
             def reject_step(_):
-                # fallback to no update
-                return params_flat, state.ls_state
+                return params, state.ls_state
 
             return jax.lax.cond(
                 descent,
@@ -197,9 +210,9 @@ class _Newton:
             )
 
         def no_step(_):
-            return params_flat, state.ls_state
+            return params, state.ls_state
 
-        new_params_flat, new_ls_state = jax.lax.cond(
+        new_params, new_ls_state = jax.lax.cond(
             converged,
             no_step,
             do_step,
@@ -227,7 +240,7 @@ class _Newton:
             ls_state=new_ls_state,
         )
 
-        return unravel(new_params_flat), new_state, None
+        return new_params, new_state, None
 
     def run(self, init_params, *args):
         state = self.init_state(init_params, *args)
