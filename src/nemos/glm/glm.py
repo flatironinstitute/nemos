@@ -842,6 +842,11 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         data :
             Data loader yielding (X_batch, y_batch) tuples.
             Must be re-iterable for ``num_epochs > 1``.
+
+            Note that NaNs are dropped per batch. The optimizer's update method
+            will be re-compiled for each unique batch size, slowing down computation.
+            If your data contains NaNs, it's best to drop them before or in the
+            dataloader, so that batches have mostly the same size after dropping NaNs.
         init_params :
             Initial parameters (coefficients, intercept).
             If None, initialized from ``sample_batch()``.
