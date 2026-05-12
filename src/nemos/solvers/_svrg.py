@@ -587,7 +587,7 @@ class ProxSVRG:
         """
         Perform the inner loop of Prox-SVRG.
 
-        Performs the inner loop of Prox-SVRG  sweeping through approximately one full epoch,
+        Performs the inner loop of Prox-SVRG sweeping through approximately one full epoch,
         updating the parameters after sampling a mini-batch on each iteration.
 
         Parameters
