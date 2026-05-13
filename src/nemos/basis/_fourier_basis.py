@@ -716,30 +716,22 @@ class FourierBasis(AtomicBasisMixin, Basis):
         return format_repr(self, exclude_keys=["fill_value"])
 
 
-# ---------------------------------------------------------------------------
-# Squared-exponential Fourier basis
-#
-# Builds a 1d real-valued Fourier basis whose implied prior on coefficients (i.i.d.
-# standard normal) yields a Gaussian process with squared-exponential
-# covariance. The frequencies and weights follow the equispaced (the same
-# construction used in the ``efgp_jax`` package).
-# ---------------------------------------------------------------------------
-
-
 def _se_quadrature(
     lengthscale: float, variance: float, eps: float, L: float
 ) -> Tuple[jnp.ndarray, jnp.ndarray, float, int]:
-    """Equispaced Fourier quadrature for a 1-D squared-exponential kernel.
+    """Finds the nodes of the equispaced quadrature in Fourier domain
+    (discretized inverse Fourier transform) for a 1-D squared-exponential
+    kernel. This involves finding the spacing between nodes ``h`` and the
+    number of nodes ``2m + 1``. This is done from a formula in --
+    https://www.sciencedirect.com/science/article/pii/S1063520324000174
 
     Returns the non-negative frequency grid ``xi_j = j * h`` for
     ``j = 0, 1, ..., m``, the weights corresponding to each column
     (also prior standard deviations from the GP perspective) in
     ``[cos columns, sin columns]`` so that an i.i.d. ``N(0, 1)`` prior
-    on coefficients gives a approximate squared-exponential covariance
-    structure, the frequency spacing ``h``, and the half-width ``m``.
-
-    The formula for the quadrature is derived in --
-    https://www.sciencedirect.com/science/article/pii/S1063520324000174
+    on coefficients gives an approximate squared-exponential covariance
+    kernel. also returns the frequency spacing ``h``, and the number of
+    non-negative frequencies, ``m``.
 
     Parameters
     ----------
@@ -767,18 +759,17 @@ def _se_quadrature(
     var = float(variance)
     eps_use = float(eps) / var
 
-    # Heuristic from get_xis_se with dim = 1: 4 * dim * 3**dim = 12 and
-    # dim * 4**(dim + 1) = 16.
+    # Heuristic for h and m
     h = 1.0 / (L + l * math.sqrt(2.0 * math.log(12.0 / eps_use)))
     m = math.ceil(math.sqrt(math.log(16.0 / eps_use) / 2.0) / math.pi / l / h)
 
     j = jnp.arange(m + 1, dtype=float)
     xis = j * h
 
-    # 1-D SE spectral density: S(xi) = var * sqrt(2*pi*l^2) * exp(-2*pi^2*l^2*xi^2)
+    # 1d se spectral density: S(xi) = var * sqrt(2*pi*l^2) * exp(-2*pi^2*l^2*xi^2)
     prefactor = var * math.sqrt(2.0 * math.pi * l ** 2)
     S = prefactor * jnp.exp(-2.0 * (math.pi * l) ** 2 * xis ** 2)
-    w = jnp.sqrt(S * h)  # EFGP per-mode weight, shape (m + 1,)
+    w = jnp.sqrt(S * h)  # efgp per-mode weight, shape (m + 1,)
 
     # convert standard efgp xis with +/- modes into a positive-only modes.
     sqrt2 = math.sqrt(2.0)
@@ -789,30 +780,26 @@ def _se_quadrature(
 
 
 class FourierSEBasis(EvalBasisMixin, AtomicBasisMixin, Basis):
-    """1d Fourier basis with squared-exponential implied covariance.
+    """1d Fourier basis with approximate squared-exponential covariance.
 
-    Generates real ``cos`` and ``sin`` basis functions on a chosen domain
+    Generates ``cos`` and ``sin`` basis functions on inputted domain
     ``[t0, t1]`` whose frequencies and weights are picked so that
-    an i.i.d. ``N(0, 1)`` prior on the basis coefficients is equivalent to a
-    Gaussian process prior with squared-exponential (se) covariance:
+    i.i.d. ``N(0, 1)`` priors on the basis coefficients is a
+    Gaussian process with approximately squared-exponential (se) covariance:
 
     .. code-block:: text
 
         k(r) = variance * exp(-r^2 / (2 * lengthscale^2))
 
-    The equispaced frequency grid is from the equispaced Fourier discretization of
-    this paper -- https://epubs.siam.org/doi/full/10.1137/23M1565310. For ``m``
-    chosen automatically from ``eps``, the basis has ``2*m + 1`` functions: cosines
+    The equispaced frequency grid for Gaussian processes is from
+    this paper -- https://epubs.siam.org/doi/full/10.1137/23M1565310.
+    User-inputted error
+    tolerance is ``eps``, the basis has ``2*m + 1`` functions: cosines
     at frequencies ``j*h`` for ``j = 0, ..., m`` and sines at ``j*h`` for
-    ``j = 1, ..., m``. Each column is multiplied by a fixed weight derived
-    from the SE spectral density so that, with standard-normal coefficients,
-    the implied covariance approximates the SE kernel up to ``eps`` error.
+    ``j = 1, ..., m``.
 
-    Unlike :class:`FourierEval`, this basis evaluates samples directly rather
-    than through a min/max rescaling: ``cos`` and ``sin`` are evaluated at
-    ``2 * pi * xi_j * (x - xcen)`` where ``xcen = (t0 + t1) / 2``. As a
-    consequence ``bounds`` are unused; the construction domain ``[t0, t1]`` is
-    fixed at construction time.
+    The ``cos`` and ``sin`` basis functions are evaluated at
+    ``2 * pi * xi_j * (x - xcen)`` where ``xcen = (t0 + t1) / 2``.
 
     Parameters
     ----------
@@ -894,7 +881,7 @@ class FourierSEBasis(EvalBasisMixin, AtomicBasisMixin, Basis):
 
     @property
     def eps(self) -> float:
-        """Spectral truncation tolerance."""
+        """kernel error approximation tolerance."""
         return self._eps
 
     @property
@@ -914,7 +901,7 @@ class FourierSEBasis(EvalBasisMixin, AtomicBasisMixin, Basis):
 
     @property
     def ndim(self) -> int:
-        """Dimensionality of the basis (always 1)."""
+        """Dimensionality of the basis."""
         return 1
 
     @support_pynapple(conv_type="numpy")
@@ -932,7 +919,7 @@ class FourierSEBasis(EvalBasisMixin, AtomicBasisMixin, Basis):
         """
         if len(sample_pts) != 1:
             raise ValueError(
-                "FourierSEBasis is 1D and expects a single sample array; "
+                "FourierSEBasis is 1d and expects a single sample array; "
                 f"received {len(sample_pts)}."
             )
         x = jnp.asarray(sample_pts[0])
@@ -963,11 +950,11 @@ class FourierSEBasis(EvalBasisMixin, AtomicBasisMixin, Basis):
         key: jax.Array,
         n_samples: int = 1,
     ) -> jnp.ndarray:
-        """Draw samples from the SE Gaussian process prior at ``x``.
+        """Draw samples from the SE Gaussian process at ``x``.
 
         With basis matrix ``Phi = self.evaluate(x)`` and ``z ~ N(0, I_M)``,
         each sample is ``f(x) = Phi @ z``. Repeated calls with the same
-        ``key`` produce the same samples (JAX PRNG semantics).
+        ``key`` produce the same samples.
 
         Parameters
         ----------
@@ -992,7 +979,7 @@ class FourierSEBasis(EvalBasisMixin, AtomicBasisMixin, Basis):
         return samples
 
     def _get_samples(self, *n_samples: int) -> Generator[NDArray, None, None]:
-        """Produce equi-spaced samples over the construction domain."""
+        """Produce equispaced samples over the construction domain."""
         t0, t1 = self._domain
         return (np.linspace(t0, t1, n_samples[0]),)
 
