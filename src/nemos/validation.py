@@ -316,8 +316,6 @@ def _check_basis_matrix_shape(basis_matrix):
             "basis_matrix must be a 2 dimensional array! "
             f"{basis_matrix.ndim} dimensions provided instead."
         )
-    if basis_matrix.shape[0] == 1:
-        raise ValueError("`basis_matrix.shape[0]` should be at least 2!")
     return basis_matrix
 
 

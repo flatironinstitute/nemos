@@ -80,8 +80,7 @@ units = nap.Tsd(spike_t/T, spike_id).to_tsgroup()
 ## Model configuration
 
 Let's imagine this dataset do not fit in memory. We can use a batching approach to train the GLM.
-First we need to instantiate the [`PopulationGLM`](nemos.glm.PopulationGLM) . The default algorithm for [`PopulationGLM`](nemos.glm.PopulationGLM)  is gradient descent.
-We suggest to use it for batching.
+First we need to instantiate the [`PopulationGLM`](nemos.glm.PopulationGLM) . The default algorithm for `PopulationGLM` is `LBFGS`, but for batching, we suggest to use gradient descent, since the hessian estimation on batches is generally noisy.
 
 :::{note}
 You must shutdown the dynamic update of the step for fitting a batched (also called stochastic) gradient descent.
@@ -138,7 +137,7 @@ This gets you the initial parameters and the first state of the solver.
 
 ```{code-cell} ipython3
 params = glm.initialize_params(*batcher())
-state = glm.initialize_solver_and_state(*batcher(), params)
+state = glm.initialize_optimizer_and_state(params, *batcher())
 ```
 
 ## Batch learning

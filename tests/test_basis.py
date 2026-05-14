@@ -4,12 +4,17 @@ import math
 import re
 from contextlib import nullcontext as does_not_raise
 from functools import partial
+from pathlib import Path
 from unittest.mock import patch
 
 import jax.numpy
 import numpy as np
 import pynapple as nap
 import pytest
+
+import nemos._inspect_utils as inspect_utils
+import nemos.basis.basis as basis
+import nemos.convolve as convolve
 from conftest import (
     DEFAULT_KWARGS,
     BasisFuncsTesting,
@@ -20,10 +25,6 @@ from conftest import (
     list_all_basis_classes,
     list_all_real_basis_classes,
 )
-
-import nemos._inspect_utils as inspect_utils
-import nemos.basis.basis as basis
-import nemos.convolve as convolve
 from nemos.basis import (
     Category,
     CustomBasis,
@@ -2337,6 +2338,17 @@ class TestHistoryBasis(BasisFuncsTesting):
             inp.reshape(inp.shape[0], -1),
         )
 
+    @pytest.mark.requires_x64
+    def test_history_conv_window_size_1(self):
+        """window_size=1 with causal convention: output is x shifted by 1, with a leading NaN."""
+        rng = np.random.default_rng(0)
+        x = rng.standard_normal(20)
+        bas = HistoryConv(window_size=1)
+        out = bas.compute_features(x)
+        assert out.shape == (20, 1), f"Expected shape (20, 1), got {out.shape}"
+        assert np.isnan(out[0, 0])
+        np.testing.assert_allclose(out[1:, 0], x[:-1])
+
 
 class TestRaisedCosineLogBasis(BasisFuncsTesting):
     cls = {"eval": basis.RaisedCosineLogEval, "conv": basis.RaisedCosineLogConv}
@@ -2666,9 +2678,8 @@ class TestMSplineBasis(BasisFuncsTesting):
         """
         Compares the output of the MSpline basis functions against precomputed values from R
         """
-        m_basis = np.loadtxt(
-            "tests/mspline_output_nointercept.csv", delimiter=",", skiprows=1
-        )
+        path = Path(__file__).parent / "mspline_output_nointercept.csv"
+        m_basis = np.loadtxt(path, delimiter=",", skiprows=1)
         bas = basis.MSplineEval(5)
         m_basis_nemos = bas.compute_features(np.linspace(0, 1, 100))
         assert np.allclose(m_basis, m_basis_nemos)

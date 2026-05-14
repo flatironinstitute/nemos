@@ -965,6 +965,13 @@ class TestCommonObservationModels:
         with expectation:
             obs.scale = scale
 
+    def test_separable_scale_is_set(self, observation_model_rate_and_samples):
+        """Test that the `_separable_scale` attribute is set and is a boolean for all observation models."""
+        obs, y, rate = observation_model_rate_and_samples
+        assert (obs._separable_scale is not None) and (
+            type(obs._separable_scale) is bool
+        )
+
     @pytest.mark.parametrize(
         "score_type, expectation",
         [

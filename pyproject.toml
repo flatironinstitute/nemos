@@ -8,17 +8,16 @@ dynamic = ["version"]
 authors = [{name = "nemos authors"}]
 description = "NEural MOdelS, a statistical modeling framework for neuroscience."
 readme = "README.md"
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.12,<3.15"
 keywords = ["neuroscience", "Poisson-GLM"]
 license = { file = "LICENSE" }
 classifiers = [
     "Intended Audience :: Science/Research",
     "Natural Language :: English",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13"
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14"
 ]
 
 # Define dependencies for the project
@@ -60,13 +59,15 @@ dev = [
     "scikit-learn",                 # Testing compatibility with CV & pipelines
     "matplotlib>=3.7",              # Needed by doctest to run docstrings examples
     "pooch",                        # Required by doctest for fetch module
-    "dandi",                        # Required by doctest for fetch module
     "seaborn",                      # Required by doctest for _documentation_utils module
     "myst-nb",                      # Test myst_nb utils for glue
     "hmmlearn",                     # Test algorithmic implementations of HMM
     "tox-uv",                       # Run tox with uv for faster installs
+    "fsspec",
+    "tqdm",
 ]
 docs = [
+    "pynapple>=0.11",               # Required for nap.compute_event_triggered_average(...) in a tutorial
     "numpydoc",
     "sphinx",
     "pydata-sphinx-theme",

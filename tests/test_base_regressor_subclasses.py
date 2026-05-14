@@ -10,12 +10,12 @@ import pytest
 import scipy as sp
 import scipy.stats as sts
 import statsmodels.api as sm
-
-# Import helpers from conftest
-from conftest import is_population_model
 from numba import njit
 
 import nemos as nmo
+
+# Import helpers from conftest
+from conftest import MockRegressor, is_population_model
 from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
 from nemos.glm.params import GLMParams
 from nemos.glm.validation import (
@@ -25,6 +25,8 @@ from nemos.glm.validation import (
     PopulationGLMValidator,
 )
 from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
+from nemos.solvers._fista import OptimistixNAG
+from nemos.solvers._optax_optimistix_solvers import OptimistixOptaxGradientDescent
 
 MODEL_REGISTRY = {
     "GLM": nmo.glm.GLM,
@@ -207,14 +209,14 @@ class TestModelVsPytree:
         indirect=["instantiate_base_regressor_subclass"],
     )
     @pytest.mark.solver_related
-    def test_initialize_solver_and_state_pytree_x(
+    def test_initialize_optimizer_and_state_pytree_x(
         self, instantiate_base_regressor_subclass, pytree_x
     ):
-        """initialize_solver_and_state runs without error when X is an arbitrary pytree."""
+        """initialize_optimizer_and_state runs without error when X is an arbitrary pytree."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
         params = model.initialize_params(pytree_x, fixture.y)
-        model.initialize_solver_and_state(pytree_x, fixture.y, params)
+        model.initialize_optimizer_and_state(params, pytree_x, fixture.y)
 
     @pytest.mark.parametrize(
         "instantiate_base_regressor_subclass, pytree_x",
@@ -227,7 +229,7 @@ class TestModelVsPytree:
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
         params = model.initialize_params(pytree_x, fixture.y)
-        opt_state = model.initialize_solver_and_state(pytree_x, fixture.y, params)
+        opt_state = model.initialize_optimizer_and_state(params, pytree_x, fixture.y)
         model.update(params, opt_state, pytree_x, fixture.y)
 
     @pytest.mark.parametrize(
@@ -363,6 +365,23 @@ def test_validate_higher_dimensional_data_X(instantiate_base_regressor_subclass)
 
 
 @pytest.mark.parametrize(
+    "solver_name, expected_class",
+    [
+        ("GradientDescent[optimistix]", OptimistixNAG),
+        ("GradientDescent[optax+optimistix]", OptimistixOptaxGradientDescent),
+    ],
+)
+def test_instantiate_solver_backend_selection(solver_name, expected_class):
+    """Specifying a non-default backend via the full name should instantiate the correct solver class."""
+    mock = MockRegressor()
+    mock.solver_name = solver_name
+    solver = mock._instantiate_solver(
+        lambda params, X, y: jnp.sum(params), init_params=None
+    )
+    assert isinstance(solver, expected_class)
+
+
+@pytest.mark.parametrize(
     "instantiate_base_regressor_subclass",
     INSTANTIATE_MODEL_ONLY,
     indirect=True,
@@ -495,10 +514,10 @@ class TestModelCommons:
         assert all(np.all(actual_values[k] == v) for k, v in expected_values.items())
 
     @pytest.mark.solver_related
-    def test_initialize_solver_mask_grouplasso(
+    def test_initialize_optimizer_mask_grouplasso(
         self, instantiate_base_regressor_subclass
     ):
-        """Test that the group lasso initialize_solver_and_state goes through"""
+        """Test that the group lasso initialize_optimizer_and_state goes through"""
         fixture = instantiate_base_regressor_subclass
         X, model, params = fixture.X, fixture.model, fixture.params
         # TODO: remove in next PR when GLM is compatible with categorical
@@ -532,7 +551,7 @@ class TestModelCommons:
             regularizer_strength=1.0,
         )
         params = model.initialize_params(X, y)
-        init_state = model.initialize_solver_and_state(X, y, params)
+        init_state = model.initialize_optimizer_and_state(params, X, y)
         # optimistix solvers do not have a velocity attr
         assert getattr(
             init_state, "velocity", model._validator.to_model_params(params)
@@ -557,7 +576,7 @@ class TestModelCommons:
         ],
     )
     @pytest.mark.solver_related
-    def test_initialize_solver_all_invalid_X(
+    def test_initialize_optimizer_all_invalid_X(
         self, fill_val, expectation, instantiate_base_regressor_subclass
     ):
         fixture = instantiate_base_regressor_subclass
@@ -573,7 +592,7 @@ class TestModelCommons:
         X.fill(fill_val)
         with expectation:
             params = model.initialize_params(X, y)
-            init_state = model.initialize_solver_and_state(X, y, params)
+            init_state = model.initialize_optimizer_and_state(params, X, y)
             # optimistix solvers do not have a velocity attr
             assert getattr(
                 init_state, "velocity", model._validator.to_model_params(params)
@@ -714,10 +733,10 @@ class TestModelCommons:
         assert model.regularizer_strength == (1.0, 0.5)
 
     ##########################################
-    # Test model.initialize_solver_and_state #
+    # Test model.initialize_optimizer_and_state #
     ##########################################
     @pytest.mark.solver_related
-    def test_initializer_solver_set_solver_callable(
+    def test_initialize_optimizer_set_solver_callable(
         self, instantiate_base_regressor_subclass
     ):
         fixture = instantiate_base_regressor_subclass
@@ -732,14 +751,14 @@ class TestModelCommons:
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         y = _add_zeros(y)
 
-        assert model.solver_init_state is None
-        assert model.solver_update is None
-        assert model.solver_run is None
+        assert model.optimizer_init_state is None
+        assert model.optimizer_update is None
+        assert model.optimizer_run is None
         init_params = model.initialize_params(X, y)
-        model.initialize_solver_and_state(X, y, init_params)
-        assert callable(model.solver_init_state)
-        assert callable(model.solver_update)
-        assert callable(model.solver_run)
+        model.initialize_optimizer_and_state(init_params, X, y)
+        assert callable(model.optimizer_init_state)
+        assert callable(model.optimizer_update)
+        assert callable(model.optimizer_run)
 
 
 @pytest.mark.parametrize(
@@ -1236,7 +1255,7 @@ class TestModelValidator:
     @pytest.mark.solver_related
     def test_validate_param_length(self, n_params, instantiate_base_regressor_subclass):
         """
-        Test the `_initialize_solver_and_state` method with different numbers of initial parameters.
+        Test the `_initialize_optimizer_and_state` method with different numbers of initial parameters.
         Check for correct number of parameters.
         """
         fixture = instantiate_base_regressor_subclass
@@ -1274,7 +1293,7 @@ class TestModelValidator:
             params = validator.validate_and_cast_params(init_params)
             user_params = validator.from_model_params(params)
             # check that params are set
-            init_state = model.initialize_solver_and_state(X, y, user_params)
+            init_state = model.initialize_optimizer_and_state(user_params, X, y)
             # optimistix solvers do not have a velocity attr
             assert getattr(init_state, "velocity", params) == params
 

@@ -125,6 +125,12 @@ VALID_PAIRS = [
     {"arg_name", "algo_name"},
     {"arg_name", "attr_name"},
     {"arg_name", "var_name"},
+    {"initial_proba_init", "initial_proba_init_kwargs"},
+    {"transition_proba_init", "transition_proba_init_kwargs"},
+    {"initial_proba_init_kwargs", "transition_proba_init_kwargs"},
+    {"is_nan", "is_nap"},
+    {"dirichlet_initial_proba", "dirichlet_transition_proba"},
+    {"random_key_pair", "random_key"},
 ]
 
 

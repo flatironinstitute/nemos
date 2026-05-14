@@ -74,8 +74,8 @@ bas = (
 predictors = bas.compute_features(position, speed)
 print(predictors.shape)
 
-predictors = dict(**bas.split_by_feature(predictors))
-print("Dictionary of predictors:", predictors)
+predictors = bas.split_by_feature(predictors)
+print(f"Dictionary of predictors with keys: {predictors.keys()}")
 
 # Define a GroupLasso GLM
 # Each leaf of the pytree is treated as a group and shrunk jointly

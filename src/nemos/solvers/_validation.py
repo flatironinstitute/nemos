@@ -6,14 +6,21 @@ import jax.numpy as jnp
 import numpy as np
 
 from .._inspect_utils import get_params, implements_methods
-from ._abstract_solver import AbstractSolver, OptimizationInfo
+from ._abstract_solver import AbstractSolver
 
 # Notes
 # We could enforce adherence to the API with type checkers
 # https://github.com/agronholm/typeguard
 # https://github.com/beartype/beartype
 
-METHOD_NAMES = AbstractSolver.__abstractmethods__
+# Validate only public-facing abstract methods (i.e. protocol methods).
+# Private abstract methods (e.g. _get_optim_info) are internal implementation
+# details and should not be enforced on custom solver classes.
+METHOD_NAMES = frozenset(
+    m
+    for m in AbstractSolver.__abstractmethods__
+    if not m.startswith("_") or m == "__init__"
+)
 AUX_VAL = -1
 
 
@@ -171,12 +178,6 @@ def _validate_solver_class_on_ridge(
     else:
         assert run_aux is None
         assert update_aux is None
-
-    optim_info = solver.get_optim_info(run_state)
-    if not isinstance(optim_info, OptimizationInfo):
-        raise TypeError(
-            f"get_optim_info must return OptimizationInfo, got {type(optim_info)!r}."
-        )
 
     penalized_loss = regularizer.penalized_loss(
         unregularized_loss, init_params, regularizer_strength

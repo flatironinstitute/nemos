@@ -80,9 +80,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
     +---------------+------------------+-------------------------------------------------------------+
     | Regularizer   | Default Solver   | Available Solvers                                           |
     +===============+==================+=============================================================+
-    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
     +---------------+------------------+-------------------------------------------------------------+
-    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    | Ridge         | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
     +---------------+------------------+-------------------------------------------------------------+
     | Lasso         | ProximalGradient | ProximalGradient                                            |
     +---------------+------------------+-------------------------------------------------------------+
@@ -226,9 +226,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
     Use LBFGS solver for potentially faster convergence:
 
-    >>> model = nmo.glm.GLM(solver_name="LBFGS").fit(X, y)
+    >>> model = nmo.glm.GLM(solver_name="BFGS").fit(X, y)
     >>> model.solver_name
-    'LBFGS[...]'
+    'BFGS'
 
     **Use a Pytree of arrays as Input**
 
@@ -278,7 +278,12 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self.scale_ = None
         self.dof_resid_ = None
         self.aux_ = None
-        self.optim_info_ = None
+        self._solver = None
+
+    @property
+    def solver(self):
+        """Getter for the solver class."""
+        return self._solver
 
     @classmethod
     def _validate_observation_class(cls, observation: obs.Observations):
@@ -625,6 +630,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
+        **kwargs,
     ) -> GLMParams:
         """Initialize the parameters based on the structure and dimensions X and y.
 
@@ -751,9 +757,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             getattr(self, "_feature_mask", None), init_params
         )
 
-        self._initialize_solver_and_state(data, y, init_params)
+        self._initialize_optimizer_and_state(init_params, data, y)
 
-        params, state, aux = self.solver_run(init_params, data, y)
+        params, state, aux = self._optimizer_run(init_params, data, y)
 
         if tree_utils.pytree_map_and_reduce(
             lambda x: jnp.any(jnp.isnan(x)), any, params
@@ -764,7 +770,22 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
                 "and/or setting `acceleration=False`."
             )
 
-        if not self._solver.get_optim_info(state).converged:
+        if hasattr(state, "stats") and hasattr(state.stats, "converged"):
+            converged = state.stats.converged
+        elif hasattr(state, "converged"):
+            # try if the custom defined solver has a convergence flag directly
+            converged = state.converged
+        else:
+            # custom solver with potentially undefined convergence state
+            converged = True
+            warnings.warn(
+                f"Solver state {state} does not have a ``.converged`` nor a ``.stats.converged`` "
+                f"attribute. Convergence state is unknown; assuming converged. "
+                f"To assess the optimization manually, "
+                f"inspect the ``solver_state_`` attribute of the model.",
+                UserWarning,
+            )
+        if not converged:
             warnings.warn(
                 "The fit did not converge. "
                 "Consider the following:"
@@ -774,7 +795,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
                 "For the available options see the ``self.solver.__init__`` docstrings.",
                 RuntimeWarning,
             )
-        self.optim_info_ = self._solver.get_optim_info(state)
 
         self._set_model_params(params)
 
@@ -943,11 +963,11 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             rank = jnp.linalg.matrix_rank(X)
             return (n_samples - rank - 1) * jnp.ones_like(params.intercept)
 
-    def _initialize_solver_and_state(
+    def _initialize_optimizer_and_state(
         self,
+        init_params: GLMParams,
         X: dict[str, jnp.ndarray] | jnp.ndarray,
         y: jnp.ndarray,
-        init_params: GLMParams,
     ) -> SolverState:
         """Initialize the solver by instantiating its init_state, update and, run methods.
 
@@ -956,14 +976,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
         Parameters
         ----------
+        init_params :
+            Initial parameters for the model.
         X :
             The predictors used in the model fitting process. This can include feature matrices or other structures
             compatible with the model's design.
         y :
             The response variables or outputs corresponding to the predictors. Used to initialize parameters when
             they are not provided.
-        init_params :
-            Initial parameters for the model.
 
         Returns
         -------
@@ -977,17 +997,18 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
         >>> model = nmo.glm.GLM()
         >>> params = model.initialize_params(X, y)
-        >>> opt_state = model.initialize_solver_and_state(X, y, params)
+        >>> opt_state = model.initialize_optimizer_and_state(params, X, y)
         >>> # Now ready to run optimization or update steps
         """
-
         opt_solver_kwargs = self._optimize_solver_params(X, y)
         #  set up the solver init/run/update attrs
-        self._instantiate_solver(
+        self._solver = self._instantiate_solver(
             self._compute_loss, init_params=init_params, solver_kwargs=opt_solver_kwargs
         )
-
-        opt_state = self.solver_init_state(init_params, X, y)
+        self._optimizer_init_state = self._solver.init_state
+        self._optimizer_update = self._solver.update
+        self._optimizer_run = self._solver.run
+        opt_state = self._optimizer_init_state(init_params, X, y)
         return opt_state
 
     @cast_to_jax
@@ -1052,7 +1073,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
         >>> glm_instance = nmo.glm.GLM()
         >>> params = glm_instance.initialize_params(X, y)
-        >>> opt_state = glm_instance.initialize_solver_and_state(X, y, params)
+        >>> opt_state = glm_instance.initialize_optimizer_and_state(params, X, y)
         >>> new_params, new_opt_state = glm_instance.update(params, opt_state, X, y)
 
         """
@@ -1063,12 +1084,12 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         data = X.data if isinstance(X, FeaturePytree) else X
 
         # wrap into GLM params, this assumes params are well structured,
-        # if initializaiton is done via `initialize_solver_and_state` it
+        # if initializaiton is done via `initialize_optimizer_and_state` it
         # should be fine
         params = self._validator.to_model_params(params)
 
         # perform a one-step update
-        updated_params, updated_state, aux = self.solver_update(
+        updated_params, updated_state, aux = self._optimizer_update(
             params, opt_state, data, y, *args, **kwargs
         )
 
@@ -1134,7 +1155,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         regularizer: Ridge()
         regularizer_strength: 0.1...
         solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
-        solver_name: BFGS[...]
+        solver_name: BFGS
         >>> # Save the model parameters to a file
         >>> model.save_params("model_params.npz")
         >>> # Load the model from the saved file
@@ -1147,7 +1168,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         regularizer: Ridge()
         regularizer_strength: 0.1...
         solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
-        solver_name: BFGS[...]
+        solver_name: BFGS
 
         >>> # Saving and loading a custom inverse link function
         >>> model = nmo.glm.GLM(
@@ -1168,16 +1189,15 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         regularizer: UnRegularized()
         regularizer_strength: None
         solver_kwargs: {}
-        solver_name: GradientDescent[...]
+        solver_name: LBFGS
         """
 
         # initialize saving dictionary
         fit_attrs = self._get_fit_state()
         fit_attrs.pop("solver_state_")
-        fit_attrs.pop("optim_info_")
         string_attrs = ["inverse_link_function"]
 
-        super().save_params(filename, fit_attrs, string_attrs)
+        self._save_params(filename, fit_attrs, string_attrs)
 
 
 class PopulationGLM(GLM):
@@ -1195,9 +1215,9 @@ class PopulationGLM(GLM):
     +---------------+------------------+-------------------------------------------------------------+
     | Regularizer   | Default Solver   | Available Solvers                                           |
     +===============+==================+=============================================================+
-    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
     +---------------+------------------+-------------------------------------------------------------+
-    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    | Ridge         | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
     +---------------+------------------+-------------------------------------------------------------+
     | Lasso         | ProximalGradient | ProximalGradient                                            |
     +---------------+------------------+-------------------------------------------------------------+
