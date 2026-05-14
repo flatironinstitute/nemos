@@ -1,10 +1,14 @@
-# Construct Design Matrices for Categorical Features
+# Categorical Predictors
 
-Capturing the effect of stimulus identity, behavioral choices, etc., are all common examples of model designs requiring the encoding of categorical predictors. In this note we will explore how to construct such designs with NeMoS `Categorical` basis, or using specialized packages ([`patsy`](https://patsy.readthedocs.io) or [`formulaic`](https://matthewwardrop.github.io/formulaic/)) that handles gracefully complex schemes that includes multiple categorical predictors and a variety of encoding schemes.
+Capturing the effect of stimulus identity, behavioral choices, etc., are all common examples of model designs requiring the encoding of categorical predictors. In this note we will explore how to construct such designs with NeMoS `Categorical` basis. It also covers specialized packages ([`patsy`](https://patsy.readthedocs.io) or [`formulaic`](https://matthewwardrop.github.io/formulaic/))  which elegantly handle complex schemes involving multiple categorical predictors and diverse encoding methods.
 
-Such packages takes care transparently of a well-know identifiability issue arising with multiple categorical predictors: that such designs may result in non-identifiable models, e.g. models that have multiple equivalent solutions. We will expand on that in a dedicated technical note for people that wants to dig deeper into the problem.
+These packages transparently resolve a well-known identifiability issue: designs with multiple categorical predictors can result in non-identifiable models that yield multiple equivalent solutions. We expand on this topic in a dedicated technical note for readers who want to explore the problem in greater depth.
 
-# Index
+[//]: # (Format "Contents" as a header level 2 without including it in the toctree, so that it doesn't render in the card)
+++++
+
+<h2 style="font-size: 2em; font-weight: bold; margin-top: 20px; margin-bottom: 10px;">Contents</h2>
+
 
 ```{toctree}
 :maxdepth: 3

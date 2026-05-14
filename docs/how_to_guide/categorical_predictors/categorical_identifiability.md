@@ -12,7 +12,7 @@ kernelspec:
 ---
 
 (categorical_identifiability)=
-# Resolving Redundancy in Categorical Design Matrices
+# Technical Note: Redundancy in Categorical Designs
 
 ## Why Does Redundancy Arise?
 

@@ -12,7 +12,7 @@ kernelspec:
 ---
 
 (categorical_design_matrices)=
-# Construct Design Matrices for Categorical Features
+# Design Matrices Construction
 
 There are two main supported uses for Category in nemos: using the category as a standalone predictor / main effect, and multiplying it by a continuous basis to estimate category-specific tuning curves. We'll show both below.
 

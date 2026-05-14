@@ -149,15 +149,7 @@ categorical_predictors/README.md
 
 :::
 
-:::{grid-item-card}
 
-```{toctree}
-:maxdepth: 2
-
-categorical_identifiability.md
-```
-
-:::
 
 :::{grid-item-card}
 
