@@ -337,10 +337,43 @@ class Category(EvalBasisMixin, AtomicBasisMixin, Basis):
         # ruff: noqa: D205, D400
         return AtomicBasisMixin.set_input_shape(self, xi)
 
-    def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
-        """Raise for categorical basis."""
-        raise NotImplementedError(
-            "``evaluate_on_grid`` is not implemented for categorical basis. The method "
-            "only makes sense for continuous bases, ``Category`` process discrete "
-            "inputs only."
-        )
+    def evaluate_on_grid(self, *n_samples: int) -> Tuple[NDArray, NDArray]:
+        """Evaluate the categorical basis on its natural grid.
+
+        For a categorical basis the grid is intrinsically fixed: one point per
+        category. The ``n_samples`` argument is kept for interface compatibility
+        with continuous bases but must equal ``n_basis_funcs``.
+
+        Parameters
+        ----------
+        n_samples :
+            Must be a single integer equal to ``n_basis_funcs`` (the number of
+            categories).
+
+        Returns
+        -------
+        X :
+            The category labels, shape ``(n_basis_funcs,)``.
+        Y :
+            One-hot encoding of the categories, shape
+            ``(n_basis_funcs, n_basis_funcs)``.
+
+        Raises
+        ------
+        ValueError
+            If more than one value is provided, or if the provided value does
+            not match ``n_basis_funcs``.
+        """
+        if len(n_samples) != 1:
+            raise ValueError(
+                "``Category`` is one-dimensional; ``evaluate_on_grid`` expects "
+                f"exactly one argument, got {len(n_samples)}."
+            )
+        n = n_samples[0]
+        if n != self.n_basis_funcs:
+            raise ValueError(
+                "``n_samples`` is fixed by the number of categories for a "
+                f"categorical basis: expected {self.n_basis_funcs}, got {n}."
+            )
+        grid = self.categories
+        return grid, self.evaluate(grid)

@@ -1494,7 +1494,7 @@ def test_call_equivalent_in_conv(n_basis, cls):
         basis.HistoryConv,
         basis.FourierEval,
         basis.Zero,
-        basis.Category,
+        Category,
     ],
 )
 class TestSharedMethods:
@@ -1519,7 +1519,7 @@ class TestSharedMethods:
                 basis.HistoryConv: "HistoryConv(window_size=10)",
                 basis.FourierEval: "FourierEval(frequencies=[Array([1., 2.], dtype=float32)], ndim=1, bounds=(1.0, 2.0), frequency_mask='no-intercept')",
                 basis.Zero: "Zero()",
-                basis.Category: "Category(out_of_category=True)",
+                Category: "Category(out_of_category=True)",
             }
         ],
     )
@@ -1555,7 +1555,7 @@ class TestSharedMethods:
                 basis.HistoryConv: r"'mylabel': HistoryConv\(window_size=10\)",
                 basis.FourierEval: r"'mylabel': FourierEval\(frequencies=\[Array\(\[1\., 2\.\], dtype=float\d{2}\)\], ndim=1, bounds=\(1\.0, 2\.0\), frequency_mask='no-intercept'\)",
                 basis.Zero: r"'mylabel': Zero\(\)",
-                basis.Category: r"'mylabel': Category\(out_of_category=True\)",
+                Category: r"'mylabel': Category\(out_of_category=True\)",
             }
         ],
     )
@@ -8463,6 +8463,43 @@ class TestCategory(BasisFuncsTesting):
         bas = Category(categories) + basis.BSplineEval(5)
         out = bas.compute_features(cat_inp, continuous_inp)
         assert out.shape[0] == len(cat_inp)
+
+    @pytest.mark.parametrize(
+        "categories, expected_grid",
+        [
+            (3, np.arange(3)),
+            ([2, 5, 8], np.array([2, 5, 8])),
+            (["c", "a", "b"], np.array(["a", "b", "c"])),
+        ],
+    )
+    def test_evaluate_on_grid_returns_categories_and_identity(
+        self, categories, expected_grid
+    ):
+        """``evaluate_on_grid(n_basis_funcs)`` returns the category labels and the one-hot identity."""
+        bas = Category(categories)
+        grid, Y = bas.evaluate_on_grid(bas.n_basis_funcs)
+        np.testing.assert_array_equal(grid, expected_grid)
+        np.testing.assert_array_equal(np.asarray(Y), np.eye(bas.n_basis_funcs))
+
+    @pytest.mark.parametrize("bad_n", [0, 1, 2, 4, 100])
+    def test_evaluate_on_grid_rejects_wrong_size(self, bad_n):
+        """Any ``n_samples`` other than ``n_basis_funcs`` raises with an informative message."""
+        bas = Category(3)
+        with pytest.raises(
+            ValueError,
+            match=r"``n_samples`` is fixed by the number of categories",
+        ):
+            bas.evaluate_on_grid(bad_n)
+
+    @pytest.mark.parametrize("args", [(), (3, 3), (3, 3, 3)])
+    def test_evaluate_on_grid_rejects_wrong_arity(self, args):
+        """Anything other than exactly one ``n_samples`` raises."""
+        bas = Category(3)
+        with pytest.raises(
+            ValueError,
+            match=r"``Category`` is one-dimensional",
+        ):
+            bas.evaluate_on_grid(*args)
 
 
 @pytest.mark.parametrize(
