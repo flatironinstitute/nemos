@@ -483,6 +483,7 @@ def setup_glm_hmm_initialization(
             glm_params_init,
             glm_params_init_kwargs,
             AVAIL_INIT_FUNCTIONS_GLM,
+            protocol=InitFunctionGLM,
         )
     elif glm_params_init_kwargs is not None:
         glm_init_funcs["glm_params_init_kwargs"] = _validate_init_funcs_kwargs(
@@ -497,7 +498,11 @@ def setup_glm_hmm_initialization(
             glm_init_funcs["scale_init_kwargs"],
             glm_init_funcs["scale_init_custom"],
         ) = _resolve_init_funcs(
-            "scale_init", scale_init, scale_init_kwargs, AVAIL_INIT_FUNCTIONS_GLM
+            "scale_init",
+            scale_init,
+            scale_init_kwargs,
+            AVAIL_INIT_FUNCTIONS_GLM,
+            protocol=InitFunctionGLM,
         )
     elif scale_init_kwargs is not None:
         glm_init_funcs["scale_init_kwargs"] = _validate_init_funcs_kwargs(

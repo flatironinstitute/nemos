@@ -765,6 +765,7 @@ def _resolve_init_funcs(
     value: str | Callable,
     kwargs: Optional[dict] = None,
     available_init_funcs: dict[str, Callable] = None,
+    protocol=InitFunctionHMM,
 ) -> Tuple[InitFunctionHMM, dict, bool]:
     """
     Validate a provided initialization function.
@@ -783,6 +784,9 @@ def _resolve_init_funcs(
         Optional keyword arguments to pass to the initialization function.
     available_init_funcs:
         Dictionary of available initialization functions and their kwargs (if any) to be used for initialization.
+    protocol :
+        The protocol that the custom function should conform to. This is used to check the required parameters in the
+        function signature.
 
     Returns
     -------
@@ -805,10 +809,12 @@ def _resolve_init_funcs(
                 f"Invalid initialization function name '{value}' for '{key}'. "
                 f"Available options are: {list(available_init_funcs[key].keys())}."
             )
-        kwargs = _validate_init_funcs_kwargs(available_init_funcs[key][value], kwargs)
+        kwargs = _validate_init_funcs_kwargs(
+            available_init_funcs[key][value], kwargs, protocol
+        )
         return available_init_funcs[key][value], kwargs, False
     elif callable(value):
-        return _validate_custom_init_func(value, kwargs)
+        return _validate_custom_init_func(value, kwargs, protocol)
     else:
         raise TypeError(
             f"Initialization function for '{key}' must be either a string or a callable. "
@@ -843,7 +849,9 @@ def _validate_init_funcs_kwargs(
 
 
 def _validate_custom_init_func(
-    func: Callable, kwargs: Optional[dict] = None
+    func: Callable,
+    kwargs: Optional[dict] = None,
+    protocol=InitFunctionHMM,
 ) -> Tuple[InitFunctionHMM, dict, bool]:
     """
     Validate a custom initialization function against the expected signature.
@@ -853,12 +861,13 @@ def _validate_custom_init_func(
 
     Parameters
     ----------
-    key : str
-        The name of the parameter being initialized (e.g., 'initial_proba_init' or 'transition_proba_init').
-    func : Callable
+    func :
         The user-provided initialization function to validate.
-    kwargs : Optional[dict]
+    kwargs :
         Optional keyword arguments to pass to the initialization function.
+    protocol :
+        The protocol that the custom function should conform to. This is used to check the required parameters in the
+        function signature.
 
     Returns
     -------
@@ -876,7 +885,7 @@ def _validate_custom_init_func(
     ValueError
         If the function does not return an array of the expected shape.
     """
-    required_params = _get_protocol_parameters(InitFunctionHMM)
+    required_params = _get_protocol_parameters(protocol)
     sig = inspect.signature(func)
     missing = required_params - sig.parameters.keys()
     if missing:
@@ -884,7 +893,7 @@ def _validate_custom_init_func(
             f"Custom initialization function must have the parameters {sorted(required_params)}. "
             f"Missing: {sorted(missing)}."
         )
-    kwargs = _validate_init_funcs_kwargs(func, kwargs)
+    kwargs = _validate_init_funcs_kwargs(func, kwargs, protocol)
 
     return func, kwargs, True
 

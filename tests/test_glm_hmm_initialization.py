@@ -483,7 +483,7 @@ class TestSetupGLMHMMInitialization:
             ("kmeans", does_not_raise(), kmeans_glm_params_init),
             (None, does_not_raise(), DEFAULT_INIT_FUNCTIONS_GLMHMM["glm_params_init"]),
             (
-                "invalid",
+                "sticky",
                 pytest.raises(ValueError, match="Invalid initialization"),
                 None,
             ),
@@ -506,7 +506,7 @@ class TestSetupGLMHMMInitialization:
             ("kmeans", does_not_raise(), kmeans_scale_init),
             (None, does_not_raise(), DEFAULT_INIT_FUNCTIONS_GLMHMM["scale_init"]),
             (
-                "invalid",
+                "sticky",
                 pytest.raises(ValueError, match="Invalid initialization"),
                 None,
             ),
@@ -581,7 +581,7 @@ class TestSetupGLMHMMInitialization:
     def test_unknown_init_funcs_key(self):
         with pytest.raises(KeyError, match="Unexpected or unknown keys"):
             MockGLMHMM(
-                n_states=2, model_initialization_funcs={"totally_invalid_key": None}
+                n_states=2, model_initialization_funcs={"initial_proba_init": None}
             )
 
     @pytest.mark.parametrize(
@@ -724,7 +724,7 @@ class TestGenerateGLMHMMInitialParams:
     def test_init_funcs_unknown_key_raises(self):
         with pytest.raises(KeyError, match="Unexpected or unknown keys"):
             MockGLMHMM(
-                n_states=2, model_initialization_funcs={"totally_invalid_key": None}
+                n_states=2, model_initialization_funcs={"transition_proba_init": None}
             )
 
     def test_none_init_funcs_uses_defaults(self):
