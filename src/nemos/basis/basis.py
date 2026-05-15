@@ -2910,8 +2910,8 @@ class Category(EvalBasisMixin, CategoryBasis):
         - ``int``: interpreted as the number of categories; labels default to
           ``[0, 1, ..., categories-1]``.
         - ``list`` or ``NDArray``: the explicit list of unique category labels. Note
-        that the category labels will be sorted internally. Column ``i`` of the one-hot
-        encoding will correspond to ``basis.categories[i]``.
+          that the category labels will be sorted internally. Column ``i`` of the one-hot
+          encoding will correspond to ``basis.categories[i]``.
 
     label :
         The label of the basis, intended to be descriptive of the task variable
