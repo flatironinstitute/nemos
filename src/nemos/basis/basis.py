@@ -2938,6 +2938,9 @@ class Category(EvalBasisMixin, CategoryBasis):
 
     Examples
     --------
+    Remember, if you wanted to use this design matrix as a categorical predictor,
+    you'd need to drop a column!
+
     Encode a categorical variable with 3 integer labels:
 
     >>> import numpy as np
