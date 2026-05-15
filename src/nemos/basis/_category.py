@@ -252,7 +252,7 @@ class Category(EvalBasisMixin, AtomicBasisMixin, Basis):
                 [0., 1., 0.],
                 [0., 0., 1.],
                 [1., 0., 0.]],
-
+        <BLANKLINE>
                [[0., 0., 1.],
                 [0., 1., 0.],
                 [1., 0., 0.],
