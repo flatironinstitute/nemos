@@ -355,7 +355,7 @@ class CombinedBasis(BasisFuncsTesting):
 
 def is_eval_basis(basis_cls) -> bool:
     is_eval = "Eval" in basis_cls.__name__ or issubclass(
-        basis_cls, (basis.Zero, basis.CategoryBasis)
+        basis_cls, (basis.Zero, Category)
     )
     return is_eval
 
@@ -382,7 +382,7 @@ def list_all_basis_classes(filter_basis="all") -> list[BasisMixin]:
             for _, bas in inspect_utils.get_non_abstract_classes(nmo.basis._basis)
             if bas != TransformerBasis
         ]
-        + [CustomBasis]
+        + [CustomBasis, Category]
     )
     if filter_basis != "all":
         cond_fn = is_eval_basis if filter_basis == "Eval" else is_conv_basis

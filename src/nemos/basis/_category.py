@@ -19,7 +19,8 @@ if TYPE_CHECKING:
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ._basis import Basis
-from ._basis_mixin import AtomicBasisMixin
+from ._basis_mixin import AtomicBasisMixin, EvalBasisMixin
+from ._composition_utils import add_docstring
 
 
 @support_pynapple(conv_type="jax")
@@ -30,14 +31,14 @@ def one_hot_encoding(
     return jax.nn.one_hot(x, n_classes)
 
 
-class CategoryBasis(AtomicBasisMixin, Basis):
+class Category(EvalBasisMixin, AtomicBasisMixin, Basis):
     """
-    Base class for categorical one-hot encoding.
+    Categorical one-hot encoding basis.
 
     Encodes a categorical variable with ``n_categories`` unique labels as a
-    one-hot matrix of shape ``(n_samples, n_categories)``. Each column
-    corresponds to one category: the entry is 1 when the input equals that
-    category, and 0 everywhere else.
+    one-hot feature matrix of shape ``(n_samples, n_categories)``. Each
+    column corresponds to one category: the entry is 1 when the input equals
+    that category, and 0 everywhere else.
 
     Parameters
     ----------
@@ -46,18 +47,70 @@ class CategoryBasis(AtomicBasisMixin, Basis):
 
         - ``int``: interpreted as the number of categories; labels default to
           ``[0, 1, ..., categories-1]``.
-        - ``list`` or ``NDArray``: the explicit list of unique category labels.
-          When a list is provided, it is converted to an ``NDArray`` via
-          ``np.asarray``. Mixed-type lists will be cast to a common dtype
-          (e.g., ``["a", 1]`` becomes ``array(['a', '1'], dtype='<U21')``).
+        - ``list`` or ``NDArray``: the explicit list of unique category labels. Note
+          that the category labels will be sorted internally. Column ``i`` of the
+          one-hot encoding will correspond to ``basis.categories[i]``. When a list
+          is provided, it is converted to an ``NDArray`` via ``np.asarray``.
+          Mixed-type lists will be cast to a common dtype (e.g., ``["a", 1]``
+          becomes ``array(['a', '1'], dtype='<U21')``).
 
-    out_of_category:
+    out_of_category :
         If False, raise if labels that do not belong to ``categories`` are provided,
         else encode the out-of-category labels as all 0s.
 
     label :
         The label of the basis, intended to be descriptive of the task variable
         being processed. For example: ``"trial_type"``, ``"stimulus_id"``.
+
+    Notes
+    -----
+    **Design matrix identifiability.**
+
+    This basis produces a *full* encoding: one column per category. Because
+    NeMoS GLMs include an intercept, including all columns of a
+    ``Category`` basis as a standalone predictor introduces perfect
+    collinearity — the column sum equals the intercept column. Always drop
+    one column per categorical variable when using categories as main
+    effects; the dropped category becomes the reference level and all
+    retained coefficients are contrasts against it.
+
+    When ``Category`` is multiplied with a continuous basis (the recommended
+    use), the intercept is not involved and no column needs to be dropped.
+
+    For a detailed discussion of identifiability, reference-level choice,
+    and the effect of regularization, see the
+    :ref:`identifiability guide <categorical_identifiability>`.
+
+    Examples
+    --------
+    Encode a categorical variable with 3 integer labels:
+
+    >>> import numpy as np
+    >>> from nemos.basis import Category
+    >>> basis = Category(3)
+    >>> basis.n_basis_funcs
+    3
+    >>> labels = np.array([0, 1, 2, 0])
+    >>> features = basis.compute_features(labels)
+    >>> features.shape
+    (4, 3)
+
+    Standalone categorical predictor with reference coding (drop one column):
+
+    >>> basis = Category(["Tri", "Sq"])
+    >>> X = basis.compute_features(np.array(["Tri", "Sq", "Tri", "Sq"]))
+    >>> X = X[:, 1:]  # "Tri" is the reference; remaining column is the "Sq" contrast
+    >>> X.shape
+    (4, 1)
+
+    Category-specific tuning curves via basis product (no column dropping needed):
+
+    >>> from nemos.basis import RaisedCosineLinearEval
+    >>> speed = np.random.randn(20)
+    >>> context = np.random.choice(["L", "R"], size=20)
+    >>> bas = Category(["L", "R"]) * RaisedCosineLinearEval(5)
+    >>> X = bas.compute_features(context, speed)
+
     """
 
     _convert_to_float = False
@@ -66,7 +119,7 @@ class CategoryBasis(AtomicBasisMixin, Basis):
     def __init__(
         self,
         categories: List | NDArray | int,
-        out_of_category: str | int | float | None,
+        out_of_category: bool = True,
         label: Optional[str] = None,
     ):
         n_categories = self._get_n_categories(categories)
@@ -74,14 +127,13 @@ class CategoryBasis(AtomicBasisMixin, Basis):
         self.out_of_category = out_of_category
         self.categories = categories
         self._n_inputs = 1
-        Basis.__init__(
-            self,
-        )
+        Basis.__init__(self)
         AtomicBasisMixin.__init__(
             self,
             n_basis_funcs=self.n_basis_funcs,
             label=label,
         )
+        EvalBasisMixin.__init__(self, bounds=None)
 
     @property
     def out_of_category(self) -> int | str | float | None:
@@ -182,6 +234,31 @@ class CategoryBasis(AtomicBasisMixin, Basis):
         ------
         ValueError
             If any label in ``xi`` is not in the set of known categories.
+
+        Notes
+        -----
+        The `evaluate` method returns an array of shape ``(*xi.shape, n_basis_funcs)``.
+        The method preserves the input shape and appends an extra basis axis.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import Category
+        >>> basis = Category(3)
+        >>> x = np.array([[0, 1, 2, 0], [2, 1, 0, 0]])
+        >>> out = basis.evaluate(x)
+        >>> out
+        Array([[[1., 0., 0.],
+                [0., 1., 0.],
+                [0., 0., 1.],
+                [1., 0., 0.]],
+
+               [[0., 0., 1.],
+                [0., 1., 0.],
+                [1., 0., 0.],
+                [1., 0., 0.]]], dtype=...)
+        >>> x.shape, out.shape
+        ((2, 4), (2, 4, 3))
         """
         # Encoded could be an array or nap tsd, with integer dtype.
         if not self.out_of_category and not isinstance(xi, Tracer):
@@ -197,6 +274,68 @@ class CategoryBasis(AtomicBasisMixin, Basis):
             # one_hot_encoding will assign 0s where encoded == -1
             encoded = self._set_out_of_category(xi, encoded)
         return one_hot_encoding(encoded, self._label_encoder.n_classes)
+
+    @add_docstring("_compute_features", EvalBasisMixin)
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import Category
+        >>> labels = np.array([0, 0, 2, 1])
+        >>> basis = Category(3)
+        >>> basis.compute_features(labels)
+        Array([[1., 0., 0.],
+               [1., 0., 0.],
+               [0., 0., 1.],
+               [0., 1., 0.]], dtype=float...)
+
+        """
+        # ruff: noqa: D205, D400
+        return super().compute_features(xi)
+
+    @add_docstring("split_by_feature", AtomicBasisMixin)
+    def split_by_feature(
+        self,
+        x: NDArray,
+        axis: int = 1,
+    ):
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import Category
+        >>> basis = Category(3, label="stimulus")
+        >>> X = basis.compute_features(np.array([0, 1, 2, 0, 1]))
+        >>> split_features = basis.split_by_feature(X, axis=1)
+        >>> for feature, arr in split_features.items():
+        ...     print(f"{feature}: shape {arr.shape}")
+        stimulus: shape (5, 3)
+
+        """
+        # ruff: noqa: D205, D400
+        return super().split_by_feature(x, axis=axis)
+
+    @add_docstring("set_input_shape", AtomicBasisMixin)
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> basis = nmo.basis.Category(3)
+        >>> # Configure with an integer input:
+        >>> _ = basis.set_input_shape(1)
+        >>> basis.n_output_features
+        3
+        >>> # Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        60
+
+        """
+        # ruff: noqa: D205, D400
+        return AtomicBasisMixin.set_input_shape(self, xi)
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Raise for categorical basis."""
