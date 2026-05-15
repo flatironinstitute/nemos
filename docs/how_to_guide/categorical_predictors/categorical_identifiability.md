@@ -14,6 +14,13 @@ kernelspec:
 (categorical_identifiability)=
 # Technical Note: Redundancy in Categorical Designs
 
+In this notebook, we're discussing a basic issue with categorical predictors in linear (and related) models. Thus, we'll discuss this problem using the following notation:
+
+- $X \in \mathbb{R}^{N \times F}$ is the N-samples by F-features design matrix.
+- $w \in \mathbb{R}^F$ are the model coefficients.
+- $c \in \mathbb{R}$ is the model intercept.
+
+
 ## Why Does Redundancy Arise?
 
 When the [`Category`](nemos.basis.Category) basis is used as a standalone main-effect predictor
@@ -31,8 +38,8 @@ print("One-hot encoding:\n", X)
 print("Sum over columns:", X.sum(axis=1))
 ```
 
-Because the one-hot columns sum to a vector of ones, we can find coefficients $\mathbf{w}$ and
-intercept $c$ for which $X \cdot \mathbf{w} + c = 0$:
+
+Because the columns of our design matrix sum to a vector of ones, we can find coefficients $\mathbf{w}$ and intercept $c$ for which $X \cdot \mathbf{w} + c = 0$:
 
 ```{code-cell} ipython3
 c = -1
@@ -41,8 +48,11 @@ w = np.array([1, 1])
 print("X @ w + c:", X @ w + c)
 ```
 
-Stacking $c$ and $\mathbf{w}$ into a single vector $\mathbf{v} = [c, \mathbf{w}]$ and prepending
-an all-ones column to $X$ gives the compact form $X_\text{aug} \cdot \mathbf{v} = 0$:
+This is bad! It means that our design matrix has a [null space](https://en.wikipedia.org/wiki/Kernel_(linear_algebra)), vectors we can add to the parameters that have no effect on the model predictions. This is what gives rise to the problem: our model cannot distinguish between different sets of parameters if their only differences lie in the null space. This both makes optimization more difficult and prevents us from interpreting the parameters.
+
+Let's unpack this a bit more.
+
+Stacking $c$ and $\mathbf{w}$ into a single vector $\mathbf{v} = [c, \mathbf{w}]$ and prepending an all-ones column to $X$ gives the compact form $X_\text{aug} \cdot \mathbf{v} = 0$, where $X_\text{aug} = \left[1 | X \right]$. Although equivalent to the formulation above, this augmented representation is more mathematically convenient, so we will use it for the remainder of the notebook.
 
 ```{code-cell} ipython3
 v = np.hstack([c, w])
@@ -64,8 +74,8 @@ print("X_aug @ (params + alpha*v): ", X_aug @ (params + alpha * v))
 Models with parameters $[c, \mathbf{w}]$ and $[c, \mathbf{w}] + \alpha \cdot \mathbf{v}$ predict the same firing rate for any $\alpha \in \mathbb{R}$.
 This is **non-identifiability**: the data alone cannot distinguish between them, and there is no unique optimal solution.
 
-A practical way to detect this redundancy is to check whether the rank of `X_aug = [1 | X]` is strictly less than number of its columns.
-**The rank is the number of linearly independent columns**, so if it is smaller than the total number of columns, some columns must be redundant. In that case, a non-trivial null space exists, i.e., there are non-zero vectors $\mathbf{v}$ such that $X_\text{aug} \cdot \mathbf{v} = 0$:
+A practical way to detect this redundancy is to check whether the rank of $X_\text{aug}$ is strictly less than number of its columns.
+[**The rank is the number of linearly independent columns**](https://en.wikipedia.org/wiki/Rank_(linear_algebra)?utm_source=chatgpt.com), so if it is smaller than the total number of columns, some columns must be redundant. In that case, a non-trivial null space exists, i.e., there are non-zero vectors $\mathbf{v}$ such that $X_\text{aug} \cdot \mathbf{v} = 0$:
 
 ```{code-cell} ipython3
 print(f"Rank of [1 | X]:   {np.linalg.matrix_rank(X_aug)}")
@@ -75,8 +85,7 @@ print(f"Number of columns: {X_aug.shape[1]}")
 
 ## Reference Coding: A Simple Way to Recover Identifiability
 
-Drop one column from the full encoding. The retained columns become *contrasts* against the
-dropped (reference) category. All columns are now linearly independent:
+One way to solve this problem, known as "reference coding", is to drop one column from the full encoding. The retained columns become *contrasts* against the dropped (reference) category. All columns are now linearly independent:
 
 ```{code-cell} ipython3
 X_ref = X[:, 1:]  # drop "L"; the remaining column codes "R" vs "L"

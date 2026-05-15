@@ -2985,18 +2985,32 @@ class Category(EvalBasisMixin, CategoryBasis):
     @add_docstring("evaluate", CategoryBasis)
     def evaluate(self, xi: ArrayLike) -> NDArray:
         """
+        Notes
+        -----
+        The `evaluate` method returns an array of shape ``(*xi.shape, n_basis_funcs)``.
+        The method preserves the input shape and appends an extra basis axis.
+
         Examples
         --------
         >>> import numpy as np
         >>> from nemos.basis import Category
         >>> basis = Category(3)
-        >>> basis.evaluate(np.array([0, 1, 2, 0]))
-        Array([[1., 0., 0.],
-               [0., 1., 0.],
-               [0., 0., 1.],
-               [1., 0., 0.]], dtype=float...)
+        >>> x = np.array([[0, 1, 2, 0], [2, 1, 0, 0]])
+        >>> out = basis.evaluate(x)
+        >>> out
+        Array([[[1., 0., 0.],
+                [0., 1., 0.],
+                [0., 0., 1.],
+                [1., 0., 0.]],
+
+               [[0., 0., 1.],
+                [0., 1., 0.],
+                [1., 0., 0.],
+                [1., 0., 0.]]], dtype=...)
+        >>> x.shape, out.shape
+        ((2, 4), (2, 4, 3))
         """
-        # ruff: noqa: D205, D400
+        # ruff: noqa: D205, D400, D401
         return super().evaluate(xi)
 
     @add_docstring("_compute_features", EvalBasisMixin)
@@ -3006,7 +3020,6 @@ class Category(EvalBasisMixin, CategoryBasis):
         --------
         >>> import numpy as np
         >>> from nemos.basis import Category
-
         >>> labels = np.array([0, 0, 2, 1])
         >>> basis = Category(3)
         >>> basis.compute_features(labels)

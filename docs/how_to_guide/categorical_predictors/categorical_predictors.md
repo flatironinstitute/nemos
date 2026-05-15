@@ -16,7 +16,29 @@ kernelspec:
 
 There are two main supported uses for Category in nemos: using the category as a standalone predictor / main effect, and multiplying it by a continuous basis to estimate category-specific tuning curves. We'll show both below.
 
+## Standalone Categorical Predictors: Why do we recommend dropping a column?
+
+To add a category as a main effect, drop one column after calling
+`compute_features`. The dropped category becomes the reference level and all
+remaining coefficients are contrasts against it:
+```{code-cell} ipython3
+cat_basis = nmo.basis.Category(["L", "R"])
+X_cat = cat_basis.compute_features(context)
+X_cat = X_cat[:, 1:]  # "L" is the reference; remaining column codes "R" vs "L"
+```
+
+:::{warning}
+NeMoS GLMs include an intercept. Including all columns of a `Category` basis
+as a standalone predictor introduces perfect collinearity — the column sum
+equals the intercept column. Always drop one column per categorical variable
+when using categories as main effects.
+For a detailed discussion of identifiability and the effect of regularization,
+see [Identifiability of Categorical Predictors](categorical_identifiability).
+:::
+
 ## Splitting a Continuous Variable by Category
+
+There are two main supported uses for `Category` in nemos: using the category as a standalone predictor / main effect, and multiplying it by a continuous basis to estimate category-specific tuning curves. We'll show both below.
 
 The primary use of the [`Category`](nemos.basis.Category) basis in NeMoS is to estimate category-specific
 tuning curves by multiplying it with a continuous basis.
@@ -39,25 +61,6 @@ print("X.shape: ", X.shape)  # (4, 6): 3 basis functions × 2 categories
 
 ```
 
-## Standalone Categorical Predictors: Why do we recommend dropping a column?
-
-To add a category as a main effect, drop one column after calling
-`compute_features`. The dropped category becomes the reference level and all
-remaining coefficients are contrasts against it:
-```{code-cell} ipython3
-cat_basis = nmo.basis.Category(["L", "R"])
-X_cat = cat_basis.compute_features(context)
-X_cat = X_cat[:, 1:]  # "L" is the reference; remaining column codes "R" vs "L"
-```
-
-:::{warning}
-NeMoS GLMs include an intercept. Including all columns of a `Category` basis
-as a standalone predictor introduces perfect collinearity — the column sum
-equals the intercept column. Always drop one column per categorical variable
-when using categories as main effects.
-For a detailed discussion of identifiability and the effect of regularization,
-see [Identifiability of Categorical Predictors](categorical_identifiability).
-:::
 
 ## Complex Designs
 
@@ -121,9 +124,6 @@ Full one-hot encoding of each term in the formula — the two categorical variab
 ```{code-cell} ipython3
 model = nmo.glm.GLM().fit(design_df, counts)
 ```
-
-
-## NeMoS `Category` vs `patsy`
 
 NeMoS [`Category`](nemos.basis.Category) basis provides a simple dummy coding of categorical variables. This is just one of the many encoding schemes that `patsy` provides.
 

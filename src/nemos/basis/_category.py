@@ -90,7 +90,7 @@ class CategoryBasis(AtomicBasisMixin, Basis):
     @out_of_category.setter
     def out_of_category(self, out_of_category: bool):
         if not isinstance(out_of_category, bool):
-            raise TypeError("``out_of_category`` must be a boolean (True or False).")
+            raise TypeError("``out_of_category`` must be a boolean.")
         self._out_of_category = out_of_category
 
     @property
