@@ -30,8 +30,6 @@ class NewtonSolverProtocol(SolverProtocol[SolverState], Protocol, Generic[Solver
 class NewtonState(eqx.Module):
     """State of the Newton optimization process."""
 
-    iter_num: int
-    converged: bool
     grad_norm: float
     stats: OptimizationInfo
     ls_state: Optional[Any] = None
@@ -43,16 +41,10 @@ class _Newton:
     def __init__(
         self,
         func: Callable,
-        maxiter: int = 30,
         tol: float = 1e-6,
-        force_autodiff_hessian: bool = False,
-        jit: bool = True,
     ):
         self.func = func
-        self.maxiter = maxiter
         self.tol = tol
-        self.force_autodiff_hessian = force_autodiff_hessian
-        self.jit = jit
 
         self._val_and_grad = jax.value_and_grad(func)
 
@@ -77,8 +69,6 @@ class _Newton:
             self._hess_tag = HessianTag(structure=Full, property=General)
 
         return NewtonState(
-            iter_num=jnp.array(0),
-            converged=jnp.array(False),
             grad_norm=jnp.array(jnp.inf),
             stats=OptimizationInfo(
                 function_val=jnp.array(jnp.nan),
@@ -95,7 +85,7 @@ class _Newton:
         g_flat,
         tag: HessianTag,
     ):
-        if tag.structure is BlockDiagonal and not self.force_autodiff_hessian:
+        if tag.structure is BlockDiagonal and H.ndim == 3:
 
             def _solve_subproblem(H_sub, g_flat_sub):
                 return self.newton_step(
@@ -125,7 +115,14 @@ class _Newton:
 
         return step_flat
 
-    def update(self, params, state: NewtonState, *args):
+    def update(
+        self,
+        params,
+        state: NewtonState,
+        *args,
+        maxiter: int,
+        force_autodiff_hessian: bool,
+    ):
         params_flat, unravel = ravel_pytree_nest(params)
 
         def value_fn_flat(x):
@@ -141,7 +138,7 @@ class _Newton:
         def do_step(_):
             H = (
                 self._hess_fn(params, *args)
-                if (not self.force_autodiff_hessian and self._hess_fn is not None)
+                if (not force_autodiff_hessian and self._hess_fn is not None)
                 else jax.hessian(value_fn_flat)(params_flat)
             )
 
@@ -188,43 +185,52 @@ class _Newton:
             operand=None,
         )
 
-        new_iter = jnp.where(converged, state.iter_num, state.iter_num + 1)
+        new_iter = jnp.where(
+            converged, state.stats.num_steps, state.stats.num_steps + 1
+        )
 
         new_stats = OptimizationInfo(
             function_val=f,
             num_steps=new_iter,
             converged=converged,
-            reached_max_steps=new_iter >= self.maxiter,
+            reached_max_steps=new_iter >= maxiter,
         )
 
         new_state = NewtonState(
-            iter_num=new_iter,
-            converged=converged,
             grad_norm=gnorm,
             stats=new_stats,
             ls_state=new_ls_state,
         )
 
-        return new_params, new_state, None
+        return new_params, new_state
 
-    def run(self, init_params, *args):
+    def run(
+        self,
+        init_params,
+        *args,
+        jit: bool = True,
+        force_autodiff_hessian: bool = False,
+        maxiter: int = 100,
+    ):
         state = self.init_state(init_params, *args)
         params = init_params
 
-        if self.jit:
+        if jit:
 
             def cond(carry):
                 params, state = carry
 
-                return (~state.converged) & (state.iter_num < self.maxiter)
+                return (~state.stats.converged) & (state.stats.num_steps < maxiter)
 
             def body(carry):
                 params, state = carry
 
-                params, state, _ = self.update(
+                params, state = self.update(
                     params,
                     state,
                     *args,
+                    force_autodiff_hessian=force_autodiff_hessian,
+                    maxiter=maxiter,
                 )
 
                 return params, state
@@ -237,16 +243,18 @@ class _Newton:
             )
 
         else:
-            for _ in range(self.maxiter):
-                params, state, _ = self.update(
+            for _ in range(maxiter):
+                params, state = self.update(
                     params,
                     state,
                     *args,
+                    force_autodiff_hessian=force_autodiff_hessian,
+                    maxiter=maxiter,
                 )
-                if state.converged:
+                if state.stats.converged:
                     break
 
-        return params, state, None
+        return params, state
 
 
 class Newton(NewtonSolverProtocol[NewtonState]):
@@ -257,15 +265,20 @@ class Newton(NewtonSolverProtocol[NewtonState]):
         regularizer_strength: float | None,
         has_aux: bool,
         init_params: Params | None = None,
+        jit: bool = True,
+        force_autodiff_hessian: bool = False,
+        maxiter: int = 100,
         **solver_kwargs,
     ):
+        self.jit = jit
+        self.force_autodiff_hessian = force_autodiff_hessian
+        self.maxiter = maxiter
+
         loss_fn = regularizer.penalized_loss(
             unregularized_loss,
             params=init_params,
             strength=regularizer_strength,
         )
-
-        self.regularizer_strength = regularizer_strength
 
         self.fun = loss_fn
         self.fun_with_aux = wrap_aux(self.fun)
@@ -287,10 +300,28 @@ class Newton(NewtonSolverProtocol[NewtonState]):
         return self._solver.init_state(init_params, *args)
 
     def update(self, params: Params, state: NewtonState, *args):
-        return self._solver.update(params, state, *args)
+        return (
+            *self._solver.update(
+                params,
+                state,
+                *args,
+                force_autodiff_hessian=self.force_autodiff_hessian,
+                maxiter=self.maxiter,
+            ),
+            None,
+        )
 
     def run(self, init_params: Params, *args):
-        return self._solver.run(init_params, *args)
+        return (
+            *self._solver.run(
+                init_params,
+                *args,
+                jit=self.jit,
+                force_autodiff_hessian=self.force_autodiff_hessian,
+                maxiter=self.maxiter,
+            ),
+            None,
+        )
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
@@ -306,9 +337,4 @@ class Newton(NewtonSolverProtocol[NewtonState]):
         state: NewtonState,
         **kwargs,
     ) -> OptimizationInfo:
-        return OptimizationInfo(
-            function_val=state.stats.function_val,
-            num_steps=state.stats.num_steps,
-            converged=state.stats.converged,
-            reached_max_steps=state.stats.reached_max_steps,
-        )
+        return state.stats
