@@ -6,6 +6,7 @@ from typing import Any, Callable, Optional
 
 import jax
 import jax.numpy as jnp
+from jax.flatten_util import ravel_pytree
 
 
 def _get_not_inf(array: jnp.ndarray) -> jnp.ndarray:
@@ -227,3 +228,51 @@ def drop_nans(*trees):
         jax.tree_util.tree_map(lambda x: x[is_valid], par) if par is not None else None
         for par in trees
     ]
+
+
+def ravel_pytree_nest(pytree):
+    """Batch-last pytree ravel that also supports non-batched pytrees."""
+
+    leaves, treedef = jax.tree.flatten(pytree)
+
+    # detect batch dimension
+    batch_dims = [x.shape[-1] for x in leaves if x.ndim > 0]
+    is_batched = len(batch_dims) > 0 and all(b == batch_dims[0] for b in batch_dims)
+
+    if not is_batched:
+        flat, unravel = ravel_pytree(pytree)
+        return flat, unravel
+
+    batch_size = batch_dims[0]
+
+    # per-sample extraction (batch-last)
+    def get_i(i):
+        return jax.tree.map(
+            lambda x: jnp.take(x, i, axis=-1) if x.ndim > 0 else x,
+            pytree,
+        )
+
+    # define layout from one sample
+    sample0 = get_i(0)
+    _, unravel = ravel_pytree(sample0)
+
+    # flatten per sample
+    def ravel_one(i):
+        sample = get_i(i)
+        flat, _ = ravel_pytree(sample)
+        return flat
+
+    flat = jax.vmap(ravel_one)(jnp.arange(batch_size)).reshape(-1)
+
+    # inverse
+    def unravel_nest(x_flat):
+        per_sample = x_flat.reshape(batch_size, -1)
+
+        samples = jax.vmap(unravel)(per_sample)
+
+        return jax.tree_util.tree_map(
+            lambda x: jnp.moveaxis(x, 0, -1) if x.ndim > 0 else x,
+            samples,
+        )
+
+    return flat, unravel_nest

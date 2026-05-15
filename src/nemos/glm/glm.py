@@ -1717,7 +1717,7 @@ class PopulationGLM(GLM):
 
                 blocks.append(block)
 
-            return jnp.stack(blocks, axis=0)
+            return jnp.stack(blocks)
 
         return hess
 

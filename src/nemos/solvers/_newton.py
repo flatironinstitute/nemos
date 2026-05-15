@@ -10,12 +10,12 @@ import jax
 import jax.numpy as jnp
 import lineax as lx
 import optax
-from jax.flatten_util import ravel_pytree
 
+from ..tree_utils import ravel_pytree_nest
 from ..typing import Params
 from ._abstract_solver import OptimizationInfo, SolverProtocol, SolverState
 from ._aux_helpers import wrap_aux
-from ._hess import BlockDiagonal, Full, HessianTag, PositiveDefinite
+from ._hess import BlockDiagonal, Full, General, HessianTag, PositiveDefinite
 
 
 @runtime_checkable
@@ -66,13 +66,15 @@ class _Newton:
         self._linear_solver: lx.AbstractLinearSolver = lx.LU()
 
     def init_state(self, init_params, *args):
-        params_flat, _ = ravel_pytree(init_params)
+        params_flat, _ = ravel_pytree_nest(init_params)
 
         ls_state = (
             self._line_search.init(params_flat)
             if self._line_search is not None
             else None
         )
+        if self._hess_tag is None:
+            self._hess_tag = HessianTag(structure=Full, property=General)
 
         return NewtonState(
             iter_num=jnp.array(0),
@@ -90,51 +92,19 @@ class _Newton:
     def newton_step(
         self,
         H,
-        g,
+        g_flat,
         tag: HessianTag,
     ):
-        """Compute Newton step matching structure of g."""
+        if tag.structure is BlockDiagonal and not self.force_autodiff_hessian:
 
-        #
-        # Recursive block-diagonal case
-        #
-        if tag.structure is BlockDiagonal:
-            step_tree = jax.vmap(
-                lambda h, gc, gi: self.newton_step(
-                    h,
-                    eqx.tree_at(
-                        lambda p: (p.coef, p.intercept),
-                        g,
-                        (gc, gi),
-                    ),
+            def _solve_subproblem(H_sub, g_flat_sub):
+                return self.newton_step(
+                    H_sub,
+                    g_flat_sub,
                     HessianTag(Full, tag.property),
                 )
-            )(
-                H,
-                g.coef.T,
-                g.intercept,
-            )
 
-            return eqx.tree_at(
-                lambda p: (p.coef, p.intercept),
-                step_tree,
-                (
-                    step_tree.coef.T,
-                    step_tree.intercept,
-                ),
-            )
-        #
-        # Base case: full matrix
-        #
-        g_coef = g.coef
-        g_intercept = g.intercept
-
-        g_flat = jnp.concatenate(
-            [
-                jnp.ravel(g_coef),
-                jnp.ravel(g_intercept),
-            ]
-        )
+            return jax.vmap(_solve_subproblem)(H, g_flat.reshape(H.shape[0], -1))
 
         if tag.property is PositiveDefinite:
             step_flat = lx.linear_solve(
@@ -153,37 +123,33 @@ class _Newton:
                 lx.LU(),
             ).value
 
-        return eqx.tree_at(
-            lambda p: (p.coef, p.intercept),
-            g,
-            (
-                step_flat[:-1],
-                step_flat[-1],
-            ),
-        )
+        return step_flat
 
     def update(self, params, state: NewtonState, *args):
-        def value_fn(p):
-            return self.func(p, *args)
+        params_flat, unravel = ravel_pytree_nest(params)
 
-        f, g_tree = self._val_and_grad(params, *args)
+        def value_fn_flat(x):
+            return self.func(unravel(x), *args)
 
-        gnorm = jnp.sqrt(optax.tree_utils.tree_vdot(g_tree, g_tree))
+        f = value_fn_flat(params_flat)
+
+        g_flat = jax.grad(value_fn_flat)(params_flat)
+
+        gnorm = jnp.linalg.norm(g_flat)
         converged = gnorm <= self.tol
 
         def do_step(_):
             H = (
                 self._hess_fn(params, *args)
                 if (not self.force_autodiff_hessian and self._hess_fn is not None)
-                else jax.hessian(value_fn)(params)
+                else jax.hessian(value_fn_flat)(params_flat)
             )
 
-            step_tree = self.newton_step(H, g_tree, self._hess_tag)
+            step_flat = self.newton_step(H, g_flat, self._hess_tag)
 
-            #
-            # Descent check
-            #
-            descent = optax.tree_utils.tree_vdot(g_tree, step_tree) < 0.0
+            descent = jnp.vdot(g_flat, step_flat) < 0.0
+
+            step_tree = unravel(step_flat)
 
             def accept_step(_):
                 if self._line_search is not None:
@@ -192,8 +158,8 @@ class _Newton:
                         state.ls_state,
                         params,
                         value=f,
-                        grad=g_tree,
-                        value_fn=value_fn,
+                        grad=step_tree,  # now consistent (tree form)
+                        value_fn=lambda p: self.func(p, *args),
                     )
                 else:
                     updates = step_tree
@@ -210,12 +176,7 @@ class _Newton:
             def reject_step(_):
                 return params, state.ls_state
 
-            return jax.lax.cond(
-                descent,
-                accept_step,
-                reject_step,
-                operand=None,
-            )
+            return jax.lax.cond(descent, accept_step, reject_step, operand=None)
 
         def no_step(_):
             return params, state.ls_state
@@ -227,11 +188,7 @@ class _Newton:
             operand=None,
         )
 
-        new_iter = jnp.where(
-            converged,
-            state.iter_num,
-            state.iter_num + 1,
-        )
+        new_iter = jnp.where(converged, state.iter_num, state.iter_num + 1)
 
         new_stats = OptimizationInfo(
             function_val=f,

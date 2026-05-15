@@ -132,6 +132,7 @@ VALID_PAIRS = [
     {"dirichlet_initial_proba", "dirichlet_transition_proba"},
     {"random_key_pair", "random_key"},
     {"tag", "tags"},
+    {"x_flat", "g_flat"},
 ]
 
 
