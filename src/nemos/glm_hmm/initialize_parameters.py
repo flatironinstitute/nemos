@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
 from typing import Any, Callable, Dict, Literal, Optional, Protocol, Tuple
 
 import jax
@@ -13,12 +12,10 @@ from ..glm import GLM, PopulationGLM
 from ..glm.initialize_parameters import initialize_intercept_matching_mean_rate
 from ..glm.params import GLMUserParams
 from ..hmm.initialize_parameters import (
-    DEFAULT_INIT_FUNCTIONS,
     InitFunctionHMM,
     KMeansInitializer,
-    _get_protocol_parameters,
+    _resolve_init_funcs,
     _validate_init_funcs_kwargs,
-    setup_hmm_initialization,
 )
 from ..pytrees import FeaturePytree
 from ..type_casting import cast_to_jax
@@ -127,6 +124,8 @@ class KMeansInitializerGLM(KMeansInitializer):
         Output data (e.g., neural activity) of shape (n_samples,).
     inverse_link_function :
         Inverse link function of the GLM.
+    observation_model :
+        Observation model of the GLM.
     is_new_session :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
         (default), it is assumed that all data belongs to a single session.
@@ -146,9 +145,9 @@ class KMeansInitializerGLM(KMeansInitializer):
         X: DESIGN_INPUT_TYPE,
         y: NDArray | jnp.ndarray,
         inverse_link_function: Callable,
+        observation_model: str,
         is_new_session: Optional[jnp.ndarray] = None,
         glm_kwargs: Optional[Dict[str, Any]] = None,
-        minimum_prob: float = 0.02,
         random_key: int | jax.Array = 0,
     ):
         super().__init__(
@@ -156,7 +155,6 @@ class KMeansInitializerGLM(KMeansInitializer):
             X,
             y,
             is_new_session,
-            minimum_prob=minimum_prob,
             random_key=random_key,
         )
         self._X = jax.tree_util.tree_map(jnp.asarray, X)
@@ -164,13 +162,26 @@ class KMeansInitializerGLM(KMeansInitializer):
             self._X = self._X.data
         self._y = jnp.asarray(y)
         self.inverse_link_function = inverse_link_function
+        self.observation_model = observation_model
         self.glm_kwargs = glm_kwargs if glm_kwargs is not None else {}
         if self._y.ndim == 1:
-            self._glm_models = {i: GLM(**self.glm_kwargs) for i in range(self.n_states)}
+            self._glm_models = {
+                i: GLM(
+                    observation_model=observation_model,
+                    inverse_link_function=inverse_link_function,
+                    **self.glm_kwargs,
+                )
+                for i in range(self.n_states)
+            }
             self._is_population = False
         else:
             self._glm_models = {
-                i: PopulationGLM(**self.glm_kwargs) for i in range(self.n_states)
+                i: PopulationGLM(
+                    observation_model=observation_model,
+                    inverse_link_function=inverse_link_function,
+                    **self.glm_kwargs,
+                )
+                for i in range(self.n_states)
             }
             self._is_population = True
 
@@ -231,9 +242,9 @@ def kmeans_glm_params_init(
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
     inverse_link_function: Callable,
+    observation_model: str,
     is_new_session: Optional[jnp.ndarray] = None,
     glm_kwargs: Optional[dict] = None,
-    minimum_prob: float = 0.02,
     random_key: Optional[jax.Array] = None,
     initializer: Optional[KMeansInitializer] = None,
 ):
@@ -250,15 +261,13 @@ def kmeans_glm_params_init(
         Output data (e.g., neural activity) of shape (n_samples,).
     inverse_link_function :
         Inverse link function of the GLM.
+    observation_model :
+        Observation model of the GLM.
     is_new_session :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
         (default), it is assumed that all data belongs to a single session.
     glm_kwargs:
         GLM parameters as keyword arguments. These are passed at model initialization.
-    minimum_prob :
-        Minimum probability added to each state to avoid zero probabilities.
-        Note that probabilities will be renormalized after adding this minimum value, so the final
-        probabilities will not be exactly this value.
     random_key :
         Random key for reproducibility of KMeans initialization.
     initializer :
@@ -277,9 +286,9 @@ def kmeans_glm_params_init(
             X,
             y,
             inverse_link_function,
+            observation_model,
             is_new_session,
             glm_kwargs,
-            minimum_prob,
             random_key,
         )
     return initializer.glm_params()
@@ -290,9 +299,9 @@ def kmeans_scale_init(
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
     inverse_link_function: Callable,
+    observation_model: str,
     is_new_session: Optional[jnp.ndarray] = None,
     glm_kwargs: Optional[dict] = None,
-    minimum_prob: float = 0.02,
     random_key: Optional[jax.Array] = None,
     initializer: Optional[KMeansInitializer] = None,
 ):
@@ -309,15 +318,13 @@ def kmeans_scale_init(
         Output data (e.g., neural activity) of shape (n_samples,).
     inverse_link_function :
         Inverse link function of the GLM.
+    observation_model :
+        Observation model of the GLM.
     is_new_session :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
         (default), it is assumed that all data belongs to a single session.
     glm_kwargs:
         GLM parameters as keyword arguments. These are passed at model initialization.
-    minimum_prob :
-        Minimum probability added to each state to avoid zero probabilities.
-        Note that probabilities will be renormalized after adding this minimum value, so the final
-        probabilities will not be exactly this value.
     random_key :
         Random key for reproducibility of KMeans initialization.
     initializer :
@@ -336,9 +343,9 @@ def kmeans_scale_init(
             X,
             y,
             inverse_link_function,
+            observation_model,
             is_new_session,
             glm_kwargs,
-            minimum_prob,
             random_key,
         )
     return initializer.scale()
@@ -391,7 +398,7 @@ def constant_scale_init(
     return scale
 
 
-GLM_INIT_FUNCS = {
+DEFAULT_INIT_FUNCTIONS_GLMHMM = {
     "glm_params_init": random_glm_params_init,
     "glm_params_init_kwargs": {},
     "glm_params_init_custom": False,
@@ -399,8 +406,6 @@ GLM_INIT_FUNCS = {
     "scale_init_kwargs": {},
     "scale_init_custom": False,
 }
-DEFAULT_INIT_FUNCTIONS_GLMHMM = DEFAULT_INIT_FUNCTIONS.copy()
-DEFAULT_INIT_FUNCTIONS_GLMHMM.update(GLM_INIT_FUNCS)
 
 AVAIL_INIT_FUNCTIONS_GLM = {
     "glm_params_init": {
@@ -412,12 +417,6 @@ AVAIL_INIT_FUNCTIONS_GLM = {
 
 GLMHMM_INITIALIZATION_FN_DICT = dict[
     Literal[
-        "initial_proba_init",
-        "initial_proba_init_kwargs",
-        "initial_proba_init_custom",
-        "transition_proba_init",
-        "transition_proba_init_kwargs",
-        "transition_proba_init_custom",
         "glm_params_init",
         "glm_params_init_kwargs",
         "glm_params_init_custom",
@@ -429,52 +428,7 @@ GLMHMM_INITIALIZATION_FN_DICT = dict[
 ]
 
 
-def _validate_custom_glm_init_func(
-    func: Callable, kwargs: Optional[dict] = None
-) -> Tuple[InitFunctionGLM, dict, bool]:
-    """Validate a custom GLM initialization function against InitFunctionGLM."""
-    required_params = _get_protocol_parameters(InitFunctionGLM)
-    sig = inspect.signature(func)
-    missing = required_params - sig.parameters.keys()
-    if missing:
-        raise ValueError(
-            f"Custom initialization function must have the parameters {sorted(required_params)}. "
-            f"Missing: {sorted(missing)}."
-        )
-    kwargs = _validate_init_funcs_kwargs(func, kwargs, protocol=InitFunctionGLM)
-    return func, kwargs, True
-
-
-def _glm_resolve_init_funcs(
-    key: str,
-    value: str | Callable,
-    kwargs: Optional[dict] = None,
-) -> Tuple[InitFunctionGLM, dict, bool]:
-    """Resolve and validate a GLM initialization function, using InitFunctionGLM for custom callables."""
-    if isinstance(value, str):
-        if value not in AVAIL_INIT_FUNCTIONS_GLM[key]:
-            raise ValueError(
-                f"Invalid initialization function name '{value}' for '{key}'. "
-                f"Available options are: {list(AVAIL_INIT_FUNCTIONS_GLM[key].keys())}."
-            )
-        kwargs = _validate_init_funcs_kwargs(
-            AVAIL_INIT_FUNCTIONS_GLM[key][value], kwargs, protocol=InitFunctionGLM
-        )
-        return AVAIL_INIT_FUNCTIONS_GLM[key][value], kwargs, False
-    elif callable(value):
-        return _validate_custom_glm_init_func(value, kwargs)
-    else:
-        raise TypeError(
-            f"Initialization function for '{key}' must be either a string or a callable. "
-            f"Got {type(value)} instead."
-        )
-
-
 def setup_glm_hmm_initialization(
-    initial_proba_init: Optional[str | Callable] = None,
-    initial_proba_init_kwargs: Optional[dict] = None,
-    transition_proba_init: Optional[str | Callable] = None,
-    transition_proba_init_kwargs: Optional[dict] = None,
     glm_params_init: Optional[str | Callable] = None,
     glm_params_init_kwargs: Optional[dict] = None,
     scale_init: Optional[str | Callable] = None,
@@ -492,16 +446,6 @@ def setup_glm_hmm_initialization(
 
     Parameters
     ----------
-    initial_proba_init :
-        User-specified initialization function for initial state probabilities. Can be a string key for built-in
-        functions or a custom callable. If None, the default build-in function will be used.
-    initial_proba_init_kwargs :
-        Keyword arguments to pass to the initial state probability initialization function.
-    transition_proba_init :
-        User-specified initialization function for transition probabilities. Can be a string key for built-in functions
-        or a custom callable. If None, the default built-in function will be used.
-    transition_proba_init_kwargs :
-        Keyword arguments to pass to the transition probability initialization function.
     glm_params_init:
         Initialization function for the GLM coefficient and intercept.
     glm_params_init_kwargs:
@@ -522,20 +466,11 @@ def setup_glm_hmm_initialization(
     """
 
     if init_funcs is None:
-        init_funcs = DEFAULT_INIT_FUNCTIONS_GLMHMM.copy()
-        glm_init_funcs = GLM_INIT_FUNCS.copy()
+        glm_init_funcs = DEFAULT_INIT_FUNCTIONS_GLMHMM.copy()
     else:
-        glm_init_funcs = {k: v for k, v in init_funcs.items() if k in GLM_INIT_FUNCS}
+        glm_init_funcs = init_funcs.copy()
 
-    hmm_init_funcs = {k: v for k, v in init_funcs.items() if k not in GLM_INIT_FUNCS}
-    hmm_init_funcs = setup_hmm_initialization(
-        initial_proba_init,
-        initial_proba_init_kwargs,
-        transition_proba_init,
-        transition_proba_init_kwargs,
-        init_funcs=hmm_init_funcs,
-    )
-    # update functions and kwargs for init prob and transition prob
+    # update functions and kwargs for glm params and scale
     # if a function is passed but not kwargs, kwargs will be reset
     # if kwargs are passed but not function, kwargs will be validated against existing function in init_funcs
     if glm_params_init is not None:
@@ -543,8 +478,11 @@ def setup_glm_hmm_initialization(
             glm_init_funcs["glm_params_init"],
             glm_init_funcs["glm_params_init_kwargs"],
             glm_init_funcs["glm_params_init_custom"],
-        ) = _glm_resolve_init_funcs(
-            "glm_params_init", glm_params_init, glm_params_init_kwargs
+        ) = _resolve_init_funcs(
+            "glm_params_init",
+            glm_params_init,
+            glm_params_init_kwargs,
+            AVAIL_INIT_FUNCTIONS_GLM,
         )
     elif glm_params_init_kwargs is not None:
         glm_init_funcs["glm_params_init_kwargs"] = _validate_init_funcs_kwargs(
@@ -558,14 +496,15 @@ def setup_glm_hmm_initialization(
             glm_init_funcs["scale_init"],
             glm_init_funcs["scale_init_kwargs"],
             glm_init_funcs["scale_init_custom"],
-        ) = _glm_resolve_init_funcs("scale_init", scale_init, scale_init_kwargs)
+        ) = _resolve_init_funcs(
+            "scale_init", scale_init, scale_init_kwargs, AVAIL_INIT_FUNCTIONS_GLM
+        )
     elif scale_init_kwargs is not None:
         glm_init_funcs["scale_init_kwargs"] = _validate_init_funcs_kwargs(
             glm_init_funcs["scale_init"],
             scale_init_kwargs,
             protocol=InitFunctionGLM,
         )
-    glm_init_funcs.update(hmm_init_funcs)
     return glm_init_funcs
 
 
@@ -622,15 +561,15 @@ def generate_glm_hmm_initial_model_params(
     :func:`nemos.glm_hmm.initialize_parameters.setup_glm_hmm_initialization`
         Function to set up the initialization functions and their kwargs based on user input.
     """
-    init_funcs = {} if init_funcs is None else init_funcs
-    glm_init_funcs = {k: v for k, v in init_funcs.items() if k in GLM_INIT_FUNCS}
+    glm_init_funcs = {} if init_funcs is None else init_funcs.copy()
     if isinstance(random_key, int):
         random_key = jax.random.PRNGKey(random_key)
 
     glm_params_key, scale_key = jax.random.split(random_key, 2)
 
     glm_params_init = (
-        glm_init_funcs.get("glm_params_init") or GLM_INIT_FUNCS["glm_params_init"]
+        glm_init_funcs.get("glm_params_init")
+        or DEFAULT_INIT_FUNCTIONS_GLMHMM["glm_params_init"]
     )
     glm_params_init_kwargs = glm_init_funcs.get("glm_params_init_kwargs") or {}
 
@@ -644,7 +583,9 @@ def generate_glm_hmm_initial_model_params(
         **glm_params_init_kwargs,
     )
 
-    scale_init_fn = glm_init_funcs.get("scale_init") or GLM_INIT_FUNCS["scale_init"]
+    scale_init_fn = (
+        glm_init_funcs.get("scale_init") or DEFAULT_INIT_FUNCTIONS_GLMHMM["scale_init"]
+    )
     scale_init_kwargs = glm_init_funcs.get("scale_init_kwargs") or {}
 
     scale = scale_init_fn(

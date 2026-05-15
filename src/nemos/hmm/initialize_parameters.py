@@ -432,10 +432,6 @@ class KMeansInitializer:
     is_new_session :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
         (default), it is assumed that all data belongs to a single session.
-    minimum_prob :
-        Minimum probability added to each state to avoid zero probabilities.
-        Note that probabilities will be renormalized after adding this minimum value, so the final
-        probabilities will not be exactly this value.
     random_key :
         Random key for reproducibility of KMeans initialization.
     """
@@ -446,14 +442,13 @@ class KMeansInitializer:
         X: DESIGN_INPUT_TYPE,
         y: NDArray | jnp.ndarray,
         is_new_session: Optional[jnp.ndarray] = None,
-        minimum_prob: float = 0.02,
         random_key: int | jax.Array = 0,
     ):
         if isinstance(random_key, jax.Array):
             random_key = int(jax.random.randint(random_key, (), 0, 2**31 - 1))
 
         self.n_states = n_states
-        self.minimum_prob = minimum_prob
+        # self.minimum_prob = minimum_prob
         self.random_key = random_key
         self.is_new_session = initialize_is_new_session(X, y, is_new_session)
         self.model = sklearn.cluster.KMeans(
@@ -466,26 +461,50 @@ class KMeansInitializer:
         self.model.fit(data)
         self.states = jax.nn.one_hot(self.model.labels_, num_classes=n_states)
 
-    def initial_probability(self):
+    def initial_probability(self, minimum_prob: float = 0.02):
         """
         Compute initial state probabilities based on KMeans assigned states.
 
         This takes the average occurrence of each state at the start of sessions to estimate the initial state
         probabilities.
+
+        Parameters
+        ----------
+        minimum_prob :
+            Minimum probability added to each state to avoid zero probabilities.
+            Note that probabilities will be renormalized after adding this minimum value, so the final
+            probabilities will not be exactly this value.
+
+        Returns
+        -------
+        initial_probability :
+            Initial state probability vector of shape (n_states,) computed from KMeans assigned states.
         """
         initial_probability = self.states[self.is_new_session].sum(axis=0)
         # normalize and add minimum_prob to avoid zero probabilities, then renormalize
         initial_probability = (
             initial_probability / initial_probability.sum()
-        ) + self.minimum_prob
+        ) + minimum_prob
         return initial_probability / initial_probability.sum()
 
-    def transition_probability(self):
+    def transition_probability(self, minimum_prob: float = 0.02):
         """
         Compute transition probabilities based on KMeans assigned states.
 
         This computes the transition probabilities by counting the transitions between states across time points,
         excluding transitions that occur at the start of new sessions.
+
+        Parameters
+        ----------
+        minimum_prob :
+            Minimum probability added to each state to avoid zero probabilities.
+            Note that probabilities will be renormalized after adding this minimum value, so the final
+            probabilities will not be exactly this value.
+
+        Returns
+        -------
+        transition_matrix :
+            Transition probability matrix of shape (n_states, n_states) computed from KMeans assigned states.
         """
         transition_matrix = (
             self.states[:-1][~self.is_new_session[1:]].T
@@ -494,7 +513,7 @@ class KMeansInitializer:
         # normalize and add minimum_prob to avoid zero probabilities, then renormalize
         transition_matrix = (
             transition_matrix / transition_matrix.sum(axis=1, keepdims=True)
-        ) + self.minimum_prob
+        ) + minimum_prob
         return transition_matrix / transition_matrix.sum(axis=1, keepdims=True)
 
 
@@ -539,10 +558,8 @@ def kmeans_initial_proba_init(
         Initial state probability vector of shape (n_states,) that sums to 1.
     """
     if initializer is None:
-        initializer = KMeansInitializer(
-            n_states, X, y, is_new_session, minimum_prob, random_key
-        )
-    return initializer.initial_probability()
+        initializer = KMeansInitializer(n_states, X, y, is_new_session, random_key)
+    return initializer.initial_probability(minimum_prob=minimum_prob)
 
 
 def kmeans_transition_proba_init(
@@ -586,10 +603,8 @@ def kmeans_transition_proba_init(
         Transition probability matrix of shape (n_states, n_states) computed from KMeans assigned states.
     """
     if initializer is None:
-        initializer = KMeansInitializer(
-            n_states, X, y, is_new_session, minimum_prob, random_key
-        )
-    return initializer.transition_probability()
+        initializer = KMeansInitializer(n_states, X, y, is_new_session, random_key)
+    return initializer.transition_probability(minimum_prob=minimum_prob)
 
 
 AVAILABLE_INIT_FUNCTIONS = MappingProxyType(
@@ -632,7 +647,6 @@ def setup_hmm_initialization(
     transition_proba_init: Optional[str | Callable] = None,
     transition_proba_init_kwargs: Optional[dict] = None,
     init_funcs: Optional[dict | INITIALIZATION_FN_DICT] = None,
-    default_init_dict: Optional[dict] = None,
     n_states: Optional[int] = None,
 ) -> INITIALIZATION_FN_DICT:
     """
@@ -661,9 +675,6 @@ def setup_hmm_initialization(
         Existing dictionary of initialization functions to update. If None, a fresh copy of
         ``default_init_dict`` is used. Keys must already be validated before calling this function;
         use :func:`_validate_init_funcs_keys` upstream (e.g., in the class setter).
-    default_init_dict :
-        Model-specific dictionary of default initialization functions. Defaults to
-        ``DEFAULT_INIT_FUNCTIONS`` when None.
     n_states :
         Number of HMM states. When provided, ``alphas`` in the init kwargs is validated
         via :func:`_resolve_dirichlet_priors` (same check as the model property setter).
@@ -673,11 +684,8 @@ def setup_hmm_initialization(
     init_funcs :
         Updated dictionary of initialization functions based on provided inputs.
     """
-    if default_init_dict is None:
-        default_init_dict = DEFAULT_INIT_FUNCTIONS.copy()
-
     if init_funcs is None:
-        init_funcs = default_init_dict
+        init_funcs = DEFAULT_INIT_FUNCTIONS.copy()
     else:
         init_funcs = init_funcs.copy()
 
@@ -731,7 +739,7 @@ def _validate_init_funcs_keys(
     if default_init_dict is None:
         default_init_dict = DEFAULT_INIT_FUNCTIONS.copy()
     if init_funcs is None:
-        return
+        return default_init_dict
     unexpected_keys = init_funcs.keys() - default_init_dict.keys()
     if unexpected_keys:
         suggested_keys = _suggest_keys(unexpected_keys, default_init_dict.keys())
