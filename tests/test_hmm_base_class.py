@@ -1,12 +1,14 @@
 from contextlib import nullcontext as does_not_raise
 from dataclasses import dataclass
 from typing import Any, Callable, Optional, Tuple, Union
+from unittest.mock import patch
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pynapple as nap
 import pytest
+import sklearn.cluster
 
 from nemos.base_validator import RegressorValidator
 from nemos.hmm.hmm import BaseHMM
@@ -758,17 +760,31 @@ class TestHMMInitialParams:
             transition_proba_init="kmeans",
             param_init="kmeans",
         )
-        model._model_specific_initialization(jnp.zeros((10, 10)), jnp.zeros(10), None)
-        assert id(
-            model.hmm_initialization_funcs["initial_proba_init_kwargs"]["initializer"]
-        ) == id(
-            model.hmm_initialization_funcs["transition_proba_init_kwargs"][
-                "initializer"
-            ]
-        )
-        assert id(
-            model.hmm_initialization_funcs["initial_proba_init_kwargs"]["initializer"]
-        ) == id(model.model_initialization_funcs["param_init_kwargs"]["initializer"])
+        original_fit = sklearn.cluster.KMeans.fit
+        # use mock fit to assert that kmeans is only called once at initializer construction
+        with patch.object(
+            sklearn.cluster.KMeans, "fit", autospec=True, side_effect=original_fit
+        ) as mock_fit:
+            model._model_specific_initialization(
+                jnp.zeros((10, 10)), jnp.zeros(10), None
+            )
+            assert id(
+                model.hmm_initialization_funcs["initial_proba_init_kwargs"][
+                    "initializer"
+                ]
+            ) == id(
+                model.hmm_initialization_funcs["transition_proba_init_kwargs"][
+                    "initializer"
+                ]
+            )
+            assert id(
+                model.hmm_initialization_funcs["initial_proba_init_kwargs"][
+                    "initializer"
+                ]
+            ) == id(
+                model.model_initialization_funcs["param_init_kwargs"]["initializer"]
+            )
+            assert mock_fit.call_count == 1
 
     @pytest.mark.parametrize(
         "key, value, expectation",

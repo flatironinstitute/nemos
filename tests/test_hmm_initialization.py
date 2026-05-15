@@ -1,11 +1,13 @@
 """Tests for hmm/initialize_parameters.py"""
 
 from contextlib import nullcontext as does_not_raise
+from unittest.mock import patch
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+import sklearn.cluster
 from sklearn.datasets import make_blobs
 
 from nemos.hmm.initialize_parameters import (
@@ -370,23 +372,34 @@ class TestKMeansInitialization:
         n_states = 5
         X, _, y, _, is_new_session, _, _ = generate_kmeans_data(n_states)
         default_initializer = KMeansInitializer(n_states, X, y, is_new_session)
-        used_initializer = KMeansInitializer(
-            n_states, X, y, is_new_session, random_key=jax.random.PRNGKey(2)
-        )
-        # initial probability
-        init_prob = kmeans_initial_proba_init(
-            n_states, X, y, is_new_session, initializer=used_initializer
-        )
-        assert not jnp.allclose(init_prob, default_initializer.initial_probability())
-        assert jnp.allclose(init_prob, used_initializer.initial_probability())
-        # transition probability
-        transition_prob = kmeans_transition_proba_init(
-            n_states, X, y, is_new_session, initializer=used_initializer
-        )
-        assert not jnp.allclose(
-            transition_prob, default_initializer.transition_probability()
-        )
-        assert jnp.allclose(transition_prob, used_initializer.transition_probability())
+
+        original_fit = sklearn.cluster.KMeans.fit
+        # use mock fit to assert that kmeans is only called once at initializer construction
+        with patch.object(
+            sklearn.cluster.KMeans, "fit", autospec=True, side_effect=original_fit
+        ) as mock_fit:
+            used_initializer = KMeansInitializer(
+                n_states, X, y, is_new_session, random_key=jax.random.PRNGKey(2)
+            )
+            # initial probability
+            init_prob = kmeans_initial_proba_init(
+                n_states, X, y, is_new_session, initializer=used_initializer
+            )
+            assert not jnp.allclose(
+                init_prob, default_initializer.initial_probability()
+            )
+            assert jnp.allclose(init_prob, used_initializer.initial_probability())
+            # transition probability
+            transition_prob = kmeans_transition_proba_init(
+                n_states, X, y, is_new_session, initializer=used_initializer
+            )
+            assert not jnp.allclose(
+                transition_prob, default_initializer.transition_probability()
+            )
+            assert jnp.allclose(
+                transition_prob, used_initializer.transition_probability()
+            )
+            assert mock_fit.call_count == 1
 
 
 class TestSetupHMMInitialization:
