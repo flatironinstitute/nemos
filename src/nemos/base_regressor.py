@@ -23,7 +23,7 @@ from .base_validator import RegressorValidator
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
-from .solvers._hess import HessianTag, combine_hessian_tags
+from .solvers._hess import HessianTag
 from .solvers._newton import NewtonSolverProtocol
 from .type_casting import cast_to_jax, is_numpy_array_like
 from .typing import (
@@ -410,13 +410,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         )
 
         if isinstance(solver, NewtonSolverProtocol):
-            if self.regularizer is not None:
-                _hess_tag = combine_hessian_tags(
-                    self._hess_tag, self.regularizer._hess_tag
-                )
-            else:
-                _hess_tag = self._hess_tag
-            solver.setup_hessian(self._get_hess_fn(), _hess_tag)
+            solver.setup_hessian(self._get_hess_fn(), self._hess_tag, self.regularizer)
 
         # nemos's solvers store a .fun attribute, but it's not necessary for a solver to work.
         # A test relies on having _solver_loss_fun saved, so still check and save it if possible.
