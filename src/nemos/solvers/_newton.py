@@ -17,6 +17,7 @@ from ._hess import (
     General,
     HessianTag,
     PositiveDefinite,
+    combine_hessian_tags,
 )
 
 
@@ -281,23 +282,25 @@ class Newton(NewtonSolverProtocol[NewtonState]):
         regularizer: Optional[Any] = None,
     ):
         self._solver._hess_fn = hess_fn
-        self._solver._hess_tag = hess_tag
+        self._solver._hess_tag = (
+            hess_tag
+            if regularizer is None
+            else combine_hessian_tags(hess_tag, regularizer._hess_tag)
+        )
 
     def init_state(self, init_params: Params, *args):
         return self._solver.init_state(init_params, *args)
 
     def update(self, params, state, *args):
-        _, aux = self.fun_with_aux(params, *args)
-        return (
-            *self._solver.update(
-                params,
-                state,
-                *args,
-                maxiter=self.maxiter,
-                force_autodiff_hessian=self.force_autodiff_hessian,
-            ),
-            aux,
+        params, state = self._solver.update(
+            params,
+            state,
+            *args,
+            maxiter=self.maxiter,
+            force_autodiff_hessian=self.force_autodiff_hessian,
         )
+        _, aux = self.fun_with_aux(params, *args)
+        return params, state, aux
 
     def run(self, init_params: Params, *args):
         params, state = self._solver.run(
