@@ -1,12 +1,12 @@
 import jax
 import jax.numpy as jnp
 import numpy as np
-import pytest
 import optax
+import pytest
 
 import nemos as nmo
-from nemos.solvers._newton import Newton, _Newton, NewtonState
 from nemos.solvers._abstract_solver import OptimizationInfo
+from nemos.solvers._newton import Newton, NewtonState, _Newton
 from nemos.tree_utils import pytree_map_and_reduce
 
 # Register every test here as solver-related
