@@ -4,10 +4,13 @@ import numpy as np
 import optax
 import pytest
 
+from nemos.glm.params import GLMParams
+
 import nemos as nmo
 from nemos.solvers._abstract_solver import OptimizationInfo
 from nemos.solvers._newton import Newton, NewtonState, _Newton
 from nemos.tree_utils import pytree_map_and_reduce
+from nemos.regularizer import UnRegularized, Ridge
 
 # Register every test here as solver-related
 pytestmark = pytest.mark.solver_related
@@ -157,3 +160,90 @@ def test_newton_glm_update(glm_class, regularizer_name, linear_regression):
     params, state = glm.update(init_params, state, X, y)
 
     assert state.stats.num_steps == 1
+
+
+@pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
+def test_newton_glm_set_regularizer_update_hessian(glm_class, linear_regression):
+    X, y, _, _, loss = linear_regression
+    if glm_class == nmo.glm.PopulationGLM:
+        y = np.expand_dims(y, 1)
+
+    glm = glm_class(regularizer=Ridge(), solver_name="Newton")
+    params = glm.initialize_params(X, y)
+    glm.initialize_optimizer_and_state(params, X, y)
+    params = GLMParams(*params)
+
+    init = glm.solver._solver._hess_fn(params, X, y)
+    expected = glm._get_hess_fn()(params, X, y)
+    np.testing.assert_allclose(init, expected)
+
+    glm.regularizer = UnRegularized()
+    after = glm.solver._solver._hess_fn(params, X, y)
+    expected = glm._get_hess_fn()(params, X, y)
+    np.testing.assert_allclose(after, expected)
+    assert ~np.allclose(after, init)
+
+
+@pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
+def test_newton_glm_set_regularizer_strength_update_hessian(
+    glm_class, linear_regression
+):
+    X, y, _, _, loss = linear_regression
+    if glm_class == nmo.glm.PopulationGLM:
+        y = np.expand_dims(y, 1)
+
+    glm = glm_class(regularizer="Ridge", solver_name="Newton", regularizer_strength=0.1)
+    params = glm.initialize_params(X, y)
+    glm.initialize_optimizer_and_state(params, X, y)
+    params = GLMParams(*params)
+
+    init = glm.solver._solver._hess_fn(params, X, y)
+    expected = glm._get_hess_fn()(params, X, y)
+    np.testing.assert_allclose(init, expected)
+
+    glm.regularizer_strength = 1.0
+    after = glm.solver._solver._hess_fn(params, X, y)
+    expected = glm._get_hess_fn()(params, X, y)
+    np.testing.assert_allclose(after, expected)
+    assert not np.allclose(after, init)
+
+
+@pytest.mark.parametrize(
+    "obs_init",
+    [
+        "PoissonObservations",
+        "GammaObservations",
+        "GaussianObservations",
+        "BernoulliObservations",
+    ],
+)
+@pytest.mark.parametrize(
+    "obs_after",
+    [
+        "PoissonObservations",
+        "GammaObservations",
+        "GaussianObservations",
+        "BernoulliObservations",
+    ],
+)
+@pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
+def test_newton_glm_set_observation_model_update_hessian(
+    glm_class, obs_init, obs_after, linear_regression
+):
+    X, y, _, _, loss = linear_regression
+    if glm_class == nmo.glm.PopulationGLM:
+        y = np.expand_dims(y, 1)
+
+    glm = glm_class(solver_name="Newton", observation_model=obs_init)
+    params = glm.initialize_params(X, y)
+    glm.initialize_optimizer_and_state(params, X, y)
+    params = GLMParams(*params)
+
+    init = glm.solver._solver._hess_fn(params, X, y)
+    expected = glm._get_hess_fn()(params, X, y)
+    np.testing.assert_allclose(init, expected)
+
+    glm.observation_model = obs_after
+    after = glm.solver._solver._hess_fn(params, X, y)
+    expected = glm._get_hess_fn()(params, X, y)
+    np.testing.assert_allclose(after, expected)

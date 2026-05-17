@@ -254,6 +254,8 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
                 stacklevel=2,
             )
             self.solver_name = None
+        else:
+            self._setup_hessian()
 
     @property
     def regularizer_strength(self) -> Any:
@@ -263,6 +265,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     @regularizer_strength.setter
     def regularizer_strength(self, strength: Any):
         self._regularizer_strength = self.regularizer._validate_strength(strength)
+        self._setup_hessian()
 
     @property
     def solver_name(self) -> str:
@@ -336,6 +339,12 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         Returns None to fall back to autodiff.
         """
         return None
+
+    def _setup_hessian(self) -> None:
+        if hasattr(self, "solver") and isinstance(self.solver, NewtonSolverProtocol):
+            self.solver.setup_hessian(
+                self._get_hess_fn(), self._hess_tag, self.regularizer
+            )
 
     def _instantiate_solver(
         self,
