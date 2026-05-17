@@ -4,13 +4,12 @@ import numpy as np
 import optax
 import pytest
 
-from nemos.glm.params import GLMParams
-
 import nemos as nmo
+from nemos.glm.params import GLMParams
+from nemos.regularizer import Ridge, UnRegularized
 from nemos.solvers._abstract_solver import OptimizationInfo
 from nemos.solvers._newton import Newton, NewtonState, _Newton
 from nemos.tree_utils import pytree_map_and_reduce
-from nemos.regularizer import UnRegularized, Ridge
 
 # Register every test here as solver-related
 pytestmark = pytest.mark.solver_related
