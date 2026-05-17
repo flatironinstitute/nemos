@@ -944,40 +944,6 @@ class FourierSEBasis(EvalBasisMixin, AtomicBasisMixin, Basis):
         out = out * self._weights[None, :]
         return out.reshape(*shape, out.shape[-1])
 
-    def sample(
-        self,
-        x: ArrayLike,
-        key: jax.Array,
-        n_samples: int = 1,
-    ) -> jnp.ndarray:
-        """Draw samples from the SE Gaussian process at ``x``.
-
-        With basis matrix ``Phi = self.evaluate(x)`` and ``z ~ N(0, I_M)``,
-        each sample is ``f(x) = Phi @ z``. Repeated calls with the same
-        ``key`` produce the same samples.
-
-        Parameters
-        ----------
-        x :
-            evaluation points.
-        key :
-            JAX PRNG key.
-        n_samples :
-            Number of independent prior samples to draw. Default is ``1``.
-
-        Returns
-        -------
-        :
-            Samples of shape ``(n_samples, *x.shape)``, or ``x.shape`` when
-            ``n_samples == 1``.
-        """
-        Phi = self.evaluate(x)  # (..., n_basis_funcs)
-        z = jax.random.normal(key, shape=(self.n_basis_funcs, n_samples))
-        samples = jnp.moveaxis(Phi @ z, -1, 0)  # (n_samples, ...)
-        if n_samples == 1:
-            return samples[0]
-        return samples
-
     def _get_samples(self, *n_samples: int) -> Generator[NDArray, None, None]:
         """Produce equispaced samples over the construction domain."""
         t0, t1 = self._domain
