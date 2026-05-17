@@ -181,7 +181,7 @@ def test_newton_glm_set_regularizer_update_hessian(glm_class, linear_regression)
     after = glm.solver._solver._hess_fn(params, X, y)
     expected = glm._get_hess_fn()(params, X, y)
     np.testing.assert_allclose(after, expected)
-    assert ~np.allclose(after, init)
+    assert not np.allclose(after, init)
 
 
 @pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
