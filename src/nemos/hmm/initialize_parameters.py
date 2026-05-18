@@ -432,10 +432,6 @@ class KMeansInitializer:
     is_new_session :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
         (default), it is assumed that all data belongs to a single session.
-    minimum_prob :
-        Minimum probability added to each state to avoid zero probabilities.
-        Note that probabilities will be renormalized after adding this minimum value, so the final
-        probabilities will not be exactly this value.
     random_key :
         Random key for reproducibility of KMeans initialization.
     """
@@ -446,14 +442,12 @@ class KMeansInitializer:
         X: DESIGN_INPUT_TYPE,
         y: NDArray | jnp.ndarray,
         is_new_session: Optional[jnp.ndarray] = None,
-        minimum_prob: float = 0.02,
         random_key: int | jax.Array = 0,
     ):
         if isinstance(random_key, jax.Array):
             random_key = int(jax.random.randint(random_key, (), 0, 2**31 - 1))
 
         self.n_states = n_states
-        self.minimum_prob = minimum_prob
         self.random_key = random_key
         self.is_new_session = initialize_is_new_session(X, y, is_new_session)
         self.model = sklearn.cluster.KMeans(
@@ -466,26 +460,50 @@ class KMeansInitializer:
         self.model.fit(data)
         self.states = jax.nn.one_hot(self.model.labels_, num_classes=n_states)
 
-    def initial_probability(self):
+    def initial_probability(self, minimum_prob: float = 0.02):
         """
         Compute initial state probabilities based on KMeans assigned states.
 
         This takes the average occurrence of each state at the start of sessions to estimate the initial state
         probabilities.
+
+        Parameters
+        ----------
+        minimum_prob :
+            Minimum probability added to each state to avoid zero probabilities.
+            Note that probabilities will be renormalized after adding this minimum value, so the final
+            probabilities will not be exactly this value.
+
+        Returns
+        -------
+        initial_probability :
+            Initial state probability vector of shape (n_states,) computed from KMeans assigned states.
         """
         initial_probability = self.states[self.is_new_session].sum(axis=0)
         # normalize and add minimum_prob to avoid zero probabilities, then renormalize
         initial_probability = (
             initial_probability / initial_probability.sum()
-        ) + self.minimum_prob
+        ) + minimum_prob
         return initial_probability / initial_probability.sum()
 
-    def transition_probability(self):
+    def transition_probability(self, minimum_prob: float = 0.02):
         """
         Compute transition probabilities based on KMeans assigned states.
 
         This computes the transition probabilities by counting the transitions between states across time points,
         excluding transitions that occur at the start of new sessions.
+
+        Parameters
+        ----------
+        minimum_prob :
+            Minimum probability added to each state to avoid zero probabilities.
+            Note that probabilities will be renormalized after adding this minimum value, so the final
+            probabilities will not be exactly this value.
+
+        Returns
+        -------
+        transition_matrix :
+            Transition probability matrix of shape (n_states, n_states) computed from KMeans assigned states.
         """
         transition_matrix = (
             self.states[:-1][~self.is_new_session[1:]].T
@@ -494,7 +512,7 @@ class KMeansInitializer:
         # normalize and add minimum_prob to avoid zero probabilities, then renormalize
         transition_matrix = (
             transition_matrix / transition_matrix.sum(axis=1, keepdims=True)
-        ) + self.minimum_prob
+        ) + minimum_prob
         return transition_matrix / transition_matrix.sum(axis=1, keepdims=True)
 
 
@@ -539,10 +557,8 @@ def kmeans_initial_proba_init(
         Initial state probability vector of shape (n_states,) that sums to 1.
     """
     if initializer is None:
-        initializer = KMeansInitializer(
-            n_states, X, y, is_new_session, minimum_prob, random_key
-        )
-    return initializer.initial_probability()
+        initializer = KMeansInitializer(n_states, X, y, is_new_session, random_key)
+    return initializer.initial_probability(minimum_prob=minimum_prob)
 
 
 def kmeans_transition_proba_init(
@@ -586,10 +602,8 @@ def kmeans_transition_proba_init(
         Transition probability matrix of shape (n_states, n_states) computed from KMeans assigned states.
     """
     if initializer is None:
-        initializer = KMeansInitializer(
-            n_states, X, y, is_new_session, minimum_prob, random_key
-        )
-    return initializer.transition_probability()
+        initializer = KMeansInitializer(n_states, X, y, is_new_session, random_key)
+    return initializer.transition_probability(minimum_prob=minimum_prob)
 
 
 AVAILABLE_INIT_FUNCTIONS = MappingProxyType(
@@ -632,7 +646,6 @@ def setup_hmm_initialization(
     transition_proba_init: Optional[str | Callable] = None,
     transition_proba_init_kwargs: Optional[dict] = None,
     init_funcs: Optional[dict | INITIALIZATION_FN_DICT] = None,
-    default_init_dict: Optional[dict] = None,
     n_states: Optional[int] = None,
 ) -> INITIALIZATION_FN_DICT:
     """
@@ -661,9 +674,6 @@ def setup_hmm_initialization(
         Existing dictionary of initialization functions to update. If None, a fresh copy of
         ``default_init_dict`` is used. Keys must already be validated before calling this function;
         use :func:`_validate_init_funcs_keys` upstream (e.g., in the class setter).
-    default_init_dict :
-        Model-specific dictionary of default initialization functions. Defaults to
-        ``DEFAULT_INIT_FUNCTIONS`` when None.
     n_states :
         Number of HMM states. When provided, ``alphas`` in the init kwargs is validated
         via :func:`_resolve_dirichlet_priors` (same check as the model property setter).
@@ -673,11 +683,8 @@ def setup_hmm_initialization(
     init_funcs :
         Updated dictionary of initialization functions based on provided inputs.
     """
-    if default_init_dict is None:
-        default_init_dict = DEFAULT_INIT_FUNCTIONS.copy()
-
     if init_funcs is None:
-        init_funcs = default_init_dict
+        init_funcs = DEFAULT_INIT_FUNCTIONS.copy()
     else:
         init_funcs = init_funcs.copy()
 
@@ -731,7 +738,7 @@ def _validate_init_funcs_keys(
     if default_init_dict is None:
         default_init_dict = DEFAULT_INIT_FUNCTIONS.copy()
     if init_funcs is None:
-        return
+        return default_init_dict
     unexpected_keys = init_funcs.keys() - default_init_dict.keys()
     if unexpected_keys:
         suggested_keys = _suggest_keys(unexpected_keys, default_init_dict.keys())
@@ -757,6 +764,7 @@ def _resolve_init_funcs(
     value: str | Callable,
     kwargs: Optional[dict] = None,
     available_init_funcs: dict[str, Callable] = None,
+    protocol=InitFunctionHMM,
 ) -> Tuple[InitFunctionHMM, dict, bool]:
     """
     Validate a provided initialization function.
@@ -775,6 +783,9 @@ def _resolve_init_funcs(
         Optional keyword arguments to pass to the initialization function.
     available_init_funcs:
         Dictionary of available initialization functions and their kwargs (if any) to be used for initialization.
+    protocol :
+        The protocol that the custom function should conform to. This is used to check the required parameters in the
+        function signature.
 
     Returns
     -------
@@ -797,10 +808,12 @@ def _resolve_init_funcs(
                 f"Invalid initialization function name '{value}' for '{key}'. "
                 f"Available options are: {list(available_init_funcs[key].keys())}."
             )
-        kwargs = _validate_init_funcs_kwargs(available_init_funcs[key][value], kwargs)
+        kwargs = _validate_init_funcs_kwargs(
+            available_init_funcs[key][value], kwargs, protocol
+        )
         return available_init_funcs[key][value], kwargs, False
     elif callable(value):
-        return _validate_custom_init_func(value, kwargs)
+        return _validate_custom_init_func(value, kwargs, protocol)
     else:
         raise TypeError(
             f"Initialization function for '{key}' must be either a string or a callable. "
@@ -835,7 +848,9 @@ def _validate_init_funcs_kwargs(
 
 
 def _validate_custom_init_func(
-    func: Callable, kwargs: Optional[dict] = None
+    func: Callable,
+    kwargs: Optional[dict] = None,
+    protocol=InitFunctionHMM,
 ) -> Tuple[InitFunctionHMM, dict, bool]:
     """
     Validate a custom initialization function against the expected signature.
@@ -845,12 +860,13 @@ def _validate_custom_init_func(
 
     Parameters
     ----------
-    key : str
-        The name of the parameter being initialized (e.g., 'initial_proba_init' or 'transition_proba_init').
-    func : Callable
+    func :
         The user-provided initialization function to validate.
-    kwargs : Optional[dict]
+    kwargs :
         Optional keyword arguments to pass to the initialization function.
+    protocol :
+        The protocol that the custom function should conform to. This is used to check the required parameters in the
+        function signature.
 
     Returns
     -------
@@ -868,7 +884,7 @@ def _validate_custom_init_func(
     ValueError
         If the function does not return an array of the expected shape.
     """
-    required_params = _get_protocol_parameters(InitFunctionHMM)
+    required_params = _get_protocol_parameters(protocol)
     sig = inspect.signature(func)
     missing = required_params - sig.parameters.keys()
     if missing:
@@ -876,7 +892,7 @@ def _validate_custom_init_func(
             f"Custom initialization function must have the parameters {sorted(required_params)}. "
             f"Missing: {sorted(missing)}."
         )
-    kwargs = _validate_init_funcs_kwargs(func, kwargs)
+    kwargs = _validate_init_funcs_kwargs(func, kwargs, protocol)
 
     return func, kwargs, True
 
