@@ -40,7 +40,6 @@ warnings.filterwarnings(
 )
 ```
 
-(batching)=
 # Batching example
 
 Here we demonstrate how to setup and run a stochastic gradient descent in `nemos`

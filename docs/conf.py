@@ -6,7 +6,7 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-import sys, os, urllib.request
+import sys, os
 from pathlib import Path
 
 from importlib.metadata import version
@@ -146,7 +146,6 @@ html_sidebars = {
     "index": [],
     "installation":[],
     "quickstart": [],
-    "benchmarking": [],
     "background/README": [],
     "how_to_guide/README": [],
     "tutorials/README": [],
@@ -155,7 +154,7 @@ html_sidebars = {
 
 
 # Path for static files (custom stylesheets or JavaScript)
-html_static_path = ['assets/stylesheets', "assets", "javascripts"]
+html_static_path = ['assets/stylesheets', "assets"]
 html_css_files = ['custom.css']
 
 html_js_files = [
@@ -239,40 +238,3 @@ for api_rst in api_order:
     api_index += "\n".join(contents)
 
 (api_dir / "index.rst").write_text(api_index)
-
-# Download the latest benchmark summary so the DataTable can be served same-origin.
-_benchmark_csv_url = "https://users.flatironinstitute.org/~ebalzani/nemos/benchmark/aggregate_summary.csv"
-_benchmark_csv_dst = Path("assets") / "aggregate_summary.csv"
-try:
-    urllib.request.urlretrieve(_benchmark_csv_url, _benchmark_csv_dst)
-    print(f"Downloaded benchmark summary -> {_benchmark_csv_dst}")
-except Exception as e:
-    raise RuntimeError(
-        f"Could not fetch benchmark summary from {_benchmark_csv_url}."
-    ) from e
-
-
-def _add_benchmark_assets(app, pagename, templatename, context, doctree):
-    if pagename != "benchmarking":
-        return
-    app.add_css_file("https://cdn.datatables.net/2.0.0/css/dataTables.dataTables.min.css")
-    app.add_js_file("https://code.jquery.com/jquery-3.7.0.js")
-    app.add_js_file("https://cdn.datatables.net/2.0.0/js/dataTables.min.js")
-    app.add_js_file("https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js")
-    app.add_js_file("https://cdn.plot.ly/plotly-2.35.2.min.js")
-    app.add_js_file("benchmark-table.js")
-
-
-def setup(app):
-    app.connect("html-page-context", _add_benchmark_assets)
-
-# Download the latest benchmark summary so the DataTable can be served same-origin.
-_benchmark_csv_url = "https://users.flatironinstitute.org/~ebalzani/nemos/benchmark/aggregate_summary.csv"
-_benchmark_csv_dst = Path("assets") / "aggregate_summary.csv"
-try:
-    urllib.request.urlretrieve(_benchmark_csv_url, _benchmark_csv_dst)
-    print(f"Downloaded benchmark summary -> {_benchmark_csv_dst}")
-except Exception as e:
-    raise RuntimeError(
-        f"Could not fetch benchmark summary from {_benchmark_csv_url}."
-    ) from e

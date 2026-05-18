@@ -15,7 +15,6 @@ Background <background/README>
 How-To Guide <how_to_guide/README>
 Tutorials <tutorials/README>
 API Reference <api/index>
-Benchmarking <benchmarking>
 Getting Help <getting_help>
 Citation Guide <citation>
 For Developers <developers_notes/README>
