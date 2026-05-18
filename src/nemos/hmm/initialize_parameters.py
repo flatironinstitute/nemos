@@ -448,7 +448,6 @@ class KMeansInitializer:
             random_key = int(jax.random.randint(random_key, (), 0, 2**31 - 1))
 
         self.n_states = n_states
-        # self.minimum_prob = minimum_prob
         self.random_key = random_key
         self.is_new_session = initialize_is_new_session(X, y, is_new_session)
         self.model = sklearn.cluster.KMeans(
