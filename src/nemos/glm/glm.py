@@ -112,17 +112,17 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
     Below is a table listing the default and available solvers for each regularizer.
 
-    +---------------+------------------+-------------------------------------------------------------+
-    | Regularizer   | Default Solver   | Available Solvers                                           |
-    +===============+==================+=============================================================+
-    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
-    +---------------+------------------+-------------------------------------------------------------+
-    | Ridge         | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
-    +---------------+------------------+-------------------------------------------------------------+
-    | Lasso         | ProximalGradient | ProximalGradient                                            |
-    +---------------+------------------+-------------------------------------------------------------+
-    | GroupLasso    | ProximalGradient | ProximalGradient                                            |
-    +---------------+------------------+-------------------------------------------------------------+
+    +---------------+------------------+----------------------------------------------------------------------+
+    | Regularizer   | Default Solver   | Available Solvers                                                    |
+    +===============+==================+======================================================================+
+    | UnRegularized | Newton            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
+    +---------------+------------------+----------------------------------------------------------------------+
+    | Ridge         | Newton            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
+    +---------------+------------------+----------------------------------------------------------------------+
+    | Lasso         | ProximalGradient | ProximalGradient                                                     |
+    +---------------+------------------+----------------------------------------------------------------------+
+    | GroupLasso    | ProximalGradient | ProximalGradient                                                     |
+    +---------------+------------------+----------------------------------------------------------------------+
 
     **Fitting Large Models**
 
@@ -381,12 +381,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         if isinstance(observation, str):
             self._observation_model = instantiate_observation_model(observation)
             self._validate_observation_class(self.observation_model)
+            self._setup_hessian()
             return
         # check that the model has the required attributes
         # and that the attribute can be called
         obs.check_observation_model(observation)
         self._observation_model = observation
         self._validate_observation_class(self.observation_model)
+        self._setup_hessian()
 
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
@@ -1317,17 +1319,17 @@ class PopulationGLM(GLM):
     stored in tabular format, shape (n_timebins, num_features) or as a pytree of arrays of the same shape.
     Below is a table listing the default and available solvers for each regularizer.
 
-    +---------------+------------------+-------------------------------------------------------------+
-    | Regularizer   | Default Solver   | Available Solvers                                           |
-    +===============+==================+=============================================================+
-    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
-    +---------------+------------------+-------------------------------------------------------------+
-    | Ridge         | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
-    +---------------+------------------+-------------------------------------------------------------+
-    | Lasso         | ProximalGradient | ProximalGradient                                            |
-    +---------------+------------------+-------------------------------------------------------------+
-    | GroupLasso    | ProximalGradient | ProximalGradient                                            |
-    +---------------+------------------+-------------------------------------------------------------+
+    +---------------+------------------+----------------------------------------------------------------------+
+    | Regularizer   | Default Solver   | Available Solvers                                                    |
+    +===============+==================+======================================================================+
+    | UnRegularized | Newton            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
+    +---------------+------------------+----------------------------------------------------------------------+
+    | Ridge         | Newton            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
+    +---------------+------------------+----------------------------------------------------------------------+
+    | Lasso         | ProximalGradient | ProximalGradient                                                     |
+    +---------------+------------------+----------------------------------------------------------------------+
+    | GroupLasso    | ProximalGradient | ProximalGradient                                                     |
+    +---------------+------------------+----------------------------------------------------------------------+
 
     **Fitting Large Models**
 
@@ -1717,7 +1719,7 @@ class PopulationGLM(GLM):
 
                 blocks.append(block)
 
-            return jnp.stack(blocks, axis=0)
+            return jnp.stack(blocks)
 
         return hess
 
