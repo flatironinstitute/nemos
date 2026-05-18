@@ -31,8 +31,6 @@ from .initialize_parameters import (
     _resolve_dirichlet_priors,
     _validate_init_funcs_keys,
     generate_hmm_initial_params,
-    kmeans_initial_proba_init,
-    kmeans_transition_proba_init,
     setup_hmm_initialization,
 )
 from .params import HMMModelParamsT, HMMUserParams, HMMUserProvidedParamsT
@@ -95,11 +93,7 @@ class BaseHMM(
     """
 
     _validator_class: type[HMMValidator[HMMUserProvidedParamsT, HMMModelParamsT]]
-    _default_init_dict: dict = DEFAULT_INIT_FUNCTIONS
-    _kmeans_init_funcs: tuple[tuple[str, Callable]] = (
-        ("initial_proba_init", kmeans_initial_proba_init),
-        ("transition_proba_init", kmeans_transition_proba_init),
-    )
+    _model_default_init_dict: INITIALIZATION_FN_DICT_T
     _kmeans_init_class = KMeansInitializer
 
     def __init__(
@@ -118,7 +112,7 @@ class BaseHMM(
         maxiter: int = 1000,
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
-        initialization_funcs: Optional[INITIALIZATION_FN_DICT_T] = None,
+        hmm_initialization_funcs: Optional[INITIALIZATION_FN_DICT_T] = None,
     ):
         super().__init__(
             regularizer=regularizer,
@@ -139,9 +133,13 @@ class BaseHMM(
         self.transition_prob_: Optional[jnp.ndarray] = None
         self.initial_prob_: Optional[jnp.ndarray] = None
 
-        self.initialization_funcs = initialization_funcs
+        self.hmm_initialization_funcs = hmm_initialization_funcs
 
-    def setup(
+        # flags for kmeans initialization
+        self._hmm_use_kmeans = None
+        self._model_use_kmeans = None
+
+    def _hmm_setup(
         self,
         initial_proba_init: Optional[str | Callable] = None,
         initial_proba_init_kwargs: Optional[dict] = None,
@@ -187,14 +185,45 @@ class BaseHMM(
         transition_proba_init_kwargs :
             A dictionary of keyword arguments to pass to the transition probability initialization function.
         """
-        self._initialization_funcs = setup_hmm_initialization(
+        # flag for initializing kmeans model at parameter initialization
+        self._hmm_use_kmeans = {
+            "initial_proba_init": initial_proba_init == "kmeans",
+            "transition_proba_init": transition_proba_init == "kmeans",
+        }
+        self._hmm_initialization_funcs = setup_hmm_initialization(
             initial_proba_init=initial_proba_init,
             initial_proba_init_kwargs=initial_proba_init_kwargs,
             transition_proba_init=transition_proba_init,
             transition_proba_init_kwargs=transition_proba_init_kwargs,
-            init_funcs=self._initialization_funcs,
-            default_init_dict=self._default_init_dict,
+            init_funcs=self._hmm_initialization_funcs,
         )
+
+    @abc.abstractmethod
+    def _model_setup(self):
+        """Model-specific setup of initialization functions."""
+        # self._model_use_kmeans and self._model_initialization_funcs must be set here
+        pass
+
+    def setup(
+        self,
+        initial_proba_init: Optional[str | Callable] = None,
+        initial_proba_init_kwargs: Optional[dict] = None,
+        transition_proba_init: Optional[str | Callable] = None,
+        transition_proba_init_kwargs: Optional[dict] = None,
+        **kwargs,
+    ):
+        """
+        Set up the HMM-based model, including HMM and model-specific setup.
+
+        This can be overwritten by the child class for custom docstrings.
+        """
+        self._hmm_setup(
+            initial_proba_init=initial_proba_init,
+            initial_proba_init_kwargs=initial_proba_init_kwargs,
+            transition_proba_init=transition_proba_init,
+            transition_proba_init_kwargs=transition_proba_init_kwargs,
+        )
+        self._model_setup(**kwargs)
 
     @property
     def n_states(self) -> int:
@@ -321,24 +350,44 @@ class BaseHMM(
         self._seed = value
 
     @property
-    def initialization_funcs(self) -> INITIALIZATION_FN_DICT_T | None:
+    def hmm_initialization_funcs(self) -> INITIALIZATION_FN_DICT_T | None:
         """Dictionary of initialization functions for HMM parameters."""
-        return self._initialization_funcs
+        return self._hmm_initialization_funcs
 
-    @initialization_funcs.setter
-    def initialization_funcs(self, value: INITIALIZATION_FN_DICT_T | None):
+    @hmm_initialization_funcs.setter
+    def hmm_initialization_funcs(self, value: INITIALIZATION_FN_DICT_T | None):
         """
         Set the dictionary of initialization functions for HMM parameters.
 
-        Validates keys against the model-specific ``_default_init_dict`` and merges
-        with defaults before storing. Calls :meth:`setup` afterward to apply any
+        Validates keys against the HMM-specific DEFAULT_INIT_FUNCTIONS and merges
+        with defaults before storing. Calls :meth:`_hmm_setup` afterward to apply any
         function/kwargs updates. May be called directly or via ``__init__``.
         """
         # always key validated in a model dependent way
-        self._initialization_funcs = _validate_init_funcs_keys(
-            value, self._default_init_dict
+        self._hmm_initialization_funcs = _validate_init_funcs_keys(
+            value, DEFAULT_INIT_FUNCTIONS
         )
-        self.setup()
+        self._hmm_setup()
+
+    @property
+    def model_initialization_funcs(self) -> INITIALIZATION_FN_DICT_T | None:
+        """Dictionary of initialization functions for HMM parameters."""
+        return self._model_initialization_funcs
+
+    @model_initialization_funcs.setter
+    def model_initialization_funcs(self, value: INITIALIZATION_FN_DICT_T | None):
+        """
+        Set the dictionary of initialization functions for model parameters.
+
+        Validates keys against the model-specific ``_model_default_init_dict`` and merges
+        with defaults before storing. Calls :meth:`_model_setup` afterward to apply any
+        function/kwargs updates. May be called directly or via ``__init__``.
+        """
+        # always key validated in a model dependent way
+        self._model_initialization_funcs = _validate_init_funcs_keys(
+            value, self._model_default_init_dict
+        )
+        self._model_setup()
 
     def _hmm_params_initialization(
         self,
@@ -375,11 +424,11 @@ class BaseHMM(
             y,
             is_new_session,
             random_key_pair=random_key_pair,
-            init_funcs=self._initialization_funcs,
+            init_funcs=self._hmm_initialization_funcs,
         )
-        validate_params = self._initialization_funcs.get(
+        validate_params = self._hmm_initialization_funcs.get(
             "initial_proba_init_custom", True
-        ) or self._initialization_funcs.get("transition_proba_init_custom", True)
+        ) or self._hmm_initialization_funcs.get("transition_proba_init_custom", True)
         return hmm_params, validate_params
 
     @abc.abstractmethod
@@ -406,52 +455,78 @@ class BaseHMM(
         """
         pass
 
+    @property
+    def _use_kmeans(self) -> bool:
+        """Check if kmeans initialization is needed for any HMM parameters."""
+        return (
+            (self._hmm_use_kmeans is not None) and any(self._hmm_use_kmeans.values())
+        ) or (
+            (self._model_use_kmeans is not None)
+            and any(self._model_use_kmeans.values())
+        )
+
     def _kmeans_extra_kwargs(self) -> dict:
+        """Extra kwargs to initialize the kmeans model. Can be overridden by child classes if needed."""
         return {}
 
-    def _kmeans_resolve(
+    def _kmeans_resolve_model_kwargs(self, use_kmeans, init_funcs) -> dict:
+        """
+        Extract model kmeans kwargs and ensure consistency across relevant init funcs.
+
+        This is not relevant for HMM init funcs, whose kwargs are not needed for the kmeans initializer
+        """
+        kmeans_kwargs = {}
+        for param, use in use_kmeans.items():
+            if use:
+                kwargs = init_funcs.get(f"{param}_kwargs", {})
+                for k, v in kwargs.items():
+                    if k in kmeans_kwargs:
+                        if not eqx.tree_equal(kmeans_kwargs[k], v):
+                            raise ValueError(
+                                f"Inconsistent KMeans init arg '{k}': "
+                                f"{kmeans_kwargs[k]} != {v}"
+                            )
+                    else:
+                        kmeans_kwargs[k] = v
+        return kmeans_kwargs
+
+    def _kmeans_setup_initializer(
         self, X, y, is_new_session=None, random_key: jnp.ndarray = None
     ):
-        kmeans_kwargs = {}
-
-        # Only iterate over the canonical kmeans init funcs
-        has_kmeans = False
-        for func_name, func in self._kmeans_init_funcs:
-            registered_func = self._initialization_funcs.get(func_name)
-
-            if registered_func is not func:
-                continue  # skip anything that doesn't match expected function
-            has_kmeans = True
-            kwargs = self._initialization_funcs.get(f"{func_name}_kwargs", {})
-
-            for k, v in kwargs.items():
-                if k in kmeans_kwargs:
-                    if not eqx.tree_equal(kmeans_kwargs[k], v):
-                        raise ValueError(
-                            f"Inconsistent KMeans init arg '{k}': "
-                            f"{kmeans_kwargs[k]} != {v}"
-                        )
-                else:
-                    kmeans_kwargs[k] = v
-        if has_kmeans:
-            # Resolve initializer
-            initializer = kmeans_kwargs.get(
-                "initializer",
-                self._kmeans_init_class(
-                    self.n_states,
-                    X,
-                    y,
-                    is_new_session=is_new_session,
-                    random_key=random_key,
-                    **self._kmeans_extra_kwargs(),
-                    **kmeans_kwargs,
-                ),
+        """Set up the kmeans initializer if any HMM or model parameters require kmeans initialization."""
+        # get additional model-specific kwargs for kmeans initializer if needed
+        if self._model_use_kmeans is not None:
+            kmeans_kwargs = self._kmeans_resolve_model_kwargs(
+                self._model_use_kmeans, self._model_initialization_funcs
             )
+        else:
+            kmeans_kwargs = {}
 
-            # Inject initializer back only into relevant funcs
-            for func_name, func in self._kmeans_init_funcs:
-                if self._initialization_funcs.get(func_name) is func:
-                    self._initialization_funcs[f"{func_name}_kwargs"][
+        # setup initializer
+        initializer = kmeans_kwargs.get(
+            "initializer",
+            self._kmeans_init_class(
+                self.n_states,
+                X,
+                y,
+                is_new_session=is_new_session,
+                random_key=random_key,
+                **self._kmeans_extra_kwargs(),
+                **kmeans_kwargs,
+            ),
+        )
+
+        # Inject initializer back only into relevant funcs
+        if self._hmm_use_kmeans is not None:
+            for param, use_kmeans in self._hmm_use_kmeans.items():
+                if use_kmeans:
+                    self._hmm_initialization_funcs[f"{param}_kwargs"][
+                        "initializer"
+                    ] = initializer
+        if self._model_use_kmeans is not None:
+            for param, use_kmeans in self._model_use_kmeans.items():
+                if use_kmeans:
+                    self._model_initialization_funcs[f"{param}_kwargs"][
                         "initializer"
                     ] = initializer
 
@@ -463,9 +538,10 @@ class BaseHMM(
         model_key = keys[3]
 
         # check kmeans kwargs and setup initializer.
-        self._kmeans_resolve(
-            X, y, is_new_session=is_new_session, random_key=hmm_keys[0]
-        )
+        if self._use_kmeans:
+            self._kmeans_setup_initializer(
+                X, y, is_new_session=is_new_session, random_key=hmm_keys[0]
+            )
 
         hmm_params, validate_hmm = self._hmm_params_initialization(
             X,
