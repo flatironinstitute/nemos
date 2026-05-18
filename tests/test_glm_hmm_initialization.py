@@ -467,6 +467,18 @@ class TestKMeansInitializerGLM:
         assert jnp.allclose(coef_r, coef_e)
         assert jnp.allclose(int_r, int_e)
 
+    def test_empty_state_raises(self, kmeans_mock):
+        """fit() raises when KMeans leaves a state with zero assigned samples."""
+        n_states, X, y, _, _ = kmeans_mock
+        initializer = KMeansInitializerGLM(
+            n_states, X, y, jnp.exp, "Poisson", random_key=0
+        )
+        # Force all samples into state 0 so states 1..n_states-1 are empty
+        labels = jnp.zeros(X.shape[0], dtype=int)
+        initializer.states = jax.nn.one_hot(labels, num_classes=n_states)
+        with pytest.raises(ValueError, match="0 samples to state"):
+            initializer.fit()
+
 
 # =============================================================================
 # Tests for setup_glm_hmm_initialization
@@ -748,3 +760,19 @@ class TestGenerateGLMHMMInitialParams:
             3, X, y, lambda x: x, random_key=2
         )
         assert not jnp.allclose(coef1, coef2)
+
+    def test_kmeans_glm_params_missing_observation_model_raises(self):
+        """kmeans glm_params_init without observation_model in kwargs raises early."""
+        init_funcs = setup_glm_hmm_initialization(glm_params_init="kmeans")
+        with pytest.raises(ValueError, match="observation_model"):
+            generate_glm_hmm_initial_model_params(
+                2, jnp.ones((10, 3)), jnp.ones(10), jnp.exp, init_funcs=init_funcs
+            )
+
+    def test_kmeans_scale_missing_observation_model_raises(self):
+        """kmeans scale_init without observation_model in kwargs raises early."""
+        init_funcs = setup_glm_hmm_initialization(scale_init="kmeans")
+        with pytest.raises(ValueError, match="observation_model"):
+            generate_glm_hmm_initial_model_params(
+                2, jnp.ones((10, 3)), jnp.ones(10), jnp.exp, init_funcs=init_funcs
+            )

@@ -786,6 +786,17 @@ class TestHMMInitialParams:
             )
             assert mock_fit.call_count == 1
 
+    def test_kmeans_inconsistent_kwargs_raises(self):
+        """_kmeans_resolve_model_kwargs raises when the same kwarg has conflicting values."""
+        model = MockHMM(n_states=3)
+        use_kmeans = {"param_a": True, "param_b": True}
+        init_funcs = {
+            "param_a_kwargs": {"minimum_prob": 0.01},
+            "param_b_kwargs": {"minimum_prob": 0.05},
+        }
+        with pytest.raises(ValueError, match="Inconsistent KMeans init arg"):
+            model._kmeans_resolve_model_kwargs(use_kmeans, init_funcs)
+
     @pytest.mark.parametrize(
         "key, value, expectation",
         [

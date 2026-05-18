@@ -56,7 +56,7 @@ def random_glm_params_init(
     Initialize GLM coefficients and intercept with random normal values.
 
     Generates random GLM parameters for each HMM state by sampling from a normal
-    distribution scaled by 0.1.
+    distribution scaled by `std_dev`.
 
     Parameters
     ----------
@@ -131,10 +131,6 @@ class KMeansInitializerGLM(KMeansInitializer):
         (default), it is assumed that all data belongs to a single session.
     glm_kwargs:
         Keyword arguments defining the GLM model: observation model, regularization etc.
-    minimum_prob :
-        Minimum probability added to each state to avoid zero probabilities.
-        Note that probabilities will be renormalized after adding this minimum value, so the final
-        probabilities will not be exactly this value.
     random_key :
         Random key for reproducibility of KMeans initialization.
     """
@@ -188,8 +184,15 @@ class KMeansInitializerGLM(KMeansInitializer):
     def fit(self) -> "KMeansInitializerGLM":
         """Fit one GLM per state on samples assigned to that state by KMeans."""
         states = self.states.astype(bool)
-        for state_mask, model in zip(states.T, self._glm_models.values()):
+        for i, (state_mask, model) in enumerate(
+            zip(states.T, self._glm_models.values())
+        ):
             X_state, y_state = self._X[state_mask], self._y[state_mask]
+            if X_state.shape[0] == 0:
+                raise ValueError(
+                    f"KMeans assigned 0 samples to state {i}. Try reducing n_states "
+                    f"or using a different initialization method."
+                )
             model.fit(X_state, y_state)
         return self
 
@@ -358,7 +361,7 @@ def constant_scale_init(
     y: NDArray | jnp.ndarray,
     inverse_link_function: Callable,
     is_new_session: Optional[NDArray | jnp.ndarray] = None,
-    random_key=jax.random.PRNGKey(124),
+    random_key: Optional[jax.Array] = None,
     scale_val: float = 1.0,
 ):
     """
@@ -578,6 +581,12 @@ def generate_glm_hmm_initial_model_params(
     )
     glm_params_init_kwargs = glm_init_funcs.get("glm_params_init_kwargs") or {}
 
+    if glm_params_init is kmeans_glm_params_init and "observation_model" not in glm_params_init_kwargs:
+        raise ValueError(
+            "The 'kmeans' GLM parameter initializer requires 'observation_model' to be "
+            "provided in 'glm_params_init_kwargs'."
+        )
+
     coef, intercept = glm_params_init(
         n_states=n_states,
         X=X,
@@ -592,6 +601,12 @@ def generate_glm_hmm_initial_model_params(
         glm_init_funcs.get("scale_init") or DEFAULT_INIT_FUNCTIONS_GLMHMM["scale_init"]
     )
     scale_init_kwargs = glm_init_funcs.get("scale_init_kwargs") or {}
+
+    if scale_init_fn is kmeans_scale_init and "observation_model" not in scale_init_kwargs:
+        raise ValueError(
+            "The 'kmeans' scale initializer requires 'observation_model' to be "
+            "provided in 'scale_init_kwargs'."
+        )
 
     scale = scale_init_fn(
         n_states=n_states,

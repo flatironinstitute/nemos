@@ -481,7 +481,8 @@ class BaseHMM(
                 kwargs = init_funcs.get(f"{param}_kwargs", {})
                 for k, v in kwargs.items():
                     if k in kmeans_kwargs:
-                        if not eqx.tree_equal(kmeans_kwargs[k], v):
+                        eq = eqx.tree_equal(kmeans_kwargs[k], v)
+                        if eq is None or not bool(eq):
                             raise ValueError(
                                 f"Inconsistent KMeans init arg '{k}': "
                                 f"{kmeans_kwargs[k]} != {v}"
@@ -491,7 +492,7 @@ class BaseHMM(
         return kmeans_kwargs
 
     def _kmeans_setup_initializer(
-        self, X, y, is_new_session=None, random_key: jnp.ndarray = None
+        self, X, y, is_new_session=None, random_key: Optional[jax.Array] = None
     ):
         """Set up the kmeans initializer if any HMM or model parameters require kmeans initialization."""
         # get additional model-specific kwargs for kmeans initializer if needed
@@ -532,15 +533,17 @@ class BaseHMM(
 
     def _model_specific_initialization(self, X, y, is_new_session=None):
         """Model-specific initialization."""
-        keys = jax.random.split(self._seed, 4)
-        hmm_keys = keys[1:3]
+        keys = jax.random.split(self._seed, 3)
+        hmm_keys = keys[:2]
         # the model needs to figure out how to split the key internally
-        model_key = keys[3]
+        model_key = keys[2]
 
         # check kmeans kwargs and setup initializer.
+        # fold_in derives an independent key so hmm_keys and model_key are unaffected.
         if self._use_kmeans:
+            kmeans_key = jax.random.fold_in(self._seed, 0)
             self._kmeans_setup_initializer(
-                X, y, is_new_session=is_new_session, random_key=hmm_keys[0]
+                X, y, is_new_session=is_new_session, random_key=kmeans_key
             )
 
         hmm_params, validate_hmm = self._hmm_params_initialization(
