@@ -581,7 +581,10 @@ def generate_glm_hmm_initial_model_params(
     )
     glm_params_init_kwargs = glm_init_funcs.get("glm_params_init_kwargs") or {}
 
-    if glm_params_init is kmeans_glm_params_init and "observation_model" not in glm_params_init_kwargs:
+    if (
+        glm_params_init is kmeans_glm_params_init
+        and "observation_model" not in glm_params_init_kwargs
+    ):
         raise ValueError(
             "The 'kmeans' GLM parameter initializer requires 'observation_model' to be "
             "provided in 'glm_params_init_kwargs'."
@@ -602,7 +605,10 @@ def generate_glm_hmm_initial_model_params(
     )
     scale_init_kwargs = glm_init_funcs.get("scale_init_kwargs") or {}
 
-    if scale_init_fn is kmeans_scale_init and "observation_model" not in scale_init_kwargs:
+    if (
+        scale_init_fn is kmeans_scale_init
+        and "observation_model" not in scale_init_kwargs
+    ):
         raise ValueError(
             "The 'kmeans' scale initializer requires 'observation_model' to be "
             "provided in 'scale_init_kwargs'."
