@@ -11,7 +11,6 @@ import pytest
 from nemos.glm import GLM
 from nemos.glm_hmm.initialize_parameters import (
     DEFAULT_INIT_FUNCTIONS_GLMHMM,
-    GLM_INIT_FUNCS,
     KMeansInitializerGLM,
     constant_scale_init,
     generate_glm_hmm_initial_model_params,
@@ -22,10 +21,6 @@ from nemos.glm_hmm.initialize_parameters import (
 )
 from nemos.glm_hmm.validation import GLMHMMValidator
 from nemos.hmm.hmm import BaseHMM
-from nemos.hmm.initialize_parameters import (
-    sticky_transition_proba_init,
-    uniform_initial_proba_init,
-)
 from nemos.inverse_link_function_utils import resolve_inverse_link_function
 
 # =============================================================================
@@ -35,17 +30,20 @@ from nemos.inverse_link_function_utils import resolve_inverse_link_function
 
 class MockGLMHMM(BaseHMM):
     _validator_class = GLMHMMValidator
-    _default_init_dict = DEFAULT_INIT_FUNCTIONS_GLMHMM
+    _model_default_init_dict = DEFAULT_INIT_FUNCTIONS_GLMHMM
 
-    def __init__(self, n_states, initialization_funcs=None):
+    def __init__(
+        self, n_states, hmm_initialization_funcs=None, model_initialization_funcs=None
+    ):
         BaseHMM.__init__(
-            self, n_states=n_states, initialization_funcs=initialization_funcs
+            self, n_states=n_states, hmm_initialization_funcs=hmm_initialization_funcs
         )
+        self.model_initialization_funcs = model_initialization_funcs
         self.coef_ = self.intercept_ = self.scale_ = None
 
-    def setup(self, **kwargs):
-        self._initialization_funcs = setup_glm_hmm_initialization(
-            init_funcs=self._initialization_funcs,
+    def _model_setup(self, **kwargs):
+        self._model_initialization_funcs = setup_glm_hmm_initialization(
+            init_funcs=self._model_initialization_funcs,
         )
 
     def _check_model_is_fit(self):
@@ -432,7 +430,9 @@ class TestKMeansInitializerGLM:
 
     def test_glm_params_output_shape(self, kmeans_mock):
         n_states, X, y, n_features, _ = kmeans_mock
-        initializer = KMeansInitializerGLM(n_states, X, y, jnp.exp, random_key=0)
+        initializer = KMeansInitializerGLM(
+            n_states, X, y, jnp.exp, "Poisson", random_key=0
+        )
         coef, intercept = initializer.glm_params()
         assert coef.shape == (n_features, n_states)
         assert intercept.shape == (n_states,)
@@ -446,22 +446,38 @@ class TestKMeansInitializerGLM:
     def test_scale_output_shape(self, kmeans_mock):
         """Poisson GLM has fixed scale=1, so scale() returns ones without fitting."""
         n_states, X, y, _, expected_shape = kmeans_mock
-        initializer = KMeansInitializerGLM(n_states, X, y, jnp.exp, random_key=0)
+        initializer = KMeansInitializerGLM(
+            n_states, X, y, jnp.exp, "Poisson", random_key=0
+        )
         scale = initializer.scale()
         assert scale.shape == expected_shape
 
     def test_shared_initializer(self, kmeans_mock):
         """Providing a pre-built initializer skips creating a new one."""
         n_states, X, y, _, _ = kmeans_mock
-        initializer = KMeansInitializerGLM(n_states, X, y, jnp.exp, random_key=7)
+        initializer = KMeansInitializerGLM(
+            n_states, X, y, jnp.exp, "Poisson", random_key=7
+        )
         result = kmeans_glm_params_init(
-            n_states, X, y, jnp.exp, initializer=initializer
+            n_states, X, y, jnp.exp, "Poisson", initializer=initializer
         )
         expected = initializer.glm_params()
         coef_r, int_r = result
         coef_e, int_e = expected
         assert jnp.allclose(coef_r, coef_e)
         assert jnp.allclose(int_r, int_e)
+
+    def test_empty_state_raises(self, kmeans_mock):
+        """fit() raises when KMeans leaves a state with zero assigned samples."""
+        n_states, X, y, _, _ = kmeans_mock
+        initializer = KMeansInitializerGLM(
+            n_states, X, y, jnp.exp, "Poisson", random_key=0
+        )
+        # Force all samples into state 0 so states 1..n_states-1 are empty
+        labels = jnp.zeros(X.shape[0], dtype=int)
+        initializer.states = jax.nn.one_hot(labels, num_classes=n_states)
+        with pytest.raises(ValueError, match="0 samples to state"):
+            initializer.fit()
 
 
 # =============================================================================
@@ -479,7 +495,7 @@ class TestSetupGLMHMMInitialization:
             ("kmeans", does_not_raise(), kmeans_glm_params_init),
             (None, does_not_raise(), DEFAULT_INIT_FUNCTIONS_GLMHMM["glm_params_init"]),
             (
-                "invalid",
+                "sticky",
                 pytest.raises(ValueError, match="Invalid initialization"),
                 None,
             ),
@@ -502,7 +518,7 @@ class TestSetupGLMHMMInitialization:
             ("kmeans", does_not_raise(), kmeans_scale_init),
             (None, does_not_raise(), DEFAULT_INIT_FUNCTIONS_GLMHMM["scale_init"]),
             (
-                "invalid",
+                "sticky",
                 pytest.raises(ValueError, match="Invalid initialization"),
                 None,
             ),
@@ -576,7 +592,9 @@ class TestSetupGLMHMMInitialization:
 
     def test_unknown_init_funcs_key(self):
         with pytest.raises(KeyError, match="Unexpected or unknown keys"):
-            MockGLMHMM(n_states=2, initialization_funcs={"totally_invalid_key": None})
+            MockGLMHMM(
+                n_states=2, model_initialization_funcs={"initial_proba_init": None}
+            )
 
     @pytest.mark.parametrize(
         "key, init_str, kwargs_key, kwargs_val",
@@ -602,7 +620,9 @@ class TestSetupGLMHMMInitialization:
         first = setup_glm_hmm_initialization(**{key: init_str, kwargs_key: kwargs_val})
         second = setup_glm_hmm_initialization(
             **{key: init_str},
-            init_funcs={k: v for k, v in first.items() if k in GLM_INIT_FUNCS},
+            init_funcs={
+                k: v for k, v in first.items() if k in DEFAULT_INIT_FUNCTIONS_GLMHMM
+            },
         )
         assert first[kwargs_key] == kwargs_val
         assert second[kwargs_key] == {}
@@ -612,19 +632,19 @@ class TestSetupGLMHMMInitialization:
         init_funcs = setup_glm_hmm_initialization()
         assert init_funcs == DEFAULT_INIT_FUNCTIONS_GLMHMM
 
-    def test_hmm_params_delegated(self):
-        """HMM init functions (initial_proba, transition_proba) are set correctly."""
-        init_funcs = setup_glm_hmm_initialization(
-            initial_proba_init="uniform",
-            transition_proba_init="sticky",
-        )
-        assert init_funcs["initial_proba_init"] == uniform_initial_proba_init
-        assert init_funcs["transition_proba_init"] == sticky_transition_proba_init
+    # def test_hmm_params_delegated(self):
+    #     """HMM init functions (initial_proba, transition_proba) are set correctly."""
+    #     init_funcs = setup_glm_hmm_initialization(
+    #         initial_proba_init="uniform",
+    #         transition_proba_init="sticky",
+    #     )
+    #     assert init_funcs["initial_proba_init"] == uniform_initial_proba_init
+    #     assert init_funcs["transition_proba_init"] == sticky_transition_proba_init
 
 
 @pytest.mark.parametrize(
     "func_name",
-    ["glm_params_init", "scale_init", "initial_proba_init", "transition_proba_init"],
+    ["glm_params_init", "scale_init"],
 )
 class TestSetupGLMHMMInitializationKwargs:
     """Test kwargs validation in setup_glm_hmm_initialization via mock registries."""
@@ -715,7 +735,9 @@ class TestGenerateGLMHMMInitialParams:
 
     def test_init_funcs_unknown_key_raises(self):
         with pytest.raises(KeyError, match="Unexpected or unknown keys"):
-            MockGLMHMM(n_states=2, initialization_funcs={"totally_invalid_key": None})
+            MockGLMHMM(
+                n_states=2, model_initialization_funcs={"transition_proba_init": None}
+            )
 
     def test_none_init_funcs_uses_defaults(self):
         X = jnp.ones((50, 5))
@@ -738,3 +760,19 @@ class TestGenerateGLMHMMInitialParams:
             3, X, y, lambda x: x, random_key=2
         )
         assert not jnp.allclose(coef1, coef2)
+
+    def test_kmeans_glm_params_missing_observation_model_raises(self):
+        """kmeans glm_params_init without observation_model in kwargs raises early."""
+        init_funcs = setup_glm_hmm_initialization(glm_params_init="kmeans")
+        with pytest.raises(ValueError, match="observation_model"):
+            generate_glm_hmm_initial_model_params(
+                2, jnp.ones((10, 3)), jnp.ones(10), jnp.exp, init_funcs=init_funcs
+            )
+
+    def test_kmeans_scale_missing_observation_model_raises(self):
+        """kmeans scale_init without observation_model in kwargs raises early."""
+        init_funcs = setup_glm_hmm_initialization(scale_init="kmeans")
+        with pytest.raises(ValueError, match="observation_model"):
+            generate_glm_hmm_initial_model_params(
+                2, jnp.ones((10, 3)), jnp.ones(10), jnp.exp, init_funcs=init_funcs
+            )

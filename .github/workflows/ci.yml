@@ -25,7 +25,7 @@ on:
 
 env:
   CODECOV_OS: ubuntu-latest
-  CODECOV_PY: '3.13'
+  CODECOV_PY: '3.14'
 
 jobs:
   tox_tests_not_solver_related:
@@ -33,7 +33,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ['3.10', '3.11', '3.12', '3.13']
+        python-version: ['3.12', '3.13', '3.14']
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
@@ -68,7 +68,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ['3.10', '3.11', '3.12', '3.13']
+        python-version: ['3.12', '3.13', '3.14']
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
@@ -103,7 +103,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ['3.10', '3.11', '3.12', '3.13']
+        python-version: ['3.12', '3.13', '3.14']
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
@@ -145,7 +145,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 #v6.2.0
         with:
-          python-version: '3.13'
+          python-version: '3.14'
 
       - name: Set up uv
         uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 #v7.3.1

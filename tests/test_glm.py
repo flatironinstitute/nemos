@@ -2390,6 +2390,145 @@ def test_grouplasso_fit_twice_different_pytree_structure():
     model.fit(X_dict, y)
 
 
+def _make_valid_group_mask(n_groups, n_features):
+    """Binary group mask: each group owns a contiguous slice of features."""
+    mask = np.zeros((n_groups, n_features))
+    split = n_features // n_groups
+    for i in range(n_groups):
+        start = i * split
+        end = (i + 1) * split if i < n_groups - 1 else n_features
+        mask[i, start:end] = 1.0
+    return mask
+
+
+@pytest.mark.parametrize(
+    "make_mask, make_X, check_coef",
+    [
+        pytest.param(
+            lambda arr, _: arr,
+            lambda X: X,
+            # flat array: coef slot should be a single 2-D array (n_groups, n_features)
+            lambda coef, n_groups, n_features: (
+                hasattr(coef, "shape") and coef.shape == (n_groups, n_features)
+            ),
+            id="flat_array_mask-2d_X",
+        ),
+        pytest.param(
+            lambda arr, _: [arr],
+            lambda X: [X],
+            # list mask with list X: coef slot should be a list of one 2-D array
+            lambda coef, n_groups, n_features: (
+                isinstance(coef, list)
+                and len(coef) == 1
+                and coef[0].shape == (n_groups, n_features)
+            ),
+            id="list_mask-list_X",
+        ),
+        pytest.param(
+            lambda arr, _: nmo.glm.params.GLMParams(
+                coef=jnp.asarray(arr), intercept=None
+            ),
+            lambda X: X,
+            # already-structured GLMParams: coef slot is unchanged, same 2-D array
+            lambda coef, n_groups, n_features: (
+                hasattr(coef, "shape") and coef.shape == (n_groups, n_features)
+            ),
+            id="already_structured_glmparams_mask",
+        ),
+    ],
+)
+def test_grouplasso_mask_wrapping_and_refit(
+    make_mask, make_X, check_coef, mock_optimizer_run
+):
+    """User-provided mask wraps into GLMParams on first fit; re-fit leaves it unchanged.
+
+    Regression test for three mask formats:
+    - flat array: mask has same shape as coef_ (mirrors X).
+    - list of one array: mask mirrors list-structured X.
+    - already-structured GLMParams: isinstance guard prevents double-wrapping.
+    """
+    rng = np.random.default_rng(0)
+    n_samples, n_features, n_groups = 50, 4, 2
+    X_arr = rng.standard_normal((n_samples, n_features))
+    y = rng.poisson(1, size=n_samples)
+
+    mask_arr = _make_valid_group_mask(n_groups, n_features)
+    mask = make_mask(mask_arr, n_features)
+    X = make_X(X_arr)
+
+    model = nmo.glm.GLM(
+        regularizer=nmo.regularizer.GroupLasso(mask=mask),
+        regularizer_strength=1.0,
+    )
+
+    model.fit(X, y)
+
+    # After first fit, mask must be wrapped into the internal GLMParams structure.
+    assert isinstance(
+        model.regularizer.mask, nmo.glm.params.GLMParams
+    ), "mask must be a GLMParams pytree after fit"
+    assert model.regularizer.mask.intercept is None
+    assert check_coef(model.regularizer.mask.coef, n_groups, n_features)
+    mask_coef_after_first = model.regularizer.mask.coef
+
+    # Re-fit: isinstance guard must prevent double-wrapping; coef content unchanged.
+    model.fit(X, y)
+    assert isinstance(model.regularizer.mask, nmo.glm.params.GLMParams)
+    assert model.regularizer.mask.intercept is None
+    jax.tree_util.tree_map(
+        lambda a, b: np.testing.assert_array_equal(a, b),
+        mask_coef_after_first,
+        model.regularizer.mask.coef,
+    )
+
+
+@pytest.mark.parametrize(
+    "make_X, make_mask, expectation",
+    [
+        pytest.param(
+            lambda arr: arr,
+            lambda arr: arr,
+            does_not_raise(),
+            id="array_X-array_mask-match",
+        ),
+        pytest.param(
+            lambda arr: arr,
+            lambda arr: [arr],
+            pytest.raises(ValueError, match="Mask pytree structure"),
+            id="array_X-list_mask-mismatch",
+        ),
+        pytest.param(
+            lambda arr: [arr],
+            lambda arr: [arr],
+            does_not_raise(),
+            id="list_X-list_mask-match",
+        ),
+        pytest.param(
+            lambda arr: [arr],
+            lambda arr: arr,
+            pytest.raises(ValueError, match="Mask pytree structure"),
+            id="list_X-array_mask-mismatch",
+        ),
+    ],
+)
+def test_grouplasso_mask_structure_mismatch(
+    make_X, make_mask, expectation, mock_optimizer_run
+):
+    """Mask pytree structure must mirror X; mismatch raises ValueError before shape checks."""
+    rng = np.random.default_rng(0)
+    n_samples, n_features, n_groups = 50, 4, 2
+    X = make_X(rng.standard_normal((n_samples, n_features)))
+    y = rng.poisson(1, size=n_samples)
+    mask = make_mask(_make_valid_group_mask(n_groups, n_features))
+
+    model = nmo.glm.GLM(
+        regularizer=nmo.regularizer.GroupLasso(mask=mask),
+        regularizer_strength=1.0,
+    )
+    with expectation:
+        model.fit(X, y)
+
+
 @pytest.mark.parametrize(
     "model_instantiation",
     [
@@ -3192,6 +3331,7 @@ class TestPoissonGLM:
     )
     @pytest.mark.parametrize("batch_size", [None, 1, 10])
     @pytest.mark.parametrize("stepsize", [None, 0.01])
+    @pytest.mark.parametrize("inverse_link_function", [jax.nn.softplus, "softplus"])
     @pytest.mark.solver_related
     def test_glm_optimal_config_set_initial_state(
         self,
@@ -3200,14 +3340,13 @@ class TestPoissonGLM:
         stepsize,
         reg,
         obs,
+        inverse_link_function,
         request,
         glm_class_type,
         model_instantiation_type,
         reg_setup,
     ):
-        """
-        Test special initialization of Poisson GLM + softmax inverse link function for SVRG and ProxSVRG.
-        """
+        """Test special initialization of Poisson GLM + softplus inverse link function for SVRG and ProxSVRG."""
         glm_class = request.getfixturevalue(glm_class_type)
         X, y, _, true_params, _ = request.getfixturevalue(
             model_instantiation_type + reg_setup
@@ -3220,7 +3359,7 @@ class TestPoissonGLM:
                 reg = nmo.regularizer.GroupLasso()
         model = glm_class(
             solver_name=solver_name,
-            inverse_link_function=jax.nn.softplus,
+            inverse_link_function=inverse_link_function,
             solver_kwargs=dict(batch_size=batch_size, stepsize=stepsize),
             observation_model=obs,
             regularizer=reg,
@@ -3241,6 +3380,49 @@ class TestPoissonGLM:
         else:
             assert isinstance(solver.batch_size, int)
             assert solver.batch_size > 0
+
+    @pytest.mark.parametrize(
+        "solver_name, regularizer",
+        [("SVRG", "UnRegularized"), ("ProxSVRG", "Lasso")],
+    )
+    @pytest.mark.parametrize(
+        "inverse_link_function, has_defaults",
+        [(jax.nn.softplus, True), ("softplus", True), (jax.numpy.exp, False)],
+    )
+    @pytest.mark.solver_related
+    def test_svrg_defaults_detect_softplus_string_and_callable(
+        self,
+        solver_name,
+        regularizer,
+        inverse_link_function,
+        has_defaults,
+        glm_class_type,
+        request,
+    ):
+        """Test Poisson SVRG defaults handle both softplus specifications."""
+        glm_class = request.getfixturevalue(glm_class_type)
+        X = jnp.array([[1.0, 2.0], [3.0, 1.0], [2.0, 4.0], [5.0, 3.0]])
+        y = jnp.array([1.0, 2.0, 3.0, 4.0])
+        if glm_class_type == "population_glm_class":
+            y = y[:, None]
+        model = glm_class(
+            solver_name=solver_name,
+            inverse_link_function=inverse_link_function,
+            observation_model=nmo.observation_models.PoissonObservations(),
+            regularizer=regularizer,
+            regularizer_strength=None if regularizer == "UnRegularized" else 1.0,
+        )
+
+        solver_kwargs = model._optimize_solver_params(X, y)
+
+        if has_defaults:
+            assert isinstance(solver_kwargs["batch_size"], int)
+            assert solver_kwargs["batch_size"] > 0
+            assert isinstance(solver_kwargs["stepsize"], float)
+            assert solver_kwargs["stepsize"] > 0
+        else:
+            assert "batch_size" not in solver_kwargs
+            assert "stepsize" not in solver_kwargs
 
     @pytest.mark.parametrize(
         "regularizer, expected_type_convexity",
@@ -3264,7 +3446,11 @@ class TestPoissonGLM:
     )
     @pytest.mark.parametrize(
         "inv_link_func, expected_type_link",
-        [(jax.nn.softplus, Callable), (jax.numpy.exp, type(None))],
+        [
+            (jax.nn.softplus, Callable),
+            ("softplus", Callable),
+            (jax.numpy.exp, type(None)),
+        ],
     )
     def test_optimal_config_outputs(
         self,

@@ -800,7 +800,7 @@ class TestForwardBackward:
         )
         xis = jnp.exp(log_xis)
         np.testing.assert_array_almost_equal(
-            np.array([[log_alphas.shape[0] - sum(new_sess)]]).astype(xis), xis
+            np.array([[log_alphas.shape[0] - sum(new_sess)]]).astype(xis.dtype), xis
         )
 
 
