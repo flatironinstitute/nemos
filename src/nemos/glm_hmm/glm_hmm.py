@@ -11,7 +11,7 @@ from numpy.typing import ArrayLike, NDArray
 from .. import observation_models as obs
 from .._observation_model_builder import instantiate_observation_model
 from ..hmm.hmm import BaseHMM
-from ..hmm.initialize_parameters import DEFAULT_INIT_FUNCTIONS
+from ..hmm.initialize_parameters import INITIALIZATION_FN_DICT
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
 from ..regularizer import Regularizer
@@ -27,6 +27,8 @@ from .initialize_parameters import (
     DEFAULT_INIT_FUNCTIONS_GLMHMM,
     GLMHMM_INITIALIZATION_FN_DICT,
     KMeansInitializerGLM,
+    kmeans_glm_params_init,
+    kmeans_scale_init,
     setup_glm_hmm_initialization,
 )
 from .params import GLMHMMParams, GLMHMMUserParams
@@ -140,9 +142,15 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
         JAX PRNG key for random number generation during initialization. Default is
         ``jax.random.PRNGKey(123)``.
     hmm_initialization_funcs : dict, optional
-        TODO: Update description
-    glm_initialization_funcs : dict, optional
-        TODO: Update description
+        Dictionary of initialization functions for HMM probabilities (initial and
+        transition). Included for scikit-learn compatibility; prefer configuring via the
+        :meth:`setup` method after construction. If ``None``, defaults from
+        ``DEFAULT_INIT_FUNCTIONS`` are used.
+    model_initialization_funcs : dict, optional
+        Dictionary of initialization functions for the GLM-specific parameters
+        (coefficients, intercept, and scale). Included for scikit-learn compatibility;
+        prefer configuring via the :meth:`setup` method after construction. If ``None``,
+        defaults from ``DEFAULT_INIT_FUNCTIONS_GLMHMM`` are used.
 
     Attributes
     ----------
@@ -179,11 +187,12 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
     TypeError
         If ``seed`` is not a valid JAX PRNG key.
     KeyError
-        If ``initialization_funcs`` contains invalid keys (not one of the four
-        valid initialization function names).
+        If ``hmm_initialization_funcs`` or ``model_initialization_funcs`` contains keys
+        that are not valid for their respective default dictionary.
     ValueError
-        If ``initialization_kwargs`` contains keyword arguments that don't match
-        the signature of the corresponding initialization function.
+        If any ``*_kwargs`` entry in either initialization-funcs dictionary contains
+        keyword arguments that don't match the signature of the corresponding
+        initialization function.
     ValueError
         If ``maxiter`` is not a positive integer.
     ValueError
@@ -216,8 +225,8 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
         maxiter: int = 1000,
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
-        hmm_initialization_funcs: Optional[DEFAULT_INIT_FUNCTIONS] = None,
-        glm_initialization_funcs: Optional[GLMHMM_INITIALIZATION_FN_DICT] = None,
+        hmm_initialization_funcs: Optional[INITIALIZATION_FN_DICT] = None,
+        model_initialization_funcs: Optional[GLMHMM_INITIALIZATION_FN_DICT] = None,
     ):
         super().__init__(
             n_states=n_states,
@@ -235,7 +244,7 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
         self.observation_model = observation_model
         self.inverse_link_function = inverse_link_function
 
-        self.model_initialization_funcs = glm_initialization_funcs
+        self.model_initialization_funcs = model_initialization_funcs
 
         # fit attributes
         self.coef_: jnp.ndarray | None = None
@@ -252,18 +261,27 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
 
     def setup(
         self,
-        initial_proba_init: Optional[str | Callable] = None,
+        initial_proba_init: Optional[
+            Literal["uniform", "random", "dirichlet", "kmeans"] | Callable
+        ] = None,
         initial_proba_init_kwargs: Optional[dict] = None,
-        transition_proba_init: Optional[str | Callable] = None,
+        transition_proba_init: Optional[
+            Literal["sticky", "uniform", "random", "dirichlet", "kmeans"] | Callable
+        ] = None,
         transition_proba_init_kwargs: Optional[dict] = None,
-        glm_params_init: Optional[str | Callable] = None,
+        glm_params_init: Optional[Literal["random", "kmeans"] | Callable] = None,
         glm_params_init_kwargs: Optional[dict] = None,
-        scale_init: Optional[str | Callable] = None,
+        scale_init: Optional[Literal["constant", "kmeans"] | Callable] = None,
         scale_init_kwargs: Optional[dict] = None,
     ):
-        """Set the initialization functions.
+        """Configure initialization functions for HMM and GLM parameters.
 
-        TODO: add docstrings
+        The HMM-side arguments (``initial_proba_init``, ``transition_proba_init`` and
+        their ``*_kwargs``) are routed to :meth:`BaseHMM._hmm_setup`; the GLM-side
+        arguments (``glm_params_init``, ``scale_init`` and their ``*_kwargs``) are
+        routed to :meth:`_model_setup`. Each entry can be a string identifier for a
+        built-in function, a custom callable, or ``None`` to leave the current value
+        untouched.
         """
         super().setup(
             initial_proba_init=initial_proba_init,
@@ -283,13 +301,13 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
         scale_init: Optional[str | Callable] = None,
         scale_init_kwargs=None,
     ):
-        """Validate and set model initialization functions."""
-        # TODO: maybe use function identity as well (in case a callable is provided)
-        # Same thing for the self._hmm_use_kmeans which is checked in BaseHMM
-        self._model_use_kmeans = {
-            "glm_params_init": glm_params_init == "kmeans",
-            "scale_init": scale_init == "kmeans",
-        }
+        """Validate and set GLM-side initialization functions.
+
+        Derives ``_model_use_kmeans`` from the identity of the stored callables so the
+        flag stays accurate regardless of whether the user passed the string ``"kmeans"``
+        or the kmeans callable directly (e.g. when set via the
+        ``model_initialization_funcs`` property).
+        """
         self._model_initialization_funcs = setup_glm_hmm_initialization(
             glm_params_init=glm_params_init,
             glm_params_init_kwargs=glm_params_init_kwargs,
@@ -297,17 +315,15 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
             scale_init_kwargs=scale_init_kwargs,
             init_funcs=self._model_initialization_funcs,
         )
-
-    def set_params(self, **kwargs):
-        """Set model parameters, ensuring initialization functions are set before their kwargs.
-
-        This override ensures that when both ``initialization_funcs`` and
-        ``initialization_kwargs`` are provided, the functions are set first so
-        that kwargs are validated against the new functions, not the old ones.
-        """
-        if "initialization_funcs" in kwargs and "initialization_kwargs" in kwargs:
-            super().set_params(initialization_funcs=kwargs.pop("initialization_funcs"))
-        return super().set_params(**kwargs)
+        self._model_use_kmeans = {
+            "glm_params_init": (
+                self._model_initialization_funcs["glm_params_init"]
+                is kmeans_glm_params_init
+            ),
+            "scale_init": (
+                self._model_initialization_funcs["scale_init"] is kmeans_scale_init
+            ),
+        }
 
     @property
     def observation_model(self) -> obs.Observations:

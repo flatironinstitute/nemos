@@ -133,11 +133,11 @@ class BaseHMM(
         self.transition_prob_: Optional[jnp.ndarray] = None
         self.initial_prob_: Optional[jnp.ndarray] = None
 
-        self.hmm_initialization_funcs = hmm_initialization_funcs
-
         # flags for kmeans initialization
         self._hmm_use_kmeans = None
         self._model_use_kmeans = None
+
+        self.hmm_initialization_funcs = hmm_initialization_funcs
 
     def _hmm_setup(
         self,
