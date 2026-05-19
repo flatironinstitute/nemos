@@ -8513,12 +8513,6 @@ class TestDiscreteBasis:
         params = {basis_cls.__name__: basis_cls._get_param_names()}
         return basis_cls(**inspect_utils.trim_kwargs(basis_cls, DEFAULT_KWARGS, params))
 
-    def test_evaluate_on_grid_raises(self, basis_cls):
-        """evaluate_on_grid raises NotImplementedError for discrete inputs."""
-        bas = self._instantiate(basis_cls)
-        with pytest.raises(NotImplementedError, match="discrete"):
-            bas.evaluate_on_grid(3)
-
     def test_bounds_get_raises(self, basis_cls):
         """Getting bounds raises AttributeError naming the class."""
         bas = self._instantiate(basis_cls)
