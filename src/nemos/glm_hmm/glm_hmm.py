@@ -314,8 +314,7 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
             Built-in name or custom callable used to initialize the initial-state
             probabilities (shape ``(n_states,)``).
         initial_proba_init_kwargs :
-            Extra keyword arguments forwarded to ``initial_proba_init``. Validated
-            against the function's signature; mismatched keys raise ``ValueError``.
+            Extra keyword arguments forwarded to ``initial_proba_init``.
         transition_proba_init :
             Built-in name or custom callable used to initialize the transition matrix
             (shape ``(n_states, n_states)``).
