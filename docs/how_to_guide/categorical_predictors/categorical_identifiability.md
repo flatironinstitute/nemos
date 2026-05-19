@@ -96,7 +96,7 @@ print(f"Rank of [1 | X_ref]: {np.linalg.matrix_rank(X_ref_aug)}")
 print(f"Number of columns:   {1 + X_ref.shape[1]}")
 ```
 
-The reference level is arbitrary from a model-fit perspective, but determines coefficient
+Which column you drop is arbitrary from a model-fit perspective, but determines coefficient
 interpretation: every retained coefficient is the effect of that category *relative to the
 reference*. See [^1] for a full discussion of contrast coding schemes.
 
