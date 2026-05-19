@@ -235,7 +235,7 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
         self.observation_model = observation_model
         self.inverse_link_function = inverse_link_function
 
-        self.glm_initialization_funcs = glm_initialization_funcs
+        self.model_initialization_funcs = glm_initialization_funcs
 
         # fit attributes
         self.coef_: jnp.ndarray | None = None
