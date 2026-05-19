@@ -48,7 +48,7 @@ see [Identifiability of Categorical Predictors](categorical_identifiability).
 
 The primary use of the [`Category`](nemos.basis.Category) basis in NeMoS is to estimate category-specific tuning curves by multiplying it with a continuous basis.
 
-Continuing the previous example, suppose we want to learn how the neuron responds to speed depending on the turn side. You can use the `Category` basis to produce an appropriate design matrix:
+Continuing the previous example, let's assume that we have also recorded the average animal speed per trial and suppose we want to learn how the neuron responds to speed depending on the turn side. You can use the `Category` basis to produce an appropriate design matrix:
 
 ```{code-cell} ipython3
 speed = np.array([10., 3., 2., 20.])
