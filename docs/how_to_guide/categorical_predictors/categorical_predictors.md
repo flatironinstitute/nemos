@@ -18,20 +18,20 @@ There are two main supported uses for Category in nemos: using the category as a
 
 ## Standalone Categorical Predictors: Why do we recommend dropping a column?
 
-To add a category as a main effect, drop one column after calling
-`compute_features`. The dropped category becomes the reference level and all
-remaining coefficients are contrasts against it:
+To add a category as a main effect, drop one column after calling `compute_features`. The dropped category becomes the reference level and all remaining coefficients are contrasts against it.
+
+For example, consider an experiment where a subject performs either a leftward or rightward turn on each trial, and let's include the turn side as a predictor.
+
 ```{code-cell} ipython3
 import numpy as np
 import nemos as nmo
 
-# Simulate data: 4 samples, two context labels, a continuous speed variable
-context = np.array(["L", "L", "R", "R"])
-speed   = np.array([10., 3., 2., 20.])
-counts  = np.array([10, 5, 10, 0])
+# Simulate data: 4 samples, two turn-side labels
+turn_side = np.array(["L", "L", "R", "R"])
+counts = np.array([10, 5, 10, 0])
 
 cat_basis = nmo.basis.Category(["L", "R"])
-X_cat = cat_basis.compute_features(context)
+X_cat = cat_basis.compute_features(turn_side)
 X_cat = X_cat[:, 1:]  # "L" is the reference; remaining column codes "R" vs "L"
 ```
 
@@ -46,21 +46,18 @@ see [Identifiability of Categorical Predictors](categorical_identifiability).
 
 ## Splitting a Continuous Variable by Category
 
-There are two main supported uses for `Category` in nemos: using the category as a standalone predictor / main effect, and multiplying it by a continuous basis to estimate category-specific tuning curves. We'll show both below.
+The primary use of the [`Category`](nemos.basis.Category) basis in NeMoS is to estimate category-specific tuning curves by multiplying it with a continuous basis.
 
-The primary use of the [`Category`](nemos.basis.Category) basis in NeMoS is to estimate category-specific
-tuning curves by multiplying it with a continuous basis.
-
-For example, consider an experiment where a subject performs either a leftward or rightward turn on each trial, and we want to learn separate coefficients for each motion type. You can use the `Category` basis to produce an appropriate design matrix:
+Continuing the previous example, suppose we want to learn how the neuron responds to speed depending on the turn side. You can use the `Category` basis to produce an appropriate design matrix:
 
 ```{code-cell} ipython3
+speed = np.array([10., 3., 2., 20.])
+
 # Category * continuous basis: one set of basis functions per category
 bas = nmo.basis.Category(["L", "R"]) * nmo.basis.RaisedCosineLinearEval(3)
-X = bas.compute_features(context, speed)
+X = bas.compute_features(turn_side, speed)
 print("X.shape: ", X.shape)  # (4, 6): 3 basis functions × 2 categories
-
 ```
-
 
 ## Complex Designs
 
