@@ -274,14 +274,90 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
         scale_init: Optional[Literal["constant", "kmeans"] | Callable] = None,
         scale_init_kwargs: Optional[dict] = None,
     ):
-        """Configure initialization functions for HMM and GLM parameters.
+        """Configure how :meth:`fit` initializes each model parameter.
 
-        The HMM-side arguments (``initial_proba_init``, ``transition_proba_init`` and
-        their ``*_kwargs``) are routed to :meth:`BaseHMM._hmm_setup`; the GLM-side
-        arguments (``glm_params_init``, ``scale_init`` and their ``*_kwargs``) are
-        routed to :meth:`_model_setup`. Each entry can be a string identifier for a
-        built-in function, a custom callable, or ``None`` to leave the current value
-        untouched.
+        Calling :meth:`setup` is optional: if it is never called, fitting starts from
+        the default initializers listed below. Use it to change the initialization
+        strategy by providing either the name of a built-in initialization function
+        or a custom callable. Each argument left as ``None`` keeps the previously
+        configured value; only the parameters you supply are updated.
+
+        Available built-in initialization functions:
+
+        - ``initial_proba_init``: ``"uniform"`` (default), ``"random"``,
+          ``"dirichlet"``, ``"kmeans"``.
+        - ``transition_proba_init``: ``"sticky"`` (default), ``"uniform"``,
+          ``"random"``, ``"dirichlet"``, ``"kmeans"``.
+        - ``glm_params_init``: ``"random"`` (default), ``"kmeans"``.
+        - ``scale_init``: ``"constant"`` (default), ``"kmeans"``.
+
+        Custom callables must follow one of two protocols depending on the parameter
+        they initialize:
+
+        - HMM probability initializers (``initial_proba_init``,
+          ``transition_proba_init``) take ``(n_states, X, y, is_new_session,
+          random_key, **kwargs)`` and return a ``jnp.ndarray`` of shape
+          ``(n_states,)`` for the initial probabilities or ``(n_states, n_states)``
+          for the transition matrix.
+        - GLM parameter initializers (``glm_params_init``, ``scale_init``) take
+          ``(n_states, X, y, inverse_link_function, is_new_session, random_key,
+          **kwargs)``. ``glm_params_init`` returns ``(coef, intercept)`` shaped to
+          match the design and ``n_states``; ``scale_init`` returns the scale array
+          for the observation model.
+
+        All arguments must appear in the function signature even when unused, so the
+        framework can supply them uniformly.
+
+        Parameters
+        ----------
+        initial_proba_init :
+            Built-in name or custom callable used to initialize the initial-state
+            probabilities (shape ``(n_states,)``).
+        initial_proba_init_kwargs :
+            Extra keyword arguments forwarded to ``initial_proba_init``. Validated
+            against the function's signature; mismatched keys raise ``ValueError``.
+        transition_proba_init :
+            Built-in name or custom callable used to initialize the transition matrix
+            (shape ``(n_states, n_states)``).
+        transition_proba_init_kwargs :
+            Extra keyword arguments forwarded to ``transition_proba_init``.
+        glm_params_init :
+            Built-in name or custom callable used to initialize the per-state GLM
+            coefficients and intercepts.
+        glm_params_init_kwargs :
+            Extra keyword arguments forwarded to ``glm_params_init``.
+        scale_init :
+            Built-in name or custom callable used to initialize the scale parameter
+            of the observation model (e.g. variance for Gaussian, dispersion for
+            NegativeBinomial). Ignored by observation models without a scale.
+        scale_init_kwargs :
+            Extra keyword arguments forwarded to ``scale_init``.
+
+        Raises
+        ------
+        ValueError
+            If a custom callable's signature is incompatible with the protocol
+            above, or if a ``*_kwargs`` entry contains keys that don't match the
+            corresponding initializer's signature.
+
+        Examples
+        --------
+        Switch a parameter to a different built-in scheme by passing its label:
+
+        >>> from nemos.glm_hmm import GLMHMM
+        >>> model = GLMHMM(n_states=3)
+        >>> model.setup(initial_proba_init="random", glm_params_init="kmeans")
+
+        Plug in a custom callable matching the GLM-side protocol:
+
+        >>> import jax.numpy as jnp
+        >>> def my_glm_init(
+        ...     n_states, X, y, inverse_link_function, is_new_session, random_key,
+        ... ):
+        ...     coef = jnp.zeros((X.shape[1], n_states))
+        ...     intercept = jnp.zeros((n_states,))
+        ...     return coef, intercept
+        >>> model.setup(glm_params_init=my_glm_init)
         """
         super().setup(
             initial_proba_init=initial_proba_init,
