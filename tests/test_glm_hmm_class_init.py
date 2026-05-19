@@ -323,7 +323,14 @@ class TestGLMHMMSetup:
 
     @pytest.mark.parametrize("func_name", FUNC_NAMES)
     def test_setup_consecutive_calls_thread_init_funcs(self, func_name):
-        """A second setup() sees the first call's result as ``init_funcs``."""
+        """A second setup() targeting a different key in the same pipeline sees
+        the first call's result as ``init_funcs`` — so previously configured
+        keys are preserved across calls."""
+        pipeline = (
+            _MODEL_FUNC_NAMES if func_name in _GLM_FUNC_NAMES else _HMM_FUNC_NAMES
+        )
+        other_key = next(k for k in pipeline if k != func_name)
+
         first_result = MagicMock()
         model = GLMHMM(n_states=2)
         patch_path = _patch_path_for(func_name)
@@ -334,7 +341,7 @@ class TestGLMHMMSetup:
 
         with patch(patch_path) as mock_setup:
             mock_setup.return_value = MagicMock()
-            model.setup(**{func_name: _get_mock_func(func_name)})
+            model.setup(**{other_key: _get_mock_func(other_key)})
             assert mock_setup.call_args.kwargs["init_funcs"] is first_result
 
     # -------------------------------------------------------------------------
