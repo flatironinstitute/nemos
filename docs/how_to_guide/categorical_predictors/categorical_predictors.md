@@ -103,7 +103,7 @@ print("patsy:\n", design_df)
 
 # formulaic equivalent
 design_df = model_matrix(formula, data)
-print("formulaic:\n", design_df)
+print("\nformulaic:\n", design_df)
 ```
 
 :::{dropdown} Understanding `patsy`'s output
