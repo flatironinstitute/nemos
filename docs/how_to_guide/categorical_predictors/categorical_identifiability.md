@@ -80,8 +80,9 @@ A practical way to detect this redundancy is to check whether the rank of $X_\te
 ```{code-cell} ipython3
 print(f"Rank of [1 | X]:   {np.linalg.matrix_rank(X_aug)}")
 print(f"Number of columns: {X_aug.shape[1]}")
-# rank < n_cols  →  null space exists  →  model is non-identifiable
 ```
+
+As we can see, the rank is less than the number of columns, and therefore there is a non-empty null space and the model is non-identifiable.
 
 ## Reference Coding: A Simple Way to Recover Identifiability
 
