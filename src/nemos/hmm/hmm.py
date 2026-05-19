@@ -141,9 +141,13 @@ class BaseHMM(
 
     def _hmm_setup(
         self,
-        initial_proba_init: Optional[str | Callable] = None,
+        initial_proba_init: Optional[
+            Literal["uniform", "random", "dirichlet", "kmeans"] | Callable
+        ] = None,
         initial_proba_init_kwargs: Optional[dict] = None,
-        transition_proba_init: Optional[str | Callable] = None,
+        transition_proba_init: Optional[
+            Literal["sticky", "uniform", "random", "dirichlet", "kmeans"] | Callable
+        ] = None,
         transition_proba_init_kwargs: Optional[dict] = None,
     ):
         """
@@ -206,9 +210,13 @@ class BaseHMM(
 
     def setup(
         self,
-        initial_proba_init: Optional[str | Callable] = None,
+        initial_proba_init: Optional[
+            Literal["uniform", "random", "dirichlet", "kmeans"] | Callable
+        ] = None,
         initial_proba_init_kwargs: Optional[dict] = None,
-        transition_proba_init: Optional[str | Callable] = None,
+        transition_proba_init: Optional[
+            Literal["sticky", "uniform", "random", "dirichlet", "kmeans"] | Callable
+        ] = None,
         transition_proba_init_kwargs: Optional[dict] = None,
         **kwargs,
     ):
