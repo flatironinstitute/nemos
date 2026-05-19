@@ -99,11 +99,12 @@ design_df = dmatrix(formula, data, return_type="dataframe")
 
 # patsy adds an intercept; drop it since NeMoS GLMs include one implicitly
 design_df = design_df.drop(columns=["Intercept"])
-print("patsy:\n", design_df)
+print("patsy:\n\n", design_df)
 
 # formulaic equivalent
 design_df = model_matrix(formula, data)
-print("\nformulaic:\n", design_df)
+design_df = design_df.drop(columns=["Intercept"])
+print("\n\nformulaic:\n\n", design_df)
 ```
 
 :::{dropdown} Understanding `patsy`'s output
