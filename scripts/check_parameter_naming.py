@@ -132,7 +132,7 @@ VALID_PAIRS = [
     {"dirichlet_initial_proba", "dirichlet_transition_proba"},
     {"glm_params_init", "glm_params_init_kwargs"},
     {"scale_init_kwargs", "solver_init_kwargs"},
-    {"hmm_initialization_funcs", "initialization_funcs"},
+    {"hmm_initialization_funcs", "glm_initialization_funcs"},
     {"glm_params_init", "glm_params_init_kwargs"},
     {"random_key_pair", "random_key"},
     {"func", "_func"},

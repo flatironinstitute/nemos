@@ -11,6 +11,7 @@ from numpy.typing import ArrayLike, NDArray
 from .. import observation_models as obs
 from .._observation_model_builder import instantiate_observation_model
 from ..hmm.hmm import BaseHMM
+from ..hmm.initialize_parameters import DEFAULT_INIT_FUNCTIONS
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
 from ..regularizer import Regularizer
@@ -26,8 +27,6 @@ from .initialize_parameters import (
     DEFAULT_INIT_FUNCTIONS_GLMHMM,
     GLMHMM_INITIALIZATION_FN_DICT,
     KMeansInitializerGLM,
-    kmeans_glm_params_init,
-    kmeans_scale_init,
     setup_glm_hmm_initialization,
 )
 from .params import GLMHMMParams, GLMHMMUserParams
@@ -140,7 +139,9 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
     seed :
         JAX PRNG key for random number generation during initialization. Default is
         ``jax.random.PRNGKey(123)``.
-    initialization_funcs : dict, optional
+    hmm_initialization_funcs : dict, optional
+        TODO: Update description
+    glm_initialization_funcs : dict, optional
         TODO: Update description
 
     Attributes
@@ -190,12 +191,7 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
     """
 
     _validator_class = GLMHMMValidator
-    _default_init_dict = DEFAULT_INIT_FUNCTIONS_GLMHMM
-    _kmeans_init_funcs: tuple[tuple[str, Callable]] = (
-        *BaseHMM._kmeans_init_funcs,
-        kmeans_scale_init,
-        kmeans_glm_params_init,
-    )
+    _model_default_init_dict = DEFAULT_INIT_FUNCTIONS_GLMHMM
     _kmeans_init_class = KMeansInitializerGLM
 
     def __init__(
@@ -220,7 +216,8 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
         maxiter: int = 1000,
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
-        initialization_funcs: Optional[GLMHMM_INITIALIZATION_FN_DICT] = None,
+        hmm_initialization_funcs: Optional[DEFAULT_INIT_FUNCTIONS] = None,
+        glm_initialization_funcs: Optional[GLMHMM_INITIALIZATION_FN_DICT] = None,
     ):
         super().__init__(
             n_states=n_states,
@@ -233,10 +230,12 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
             maxiter=maxiter,
             tol=tol,
             seed=seed,
-            initialization_funcs=initialization_funcs,
+            hmm_initialization_funcs=hmm_initialization_funcs,
         )
         self.observation_model = observation_model
         self.inverse_link_function = inverse_link_function
+
+        self.glm_initialization_funcs = glm_initialization_funcs
 
         # fit attributes
         self.coef_: jnp.ndarray | None = None
@@ -262,8 +261,11 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
         scale_init: Optional[str | Callable] = None,
         scale_init_kwargs: Optional[dict] = None,
     ):
-        """Set the initialization functions."""
-        self._initialization_funcs = setup_glm_hmm_initialization(
+        """Set the initialization functions.
+
+        TODO: add docstrings
+        """
+        super().setup(
             initial_proba_init=initial_proba_init,
             initial_proba_init_kwargs=initial_proba_init_kwargs,
             transition_proba_init=transition_proba_init,
@@ -272,7 +274,28 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
             glm_params_init_kwargs=glm_params_init_kwargs,
             scale_init=scale_init,
             scale_init_kwargs=scale_init_kwargs,
-            init_funcs=self._initialization_funcs,
+        )
+
+    def _model_setup(
+        self,
+        glm_params_init: Optional[str | Callable] = None,
+        glm_params_init_kwargs=None,
+        scale_init: Optional[str | Callable] = None,
+        scale_init_kwargs=None,
+    ):
+        """Validate and set model initialization functions."""
+        # TODO: maybe use function identity as well (in case a callable is provided)
+        # Same thing for the self._hmm_use_kmeans which is checked in BaseHMM
+        self._model_use_kmeans = {
+            "glm_params_init": glm_params_init == "kmeans",
+            "scale_init": scale_init == "kmeans",
+        }
+        self._model_initialization_funcs = setup_glm_hmm_initialization(
+            glm_params_init=glm_params_init,
+            glm_params_init_kwargs=glm_params_init_kwargs,
+            scale_init=scale_init,
+            scale_init_kwargs=scale_init_kwargs,
+            init_funcs=self._model_initialization_funcs,
         )
 
     def set_params(self, **kwargs):

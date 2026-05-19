@@ -85,7 +85,7 @@ class BaseHMM(
     seed :
         JAX PRNG key for random number generation during initialization. Default is
         ``jax.random.PRNGKey(123)``.
-    initialization_funcs :
+    hmm_initialization_funcs :
         Dictionary specifying the initialization functions for the HMM parameters. This parameter is
         included at initialization for scikit-learn compatibility; however, users should set up the
         initialization functions using the :meth:`~nemos.hmm.hmm.BaseHMM.setup` method after model
@@ -199,7 +199,7 @@ class BaseHMM(
         )
 
     @abc.abstractmethod
-    def _model_setup(self):
+    def _model_setup(self, **kwargs):
         """Model-specific setup of initialization functions."""
         # self._model_use_kmeans and self._model_initialization_funcs must be set here
         pass
