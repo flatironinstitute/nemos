@@ -10,9 +10,11 @@ import pynapple as nap
 import pytest
 import sklearn.cluster
 
+from nemos._inspect_utils import extract_literal_options
 from nemos.base_validator import RegressorValidator
 from nemos.hmm.hmm import BaseHMM
 from nemos.hmm.initialize_parameters import (
+    AVAILABLE_INIT_FUNCTIONS,
     DEFAULT_INIT_FUNCTIONS,
     INITIALIZATION_FN_DICT,
     kmeans_initial_proba_init,
@@ -688,6 +690,21 @@ class TestHMMSetup:
         assert model.hmm_initialization_funcs[key + "_kwargs"] == {"minimum_prob": 0.01}
         model.setup(**{key: "random"})
         assert model.hmm_initialization_funcs[key + "_kwargs"] == {}
+
+    @pytest.mark.parametrize(
+        "param_name", ["initial_proba_init", "transition_proba_init"]
+    )
+    def test_setup_literal_options_match_registry(self, param_name):
+        """``BaseHMM.setup`` Literal annotations must enumerate exactly the
+        built-in string aliases declared in ``AVAILABLE_INIT_FUNCTIONS``. If a
+        new built-in is added (or one is removed) without updating the
+        signature, this test fails — preventing silent drift."""
+        literals = extract_literal_options(BaseHMM.setup, param_name)
+        registry = AVAILABLE_INIT_FUNCTIONS[param_name]
+        assert literals == set(registry.keys()), (
+            f"Literal options for {param_name!r} in BaseHMM.setup ({literals}) "
+            f"differ from registered keys ({set(registry.keys())})."
+        )
 
 
 class TestHMMInitialParams:

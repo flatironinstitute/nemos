@@ -1,13 +1,13 @@
 """Tests for GLMHMM class __init__, property setters, and setup method."""
 
 import itertools
-from typing import Literal, get_args, get_origin, get_type_hints
 from unittest.mock import MagicMock, create_autospec, patch
 
 import jax
 import jax.numpy as jnp
 import pytest
 
+from nemos._inspect_utils import extract_literal_options
 from nemos.glm_hmm.glm_hmm import GLMHMM
 from nemos.glm_hmm.initialize_parameters import (
     AVAIL_INIT_FUNCTIONS_GLM,
@@ -82,34 +82,6 @@ def _get_defining_class_and_prop(attr):
         if attr in cls.__dict__:
             return cls, cls.__dict__[attr]
     raise AttributeError(f"No defining class found for {attr!r}")
-
-
-def _extract_literal_options(func, param_name):
-    """Return the set of string options declared via ``Literal[...]`` on
-    ``func``'s ``param_name`` annotation. Walks union members recursively so
-    that ``Optional[Literal[...] | Callable]`` is supported."""
-    hints = get_type_hints(func)
-    if param_name not in hints:
-        raise AssertionError(
-            f"{func.__qualname__} has no annotation for {param_name!r}."
-        )
-
-    def walk(annotation):
-        if get_origin(annotation) is Literal:
-            return set(get_args(annotation))
-        for member in get_args(annotation):
-            found = walk(member)
-            if found is not None:
-                return found
-        return None
-
-    options = walk(hints[param_name])
-    if options is None:
-        raise AssertionError(
-            f"No Literal[...] found in annotation of {param_name!r} on "
-            f"{func.__qualname__}: {hints[param_name]!r}"
-        )
-    return options
 
 
 # =============================================================================
@@ -385,7 +357,7 @@ class TestGLMHMMSetup:
         string aliases declared in the init-function registries. If a new
         built-in is added (or one is removed) without updating the signature,
         this test fails — preventing silent drift."""
-        literals = _extract_literal_options(GLMHMM.setup, param_name)
+        literals = extract_literal_options(GLMHMM.setup, param_name)
         assert literals == set(registry.keys()), (
             f"Literal options for {param_name!r} in GLMHMM.setup ({literals}) "
             f"differ from registered keys ({set(registry.keys())})."
