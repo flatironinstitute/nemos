@@ -16,7 +16,7 @@ kernelspec:
 
 There are two main supported uses for Category in nemos: using the category as a standalone predictor / main effect, and multiplying it by a continuous basis to estimate category-specific tuning curves. We'll show both below.
 
-## Standalone Categorical Predictors: Why do we recommend dropping a column?
+## Standalone Categorical Predictors
 
 To add a category as a main effect, drop one column after calling `compute_features`. The dropped category becomes the reference level and all remaining coefficients are contrasts against it.
 
