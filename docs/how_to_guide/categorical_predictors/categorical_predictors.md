@@ -22,6 +22,14 @@ To add a category as a main effect, drop one column after calling
 `compute_features`. The dropped category becomes the reference level and all
 remaining coefficients are contrasts against it:
 ```{code-cell} ipython3
+import numpy as np
+import nemos as nmo
+
+# Simulate data: 4 samples, two context labels, a continuous speed variable
+context = np.array(["L", "L", "R", "R"])
+speed   = np.array([10., 3., 2., 20.])
+counts  = np.array([10, 5, 10, 0])
+
 cat_basis = nmo.basis.Category(["L", "R"])
 X_cat = cat_basis.compute_features(context)
 X_cat = X_cat[:, 1:]  # "L" is the reference; remaining column codes "R" vs "L"
@@ -46,14 +54,6 @@ tuning curves by multiplying it with a continuous basis.
 For example, consider an experiment where a subject performs either a leftward or rightward turn on each trial, and we want to learn separate coefficients for each motion type. You can use the `Category` basis to produce an appropriate design matrix:
 
 ```{code-cell} ipython3
-import numpy as np
-import nemos as nmo
-
-# Simulate data: 4 samples, two context labels, a continuous speed variable
-context = np.array(["L", "L", "R", "R"])
-speed   = np.array([10., 3., 2., 20.])
-counts  = np.array([10, 5, 10, 0])
-
 # Category * continuous basis: one set of basis functions per category
 bas = nmo.basis.Category(["L", "R"]) * nmo.basis.RaisedCosineLinearEval(3)
 X = bas.compute_features(context, speed)
