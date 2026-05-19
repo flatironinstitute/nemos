@@ -94,6 +94,7 @@ docs = [
     "ipykernel",
     "patsy",
     "tqdm",
+    "one-api"
 ]
 examples = [
     "scikit-learn",
