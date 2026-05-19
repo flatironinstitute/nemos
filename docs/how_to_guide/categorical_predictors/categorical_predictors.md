@@ -86,6 +86,7 @@ support a wide range of coding schemes.
 ```{code-cell} ipython3
 import pandas as pd
 from patsy import dmatrix
+from formulaic import model_matrix
 
 data = pd.DataFrame({
     'stimulus': ['Tri', 'Sq', 'Tri', 'Sq'],
@@ -98,7 +99,11 @@ design_df = dmatrix(formula, data, return_type="dataframe")
 
 # patsy adds an intercept; drop it since NeMoS GLMs include one implicitly
 design_df = design_df.drop(columns=["Intercept"])
-design_df
+print("patsy:\n", design_df)
+
+# formulaic equivalent
+design_df = model_matrix(formula, data)
+print("formulaic:\n", design_df)
 ```
 
 :::{dropdown} Understanding `patsy`'s output
