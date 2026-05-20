@@ -16,7 +16,7 @@ from nemos.hmm.hmm import BaseHMM
 from nemos.hmm.initialize_parameters import (
     AVAILABLE_INIT_FUNCTIONS,
     DEFAULT_INIT_FUNCTIONS,
-    INITIALIZATION_FN_DICT,
+    HMM_INITIALIZATION_FN_DICT,
     kmeans_initial_proba_init,
     kmeans_transition_proba_init,
     random_initial_proba_init,
@@ -80,7 +80,7 @@ class MockHMMValidator(HMMValidator[MockHMMUserParams, MockHMMParams]):
         return True
 
 
-class MockHMM(BaseHMM[MockHMMParams, MockHMMUserParams, INITIALIZATION_FN_DICT]):
+class MockHMM(BaseHMM[MockHMMParams, MockHMMUserParams, HMM_INITIALIZATION_FN_DICT]):
     _validator_class = MockHMMValidator
     _model_default_init_dict = {
         "param_init": None,
@@ -98,8 +98,8 @@ class MockHMM(BaseHMM[MockHMMParams, MockHMMUserParams, INITIALIZATION_FN_DICT])
         maxiter: int = 1000,
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
-        hmm_initialization_funcs: INITIALIZATION_FN_DICT = None,
-        model_initialization_funcs: INITIALIZATION_FN_DICT = None,
+        hmm_initialization_funcs: HMM_INITIALIZATION_FN_DICT = None,
+        model_initialization_funcs: HMM_INITIALIZATION_FN_DICT = None,
     ):
         BaseHMM.__init__(
             self,

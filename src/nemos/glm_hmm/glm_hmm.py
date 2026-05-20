@@ -11,7 +11,7 @@ from numpy.typing import ArrayLike, NDArray
 from .. import observation_models as obs
 from .._observation_model_builder import instantiate_observation_model
 from ..hmm.hmm import BaseHMM
-from ..hmm.initialize_parameters import INITIALIZATION_FN_DICT
+from ..hmm.initialize_parameters import HMM_INITIALIZATION_FN_DICT
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
 from ..regularizer import Regularizer
@@ -33,27 +33,6 @@ from .initialize_parameters import (
 )
 from .params import GLMHMMParams, GLMHMMUserParams
 from .validation import GLMHMMValidator
-
-
-def _check_state_format(state_format: str) -> None:
-    """Validate state_format parameter.
-
-    Parameters
-    ----------
-    state_format :
-        Format for state output, must be "one-hot" or "index".
-
-    Raises
-    ------
-    ValueError
-        If state_format is not "one-hot" or "index".
-    """
-    valid_formats = ("one-hot", "index")
-    if state_format not in valid_formats:
-        raise ValueError(
-            f"Invalid state_format '{state_format}'. "
-            f"Must be one of {valid_formats}."
-        )
 
 
 class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DICT]):
@@ -225,7 +204,7 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
         maxiter: int = 1000,
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
-        hmm_initialization_funcs: Optional[INITIALIZATION_FN_DICT] = None,
+        hmm_initialization_funcs: Optional[HMM_INITIALIZATION_FN_DICT] = None,
         model_initialization_funcs: Optional[GLMHMM_INITIALIZATION_FN_DICT] = None,
     ):
         super().__init__(
