@@ -87,7 +87,7 @@ _vmap_add_prior = jax.vmap(_add_prior_logspace)
 
 def m_step_initial_logspace(
     log_posteriors: jnp.ndarray,
-    is_new_session: jnp.ndarray,
+    session_starts: jnp.ndarray,
     dirichlet_prior_alphas: jnp.ndarray | None = None,
 ):
     """M-step for initial probabilities in log-space.
@@ -96,7 +96,7 @@ def m_step_initial_logspace(
     """
     # Mask out non-session-start time points
     masked_log_posteriors = jnp.where(
-        is_new_session[:, jnp.newaxis], log_posteriors, -jnp.inf
+        session_starts[:, jnp.newaxis], log_posteriors, -jnp.inf
     )
 
     # Sum over time in log-space
@@ -137,7 +137,7 @@ def m_step_transition_logspace(
 
 
 def viterbi_with_hmmlearn(
-    log_emission, transition_proba, init_proba, is_new_session=None
+    log_emission, transition_proba, init_proba, session_starts=None
 ):
     """
     Use hmmlearn's Viterbi algorithm with custom log probabilities.
@@ -150,7 +150,7 @@ def viterbi_with_hmmlearn(
         Log transition probability matrix [from_state, to_state].
     init_proba
         Log initial state probabilities.
-    is_new_session
+    session_starts
         Either None or array of shape (T,) of 0s and 1s, where 1s mark
         the beginning of a new session.
 
@@ -168,11 +168,11 @@ def viterbi_with_hmmlearn(
     model.transmat_ = transition_proba
     # Set dummy emission probabilities (required but will be overridden)
     model.emissionprob_ = np.ones((K, 2)) / 2
-    if is_new_session is None:
+    if session_starts is None:
         slices = [slice(None)]
     else:
-        session_start = np.where(is_new_session)[0]
-        session_end = np.concatenate([session_start[1:], [len(is_new_session)]])
+        session_start = np.where(session_starts)[0]
+        session_end = np.concatenate([session_start[1:], [len(session_starts)]])
         slices = [slice(s, e) for s, e in zip(session_start, session_end)]
 
     map_path = []
@@ -293,7 +293,7 @@ def prepare_gammas_and_xis_for_m_step_single_neuron(
         X,
         y,
         log_likelihood_func=likelihood,
-        is_new_session=new_sess.astype(bool),
+        session_starts=new_sess.astype(bool),
     )
 
     return gammas, xis
@@ -648,7 +648,7 @@ class TestForwardBackward:
             X[:, 1:],  # drop intercept
             y,
             log_likelihood_func=log_likelihood,
-            is_new_session=new_sess.astype(bool),
+            session_starts=new_sess.astype(bool),
         )
 
         # First testing alphas and betas because they are computed first
@@ -914,7 +914,7 @@ class TestMStep:
             y,
             np.log(gammas),
             np.log(xis),
-            is_new_session=new_sess.astype(bool),
+            session_starts=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
         )
 
@@ -1046,7 +1046,7 @@ class TestMStep:
             y,
             log_alphas + log_betas,
             np.log(xis),
-            is_new_session=new_sess.astype(bool),
+            session_starts=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
         )
         glm = GLM(
@@ -1128,7 +1128,7 @@ class TestMStep:
             y,
             log_gammas,
             log_xis,
-            is_new_session=new_sess.astype(bool),
+            session_starts=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
             dirichlet_transition_proba=alphas_transition,
             dirichlet_initial_proba=alphas_init,
@@ -1227,7 +1227,7 @@ class TestMStep:
             y,
             log_gammas,
             log_xis,
-            is_new_session=new_sess.astype(bool),
+            session_starts=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
             dirichlet_transition_proba=alphas_transition,
             dirichlet_initial_proba=alphas_init,
@@ -1291,7 +1291,7 @@ class TestMStep:
             y,
             log_gammas,
             log_xis,
-            is_new_session=new_sess.astype(bool),
+            session_starts=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
             dirichlet_transition_proba=alphas_transition,
             dirichlet_initial_proba=alphas_init,
@@ -1351,7 +1351,7 @@ class TestMStep:
             y,
             log_gammas,
             log_xis,
-            is_new_session=new_sess.astype(bool),
+            session_starts=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
             dirichlet_transition_proba=alphas_transition,
             dirichlet_initial_proba=alphas_init,
@@ -1365,7 +1365,7 @@ class TestMStep:
             y,
             log_gammas,
             log_xis,
-            is_new_session=new_sess.astype(bool),
+            session_starts=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
             dirichlet_transition_proba=alphas_transition,
             dirichlet_initial_proba=None,
@@ -1434,7 +1434,7 @@ class TestMStep:
             y,
             log_gammas,
             log_xis,
-            is_new_session=new_sess.astype(bool),
+            session_starts=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
             dirichlet_transition_proba=alphas_transition,
             dirichlet_initial_proba=alphas_init,
@@ -1448,7 +1448,7 @@ class TestMStep:
             y,
             log_gammas,
             log_xis,
-            is_new_session=new_sess.astype(bool),
+            session_starts=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
             dirichlet_transition_proba=None,
             dirichlet_initial_proba=alphas_init,
@@ -1540,7 +1540,7 @@ class TestMStep:
             y,
             np.log(gammas),
             np.log(xis),
-            is_new_session=new_sess.astype(bool),
+            session_starts=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
             dirichlet_initial_proba=dirichlet_prior_initial_prob,
             dirichlet_transition_proba=dirichlet_prior_transition_prob,
@@ -1623,10 +1623,10 @@ class TestMStep:
             np.mean(log_posteriors < -40),
         )
         # Session starts
-        is_new_session = np.zeros(n_timesteps, dtype=bool)
+        session_starts = np.zeros(n_timesteps, dtype=bool)
         session_starts = np.linspace(0, n_timesteps - 1, n_sessions, dtype=int)
-        is_new_session[session_starts] = True
-        is_new_session = jnp.array(is_new_session)
+        session_starts[session_starts] = True
+        session_starts = jnp.array(session_starts)
 
         # Log joint posterior for transitions
         key, subkey = jax.random.split(key)
@@ -1657,7 +1657,7 @@ class TestMStep:
 
         # Compute reference log-space M-step
         log_init_ref = m_step_initial_logspace(
-            log_posteriors, is_new_session, alphas_init
+            log_posteriors, session_starts, alphas_init
         )
         log_trans_ref = m_step_transition_logspace(log_joint_posterior, alphas_trans)
 
@@ -1682,7 +1682,7 @@ class TestMStep:
             y_dummy,
             log_posteriors,
             log_joint_posterior,
-            is_new_session=is_new_session,
+            session_starts=session_starts,
             m_step_fn_model_params=lambda *a, **kw: (
                 GLMParams(
                     dummy_coef,
@@ -1748,7 +1748,7 @@ class TestMStep:
                 X,
                 y,
                 log_likelihood_func=ll_func,
-                is_new_session=new_sess,
+                session_starts=new_sess,
             )
         )
 
@@ -1757,7 +1757,7 @@ class TestMStep:
         posteriors = jnp.exp(log_posteriors)
         new_log_initial_prob = _analytical_m_step_log_initial_prob(
             log_posteriors,
-            is_new_session=new_sess,
+            session_starts=new_sess,
         )
         _, _, _, updated_log_like, _, _ = forward_backward(
             GLMHMMParams(
@@ -1769,7 +1769,7 @@ class TestMStep:
             X,
             y,
             log_likelihood_func=ll_func,
-            is_new_session=new_sess,
+            session_starts=new_sess,
         )
         assert (
             updated_log_like > initial_log_like
@@ -1789,7 +1789,7 @@ class TestMStep:
             X,
             y,
             log_likelihood_func=ll_func,
-            is_new_session=new_sess,
+            session_starts=new_sess,
         )
         assert (
             updated_log_like > initial_log_like
@@ -1813,7 +1813,7 @@ class TestMStep:
             X,
             y,
             log_likelihood_func=ll_func,
-            is_new_session=new_sess,
+            session_starts=new_sess,
         )
         assert (
             updated_log_like > initial_log_like
@@ -1842,7 +1842,7 @@ class TestMStep:
                 X,
                 y,
                 log_likelihood_func=ll_func,
-                is_new_session=new_sess,
+                session_starts=new_sess,
             )
             assert (
                 updated_log_like > initial_log_like
@@ -1868,7 +1868,7 @@ class TestMStep:
             y,
             log_posteriors=log_posteriors,
             log_joint_posterior=log_joint_posterior,
-            is_new_session=new_sess,
+            session_starts=new_sess,
             m_step_fn_model_params=update_fn,
         )
 
@@ -1959,7 +1959,7 @@ class TestEMAlgorithm:
             params=params,
             X=X[:, 1:],
             y=y,
-            is_new_session=(
+            session_starts=(
                 new_sess.astype(bool)[: X.shape[0]] if require_new_session else None
             ),
             log_likelihood_func=likelihood_func,
@@ -2184,7 +2184,7 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
         X,
         y,
         log_likelihood_func=likelihood,
-        is_new_session=new_sess.astype(bool),
+        session_starts=new_sess.astype(bool),
     )
 
     alphas_transition = np.random.uniform(1, 3, size=transition_prob.shape)
@@ -2207,7 +2207,7 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
         y,
         log_gammas,
         log_xis,
-        is_new_session=new_sess.astype(bool),
+        session_starts=new_sess.astype(bool),
         m_step_fn_model_params=update_fn,
         dirichlet_transition_proba=alphas_transition,
         dirichlet_initial_proba=alphas_init,
@@ -2250,14 +2250,14 @@ class TestViterbi:
             X[:, 1:],
             y,
             log_like_func_max_sum,
-            is_new_session=new_session,
+            session_starts=new_session,
             return_index=True,
         )
         hmmlearn_map_path = viterbi_with_hmmlearn(
             log_emission_array,
             transition_prob,
             initial_prob,
-            is_new_session=new_session,
+            session_starts=new_session,
         )
         np.testing.assert_array_equal(
             map_path.astype(np.int32), hmmlearn_map_path.astype(np.int32)
@@ -2297,7 +2297,7 @@ class TestViterbi:
             X[:100, 1:],
             y[:100],
             log_like_func_max_sum,
-            is_new_session=new_session,
+            session_starts=new_session,
             return_index=return_index,
         )
         if return_index:
@@ -2860,7 +2860,7 @@ class TestCompilation:
             y,
             log_gammas,
             log_xis,
-            is_new_session,
+            session_starts,
             m_step_fn_model_params,
             dirichlet_initial_proba=None,
             dirichlet_transition_proba=None,
@@ -2874,7 +2874,7 @@ class TestCompilation:
                 y,
                 log_gammas,
                 log_xis,
-                is_new_session=is_new_session,
+                session_starts=session_starts,
                 m_step_fn_model_params=m_step_fn_model_params,
                 dirichlet_transition_proba=dirichlet_transition_proba,
                 dirichlet_initial_proba=dirichlet_initial_proba,
@@ -2898,7 +2898,7 @@ class TestCompilation:
             y,
             log_gammas,
             log_xis,
-            is_new_session=new_sess.astype(bool),
+            session_starts=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
             dirichlet_transition_proba=None,
             dirichlet_initial_proba=None,
@@ -2912,7 +2912,7 @@ class TestCompilation:
             y,
             log_gammas,
             log_xis,
-            is_new_session=new_sess.astype(bool),
+            session_starts=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
             dirichlet_transition_proba=None,
             dirichlet_initial_proba=None,
@@ -2926,7 +2926,7 @@ class TestCompilation:
             y,
             log_gammas,
             log_xis,
-            is_new_session=new_sess.astype(bool),
+            session_starts=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
             dirichlet_transition_proba=np.ones(transition_prob.shape),
             dirichlet_initial_proba=np.ones(initial_prob.shape),
@@ -2942,7 +2942,7 @@ class TestCompilation:
             y,
             log_gammas,
             log_xis,
-            is_new_session=new_sess.astype(bool),
+            session_starts=new_sess.astype(bool),
             m_step_fn_model_params=solver.run,
             dirichlet_transition_proba=2 * np.ones(transition_prob.shape),
             dirichlet_initial_proba=2 * np.ones(initial_prob.shape),
@@ -3024,7 +3024,7 @@ class TestCompilation:
             likelihood_func,
             m_step_fn_model_params,
             inverse_link_function,
-            is_new_session=None,
+            session_starts=None,
             maxiter=10**3,
             tol=1e-8,
             check_convergence=check_log_likelihood_increment,
@@ -3039,7 +3039,7 @@ class TestCompilation:
                 log_likelihood_func=likelihood_func,
                 m_step_fn_model_params=m_step_fn_model_params,
                 maxiter=maxiter,
-                is_new_session=is_new_session,
+                session_starts=session_starts,
                 tol=tol,
                 check_convergence=check_convergence,
             )
@@ -3171,7 +3171,7 @@ class TestCompilation:
             X,
             y,
             log_likelihood_func,
-            is_new_session=None,
+            session_starts=None,
         ):
             # This increment only runs during tracing (compilation)
             compilation_counter["n_compilations"] += 1
@@ -3181,7 +3181,7 @@ class TestCompilation:
                 X,  # drop intercept
                 y,
                 log_likelihood_func=log_likelihood_func,
-                is_new_session=is_new_session,
+                session_starts=session_starts,
             )
 
         _ = tracked_forward_backward(
@@ -3194,7 +3194,7 @@ class TestCompilation:
             X,
             y,
             log_likelihood_func=likelihood_func,
-            is_new_session=new_sess.astype(bool),
+            session_starts=new_sess.astype(bool),
         )
         assert compilation_counter["n_compilations"] == 1, "First call should compile"
 
@@ -3217,7 +3217,7 @@ class TestCompilation:
             X_new,
             y_new,
             log_likelihood_func=likelihood_func,
-            is_new_session=new_sess.astype(bool),
+            session_starts=new_sess.astype(bool),
         )
 
         assert compilation_counter["n_compilations"] == 1, (
@@ -3283,7 +3283,7 @@ class TestPytreeSupport:
             X,
             y,
             log_likelihood_func=likelihood_func,
-            is_new_session=new_sess.astype(bool),
+            session_starts=new_sess.astype(bool),
         )
 
         # Test with pytrees
@@ -3297,7 +3297,7 @@ class TestPytreeSupport:
             X_tree,
             y,
             log_likelihood_func=likelihood_func,
-            is_new_session=new_sess.astype(bool),
+            session_starts=new_sess.astype(bool),
         )
 
         # Results should be identical (allow small numerical errors from floating point)
@@ -3454,7 +3454,7 @@ class TestPytreeSupport:
             y=y,
             log_likelihood_func=likelihood_func,
             m_step_fn_model_params=solver_run,
-            is_new_session=new_sess.astype(bool),
+            session_starts=new_sess.astype(bool),
             maxiter=3,
             tol=1e-8,
         )

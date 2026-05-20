@@ -355,7 +355,7 @@ class TestValidateInputs:
 
 
 # ---------------------------------------------------------------------------
-# validate_and_cast_is_new_session
+# validate_and_cast_session_starts
 # ---------------------------------------------------------------------------
 
 
@@ -369,7 +369,7 @@ class TestValidateAndCastIsNewSession:
 
     def test_none_returns_default(self, validator, simple_data):
         X, y = simple_data
-        result = validator.validate_and_cast_is_new_session(X, y, is_new_session=None)
+        result = validator.validate_and_cast_session_starts(X, y, session_starts=None)
         assert result.shape == (len(y),)
         assert result[0]  # first sample always starts a session
 
@@ -378,7 +378,7 @@ class TestValidateAndCastIsNewSession:
         n = len(y)
         is_ns = np.zeros(n, dtype=bool)
         is_ns[0] = True
-        result = validator.validate_and_cast_is_new_session(X, y, is_new_session=is_ns)
+        result = validator.validate_and_cast_session_starts(X, y, session_starts=is_ns)
         assert result.shape == (n,)
         assert result[0]
 
@@ -388,21 +388,21 @@ class TestValidateAndCastIsNewSession:
         is_ns = np.zeros(n, dtype=bool)
         is_ns[0] = True
         is_ns[n // 2] = True
-        result = validator.validate_and_cast_is_new_session(X, y, is_new_session=is_ns)
+        result = validator.validate_and_cast_session_starts(X, y, session_starts=is_ns)
         assert result[n // 2]
 
     def test_bool_array_wrong_length_raises(self, validator, simple_data):
         X, y = simple_data
         bad_ns = np.zeros(len(y) + 1, dtype=bool)
-        with pytest.raises(ValueError, match="Boolean is_new_session must have shape"):
-            validator.validate_and_cast_is_new_session(X, y, is_new_session=bad_ns)
+        with pytest.raises(ValueError, match="Boolean session_starts must have shape"):
+            validator.validate_and_cast_session_starts(X, y, session_starts=bad_ns)
 
     def test_int_array_cast_succeeds(self, validator, simple_data):
         X, y = simple_data
         n = len(y)
         is_ns = np.zeros(n, dtype=int)
         is_ns[0] = 1
-        result = validator.validate_and_cast_is_new_session(X, y, is_new_session=is_ns)
+        result = validator.validate_and_cast_session_starts(X, y, session_starts=is_ns)
         assert result.shape == (n,)
         assert np.issubdtype(result.dtype, bool)
 
@@ -411,7 +411,7 @@ class TestValidateAndCastIsNewSession:
         n = len(y)
         # Integer array interpreted as indices of session starts (not a 0/1 mask)
         is_ns = np.array([0, n // 2], dtype=int)
-        result = validator.validate_and_cast_is_new_session(X, y, is_new_session=is_ns)
+        result = validator.validate_and_cast_session_starts(X, y, session_starts=is_ns)
         assert result.shape == (n,)
         assert result[0]
         assert result[n // 2]
@@ -423,34 +423,34 @@ class TestValidateAndCastIsNewSession:
         n = len(y)
         is_ns = np.array([delta[0], n + delta[1]], dtype=int)  # max >= n_samples
         with pytest.raises(
-            ValueError, match="Integer is_new_session values must be between"
+            ValueError, match="Integer session_starts values must be between"
         ):
-            validator.validate_and_cast_is_new_session(X, y, is_new_session=is_ns)
+            validator.validate_and_cast_session_starts(X, y, session_starts=is_ns)
 
     def test_2d_bool_array_raises(self, validator, simple_data):
         X, y = simple_data
         n = len(y)
         is_ns = np.zeros((n, 1), dtype=bool)
-        with pytest.raises(ValueError, match="Boolean is_new_session must have shape"):
-            validator.validate_and_cast_is_new_session(X, y, is_new_session=is_ns)
+        with pytest.raises(ValueError, match="Boolean session_starts must have shape"):
+            validator.validate_and_cast_session_starts(X, y, session_starts=is_ns)
 
     def test_float_dtype_raises(self, validator, simple_data):
         X, y = simple_data
         n = len(y)
         is_ns = np.zeros(n, dtype=float)
         with pytest.raises(
-            TypeError, match="is_new_session must be a boolean or integer array"
+            TypeError, match="session_starts must be a boolean or integer array"
         ):
-            validator.validate_and_cast_is_new_session(X, y, is_new_session=is_ns)
+            validator.validate_and_cast_session_starts(X, y, session_starts=is_ns)
 
     def test_unsupported_type_raises(self, validator, simple_data):
         X, y = simple_data
         n = len(y)
         is_ns = [0] * n  # plain list has no .dtype
         with pytest.raises(
-            TypeError, match="is_new_session must be a boolean or integer array"
+            TypeError, match="session_starts must be a boolean or integer array"
         ):
-            validator.validate_and_cast_is_new_session(X, y, is_new_session=is_ns)
+            validator.validate_and_cast_session_starts(X, y, session_starts=is_ns)
 
 
 # ---------------------------------------------------------------------------

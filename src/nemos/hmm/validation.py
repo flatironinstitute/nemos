@@ -16,8 +16,8 @@ from ..type_casting import is_pynapple_tsd
 from ..typing import DESIGN_INPUT_TYPE, ArrayLike
 from .params import HMMModelParamsT, HMMParams, HMMUserParams, HMMUserProvidedParamsT
 from .utils import (
-    initialize_is_new_session,
-    shift_nan_is_new_session,
+    initialize_session_starts,
+    shift_nan_session_starts,
 )
 
 nap = lazy.load("pynapple")
@@ -209,17 +209,17 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
                 "or split it into separate epochs at the gaps."
             )
 
-    def validate_and_cast_is_new_session(
-        self, X, y, is_new_session: Optional[ArrayLike | nap.IntervalSet] = None
+    def validate_and_cast_session_starts(
+        self, X, y, session_starts: Optional[ArrayLike | nap.IntervalSet] = None
     ) -> jnp.ndarray:
-        """Validate and cast is_new_session to a binary array of shape (n_samples,)."""
-        if is_new_session is None:
+        """Validate and cast session_starts to a binary array of shape (n_samples,)."""
+        if session_starts is None:
             if is_pynapple_tsd(y):
-                is_new_session = y.time_support
+                session_starts = y.time_support
             elif is_pynapple_tsd(X):
-                is_new_session = X.time_support
+                session_starts = X.time_support
 
-        is_new_session = initialize_is_new_session(X, y, is_new_session)
+        session_starts = initialize_session_starts(X, y, session_starts)
 
         # shift any True values that fall on NaN samples to the next valid sample
         def _is_nan(x):
@@ -232,7 +232,7 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
             combined_nans = nan_x | nan_y
         else:
             combined_nans = nan_x
-        return shift_nan_is_new_session(is_new_session, combined_nans)
+        return shift_nan_session_starts(session_starts, combined_nans)
 
     def get_empty_params(self, X, y) -> HMMModelParamsT:
         """Return the param shape given the input data."""

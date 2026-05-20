@@ -26,7 +26,7 @@ from nemos.hmm.initialize_parameters import (
     uniform_transition_proba_init,
 )
 from nemos.hmm.params import HMMParams
-from nemos.hmm.utils import initialize_is_new_session
+from nemos.hmm.utils import initialize_session_starts
 from nemos.hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
 from nemos.params import ModelParams
 
@@ -80,7 +80,9 @@ class MockHMMValidator(HMMValidator[MockHMMUserParams, MockHMMParams]):
         return True
 
 
-class MockHMM(BaseHMM[MockHMMParams, MockHMMUserParams, HMM_INITIALIZATION_FN_DICT]):
+class MockHMM(
+    BaseHMM[MockHMMParams, MockHMMUserParams, HMM_INITIALIZATION_FN_DICT, MockHMMValidator]
+):
     _validator_class = MockHMMValidator
     _model_default_init_dict = {
         "param_init": None,
@@ -143,15 +145,15 @@ class MockHMM(BaseHMM[MockHMMParams, MockHMMUserParams, HMM_INITIALIZATION_FN_DI
     def _log_likelihood(self, params, X, y):
         return jnp.zeros((y.shape[0], self.n_states))
 
-    def _model_params_initialization(self, X, y, is_new_session, random_key=None):
+    def _model_params_initialization(self, X, y, session_starts, random_key=None):
         return (
             jnp.arange(self._n_states),
             False,
         )
 
-    def fit(self, X, y, is_new_session=None, init_params=None):
-        is_new_session = initialize_is_new_session(X, y, is_new_session)
-        fit_params = self._model_specific_initialization(X, y, is_new_session)
+    def fit(self, X, y, session_starts=None, init_params=None):
+        session_starts = initialize_session_starts(X, y, session_starts)
+        fit_params = self._model_specific_initialization(X, y, session_starts)
         self._set_model_params(fit_params)
 
     def _initialize_optimizer_and_state(self, *args, **kwargs):
@@ -468,7 +470,7 @@ class TestHMMSetup:
             ),
             (
                 "custom",
-                lambda n_states, X, y, is_new_session, random_key, extra_arg: jnp.full(
+                lambda n_states, X, y, session_starts, random_key, extra_arg: jnp.full(
                     (n_states,), 1.0
                 )
                 / n_states,
@@ -477,7 +479,7 @@ class TestHMMSetup:
             ),
             (
                 "custom",
-                lambda n_states, X, y, is_new_session, random_key: jnp.full(
+                lambda n_states, X, y, session_starts, random_key: jnp.full(
                     (n_states,), 1.0
                 )
                 / n_states,
@@ -539,7 +541,7 @@ class TestHMMSetup:
             ),
             (
                 "custom",
-                lambda n_states, X, y, is_new_session, random_key, extra_arg: jnp.full(
+                lambda n_states, X, y, session_starts, random_key, extra_arg: jnp.full(
                     (n_states, n_states), 1.0
                 )
                 / n_states,
@@ -548,7 +550,7 @@ class TestHMMSetup:
             ),
             (
                 "custom",
-                lambda n_states, X, y, is_new_session, random_key: jnp.full(
+                lambda n_states, X, y, session_starts, random_key: jnp.full(
                     (n_states, n_states), 1.0
                 )
                 / n_states,
@@ -733,7 +735,7 @@ class TestHMMInitialParams:
     def test__hmm_params_initialization_custom_validation(self):
         model = MockHMM(n_states=3)
         model.setup(
-            initial_proba_init=lambda n_states, X, y, is_new_session, random_key: jnp.full(
+            initial_proba_init=lambda n_states, X, y, session_starts, random_key: jnp.full(
                 (n_states,), 1.0
             )
             / n_states
@@ -746,7 +748,7 @@ class TestHMMInitialParams:
 
         model = MockHMM(n_states=3)
         model.setup(
-            transition_proba_init=lambda n_states, X, y, is_new_session, random_key: jnp.full(
+            transition_proba_init=lambda n_states, X, y, session_starts, random_key: jnp.full(
                 (n_states, n_states), 1.0
             )
             / n_states
@@ -819,13 +821,13 @@ class TestHMMInitialParams:
         [
             (
                 "initial_proba_init",
-                lambda n_states, X, y, is_new_session, random_key: jnp.ones((n_states,))
+                lambda n_states, X, y, session_starts, random_key: jnp.ones((n_states,))
                 / n_states,
                 does_not_raise(),
             ),
             (
                 "transition_proba_init",
-                lambda n_states, X, y, is_new_session, random_key: jnp.ones(
+                lambda n_states, X, y, session_starts, random_key: jnp.ones(
                     (n_states, n_states)
                 )
                 / n_states,
@@ -833,28 +835,28 @@ class TestHMMInitialParams:
             ),
             (
                 "initial_proba_init",
-                lambda n_states, X, y, is_new_session, random_key: jnp.ones(
+                lambda n_states, X, y, session_starts, random_key: jnp.ones(
                     (n_states - 1,)
                 ),
                 pytest.raises(ValueError, match="initial_prob must be"),
             ),
             (
                 "transition_proba_init",
-                lambda n_states, X, y, is_new_session, random_key: jnp.ones(
+                lambda n_states, X, y, session_starts, random_key: jnp.ones(
                     (n_states - 1, n_states - 1)
                 ),
                 pytest.raises(ValueError, match="transition_prob must be"),
             ),
             (
                 "initial_proba_init",
-                lambda n_states, X, y, is_new_session, random_key: jnp.ones(
+                lambda n_states, X, y, session_starts, random_key: jnp.ones(
                     (n_states,)
                 ),
                 pytest.raises(ValueError, match="must sum to 1"),
             ),
             (
                 "transition_proba_init",
-                lambda n_states, X, y, is_new_session, random_key: jnp.ones(
+                lambda n_states, X, y, session_starts, random_key: jnp.ones(
                     (n_states, n_states)
                 ),
                 pytest.raises(ValueError, match="rows must sum to 1"),
@@ -873,11 +875,11 @@ class TestHMMInitialParams:
 class TestHMMNewSession:
 
     @pytest.mark.parametrize(
-        "X, y, is_new_session, expected_new_session",
+        "X, y, session_starts, expected_new_session",
         [
-            # No is_new_session provided
+            # No session_starts provided
             (np.ones((3, 1)), np.ones((3,)), None, jnp.array([1, 0, 0])),
-            # Explicit is_new_session provided by user
+            # Explicit session_starts provided by user
             # boolean array or integer array with 1s and 0s
             (
                 np.ones((3, 1)),
@@ -935,16 +937,16 @@ class TestHMMNewSession:
             ),
         ],
     )
-    def test_initialize_new_session(self, X, y, is_new_session, expected_new_session):
+    def test_initialize_new_session(self, X, y, session_starts, expected_new_session):
         """Test that session boundaries are correctly initialized."""
         model = MockHMM(n_states=3)
-        is_new_session = model._validator.validate_and_cast_is_new_session(
-            X, y, is_new_session
+        session_starts = model._validator.validate_and_cast_session_starts(
+            X, y, session_starts
         )
-        assert jnp.all(is_new_session == expected_new_session)
+        assert jnp.all(session_starts == expected_new_session)
 
     @pytest.mark.parametrize(
-        "X, y, is_new_session, expected_new_session",
+        "X, y, session_starts, expected_new_session",
         [
             # NaN at start in y
             (np.ones((3, 1)), np.array([np.nan, 0, 0]), None, jnp.array([0, 1, 0])),
@@ -983,7 +985,7 @@ class TestHMMNewSession:
                 None,
                 jnp.array([0, 1, 0, 0, 0]),
             ),
-            # Explicit is_new_session provided by user
+            # Explicit session_starts provided by user
             # beginning session shifted
             (
                 np.ones((3, 1)),
@@ -1009,19 +1011,19 @@ class TestHMMNewSession:
         ],
     )
     def test_initialize_new_session_with_nan_shift(
-        self, X, y, is_new_session, expected_new_session
+        self, X, y, session_starts, expected_new_session
     ):
         """Test that session boundaries are correctly moved when there are NaN values."""
         model = MockHMM(n_states=3)
-        is_new_session = model._validator.validate_and_cast_is_new_session(
-            X, y, is_new_session
+        session_starts = model._validator.validate_and_cast_session_starts(
+            X, y, session_starts
         )
-        assert jnp.all(is_new_session == expected_new_session)
+        assert jnp.all(session_starts == expected_new_session)
 
     @pytest.mark.parametrize(
-        "X, y, is_new_session, expected_new_session",
+        "X, y, session_starts, expected_new_session",
         [
-            # no is_new_session provided
+            # no session_starts provided
             # inferred time support should only find one new session at start
             (
                 nap.TsdFrame(
@@ -1116,7 +1118,7 @@ class TestHMMNewSession:
                 None,
                 jnp.array([1, 0, 0, 0, 1, 0]),
             ),
-            # intervalset passed as is_new_session
+            # intervalset passed as session_starts
             (
                 nap.TsdFrame(
                     t=np.arange(3),
@@ -1187,25 +1189,25 @@ class TestHMMNewSession:
             ),
         ],
     )
-    def test_compute_is_new_session_from_pynapple(
-        self, X, y, is_new_session, expected_new_session
+    def test_compute_session_starts_from_pynapple(
+        self, X, y, session_starts, expected_new_session
     ):
-        """Test that is_new_session is correctly computed from pynapple time support and interval sets"""
+        """Test that session_starts is correctly computed from pynapple time support and interval sets"""
         model = MockHMM(n_states=3)
-        is_new_session = model._validator.validate_and_cast_is_new_session(
-            X, y, is_new_session
+        session_starts = model._validator.validate_and_cast_session_starts(
+            X, y, session_starts
         )
-        assert jnp.all(is_new_session == expected_new_session)
+        assert jnp.all(session_starts == expected_new_session)
 
     @pytest.mark.parametrize(
-        "X, y, is_new_session, expectation",
+        "X, y, session_starts, expectation",
         [
             # wrong shape for boolean array
             (
                 np.ones((3, 1)),
                 np.ones((3,)),
                 jnp.array([True, False, False, False]),
-                pytest.raises(ValueError, match="is_new_session must have shape"),
+                pytest.raises(ValueError, match="session_starts must have shape"),
             ),
             # wrong length for integer array
             (
@@ -1213,7 +1215,7 @@ class TestHMMNewSession:
                 np.ones((3,)),
                 jnp.array([1, 0, 0, 0]),
                 pytest.raises(
-                    ValueError, match="is_new_session array must have length"
+                    ValueError, match="session_starts array must have length"
                 ),
             ),
             # integer out of bounds
@@ -1221,14 +1223,14 @@ class TestHMMNewSession:
                 np.ones((3, 1)),
                 np.ones((3,)),
                 jnp.array([0, 3]),
-                pytest.raises(ValueError, match="is_new_session values must be"),
+                pytest.raises(ValueError, match="session_starts values must be"),
             ),
             # negative integer
             (
                 np.ones((3, 1)),
                 np.ones((3,)),
                 jnp.array([-1]),
-                pytest.raises(ValueError, match="is_new_session values must be"),
+                pytest.raises(ValueError, match="session_starts values must be"),
             ),
             # wrong dtype
             (
@@ -1237,17 +1239,17 @@ class TestHMMNewSession:
                 jnp.array([0.0, 3.0]),
                 pytest.raises(
                     TypeError,
-                    match="is_new_session must be a boolean or integer array",
+                    match="session_starts must be a boolean or integer array",
                 ),
             ),
             # wrong dtype
             (
                 np.ones((3, 1)),
                 np.ones((3,)),
-                "is_new_session",
+                "session_starts",
                 pytest.raises(
                     TypeError,
-                    match="is_new_session must be a boolean or integer array",
+                    match="session_starts must be a boolean or integer array",
                 ),
             ),
             # interval set when no pynapple objects are used
@@ -1263,13 +1265,13 @@ class TestHMMNewSession:
         ],
     )
     def test_initialize_and_compute_new_session_errors(
-        self, X, y, is_new_session, expectation
+        self, X, y, session_starts, expectation
     ):
         """Test that session boundaries are correctly initialized and moved when there are NaN values."""
         model = MockHMM(n_states=3)
         with expectation:
-            is_new_session = model._validator.validate_and_cast_is_new_session(
-                X, y, is_new_session
+            session_starts = model._validator.validate_and_cast_session_starts(
+                X, y, session_starts
             )
 
 
@@ -1786,7 +1788,7 @@ class TestHMMInference:
     @pytest.mark.parametrize(
         "method_name", ["smooth_proba", "filter_proba", "decode_state"]
     )
-    def test_is_new_session_is_used(self, method_name):
+    def test_session_starts_is_used(self, method_name):
         model = MockHMM(n_states=3)
         X = np.random.rand(10, 2)
         y = np.random.rand(10)
@@ -1796,7 +1798,7 @@ class TestHMMInference:
             [[0.1, 0.8, 0.1], [0.1, 0.1, 0.8], [0.8, 0.1, 0.1]]
         )
         out_all_new_sess = getattr(model, method_name)(
-            X, y, is_new_session=np.ones(10, dtype=bool)
+            X, y, session_starts=np.ones(10, dtype=bool)
         )
         assert np.all(
             out_all_new_sess == out_all_new_sess[0]
@@ -1806,7 +1808,7 @@ class TestHMMInference:
             out_all_new_sess, out_default
         ), "Output with all new sessions should not match default output"
         out_no_new_sess = getattr(model, method_name)(
-            X, y, is_new_session=np.zeros(10, dtype=bool)
+            X, y, session_starts=np.zeros(10, dtype=bool)
         )
         assert jnp.allclose(
             out_no_new_sess, out_default

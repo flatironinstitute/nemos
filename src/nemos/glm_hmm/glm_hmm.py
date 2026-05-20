@@ -268,7 +268,7 @@ class GLMHMM(
 
     **Fit Across Multiple Sessions**
 
-    Mark session boundaries with ``is_new_session`` so the HMM resets at each
+    Mark session boundaries with ``session_starts`` so the HMM resets at each
     new session start instead of treating the data as a single chain. Pass
     either a boolean mask of shape ``(n_time_bins,)`` with ``True`` at each
     session start, or an integer array of session-start indices — the two
@@ -277,19 +277,19 @@ class GLMHMM(
     >>> is_new_mask = np.zeros(200, dtype=bool)
     >>> is_new_mask[0] = True
     >>> is_new_mask[100] = True
-    >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(X, y, is_new_session=is_new_mask)
+    >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(X, y, session_starts=is_new_mask)
     >>> # Equivalent: pass the starts as integer indices.
-    >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(X, y, is_new_session=np.array([0, 100]))
+    >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(X, y, session_starts=np.array([0, 100]))
 
     **Decode Hidden States**
 
     Recover the most-likely state sequence (Viterbi-style) or the smoothed
     posterior probabilities from the forward-backward pass:
 
-    >>> states = model.decode_state(X, y, is_new_session=is_new_mask)
+    >>> states = model.decode_state(X, y, session_starts=is_new_mask)
     >>> states.shape
     (200, 2)
-    >>> post = model.smooth_proba(X, y, is_new_session=is_new_mask)
+    >>> post = model.smooth_proba(X, y, session_starts=is_new_mask)
     >>> post.shape
     (200, 2)
 
@@ -483,7 +483,7 @@ class GLMHMM(
 
         >>> import jax.numpy as jnp
         >>> def my_glm_init(
-        ...     n_states, X, y, inverse_link_function, is_new_session, random_key,
+        ...     n_states, X, y, inverse_link_function, session_starts, random_key,
         ... ):
         ...     coef = jnp.zeros((X.shape[1], n_states))
         ...     intercept = jnp.zeros((n_states,))
@@ -592,7 +592,7 @@ class GLMHMM(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        is_new_session: jnp.ndarray,
+        session_starts: jnp.ndarray,
         random_key: jax.Array,
     ) -> Tuple[GLMHMMUserParams, bool]:
         """GLM-HMM initialization."""
@@ -601,7 +601,7 @@ class GLMHMM(
             X,
             y,
             inverse_link_function=self._inverse_link_function,
-            is_new_session=is_new_session,
+            session_starts=session_starts,
             random_key=random_key,
             init_funcs=self._model_initialization_funcs,
         )
@@ -616,19 +616,19 @@ class GLMHMM(
         X: DESIGN_INPUT_TYPE,
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
         init_params: Optional[GLMHMMUserParams] = None,
-        is_new_session: Optional[jnp.ndarray] = None,  # refactor: session_starts
+        session_starts: Optional[jnp.ndarray] = None,  # refactor: session_starts
     ) -> "GLMHMM":
         """Fit the GLM-HMM model to the data."""
         self._validator.validate_inputs(X=X, y=y)
         # validate and cast session boundaries, shifting markers off NaN samples
-        is_new_session = self._validator.validate_and_cast_is_new_session(
-            X, y, is_new_session=is_new_session
+        session_starts = self._validator.validate_and_cast_session_starts(
+            X, y, session_starts=session_starts
         )
 
         # validate the inputs & initialize solver
         # initialize params if no params are provided
         if init_params is None:
-            init_params = self._model_specific_initialization(X, y, is_new_session)
+            init_params = self._model_specific_initialization(X, y, session_starts)
         else:
             init_params = self._validator.validate_and_cast_params(init_params)
             self._validator.validate_consistency(init_params, X=X, y=y)
@@ -638,10 +638,10 @@ class GLMHMM(
         )
 
         # filter for non-nans, grab data if needed
-        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+        data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
 
-        # make sure is_new_session starts with a 1
-        is_new_session = is_new_session.at[0].set(True)
+        # make sure session_starts starts with a 1
+        session_starts = session_starts.at[0].set(True)
 
         # set up optimization
         self._initialize_optimizer_and_state(init_params, data, y)
@@ -650,7 +650,7 @@ class GLMHMM(
         (
             fit_params,
             self.solver_state_,
-        ) = self._optimizer_run(init_params, X=data, y=y, is_new_session=is_new_session)
+        ) = self._optimizer_run(init_params, X=data, y=y, session_starts=session_starts)
 
         if self.solver_state_.iterations == self.maxiter:
             warnings.warn(
@@ -743,7 +743,7 @@ class GLMHMM(
         random_key: jax.Array,
         feedforward_input: DESIGN_INPUT_TYPE,
         state_format: Literal["one-hot", "index"] = "index",
-        is_new_session: Optional[jax.Array] = None,
+        session_starts: Optional[jax.Array] = None,
     ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
         """Simulate neural activity and hidden states from the model.
 
@@ -764,7 +764,7 @@ class GLMHMM(
 
             - ``"index"``: Integer array of shape ``(n_time_bins,)`` with state indices.
             - ``"one-hot"``: Binary array of shape ``(n_time_bins, n_states)``.
-        is_new_session :
+        session_starts :
             Boolean array of shape ``(n_time_bins,)`` marking session starts with
             ``True``. If ``None``, the entire input is treated as a single session.
             Ignored when ``feedforward_input`` is a pynapple object (boundaries are
@@ -811,21 +811,21 @@ class GLMHMM(
         """
         _check_state_format(state_format)
 
-        params, feedforward_input, _, is_new_session = (
-            self._validate_and_prepare_inputs(feedforward_input, None, is_new_session)
+        params, feedforward_input, _, session_starts = (
+            self._validate_and_prepare_inputs(feedforward_input, None, session_starts)
         )
 
         # preprocess inputs (drop nans, extract data)
-        data, _, is_new_session = self._preprocess_inputs(
-            feedforward_input, None, is_new_session
+        data, _, session_starts = self._preprocess_inputs(
+            feedforward_input, None, session_starts
         )
 
         # ensure first time point is a session start
-        is_new_session = is_new_session.at[0].set(True)
+        session_starts = session_starts.at[0].set(True)
 
         # run simulation
         simulated_activity, firing_rates, simulated_states = self._simulate(
-            random_key, params, data, is_new_session
+            random_key, params, data, session_starts
         )
 
         # format state output
@@ -841,7 +841,7 @@ class GLMHMM(
         random_key: jax.Array,
         params: GLMHMMParams,
         X: jnp.ndarray,
-        is_new_session: jnp.ndarray,
+        session_starts: jnp.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
         """Simulate activity vis jax.lax.scan.
 
@@ -853,7 +853,7 @@ class GLMHMM(
             Model parameters.
         X :
             Design matrix of shape ``(n_time_bins, n_features)``.
-        is_new_session :
+        session_starts :
             Boolean array marking session starts.
 
         Returns
@@ -906,12 +906,12 @@ class GLMHMM(
 
             return state_idx, (y_t, rate, state_idx)
 
-        # initialize carry (state will be overwritten at first step since is_new_session[0]=True)
+        # initialize carry (state will be overwritten at first step since session_starts[0]=True)
         init_carry = jnp.array(0)
 
         # run scan
         _, (simulated_activity, firing_rates, simulated_states) = jax.lax.scan(
-            simulate_step, init_carry, (all_rates, is_new_session, state_keys, obs_keys)
+            simulate_step, init_carry, (all_rates, session_starts, state_keys, obs_keys)
         )
 
         return simulated_activity, firing_rates, simulated_states
@@ -995,7 +995,7 @@ class GLMHMM(
             init_params=init_params.model_params,
         )
 
-        # cannot wrap is_new_session, that's to be calculated at each update form the provided X and y.
+        # cannot wrap session_starts, that's to be calculated at each update form the provided X and y.
         # for consistency, do not make a partial of that argument in run as well.
         self._optimizer_run = eqx.Partial(
             em_hmm,

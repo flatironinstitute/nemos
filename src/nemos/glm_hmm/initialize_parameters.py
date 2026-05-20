@@ -34,7 +34,7 @@ class InitFunctionGLM(Protocol):
         X: DESIGN_INPUT_TYPE,
         y: NDArray | jnp.ndarray,
         inverse_link_function: Callable,
-        is_new_session: Optional[NDArray | jnp.ndarray],
+        session_starts: Optional[NDArray | jnp.ndarray],
         random_key: jax.Array,
         **kwargs: Any,
     ) -> jnp.ndarray:
@@ -48,7 +48,7 @@ def random_glm_params_init(
     X: DESIGN_INPUT_TYPE,
     y: jnp.ndarray,
     inverse_link_function: Callable,
-    is_new_session: Optional[NDArray | jnp.ndarray] = None,
+    session_starts: Optional[NDArray | jnp.ndarray] = None,
     random_key: Optional[jax.Array] = None,
     std_dev=0.001,
 ) -> GLMUserParams:
@@ -68,7 +68,7 @@ def random_glm_params_init(
         Observations, shape (n_samples,) or (n_samples, n_neurons).
     inverse_link_function :
         Inverse link function of the GLM.
-    is_new_session :
+    session_starts :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions.
         Unused for this initialization, but included for API consistency.
     random_key : jax.random.PRNGKey
@@ -126,7 +126,7 @@ class KMeansInitializerGLM(KMeansInitializer):
         Inverse link function of the GLM.
     observation_model :
         Observation model of the GLM.
-    is_new_session :
+    session_starts :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
         (default), it is assumed that all data belongs to a single session.
     glm_kwargs:
@@ -142,7 +142,7 @@ class KMeansInitializerGLM(KMeansInitializer):
         y: NDArray | jnp.ndarray,
         inverse_link_function: Callable,
         observation_model: str,
-        is_new_session: Optional[jnp.ndarray] = None,
+        session_starts: Optional[jnp.ndarray] = None,
         glm_kwargs: Optional[Dict[str, Any]] = None,
         random_key: int | jax.Array = 0,
     ):
@@ -150,7 +150,7 @@ class KMeansInitializerGLM(KMeansInitializer):
             n_states,
             X,
             y,
-            is_new_session,
+            session_starts,
             random_key=random_key,
         )
         self._X = jax.tree_util.tree_map(jnp.asarray, X)
@@ -246,7 +246,7 @@ def kmeans_glm_params_init(
     y: NDArray | jnp.ndarray,
     inverse_link_function: Callable,
     observation_model: str,
-    is_new_session: Optional[jnp.ndarray] = None,
+    session_starts: Optional[jnp.ndarray] = None,
     glm_kwargs: Optional[dict] = None,
     random_key: Optional[jax.Array] = None,
     initializer: Optional[KMeansInitializer] = None,
@@ -266,7 +266,7 @@ def kmeans_glm_params_init(
         Inverse link function of the GLM.
     observation_model :
         Observation model of the GLM.
-    is_new_session :
+    session_starts :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
         (default), it is assumed that all data belongs to a single session.
     glm_kwargs:
@@ -290,7 +290,7 @@ def kmeans_glm_params_init(
             y,
             inverse_link_function,
             observation_model,
-            is_new_session,
+            session_starts,
             glm_kwargs,
             random_key,
         )
@@ -303,7 +303,7 @@ def kmeans_scale_init(
     y: NDArray | jnp.ndarray,
     inverse_link_function: Callable,
     observation_model: str,
-    is_new_session: Optional[jnp.ndarray] = None,
+    session_starts: Optional[jnp.ndarray] = None,
     glm_kwargs: Optional[dict] = None,
     random_key: Optional[jax.Array] = None,
     initializer: Optional[KMeansInitializer] = None,
@@ -323,7 +323,7 @@ def kmeans_scale_init(
         Inverse link function of the GLM.
     observation_model :
         Observation model of the GLM.
-    is_new_session :
+    session_starts :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
         (default), it is assumed that all data belongs to a single session.
     glm_kwargs:
@@ -347,7 +347,7 @@ def kmeans_scale_init(
             y,
             inverse_link_function,
             observation_model,
-            is_new_session,
+            session_starts,
             glm_kwargs,
             random_key,
         )
@@ -360,7 +360,7 @@ def constant_scale_init(
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
     inverse_link_function: Callable,
-    is_new_session: Optional[NDArray | jnp.ndarray] = None,
+    session_starts: Optional[NDArray | jnp.ndarray] = None,
     random_key: Optional[jax.Array] = None,
     scale_val: float = 1.0,
 ):
@@ -379,7 +379,7 @@ def constant_scale_init(
         Observations, used to determine number of neurons from shape.
     inverse_link_function :
         Inverse link function of the GLM. Unused for this initialization, but included for API consistency.
-    is_new_session :
+    session_starts :
         Optional boolean array of shape (n_samples,). Unused for this initialization,
         but included for API consistency.
     random_key : jax.random.PRNGKey
@@ -521,7 +521,7 @@ def generate_glm_hmm_initial_model_params(
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
     inverse_link_function: Callable,
-    is_new_session: Optional[NDArray | jnp.ndarray] = None,
+    session_starts: Optional[NDArray | jnp.ndarray] = None,
     random_key: int | jax.Array = 123,
     init_funcs: Optional[dict] = None,
 ) -> Tuple[Any, jnp.ndarray, jnp.ndarray]:
@@ -543,7 +543,7 @@ def generate_glm_hmm_initial_model_params(
         Output data (e.g., neural activity) of shape (n_samples,) or (n_samples, n_neurons).
     inverse_link_function :
         Inverse link function of the GLM, passed to GLM parameter and scale initialization functions.
-    is_new_session :
+    session_starts :
         Boolean array of shape (n_samples,) indicating the start of new sessions. If None, a single
         session is assumed.
     random_key :
@@ -595,7 +595,7 @@ def generate_glm_hmm_initial_model_params(
         X=X,
         y=y,
         inverse_link_function=inverse_link_function,
-        is_new_session=is_new_session,
+        session_starts=session_starts,
         random_key=glm_params_key,
         **glm_params_init_kwargs,
     )
@@ -619,7 +619,7 @@ def generate_glm_hmm_initial_model_params(
         X=X,
         y=y,
         inverse_link_function=inverse_link_function,
-        is_new_session=is_new_session,
+        session_starts=session_starts,
         random_key=scale_key,
         **scale_init_kwargs,
     )

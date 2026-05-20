@@ -110,7 +110,7 @@ def generate_data_gaussian(request):
         X,
         y,
         log_likelihood_func=log_likelihood_fn,
-        is_new_session=None,
+        session_starts=None,
     )
     return (
         X,
@@ -234,7 +234,7 @@ class TestAnalyticMStepScale:
             y,
             log_gammas,
             log_xis,
-            is_new_session=new_sess,
+            session_starts=new_sess,
             m_step_fn_model_params=analytical_update_fn,
             dirichlet_transition_proba=None,
             dirichlet_initial_proba=None,
@@ -267,7 +267,7 @@ class TestAnalyticMStepScale:
             y,
             log_gammas,
             log_xis,
-            is_new_session=new_sess,
+            session_starts=new_sess,
             m_step_fn_model_params=numerical_update_fn,
             dirichlet_transition_proba=None,
             dirichlet_initial_proba=None,

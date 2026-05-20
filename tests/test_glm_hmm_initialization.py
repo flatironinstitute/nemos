@@ -58,7 +58,7 @@ class MockGLMHMM(BaseHMM):
     def _log_likelihood(self, params, X, y):
         pass
 
-    def _model_params_initialization(self, X, y, is_new_session, random_key=None):
+    def _model_params_initialization(self, X, y, session_starts, random_key=None):
         pass
 
     def fit(self, *a, **kw):
@@ -95,15 +95,15 @@ class MockGLMHMM(BaseHMM):
 
 
 # GLM-type templates: 6 mandatory params
-# (n_states, X, y, inverse_link_function, is_new_session, random_key)
+# (n_states, X, y, inverse_link_function, session_starts, random_key)
 def _glm_template_no_extra(
-    n_states, X, y, inverse_link_function, is_new_session, random_key
+    n_states, X, y, inverse_link_function, session_starts, random_key
 ):
     pass
 
 
 def _glm_template_one_extra(
-    n_states, X, y, inverse_link_function, is_new_session, random_key, param1=None
+    n_states, X, y, inverse_link_function, session_starts, random_key, param1=None
 ):
     pass
 
@@ -113,7 +113,7 @@ def _glm_template_two_extra(
     X,
     y,
     inverse_link_function,
-    is_new_session,
+    session_starts,
     random_key,
     param1=None,
     param2=None,
@@ -126,7 +126,7 @@ def _glm_template_special(
     X,
     y,
     inverse_link_function,
-    is_new_session,
+    session_starts,
     random_key,
     my_special_param=None,
 ):
@@ -134,23 +134,23 @@ def _glm_template_special(
 
 
 # HMM-type templates: 5 mandatory params
-# (n_states, X, y, is_new_session, random_key)
-def _hmm_template_no_extra(n_states, X, y, is_new_session, random_key):
+# (n_states, X, y, session_starts, random_key)
+def _hmm_template_no_extra(n_states, X, y, session_starts, random_key):
     pass
 
 
-def _hmm_template_one_extra(n_states, X, y, is_new_session, random_key, param1=None):
+def _hmm_template_one_extra(n_states, X, y, session_starts, random_key, param1=None):
     pass
 
 
 def _hmm_template_two_extra(
-    n_states, X, y, is_new_session, random_key, param1=None, param2=None
+    n_states, X, y, session_starts, random_key, param1=None, param2=None
 ):
     pass
 
 
 def _hmm_template_special(
-    n_states, X, y, is_new_session, random_key, my_special_param=None
+    n_states, X, y, session_starts, random_key, my_special_param=None
 ):
     pass
 
@@ -533,7 +533,7 @@ class TestSetupGLMHMMInitialization:
         "init_func, expectation",
         [
             (
-                lambda n_states, X, y, inverse_link_function, is_new_session, random_key: (
+                lambda n_states, X, y, inverse_link_function, session_starts, random_key: (
                     jnp.zeros((1, n_states)),
                     jnp.zeros(n_states),
                 ),
@@ -554,7 +554,7 @@ class TestSetupGLMHMMInitialization:
         "init_func, expectation",
         [
             (
-                lambda n_states, X, y, inverse_link_function, is_new_session, random_key: jnp.ones(
+                lambda n_states, X, y, inverse_link_function, session_starts, random_key: jnp.ones(
                     n_states
                 ),
                 does_not_raise(),
@@ -572,7 +572,7 @@ class TestSetupGLMHMMInitialization:
 
     @pytest.mark.parametrize(
         "kwarg_name",
-        ["n_states", "X", "y", "inverse_link_function", "is_new_session", "random_key"],
+        ["n_states", "X", "y", "inverse_link_function", "session_starts", "random_key"],
     )
     def test_glm_params_init_kwargs_reserved(self, kwarg_name):
         with pytest.raises(
@@ -582,7 +582,7 @@ class TestSetupGLMHMMInitialization:
 
     @pytest.mark.parametrize(
         "kwarg_name",
-        ["n_states", "X", "y", "inverse_link_function", "is_new_session", "random_key"],
+        ["n_states", "X", "y", "inverse_link_function", "session_starts", "random_key"],
     )
     def test_scale_init_kwargs_reserved(self, kwarg_name):
         with pytest.raises(

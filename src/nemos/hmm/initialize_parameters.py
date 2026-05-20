@@ -13,7 +13,7 @@ from ..type_casting import is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE
 from ..validation import _suggest_keys
 from .params import HMMUserParams
-from .utils import initialize_is_new_session
+from .utils import initialize_session_starts
 
 sklearn = lazy.load("sklearn")
 
@@ -26,7 +26,7 @@ class InitFunctionHMM(Protocol):
         n_states: int,
         X: DESIGN_INPUT_TYPE,
         y: NDArray | jnp.ndarray,
-        is_new_session: NDArray | jnp.ndarray,
+        session_starts: NDArray | jnp.ndarray,
         random_key: jax.Array,
         **kwargs: Any,
     ) -> jnp.ndarray:
@@ -67,7 +67,7 @@ def sticky_transition_proba_init(
     prob_stay: float = 0.95,
     X: Optional[DESIGN_INPUT_TYPE] = None,
     y: Optional[NDArray | jnp.ndarray] = None,
-    is_new_session: Optional[NDArray | jnp.ndarray] = None,
+    session_starts: Optional[NDArray | jnp.ndarray] = None,
     random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
 ) -> jnp.ndarray:
     """
@@ -88,7 +88,7 @@ def sticky_transition_proba_init(
         Optional predictor data. Unused for this particular initialization, but added for API consistency.
     y :
         Optional output data. Unused for this particular initialization, but added for API consistency.
-    is_new_session :
+    session_starts :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. Unused for this
         particular initialization, but added for API consistency.
     random_key :
@@ -126,7 +126,7 @@ def uniform_transition_proba_init(
     n_states: int,
     X: Optional[DESIGN_INPUT_TYPE] = None,
     y: Optional[NDArray | jnp.ndarray] = None,
-    is_new_session: Optional[NDArray | jnp.ndarray] = None,
+    session_starts: Optional[NDArray | jnp.ndarray] = None,
     random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
 ) -> jnp.ndarray:
     """
@@ -143,7 +143,7 @@ def uniform_transition_proba_init(
         Optional predictor data. Unused for this particular initialization, but added for API consistency.
     y :
         Optional output data. Unused for this particular initialization, but added for API consistency.
-    is_new_session :
+    session_starts :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. Unused for this
         particular initialization, but added for API consistency.
     random_key :
@@ -174,7 +174,7 @@ def random_transition_proba_init(
     random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
     X: Optional[DESIGN_INPUT_TYPE] = None,
     y: Optional[NDArray | jnp.ndarray] = None,
-    is_new_session: Optional[NDArray | jnp.ndarray] = None,
+    session_starts: Optional[NDArray | jnp.ndarray] = None,
 ) -> jnp.ndarray:
     """
     Initialize transition probabilities randomly.
@@ -192,7 +192,7 @@ def random_transition_proba_init(
         Optional predictor data. Unused for this particular initialization, but added for API consistency.
     y :
         Optional output data. Unused for this particular initialization, but added for API consistency.
-    is_new_session :
+    session_starts :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. Unused for this
         particular initialization, but added for API consistency.
 
@@ -224,7 +224,7 @@ def dirichlet_transition_proba_init(
     random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
     X: Optional[DESIGN_INPUT_TYPE] = None,
     y: Optional[NDArray | jnp.ndarray] = None,
-    is_new_session: Optional[NDArray | jnp.ndarray] = None,
+    session_starts: Optional[NDArray | jnp.ndarray] = None,
 ) -> jnp.ndarray:
     """
     Initialize transition probabilities by sampling from a Dirichlet distribution.
@@ -245,7 +245,7 @@ def dirichlet_transition_proba_init(
         Optional predictor data. Unused for this particular initialization, but added for API consistency.
     y :
         Optional output data. Unused for this particular initialization, but added for API consistency.
-    is_new_session :
+    session_starts :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. Unused for this
         particular initialization, but added for API consistency.
 
@@ -272,7 +272,7 @@ def uniform_initial_proba_init(
     n_states: int,
     X: Optional[DESIGN_INPUT_TYPE] = None,
     y: Optional[NDArray | jnp.ndarray] = None,
-    is_new_session: Optional[NDArray | jnp.ndarray] = None,
+    session_starts: Optional[NDArray | jnp.ndarray] = None,
     random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
 ) -> jnp.ndarray:
     """
@@ -289,7 +289,7 @@ def uniform_initial_proba_init(
         Optional predictor data. Unused for this particular initialization, but added for API consistency.
     y :
         Optional output data. Unused for this particular initialization, but added for API consistency.
-    is_new_session :
+    session_starts :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. Unused for this
         particular initialization, but added for API consistency.
     random_key :
@@ -319,7 +319,7 @@ def random_initial_proba_init(
     random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
     X: Optional[DESIGN_INPUT_TYPE] = None,
     y: Optional[NDArray | jnp.ndarray] = None,
-    is_new_session: Optional[NDArray | jnp.ndarray] = None,
+    session_starts: Optional[NDArray | jnp.ndarray] = None,
 ) -> jnp.ndarray:
     """
     Randomly initialize initial state probabilities.
@@ -337,7 +337,7 @@ def random_initial_proba_init(
         Optional predictor data. Unused for this particular initialization, but added for API consistency.
     y :
         Optional output data. Unused for this particular initialization, but added for API consistency.
-    is_new_session :
+    session_starts :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. Unused for this
         particular initialization, but added for API consistency.
 
@@ -369,7 +369,7 @@ def dirichlet_initial_proba_init(
     random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
     X: Optional[DESIGN_INPUT_TYPE] = None,
     y: Optional[NDArray | jnp.ndarray] = None,
-    is_new_session: Optional[NDArray | jnp.ndarray] = None,
+    session_starts: Optional[NDArray | jnp.ndarray] = None,
 ) -> jnp.ndarray:
     """
     Initialize initial state probabilities by sampling from a Dirichlet distribution.
@@ -390,7 +390,7 @@ def dirichlet_initial_proba_init(
         Optional predictor data. Unused for this particular initialization, but added for API consistency.
     y :
         Optional output data. Unused for this particular initialization, but added for API consistency.
-    is_new_session :
+    session_starts :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. Unused for this
         particular initialization, but added for API consistency.
 
@@ -429,7 +429,7 @@ class KMeansInitializer:
         Predictor data (e.g., model design for GLM) of shape (n_samples, n_features).
     y :
         Output data (e.g., neural activity) of shape (n_samples,).
-    is_new_session :
+    session_starts :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
         (default), it is assumed that all data belongs to a single session.
     random_key :
@@ -441,7 +441,7 @@ class KMeansInitializer:
         n_states: int,
         X: DESIGN_INPUT_TYPE,
         y: NDArray | jnp.ndarray,
-        is_new_session: Optional[jnp.ndarray] = None,
+        session_starts: Optional[jnp.ndarray] = None,
         random_key: int | jax.Array = 0,
     ):
         if isinstance(random_key, jax.Array):
@@ -449,7 +449,7 @@ class KMeansInitializer:
 
         self.n_states = n_states
         self.random_key = random_key
-        self.is_new_session = initialize_is_new_session(X, y, is_new_session)
+        self.session_starts = initialize_session_starts(X, y, session_starts)
         self.model = sklearn.cluster.KMeans(
             n_clusters=n_states, random_state=random_key
         )
@@ -479,7 +479,7 @@ class KMeansInitializer:
         initial_probability :
             Initial state probability vector of shape (n_states,) computed from KMeans assigned states.
         """
-        initial_probability = self.states[self.is_new_session].sum(axis=0)
+        initial_probability = self.states[self.session_starts].sum(axis=0)
         # normalize and add minimum_prob to avoid zero probabilities, then renormalize
         initial_probability = (
             initial_probability / initial_probability.sum()
@@ -506,8 +506,8 @@ class KMeansInitializer:
             Transition probability matrix of shape (n_states, n_states) computed from KMeans assigned states.
         """
         transition_matrix = (
-            self.states[:-1][~self.is_new_session[1:]].T
-            @ self.states[1:][~self.is_new_session[1:]]
+            self.states[:-1][~self.session_starts[1:]].T
+            @ self.states[1:][~self.session_starts[1:]]
         )
         # normalize and add minimum_prob to avoid zero probabilities, then renormalize
         transition_matrix = (
@@ -520,7 +520,7 @@ def kmeans_initial_proba_init(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
-    is_new_session: Optional[jnp.ndarray] = None,
+    session_starts: Optional[jnp.ndarray] = None,
     minimum_prob: float = 0.02,
     random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
     initializer: Optional[KMeansInitializer] = None,
@@ -539,7 +539,7 @@ def kmeans_initial_proba_init(
         Predictor data (e.g., model design for GLM) of shape (n_samples, n_features).
     y :
         Output data (e.g., neural activity) of shape (n_samples,).
-    is_new_session :
+    session_starts :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
         (default), it is assumed that all data belongs to a single session.
     minimum_prob :
@@ -557,7 +557,7 @@ def kmeans_initial_proba_init(
         Initial state probability vector of shape (n_states,) that sums to 1.
     """
     if initializer is None:
-        initializer = KMeansInitializer(n_states, X, y, is_new_session, random_key)
+        initializer = KMeansInitializer(n_states, X, y, session_starts, random_key)
     return initializer.initial_probability(minimum_prob=minimum_prob)
 
 
@@ -565,7 +565,7 @@ def kmeans_transition_proba_init(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
-    is_new_session: Optional[jnp.ndarray] = None,
+    session_starts: Optional[jnp.ndarray] = None,
     minimum_prob: float = 0.02,
     random_key: jax.Array = jax.random.PRNGKey(123),
     initializer: Optional[KMeansInitializer] = None,
@@ -584,7 +584,7 @@ def kmeans_transition_proba_init(
         Predictor data (e.g., model design for GLM) of shape (n_samples, n_features).
     y :
         Output data (e.g., neural activity) of shape (n_samples,).
-    is_new_session :
+    session_starts :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
         (default), it is assumed that all data belongs to a single session.
     minimum_prob :
@@ -602,7 +602,7 @@ def kmeans_transition_proba_init(
         Transition probability matrix of shape (n_states, n_states) computed from KMeans assigned states.
     """
     if initializer is None:
-        initializer = KMeansInitializer(n_states, X, y, is_new_session, random_key)
+        initializer = KMeansInitializer(n_states, X, y, session_starts, random_key)
     return initializer.transition_probability(minimum_prob=minimum_prob)
 
 
@@ -901,7 +901,7 @@ def generate_hmm_initial_params(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
-    is_new_session: NDArray | jnp.ndarray,
+    session_starts: NDArray | jnp.ndarray,
     random_key_pair: jax.Array = jax.random.split(jax.random.PRNGKey(1234), 2),
     init_funcs: Optional[dict] = None,
 ) -> HMMUserParams:
@@ -919,7 +919,7 @@ def generate_hmm_initial_params(
         Predictor data (e.g., model design for GLM) of shape (n_samples, n_features).
     y :
         Output data (e.g., neural activity) of shape (n_samples,).
-    is_new_session :
+    session_starts :
         Boolean array of shape (n_samples,) indicating the start of new sessions.
     random_key_pair :
         Optional pair of keys for random number generation, if needed by the initialization functions.
@@ -964,7 +964,7 @@ def generate_hmm_initial_params(
         n_states=n_states,
         X=X,
         y=y,
-        is_new_session=is_new_session,
+        session_starts=session_starts,
         random_key=random_key_pair[0],
         **initial_proba_init_kwargs,
     )
@@ -972,7 +972,7 @@ def generate_hmm_initial_params(
         n_states=n_states,
         X=X,
         y=y,
-        is_new_session=is_new_session,
+        session_starts=session_starts,
         random_key=random_key_pair[1],
         **transition_proba_init_kwargs,
     )

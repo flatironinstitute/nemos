@@ -142,9 +142,9 @@ class TestGLMHMM:
         is_ns_multi[0] = True
         is_ns_multi[n // 2] = True
         model_single.fit(
-            X_np, y_np, is_new_session=is_ns_single, init_params=init_params
+            X_np, y_np, session_starts=is_ns_single, init_params=init_params
         )
-        model_multi.fit(X_np, y_np, is_new_session=is_ns_multi, init_params=init_params)
+        model_multi.fit(X_np, y_np, session_starts=is_ns_multi, init_params=init_params)
         assert not jnp.array_equal(
             model_single.initial_prob_, model_multi.initial_prob_
         )
@@ -528,13 +528,13 @@ class TestSolverConfiguration:
         INSTANTIATE_MODEL_AND_SIMULATE,
         indirect=True,
     )
-    def test_is_new_session_forwarded_to_initialization(
+    def test_session_starts_forwarded_to_initialization(
         self,
         instantiate_base_regressor_subclass,
         mock_glm_hmm_optimizer_run,
         monkeypatch,
     ):
-        """is_new_session passed to fit() reaches _model_specific_initialization."""
+        """session_starts passed to fit() reaches _model_specific_initialization."""
         fixture = instantiate_base_regressor_subclass
         n = 50
         X = fixture.X[:n]
@@ -546,20 +546,20 @@ class TestSolverConfiguration:
         captured = {}
         original_model_init = GLMHMM._model_specific_initialization
 
-        def capturing_model_init(self, X, y, is_new_session=None):
-            captured["is_new_session"] = is_new_session
-            return original_model_init(self, X, y, is_new_session)
+        def capturing_model_init(self, X, y, session_starts=None):
+            captured["session_starts"] = session_starts
+            return original_model_init(self, X, y, session_starts)
 
         monkeypatch.setattr(
             GLMHMM, "_model_specific_initialization", capturing_model_init
         )
 
-        fixture.model.fit(X, y, is_new_session=is_ns)
+        fixture.model.fit(X, y, session_starts=is_ns)
 
-        assert "is_new_session" in captured
-        assert captured["is_new_session"] is not None
+        assert "session_starts" in captured
+        assert captured["session_starts"] is not None
         # The session boundary at n//2 should be present in the forwarded array.
-        assert bool(captured["is_new_session"][n // 2])
+        assert bool(captured["session_starts"][n // 2])
 
     @pytest.mark.parametrize(
         "instantiate_base_regressor_subclass",
@@ -657,20 +657,20 @@ def stub_glmhmm_simulate(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# TestFitDelegation — fit() calls validate_and_cast_is_new_session
+# TestFitDelegation — fit() calls validate_and_cast_session_starts
 # ---------------------------------------------------------------------------
 
 
 class TestFitDelegation:
-    """fit() and simulate() must delegate session-boundary handling to validate_and_cast_is_new_session."""
+    """fit() and simulate() must delegate session-boundary handling to validate_and_cast_session_starts."""
 
-    def test_fit_calls_validate_and_cast_is_new_session(
+    def test_fit_calls_validate_and_cast_session_starts(
         self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
     ):
         n = glm_hmm_data["X"].shape[0]
-        default_is_new_session = jnp.zeros(n, dtype=bool).at[0].set(True)
-        mock = MagicMock(return_value=default_is_new_session)
-        monkeypatch.setattr(GLMHMMValidator, "validate_and_cast_is_new_session", mock)
+        default_session_starts = jnp.zeros(n, dtype=bool).at[0].set(True)
+        mock = MagicMock(return_value=default_session_starts)
+        monkeypatch.setattr(GLMHMMValidator, "validate_and_cast_session_starts", mock)
 
         model = GLMHMM(n_states=glm_hmm_data["n_states"])
         model.fit(
@@ -681,7 +681,7 @@ class TestFitDelegation:
 
         mock.assert_called_once()
 
-    def test_simulate_calls_validate_and_cast_is_new_session(
+    def test_simulate_calls_validate_and_cast_session_starts(
         self,
         glm_hmm_data,
         mock_glm_hmm_optimizer_run,
@@ -694,9 +694,9 @@ class TestFitDelegation:
         model = GLMHMM(n_states=glm_hmm_data["n_states"])
         model.fit(X, glm_hmm_data["y"], init_params=glm_hmm_data["init_params"])
 
-        default_is_new_session = jnp.zeros(n, dtype=bool).at[0].set(True)
-        mock = MagicMock(return_value=default_is_new_session)
-        monkeypatch.setattr(GLMHMMValidator, "validate_and_cast_is_new_session", mock)
+        default_session_starts = jnp.zeros(n, dtype=bool).at[0].set(True)
+        mock = MagicMock(return_value=default_session_starts)
+        monkeypatch.setattr(GLMHMMValidator, "validate_and_cast_session_starts", mock)
         stub_glmhmm_simulate(n)
 
         model.simulate(jax.random.key(0), X)
@@ -769,13 +769,13 @@ class TestSimulate:
         model = GLMHMM(n_states=glm_hmm_data["n_states"])
         model.fit(X, glm_hmm_data["y"], init_params=glm_hmm_data["init_params"])
 
-        is_new_session = jnp.zeros(n, dtype=bool).at[0].set(True)
+        session_starts = jnp.zeros(n, dtype=bool).at[0].set(True)
         mock_vapi = MagicMock(
             return_value=(
                 model._get_model_params(),
                 jnp.asarray(X),
                 None,
-                is_new_session,
+                session_starts,
             )
         )
         monkeypatch.setattr(GLMHMM, "_validate_and_prepare_inputs", mock_vapi)
@@ -858,7 +858,7 @@ class TestSimulate:
     def test_simulate_forces_first_bin_new_session(
         self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
     ):
-        """is_new_session[0] is always True regardless of what the user passes."""
+        """session_starts[0] is always True regardless of what the user passes."""
         model = GLMHMM(n_states=glm_hmm_data["n_states"])
         model.fit(
             glm_hmm_data["X"],
@@ -869,14 +869,14 @@ class TestSimulate:
         n = X.shape[0]
         captured = {}
 
-        def capturing_simulate(self_inner, key, params, data, is_new_session):
-            captured["is_new_session"] = is_new_session
+        def capturing_simulate(self_inner, key, params, data, session_starts):
+            captured["session_starts"] = session_starts
             return jnp.zeros(n), jnp.zeros(n), jnp.zeros(n, dtype=int)
 
         monkeypatch.setattr(GLMHMM, "_simulate", capturing_simulate)
-        model.simulate(jax.random.key(0), X, is_new_session=jnp.zeros(n, dtype=bool))
+        model.simulate(jax.random.key(0), X, session_starts=jnp.zeros(n, dtype=bool))
 
-        assert bool(captured["is_new_session"][0]) is True
+        assert bool(captured["session_starts"][0]) is True
 
     def test_simulate_sample_generator_receives_key_rate_scale(
         self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch

@@ -165,14 +165,14 @@ class BaseHMM(
         - For transition probabilities: "sticky" (default), "uniform", "random", "kmeans"
 
         Any custom initialization function provided by the user should be a callable that matches the following input
-        (n_states, X, y, is_new_session, random_key, **kwargs) and returns an array of the appropriate shape for the
+        (n_states, X, y, session_starts, random_key, **kwargs) and returns an array of the appropriate shape for the
         parameters it initializes (initial probabilities should return shape (n_states,) and transition probabilities
         should return shape (n_states, n_states)). Even if the function does not use all the inputs, they should be
         included in the function signature to ensure compatibility with the setup process.
 
         An example of a custom initialization function for initial probabilities could be:
         ```
-        def custom_initial_proba_init(n_states, X, y, is_new_session, random_key, min_prob=0.05):
+        def custom_initial_proba_init(n_states, X, y, session_starts, random_key, min_prob=0.05):
             init_prob = jax.random.uniform(random_key, (n_states,), dtype=float)
             init_prob = init_prob / init_prob.sum()  # normalize to sum to 1
             init_prob = jnp.clip(init_prob, a_min=min_prob)  # enforce minimum probability
@@ -404,7 +404,7 @@ class BaseHMM(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        is_new_session: jnp.ndarray,
+        session_starts: jnp.ndarray,
         random_key_pair: jax.Array,
     ) -> Tuple[HMMUserParams, bool]:
         """
@@ -416,7 +416,7 @@ class BaseHMM(
             Design matrix.
         y :
             Target observations.
-        is_new_session :
+        session_starts :
             Boolean array marking the start of new sessions.
         random_key_pair :
             Pair of JAX PRNG keys passed to the initial-prob and transition-prob
@@ -433,7 +433,7 @@ class BaseHMM(
             self._n_states,
             X,
             y,
-            is_new_session,
+            session_starts,
             random_key_pair=random_key_pair,
             init_funcs=self._hmm_initialization_funcs,
         )
@@ -443,7 +443,7 @@ class BaseHMM(
         return hmm_params, validate_params
 
     @abc.abstractmethod
-    def _model_params_initialization(self, X, y, is_new_session, random_key: jax.Array):
+    def _model_params_initialization(self, X, y, session_starts, random_key: jax.Array):
         """
         Model-specific parameter initialization.
 
@@ -453,7 +453,7 @@ class BaseHMM(
             Design matrix.
         y :
             Target observations.
-        is_new_session :
+        session_starts :
             Boolean array marking the start of new sessions.
         random_key :
             JAX PRNG key for any stochastic initialization.
@@ -503,7 +503,7 @@ class BaseHMM(
         return kmeans_kwargs
 
     def _kmeans_setup_initializer(
-        self, X, y, is_new_session=None, random_key: Optional[jax.Array] = None
+        self, X, y, session_starts=None, random_key: Optional[jax.Array] = None
     ):
         """Set up the kmeans initializer if any HMM or model parameters require kmeans initialization."""
         # get additional model-specific kwargs for kmeans initializer if needed
@@ -521,7 +521,7 @@ class BaseHMM(
                 self.n_states,
                 X,
                 y,
-                is_new_session=is_new_session,
+                session_starts=session_starts,
                 random_key=random_key,
                 **self._kmeans_extra_kwargs(),
                 **kmeans_kwargs,
@@ -542,7 +542,7 @@ class BaseHMM(
                         "initializer"
                     ] = initializer
 
-    def _model_specific_initialization(self, X, y, is_new_session=None):
+    def _model_specific_initialization(self, X, y, session_starts=None):
         """Model-specific initialization."""
         keys = jax.random.split(self._seed, 3)
         hmm_keys = keys[:2]
@@ -554,19 +554,19 @@ class BaseHMM(
         if self._use_kmeans:
             kmeans_key = jax.random.fold_in(self._seed, 0)
             self._kmeans_setup_initializer(
-                X, y, is_new_session=is_new_session, random_key=kmeans_key
+                X, y, session_starts=session_starts, random_key=kmeans_key
             )
 
         hmm_params, validate_hmm = self._hmm_params_initialization(
             X,
             y,
-            is_new_session,
+            session_starts,
             random_key_pair=hmm_keys,
         )
         model_params, validate_model = self._model_params_initialization(
             X,
             y,
-            is_new_session,
+            session_starts,
             random_key=model_key,
         )
         user_params = self._validator.wrap_user_params(
@@ -610,7 +610,7 @@ class BaseHMM(
         self._check_hmm_is_fit()
         self._check_model_is_fit()
 
-    def _validate_and_prepare_inputs(self, X, y, is_new_session=None):
+    def _validate_and_prepare_inputs(self, X, y, session_starts=None):
         """Validate and prepare inputs."""
         # check if the model was fit
         self._check_is_fit()
@@ -619,10 +619,10 @@ class BaseHMM(
         # validate inputs
         self._validator.validate_inputs(X=X, y=y)
         self._validator.validate_consistency(params, X=X, y=y)
-        is_new_session = self._validator.validate_and_cast_is_new_session(
-            X=X, y=y, is_new_session=is_new_session
+        session_starts = self._validator.validate_and_cast_session_starts(
+            X=X, y=y, session_starts=session_starts
         )
-        return params, X, y, is_new_session
+        return params, X, y, session_starts
 
     @abc.abstractmethod
     def _log_likelihood(
@@ -636,23 +636,23 @@ class BaseHMM(
         params: HMMModelParamsT,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
-        is_new_session: jnp.ndarray,
+        session_starts: jnp.ndarray,
     ) -> jnp.ndarray:
         """Private score compute."""
         # filter for non-nans, grab data if needed
-        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+        data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
         # safe conversion to jax arrays of float
         params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
 
-        # make sure is_new_session starts with a 1
-        is_new_session = is_new_session.at[0].set(True)
+        # make sure session_starts starts with a 1
+        session_starts = session_starts.at[0].set(True)
 
         # smooth with forward backward
         _, log_norm = forward_pass(
             params=params,
             X=data,
             y=y,
-            is_new_session=is_new_session,
+            session_starts=session_starts,
             # do we store this in the model during initialization?
             log_likelihood_func=self._log_likelihood,
         )
@@ -662,7 +662,7 @@ class BaseHMM(
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
-        is_new_session: Optional[ArrayLike] = None,
+        session_starts: Optional[ArrayLike] = None,
         score_type: Literal[
             "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
         ] = "log-likelihood",
@@ -680,7 +680,7 @@ class BaseHMM(
             Input data/design matrix, shape ``(n_samples, n_features)``.
         y :
             Output data/observations, shape ``(n_samples, n_observations)``.
-        is_new_session :
+        session_starts :
             Optional array indicating user-provided session boundaries. Can be:
             - a boolean array indicating session starts, shape ``(n_samples,)``
             - an integer array of indices marking session starts, shape ``(n_sessions,)``
@@ -708,10 +708,10 @@ class BaseHMM(
             raise NotImplementedError(
                 f"score of type {score_type} not implemented yet!"
             )
-        params, X, y, is_new_session = self._validate_and_prepare_inputs(
-            X, y, is_new_session
+        params, X, y, session_starts = self._validate_and_prepare_inputs(
+            X, y, session_starts
         )
-        return self._score(params, X, y, is_new_session)
+        return self._score(params, X, y, session_starts)
 
     @support_pynapple(conv_type="jax")
     def _smooth_proba(
@@ -719,25 +719,25 @@ class BaseHMM(
         params: HMMModelParamsT,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
-        is_new_session: jnp.ndarray,
+        session_starts: jnp.ndarray,
     ) -> jnp.ndarray:
         """Private smooth_proba compute."""
         # filter for non-nans, grab data if needed
         valid = tree_utils.get_valid_multitree(X, y)
-        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+        data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
 
         # safe conversion to jax arrays of float
         params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
 
-        # make sure is_new_session starts with a 1
-        is_new_session = is_new_session.at[0].set(True)
+        # make sure session_starts starts with a 1
+        session_starts = session_starts.at[0].set(True)
 
         # smooth with forward backward
         log_posteriors, _, _, _, _, _ = forward_backward(
             params=params,
             X=data,
             y=y,
-            is_new_session=is_new_session,
+            session_starts=session_starts,
             log_likelihood_func=self._log_likelihood,
         )
         proba = jnp.exp(log_posteriors)
@@ -751,7 +751,7 @@ class BaseHMM(
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
-        is_new_session: Optional[ArrayLike] = None,
+        session_starts: Optional[ArrayLike] = None,
     ) -> jnp.ndarray | nap.TsdFrame:
         """Compute smoothing posterior probabilities over hidden states.
 
@@ -770,7 +770,7 @@ class BaseHMM(
         y :
             Observations, shape ``(n_time_points,)`` for single observation or
             ``(n_time_points, n_observations)`` for population.
-        is_new_session :
+        session_starts :
             Optional array indicating user-provided session boundaries. Can be:
             - a boolean array indicating session starts, shape ``(n_time_points,)``
             - an integer array of indices marking session starts, shape ``(n_sessions,)``
@@ -806,10 +806,10 @@ class BaseHMM(
         - Smoothing provides better state estimates than filtering because it uses all data
         - The algorithm properly handles session boundaries and NaN values at epoch borders
         """
-        params, X, y, is_new_session = self._validate_and_prepare_inputs(
-            X, y, is_new_session
+        params, X, y, session_starts = self._validate_and_prepare_inputs(
+            X, y, session_starts
         )
-        return self._smooth_proba(params, X, y, is_new_session)
+        return self._smooth_proba(params, X, y, session_starts)
 
     @support_pynapple(conv_type="jax")
     def _filter_proba(
@@ -817,23 +817,23 @@ class BaseHMM(
         params: HMMModelParamsT,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
-        is_new_session: jnp.ndarray,
+        session_starts: jnp.ndarray,
     ) -> jnp.ndarray:
         """Compute filtering probabilities without validation (internal method)."""
         # filter for non-nans, grab data if needed
         valid = tree_utils.get_valid_multitree(X, y)
-        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+        data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
 
         # safe conversion to jax arrays of float
         params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
 
-        # make sure is_new_session starts with a 1
-        is_new_session = is_new_session.at[0].set(True)
+        # make sure session_starts starts with a 1
+        session_starts = session_starts.at[0].set(True)
         log_proba, _ = forward_pass(
             params,
             data,
             y,
-            is_new_session=is_new_session,
+            session_starts=session_starts,
             log_likelihood_func=self._log_likelihood,
         )
         proba = jnp.exp(log_proba)
@@ -847,7 +847,7 @@ class BaseHMM(
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
-        is_new_session: Optional[ArrayLike] = None,
+        session_starts: Optional[ArrayLike] = None,
     ) -> jnp.ndarray | nap.TsdFrame:
         """Compute filtering posterior probabilities over hidden states.
 
@@ -866,7 +866,7 @@ class BaseHMM(
         y
             Observations, shape ``(n_time_points,)`` for single observation or
             ``(n_time_points, n_observations)`` for population.
-        is_new_session :
+        session_starts :
             Optional array indicating user-provided session boundaries. Can be:
             - a boolean array indicating session starts, shape ``(n_time_points,)``
             - an integer array of indices marking session starts, shape ``(n_sessions,)``
@@ -905,10 +905,10 @@ class BaseHMM(
         - NaN values are removed before inference, but session markers are preserved
         - For pynapple inputs, the output TsdFrame has columns named "state_0", "state_1", etc.
         """
-        params, X, y, is_new_session = self._validate_and_prepare_inputs(
-            X, y, is_new_session
+        params, X, y, session_starts = self._validate_and_prepare_inputs(
+            X, y, session_starts
         )
-        return self._filter_proba(params, X, y, is_new_session)
+        return self._filter_proba(params, X, y, session_starts)
 
     @support_pynapple(conv_type="jax")
     def _decode_state(
@@ -916,25 +916,25 @@ class BaseHMM(
         params: HMMModelParamsT,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
-        is_new_session: jnp.ndarray,
+        session_starts: jnp.ndarray,
         return_index: bool,
     ) -> jnp.ndarray:
         """Decode most likely state sequence without validation (internal method)."""
         # filter for non-nans, grab data if needed
         valid = tree_utils.get_valid_multitree(X, y)
-        data, y, is_new_session = self._preprocess_inputs(X, y, is_new_session)
+        data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
 
         # safe conversion to jax arrays of float
         params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
 
-        # make sure is_new_session starts with a 1
-        is_new_session = is_new_session.at[0].set(True)
+        # make sure session_starts starts with a 1
+        session_starts = session_starts.at[0].set(True)
 
         decoded_states = max_sum(
             params,
             data,
             y,
-            is_new_session=is_new_session,
+            session_starts=session_starts,
             log_likelihood_func=self._log_likelihood,
             return_index=return_index,
         )
@@ -951,7 +951,7 @@ class BaseHMM(
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
-        is_new_session: Optional[ArrayLike] = None,
+        session_starts: Optional[ArrayLike] = None,
         state_format: Literal["one-hot", "index"] = "one-hot",
     ) -> jnp.ndarray | nap.TsdFrame:
         """Compute the most likely hidden state sequence (Viterbi decoding).
@@ -975,7 +975,7 @@ class BaseHMM(
         y
             Observations, shape ``(n_time_points,)`` for single observation or
             ``(n_time_points, n_observations)`` for population.
-        is_new_session :
+        session_starts :
             Optional array indicating user-provided session boundaries. Can be:
             - a boolean array indicating session starts, shape ``(n_time_points,)``
             - an integer array of indices marking session starts, shape ``(n_sessions,)``
@@ -1025,11 +1025,11 @@ class BaseHMM(
         - Decoding is useful for segmenting continuous data into discrete behavioral states
         - For uncertainty estimates about states, use ``smooth_proba()`` instead
         """
-        params, X, y, is_new_session = self._validate_and_prepare_inputs(
-            X, y, is_new_session
+        params, X, y, session_starts = self._validate_and_prepare_inputs(
+            X, y, session_starts
         )
         # validate state_format
         _check_state_format(state_format)
         # define the return type for the max-sum
         return_index = False if state_format == "one-hot" else True
-        return self._decode_state(params, X, y, is_new_session, return_index)
+        return self._decode_state(params, X, y, session_starts, return_index)

@@ -1737,7 +1737,7 @@ def instantiate_glm_hmm_func(
         X=X,
         y=y,
         inverse_link_function=model.inverse_link_function,
-        is_new_session=None,
+        session_starts=None,
         random_key=jax.random.PRNGKey(123),
     )
     coef = jnp.squeeze(coef)
