@@ -616,7 +616,7 @@ class GLMHMM(
         X: DESIGN_INPUT_TYPE,
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
         init_params: Optional[GLMHMMUserParams] = None,
-        session_starts: Optional[jnp.ndarray] = None,  # refactor: session_starts
+        session_starts: Optional[jnp.ndarray] = None,
     ) -> "GLMHMM":
         """Fit the GLM-HMM model to the data."""
         self._validator.validate_inputs(X=X, y=y)
@@ -836,6 +836,114 @@ class GLMHMM(
 
         return simulated_activity, firing_rates, simulated_states
 
+    def smooth_proba(
+        self,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: Union[NDArray, jnp.ndarray, nap.Tsd],
+        session_starts: Optional[ArrayLike] = None,
+    ) -> jnp.ndarray | nap.TsdFrame:
+        """Compute smoothing posterior probabilities for the GLM-HMM.
+
+        Thin override of :meth:`nemos.hmm.BaseHMM.smooth_proba` carrying a
+        GLM-HMM-specific Example. The full Parameters/Returns/Raises/Notes
+        documentation lives on the base method.
+
+        Examples
+        --------
+        Fit a GLM-HMM and compute smoothing posteriors:
+
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> np.random.seed(123)
+        >>> X = np.random.randn(100, 5)
+        >>> y = np.random.poisson(2, size=100)
+        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson").fit(X, y)
+        >>> posteriors = model.smooth_proba(X, y)
+        >>> posteriors.shape
+        (100, 3)
+        >>> bool(np.allclose(posteriors.sum(axis=1), 1.0))
+        True
+
+        With pynapple inputs the result is returned as a ``TsdFrame``:
+
+        >>> import pynapple as nap
+        >>> t = np.arange(100) * 0.01
+        >>> X_tsd = nap.TsdFrame(t=t, d=X)
+        >>> y_tsd = nap.Tsd(t=t, d=y.astype(float))
+        >>> type(model.smooth_proba(X_tsd, y_tsd)).__name__
+        'TsdFrame'
+        """
+        return super().smooth_proba(X, y, session_starts=session_starts)
+
+    def filter_proba(
+        self,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: Union[NDArray, jnp.ndarray, nap.Tsd],
+        session_starts: Optional[ArrayLike] = None,
+    ) -> jnp.ndarray | nap.TsdFrame:
+        """Compute filtering posterior probabilities for the GLM-HMM.
+
+        Thin override of :meth:`nemos.hmm.BaseHMM.filter_proba` carrying a
+        GLM-HMM-specific Example. The full Parameters/Returns/Raises/Notes
+        documentation lives on the base method.
+
+        Examples
+        --------
+        Fit a GLM-HMM and compute filtering posteriors (causal/online):
+
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> np.random.seed(123)
+        >>> X = np.random.randn(100, 5)
+        >>> y = np.random.poisson(2, size=100)
+        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson").fit(X, y)
+        >>> filt = model.filter_proba(X, y)
+        >>> filt.shape
+        (100, 3)
+        >>> bool(np.allclose(filt.sum(axis=1), 1.0))
+        True
+        """
+        return super().filter_proba(X, y, session_starts=session_starts)
+
+    def decode_state(
+        self,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: ArrayLike,
+        session_starts: Optional[ArrayLike] = None,
+        state_format: Literal["one-hot", "index"] = "one-hot",
+    ) -> jnp.ndarray | nap.TsdFrame:
+        """Viterbi-decode the most likely hidden state sequence for the GLM-HMM.
+
+        Thin override of :meth:`nemos.hmm.BaseHMM.decode_state` carrying a
+        GLM-HMM-specific Example. The full Parameters/Returns/Raises/Notes
+        documentation lives on the base method.
+
+        Examples
+        --------
+        Decode the most likely state sequence as integer indices:
+
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> np.random.seed(123)
+        >>> X = np.random.randn(100, 5)
+        >>> y = np.random.poisson(2, size=100)
+        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson").fit(X, y)
+        >>> states = model.decode_state(X, y, state_format="index")
+        >>> states.shape
+        (100,)
+
+        One-hot output (default):
+
+        >>> states_onehot = model.decode_state(X, y)
+        >>> states_onehot.shape
+        (100, 3)
+        >>> bool(np.all(states_onehot.sum(axis=1) == 1))
+        True
+        """
+        return super().decode_state(
+            X, y, session_starts=session_starts, state_format=state_format
+        )
+
     def _simulate(
         self,
         random_key: jax.Array,
@@ -920,8 +1028,36 @@ class GLMHMM(
         self,
         filename: Union[str, Path],
     ):
-        """Save model params."""
-        pass
+        """Save GLM-HMM model parameters and fit state to a .npz file.
+
+        Persists hyperparameters returned by :meth:`get_params` together with the
+        fitted attributes (``coef_``, ``intercept_``, ``scale_``, ``initial_prob_``,
+        ``transition_prob_``, ``dof_resid_``). The ``solver_state_`` is intentionally
+        excluded as it is solver-specific and not needed to reuse the fitted model.
+        The file can be reloaded with :func:`nemos.load_model`.
+
+        Parameters
+        ----------
+        filename :
+            Path of the output file (``.npz`` format).
+
+        Examples
+        --------
+        >>> import os, tempfile
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> np.random.seed(0)
+        >>> X = np.random.normal(size=(80, 3))
+        >>> y = np.random.binomial(n=1, p=0.5, size=80)
+        >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(X, y)
+        >>> with tempfile.TemporaryDirectory() as d:
+        ...     model.save_params(os.path.join(d, "glmhmm.npz"))
+        """
+        # initialize saving dictionary
+        fit_attrs = self._get_fit_state()
+        fit_attrs.pop("solver_state_", None)
+        string_attrs = ["inverse_link_function"]
+        self._save_params(filename, fit_attrs, string_attrs)
 
     # SVRG specific optimization not available.
     def _get_optimal_solver_params_config(self):
@@ -951,16 +1087,104 @@ class GLMHMM(
 
     def update(
         self,
-        params: Tuple[jnp.ndarray, jnp.ndarray],
+        params: GLMHMMUserParams,
         opt_state: NamedTuple,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         *args,
+        session_starts: Optional[jnp.ndarray] = None,
         n_samples: Optional[int] = None,
         **kwargs,
     ) -> StepResult:
-        """Run a single update step of the jaxopt solver."""
-        pass
+        """Run a single EM iteration on the GLM-HMM.
+
+        Performs one E-step / M-step pair starting from the supplied parameters and
+        EM state, updates the model's fitted attributes (``coef_``, ``intercept_``,
+        ``scale_``, ``initial_prob_``, ``transition_prob_``, ``solver_state_``,
+        ``dof_resid_``) in place, and returns the updated parameter tuple and EM
+        state. Intended for callers that need fine-grained control over EM
+        iteration (e.g. checkpointing, custom convergence criteria) instead of the
+        bundled :meth:`fit` loop.
+
+        :meth:`initialize_optimizer_and_state` must be called first so that the EM
+        step function and initial ``opt_state`` are available.
+
+        Parameters
+        ----------
+        params :
+            Current model parameters as a 5-tuple
+            ``(coef, intercept, scale, initial_prob, transition_prob)`` matching
+            the structure produced by :meth:`initialize_params`.
+        opt_state :
+            EM state returned by :meth:`initialize_optimizer_and_state` or by the
+            previous call to :meth:`update`.
+        X :
+            Predictors, shape ``(n_time_bins, n_features)`` (or a pytree of arrays
+            of the same shape).
+        y :
+            Observations, shape ``(n_time_bins,)`` or ``(n_time_bins, n_neurons)``.
+        session_starts :
+            Optional session-boundary spec. Accepts a boolean mask of shape
+            ``(n_time_bins,)``, an integer array of session-start indices, or a
+            pynapple ``IntervalSet`` (when X or y is a pynapple object). ``None``
+            treats all samples as a single session.
+        n_samples :
+            Total sample count to use when estimating the residual degrees of
+            freedom. Defaults to ``X.shape[0]``.
+
+        Returns
+        -------
+        params :
+            Updated user-facing parameter tuple.
+        state :
+            Updated EM state.
+
+        Raises
+        ------
+        ValueError
+            If inputs fail shape/consistency validation.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> np.random.seed(0)
+        >>> X = np.random.normal(size=(80, 3))
+        >>> y = np.random.binomial(n=1, p=0.5, size=80)
+        >>> model = nmo.glm_hmm.GLMHMM(n_states=2)
+        >>> init_params = model.initialize_params(X, y)
+        >>> opt_state = model.initialize_optimizer_and_state(init_params, X, y)
+        >>> new_params, new_state = model.update(init_params, opt_state, X, y)
+        """
+        # validate inputs and session boundaries
+        self._validator.validate_inputs(X=X, y=y)
+        session_starts = self._validator.validate_and_cast_session_starts(
+            X, y, session_starts=session_starts
+        )
+
+        # drop nans and pull pytree data
+        data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
+
+        # ensure first sample is a session start
+        session_starts = session_starts.at[0].set(True)
+
+        # wrap into model params (assumes init was done via
+        # `initialize_optimizer_and_state` so the EM step function is in place)
+        params = self._validator.to_model_params(params)
+
+        # one EM step
+        updated_params, updated_state = self._optimizer_update(
+            params, opt_state, data, y, session_starts=session_starts
+        )
+
+        # persist
+        self._set_model_params(updated_params)
+        self.solver_state_ = updated_state
+        self.dof_resid_ = self._estimate_resid_degrees_of_freedom(
+            data, n_samples=n_samples
+        )
+
+        return self._validator.from_model_params(updated_params), updated_state
 
     def __repr__(self) -> str:
         """Hierarchical repr for the GLMHMM class."""
