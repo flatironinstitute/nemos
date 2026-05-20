@@ -98,9 +98,10 @@ HARD_CODED_GET_PARAMS_KEYS = {
     "GLMHMM": {
         "dirichlet_initial_proba",
         "dirichlet_transition_proba",
-        "initialization_funcs",
+        "hmm_initialization_funcs",
         "inverse_link_function",
         "maxiter",
+        "model_initialization_funcs",
         "n_states",
         "observation_model",
         "regularizer",
