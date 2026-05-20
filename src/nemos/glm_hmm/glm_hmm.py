@@ -474,16 +474,11 @@ class GLMHMM(
             inverse_link_function=self._inverse_link_function,
             is_new_session=is_new_session,
             random_key=random_key,
-            init_funcs=self._initialization_funcs,
+            init_funcs=self._model_initialization_funcs,
         )
         validate_params = any(
-            self._initialization_funcs[s]
-            for s in [
-                "initial_proba_init_custom",
-                "transition_proba_init_custom",
-                "glm_params_init_custom",
-                "scale_init_custom",
-            ]
+            self._model_initialization_funcs[s]
+            for s in ("glm_params_init_custom", "scale_init_custom")
         )
         return user_params, validate_params
 
