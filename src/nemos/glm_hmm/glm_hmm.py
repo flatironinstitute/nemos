@@ -430,7 +430,10 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
             )
 
     def _kmeans_extra_kwargs(self) -> dict:
-        return {"inverse_link_function": self.inverse_link_function, "observation_model": self.observation_model}
+        return {
+            "inverse_link_function": self.inverse_link_function,
+            "observation_model": self.observation_model,
+        }
 
     def _model_specific_initialization(
         self,
