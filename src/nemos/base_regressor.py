@@ -9,7 +9,6 @@ from copy import deepcopy
 from functools import wraps
 from pathlib import Path
 from typing import (
-    TYPE_CHECKING,
     Any,
     Generic,
     Optional,
@@ -27,7 +26,6 @@ from . import solvers, tree_utils, utils
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
 from .base_validator import RegressorValidator
-from .callbacks import Callback
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
@@ -43,9 +41,6 @@ from .typing import (
     UserProvidedParamsT,
 )
 from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
-
-if TYPE_CHECKING:
-    from .batching import DataLoader
 
 _SOLVER_ARGS_CACHE = {}
 
@@ -427,58 +422,6 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         init_params: Optional[UserProvidedParamsT] = None,
     ) -> BaseRegressor[UserProvidedParamsT, ModelParamsT]:
         """Fit the model to neural activity."""
-        pass
-
-    @abc.abstractmethod
-    def stochastic_fit(
-        self,
-        data: "DataLoader",
-        *,
-        init_params: Optional[UserProvidedParamsT] = None,
-        num_epochs: int = 1,
-        callbacks: "Callback | list[Callback] | None" = None,
-    ) -> BaseRegressor[UserProvidedParamsT, ModelParamsT]:
-        """
-        Fit the model using stochastic optimization with mini-batches.
-
-        This method provides an out-of-memory training interface for large datasets
-        that cannot fit in memory. Data is provided via a DataLoader that yields
-        mini-batches.
-
-        Parameters
-        ----------
-        data :
-            Data loader yielding (X_batch, y_batch) tuples.
-            Must be re-iterable for ``num_epochs > 1``.
-        init_params :
-            Initial parameters. If None, initialized from ``sample_batch()``.
-        num_epochs :
-            Maximum number of passes over the data. Must be >= 1.
-            Optimization may stop earlier if a callback requests a stop.
-
-            There is no convergence-based stopping by default. To stop
-            automatically when the solver's convergence criterion is met,
-            pass ``callbacks=SolverConvergenceCallback()``. Otherwise the
-            fit will run for the full ``num_epochs``.
-        callbacks :
-            Training callbacks. Accepts a single ``Callback``, a list of
-            ``Callback`` objects, or ``None`` (default, no callbacks).
-
-            To stop optimization when the solver's built-in convergence
-            criterion is met pass ``nmo.callbacks.SolverConvergenceCallback()``.
-            This is the recommended way to avoid running for the full
-            ``num_epochs`` when the model has already converged.
-
-        Returns
-        -------
-        self
-            The fitted model.
-
-        Raises
-        ------
-        ValueError
-            If the solver doesn't support stochastic optimization.
-        """
         pass
 
     @abc.abstractmethod
