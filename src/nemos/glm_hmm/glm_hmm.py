@@ -81,9 +81,9 @@ class GLMHMM(
     +---------------+------------------+-------------------------------------------------------------+
     | Regularizer   | Default Solver   | Available Solvers                                           |
     +===============+==================+=============================================================+
-    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
     +---------------+------------------+-------------------------------------------------------------+
-    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    | Ridge         | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
     +---------------+------------------+-------------------------------------------------------------+
     | Lasso         | ProximalGradient | ProximalGradient                                            |
     +---------------+------------------+-------------------------------------------------------------+
@@ -104,12 +104,11 @@ class GLMHMM(
         A function that maps the linear combination of predictors into a rate or probability.
         The default depends on the observation model, see the table above.
     regularizer :
-        Regularization to use for GLM parameter optimization. Defines the regularization scheme
-        and related parameters. Default is UnRegularized regression.
+        Regularization scheme used in the M-step for the per-state GLM coefficients.
+        Default is ``"Ridge"``. Pass ``"UnRegularized"`` to disable regularization.
     regularizer_strength :
-        Typically a float. Default is None. Sets the regularizer strength for the GLM coefficients.
-        If a user does not pass a value, and it is needed for regularization,
-        a warning will be raised and the strength will default to 1.0.
+        Strength of the regularization applied to the GLM coefficients. Default is
+        ``1.0``. Ignored when ``regularizer="UnRegularized"``.
     dirichlet_initial_proba :
         Alpha parameters for the Dirichlet prior over the initial state probabilities.
         Shape ``(n_states,)``. If None, a flat (uninformative) prior is assumed.
@@ -117,10 +116,11 @@ class GLMHMM(
         Alpha parameters for the Dirichlet prior over the transition probabilities.
         Shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
     solver_name :
-        Solver to use for GLM optimization within the M-step. Defines the optimization scheme
-        and related parameters. The solver must be an appropriate match for the chosen regularizer.
-        Default is None. If no solver specified, one will be chosen based on the regularizer.
-        See the table above for regularizer/optimizer pairings.
+        Solver used for the GLM M-step. The solver must be valid for the chosen
+        regularizer (see table above). Default is ``None``, in which case the
+        regularizer's default solver is selected (``"LBFGS"`` for Ridge /
+        UnRegularized, ``"ProximalGradient"`` for Lasso / ElasticNet /
+        GroupLasso).
     solver_kwargs :
         Optional dictionary for keyword arguments that are passed to the solver when instantiated.
         E.g., stepsize, tol, acceleration, etc.
