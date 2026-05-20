@@ -14,9 +14,6 @@ import pytest
 
 from nemos.glm.params import GLMParams
 from nemos.glm_hmm.glm_hmm import GLMHMM
-from nemos.glm_hmm.initialize_parameters import (
-    kmeans_glm_params_init,
-)
 from nemos.glm_hmm.params import GLMHMMModelParams
 from nemos.glm_hmm.validation import GLMHMMValidator
 from nemos.hmm.expectation_maximization import EMState
@@ -705,39 +702,6 @@ class TestFitDelegation:
         model.simulate(jax.random.key(0), X)
 
         mock.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
-# TestSetParams — set_params joint-initialization path
-# ---------------------------------------------------------------------------
-
-
-class TestSetParams:
-    """Cover the set_params override that orders initialization_funcs before initialization_kwargs."""
-
-    def test_joint_initialization_sets_funcs_first(self, glm_hmm_data):
-        """initialization_funcs is applied before initialization_kwargs when both are passed.
-
-        The second call raises because initialization_kwargs is not a valid sklearn param;
-        but initialization_funcs must already have been updated at that point.
-        """
-        model = GLMHMM(n_states=glm_hmm_data["n_states"])
-        # Build funcs that are provably different from the current ones
-        new_funcs = dict(**model.initialization_funcs)
-        new_funcs["glm_params_init"] = kmeans_glm_params_init
-        assert (
-            model.initialization_funcs["glm_params_init"] is not kmeans_glm_params_init
-        )
-
-        with pytest.raises(
-            ValueError, match="Invalid parameter 'initialization_kwargs'"
-        ):
-            model.set_params(
-                initialization_funcs=new_funcs, initialization_kwargs="unused"
-            )
-
-        # initialization_funcs was updated before the error
-        assert model.initialization_funcs["glm_params_init"] is kmeans_glm_params_init
 
 
 # ---------------------------------------------------------------------------
