@@ -310,8 +310,8 @@ class GLMHMM(
     will share the same pytree structure, with the trailing axis indexing states:
 
     >>> X_dict = {"input_1": X[:, :2], "input_2": X[:, 2:]}
-    >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(X_dict, y)  # doctest: +SKIP
-    >>> type(model.coef_)  # doctest: +SKIP
+    >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(X_dict, y)
+    >>> type(model.coef_)
     <class 'dict'>
     """
 
