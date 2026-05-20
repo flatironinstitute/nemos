@@ -132,21 +132,23 @@ NeMoS provides a high-level interface for stochastic (mini-batch) optimization t
 The simplest way to use stochastic optimization is through the `stochastic_fit` method on GLM models:
 
 ```python
-import jax.numpy as jnp
+import numpy as np
 import nemos as nmo
 from nemos.batching import ArrayDataLoader
 
 # Create data loader
-X = jnp.ones((10000, 50))
-y = jnp.ones((10000,))
-loader = ArrayDataLoader(X, y, batch_size=128, shuffle=True)
+X = np.random.normal(size=(10000, 3))
+w = np.array([0.5, 1.0, 2.0])
+y = np.random.poisson(np.exp(X @ w))
+loader = ArrayDataLoader(X, y, batch_size=200, shuffle=True)
 
 # Fit model using stochastic optimization
 model = nmo.glm.GLM(
     solver_name="GradientDescent",
-    solver_kwargs={"stepsize": 0.01, "acceleration": False}
+    solver_kwargs={"stepsize": 0.01, "acceleration": False},
 )
 model.stochastic_fit(loader, num_epochs=10)
+
 ```
 
 ### DataLoader protocol
