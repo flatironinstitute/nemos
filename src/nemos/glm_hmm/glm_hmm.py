@@ -846,7 +846,7 @@ class GLMHMM(
         >>> np.random.seed(123)
         >>> X = np.random.randn(100, 3)
         >>> y = np.random.binomial(1, 0.5, 100)
-        >>> model = nmo.glm.GLMHMM(n_states=2, observation_model="Bernoulli")
+        >>> model = nmo.glm_hmm.GLMHMM(n_states=2, observation_model="Bernoulli")
         >>> model = model.fit(X, y)
         >>> key = jax.random.key(0)
         >>> X_new = np.random.randn(50, 3)
