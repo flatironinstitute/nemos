@@ -41,11 +41,17 @@ from .validation import HMMValidator
 nap = lazy.load("pynapple")
 
 MODEL_INITIALIZATION_FN_DICT_T = TypeVar("MODEL_INITIALIZATION_FN_DICT_T")
+HMMValidatorT = TypeVar("HMMValidatorT", bound="HMMValidator")
 
 
 class BaseHMM(
-    BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT],
-    Generic[HMMModelParamsT, HMMUserProvidedParamsT, MODEL_INITIALIZATION_FN_DICT_T],
+    BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT, HMMValidatorT],
+    Generic[
+        HMMModelParamsT,
+        HMMUserProvidedParamsT,
+        MODEL_INITIALIZATION_FN_DICT_T,
+        HMMValidatorT,
+    ],
 ):
     """Base class for HMM models.
 
@@ -93,7 +99,7 @@ class BaseHMM(
         instantiation.
     """
 
-    _validator_class: type[HMMValidator[HMMUserProvidedParamsT, HMMModelParamsT]]
+    _validator_class: type[HMMValidatorT]
     _model_default_init_dict: MODEL_INITIALIZATION_FN_DICT_T
     _kmeans_init_class = KMeansInitializer
 

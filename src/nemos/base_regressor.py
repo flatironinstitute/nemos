@@ -26,7 +26,6 @@ from numpy.typing import NDArray
 from . import solvers, tree_utils, utils
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
-from .base_validator import RegressorValidator
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
@@ -40,6 +39,7 @@ from .typing import (
     SolverUpdate,
     StepResult,
     UserProvidedParamsT,
+    ValidatorT,
 )
 from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
 
@@ -71,7 +71,9 @@ def strip_metadata(arg_num: Optional[int] = None, arg_name: Optional[str] = None
     return decorator
 
 
-class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
+class BaseRegressor(
+    abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT, ValidatorT]
+):
     """Abstract base class for GLM regression models.
 
     This class encapsulates the common functionality for Generalized Linear Models (GLM)
@@ -114,7 +116,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     - [`PopulationGLM`](../glm/#nemos.glm.PopulationGLM): A population GLM implementation.
     """
 
-    _validator: RegressorValidator = None
+    _validator: ValidatorT
 
     # overwrite this in subclasses if their objective functions return aux
     _has_aux: bool = False

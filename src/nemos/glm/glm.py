@@ -50,7 +50,7 @@ REGRESSION_GLM_TYPES = Union[
 ]
 
 
-class GLM(BaseRegressor[GLMUserParams, GLMParams]):
+class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
     r"""Generalized Linear Model (GLM) for neural activity data.
 
     This GLM implementation allows users to model neural activity based on a combination of exogenous inputs

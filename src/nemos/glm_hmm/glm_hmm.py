@@ -42,7 +42,11 @@ from .utils import compute_rate_per_state
 from .validation import GLMHMMValidator
 
 
-class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DICT]):
+class GLMHMM(
+    BaseHMM[
+        GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DICT, GLMHMMValidator
+    ]
+):
     r"""Generalized Linear Model with Hidden Markov Model (GLM-HMM).
 
     This model combines a Generalized Linear Model (GLM) with a Hidden Markov Model (HMM) to capture
@@ -239,10 +243,6 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DI
         self.scale_: jnp.ndarray | None = None
         self.dof_resid_: int | None = None
 
-        # please the type checkers
-        self._validator: GLMHMMValidator = (
-            self._validator
-        )  # Why is this not automatically recognized?
         # cache the log-like
         self._log_like_cache = {}
 
