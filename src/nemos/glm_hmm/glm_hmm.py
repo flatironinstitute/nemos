@@ -534,11 +534,36 @@ class GLMHMM(
 
     @property
     def observation_model(self) -> obs.Observations:
-        """Getter for the ``observation_model`` attribute."""
+        """The observation model governing the emission distribution at each state.
+
+        Always an instance of an :class:`~nemos.observation_models.Observations`
+        subclass. The same distribution is used across all hidden states (per-state
+        differences come from the state-specific coefficients/intercept/scale, not
+        from the family). If a string alias was passed at construction time it is
+        resolved to the corresponding instance here.
+        """
         return self._observation_model
 
     @observation_model.setter
     def observation_model(self, observation: obs.Observations):
+        """Validate and set the observation model.
+
+        Parameters
+        ----------
+        observation :
+            Either an :class:`~nemos.observation_models.Observations` instance,
+            or a string alias from
+            ``{"Poisson", "Gamma", "Bernoulli", "NegativeBinomial", "Gaussian"}``.
+            String aliases are instantiated via
+            :func:`nemos.observation_models.instantiate_observation_model`.
+
+        Raises
+        ------
+        AttributeError, TypeError
+            If the instance does not implement the
+            :class:`~nemos.observation_models.Observations` interface (checked
+            via :func:`nemos.observation_models.check_observation_model`).
+        """
         if isinstance(observation, str):
             self._observation_model = instantiate_observation_model(observation)
             return
@@ -549,12 +574,39 @@ class GLMHMM(
 
     @property
     def inverse_link_function(self):
-        """Getter for the inverse link function for the model."""
+        """Inverse link function mapping the linear predictor to the emission space.
+
+        Always a callable. If ``None`` was passed at construction time, this is
+        resolved to the observation model's default (e.g. ``jnp.exp`` for Poisson,
+        ``1 / x`` for Gamma, ``jax.nn.sigmoid`` for Bernoulli). Shared across all
+        hidden states.
+        """
         return self._inverse_link_function
 
     @inverse_link_function.setter
     def inverse_link_function(self, inverse_link_function: Callable):
-        """Setter for the inverse link function for the model."""
+        """Validate and set the inverse link function.
+
+        Parameters
+        ----------
+        inverse_link_function :
+            One of:
+
+            - ``None`` — use the observation model's default inverse link.
+            - ``str`` — name of a built-in (e.g. ``"identity"``, ``"log"``,
+              ``"logit"``); resolved by
+              :func:`nemos.inverse_link_function_utils.resolve_inverse_link_function`.
+            - ``Callable`` — a custom function. Must be JAX-traceable
+              (differentiable) and return a ``jax.numpy.ndarray`` or scalar
+              when called on a JAX array.
+
+        Raises
+        ------
+        TypeError
+            If the value is neither callable nor a string.
+        ValueError
+            If a callable is non-differentiable or returns an unsupported type.
+        """
         self._inverse_link_function = resolve_inverse_link_function(
             inverse_link_function, self._observation_model
         )
