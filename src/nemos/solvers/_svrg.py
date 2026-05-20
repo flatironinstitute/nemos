@@ -18,7 +18,13 @@ import jax.numpy as jnp
 from jax import grad, jit, lax, random
 
 from ..proximal_operator import prox_none
-from ..tree_utils import tree_add_scalar_mul, tree_l2_norm, tree_slice, tree_sub
+from ..tree_utils import (
+    tree_add_scalar_mul,
+    tree_l2_norm,
+    tree_scalar_mul,
+    tree_slice,
+    tree_sub,
+)
 from ..typing import KeyArrayLike, Params, Pytree
 from ._jaxopt_adapter import JaxoptAdapter, JaxoptAdapterState
 from ._stochastic_mixins import JaxoptStochasticSolverMixin
@@ -564,11 +570,9 @@ class ProxSVRG:
             batch_grad, _ = self.loss_gradient(params, *batch_data)
 
             if total_grad is None:
-                total_grad = jax.tree.map(lambda g: g * batch_size, batch_grad)
+                total_grad = tree_scalar_mul(batch_size, batch_grad)
             else:
-                total_grad = jax.tree.map(
-                    lambda t, g: t + g * batch_size, total_grad, batch_grad
-                )
+                total_grad = tree_add_scalar_mul(total_grad, batch_size, batch_grad)
             total_samples += batch_size
 
         if total_samples == 0:
