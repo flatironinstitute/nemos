@@ -23,7 +23,7 @@ from ..exceptions import NotFittedError
 from ..inverse_link_function_utils import resolve_inverse_link_function, softplus
 from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
-from ..solvers import list_stochastic_solvers
+from ..solvers import WrappedProxSVRG, WrappedSVRG, list_stochastic_solvers
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from ..type_casting import cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, SolverState, StepResult
@@ -994,10 +994,12 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
     def _warn_about_estimated_svrg_settings(self):
         """Warn if SVRG settings are estimated on sample data instead of the full dataset."""
 
+        if not isinstance(self._solver, (WrappedSVRG, WrappedProxSVRG)):
+            return
+
         batch_size_estimated_for_svrg = False
         if (
-            "svrg" in self.solver_name.lower()
-            and self.inverse_link_function in (jax.nn.softplus, softplus)
+            self.inverse_link_function in (jax.nn.softplus, softplus)
             and isinstance(self.observation_model, obs.PoissonObservations)
             and self.solver_kwargs.get("stepsize", None) is None
         ):
@@ -1019,8 +1021,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             )
 
         batch_size_given_for_svrg = (
-            "svrg" in self.solver_name.lower()
-            and self.solver_kwargs.get("batch_size", None) is not None
+            self.solver_kwargs.get("batch_size", None) is not None
         )
 
         if batch_size_given_for_svrg or batch_size_estimated_for_svrg:
