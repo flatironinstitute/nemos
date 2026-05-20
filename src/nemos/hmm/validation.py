@@ -5,11 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional, Tuple
 
+import jax
 import jax.numpy as jnp
 import lazy_loader as lazy
 
 from .. import validation
 from ..base_validator import RegressorValidator
+from ..tree_utils import pytree_map_and_reduce
 from ..type_casting import is_pynapple_tsd
 from ..typing import DESIGN_INPUT_TYPE, ArrayLike
 from .params import HMMModelParamsT, HMMParams, HMMUserParams, HMMUserProvidedParamsT
@@ -165,7 +167,9 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
         # (the forward-backward implementation assumes no nans in the inputs)
         # Skip NaN border check if y is None (e.g., during simulation)
         if y is None:
-            if X is not None and not has_nans_only_at_border(X):
+            if X is not None and not pytree_map_and_reduce(
+                has_nans_only_at_border, all, X
+            ):
                 raise ValueError(
                     "HMM requires continuous time-series data. NaN values must only "
                     "appear at the beginning or end of the data, not in the middle."
@@ -193,7 +197,9 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
             )
         else:
             # check nans at the border
-            is_continuous = has_nans_only_at_border(X) and has_nans_only_at_border(y)
+            is_continuous = pytree_map_and_reduce(
+                has_nans_only_at_border, all, X
+            ) and has_nans_only_at_border(y)
         if not is_continuous:
             raise ValueError(
                 f"{self.model_class} requires continuous time-series data. NaN values must only "
@@ -216,7 +222,11 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
         is_new_session = initialize_is_new_session(X, y, is_new_session)
 
         # shift any True values that fall on NaN samples to the next valid sample
-        nan_x = jnp.any(jnp.isnan(jnp.asarray(X)).reshape(X.shape[0], -1), axis=1)
+        def _is_nan(x):
+            return jnp.any(jnp.isnan(jnp.asarray(x)).reshape(x.shape[0], -1), axis=1)
+
+        nan_x = jax.tree_util.tree_reduce(jnp.logical_or, jax.tree.map(_is_nan, X))
+
         if y is not None:
             nan_y = jnp.any(jnp.isnan(jnp.asarray(y)).reshape(y.shape[0], -1), axis=1)
             combined_nans = nan_x | nan_y

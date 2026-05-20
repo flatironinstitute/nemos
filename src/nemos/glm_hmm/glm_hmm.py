@@ -14,7 +14,7 @@ from .. import observation_models as obs
 from .._observation_model_builder import instantiate_observation_model
 from ..hmm.expectation_maximization import EMState, em_hmm, em_step
 from ..hmm.hmm import BaseHMM
-from ..hmm.initialize_parameters import HMM_INITIALIZATION_FN_DICT
+from ..hmm.initialize_parameters import HMM_INITIALIZATION_FN_DICT, InitFunctionHMM
 from ..hmm.utils import _check_state_format
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
@@ -31,6 +31,7 @@ from .algorithm_configs import prepare_estep_log_likelihood, prepare_mstep_updat
 from .initialize_parameters import (
     DEFAULT_INIT_FUNCTIONS_GLMHMM,
     GLMHMM_INITIALIZATION_FN_DICT,
+    InitFunctionGLM,
     KMeansInitializerGLM,
     generate_glm_hmm_initial_model_params,
     kmeans_glm_params_init,
@@ -187,6 +188,131 @@ class GLMHMM(
         If ``maxiter`` is not a positive integer.
     ValueError
         If ``tol`` is not a positive float.
+
+    Examples
+    --------
+    **Fit a GLM-HMM**
+
+    Basic model fitting with the default Bernoulli observation model. The number
+    of hidden states is the only required argument; ``coef_`` carries one column
+    per state, and the HMM transition matrix and initial distribution are exposed
+    as fitted attributes.
+
+    >>> import jax
+    >>> import numpy as np
+    >>> import nemos as nmo
+    >>> np.random.seed(123)
+    >>> X = np.random.normal(size=(200, 4))
+    >>> y = np.random.binomial(n=1, p=0.5, size=200)
+    >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(X, y)
+    >>> model.coef_.shape
+    (4, 2)
+    >>> model.transition_prob_.shape
+    (2, 2)
+    >>> model.initial_prob_.shape
+    (2,)
+
+    **Customize the Observation Model**
+
+    Specify the observation model as a string:
+
+    >>> model = nmo.glm_hmm.GLMHMM(n_states=2, observation_model="Poisson")
+    >>> model.observation_model
+    PoissonObservations()
+
+    Or pass the observation model object directly:
+
+    >>> model = nmo.glm_hmm.GLMHMM(
+    ...     n_states=2, observation_model=nmo.observation_models.PoissonObservations()
+    ... )
+    >>> model.observation_model
+    PoissonObservations()
+
+    **Customize the Inverse Link Function**
+
+    Use a soft-plus inverse link function instead of the observation-model default:
+
+    >>> model = nmo.glm_hmm.GLMHMM(n_states=2, inverse_link_function=jax.nn.softplus)
+    >>> model.inverse_link_function.__name__
+    'softplus'
+
+    **Change the Regularization**
+
+    Regularization applies to the per-state GLM coefficients. The default is
+    Ridge with strength ``1.0``. Tune the strength:
+
+    >>> model = nmo.glm_hmm.GLMHMM(n_states=2, regularizer_strength=0.1).fit(X, y)
+    >>> model.regularizer, float(model.regularizer_strength)
+    (Ridge(), 0.1)
+
+    Or switch to Lasso for sparse per-state coefficients (Lasso requires a
+    proximal solver):
+
+    >>> model = nmo.glm_hmm.GLMHMM(
+    ...     n_states=2,
+    ...     regularizer="Lasso",
+    ...     regularizer_strength=0.01,
+    ...     solver_name="ProximalGradient",
+    ... ).fit(X, y)
+    >>> model.regularizer
+    Lasso()
+
+    **Select a Solver**
+
+    The solver is used for the M-step inside EM. Pick LBFGS for potentially
+    faster convergence on smooth losses:
+
+    >>> model = nmo.glm_hmm.GLMHMM(n_states=2, solver_name="LBFGS").fit(X, y)
+    >>> model.solver_name
+    'LBFGS'
+
+    **Fit Across Multiple Sessions**
+
+    Mark session boundaries with ``is_new_session`` so the HMM resets at each
+    new session start instead of treating the data as a single chain. Pass
+    either a boolean mask of shape ``(n_time_bins,)`` with ``True`` at each
+    session start, or an integer array of session-start indices — the two
+    are equivalent:
+
+    >>> is_new_mask = np.zeros(200, dtype=bool)
+    >>> is_new_mask[0] = True
+    >>> is_new_mask[100] = True
+    >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(X, y, is_new_session=is_new_mask)
+    >>> # Equivalent: pass the starts as integer indices.
+    >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(X, y, is_new_session=np.array([0, 100]))
+
+    **Decode Hidden States**
+
+    Recover the most-likely state sequence (Viterbi-style) or the smoothed
+    posterior probabilities from the forward-backward pass:
+
+    >>> states = model.decode_state(X, y, is_new_session=is_new_mask)
+    >>> states.shape
+    (200, 2)
+    >>> post = model.smooth_proba(X, y, is_new_session=is_new_mask)
+    >>> post.shape
+    (200, 2)
+
+    **Simulate from the Fitted Model**
+
+    Sample a hidden-state trajectory and observations conditioned on inputs:
+
+    >>> activity, rates, sim_states = model.simulate(
+    ...     jax.random.key(0), X, state_format="index"
+    ... )
+    >>> activity.shape, sim_states.shape
+    ((200,), (200,))
+
+
+    **Use a Dict of Arrays as Input**
+
+    Features can be passed as any JAX pytree of 2-D arrays; the fitted ``coef_``
+    will share the same pytree structure, with the trailing axis indexing states:
+
+    >>> X_dict = {"input_1": X[:, :2], "input_2": X[:, 2:]}
+    >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(X_dict, y)  # doctest: +SKIP
+    >>> type(model.coef_)  # doctest: +SKIP
+    <class 'dict'>
     """
 
     _validator_class = GLMHMMValidator
@@ -201,10 +327,8 @@ class GLMHMM(
             | Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial", "Gaussian"]
         ) = "Bernoulli",
         inverse_link_function: Optional[Callable[[jnp.ndarray], jnp.ndarray]] = None,
-        regularizer: Optional[Union[str, Regularizer]] = None,
-        regularizer_strength: Optional[
-            Any
-        ] = None,  # this is used to regularize GLM coef.
+        regularizer: Union[str, Regularizer] = "Ridge",
+        regularizer_strength: Any = 1.0,  # this is used to regularize GLM coef.
         # prior to regularize init prob and transition
         dirichlet_initial_proba: Union[jnp.ndarray, None] = None,  # (n_state, )
         dirichlet_transition_proba: Union[
@@ -265,16 +389,17 @@ class GLMHMM(
     def setup(
         self,
         initial_proba_init: Optional[
-            Literal["uniform", "random", "dirichlet", "kmeans"] | Callable
+            Literal["uniform", "random", "dirichlet", "kmeans"] | InitFunctionHMM
         ] = None,
         initial_proba_init_kwargs: Optional[dict] = None,
         transition_proba_init: Optional[
-            Literal["sticky", "uniform", "random", "dirichlet", "kmeans"] | Callable
+            Literal["sticky", "uniform", "random", "dirichlet", "kmeans"]
+            | InitFunctionHMM
         ] = None,
         transition_proba_init_kwargs: Optional[dict] = None,
-        glm_params_init: Optional[Literal["random", "kmeans"] | Callable] = None,
+        glm_params_init: Optional[Literal["random", "kmeans"] | InitFunctionGLM] = None,
         glm_params_init_kwargs: Optional[dict] = None,
-        scale_init: Optional[Literal["constant", "kmeans"] | Callable] = None,
+        scale_init: Optional[Literal["constant", "kmeans"] | InitFunctionGLM] = None,
         scale_init_kwargs: Optional[dict] = None,
     ):
         """Configure how :meth:`fit` initializes each model parameter.
@@ -294,19 +419,23 @@ class GLMHMM(
         - ``glm_params_init``: ``"random"`` (default), ``"kmeans"``.
         - ``scale_init``: ``"constant"`` (default), ``"kmeans"``.
 
-        Custom callables must follow one of two protocols depending on the parameter
-        they initialize:
+        Custom callables must satisfy one of two ``typing.Protocol`` classes:
 
-        - HMM probability initializers (``initial_proba_init``,
-          ``transition_proba_init``) take ``(n_states, X, y, is_new_session,
-          random_key, **kwargs)`` and return a ``jnp.ndarray`` of shape
-          ``(n_states,)`` for the initial probabilities or ``(n_states, n_states)``
-          for the transition matrix.
-        - GLM parameter initializers (``glm_params_init``, ``scale_init``) take
-          ``(n_states, X, y, inverse_link_function, is_new_session, random_key,
-          **kwargs)``. ``glm_params_init`` returns ``(coef, intercept)`` shaped to
-          match the design and ``n_states``; ``scale_init`` returns the scale array
-          for the observation model.
+        - ``initial_proba_init`` and ``transition_proba_init`` must satisfy
+          :class:`~nemos.hmm.initialize_parameters.InitFunctionHMM` and return a
+          ``jnp.ndarray`` of shape ``(n_states,)`` or ``(n_states, n_states)``
+          respectively.
+        - ``glm_params_init`` and ``scale_init`` must satisfy
+          :class:`~nemos.glm_hmm.initialize_parameters.InitFunctionGLM`.
+          ``glm_params_init`` returns ``(coef, intercept)`` matched to the design
+          and ``n_states``; ``scale_init`` returns the scale array for the
+          observation model.
+
+        To inspect a protocol's signature, import and ``help()`` it::
+
+            from nemos.hmm.initialize_parameters import InitFunctionHMM
+            from nemos.glm_hmm.initialize_parameters import InitFunctionGLM
+            help(InitFunctionHMM)  # or help(InitFunctionGLM)
 
         All arguments must appear in the function signature even when unused, so the
         framework can supply them uniformly.
@@ -487,7 +616,7 @@ class GLMHMM(
         X: DESIGN_INPUT_TYPE,
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
         init_params: Optional[GLMHMMUserParams] = None,
-        is_new_session: Optional[jnp.ndarray] = None,
+        is_new_session: Optional[jnp.ndarray] = None,  # refactor: session_starts
     ) -> "GLMHMM":
         """Fit the GLM-HMM model to the data."""
         self._validator.validate_inputs(X=X, y=y)
@@ -573,8 +702,9 @@ class GLMHMM(
 
         params = self._get_model_params()
         coef = params.model_params.coef
-        if coef.ndim == 3:
-            n_neurons = coef.shape[1]
+        coef_leaf = jax.tree_util.tree_leaves(coef)[0]
+        if coef_leaf.ndim == 3:
+            n_neurons = coef_leaf.shape[1]
         else:
             n_neurons = 1
 
