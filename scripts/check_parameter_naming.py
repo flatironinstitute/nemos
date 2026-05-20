@@ -129,12 +129,13 @@ VALID_PAIRS = [
     {"transition_proba_init", "transition_proba_init_kwargs"},
     {"initial_proba_init_kwargs", "transition_proba_init_kwargs"},
     {"is_nan", "is_nap"},
-    {"_func", "func"},
-    {"_func", "funcs"},
     {"dirichlet_initial_proba", "dirichlet_transition_proba"},
     {"glm_params_init", "glm_params_init_kwargs"},
     {"scale_init_kwargs", "solver_init_kwargs"},
+    {"hmm_initialization_funcs", "model_initialization_funcs"},
     {"random_key_pair", "random_key"},
+    {"func", "_func"},
+    {"funcs", "_func"},
 ]
 
 

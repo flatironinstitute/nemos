@@ -10,7 +10,8 @@
     { "pattern": "^https://www.jneurosci.org/content/25/47/11003" },
     { "pattern": "^https://www.nature.com/articles/s41467-017-01908-3" },
     { "pattern": "^https://doi.org/10.1038/s41467-017-01908-3" },
-    { "pattern": "^https://www.taylorfrancis.com/books/mono/10.4324/9780203774441/applied-multiple-regression-correlation-analysis-behavioral-sciences-jacob-cohen-patricia-cohen-stephen-west-leona-aiken" }
+    { "pattern": "^https://www.taylorfrancis.com/books/mono/10.4324/9780203774441/applied-multiple-regression-correlation-analysis-behavioral-sciences-jacob-cohen-patricia-cohen-stephen-west-leona-aiken" },
+    { "pattern": "^https://news\\.ycombinator\\.com/item\\?id=41901475" }
   ],
   "aliveStatusCodes": [200, 206, 302, 400, 403, 503, 504, 0],
   "timeout": "20s",

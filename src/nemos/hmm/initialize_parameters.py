@@ -49,7 +49,7 @@ def _get_protocol_parameters(protocol) -> set[str]:
     }
 
 
-INITIALIZATION_FN_DICT = dict[
+HMM_INITIALIZATION_FN_DICT = dict[
     Literal[
         "initial_proba_init",
         "initial_proba_init_kwargs",
@@ -628,7 +628,7 @@ AVAILABLE_INIT_FUNCTIONS = MappingProxyType(
     }
 )
 
-DEFAULT_INIT_FUNCTIONS: INITIALIZATION_FN_DICT = MappingProxyType(
+DEFAULT_INIT_FUNCTIONS: HMM_INITIALIZATION_FN_DICT = MappingProxyType(
     {
         "initial_proba_init": uniform_initial_proba_init,
         "initial_proba_init_kwargs": {},
@@ -645,9 +645,9 @@ def setup_hmm_initialization(
     initial_proba_init_kwargs: Optional[dict] = None,
     transition_proba_init: Optional[str | Callable] = None,
     transition_proba_init_kwargs: Optional[dict] = None,
-    init_funcs: Optional[dict | INITIALIZATION_FN_DICT] = None,
+    init_funcs: Optional[dict | HMM_INITIALIZATION_FN_DICT] = None,
     n_states: Optional[int] = None,
-) -> INITIALIZATION_FN_DICT:
+) -> HMM_INITIALIZATION_FN_DICT:
     """
     Set up HMM initialization functions based on user input, merging with defaults.
 
@@ -731,9 +731,9 @@ def setup_hmm_initialization(
 
 
 def _validate_init_funcs_keys(
-    init_funcs: dict | INITIALIZATION_FN_DICT | None,
+    init_funcs: dict | HMM_INITIALIZATION_FN_DICT | None,
     default_init_dict: Optional[dict[str, Callable]] = None,
-) -> INITIALIZATION_FN_DICT | None:
+) -> HMM_INITIALIZATION_FN_DICT | None:
     """Validate that the keys in the init_funcs dictionary are as expected. Set missing values to defaults."""
     if default_init_dict is None:
         default_init_dict = DEFAULT_INIT_FUNCTIONS.copy()
