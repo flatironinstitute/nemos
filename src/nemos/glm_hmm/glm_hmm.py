@@ -14,8 +14,8 @@ from .. import observation_models as obs
 from .._observation_model_builder import instantiate_observation_model
 from ..hmm.expectation_maximization import EMState, em_hmm, em_step
 from ..hmm.hmm import BaseHMM
-from ..hmm.utils import _check_state_format
 from ..hmm.initialize_parameters import HMM_INITIALIZATION_FN_DICT
+from ..hmm.utils import _check_state_format
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
 from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
