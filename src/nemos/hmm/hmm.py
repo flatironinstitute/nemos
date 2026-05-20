@@ -27,6 +27,7 @@ from ..typing import (
 )
 from .initialize_parameters import (
     DEFAULT_INIT_FUNCTIONS,
+    HMM_INITIALIZATION_FN_DICT,
     KMeansInitializer,
     _resolve_dirichlet_priors,
     _validate_init_funcs_keys,
@@ -39,12 +40,12 @@ from .validation import HMMValidator
 
 nap = lazy.load("pynapple")
 
-INITIALIZATION_FN_DICT_T = TypeVar("INITIALIZATION_FN_DICT_T")
+MODEL_INITIALIZATION_FN_DICT_T = TypeVar("MODEL_INITIALIZATION_FN_DICT_T")
 
 
 class BaseHMM(
     BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT],
-    Generic[HMMModelParamsT, HMMUserProvidedParamsT, INITIALIZATION_FN_DICT_T],
+    Generic[HMMModelParamsT, HMMUserProvidedParamsT, MODEL_INITIALIZATION_FN_DICT_T],
 ):
     """Base class for HMM models.
 
@@ -93,7 +94,7 @@ class BaseHMM(
     """
 
     _validator_class: type[HMMValidator[HMMUserProvidedParamsT, HMMModelParamsT]]
-    _model_default_init_dict: INITIALIZATION_FN_DICT_T
+    _model_default_init_dict: MODEL_INITIALIZATION_FN_DICT_T
     _kmeans_init_class = KMeansInitializer
 
     def __init__(
@@ -112,7 +113,7 @@ class BaseHMM(
         maxiter: int = 1000,
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
-        hmm_initialization_funcs: Optional[INITIALIZATION_FN_DICT_T] = None,
+        hmm_initialization_funcs: Optional[HMM_INITIALIZATION_FN_DICT] = None,
     ):
         super().__init__(
             regularizer=regularizer,
@@ -354,12 +355,12 @@ class BaseHMM(
         self._seed = value
 
     @property
-    def hmm_initialization_funcs(self) -> INITIALIZATION_FN_DICT_T | None:
+    def hmm_initialization_funcs(self) -> HMM_INITIALIZATION_FN_DICT | None:
         """Dictionary of initialization functions for HMM parameters."""
         return self._hmm_initialization_funcs
 
     @hmm_initialization_funcs.setter
-    def hmm_initialization_funcs(self, value: INITIALIZATION_FN_DICT_T | None):
+    def hmm_initialization_funcs(self, value: HMM_INITIALIZATION_FN_DICT | None):
         """
         Set the dictionary of initialization functions for HMM parameters.
 
@@ -374,12 +375,12 @@ class BaseHMM(
         self._hmm_setup()
 
     @property
-    def model_initialization_funcs(self) -> INITIALIZATION_FN_DICT_T | None:
-        """Dictionary of initialization functions for HMM parameters."""
+    def model_initialization_funcs(self) -> MODEL_INITIALIZATION_FN_DICT_T | None:
+        """Dictionary of initialization functions for model parameters."""
         return self._model_initialization_funcs
 
     @model_initialization_funcs.setter
-    def model_initialization_funcs(self, value: INITIALIZATION_FN_DICT_T | None):
+    def model_initialization_funcs(self, value: MODEL_INITIALIZATION_FN_DICT_T | None):
         """
         Set the dictionary of initialization functions for model parameters.
 
