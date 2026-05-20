@@ -670,7 +670,100 @@ class GLMHMM(
         init_params: Optional[GLMHMMUserParams] = None,
         session_starts: Optional[jnp.ndarray] = None,
     ) -> "GLMHMM":
-        """Fit the GLM-HMM model to the data."""
+        """Fit the GLM-HMM via Expectation-Maximization.
+
+        Runs the EM algorithm until the absolute change in log-likelihood between
+        consecutive iterations falls below ``tol`` or ``maxiter`` is reached.
+        Fitted parameters are exposed on the instance as ``coef_``, ``intercept_``,
+        ``scale_``, ``initial_prob_``, ``transition_prob_``, plus
+        ``solver_state_`` (EM trace) and ``dof_resid_``.
+
+        How parameters are initialized:
+
+        - If ``init_params`` is ``None`` (typical), the per-state GLM parameters
+          and HMM probabilities are produced by the initializers configured via
+          :meth:`setup` (or the package defaults when :meth:`setup` was never
+          called).
+        - If ``init_params`` is provided, it bypasses the initializers entirely.
+          It must be a 5-tuple ``(coef, intercept, scale, initial_prob,
+          transition_prob)`` whose shapes are consistent with ``X``, ``y``, and
+          ``n_states``.
+
+        Parameters
+        ----------
+        X :
+            Predictors, shape ``(n_time_bins, n_features)``. A pytree of arrays
+            sharing leading dimension is also accepted; the fitted ``coef_``
+            mirrors the pytree structure (with a trailing state axis). A pynapple
+            ``TsdFrame`` is accepted.
+        y :
+            Observations, shape ``(n_time_bins,)`` for single neuron or
+            ``(n_time_bins, n_neurons)`` for population models. A pynapple
+            ``Tsd``/``TsdFrame`` is accepted.
+        init_params :
+            Optional explicit initial parameters as a 5-tuple
+            ``(coef, intercept, scale, initial_prob, transition_prob)``. When
+            ``None`` (default), the initializers configured by :meth:`setup`
+            (or the defaults) are used.
+        session_starts :
+            Optional session boundaries for the HMM. Accepts:
+
+            - a boolean array of shape ``(n_time_bins,)`` with ``True`` at each
+              session start,
+            - an integer array of session-start indices,
+            - a pynapple ``IntervalSet`` (when ``X`` or ``y`` is a pynapple
+              object).
+
+            If ``X`` or ``y`` is a pynapple object and ``session_starts`` is
+            ``None``, the (unique, enforced) ``time_support`` of the pynapple
+            input determines the session starts. With no pynapple input and
+            ``session_starts=None``, the whole input is treated as a single
+            session.
+
+        Returns
+        -------
+        self :
+            The fitted estimator.
+
+        Raises
+        ------
+        ValueError
+            If inputs fail dimensionality, shape, or consistency checks (e.g.
+            ``coef`` features do not match ``X.shape[1]``, or NaNs appear
+            mid-epoch).
+        TypeError
+            If ``init_params`` is not a 5-tuple or has incompatible leaf types.
+
+        Warns
+        -----
+        RuntimeWarning
+            Emitted when EM runs out of iterations without satisfying the ``tol``
+            criterion (``solver_state_.iterations == maxiter``). Consider
+            enabling float64, raising ``maxiter``, or loosening ``tol``.
+
+        Examples
+        --------
+        Basic fit with default Bernoulli observations:
+
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> np.random.seed(0)
+        >>> X = np.random.normal(size=(200, 4))
+        >>> y = np.random.binomial(n=1, p=0.5, size=200)
+        >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(X, y)
+        >>> model.coef_.shape, model.transition_prob_.shape
+        ((4, 2), (2, 2))
+
+        Multiple sessions via explicit ``session_starts``:
+
+        >>> session_starts = np.array([0, 100])
+        >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(X, y, session_starts=session_starts)
+
+        See Also
+        --------
+        setup : Configure the initializers used when ``init_params is None``.
+        update : Run a single EM iteration (advanced, manual loop).
+        """
         self._validator.validate_inputs(X=X, y=y)
         # validate and cast session boundaries, shifting markers off NaN samples
         session_starts = self._validator.validate_and_cast_session_starts(
