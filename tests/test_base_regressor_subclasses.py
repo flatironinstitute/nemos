@@ -203,6 +203,7 @@ _MODEL_CONFIGS = [
     ("PopulationGLM", "Poisson"),
     ("ClassifierGLM", "Categorical"),
     ("ClassifierPopulationGLM", "Categorical"),
+    ("GLMHMM", "Bernoulli"),
 ]
 
 _MODEL_PYTREE_X_CASES = [
@@ -315,6 +316,8 @@ class TestModelVsPytree:
         """predict output shape matches y after fitting with pytree X."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
+        if not hasattr(model, "predict"):
+            pytest.skip(f"{type(model).__name__} does not implement predict")
         model.fit(pytree_x, fixture.y)
         assert model.predict(pytree_x).shape == fixture.y.shape
 
@@ -338,13 +341,16 @@ class TestModelVsPytree:
     )
     @pytest.mark.solver_related
     def test_simulate_pytree_x(self, instantiate_base_regressor_subclass, pytree_x):
-        """simulate runs without error and returns outputs with the correct n_samples when X is an arbitrary pytree."""
+        """simulate runs without error and the simulated activity has the correct
+        n_samples when X is an arbitrary pytree."""
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
         model.fit(pytree_x, fixture.y)
         n_samples = jax.tree_util.tree_leaves(pytree_x)[0].shape[0]
-        counts, rates = model.simulate(jax.random.key(123), pytree_x)
-        assert counts.shape[0] == n_samples
+        # simulate returns (counts, rates) for GLMs and (activity, rates, states)
+        # for GLM-HMM; the first element is the simulated activity either way.
+        activity, *_ = model.simulate(jax.random.key(123), pytree_x)
+        assert activity.shape[0] == n_samples
 
 
 def test_all_defaults_assigned():

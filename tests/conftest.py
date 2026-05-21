@@ -161,9 +161,12 @@ def mock_glm_hmm_optimizer_run(monkeypatch):
     _make_optimizer_run_patch(monkeypatch, nmo.glm_hmm.GLMHMM)
 
 
-# No-op _optimizer_update per model class. Default covers all current models (3-tuple).
+# No-op _optimizer_update per model class. Default covers GLM-family models (3-tuple);
+# GLM-HMM's update() unpacks a 2-tuple (params, state).
 # Add an entry only when a model's update() unpacks _optimizer_update differently.
-_NOOP_OPTIMIZER_UPDATE = {}
+_NOOP_OPTIMIZER_UPDATE = {
+    nmo.glm_hmm.GLMHMM: lambda p, s, *a, **kw: (p, s),  # noqa: E731
+}
 _DEFAULT_NOOP_OPTIMIZER_UPDATE = lambda p, s, *a, **kw: (p, s, None)  # noqa: E731
 
 
