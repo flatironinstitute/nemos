@@ -3891,17 +3891,6 @@ class TestEMScaleOptimization:
                 predicted_rate,
                 posteriors,
             )
-            g = jax.grad(nll_scale, argnums=0)(
-                params.log_scale, y, predicted_rate, posteriors
-            )
-            jax.debug.print(
-                "rate_max={r} lsi={lsi} lso={lso} nll={n} grad={g}",
-                r=jnp.max(predicted_rate),
-                lsi=params.log_scale,
-                lso=new_log_scale,
-                n=nll_scale(params.log_scale, y, predicted_rate, posteriors),
-                g=g,
-            )
             return (
                 GLMHMMModelParams(
                     coef=new_model_params.coef,
