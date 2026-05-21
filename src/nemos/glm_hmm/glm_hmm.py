@@ -1387,16 +1387,6 @@ class GLMHMM(
             self, multiline=True, use_name_keys=["inverse_link_function"]
         )
 
-    def _compute_loss(
-        self,
-        params: ModelParamsT,
-        X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
-        *args,
-        **kwargs,
-    ):
-        pass
-
     def _initialize_optimizer_and_state(
         self,
         init_params: ModelParamsT,

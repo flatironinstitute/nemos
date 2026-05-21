@@ -1085,9 +1085,7 @@ class TestLogLikelihood:
         else:
             y = jnp.asarray(rng.integers(0, 2, size=(n_samples, n_neurons)))
         model = GLMHMM(n_states=2)
-        ll = model._log_likelihood(
-            _make_model_params(n_features, 2, n_neurons), X, y
-        )
+        ll = model._log_likelihood(_make_model_params(n_features, 2, n_neurons), X, y)
         assert ll.shape == (n_samples, 2)
         assert jnp.all(jnp.isfinite(ll))
 
@@ -1405,9 +1403,7 @@ class TestInferenceMethods:
     def test_returns_normalized_posteriors(
         self, method_name, fitted_model, glm_hmm_data
     ):
-        out = getattr(fitted_model, method_name)(
-            glm_hmm_data["X"], glm_hmm_data["y"]
-        )
+        out = getattr(fitted_model, method_name)(glm_hmm_data["X"], glm_hmm_data["y"])
         n, n_states = glm_hmm_data["X"].shape[0], glm_hmm_data["n_states"]
         assert out.shape == (n, n_states)
         assert jnp.allclose(jnp.asarray(out).sum(axis=1), 1.0)

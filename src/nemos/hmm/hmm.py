@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import abc
-import warnings
 from numbers import Number
 from typing import Any, Callable, Generic, Literal, Optional, Tuple, TypeVar, Union
 
@@ -703,14 +702,19 @@ class BaseHMM(
         """Compute the log-likelihood of the data given the model parameters."""
         pass
 
-    def _score(
+    def _compute_loss(
         self,
         params: HMMModelParamsT,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
         session_starts: jnp.ndarray,
     ) -> jnp.ndarray:
-        """Private score compute."""
+        """Negative marginal log-likelihood via the forward pass.
+
+        Implements the BaseRegressor ``_compute_loss`` contract for HMM-family
+        models: returns the unpenalized scalar loss given parameters and data.
+        ``score`` negates this to recover the log-likelihood.
+        """
         # filter for non-nans, grab data if needed
         data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
         # safe conversion to jax arrays of float
@@ -719,32 +723,29 @@ class BaseHMM(
         # make sure session_starts starts with a 1
         session_starts = session_starts.at[0].set(True)
 
-        # smooth with forward backward
         _, log_norm = forward_pass(
             params=params,
             X=data,
             y=y,
             session_starts=session_starts,
-            # do we store this in the model during initialization?
             log_likelihood_func=self._log_likelihood,
         )
-        return jnp.sum(log_norm)
+        return -jnp.sum(log_norm)
 
     def score(
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
         session_starts: Optional[ArrayLike] = None,
-        score_type: Literal[
-            "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
-        ] = "log-likelihood",
-        null_model: Optional[Literal["constant", "glm"]] = None,
     ) -> jnp.ndarray:
         """
-        Compute the model score.
+        Marginal log-likelihood of the data under the fitted HMM.
 
-        Scores the model by computing the log-likelihood of the data given the model parameters.
-        Other score metrics are currently not implemented.
+        HMM-family models score only by log-likelihood. Variance-based or
+        deviance-based pseudo-R² metrics are not implemented because they
+        depend on a null/saturated-model construction that has no clean
+        analogue for latent-state sequence models. Compute AIC/BIC or
+        held-out log-likelihood externally if needed.
 
         Parameters
         ----------
@@ -759,31 +760,16 @@ class BaseHMM(
             - a pynapple.IntervalSet marking session epochs (requires either X or y to be a
             pynapple Tsd or TsdFrame to get timestamps)
             If None, creates a default array treating all data as one session.
-        score_type :
-            The type of score to compute. Currently, only "log-likelihood" is implemented.
-        null_model :
-            Used for scoring metrics that require a null model (e.g., pseudo-R2).
-            Currently not used as only log-likelihood is implemented.
 
         Returns
         -------
         :
-            The computed model score.
+            The marginal log-likelihood (summed over time).
         """
-        if score_type == "log-likelihood" and null_model is not None:
-            warnings.warn(
-                "The null model is not used for the log-likelihood computation.",
-                UserWarning,
-                stacklevel=2,
-            )
-        if score_type != "log-likelihood":
-            raise NotImplementedError(
-                f"score of type {score_type} not implemented yet!"
-            )
         params, X, y, session_starts = self._validate_and_prepare_inputs(
             X, y, session_starts
         )
-        return self._score(params, X, y, session_starts)
+        return -self._compute_loss(params, X, y, session_starts)
 
     @support_pynapple(conv_type="jax")
     def _smooth_proba(

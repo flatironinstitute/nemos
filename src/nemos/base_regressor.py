@@ -466,15 +466,13 @@ class BaseRegressor(
         *args,
         **kwargs,
     ):
-        """Unpenalized loss function for optimization.
+        """Unpenalized scalar loss given parameters and data.
 
-        This method computes the unpenalized loss (e.g., negative log-likelihood)
-        that is passed to the solver during optimization. The solver adds
-        regularization penalties internally.
-
-        Subclasses that use gradient-based optimization (e.g., GLM) should
-        override this method. Models using other optimization approaches
-        (e.g., EM algorithm) may not need to implement this.
+        For GLM-family models this is the negative log-likelihood passed to
+        gradient-based solvers (the solver adds the regularization penalty on
+        top). For HMM-family models the EM solver does not consume this method,
+        but it is still implemented as the negative marginal log-likelihood so
+        that ``score`` and ``compute_loss`` work uniformly across the hierarchy.
 
         Parameters
         ----------
@@ -492,16 +490,10 @@ class BaseRegressor(
         Returns
         -------
         :
-            The unpenalized loss value.
-
-        Raises
-        ------
-        NotImplementedError
-            If the subclass does not override this method.
+            The unpenalized loss value (a scalar).
         """
         raise NotImplementedError(
-            f"{self.__class__.__name__} does not implement `_compute_loss`. "
-            "This method is only required for models using gradient-based optimization."
+            f"{self.__class__.__name__} does not implement `_compute_loss`."
         )
 
     @cast_to_jax
