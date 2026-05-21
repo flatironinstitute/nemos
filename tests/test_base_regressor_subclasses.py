@@ -1107,13 +1107,21 @@ class TestObservationModel:
     indirect=True,
 )
 def test_simulate_requires_fit(instantiate_base_regressor_subclass):
-    """simulate() raises ``not fitted`` before fit is called."""
+    """simulate() raises before fit is called.
+
+    The exact exception is subclass-specific:
+      * GLM / PopulationGLM / GLMHMM raise ValueError ``not fitted``;
+      * ClassifierGLM raises RuntimeError ``Classes are not set`` (label encoder
+        is populated inside fit()).
+    """
     fixture = instantiate_base_regressor_subclass
     model_cls = fixture.model.__class__
     fresh_model = model_cls(**DEFAULTS[model_cls.__name__])
     if not hasattr(fresh_model, "simulate"):
         pytest.skip(f"{model_cls.__name__} does not implement simulate")
-    with pytest.raises(ValueError, match="not fitted"):
+    with pytest.raises(
+        (ValueError, RuntimeError), match="not fitted|Classes are not set"
+    ):
         fresh_model.simulate(jax.random.key(0), fixture.X)
 
 

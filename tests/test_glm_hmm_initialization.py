@@ -295,6 +295,23 @@ class TestRandomGLMParamsInitialization:
         )
         assert jnp.allclose(intercept[0], intercept)
 
+    def test_pytree_x_unwraps_feature_pytree(self):
+        """FeaturePytree X is unwrapped to its underlying dict; coef mirrors that structure."""
+        from nemos.pytrees import FeaturePytree
+
+        n_samples, n_states = 30, 3
+        X = FeaturePytree(a=jnp.ones((n_samples, 2)), b=jnp.ones((n_samples, 4)))
+        y = jnp.ones(n_samples)
+        coef, intercept = random_glm_params_init(
+            n_states, X, y, lambda x: x, random_key=jax.random.PRNGKey(0)
+        )
+        # Line 93-94: FeaturePytree -> X.data (dict).
+        assert isinstance(coef, dict)
+        assert set(coef) == {"a", "b"}
+        assert coef["a"].shape == (2, n_states)
+        assert coef["b"].shape == (4, n_states)
+        assert intercept.shape == (n_states,)
+
     @pytest.mark.parametrize("n_neurons", [1, 3])
     def test_inverse_link_function_usage(self, n_neurons):
         """Exp inverse link → intercept = log(mean(y))."""
@@ -478,6 +495,81 @@ class TestKMeansInitializerGLM:
         initializer.states = jax.nn.one_hot(labels, num_classes=n_states)
         with pytest.raises(ValueError, match="0 samples to state"):
             initializer.fit()
+
+    def test_kmeans_glm_params_init_constructs_default_initializer(self, kmeans_mock):
+        """initializer=None, random_key=None hits the construction branch in
+        ``kmeans_glm_params_init`` (lines 285-298)."""
+        n_states, X, y, n_features, _ = kmeans_mock
+        coef, intercept = kmeans_glm_params_init(n_states, X, y, jnp.exp, "Poisson")
+        assert coef.shape == (n_features, n_states)
+        assert intercept.shape == (n_states,)
+
+    def test_kmeans_scale_init_constructs_default_initializer(self, kmeans_mock):
+        """initializer=None, random_key=None hits the construction branch in
+        ``kmeans_scale_init`` (lines 342-354)."""
+        n_states, X, y, _, expected_shape = kmeans_mock
+        scale = kmeans_scale_init(n_states, X, y, jnp.exp, "Poisson")
+        assert scale.shape == expected_shape
+
+    def test_unwraps_feature_pytree_x(self, kmeans_mock):
+        """FeaturePytree X is unwrapped to its underlying dict at __init__ (line 158-159)."""
+        from nemos.pytrees import FeaturePytree
+
+        n_states, X_arr, y, _, _ = kmeans_mock
+        X = FeaturePytree(a=jnp.asarray(X_arr))
+        initializer = KMeansInitializerGLM(
+            n_states, X, y, jnp.exp, "Poisson", random_key=0
+        )
+        assert not isinstance(initializer._X, FeaturePytree)
+        assert isinstance(initializer._X, dict)
+        assert "a" in initializer._X
+
+    def test_population_branch_uses_population_glm(self, monkeypatch):
+        """y.ndim>1 selects PopulationGLM (lines 174-183) and glm_params honours
+        the is_population branch (line 218-219)."""
+        from nemos.glm import PopulationGLM
+
+        n_states, n_samples, n_features, n_neurons = 3, 30, 4, 2
+        rng = np.random.default_rng(0)
+        X = rng.standard_normal((n_samples, n_features))
+        y = np.ones((n_samples, n_neurons))
+
+        def fake_pop_fit(self, X, y, **kw):
+            self.coef_ = jnp.zeros((X.shape[1], y.shape[1]))
+            self.intercept_ = jnp.zeros(y.shape[1])
+
+        monkeypatch.setattr(PopulationGLM, "fit", fake_pop_fit)
+        initializer = KMeansInitializerGLM(
+            n_states, X, y, jnp.exp, "Poisson", random_key=0
+        )
+        assert isinstance(initializer._glm_models[0], PopulationGLM)
+        assert initializer._is_population is True
+        coef, intercept = initializer.glm_params()
+        assert coef.shape == (n_features, n_neurons, n_states)
+        assert intercept.shape == (n_neurons, n_states)
+
+    def test_scale_non_fixed_obs_model_fits_glm(self, monkeypatch):
+        """Non-fixed-scale obs model (Gaussian) exercises the ``scale_ is None ->
+        self.fit()`` branch and the per-state scale extraction (lines 236-241)."""
+        n_states, n_samples, n_features = 3, 30, 4
+        rng = np.random.default_rng(0)
+        X = rng.standard_normal((n_samples, n_features))
+        y = rng.standard_normal(n_samples)
+        scale_val = 2.5
+
+        def fake_glm_fit(self, X, y, **kw):
+            self.coef_ = jnp.zeros(X.shape[1])
+            self.intercept_ = jnp.array([0.0])
+            self.scale_ = jnp.array(scale_val)
+
+        monkeypatch.setattr(GLM, "fit", fake_glm_fit)
+        initializer = KMeansInitializerGLM(
+            n_states, X, y, lambda x: x, "Gaussian", random_key=0
+        )
+        # Call scale() before glm_params() so the ``scale_ is None`` guard fires.
+        scale = initializer.scale()
+        assert scale.shape == (n_states,)
+        assert jnp.all(scale == scale_val)
 
 
 # =============================================================================

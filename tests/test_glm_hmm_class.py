@@ -14,9 +14,11 @@ import pytest
 
 from nemos.glm.params import GLMParams
 from nemos.glm_hmm.glm_hmm import GLMHMM
-from nemos.glm_hmm.params import GLMHMMModelParams
+from nemos.glm_hmm.params import GLMHMMModelParams, GLMHMMParams
 from nemos.glm_hmm.validation import GLMHMMValidator
 from nemos.hmm.expectation_maximization import EMState
+from nemos.hmm.hmm import BaseHMM
+from nemos.hmm.params import HMMParams
 from nemos.pytrees import FeaturePytree
 from nemos.regularizer import Ridge, UnRegularized
 
@@ -1342,3 +1344,143 @@ class TestUpdate:
         )
 
         assert bool(captured["session_starts"][0]) is True
+
+
+# ---------------------------------------------------------------------------
+# TestGLMHMMParamsContainer — static helpers on the GLMHMMParams class itself
+# ---------------------------------------------------------------------------
+
+
+class TestGLMHMMParamsContainer:
+    """Static helpers on GLMHMMParams that are not exercised via the model path."""
+
+    def test_regularizable_subtrees_extracts_coef(self):
+        """The single subtree accessor returns model_params.coef (params.py:27-31)."""
+        n_features, n_states = 4, 3
+        coef = jnp.arange(n_features * n_states, dtype=float).reshape(
+            n_features, n_states
+        )
+        params = GLMHMMParams(
+            model_params=GLMHMMModelParams(
+                coef=coef,
+                intercept=jnp.zeros(n_states),
+                log_scale=jnp.zeros(n_states),
+            ),
+            hmm_params=HMMParams(
+                log_initial_prob=jnp.log(jnp.ones(n_states) / n_states),
+                log_transition_prob=jnp.log(jnp.ones((n_states, n_states)) / n_states),
+            ),
+        )
+        wheres = GLMHMMParams.regularizable_subtrees()
+        assert len(wheres) == 1
+        extracted = wheres[0](params)
+        # eqx.tree_at uses ``is`` identity on the where-accessor, so the lambda
+        # must return the exact leaf — not a copy.
+        assert extracted is params.model_params.coef
+        assert jnp.array_equal(extracted, coef)
+
+
+# ---------------------------------------------------------------------------
+# TestInferenceMethods — smooth_proba / filter_proba / decode_state overrides
+# ---------------------------------------------------------------------------
+
+
+class TestInferenceMethods:
+    """GLMHMM.smooth_proba/filter_proba/decode_state are thin overrides that add a
+    GLM-HMM-specific docstring example and delegate to BaseHMM. These tests
+    confirm the override wires X/y/session_starts/state_format through and that
+    the public surface returns the expected shapes."""
+
+    @pytest.fixture
+    def fitted_model(self, glm_hmm_data, mock_glm_hmm_optimizer_run):
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+        return model
+
+    @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba"])
+    def test_returns_normalized_posteriors(
+        self, method_name, fitted_model, glm_hmm_data
+    ):
+        out = getattr(fitted_model, method_name)(
+            glm_hmm_data["X"], glm_hmm_data["y"]
+        )
+        n, n_states = glm_hmm_data["X"].shape[0], glm_hmm_data["n_states"]
+        assert out.shape == (n, n_states)
+        assert jnp.allclose(jnp.asarray(out).sum(axis=1), 1.0)
+
+    @pytest.mark.parametrize(
+        "state_format, expected_shape",
+        [
+            ("one-hot", lambda n, s: (n, s)),
+            ("index", lambda n, s: (n,)),
+        ],
+    )
+    def test_decode_state_output_shape(
+        self, state_format, expected_shape, fitted_model, glm_hmm_data
+    ):
+        out = fitted_model.decode_state(
+            glm_hmm_data["X"], glm_hmm_data["y"], state_format=state_format
+        )
+        n, n_states = glm_hmm_data["X"].shape[0], glm_hmm_data["n_states"]
+        assert out.shape == expected_shape(n, n_states)
+        if state_format == "one-hot":
+            assert jnp.all(jnp.asarray(out).sum(axis=1) == 1)
+
+    @pytest.mark.parametrize(
+        "method_name", ["smooth_proba", "filter_proba", "decode_state"]
+    )
+    def test_session_starts_forwarded_to_base(
+        self, method_name, fitted_model, glm_hmm_data, monkeypatch
+    ):
+        """The override forwards session_starts verbatim to BaseHMM."""
+        captured = {}
+        real = getattr(BaseHMM, method_name)
+
+        def spy(self_inner, X, y, **kw):
+            captured.update(kw)
+            return real(self_inner, X, y, **kw)
+
+        monkeypatch.setattr(BaseHMM, method_name, spy)
+        n = glm_hmm_data["X"].shape[0]
+        is_ns = jnp.zeros(n, dtype=bool).at[0].set(True).at[n // 2].set(True)
+        getattr(fitted_model, method_name)(
+            glm_hmm_data["X"], glm_hmm_data["y"], session_starts=is_ns
+        )
+        np.testing.assert_array_equal(captured["session_starts"], is_ns)
+
+    def test_decode_state_forwards_state_format(
+        self, fitted_model, glm_hmm_data, monkeypatch
+    ):
+        """state_format reaches BaseHMM.decode_state unchanged."""
+        captured = {}
+        real = BaseHMM.decode_state
+
+        def spy(self_inner, X, y, **kw):
+            captured.update(kw)
+            return real(self_inner, X, y, **kw)
+
+        monkeypatch.setattr(BaseHMM, "decode_state", spy)
+        fitted_model.decode_state(
+            glm_hmm_data["X"], glm_hmm_data["y"], state_format="index"
+        )
+        assert captured["state_format"] == "index"
+
+    def test_pynapple_input_returns_tsdframe(self, fitted_model, glm_hmm_data):
+        n = glm_hmm_data["X"].shape[0]
+        X_tsd = nap.TsdFrame(t=np.arange(n, dtype=float), d=glm_hmm_data["X"])
+        y_tsd = nap.Tsd(t=np.arange(n, dtype=float), d=glm_hmm_data["y"])
+        assert isinstance(fitted_model.smooth_proba(X_tsd, y_tsd), nap.TsdFrame)
+
+
+def test_get_optimal_solver_params_config():
+    """GLMHMM has no SVRG optimal-params config: returns (None, None, None)
+    (glm_hmm.py:1258-1260)."""
+    assert GLMHMM(n_states=2)._get_optimal_solver_params_config() == (
+        None,
+        None,
+        None,
+    )
