@@ -647,17 +647,26 @@ class BaseRegressor(
         """Convert a user-provided GroupLasso mask into the internal structured format.
 
         Mutates ``self.regularizer.mask`` in place. No-op if the mask is already
-        in the structured format (i.e. already an instance of the params type).
+        in the structured format (i.e. already an instance of the solved params
+        type). For composite models (e.g. GLM-HMM) the numerical solver optimizes
+        only a sub-pytree of the full parameters; the mask is interpreted at that
+        level.
         """
         import equinox as eqx
 
         model_pars = self._validator.get_empty_params(data, y)
-        if isinstance(self.regularizer.mask, type(model_pars)):
+        # composite models solve only a sub-pytree; flat models solve the full
+        # params. The regularizer and its mask act at the solved level.
+        solver_subtree = getattr(
+            model_pars, "solver_param_subtree", lambda: lambda p: p
+        )()
+        solver_pars = solver_subtree(model_pars)
+        if isinstance(self.regularizer.mask, type(solver_pars)):
             return
 
         select_subtrees = (
-            model_pars.regularizable_subtrees()
-            if hasattr(model_pars, "regularizable_subtrees")
+            solver_pars.regularizable_subtrees()
+            if hasattr(solver_pars, "regularizable_subtrees")
             else [lambda p: p]
         )
         if len(select_subtrees) == 1:
@@ -672,7 +681,7 @@ class BaseRegressor(
                 )
 
         for where, m in zip(select_subtrees, mask_list):
-            expected = jax.tree_util.tree_structure(where(model_pars))
+            expected = jax.tree_util.tree_structure(where(solver_pars))
             actual = jax.tree_util.tree_structure(m)
             if expected != actual:
                 raise ValueError(
@@ -682,7 +691,7 @@ class BaseRegressor(
                     f"list, the mask must also be a list)."
                 )
 
-        struct = jax.tree_util.tree_structure(model_pars)
+        struct = jax.tree_util.tree_structure(solver_pars)
         mask_tree = jax.tree_util.tree_unflatten(struct, [None] * struct.num_leaves)
         for where, m in zip(select_subtrees, mask_list):
             mask_tree = eqx.tree_at(where, mask_tree, m, is_leaf=lambda x: x is None)
