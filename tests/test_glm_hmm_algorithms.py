@@ -1624,8 +1624,8 @@ class TestMStep:
         )
         # Session starts
         session_starts = np.zeros(n_timesteps, dtype=bool)
-        session_starts = np.linspace(0, n_timesteps - 1, n_sessions, dtype=int)
-        session_starts[session_starts] = True
+        session_indices = np.linspace(0, n_timesteps - 1, n_sessions, dtype=int)
+        session_starts[session_indices] = True
         session_starts = jnp.array(session_starts)
 
         # Log joint posterior for transitions
@@ -3860,10 +3860,13 @@ class TestEMScaleOptimization:
         nll_scale = prepare_mstep_nll_objective_scale(False, obs)
 
         solver_params = setup_solver(
-            nll_params, init_params=GLMParams(init_coef, init_intercept), tol=10**-6
+            nll_params,
+            init_params=GLMParams(init_coef, init_intercept),
+            tol=10**-6,
+            solver_name="BFGS",
         )
         solver_scale = setup_solver(
-            nll_scale, init_params=jnp.log(init_scale), tol=10**-6
+            nll_scale, init_params=jnp.log(init_scale), tol=10**-12, solver_name="BFGS"
         )
 
         # Create initial parameters
@@ -3889,6 +3892,17 @@ class TestEMScaleOptimization:
                 y,
                 predicted_rate,
                 posteriors,
+            )
+            g = jax.grad(nll_scale, argnums=0)(
+                params.log_scale, y, predicted_rate, posteriors
+            )
+            jax.debug.print(
+                "rate_max={r} lsi={lsi} lso={lso} nll={n} grad={g}",
+                r=jnp.max(predicted_rate),
+                lsi=params.log_scale,
+                lso=new_log_scale,
+                n=nll_scale(params.log_scale, y, predicted_rate, posteriors),
+                g=g,
             )
             return (
                 GLMHMMModelParams(
