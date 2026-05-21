@@ -443,6 +443,63 @@ def _spy_instantiate_solver(monkeypatch):
     return calls
 
 
+def _spy_calls(monkeypatch, container, attr_name):
+    """Wrap ``container.attr_name`` with a spy that forwards to the real callable.
+
+    Returns a list of ``(args, kwargs)`` tuples per call. Use for any module-level
+    function or class method we want to assert was called with given arguments
+    without disturbing the real flow.
+    """
+    calls = []
+    real = getattr(container, attr_name)
+
+    def spy(*args, **kwargs):
+        calls.append((args, kwargs))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(container, attr_name, spy)
+    return calls
+
+
+def _make_model_params(n_features, n_states, n_neurons=None):
+    """Build a minimal GLMHMMModelParams (zeros). ``n_neurons=None`` for single-neuron."""
+    if n_neurons is None:
+        return GLMHMMModelParams(
+            coef=jnp.zeros((n_features, n_states)),
+            intercept=jnp.zeros((n_states,)),
+            log_scale=jnp.zeros((n_states,)),
+        )
+    return GLMHMMModelParams(
+        coef=jnp.zeros((n_features, n_neurons, n_states)),
+        intercept=jnp.zeros((n_neurons, n_states)),
+        log_scale=jnp.zeros((n_neurons, n_states)),
+    )
+
+
+# Custom init callables exercising every slot's *_custom path. Each returns a
+# shape-correct, valid output so fit() can continue without extra mocking.
+
+
+def _custom_glm_params_init(
+    n_states, X, y, inverse_link_function, session_starts, random_key
+):
+    return jnp.zeros((X.shape[1], n_states)), jnp.zeros((n_states,))
+
+
+def _custom_scale_init(
+    n_states, X, y, inverse_link_function, session_starts, random_key
+):
+    return jnp.ones((n_states,))
+
+
+def _custom_initial_proba_init(n_states, X, y, session_starts, random_key):
+    return jnp.ones((n_states,)) / n_states
+
+
+def _custom_transition_proba_init(n_states, X, y, session_starts, random_key):
+    return jnp.full((n_states, n_states), 1.0 / n_states)
+
+
 class TestSolverConfiguration:
     """Verify that _initialize_optimizer_and_state wires EM correctly."""
 
@@ -703,6 +760,111 @@ class TestFitDelegation:
 
         mock.assert_called_once()
 
+    def test_fit_calls_validate_inputs(
+        self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
+    ):
+        """fit() forwards X and y to GLMHMMValidator.validate_inputs."""
+        calls = _spy_calls(monkeypatch, GLMHMMValidator, "validate_inputs")
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+        assert len(calls) == 1
+        _, kwargs = calls[0]
+        assert kwargs["X"] is glm_hmm_data["X"]
+        assert kwargs["y"] is glm_hmm_data["y"]
+
+    def test_fit_with_init_params_calls_validate_and_cast_params(
+        self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
+    ):
+        """fit(init_params=...) validates the user-provided params via the validator."""
+        calls = _spy_calls(monkeypatch, GLMHMMValidator, "validate_and_cast_params")
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+        assert len(calls) == 1
+        # args = (validator_self, init_params) when patched on the class
+        args, _ = calls[0]
+        assert args[1] is glm_hmm_data["init_params"]
+
+    def test_fit_default_init_skips_validate_and_cast_params(
+        self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
+    ):
+        """fit(init_params=None) with default initializers bypasses validate_and_cast_params."""
+        calls = _spy_calls(monkeypatch, GLMHMMValidator, "validate_and_cast_params")
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        model.fit(glm_hmm_data["X"], glm_hmm_data["y"])
+        assert calls == []
+
+    def test_fit_default_init_calls_generate_glm_hmm_initial_model_params(
+        self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
+    ):
+        """fit(init_params=None) routes init through generate_glm_hmm_initial_model_params
+        with all positional and keyword arguments propagated from the model."""
+        from nemos.glm_hmm import glm_hmm as glm_hmm_module
+
+        calls = _spy_calls(
+            monkeypatch, glm_hmm_module, "generate_glm_hmm_initial_model_params"
+        )
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        model.fit(glm_hmm_data["X"], glm_hmm_data["y"])
+
+        assert len(calls) == 1
+        args, kwargs = calls[0]
+        # positional args: (n_states, X, y)
+        assert args[0] == glm_hmm_data["n_states"]
+        np.testing.assert_array_equal(args[1], glm_hmm_data["X"])
+        np.testing.assert_array_equal(args[2], glm_hmm_data["y"])
+        # keyword args: every entry the call site supplies
+        assert set(kwargs) == {
+            "inverse_link_function",
+            "session_starts",
+            "random_key",
+            "init_funcs",
+        }
+        assert kwargs["inverse_link_function"] is model._inverse_link_function
+        assert kwargs["init_funcs"] is model._model_initialization_funcs
+        # session_starts: default is a length-n boolean array with first entry True
+        n = glm_hmm_data["X"].shape[0]
+        expected_session_starts = jnp.zeros(n, dtype=bool).at[0].set(True)
+        np.testing.assert_array_equal(kwargs["session_starts"], expected_session_starts)
+        # random_key: a jax PRNG key
+        assert isinstance(kwargs["random_key"], jax.Array)
+        assert kwargs["random_key"].dtype == jax.random.PRNGKey(0).dtype
+
+    @pytest.mark.parametrize(
+        "setup_kwargs",
+        [
+            pytest.param(
+                {"glm_params_init": _custom_glm_params_init}, id="glm_params_init"
+            ),
+            pytest.param({"scale_init": _custom_scale_init}, id="scale_init"),
+            pytest.param(
+                {"initial_proba_init": _custom_initial_proba_init},
+                id="initial_proba_init",
+            ),
+            pytest.param(
+                {"transition_proba_init": _custom_transition_proba_init},
+                id="transition_proba_init",
+            ),
+        ],
+    )
+    def test_fit_custom_init_func_triggers_validate_and_cast_params(
+        self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch, setup_kwargs
+    ):
+        """Any custom init function on any of the four slots makes ``validate_params``
+        True, so fit(init_params=None) routes through validate_and_cast_params."""
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        model.setup(**setup_kwargs)
+        calls = _spy_calls(monkeypatch, GLMHMMValidator, "validate_and_cast_params")
+        model.fit(glm_hmm_data["X"], glm_hmm_data["y"])
+        assert len(calls) == 1
+
 
 # ---------------------------------------------------------------------------
 # TestEstimateResidDegreesOfFreedom — exceptions and Lasso branch
@@ -914,6 +1076,105 @@ class TestSimulate:
             assert call["key"].ndim == 0
             assert call["predicted_rate"].ndim == 0
             assert call["scale"].ndim == 0
+
+
+# ---------------------------------------------------------------------------
+# TestLogLikelihood — _log_likelihood input shapes and cache behavior
+# ---------------------------------------------------------------------------
+
+
+class TestLogLikelihood:
+    """GLMHMM._log_likelihood input shapes and cache behavior."""
+
+    @pytest.mark.parametrize(
+        "n_samples, n_features, n_neurons",
+        [
+            pytest.param(1, 1, None, id="1-sample-1-feature"),
+            pytest.param(1, 4, None, id="1-sample-multi-feature"),
+            pytest.param(50, 1, None, id="multi-sample-1-feature"),
+            pytest.param(50, 4, None, id="multi-sample-multi-feature"),
+            pytest.param(30, 3, 2, id="population-2-neurons"),
+        ],
+    )
+    def test_output_shape_finite(self, n_samples, n_features, n_neurons):
+        """Output is per-(sample, state), finite, across single-neuron and population y."""
+        rng = np.random.default_rng(0)
+        X = jnp.asarray(rng.standard_normal((n_samples, n_features)))
+        if n_neurons is None:
+            y = jnp.asarray(rng.integers(0, 2, size=n_samples))
+        else:
+            y = jnp.asarray(rng.integers(0, 2, size=(n_samples, n_neurons)))
+        model = GLMHMM(n_states=2)
+        ll = model._log_likelihood(
+            _make_model_params(n_features, 2, n_neurons), X, y
+        )
+        assert ll.shape == (n_samples, 2)
+        assert jnp.all(jnp.isfinite(ll))
+
+    def test_cache_reuses_func_for_repeated_call(self, monkeypatch):
+        """Second call with matching (y.ndim, obs_model, inv_link) reuses cached ll_func."""
+        from nemos.glm_hmm import glm_hmm as glm_hmm_module
+
+        calls = _spy_calls(monkeypatch, glm_hmm_module, "prepare_estep_log_likelihood")
+        model = GLMHMM(n_states=2)
+        params = _make_model_params(2, 2)
+        X = jnp.zeros((10, 2))
+        y = jnp.zeros(10)
+
+        model._log_likelihood(params, X, y)
+        model._log_likelihood(params, X, y)
+
+        assert len(calls) == 1, (
+            "prepare_estep_log_likelihood should be called once and reused from cache "
+            "on the second call with matching key."
+        )
+
+    def test_cache_invalidates_when_y_ndim_changes(self, monkeypatch):
+        """Switching between 1-d and 2-d y yields a different cache key."""
+        from nemos.glm_hmm import glm_hmm as glm_hmm_module
+
+        calls = _spy_calls(monkeypatch, glm_hmm_module, "prepare_estep_log_likelihood")
+        model = GLMHMM(n_states=2)
+        model._log_likelihood(
+            _make_model_params(2, 2), jnp.zeros((10, 2)), jnp.zeros(10)
+        )
+        model._log_likelihood(
+            _make_model_params(2, 2, n_neurons=3),
+            jnp.zeros((10, 2)),
+            jnp.zeros((10, 3)),
+        )
+
+        # is_population_glm (first positional arg) toggles False -> True
+        assert [args[0][0] for args in calls] == [False, True]
+
+    @pytest.mark.parametrize(
+        "attr, new_value",
+        [
+            pytest.param("observation_model", "Gaussian", id="observation_model"),
+            pytest.param(
+                "inverse_link_function",
+                lambda x: jnp.exp(x),
+                id="inverse_link_function",
+            ),
+        ],
+    )
+    def test_cache_invalidates_when_model_attr_changes(
+        self, monkeypatch, attr, new_value
+    ):
+        """Mutating observation_model or inverse_link_function between calls invalidates the cache."""
+        from nemos.glm_hmm import glm_hmm as glm_hmm_module
+
+        calls = _spy_calls(monkeypatch, glm_hmm_module, "prepare_estep_log_likelihood")
+        model = GLMHMM(n_states=2)
+        params = _make_model_params(2, 2)
+        X = jnp.zeros((10, 2))
+        y = jnp.zeros(10)
+
+        model._log_likelihood(params, X, y)
+        setattr(model, attr, new_value)
+        model._log_likelihood(params, X, y)
+
+        assert len(calls) == 2
 
 
 # ---------------------------------------------------------------------------
