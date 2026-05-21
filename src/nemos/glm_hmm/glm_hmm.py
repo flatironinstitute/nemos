@@ -1139,7 +1139,7 @@ class GLMHMM(
         )
 
         # pre-generate random keys for all time steps
-        n_time_bins = X.shape[0]
+        n_time_bins = jax.tree_util.tree_leaves(X)[0].shape[0]
         all_keys = jax.random.split(random_key, n_time_bins * 2)
         state_keys = all_keys[:n_time_bins]
         obs_keys = all_keys[n_time_bins:]
