@@ -44,6 +44,35 @@ MODEL_INITIALIZATION_FN_DICT_T = TypeVar("MODEL_INITIALIZATION_FN_DICT_T")
 HMMValidatorT = TypeVar("HMMValidatorT", bound="HMMValidator")
 
 
+def _kmeans_kwargs_equal(a, b) -> bool:
+    """
+    Compare two kmeans-kwarg values for logical equality.
+
+    Falls back to sklearn-style ``get_params(deep=True)`` when both values are
+    the same class and expose ``get_params``, so two distinct instances of e.g.
+    ``BernoulliObservations`` are not flagged as different.
+
+    Parameters
+    ----------
+    a, b :
+        Values to compare. Typically a constructor argument expected by a kmeans
+        initialization function (e.g. ``observation_model``).
+
+    Returns
+    -------
+    :
+        ``True`` if ``a`` and ``b`` are logically equivalent, ``False`` otherwise.
+    """
+    if a is b:
+        return True
+    eq = eqx.tree_equal(a, b)
+    if eq is not None and bool(eq):
+        return True
+    if type(a) is type(b) and hasattr(a, "get_params") and hasattr(b, "get_params"):
+        return a.get_params(deep=True) == b.get_params(deep=True)
+    return False
+
+
 class BaseHMM(
     BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT, HMMValidatorT],
     Generic[
@@ -510,35 +539,38 @@ class BaseHMM(
                         kmeans_kwargs[k] = v
         return kmeans_kwargs
 
-    def _kmeans_setup_initializer(
-        self, X, y, session_starts=None, random_key: Optional[jax.Array] = None
-    ):
-        """Set up the kmeans initializer if any HMM or model parameters require kmeans initialization."""
-        # get additional model-specific kwargs for kmeans initializer if needed
-        if self._model_use_kmeans is not None:
-            kmeans_kwargs = self._kmeans_resolve_model_kwargs(
-                self._model_use_kmeans, self._model_initialization_funcs
-            )
-        else:
-            kmeans_kwargs = {}
+    def _kmeans_reconcile_user_kwargs(
+        self, kmeans_kwargs: dict, model_kwargs: dict
+    ) -> dict:
+        """Drop user kwargs that duplicate model state, raising on disagreement.
 
-        # setup initializer
-        initializer = kmeans_kwargs.get(
-            "initializer",
-            self._kmeans_init_class(
-                self.n_states,
-                X,
-                y,
-                session_starts=session_starts,
-                random_key=random_key,
-                **self._kmeans_extra_kwargs(),
-                **kmeans_kwargs,
-            ),
-        )
+        For each key in ``model_kwargs`` that also appears in ``kmeans_kwargs``,
+        the two values must match (per :func:`_kmeans_kwargs_equal`); the
+        agreeing entry is then removed from ``kmeans_kwargs`` so the eventual
+        merge ``{**model_kwargs, **kmeans_kwargs}`` doesn't produce a Python
+        ``TypeError`` for duplicate keys. Model state is canonical.
+        """
+        for k, v in model_kwargs.items():
+            if k not in kmeans_kwargs:
+                continue
+            if not _kmeans_kwargs_equal(kmeans_kwargs[k], v):
+                raise ValueError(
+                    f"Inconsistent value for '{k}' in kmeans init kwargs: "
+                    f"{kmeans_kwargs[k]!r} differs from the model's value "
+                    f"{v!r}. Remove it from the init kwargs or align it with "
+                    f"the model attribute."
+                )
+            kmeans_kwargs.pop(k)
+        return kmeans_kwargs
 
-        # Inject initializer back only into relevant funcs. Model-side funcs also
-        # receive any signature-required extras (e.g. observation_model for GLMHMM)
-        # via _kmeans_init_func_kwargs, so the upstream guard stays valid.
+    def _kmeans_inject_initializer(self, initializer) -> None:
+        """Inject ``initializer`` into every kmeans-using init-func kwargs dict.
+
+        Model-side funcs additionally receive any signature-required extras
+        (e.g. ``observation_model`` for GLMHMM) via
+        :meth:`_kmeans_init_func_kwargs`; upstream reconciliation guarantees
+        these don't conflict with anything the user provided.
+        """
         if self._hmm_use_kmeans is not None:
             for param, use_kmeans in self._hmm_use_kmeans.items():
                 if use_kmeans:
@@ -552,7 +584,35 @@ class BaseHMM(
                     kwargs = self._model_initialization_funcs[f"{param}_kwargs"]
                     kwargs["initializer"] = initializer
                     for k, v in extra_kwargs.items():
-                        kwargs.setdefault(k, v)
+                        kwargs[k] = v
+
+    def _kmeans_setup_initializer(
+        self, X, y, session_starts=None, random_key: Optional[jax.Array] = None
+    ):
+        """Set up the kmeans initializer if any HMM or model parameters require kmeans initialization."""
+        if self._model_use_kmeans is not None:
+            kmeans_kwargs = self._kmeans_resolve_model_kwargs(
+                self._model_use_kmeans, self._model_initialization_funcs
+            )
+        else:
+            kmeans_kwargs = {}
+
+        model_kwargs = self._kmeans_extra_kwargs()
+        kmeans_kwargs = self._kmeans_reconcile_user_kwargs(kmeans_kwargs, model_kwargs)
+
+        initializer = kmeans_kwargs.get(
+            "initializer",
+            self._kmeans_init_class(
+                self.n_states,
+                X,
+                y,
+                session_starts=session_starts,
+                random_key=random_key,
+                **model_kwargs,
+                **kmeans_kwargs,
+            ),
+        )
+        self._kmeans_inject_initializer(initializer)
 
     def _model_specific_initialization(self, X, y, session_starts=None):
         """Model-specific initialization."""
