@@ -178,13 +178,6 @@ def _add_zeros(y):
     return y
 
 
-def _zero_init_params(X, y):
-    return (
-        jax.tree_util.tree_map(lambda x: jnp.zeros((*x[0].shape, *y.shape[1:])), X),
-        jnp.zeros(jnp.nanmean(y, axis=0).shape),
-    )
-
-
 class _TwoLeafModule(eqx.Module):
     a: jnp.ndarray
     b: jnp.ndarray
@@ -390,9 +383,8 @@ def test_validate_lower_dimensional_data_X(instantiate_base_regressor_subclass):
     y = jnp.array([0, 1, 1])
     if is_population_model(model):
         y = y[None]
-    err_msg = "X must be 2-dimensional"
-    with pytest.raises(ValueError, match=err_msg):
-        model._validate(X, y, _zero_init_params(X, y))
+    with pytest.raises(ValueError, match="X must be 2-dimensional"):
+        model._validator.validate_inputs(X, y)
 
 
 @pytest.mark.parametrize(
@@ -411,7 +403,7 @@ def test_preprocess_fit_higher_dimensional_data_y(instantiate_base_regressor_sub
     else:
         err_msg = "y must be 1-dimensional"
     with pytest.raises(ValueError, match=err_msg):
-        model._validate(X, y, _zero_init_params(X, y))
+        model._validator.validate_inputs(X, y)
 
 
 @pytest.mark.parametrize(
@@ -428,7 +420,7 @@ def test_validate_higher_dimensional_data_X(instantiate_base_regressor_subclass)
     if is_population_model(model):
         y = y[None]
     with pytest.raises(ValueError, match="X must be 2-dimensional"):
-        model._validate(X, y, _zero_init_params(X, y))
+        model._validator.validate_inputs(X, y)
 
 
 @pytest.mark.parametrize(
