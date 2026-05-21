@@ -548,21 +548,6 @@ class BaseRegressor(
         X, y = self._preprocess_inputs(X, y)
         return self._compute_loss(params, X, y, *args, **kwargs)
 
-    def _validate(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, jnp.ndarray],
-        y: Union[NDArray, jnp.ndarray],
-        init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
-    ):
-        # check input dimensionality
-        self._validator.validate_inputs(X, y)
-
-        # validate input and params consistency
-        init_params = self._validator.validate_and_cast_params(init_params)
-
-        # validate input and params consistency
-        self._validator.validate_consistency(init_params, X=X, y=y)
-
     @abc.abstractmethod
     def update(
         self,
