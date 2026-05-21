@@ -81,7 +81,9 @@ class MockHMMValidator(HMMValidator[MockHMMUserParams, MockHMMParams]):
 
 
 class MockHMM(
-    BaseHMM[MockHMMParams, MockHMMUserParams, HMM_INITIALIZATION_FN_DICT, MockHMMValidator]
+    BaseHMM[
+        MockHMMParams, MockHMMUserParams, HMM_INITIALIZATION_FN_DICT, MockHMMValidator
+    ]
 ):
     _validator_class = MockHMMValidator
     _model_default_init_dict = {

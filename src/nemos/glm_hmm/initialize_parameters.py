@@ -14,6 +14,7 @@ from ..glm.params import GLMUserParams
 from ..hmm.initialize_parameters import (
     InitFunctionHMM,
     KMeansInitializer,
+    _resolve_existing_slots,
     _resolve_init_funcs,
     _validate_init_funcs_kwargs,
 )
@@ -472,6 +473,15 @@ def setup_glm_hmm_initialization(
         glm_init_funcs = DEFAULT_INIT_FUNCTIONS_GLMHMM.copy()
     else:
         glm_init_funcs = init_funcs.copy()
+
+    # resolve any string-valued slots already in glm_init_funcs (e.g. from load_model)
+    # against the registry, and re-derive *_custom for callable entries.
+    _resolve_existing_slots(
+        glm_init_funcs,
+        ("glm_params_init", "scale_init"),
+        AVAIL_INIT_FUNCTIONS_GLM,
+        InitFunctionGLM,
+    )
 
     # update functions and kwargs for glm params and scale
     # if a function is passed but not kwargs, kwargs will be reset

@@ -808,6 +808,12 @@ def _unpack_params(params_dict: dict, string_attrs: list = None) -> dict:
             cls_name = _get_name(value)
             params = _unpack_params(value.get_params(deep=False), string_attrs)
             out[key] = {"class": cls_name, "params": params}
+        elif isinstance(value, dict):
+            # serialize callable/class leaves inside plain dicts by their name,
+            # so npz can store them as strings instead of pickled object arrays.
+            out[key] = jax.tree_util.tree_map(
+                lambda v: _get_name(v) if _is_callable_or_class(v) else v, value
+            )
         else:
             # if the parameter is in string_attrs, store its name
             if string_attrs is not None and (

@@ -1181,6 +1181,15 @@ class GLMHMM(
         excluded as it is solver-specific and not needed to reuse the fitted model.
         The file can be reloaded with :func:`nemos.load_model`.
 
+        Initialization functions are serialized by their fully-qualified name when
+        they are built-ins; :func:`nemos.load_model` resolves them via the registry.
+        Custom callables are also stored by name, which means a custom callable
+        must be supplied at load time. Because the io path consumes the
+        ``model_initialization_funcs`` / ``hmm_initialization_funcs`` constructor
+        argument (not :meth:`setup`), the override is passed as a (partial) dict of
+        slot → callable, and the setter fills in the remaining slots from the saved
+        names.
+
         Parameters
         ----------
         filename :
@@ -1188,6 +1197,9 @@ class GLMHMM(
 
         Examples
         --------
+        Default round-trip — built-in initializers are resolved automatically on
+        load:
+
         >>> import os, tempfile
         >>> import numpy as np
         >>> import nemos as nmo
@@ -1196,7 +1208,35 @@ class GLMHMM(
         >>> y = np.random.binomial(n=1, p=0.5, size=80)
         >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(X, y)
         >>> with tempfile.TemporaryDirectory() as d:
-        ...     model.save_params(os.path.join(d, "glmhmm.npz"))
+        ...     path = os.path.join(d, "glmhmm.npz")
+        ...     model.save_params(path)
+        ...     loaded = nmo.load_model(path)
+        >>> bool(np.allclose(model.coef_, loaded.coef_))
+        True
+
+        Round-trip with a custom GLM-params initializer. Pass it back as a partial
+        dict under ``model_initialization_funcs``; remaining slots fall back to the
+        saved (built-in) names:
+
+        >>> import jax.numpy as jnp
+        >>> def my_glm_init(
+        ...     n_states, X, y, inverse_link_function, session_starts, random_key,
+        ... ):
+        ...     return jnp.zeros((X.shape[1], n_states)), jnp.zeros((n_states,))
+        >>> model = nmo.glm_hmm.GLMHMM(n_states=2)
+        >>> model.setup(glm_params_init=my_glm_init)
+        >>> _ = model.fit(X, y)
+        >>> with tempfile.TemporaryDirectory() as d:
+        ...     path = os.path.join(d, "glmhmm.npz")
+        ...     model.save_params(path)
+        ...     loaded = nmo.load_model(
+        ...         path,
+        ...         mapping_dict={
+        ...             "model_initialization_funcs": {"glm_params_init": my_glm_init},
+        ...         },
+        ...     )
+        >>> loaded.model_initialization_funcs["glm_params_init"] is my_glm_init
+        True
         """
         # initialize saving dictionary
         fit_attrs = self._get_fit_state()

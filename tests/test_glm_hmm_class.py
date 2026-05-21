@@ -914,3 +914,119 @@ class TestSimulate:
             assert call["key"].ndim == 0
             assert call["predicted_rate"].ndim == 0
             assert call["scale"].ndim == 0
+
+
+# ---------------------------------------------------------------------------
+# save_params / load_model round-trip
+# ---------------------------------------------------------------------------
+
+
+def _custom_glm_init(n_states, X, y, inverse_link_function, session_starts, random_key):
+    """Custom GLM-params initializer used to exercise the custom-callable path."""
+    return jnp.zeros((X.shape[1], n_states)), jnp.zeros((n_states,))
+
+
+def _fit_glmhmm(custom=False):
+    np.random.seed(0)
+    X = np.random.normal(size=(80, 3))
+    y = np.random.binomial(n=1, p=0.5, size=80)
+    model = GLMHMM(n_states=2)
+    if custom:
+        model.setup(glm_params_init=_custom_glm_init)
+    model.fit(X, y)
+    return model
+
+
+class TestGLMHMMSaveLoad:
+    """save_params / load_model round-trip with native and custom initializers."""
+
+    def test_native_round_trip(self, tmp_path):
+        """Default initializers serialize as names and reload to the same callables."""
+        import nemos as nmo
+
+        model = _fit_glmhmm()
+        save_path = tmp_path / "glmhmm.npz"
+        model.save_params(save_path)
+        loaded = nmo.load_model(save_path)
+
+        # fit arrays match
+        np.testing.assert_allclose(model.coef_, loaded.coef_)
+        np.testing.assert_allclose(model.intercept_, loaded.intercept_)
+        np.testing.assert_allclose(model.initial_prob_, loaded.initial_prob_)
+        np.testing.assert_allclose(model.transition_prob_, loaded.transition_prob_)
+
+        # init dicts contain callables that match by identity (canonical registry entries)
+        for slot in ("glm_params_init", "scale_init"):
+            assert (
+                loaded.model_initialization_funcs[slot]
+                is model.model_initialization_funcs[slot]
+            )
+            assert loaded.model_initialization_funcs[f"{slot}_custom"] is False
+        for slot in ("initial_proba_init", "transition_proba_init"):
+            assert (
+                loaded.hmm_initialization_funcs[slot]
+                is model.hmm_initialization_funcs[slot]
+            )
+
+    def test_custom_callable_requires_mapping(self, tmp_path):
+        """Custom callable can't be resolved from name alone; load raises a clear error."""
+        import nemos as nmo
+
+        model = _fit_glmhmm(custom=True)
+        save_path = tmp_path / "glmhmm.npz"
+        model.save_params(save_path)
+
+        with pytest.raises(
+            ValueError, match="Failed to instantiate model class"
+        ) as excinfo:
+            nmo.load_model(save_path)
+        # the underlying cause names the offending slot
+        assert "glm_params_init" in str(excinfo.value.__cause__)
+
+    def test_custom_callable_partial_mapping(self, tmp_path):
+        """Partial mapping_dict override: user supplies the custom func; saved
+        built-ins for other slots come back from the registry."""
+        import nemos as nmo
+
+        model = _fit_glmhmm(custom=True)
+        save_path = tmp_path / "glmhmm.npz"
+        model.save_params(save_path)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            loaded = nmo.load_model(
+                save_path,
+                mapping_dict={
+                    "model_initialization_funcs": {"glm_params_init": _custom_glm_init}
+                },
+            )
+
+        assert loaded.model_initialization_funcs["glm_params_init"] is _custom_glm_init
+        assert bool(loaded.model_initialization_funcs["glm_params_init_custom"]) is True
+        # saved built-in scale_init resolves back from the registry
+        assert (
+            loaded.model_initialization_funcs["scale_init"]
+            is model.model_initialization_funcs["scale_init"]
+        )
+        np.testing.assert_allclose(model.coef_, loaded.coef_)
+
+    def test_custom_callable_nested_key_mapping(self, tmp_path):
+        """Sklearn-style nested-key mapping (model_initialization_funcs__slot) also
+        descends per slot and overrides correctly."""
+        import nemos as nmo
+
+        model = _fit_glmhmm(custom=True)
+        save_path = tmp_path / "glmhmm.npz"
+        model.save_params(save_path)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            loaded = nmo.load_model(
+                save_path,
+                mapping_dict={
+                    "model_initialization_funcs__glm_params_init": _custom_glm_init
+                },
+            )
+
+        assert loaded.model_initialization_funcs["glm_params_init"] is _custom_glm_init
+        np.testing.assert_allclose(model.coef_, loaded.coef_)

@@ -19,6 +19,7 @@ from .._observation_model_builder import (
 )
 from .._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from ..glm import GLM, ClassifierGLM, ClassifierPopulationGLM, PopulationGLM
+from ..glm_hmm import GLMHMM
 from ..utils import _get_name, _unflatten_dict, get_env_metadata
 from ..validation import _suggest_keys
 
@@ -27,6 +28,7 @@ MODEL_REGISTRY = {
     "nemos.glm.glm.PopulationGLM": PopulationGLM,
     "nemos.glm.classifier_glm.ClassifierGLM": ClassifierGLM,
     "nemos.glm.classifier_glm.ClassifierPopulationGLM": ClassifierPopulationGLM,
+    "nemos.glm_hmm.glm_hmm.GLMHMM": GLMHMM,
 }
 
 ERROR_MSG_OVERRIDE_NOT_ALLOWED = (
@@ -285,8 +287,19 @@ def _apply_custom_map(
         # handle classes and params separately
         if _is_param(val):
             if isinstance(val, dict):
-                # dict cannot be mapped, so store original params
-                updated_params[key] = val
+                # Plain dict (e.g. *_initialization_funcs): recurse so per-slot
+                # overrides flow through the same logic as top-level params.
+                # The downstream setter fills missing slots and validates.
+                mapped_val = mapping_dict.get(key, {})
+                if isinstance(mapped_val, dict) and mapped_val:
+                    sub_keys: List = []
+                    new_val, sub_keys = _apply_custom_map(
+                        val, mapped_val, updated_keys=sub_keys
+                    )
+                    updated_params[key] = new_val
+                    updated_keys.extend(f"{key}__{k}" for k in sub_keys)
+                else:
+                    updated_params[key] = val
             else:
                 mapped_val = mapping_dict.get(key, None)
                 is_mapped = mapped_val is not None
@@ -569,6 +582,11 @@ def _get_invalid_mappings(mapping_dict: dict | None) -> List:
         # Handle dict with "params" key (but no "class" or already processed)
         elif isinstance(v, dict) and "params" in v:
             invalid_sub = _get_invalid_mappings(v["params"])
+            invalid.extend(f"{key}__{k}" for k in invalid_sub)
+        # Plain dict of per-slot overrides (e.g. model_initialization_funcs).
+        # Each leaf must be callable/class; nested dicts are validated recursively.
+        elif isinstance(v, dict):
+            invalid_sub = _get_invalid_mappings(v)
             invalid.extend(f"{key}__{k}" for k in invalid_sub)
         # Handle non-dict values
         elif not inspect.isclass(v) and not callable(v):

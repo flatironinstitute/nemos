@@ -11,6 +11,7 @@ from numpy.typing import NDArray
 
 from ..type_casting import is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE
+from ..utils import _get_name
 from ..validation import _suggest_keys
 from .params import HMMUserParams
 from .utils import initialize_session_starts
@@ -688,6 +689,15 @@ def setup_hmm_initialization(
     else:
         init_funcs = init_funcs.copy()
 
+    # resolve any string-valued slots already in init_funcs (e.g. from load_model)
+    # against the registry, and re-derive *_custom for callable entries.
+    _resolve_existing_slots(
+        init_funcs,
+        ("initial_proba_init", "transition_proba_init"),
+        AVAILABLE_INIT_FUNCTIONS,
+        InitFunctionHMM,
+    )
+
     # update functions and kwargs for init prob and transition prob
     # if a function is passed but not kwargs, kwargs will be reset
     # if kwargs are passed but not function, kwargs will be validated against existing function in init_funcs
@@ -759,6 +769,35 @@ def _validate_init_funcs_keys(
     return init_funcs
 
 
+def _resolve_existing_slots(
+    init_funcs: dict,
+    slot_keys: Tuple[str, ...],
+    available_init_funcs: dict,
+    protocol,
+) -> None:
+    """Resolve string-valued slots against the registry in place.
+
+    Strings come from ``save_params`` (fully-qualified names) or from a user
+    passing a built-in alias directly through the init dict; ``_resolve_init_funcs``
+    handles both. Callable slots are left untouched so direct constructor-dict
+    assignment stays a lenient pass-through.
+    """
+    for slot in slot_keys:
+        value = init_funcs.get(slot)
+        if not isinstance(value, str):
+            continue
+        resolved, resolved_kwargs, is_custom = _resolve_init_funcs(
+            slot,
+            value,
+            init_funcs.get(f"{slot}_kwargs"),
+            available_init_funcs,
+            protocol,
+        )
+        init_funcs[slot] = resolved
+        init_funcs[f"{slot}_kwargs"] = resolved_kwargs
+        init_funcs[f"{slot}_custom"] = is_custom
+
+
 def _resolve_init_funcs(
     key: str,
     value: str | Callable,
@@ -803,15 +842,21 @@ def _resolve_init_funcs(
     if available_init_funcs is None:
         available_init_funcs = AVAILABLE_INIT_FUNCTIONS
     if isinstance(value, str):
-        if value not in available_init_funcs[key]:
+        resolved = available_init_funcs[key].get(value)
+        if resolved is None:
+            # fall back to matching by fully-qualified name; this is what
+            # save_params writes for native init funcs.
+            for fn in available_init_funcs[key].values():
+                if _get_name(fn) == value:
+                    resolved = fn
+                    break
+        if resolved is None:
             raise ValueError(
                 f"Invalid initialization function name '{value}' for '{key}'. "
                 f"Available options are: {list(available_init_funcs[key].keys())}."
             )
-        kwargs = _validate_init_funcs_kwargs(
-            available_init_funcs[key][value], kwargs, protocol
-        )
-        return available_init_funcs[key][value], kwargs, False
+        kwargs = _validate_init_funcs_kwargs(resolved, kwargs, protocol)
+        return resolved, kwargs, False
     elif callable(value):
         return _validate_custom_init_func(value, kwargs, protocol)
     else:
