@@ -1291,3 +1291,76 @@ class TestGLMHMMSaveLoad:
 
         assert loaded.model_initialization_funcs["glm_params_init"] is _custom_glm_init
         np.testing.assert_allclose(model.coef_, loaded.coef_)
+
+
+# ---------------------------------------------------------------------------
+# TestUpdate — single EM iteration via the public update() method
+# ---------------------------------------------------------------------------
+
+
+class TestUpdate:
+    """GLMHMM.update() runs one EM iteration and persists the fitted attributes.
+
+    Pytree-X coverage of update() is provided by the shared
+    test_base_regressor_subclasses.py::TestModelVsPytree::test_update_pytree_x.
+    """
+
+    @staticmethod
+    def _prepare(model, X, y):
+        """Run the init handshake update() documents as its precondition."""
+        init_params = model.initialize_params(X, y)
+        opt_state = model.initialize_optimizer_and_state(init_params, X, y)
+        return init_params, opt_state
+
+    def test_update_runs_and_sets_attrs(self, glm_hmm_data):
+        """One update() call returns a 5-tuple and sets every fit attribute."""
+        d = glm_hmm_data
+        model = GLMHMM(n_states=d["n_states"], solver_kwargs={"maxiter": 1})
+        init_params, opt_state = self._prepare(model, d["X"], d["y"])
+
+        params, _ = model.update(init_params, opt_state, d["X"], d["y"])
+
+        assert len(params) == 5
+        assert all(v is not None for v in model._get_fit_state().values())
+
+    def test_update_calls_validate_inputs(self, glm_hmm_data, monkeypatch):
+        """update() forwards X and y to GLMHMMValidator.validate_inputs exactly once."""
+        d = glm_hmm_data
+        model = GLMHMM(n_states=d["n_states"], solver_kwargs={"maxiter": 1})
+        init_params, opt_state = self._prepare(model, d["X"], d["y"])
+
+        calls = _spy_calls(monkeypatch, GLMHMMValidator, "validate_inputs")
+        model.update(init_params, opt_state, d["X"], d["y"])
+
+        assert len(calls) == 1
+        _, kwargs = calls[0]
+        assert kwargs["X"] is d["X"]
+        assert kwargs["y"] is d["y"]
+
+    def test_update_forces_first_bin_new_session(self, glm_hmm_data, monkeypatch):
+        """update() marks the first sample as a session start before the EM step,
+        regardless of the session_starts passed in."""
+        d = glm_hmm_data
+        n = d["X"].shape[0]
+        model = GLMHMM(n_states=d["n_states"], solver_kwargs={"maxiter": 1})
+        init_params, opt_state = self._prepare(model, d["X"], d["y"])
+
+        captured = {}
+        real_update = model._optimizer_update
+
+        def capturing(params, state, data, y, *, session_starts, **kwargs):
+            captured["session_starts"] = session_starts
+            return real_update(
+                params, state, data, y, session_starts=session_starts, **kwargs
+            )
+
+        monkeypatch.setattr(model, "_optimizer_update", capturing)
+        model.update(
+            init_params,
+            opt_state,
+            d["X"],
+            d["y"],
+            session_starts=np.zeros(n, dtype=bool),
+        )
+
+        assert bool(captured["session_starts"][0]) is True
