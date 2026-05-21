@@ -2438,7 +2438,7 @@ def _make_valid_group_mask(n_groups, n_features):
     ],
 )
 def test_grouplasso_mask_wrapping_and_refit(
-    make_mask, make_X, check_coef, mock_optimizer_run
+    make_mask, make_X, check_coef, mock_glm_optimizer_run
 ):
     """User-provided mask wraps into GLMParams on first fit; re-fit leaves it unchanged.
 
@@ -2512,7 +2512,7 @@ def test_grouplasso_mask_wrapping_and_refit(
     ],
 )
 def test_grouplasso_mask_structure_mismatch(
-    make_X, make_mask, expectation, mock_optimizer_run
+    make_X, make_mask, expectation, mock_glm_optimizer_run
 ):
     """Mask pytree structure must mirror X; mismatch raises ValueError before shape checks."""
     rng = np.random.default_rng(0)
