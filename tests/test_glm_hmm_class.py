@@ -223,6 +223,9 @@ class TestGLMHMM:
             validator.validate_and_cast_params(params)
 
     # Parametrize table for test_fit_init_glm_params_type.
+    # Wrong-length / non-tuple cases (scalar, set, len != 5) are covered by the
+    # shared TestModelValidator.test_validate_param_length in
+    # test_base_regressor_subclasses.py.
     _fit_init_params_type_cases = (
         "expectation, init_params",
         [
@@ -236,11 +239,6 @@ class TestGLMHMM:
                     jnp.ones(3) / 3,
                     jnp.ones((3, 3)) / 3,
                 ),
-            ),
-            # Wrong tuple length (not 5)
-            (
-                pytest.raises(ValueError, match="Params must have length 5"),
-                (jnp.zeros((1, 2, 3)), jnp.zeros((3,))),
             ),
             # Dict coef while X is a plain array — tested at consistency level
             (
@@ -264,10 +262,6 @@ class TestGLMHMM:
                     jnp.ones((3, 3)) / 3,
                 ),
             ),
-            # Scalar instead of tuple
-            (pytest.raises(ValueError, match="Params must have length 5"), 0),
-            # Set instead of tuple
-            (pytest.raises(ValueError, match="Params must have length 5"), {0, 1}),
             # String intercept
             (
                 pytest.raises(
@@ -535,16 +529,6 @@ class TestSolverConfiguration:
         primary = calls[0]
         assert isinstance(primary["regularizer"], expected_regularizer_type)
         assert solver_name in primary["solver_name"]
-
-    def test_mismatched_solver_raises(self, glm_hmm_data):
-        """Lasso regularizer with LBFGS solver raises ValueError."""
-        with pytest.raises(ValueError):
-            GLMHMM(
-                n_states=glm_hmm_data["n_states"],
-                regularizer="Lasso",
-                solver_name="LBFGS",
-                regularizer_strength=1.0,
-            )
 
     def test_bernoulli_single_solver_smoke(
         self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
@@ -1010,12 +994,6 @@ class TestSimulate:
         assert jnp.array_equal(state1, state2)
         assert jnp.array_equal(rate1, rate2)
         assert jnp.array_equal(act1, act2)
-
-    def test_simulate_requires_fit(self, glm_hmm_data):
-        """simulate() raises ValueError if called before fit."""
-        model = GLMHMM(n_states=glm_hmm_data["n_states"])
-        with pytest.raises(ValueError, match="not fitted"):
-            model.simulate(jax.random.key(0), glm_hmm_data["X"])
 
     def test_simulate_forces_first_bin_new_session(
         self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch

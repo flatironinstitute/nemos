@@ -529,6 +529,20 @@ class TestModelCommons:
                     regularizer_strength=1,
                 )
 
+    def test_mismatched_solver_regularizer_raises(
+        self, instantiate_base_regressor_subclass
+    ):
+        """Lasso regularizer with LBFGS solver raises ValueError at init."""
+        fixture = instantiate_base_regressor_subclass
+        model_cls = fixture.model.__class__
+        with pytest.raises(ValueError):
+            model_cls(
+                **DEFAULTS[model_cls.__name__],
+                regularizer="Lasso",
+                solver_name="LBFGS",
+                regularizer_strength=1.0,
+            )
+
     def test_get_params(self, instantiate_base_regressor_subclass):
         """
         Test that get_params() contains expected values.
@@ -1085,6 +1099,22 @@ class TestObservationModel:
             pytest.skip(f"model {model_cls.__name__} don't require obervation model.")
         with expectation:
             model_cls(**DEFAULTS[model_cls.__name__], observation_model=observation)
+
+
+@pytest.mark.parametrize(
+    "instantiate_base_regressor_subclass",
+    INSTANTIATE_MODEL_ONLY,
+    indirect=True,
+)
+def test_simulate_requires_fit(instantiate_base_regressor_subclass):
+    """simulate() raises ``not fitted`` before fit is called."""
+    fixture = instantiate_base_regressor_subclass
+    model_cls = fixture.model.__class__
+    fresh_model = model_cls(**DEFAULTS[model_cls.__name__])
+    if not hasattr(fresh_model, "simulate"):
+        pytest.skip(f"{model_cls.__name__} does not implement simulate")
+    with pytest.raises(ValueError, match="not fitted"):
+        fresh_model.simulate(jax.random.key(0), fixture.X)
 
 
 @pytest.mark.parametrize(
