@@ -377,13 +377,17 @@ class GLMHMM(
 
         Use cached values to avoid unnecessary computations.
         """
-        ll_func = self._log_like_cache.get(
-            (y.ndim > 1, self._observation_model, self._inverse_link_function)
+        cache_key = (
+            y.ndim > 1,
+            self._observation_model,
+            self._inverse_link_function,
         )
+        ll_func = self._log_like_cache.get(cache_key)
         if ll_func is None:
             ll_func = prepare_estep_log_likelihood(
                 y.ndim > 1, self._observation_model, self._inverse_link_function
             )
+            self._log_like_cache[cache_key] = ll_func
         return ll_func(params, X, y)
 
     def setup(
