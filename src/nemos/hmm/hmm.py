@@ -480,6 +480,14 @@ class BaseHMM(
         """Extra kwargs to initialize the kmeans model. Can be overridden by child classes if needed."""
         return {}
 
+    def _kmeans_init_func_kwargs(self) -> dict:
+        """Kwargs forwarded to model-side kmeans init funcs alongside ``initializer``.
+
+        Override when the model's init-func signature requires extra args (e.g.
+        ``observation_model``). HMM-side init funcs do not receive these.
+        """
+        return {}
+
     def _kmeans_resolve_model_kwargs(self, use_kmeans, init_funcs) -> dict:
         """
         Extract model kmeans kwargs and ensure consistency across relevant init funcs.
@@ -528,7 +536,9 @@ class BaseHMM(
             ),
         )
 
-        # Inject initializer back only into relevant funcs
+        # Inject initializer back only into relevant funcs. Model-side funcs also
+        # receive any signature-required extras (e.g. observation_model for GLMHMM)
+        # via _kmeans_init_func_kwargs, so the upstream guard stays valid.
         if self._hmm_use_kmeans is not None:
             for param, use_kmeans in self._hmm_use_kmeans.items():
                 if use_kmeans:
@@ -536,11 +546,13 @@ class BaseHMM(
                         "initializer"
                     ] = initializer
         if self._model_use_kmeans is not None:
+            extra_kwargs = self._kmeans_init_func_kwargs()
             for param, use_kmeans in self._model_use_kmeans.items():
                 if use_kmeans:
-                    self._model_initialization_funcs[f"{param}_kwargs"][
-                        "initializer"
-                    ] = initializer
+                    kwargs = self._model_initialization_funcs[f"{param}_kwargs"]
+                    kwargs["initializer"] = initializer
+                    for k, v in extra_kwargs.items():
+                        kwargs.setdefault(k, v)
 
     def _model_specific_initialization(self, X, y, session_starts=None):
         """Model-specific initialization."""

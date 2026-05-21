@@ -640,6 +640,12 @@ class GLMHMM(
             "observation_model": self.observation_model,
         }
 
+    def _kmeans_init_func_kwargs(self) -> dict:
+        # observation_model is a required arg of kmeans_glm_params_init /
+        # kmeans_scale_init; surface it alongside the injected initializer so the
+        # upstream guard and the function signature are both satisfied.
+        return {"observation_model": self.observation_model}
+
     def _model_params_initialization(
         self,
         X: DESIGN_INPUT_TYPE,
