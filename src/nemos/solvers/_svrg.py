@@ -876,6 +876,14 @@ class _WrappedSVRGBase(JaxoptStochasticSolverMixin, JaxoptAdapter):
 
     _supports_stochastic = True
 
+    @property
+    def acceleration_turned_on(self) -> bool:
+        return False
+
+    @property
+    def linesearch_turned_on(self) -> bool:
+        return False
+
     def _epoch_prep(
         self,
         params: Params,

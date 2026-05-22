@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import abc
 from typing import TYPE_CHECKING, Any
 
 from nemos.solvers._abstract_solver import SolverAdapterState
@@ -34,7 +35,7 @@ def _params_only_cauchy_criterion(
     )
 
 
-class StochasticSolverMixin:
+class StochasticSolverMixin(abc.ABC):
     """
     Mixin providing standard stochastic optimization loop.
 
@@ -53,19 +54,25 @@ class StochasticSolverMixin:
 
     _supports_stochastic = True
 
+    @property
+    @abc.abstractmethod
+    def acceleration_turned_on(self) -> bool: ...
+
+    @property
+    @abc.abstractmethod
+    def linesearch_turned_on(self) -> bool: ...
+
     def _validate_stochastic_options(self):
         """Make sure acceleration and linesearches are turned off if available."""
-        if "acceleration" in self.get_accepted_arguments():
-            if self.acceleration:
-                raise ValueError(
-                    "Turn off acceleration option for stochastic optimization."
-                )
+        if self.acceleration_turned_on:
+            raise ValueError(
+                "Turn off acceleration option for stochastic optimization."
+            )
 
-        if "stepsize" in self.get_accepted_arguments():
-            if self.stepsize is None or self.stepsize <= 0.0:
-                raise ValueError(
-                    "Turn off linesearch and set explicit stepsizes for stochastic optimization."
-                )
+        if self.linesearch_turned_on:
+            raise ValueError(
+                "Turn off linesearch and set explicit stepsizes for stochastic optimization."
+            )
 
     def _epoch_prep(
         self,
@@ -185,6 +192,16 @@ class OptimistixStochasticSolverMixin(StochasticSolverMixin):
         # function evaluation on the whole data might be too expensive
         return _params_only_cauchy_criterion(params, prev_params, self.tol, self.rtol)
 
+    # FISTA, NAG, Optax GD all follow the same convention
+    @property
+    def acceleration_turned_on(self) -> bool:
+        return self.acceleration
+
+    # FISTA, NAG, Optax GD all follow the same convention
+    @property
+    def linesearch_turned_on(self) -> bool:
+        return self.stepsize is None or self.stepsize <= 0.0
+
 
 def _stepsize_normalized_convergence(
     params: Params,
@@ -220,6 +237,9 @@ class JaxoptStochasticSolverMixin(StochasticSolverMixin):
 
     Defines stochastic convergence criterion as |params - prev_params| / stepsize <= tol
     """
+
+    # acceleration_turned_on and linesearch_turned_on are defined in the concrete classes
+    # (Prox-)SVRG sets both to False
 
     def stochastic_convergence_criterion(
         self,

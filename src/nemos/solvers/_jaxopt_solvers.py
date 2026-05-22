@@ -15,6 +15,14 @@ if JAXOPT_AVAILABLE:
 
         _solver_cls = GradientDescent
 
+        @property
+        def acceleration_turned_on(self) -> bool:
+            return self.acceleration
+
+        @property
+        def linesearch_turned_on(self) -> bool:
+            return self.stepsize <= 0.0
+
     class JaxoptProximalGradient(JaxoptStochasticSolverMixin, JaxoptAdapter):
         """
         Adapter for jaxopt.ProximalGradient.
@@ -25,6 +33,14 @@ if JAXOPT_AVAILABLE:
 
         _solver_cls = ProximalGradient
         _proximal = True
+
+        @property
+        def acceleration_turned_on(self) -> bool:
+            return self.acceleration
+
+        @property
+        def linesearch_turned_on(self) -> bool:
+            return self.stepsize <= 0.0
 
     class JaxoptBFGS(JaxoptAdapter):
         """Adapter for jaxopt.BFGS."""
