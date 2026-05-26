@@ -6,6 +6,7 @@ from copy import deepcopy
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -1176,9 +1177,7 @@ class TestEMConfiguration:
         from nemos.glm_hmm import glm_hmm as glm_hmm_module
 
         calls = _spy_calls(monkeypatch, glm_hmm_module, "prepare_mstep_update_fn")
-        model = GLMHMM(
-            n_states=glm_hmm_data["n_states"], observation_model="Bernoulli"
-        )
+        model = GLMHMM(n_states=glm_hmm_data["n_states"], observation_model="Bernoulli")
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
@@ -1187,6 +1186,8 @@ class TestEMConfiguration:
         assert len(calls) == 1
         _, kwargs = calls[0]
         assert kwargs["observation_model"] is model._observation_model
+        p = model._validator.to_model_params(glm_hmm_data["init_params"])
+        assert eqx.tree_equal(p.model_params, kwargs["init_params"])
 
     def test_mstep_receives_inverse_link_function(
         self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
@@ -1209,9 +1210,7 @@ class TestEMConfiguration:
         """prepare_estep_log_likelihood is called with the model's _observation_model."""
         from nemos.glm_hmm import glm_hmm as glm_hmm_module
 
-        calls = _spy_calls(
-            monkeypatch, glm_hmm_module, "prepare_estep_log_likelihood"
-        )
+        calls = _spy_calls(monkeypatch, glm_hmm_module, "prepare_estep_log_likelihood")
         model = GLMHMM(n_states=2, observation_model="Poisson")
         model._log_likelihood(
             _make_model_params(2, 2), jnp.zeros((10, 2)), jnp.zeros(10)
@@ -1224,9 +1223,7 @@ class TestEMConfiguration:
         """prepare_estep_log_likelihood is called with the model's _inverse_link_function."""
         from nemos.glm_hmm import glm_hmm as glm_hmm_module
 
-        calls = _spy_calls(
-            monkeypatch, glm_hmm_module, "prepare_estep_log_likelihood"
-        )
+        calls = _spy_calls(monkeypatch, glm_hmm_module, "prepare_estep_log_likelihood")
         model = GLMHMM(n_states=2)
         model._log_likelihood(
             _make_model_params(2, 2), jnp.zeros((10, 2)), jnp.zeros(10)
@@ -1288,9 +1285,7 @@ class TestEMConfiguration:
         assert opt_run.keywords["maxiter"] == custom_maxiter
         assert opt_run.keywords["tol"] == custom_tol
 
-    def test_optimizer_run_and_update_share_mstep_fn(
-        self, glm_hmm_data, monkeypatch
-    ):
+    def test_optimizer_run_and_update_share_mstep_fn(self, glm_hmm_data, monkeypatch):
         """_optimizer_run and _optimizer_update receive the same m_step_fn_model_params closure."""
         from types import SimpleNamespace
 
