@@ -22,7 +22,6 @@ from nemos.glm_hmm.validation import GLMHMMValidator
 from nemos.hmm.expectation_maximization import EMState
 from nemos.hmm.hmm import BaseHMM
 from nemos.hmm.params import HMMParams
-from nemos.pytrees import FeaturePytree
 from nemos.regularizer import Ridge, UnRegularized
 from nemos.utils import _get_name
 from tests.conftest import instantiate_glm_hmm_func
@@ -156,182 +155,6 @@ class TestGLMHMM:
             model_single.initial_prob_, model_multi.initial_prob_
         )
 
-    @pytest.mark.parametrize(
-        "dim_weights, expectation",
-        [
-            (0, pytest.raises(ValueError, match=r"dimensionality")),
-            (1, pytest.raises(ValueError, match=r"dimensionality")),
-            (2, does_not_raise()),
-            (3, pytest.raises(ValueError, match=r"dimensionality")),
-        ],
-    )
-    def test_fit_weights_dimensionality(
-        self,
-        dim_weights,
-        expectation,
-        instantiate_base_regressor_subclass,
-    ):
-        """Coef with wrong ndim raises via validator; correct ndim=2 does not."""
-        fixture = instantiate_base_regressor_subclass
-        n_features = fixture.X.shape[1]
-        coef_shape = DEFAULT_GLM_COEF_SHAPE[fixture.model.__class__.__name__]
-        if dim_weights == 0:
-            init_w = jnp.array([])
-        elif dim_weights == 1:
-            init_w = jnp.zeros((n_features,))
-        elif dim_weights == 2:
-            init_w = jnp.zeros(coef_shape)
-        else:
-            init_w = jnp.zeros(coef_shape + (1,) * (dim_weights - 2))
-
-        validator = GLMHMMValidator(n_states=N_STATES)
-        params = (
-            init_w,
-            fixture.params.model_params.intercept,
-            fixture.params.model_params.log_scale,
-            jnp.exp(fixture.params.hmm_params.log_initial_prob),
-            jnp.exp(fixture.params.hmm_params.log_transition_prob),
-        )
-        with expectation:
-            validator.validate_and_cast_params(params)
-
-    @pytest.mark.parametrize(
-        "dim_intercepts, expectation",
-        [
-            (0, pytest.raises(ValueError, match=r"Unexpected array dimensionality")),
-            (1, does_not_raise()),
-            (2, pytest.raises(ValueError, match=r"Unexpected array dimensionality")),
-            (3, pytest.raises(ValueError, match=r"Unexpected array dimensionality")),
-        ],
-    )
-    def test_fit_intercepts_dimensionality(
-        self,
-        dim_intercepts,
-        expectation,
-        instantiate_base_regressor_subclass,
-    ):
-        """Intercept with wrong ndim raises via validator; ndim=1 does not."""
-        fixture = instantiate_base_regressor_subclass
-        n_states = DEFAULT_GLM_COEF_SHAPE[fixture.model.__class__.__name__][1]
-        if dim_intercepts == 0:
-            init_b = jnp.array(1.0)
-        else:
-            init_b = jnp.ones((n_states,) + (1,) * (dim_intercepts - 1))
-
-        validator = GLMHMMValidator(n_states=N_STATES)
-        params = (
-            fixture.params.model_params.coef,
-            init_b,
-            fixture.params.model_params.log_scale,
-            jnp.exp(fixture.params.hmm_params.log_initial_prob),
-            jnp.exp(fixture.params.hmm_params.log_transition_prob),
-        )
-        with expectation:
-            validator.validate_and_cast_params(params)
-
-    # Parametrize table for test_fit_init_glm_params_type.
-    # Wrong-length / non-tuple cases (scalar, set, len != 5) are covered by the
-    # shared TestModelValidator.test_validate_param_length in
-    # test_base_regressor_subclasses.py.
-    _fit_init_params_type_cases = (
-        "expectation, init_params",
-        [
-            # Valid: correct shapes for all five params
-            (
-                does_not_raise(),
-                (
-                    jnp.zeros((2, 3)),
-                    jnp.zeros((3,)),
-                    jnp.ones((3,)),
-                    jnp.ones(3) / 3,
-                    jnp.ones((3, 3)) / 3,
-                ),
-            ),
-            # Dict coef while X is a plain array — tested at consistency level
-            (
-                pytest.raises((AttributeError, TypeError)),
-                (
-                    dict(p1=jnp.zeros((1, 3)), p2=jnp.zeros((1, 3))),
-                    jnp.zeros((3,)),
-                    jnp.ones((3,)),
-                    jnp.ones(3) / 3,
-                    jnp.ones((3, 3)) / 3,
-                ),
-            ),
-            # FeaturePytree coef while X is a plain array
-            (
-                pytest.raises(TypeError, match=r"X and coef have mismatched structure"),
-                (
-                    FeaturePytree(p1=jnp.zeros((1, 3)), p2=jnp.zeros((1, 3))),
-                    jnp.zeros((3,)),
-                    jnp.ones((3,)),
-                    jnp.ones(3) / 3,
-                    jnp.ones((3, 3)) / 3,
-                ),
-            ),
-            # String intercept
-            (
-                pytest.raises(
-                    TypeError, match="Failed to convert parameters to JAX arrays"
-                ),
-                (
-                    jnp.zeros((2, 3)),
-                    "",
-                    jnp.ones((3,)),
-                    jnp.ones(3) / 3,
-                    jnp.ones((3, 3)) / 3,
-                ),
-            ),
-            # String coef
-            (
-                pytest.raises(
-                    TypeError, match="Failed to convert parameters to JAX arrays"
-                ),
-                (
-                    "",
-                    jnp.zeros((3,)),
-                    jnp.ones((3,)),
-                    jnp.ones(3) / 3,
-                    jnp.ones((3, 3)) / 3,
-                ),
-            ),
-        ],
-    )
-
-    @pytest.mark.parametrize(*_fit_init_params_type_cases)
-    def test_fit_init_glm_params_type(
-        self,
-        instantiate_base_regressor_subclass,
-        expectation,
-        init_params,
-        mock_glm_hmm_optimizer_run,
-    ):
-        """Valid init_params accepted; invalid types/lengths rejected with clear errors.
-
-        The dict-coef and FeaturePytree cases require the consistency check that
-        runs inside fit(), so model.fit() is still called for those.  All other
-        cases only need the validation pipeline and use the validator directly.
-        """
-        fixture = instantiate_base_regressor_subclass
-
-        # Cases that require X-vs-coef structure check inside fit()
-        needs_fit = (
-            isinstance(init_params, tuple)
-            and len(init_params) == 5
-            and (isinstance(init_params[0], (dict, FeaturePytree)))
-        )
-
-        if needs_fit:
-            with expectation:
-                fixture.model.fit(fixture.X, fixture.y, init_params=init_params)
-        else:
-            validator = GLMHMMValidator(n_states=N_STATES)
-            with expectation:
-                validated = validator.validate_and_cast_params(init_params)
-                # For the valid case, also run consistency check
-                if isinstance(init_params, tuple) and len(init_params) == 5:
-                    validator.validate_consistency(validated, X=fixture.X, y=fixture.y)
-
     def test_kmeans_initialized_once(
         self, mock_glm_hmm_optimizer_run, instantiate_base_regressor_subclass
     ):
@@ -358,33 +181,27 @@ class TestGLMHMM:
             fixture.model.fit(fixture.X, fixture.y)
             assert MockClass.call_count == 1
 
-    @pytest.mark.parametrize(
-        "delta_n_features, expectation",
-        [
-            (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
-            (0, does_not_raise()),
-            (1, pytest.raises(ValueError, match="Inconsistent number of features")),
-        ],
-    )
-    def test_fit_n_feature_consistency_weights(
+    def test_fit_calls_validate_consistency(
         self,
-        delta_n_features,
-        expectation,
         instantiate_base_regressor_subclass,
+        mock_glm_hmm_optimizer_run,
+        monkeypatch,
     ):
-        """Coef feature count must match X.shape[1]; mismatch raises ValueError."""
-        fixture = instantiate_base_regressor_subclass
-        init_w = jnp.zeros((fixture.X.shape[1] + delta_n_features, N_STATES))
-        init_b = jnp.ones(N_STATES)
-        init_scale = fixture.params.model_params.log_scale
-        init_ip = jnp.exp(fixture.params.hmm_params.log_initial_prob)
-        init_tp = jnp.exp(fixture.params.hmm_params.log_transition_prob)
+        """fit() delegates X-vs-params consistency checking to validate_consistency.
 
-        validator = GLMHMMValidator(n_states=N_STATES)
-        params = (init_w, init_b, init_scale, init_ip, init_tp)
-        with expectation:
-            model_params = validator.validate_and_cast_params(params)
-            validator.validate_consistency(model_params, X=fixture.X, y=fixture.y)
+        The exhaustive cases (feature count mismatch, shape mismatches) are
+        tested directly against the validator in test_glm_hmm_validator.py.
+        Here we only verify the delegation contract so that fit() cannot silently
+        bypass the consistency check.
+        """
+        fixture = instantiate_base_regressor_subclass
+        calls = _spy_calls(monkeypatch, GLMHMMValidator, "validate_consistency")
+        fixture.model.fit(
+            fixture.X,
+            fixture.y,
+            init_params=_init_params_from_fixture(fixture),
+        )
+        assert len(calls) == 1
 
 
 @pytest.fixture
@@ -532,7 +349,7 @@ class TestSolverConfiguration:
             glm_hmm_data["y"],
             init_params=glm_hmm_data["init_params"],
         )
-        assert len(calls) >= 1
+        assert len(calls) == 1
         primary = calls[0]
         assert isinstance(primary["regularizer"], expected_regularizer_type)
         assert solver_name in primary["solver_name"]
@@ -591,23 +408,15 @@ class TestSolverConfiguration:
         is_ns[0] = True
         is_ns[n // 2] = True
 
-        captured = {}
-        original_model_init = GLMHMM._model_specific_initialization
-
-        def capturing_model_init(self, X, y, session_starts=None):
-            captured["session_starts"] = session_starts
-            return original_model_init(self, X, y, session_starts)
-
-        monkeypatch.setattr(
-            GLMHMM, "_model_specific_initialization", capturing_model_init
-        )
-
+        calls = _spy_calls(monkeypatch, GLMHMM, "_model_specific_initialization")
         fixture.model.fit(X, y, session_starts=is_ns)
 
-        assert "session_starts" in captured
-        assert captured["session_starts"] is not None
-        # The session boundary at n//2 should be present in the forwarded array.
-        assert bool(captured["session_starts"][n // 2])
+        assert len(calls) == 1
+        args, _ = calls[0]
+        # signature: (self, X, y, session_starts)
+        forwarded_session_starts = args[3]
+        assert forwarded_session_starts is not None
+        assert bool(forwarded_session_starts[n // 2])
 
     @pytest.mark.parametrize(
         "instantiate_base_regressor_subclass",
