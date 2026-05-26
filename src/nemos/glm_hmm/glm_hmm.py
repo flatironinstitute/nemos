@@ -721,8 +721,8 @@ class GLMHMM(
             - a boolean array of shape ``(n_time_bins,)`` with ``True`` at each
               session start,
             - an integer array of session-start indices,
-            - a pynapple ``IntervalSet`` (when ``X`` or ``y`` is a pynapple
-              object).
+            - a pynapple ``IntervalSet`` (requires ``X`` or ``y`` to be a
+              pynapple object to supply timestamps).
 
             If ``X`` or ``y`` is a pynapple object and ``session_starts`` is
             ``None``, the (unique, enforced) ``time_support`` of the pynapple
@@ -920,10 +920,18 @@ class GLMHMM(
             - ``"index"``: Integer array of shape ``(n_time_bins,)`` with state indices.
             - ``"one-hot"``: Binary array of shape ``(n_time_bins, n_states)``.
         session_starts :
-            Boolean array of shape ``(n_time_bins,)`` marking session starts with
-            ``True``. If ``None``, the entire input is treated as a single session.
-            Ignored when ``feedforward_input`` is a pynapple object (boundaries are
-            inferred from ``time_support``).
+            Optional session boundaries. Accepts:
+
+            - a boolean array of shape ``(n_time_bins,)`` with ``True`` at each
+              session start,
+            - an integer array of session-start indices,
+            - a pynapple ``IntervalSet`` (requires ``feedforward_input`` to be a
+              pynapple object to supply timestamps).
+
+            If ``feedforward_input`` is a pynapple object and ``session_starts``
+            is ``None``, the ``time_support`` determines the session starts. With
+            no pynapple input and ``session_starts=None``, the whole input is
+            treated as a single session.
 
         Returns
         -------
@@ -997,11 +1005,68 @@ class GLMHMM(
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
         session_starts: Optional[ArrayLike] = None,
     ) -> jnp.ndarray | nap.TsdFrame:
-        """Compute smoothing posterior probabilities for the GLM-HMM.
+        """Compute smoothing posterior probabilities over hidden states.
 
-        Thin override of :meth:`nemos.hmm.BaseHMM.smooth_proba` carrying a
-        GLM-HMM-specific Example. The full Parameters/Returns/Raises/Notes
-        documentation lives on the base method.
+        Computes the probability of being in each hidden state at each time bin,
+        conditioned on the entire observed sequence. Uses the forward-backward
+        algorithm to incorporate information from both past and future observations,
+        providing optimal state estimates given all available data.
+
+        The smoothing posteriors answer: "Given all observations, what is the
+        probability that the system was in state ``k`` at time ``t``?"
+
+        Parameters
+        ----------
+        X :
+            Predictors, shape ``(n_time_bins, n_features)``. A pytree of 2-D
+            arrays sharing the leading time axis is also accepted.
+        y :
+            Observations, shape ``(n_time_bins,)`` for a single neuron or
+            ``(n_time_bins, n_neurons)`` for a population model. A pynapple
+            ``Tsd``/``TsdFrame`` is accepted; session boundaries are then
+            inferred from ``time_support``.
+        session_starts :
+            Optional session boundaries. Accepts:
+
+            - a boolean array of shape ``(n_time_bins,)`` with ``True`` at each
+              session start,
+            - an integer array of session-start indices,
+            - a pynapple ``IntervalSet`` (requires ``X`` or ``y`` to be a
+              pynapple object to supply timestamps).
+
+            If ``None``, the entire input is treated as a single session.
+
+        Returns
+        -------
+        posteriors :
+            Smoothing posterior probabilities, shape ``(n_time_bins, n_states)``.
+            Each row sums to 1. Returns a pynapple ``TsdFrame`` (with columns
+            named ``"state_0"``, ``"state_1"``, …) when the inputs are pynapple
+            objects; otherwise returns a JAX array.
+
+        Raises
+        ------
+        ValueError
+            If the model has not been fitted (call :meth:`fit` first).
+        ValueError
+            If ``X`` or ``y`` contain NaN values in the interior of an epoch
+            (boundary NaNs are allowed and removed before inference).
+        ValueError
+            If ``X`` and ``y`` have inconsistent shapes or feature counts.
+
+        See Also
+        --------
+        filter_proba :
+            Compute filtering posteriors (conditioned on past observations only).
+        decode_state :
+            Compute the most likely state sequence via Viterbi decoding.
+
+        Notes
+        -----
+        Smoothing uses all data (non-causal) and gives better state estimates than
+        filtering. For online or real-time applications use :meth:`filter_proba`
+        instead. Session boundaries reset the HMM chain so that no information
+        crosses session borders.
 
         Examples
         --------
@@ -1036,11 +1101,69 @@ class GLMHMM(
         y: Union[NDArray, jnp.ndarray, nap.Tsd],
         session_starts: Optional[ArrayLike] = None,
     ) -> jnp.ndarray | nap.TsdFrame:
-        """Compute filtering posterior probabilities for the GLM-HMM.
+        """Compute filtering posterior probabilities over hidden states.
 
-        Thin override of :meth:`nemos.hmm.BaseHMM.filter_proba` carrying a
-        GLM-HMM-specific Example. The full Parameters/Returns/Raises/Notes
-        documentation lives on the base method.
+        Computes the probability of being in each hidden state at each time bin,
+        conditioned only on observations up to that time bin. Uses the forward
+        pass of the forward-backward algorithm, providing causal (online) state
+        estimates that rely solely on past and current observations.
+
+        The filtering posteriors answer: "Given observations up to time ``t``,
+        what is the probability that the system is in state ``k`` at time ``t``?"
+
+        Parameters
+        ----------
+        X :
+            Predictors, shape ``(n_time_bins, n_features)``. A pytree of 2-D
+            arrays sharing the leading time axis is also accepted.
+        y :
+            Observations, shape ``(n_time_bins,)`` for a single neuron or
+            ``(n_time_bins, n_neurons)`` for a population model. A pynapple
+            ``Tsd``/``TsdFrame`` is accepted; session boundaries are then
+            inferred from ``time_support``.
+        session_starts :
+            Optional session boundaries. Accepts:
+
+            - a boolean array of shape ``(n_time_bins,)`` with ``True`` at each
+              session start,
+            - an integer array of session-start indices,
+            - a pynapple ``IntervalSet`` (requires ``X`` or ``y`` to be a
+              pynapple object to supply timestamps).
+
+            If ``None``, the entire input is treated as a single session.
+
+        Returns
+        -------
+        posteriors :
+            Filtering posterior probabilities, shape ``(n_time_bins, n_states)``.
+            Each row sums to 1. Returns a pynapple ``TsdFrame`` (with columns
+            named ``"state_0"``, ``"state_1"``, …) when the inputs are pynapple
+            objects; otherwise returns a JAX array.
+
+        Raises
+        ------
+        ValueError
+            If the model has not been fitted (call :meth:`fit` first).
+        ValueError
+            If ``X`` or ``y`` contain NaN values in the interior of an epoch
+            (boundary NaNs are allowed and removed before inference).
+        ValueError
+            If ``X`` and ``y`` have inconsistent shapes or feature counts.
+
+        See Also
+        --------
+        smooth_proba :
+            Compute smoothing posteriors (conditioned on all observations).
+        decode_state :
+            Compute the most likely state sequence via Viterbi decoding.
+
+        Notes
+        -----
+        Filtering is causal: each posterior at time ``t`` uses only observations
+        up to ``t``, making it suitable for online or real-time applications.
+        For retrospective analysis where all data are available, :meth:`smooth_proba`
+        gives better state estimates. Session boundaries reset the HMM chain so
+        that no information crosses session borders.
 
         Examples
         --------
@@ -1057,6 +1180,15 @@ class GLMHMM(
         (100, 3)
         >>> bool(np.allclose(filt.sum(axis=1), 1.0))
         True
+
+        With pynapple inputs the result is returned as a ``TsdFrame``:
+
+        >>> import pynapple as nap
+        >>> t = np.arange(100) * 0.01
+        >>> X_tsd = nap.TsdFrame(t=t, d=X)
+        >>> y_tsd = nap.Tsd(t=t, d=y.astype(float))
+        >>> type(model.filter_proba(X_tsd, y_tsd)).__name__
+        'TsdFrame'
         """
         return super().filter_proba(X, y, session_starts=session_starts)
 
@@ -1067,11 +1199,82 @@ class GLMHMM(
         session_starts: Optional[ArrayLike] = None,
         state_format: Literal["one-hot", "index"] = "one-hot",
     ) -> jnp.ndarray | nap.TsdFrame:
-        """Viterbi-decode the most likely hidden state sequence for the GLM-HMM.
+        """Compute the most likely hidden state sequence (Viterbi decoding).
 
-        Thin override of :meth:`nemos.hmm.BaseHMM.decode_state` carrying a
-        GLM-HMM-specific Example. The full Parameters/Returns/Raises/Notes
-        documentation lives on the base method.
+        Finds the single most likely sequence of hidden states that best explains
+        the observed data. Uses the Viterbi (max-sum) algorithm to compute the
+        state sequence that maximizes the joint probability of states and observations.
+
+        Unlike :meth:`smooth_proba` and :meth:`filter_proba`, which return a
+        probability distribution over states at each time bin, this method makes
+        a hard assignment to the single globally optimal state path.
+
+        The decoded states answer: "What is the most likely sequence of states
+        that generated the observed data?"
+
+        Parameters
+        ----------
+        X :
+            Predictors, shape ``(n_time_bins, n_features)``. A pytree of 2-D
+            arrays sharing the leading time axis is also accepted.
+        y :
+            Observations, shape ``(n_time_bins,)`` for a single neuron or
+            ``(n_time_bins, n_neurons)`` for a population model. A pynapple
+            ``Tsd``/``TsdFrame`` is accepted; session boundaries are then
+            inferred from ``time_support``.
+        session_starts :
+            Optional session boundaries. Accepts:
+
+            - a boolean array of shape ``(n_time_bins,)`` with ``True`` at each
+              session start,
+            - an integer array of session-start indices,
+            - a pynapple ``IntervalSet`` (requires ``X`` or ``y`` to be a
+              pynapple object to supply timestamps).
+
+            If ``None``, the entire input is treated as a single session.
+        state_format :
+            Format of the returned state sequence:
+
+            - ``"one-hot"`` (default): binary array of shape
+              ``(n_time_bins, n_states)`` with a single 1 per row.
+            - ``"index"``: integer array of shape ``(n_time_bins,)`` with
+              values in ``[0, n_states - 1]``.
+
+        Returns
+        -------
+        decoded_states :
+            Most likely state sequence. Shape and dtype depend on
+            ``state_format`` (see above). Returns a pynapple ``TsdFrame``
+            (columns ``"state_0"``, ``"state_1"``, …) for ``"one-hot"`` format
+            or a pynapple ``Tsd`` for ``"index"`` format when the inputs are
+            pynapple objects; otherwise returns a JAX array.
+
+        Raises
+        ------
+        ValueError
+            If the model has not been fitted (call :meth:`fit` first).
+        ValueError
+            If ``state_format`` is not ``"one-hot"`` or ``"index"``.
+        ValueError
+            If ``X`` or ``y`` contain NaN values in the interior of an epoch
+            (boundary NaNs are allowed and removed before inference).
+        ValueError
+            If ``X`` and ``y`` have inconsistent shapes or feature counts.
+
+        See Also
+        --------
+        smooth_proba :
+            Compute smoothing posteriors (soft, probabilistic state assignments).
+        filter_proba :
+            Compute filtering posteriors (causal, conditioned on past observations).
+
+        Notes
+        -----
+        Viterbi decoding finds the globally optimal state *sequence*, which can
+        differ from the sequence of states that are individually most probable
+        at each time bin (as returned by :meth:`smooth_proba`). For uncertainty
+        estimates use :meth:`smooth_proba` instead. Session boundaries reset the
+        Viterbi recursion so that no path crosses session borders.
 
         Examples
         --------
@@ -1319,10 +1522,15 @@ class GLMHMM(
         y :
             Observations, shape ``(n_time_bins,)`` or ``(n_time_bins, n_neurons)``.
         session_starts :
-            Optional session-boundary spec. Accepts a boolean mask of shape
-            ``(n_time_bins,)``, an integer array of session-start indices, or a
-            pynapple ``IntervalSet`` (when X or y is a pynapple object). ``None``
-            treats all samples as a single session.
+            Optional session boundaries. Accepts:
+
+            - a boolean array of shape ``(n_time_bins,)`` with ``True`` at each
+              session start,
+            - an integer array of session-start indices,
+            - a pynapple ``IntervalSet`` (requires ``X`` or ``y`` to be a
+              pynapple object to supply timestamps).
+
+            If ``None``, the entire input is treated as a single session.
         n_samples :
             Total sample count to use when estimating the residual degrees of
             freedom. Defaults to ``X.shape[0]``.
