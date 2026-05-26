@@ -1202,6 +1202,48 @@ class TestHMMNewSession:
         assert jnp.all(session_starts == expected_new_session)
 
     @pytest.mark.parametrize(
+        "X, y, session_starts, expected",
+        [
+            # Use provided iset
+            (
+                nap.TsdFrame(
+                    t=np.arange(3),
+                    d=np.zeros((3, 3)),
+                    time_support=nap.IntervalSet([0, 1.5], [1.0, 2.0]),
+                ),
+                nap.Tsd(
+                    t=np.arange(3),
+                    d=np.zeros((3,)),
+                    time_support=nap.IntervalSet([0, 1.5], [1.0, 2.0]),
+                ),
+                nap.IntervalSet(1, 10),
+                jnp.array([True, True, False]),
+            ),
+            # Use iset from Tsds
+            (
+                nap.TsdFrame(
+                    t=np.arange(3),
+                    d=np.zeros((3, 3)),
+                    time_support=nap.IntervalSet([0, 1.5], [1.0, 2.0]),
+                ),
+                nap.Tsd(
+                    t=np.arange(3),
+                    d=np.zeros((3,)),
+                    time_support=nap.IntervalSet([0, 1.5], [1.0, 2.0]),
+                ),
+                None,
+                jnp.array([True, False, True]),
+            ),
+        ],
+    )
+    def test_session_starts_resolution_hierarchy(self, X, y, session_starts, expected):
+        model = MockHMM(n_states=3)
+        session_starts = model._validator.validate_and_cast_session_starts(
+            X, y, session_starts
+        )
+        np.testing.assert_array_equal(session_starts, expected)
+
+    @pytest.mark.parametrize(
         "X, y, session_starts, expectation",
         [
             # wrong shape for boolean array

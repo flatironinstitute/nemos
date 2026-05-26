@@ -13,6 +13,7 @@ import numpy as np
 import pynapple as nap
 import pytest
 
+import nemos as nmo
 from nemos.glm.params import GLMParams
 from nemos.glm_hmm.glm_hmm import GLMHMM
 from nemos.glm_hmm.params import GLMHMMModelParams, GLMHMMParams
@@ -22,6 +23,8 @@ from nemos.hmm.hmm import BaseHMM
 from nemos.hmm.params import HMMParams
 from nemos.pytrees import FeaturePytree
 from nemos.regularizer import Ridge, UnRegularized
+from nemos.utils import _get_name
+from tests.conftest import instantiate_glm_hmm_func
 
 # ---------------------------------------------------------------------------
 # Parametrize lists: GLMHMM only, single obs_model (Bernoulli).
@@ -1170,14 +1173,18 @@ class TestEMConfiguration:
     is_population_glm, maxiter, and tol all reach the correct callables.
     """
 
-    def test_mstep_receives_observation_model(
+    def test_mstep_receives_params(
         self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
     ):
         """prepare_mstep_update_fn is called with the model's _observation_model."""
         from nemos.glm_hmm import glm_hmm as glm_hmm_module
 
         calls = _spy_calls(monkeypatch, glm_hmm_module, "prepare_mstep_update_fn")
-        model = GLMHMM(n_states=glm_hmm_data["n_states"], observation_model="Bernoulli")
+        model = GLMHMM(
+            n_states=glm_hmm_data["n_states"],
+            observation_model="Poisson",
+            inverse_link_function=jax.nn.softplus,
+        )
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
@@ -1188,48 +1195,28 @@ class TestEMConfiguration:
         assert kwargs["observation_model"] is model._observation_model
         p = model._validator.to_model_params(glm_hmm_data["init_params"])
         assert eqx.tree_equal(p.model_params, kwargs["init_params"])
-
-    def test_mstep_receives_inverse_link_function(
-        self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
-    ):
-        """prepare_mstep_update_fn is called with the model's _inverse_link_function."""
-        from nemos.glm_hmm import glm_hmm as glm_hmm_module
-
-        calls = _spy_calls(monkeypatch, glm_hmm_module, "prepare_mstep_update_fn")
-        model = GLMHMM(n_states=glm_hmm_data["n_states"])
-        model.fit(
-            glm_hmm_data["X"],
-            glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
-        )
-        assert len(calls) == 1
-        _, kwargs = calls[0]
         assert kwargs["inverse_link_function"] is model._inverse_link_function
 
-    def test_estep_ll_receives_observation_model(self, monkeypatch):
-        """prepare_estep_log_likelihood is called with the model's _observation_model."""
+    def test_estep_ll_receives_observation_config(self, monkeypatch):
+        """prepare_estep_log_likelihood receives the model's observation_model and inverse_link_function.
+
+        Uses non-default Poisson + softplus so identity checks fail if the code
+        always forwards the Bernoulli/sigmoid defaults.
+        """
         from nemos.glm_hmm import glm_hmm as glm_hmm_module
 
         calls = _spy_calls(monkeypatch, glm_hmm_module, "prepare_estep_log_likelihood")
-        model = GLMHMM(n_states=2, observation_model="Poisson")
+        model = GLMHMM(
+            n_states=2,
+            observation_model="Poisson",
+            inverse_link_function=jax.nn.softplus,
+        )
         model._log_likelihood(
             _make_model_params(2, 2), jnp.zeros((10, 2)), jnp.zeros(10)
         )
         assert len(calls) == 1
         args, _ = calls[0]
         assert args[1] is model._observation_model
-
-    def test_estep_ll_receives_inverse_link_function(self, monkeypatch):
-        """prepare_estep_log_likelihood is called with the model's _inverse_link_function."""
-        from nemos.glm_hmm import glm_hmm as glm_hmm_module
-
-        calls = _spy_calls(monkeypatch, glm_hmm_module, "prepare_estep_log_likelihood")
-        model = GLMHMM(n_states=2)
-        model._log_likelihood(
-            _make_model_params(2, 2), jnp.zeros((10, 2)), jnp.zeros(10)
-        )
-        assert len(calls) == 1
-        args, _ = calls[0]
         assert args[2] is model._inverse_link_function
 
     def test_is_population_false_for_1d_y(
@@ -1319,6 +1306,109 @@ class TestEMConfiguration:
 
 
 # ---------------------------------------------------------------------------
+# save_params / load_model round-trip
+# ---------------------------------------------------------------------------
+
+
+def _assert_params_equal(a, b, path=""):
+    """Recursively assert two param trees are equal, dispatching by type."""
+    if a is None:
+        assert b is None, f"{path}: expected None, got {b!r}"
+    elif isinstance(a, dict):
+        for (ka, va), (kb, vb) in zip(a.items(), b.items(), strict=True):
+            assert ka == kb, f"{path}: key mismatch {ka!r} != {kb!r}"
+            _assert_params_equal(va, vb, f"{path}.{ka}" if path else ka)
+    elif isinstance(a, (np.ndarray, jnp.ndarray)):
+        np.testing.assert_allclose(
+            np.array(a), np.array(b), err_msg=f"array mismatch at {path}"
+        )
+    elif isinstance(a, (bool, int, float, str)):
+        assert a == b, f"{path}: {a!r} != {b!r}"
+    else:
+        # callables and class instances (e.g. observation model objects): compare by name
+        assert _get_name(a) == _get_name(
+            b
+        ), f"{path}: name mismatch {_get_name(a)} != {_get_name(b)}"
+
+
+def _collect_params(model, *, skip_solver_state=True):
+    """Merge get_params() and _get_fit_state() into a single flat dict."""
+    params = model.get_params()
+    fit_state = model._get_fit_state()
+    if skip_solver_state:
+        fit_state.pop("solver_state_", None)
+    params.update(fit_state)
+    return params
+
+
+def _custom_glm_init(n_states, X, y, inverse_link_function, session_starts, random_key):
+    """Custom GLM-params initializer used to exercise the custom-callable path."""
+    return jnp.zeros((X.shape[1], n_states)), jnp.zeros((n_states,))
+
+
+@pytest.fixture(scope="module")
+def fitted_glmhmm():
+    f = instantiate_glm_hmm_func(simulate=False)
+    f.model.fit(f.X, f.y, init_params=_init_params_from_fixture(f))
+    return f.model
+
+
+@pytest.fixture(scope="module")
+def fitted_glmhmm_custom():
+    f = instantiate_glm_hmm_func(simulate=False)
+    f.model.setup(glm_params_init=_custom_glm_init)
+    f.model.fit(f.X, f.y, init_params=_init_params_from_fixture(f))
+    return f.model
+
+
+class TestGLMHMMSaveLoad:
+    """save_params / load_model round-trip with native and custom initializers."""
+
+    def test_native_round_trip(self, fitted_glmhmm, tmp_path):
+        """All params and fit-state survive a save/load cycle with default initializers."""
+        save_path = tmp_path / "glmhmm.npz"
+        fitted_glmhmm.save_params(save_path)
+        loaded = nmo.load_model(save_path)
+
+        _assert_params_equal(_collect_params(fitted_glmhmm), _collect_params(loaded))
+
+    def test_custom_callable_requires_mapping(self, fitted_glmhmm_custom, tmp_path):
+        """Custom callable can't be resolved from name alone; load raises a clear error."""
+        save_path = tmp_path / "glmhmm.npz"
+        fitted_glmhmm_custom.save_params(save_path)
+
+        with pytest.raises(
+            ValueError, match="Failed to instantiate model class"
+        ) as excinfo:
+            nmo.load_model(save_path)
+        assert "glm_params_init" in str(excinfo.value.__cause__)
+
+    @pytest.mark.parametrize(
+        "mapping_dict",
+        [
+            {"model_initialization_funcs": {"glm_params_init": _custom_glm_init}},
+            {"model_initialization_funcs__glm_params_init": _custom_glm_init},
+        ],
+        ids=["nested-dict", "sklearn-key"],
+    )
+    def test_custom_callable_mapping(
+        self, fitted_glmhmm_custom, tmp_path, mapping_dict
+    ):
+        """Both mapping_dict formats resolve the custom callable and preserve all params."""
+        save_path = tmp_path / "glmhmm.npz"
+        fitted_glmhmm_custom.save_params(save_path)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            loaded = nmo.load_model(save_path, mapping_dict=mapping_dict)
+
+        assert loaded.model_initialization_funcs["glm_params_init"] is _custom_glm_init
+        _assert_params_equal(
+            _collect_params(fitted_glmhmm_custom), _collect_params(loaded)
+        )
+
+
+# ---------------------------------------------------------------------------
 # TestUpdateFitEquivalence — N update steps == fit with maxiter=N
 # ---------------------------------------------------------------------------
 
@@ -1326,6 +1416,7 @@ class TestEMConfiguration:
 class TestUpdateFitEquivalence:
     """Verify that calling update() N times produces the same result as fit(maxiter=N)."""
 
+    @pytest.mark.requires_x64
     def test_n_update_steps_matches_fit(self):
         """fit(maxiter=N) and N manual update() calls from the same init produce identical params."""
         rng = np.random.default_rng(0)
@@ -1361,132 +1452,12 @@ class TestUpdateFitEquivalence:
         for _ in range(n_steps):
             params, opt_state = model_update.update(params, opt_state, X, y)
 
-        np.testing.assert_allclose(model_fit.coef_, model_update.coef_, rtol=1e-5)
+        np.testing.assert_allclose(model_fit.coef_, model_update.coef_)
+        np.testing.assert_allclose(model_fit.intercept_, model_update.intercept_)
+        np.testing.assert_allclose(model_fit.initial_prob_, model_update.initial_prob_)
         np.testing.assert_allclose(
-            model_fit.intercept_, model_update.intercept_, rtol=1e-5
+            model_fit.transition_prob_, model_update.transition_prob_
         )
-        np.testing.assert_allclose(
-            model_fit.initial_prob_, model_update.initial_prob_, rtol=1e-5
-        )
-        np.testing.assert_allclose(
-            model_fit.transition_prob_, model_update.transition_prob_, rtol=1e-5
-        )
-
-
-# ---------------------------------------------------------------------------
-# save_params / load_model round-trip
-# ---------------------------------------------------------------------------
-
-
-def _custom_glm_init(n_states, X, y, inverse_link_function, session_starts, random_key):
-    """Custom GLM-params initializer used to exercise the custom-callable path."""
-    return jnp.zeros((X.shape[1], n_states)), jnp.zeros((n_states,))
-
-
-def _fit_glmhmm(custom=False):
-    np.random.seed(0)
-    X = np.random.normal(size=(80, 3))
-    y = np.random.binomial(n=1, p=0.5, size=80)
-    model = GLMHMM(n_states=2)
-    if custom:
-        model.setup(glm_params_init=_custom_glm_init)
-    model.fit(X, y)
-    return model
-
-
-class TestGLMHMMSaveLoad:
-    """save_params / load_model round-trip with native and custom initializers."""
-
-    def test_native_round_trip(self, tmp_path):
-        """Default initializers serialize as names and reload to the same callables."""
-        import nemos as nmo
-
-        model = _fit_glmhmm()
-        save_path = tmp_path / "glmhmm.npz"
-        model.save_params(save_path)
-        loaded = nmo.load_model(save_path)
-
-        # fit arrays match
-        np.testing.assert_allclose(model.coef_, loaded.coef_)
-        np.testing.assert_allclose(model.intercept_, loaded.intercept_)
-        np.testing.assert_allclose(model.initial_prob_, loaded.initial_prob_)
-        np.testing.assert_allclose(model.transition_prob_, loaded.transition_prob_)
-
-        # init dicts contain callables that match by identity (canonical registry entries)
-        for slot in ("glm_params_init", "scale_init"):
-            assert (
-                loaded.model_initialization_funcs[slot]
-                is model.model_initialization_funcs[slot]
-            )
-            assert loaded.model_initialization_funcs[f"{slot}_custom"] is False
-        for slot in ("initial_proba_init", "transition_proba_init"):
-            assert (
-                loaded.hmm_initialization_funcs[slot]
-                is model.hmm_initialization_funcs[slot]
-            )
-
-    def test_custom_callable_requires_mapping(self, tmp_path):
-        """Custom callable can't be resolved from name alone; load raises a clear error."""
-        import nemos as nmo
-
-        model = _fit_glmhmm(custom=True)
-        save_path = tmp_path / "glmhmm.npz"
-        model.save_params(save_path)
-
-        with pytest.raises(
-            ValueError, match="Failed to instantiate model class"
-        ) as excinfo:
-            nmo.load_model(save_path)
-        # the underlying cause names the offending slot
-        assert "glm_params_init" in str(excinfo.value.__cause__)
-
-    def test_custom_callable_partial_mapping(self, tmp_path):
-        """Partial mapping_dict override: user supplies the custom func; saved
-        built-ins for other slots come back from the registry."""
-        import nemos as nmo
-
-        model = _fit_glmhmm(custom=True)
-        save_path = tmp_path / "glmhmm.npz"
-        model.save_params(save_path)
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)
-            loaded = nmo.load_model(
-                save_path,
-                mapping_dict={
-                    "model_initialization_funcs": {"glm_params_init": _custom_glm_init}
-                },
-            )
-
-        assert loaded.model_initialization_funcs["glm_params_init"] is _custom_glm_init
-        assert bool(loaded.model_initialization_funcs["glm_params_init_custom"]) is True
-        # saved built-in scale_init resolves back from the registry
-        assert (
-            loaded.model_initialization_funcs["scale_init"]
-            is model.model_initialization_funcs["scale_init"]
-        )
-        np.testing.assert_allclose(model.coef_, loaded.coef_)
-
-    def test_custom_callable_nested_key_mapping(self, tmp_path):
-        """Sklearn-style nested-key mapping (model_initialization_funcs__slot) also
-        descends per slot and overrides correctly."""
-        import nemos as nmo
-
-        model = _fit_glmhmm(custom=True)
-        save_path = tmp_path / "glmhmm.npz"
-        model.save_params(save_path)
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)
-            loaded = nmo.load_model(
-                save_path,
-                mapping_dict={
-                    "model_initialization_funcs__glm_params_init": _custom_glm_init
-                },
-            )
-
-        assert loaded.model_initialization_funcs["glm_params_init"] is _custom_glm_init
-        np.testing.assert_allclose(model.coef_, loaded.coef_)
 
 
 # ---------------------------------------------------------------------------
@@ -1560,6 +1531,46 @@ class TestUpdate:
         )
 
         assert bool(captured["session_starts"][0]) is True
+
+    def test_update_drops_leading_nan_and_preserves_session_boundaries(
+        self, glm_hmm_data, monkeypatch
+    ):
+        """Leading NaN rows are dropped before the EM step and session boundaries at
+        non-NaN rows land at the correct post-drop indices."""
+        d = glm_hmm_data
+        n = d["X"].shape[0]
+        n_leading_nan = 3
+        second_session_row = 30  # a non-NaN row with an explicit session boundary
+        model = GLMHMM(n_states=d["n_states"], solver_kwargs={"maxiter": 1})
+        init_params, opt_state = self._prepare(model, d["X"], d["y"])
+
+        X_nan = d["X"].copy().astype(float)
+        X_nan[:n_leading_nan, :] = np.nan
+        session_starts = np.zeros(n, dtype=bool)
+        session_starts[0] = True
+        session_starts[second_session_row] = True
+
+        captured = {}
+        real_update = model._optimizer_update
+
+        def capturing(params, state, data, y, *, session_starts, **kwargs):
+            captured["session_starts"] = session_starts
+            captured["n_samples"] = data.shape[0]
+            return real_update(
+                params, state, data, y, session_starts=session_starts, **kwargs
+            )
+
+        monkeypatch.setattr(model, "_optimizer_update", capturing)
+        model.update(
+            init_params, opt_state, X_nan, d["y"], session_starts=session_starts
+        )
+
+        assert captured["n_samples"] == n - n_leading_nan
+        assert bool(captured["session_starts"][0]) is True
+        # second_session_row shifts left by n_leading_nan after the drop
+        assert (
+            bool(captured["session_starts"][second_session_row - n_leading_nan]) is True
+        )
 
 
 # ---------------------------------------------------------------------------
