@@ -1,5 +1,6 @@
 """Tests for GLMHMM.fit and related fit-path validation."""
 
+import math
 import warnings
 from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
@@ -684,6 +685,112 @@ class TestSolverConfiguration:
         assert len(convergence_warns) == 0
         assert fixture.model.solver_state_.iterations == maxiter - 1
         assert fixture.model.solver_state_.converged is True
+
+    @pytest.mark.parametrize(
+        "obs_model, y_factory",
+        [
+            ("Bernoulli", lambda n: np.random.default_rng(0).integers(0, 2, n).astype(float)),
+            ("Gaussian", lambda n: np.random.default_rng(0).standard_normal(n)),
+        ],
+        ids=["non-separable-scale", "separable-scale"],
+    )
+    def test_group_lasso_pytree_x_runs(self, obs_model, y_factory, monkeypatch):
+        """GroupLasso with a dict pytree X auto-initializes a pytree mask from coef leaves.
+
+        No explicit mask is provided. GroupLasso.initialize_mask receives the
+        solver params with dict-structured coef (because X is a dict) and must
+        return a mask whose .coef has the same keys and each leaf has shape
+        (n_groups, *coef_leaf_shape) where n_groups == len(coef_leaves).
+        """
+        n, s = 100, 2
+        rng = np.random.default_rng(0)
+        X = {"p1": rng.standard_normal((n, 2)), "p2": rng.standard_normal((n, 3))}
+        y = y_factory(n)
+
+        captured = {}
+        real_initialize_mask = nmo.regularizer.GroupLasso.initialize_mask
+
+        def capturing_initialize_mask(self, params):
+            result = real_initialize_mask(self, params)
+            captured["mask"] = result
+            return result
+
+        monkeypatch.setattr(
+            nmo.regularizer.GroupLasso, "initialize_mask", capturing_initialize_mask
+        )
+
+        model = GLMHMM(
+            n_states=s,
+            observation_model=obs_model,
+            regularizer="GroupLasso",
+            solver_name="ProximalGradient",
+            regularizer_strength=0.1,
+            maxiter=3,
+        )
+        model.fit(X, y)
+
+        assert model.coef_ is not None
+        assert "mask" in captured
+        coef_leaves = jax.tree_util.tree_leaves(model.coef_)
+        mask_coef_leaves = jax.tree_util.tree_leaves(captured["mask"].coef)
+        # _initialize_subtree_mask groups by trailing dims of each coef leaf:
+        # n_groups = sum(math.prod(leaf.shape[1:]) for each leaf).
+        # For GLMHMM coef shape (n_states, n_features), shape[1:] = (n_features,),
+        # so each feature gets its own group across all states.
+        # If the grouping assumption changes (e.g. one group per leaf), update here.
+        n_groups = sum(math.prod(c_leaf.shape[1:]) for c_leaf in coef_leaves)
+        assert len(mask_coef_leaves) == len(coef_leaves)
+        for m_leaf, c_leaf in zip(mask_coef_leaves, coef_leaves):
+            assert m_leaf.shape == (n_groups, *c_leaf.shape)
+
+    @pytest.mark.parametrize(
+        "obs_model, y_factory",
+        [
+            ("Bernoulli", lambda n: np.random.default_rng(0).integers(0, 2, n).astype(float)),
+            ("Gaussian", lambda n: np.random.default_rng(0).standard_normal(n)),
+        ],
+        ids=["non-separable-scale", "separable-scale"],
+    )
+    def test_group_lasso_pytree_x_update_runs(self, obs_model, y_factory, monkeypatch):
+        """GroupLasso with a dict pytree X auto-initializes a pytree mask via update()."""
+        n, s = 100, 2
+        rng = np.random.default_rng(0)
+        X = {"p1": rng.standard_normal((n, 2)), "p2": rng.standard_normal((n, 3))}
+        y = y_factory(n)
+
+        captured = {}
+        real_initialize_mask = nmo.regularizer.GroupLasso.initialize_mask
+
+        def capturing_initialize_mask(self, params):
+            result = real_initialize_mask(self, params)
+            captured["mask"] = result
+            return result
+
+        monkeypatch.setattr(
+            nmo.regularizer.GroupLasso, "initialize_mask", capturing_initialize_mask
+        )
+
+        model = GLMHMM(
+            n_states=s,
+            observation_model=obs_model,
+            regularizer="GroupLasso",
+            solver_name="ProximalGradient",
+            regularizer_strength=0.1,
+        )
+        init_params = model.initialize_params(X, y)
+        opt_state = model.initialize_optimizer_and_state(init_params, X, y)
+        params = init_params
+        for _ in range(3):
+            params, opt_state = model.update(params, opt_state, X, y)
+
+        assert model.coef_ is not None
+        assert "mask" in captured
+        coef_leaves = jax.tree_util.tree_leaves(model.coef_)
+        mask_coef_leaves = jax.tree_util.tree_leaves(captured["mask"].coef)
+        n_groups = sum(math.prod(c_leaf.shape[1:]) for c_leaf in coef_leaves)
+        assert len(mask_coef_leaves) == len(coef_leaves)
+        for m_leaf, c_leaf in zip(mask_coef_leaves, coef_leaves):
+            assert m_leaf.shape == (n_groups, *c_leaf.shape)
 
 
 # ---------------------------------------------------------------------------
