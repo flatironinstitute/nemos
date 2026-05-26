@@ -689,7 +689,10 @@ class TestSolverConfiguration:
     @pytest.mark.parametrize(
         "obs_model, y_factory",
         [
-            ("Bernoulli", lambda n: np.random.default_rng(0).integers(0, 2, n).astype(float)),
+            (
+                "Bernoulli",
+                lambda n: np.random.default_rng(0).integers(0, 2, n).astype(float),
+            ),
             ("Gaussian", lambda n: np.random.default_rng(0).standard_normal(n)),
         ],
         ids=["non-separable-scale", "separable-scale"],
@@ -746,7 +749,10 @@ class TestSolverConfiguration:
     @pytest.mark.parametrize(
         "obs_model, y_factory",
         [
-            ("Bernoulli", lambda n: np.random.default_rng(0).integers(0, 2, n).astype(float)),
+            (
+                "Bernoulli",
+                lambda n: np.random.default_rng(0).integers(0, 2, n).astype(float),
+            ),
             ("Gaussian", lambda n: np.random.default_rng(0).standard_normal(n)),
         ],
         ids=["non-separable-scale", "separable-scale"],
