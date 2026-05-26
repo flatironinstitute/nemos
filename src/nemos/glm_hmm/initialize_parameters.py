@@ -474,8 +474,8 @@ def setup_glm_hmm_initialization(
     else:
         glm_init_funcs = init_funcs.copy()
 
-    # resolve any string-valued slots already in glm_init_funcs (e.g. from load_model)
-    # against the registry, and re-derive *_custom for callable entries.
+    # Resolve string-valued slots (written by save_params) back to callables and
+    # set *_custom = False so the validate-params guard treats them as built-ins.
     _resolve_existing_slots(
         glm_init_funcs,
         ("glm_params_init", "scale_init"),

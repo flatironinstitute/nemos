@@ -689,8 +689,8 @@ def setup_hmm_initialization(
     else:
         init_funcs = init_funcs.copy()
 
-    # resolve any string-valued slots already in init_funcs (e.g. from load_model)
-    # against the registry, and re-derive *_custom for callable entries.
+    # Resolve string-valued slots (written by save_params) back to callables and
+    # set *_custom = False so the validate-params guard treats them as built-ins.
     _resolve_existing_slots(
         init_funcs,
         ("initial_proba_init", "transition_proba_init"),
@@ -777,10 +777,16 @@ def _resolve_existing_slots(
 ) -> None:
     """Resolve string-valued slots against the registry in place.
 
-    Strings come from ``save_params`` (fully-qualified names) or from a user
-    passing a built-in alias directly through the init dict; ``_resolve_init_funcs``
-    handles both. Callable slots are left untouched so direct constructor-dict
-    assignment stays a lenient pass-through.
+    This function exists primarily to support the IO round-trip: ``save_params``
+    serialises built-in callables as their fully-qualified name strings. When
+    ``load_model`` reconstructs the init-funcs dict and feeds it back through the
+    setup path, those string slots must be converted back to callables before any
+    new user-provided values are applied. Crucially, resolving a string always sets
+    ``*_custom = False``, which prevents the validate-params guard from treating a
+    built-in initializer as a custom one that requires extra validation.
+
+    Callable slots are left untouched so direct constructor-dict assignment remains
+    a lenient pass-through.
     """
     for slot in slot_keys:
         value = init_funcs.get(slot)

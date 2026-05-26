@@ -1394,14 +1394,9 @@ class GLMHMM(
         excluded as it is solver-specific and not needed to reuse the fitted model.
         The file can be reloaded with :func:`nemos.load_model`.
 
-        Initialization functions are serialized by their fully-qualified name when
-        they are built-ins; :func:`nemos.load_model` resolves them via the registry.
-        Custom callables are also stored by name, which means a custom callable
-        must be supplied at load time. Because the io path consumes the
-        ``model_initialization_funcs`` / ``hmm_initialization_funcs`` constructor
-        argument (not :meth:`setup`), the override is passed as a (partial) dict of
-        slot → callable, and the setter fills in the remaining slots from the saved
-        names.
+        If the model was configured with custom initialization functions, pass them
+        back to :func:`nemos.load_model` via ``mapping_dict`` to restore them (see
+        example below). Built-in initializers are resolved automatically.
 
         Parameters
         ----------
