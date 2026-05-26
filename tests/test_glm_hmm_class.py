@@ -1156,6 +1156,229 @@ class TestLogLikelihood:
 
 
 # ---------------------------------------------------------------------------
+# TestEMConfiguration — verify _initialize_optimizer_and_state wires EM correctly
+# ---------------------------------------------------------------------------
+
+
+class TestEMConfiguration:
+    """Verify that _initialize_optimizer_and_state passes the right objects to each EM component.
+
+    The solver-configuration tests (TestSolverConfiguration) already check that
+    _instantiate_solver receives the right regularizer/solver name and init_params type.
+    These tests cover the complementary side: observation_model, inverse_link_function,
+    is_population_glm, maxiter, and tol all reach the correct callables.
+    """
+
+    def test_mstep_receives_observation_model(
+        self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
+    ):
+        """prepare_mstep_update_fn is called with the model's _observation_model."""
+        from nemos.glm_hmm import glm_hmm as glm_hmm_module
+
+        calls = _spy_calls(monkeypatch, glm_hmm_module, "prepare_mstep_update_fn")
+        model = GLMHMM(
+            n_states=glm_hmm_data["n_states"], observation_model="Bernoulli"
+        )
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+        assert len(calls) == 1
+        _, kwargs = calls[0]
+        assert kwargs["observation_model"] is model._observation_model
+
+    def test_mstep_receives_inverse_link_function(
+        self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
+    ):
+        """prepare_mstep_update_fn is called with the model's _inverse_link_function."""
+        from nemos.glm_hmm import glm_hmm as glm_hmm_module
+
+        calls = _spy_calls(monkeypatch, glm_hmm_module, "prepare_mstep_update_fn")
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+        assert len(calls) == 1
+        _, kwargs = calls[0]
+        assert kwargs["inverse_link_function"] is model._inverse_link_function
+
+    def test_estep_ll_receives_observation_model(self, monkeypatch):
+        """prepare_estep_log_likelihood is called with the model's _observation_model."""
+        from nemos.glm_hmm import glm_hmm as glm_hmm_module
+
+        calls = _spy_calls(
+            monkeypatch, glm_hmm_module, "prepare_estep_log_likelihood"
+        )
+        model = GLMHMM(n_states=2, observation_model="Poisson")
+        model._log_likelihood(
+            _make_model_params(2, 2), jnp.zeros((10, 2)), jnp.zeros(10)
+        )
+        assert len(calls) == 1
+        args, _ = calls[0]
+        assert args[1] is model._observation_model
+
+    def test_estep_ll_receives_inverse_link_function(self, monkeypatch):
+        """prepare_estep_log_likelihood is called with the model's _inverse_link_function."""
+        from nemos.glm_hmm import glm_hmm as glm_hmm_module
+
+        calls = _spy_calls(
+            monkeypatch, glm_hmm_module, "prepare_estep_log_likelihood"
+        )
+        model = GLMHMM(n_states=2)
+        model._log_likelihood(
+            _make_model_params(2, 2), jnp.zeros((10, 2)), jnp.zeros(10)
+        )
+        assert len(calls) == 1
+        args, _ = calls[0]
+        assert args[2] is model._inverse_link_function
+
+    def test_is_population_false_for_1d_y(
+        self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
+    ):
+        """is_population_glm=False for 1-D y (population not yet supported by GLMHMMValidator)."""
+        from nemos.glm_hmm import glm_hmm as glm_hmm_module
+
+        calls = _spy_calls(monkeypatch, glm_hmm_module, "prepare_mstep_update_fn")
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+        assert len(calls) == 1
+        _, kwargs = calls[0]
+        assert kwargs["is_population_glm"] is False
+
+    def test_maxiter_and_tol_threaded_into_em(self, glm_hmm_data, monkeypatch):
+        """_optimizer_run partial binds maxiter and tol from the model."""
+        from types import SimpleNamespace
+
+        custom_maxiter = 17
+        custom_tol = 3e-6
+        captured = {}
+
+        real_init = GLMHMM._initialize_optimizer_and_state
+
+        def capturing_init(self, init_params, data, y):
+            result = real_init(self, init_params, data, y)
+            captured["optimizer_run"] = self._optimizer_run
+            self._optimizer_run = lambda p, *a, **kw: (
+                p,
+                SimpleNamespace(iterations=1, converged=True),
+            )
+            return result
+
+        monkeypatch.setattr(GLMHMM, "_initialize_optimizer_and_state", capturing_init)
+
+        model = GLMHMM(
+            n_states=glm_hmm_data["n_states"],
+            maxiter=custom_maxiter,
+            tol=custom_tol,
+        )
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+
+        opt_run = captured["optimizer_run"]
+        assert opt_run.keywords["maxiter"] == custom_maxiter
+        assert opt_run.keywords["tol"] == custom_tol
+
+    def test_optimizer_run_and_update_share_mstep_fn(
+        self, glm_hmm_data, monkeypatch
+    ):
+        """_optimizer_run and _optimizer_update receive the same m_step_fn_model_params closure."""
+        from types import SimpleNamespace
+
+        captured = {}
+
+        real_init = GLMHMM._initialize_optimizer_and_state
+
+        def capturing_init(self, init_params, data, y):
+            result = real_init(self, init_params, data, y)
+            captured["optimizer_run"] = self._optimizer_run
+            captured["optimizer_update"] = self._optimizer_update
+            self._optimizer_run = lambda p, *a, **kw: (
+                p,
+                SimpleNamespace(iterations=1, converged=True),
+            )
+            return result
+
+        monkeypatch.setattr(GLMHMM, "_initialize_optimizer_and_state", capturing_init)
+
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+
+        assert (
+            captured["optimizer_run"].keywords["m_step_fn_model_params"]
+            is captured["optimizer_update"].keywords["m_step_fn_model_params"]
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestUpdateFitEquivalence — N update steps == fit with maxiter=N
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateFitEquivalence:
+    """Verify that calling update() N times produces the same result as fit(maxiter=N)."""
+
+    def test_n_update_steps_matches_fit(self):
+        """fit(maxiter=N) and N manual update() calls from the same init produce identical params."""
+        rng = np.random.default_rng(0)
+        n, k, s = 80, 3, 2
+        X = rng.standard_normal((n, k))
+        y = rng.binomial(1, 0.4, size=n)
+
+        # shared init params so both paths start from exactly the same point
+        seed = jax.random.PRNGKey(7)
+        init_coef = jnp.zeros((k, s))
+        init_intercept = jnp.zeros((s,))
+        init_scale = jnp.ones((s,))
+        init_initial_prob = jnp.ones(s) / s
+        init_transition_prob = jnp.ones((s, s)) / s
+        init_params = (
+            init_coef,
+            init_intercept,
+            init_scale,
+            init_initial_prob,
+            init_transition_prob,
+        )
+
+        n_steps = 3
+
+        # --- path A: fit with maxiter=n_steps ---
+        model_fit = GLMHMM(n_states=s, maxiter=n_steps, tol=1e-300, seed=seed)
+        model_fit.fit(X, y, init_params=init_params)
+
+        # --- path B: manual update loop ---
+        model_update = GLMHMM(n_states=s, maxiter=n_steps, tol=1e-300, seed=seed)
+        opt_state = model_update.initialize_optimizer_and_state(init_params, X, y)
+        params = init_params
+        for _ in range(n_steps):
+            params, opt_state = model_update.update(params, opt_state, X, y)
+
+        np.testing.assert_allclose(model_fit.coef_, model_update.coef_, rtol=1e-5)
+        np.testing.assert_allclose(
+            model_fit.intercept_, model_update.intercept_, rtol=1e-5
+        )
+        np.testing.assert_allclose(
+            model_fit.initial_prob_, model_update.initial_prob_, rtol=1e-5
+        )
+        np.testing.assert_allclose(
+            model_fit.transition_prob_, model_update.transition_prob_, rtol=1e-5
+        )
+
+
+# ---------------------------------------------------------------------------
 # save_params / load_model round-trip
 # ---------------------------------------------------------------------------
 
