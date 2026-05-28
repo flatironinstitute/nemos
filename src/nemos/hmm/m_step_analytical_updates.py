@@ -42,7 +42,7 @@ _vmap_add_prior = jax.vmap(_add_prior)
 
 def _analytical_m_step_log_initial_prob(
     log_posteriors: jnp.ndarray,
-    is_new_session: jnp.ndarray,
+    session_starts: jnp.ndarray,
     dirichlet_prior_alphas: Optional[jnp.ndarray] = None,
 ):
     """
@@ -55,7 +55,7 @@ def _analytical_m_step_log_initial_prob(
     ----------
     log_posteriors :
         The log posterior distribution over latent states, shape ``(n_time_bins, n_states)``.
-    is_new_session :
+    session_starts :
         Boolean array indicating session start points, shape ``(n_time_bins,)``.
     dirichlet_prior_alphas :
         The parameters of the Dirichlet prior for the initial distribution,
@@ -76,7 +76,7 @@ def _analytical_m_step_log_initial_prob(
     """
     # Mask out non-session-start time points by setting to -inf
     masked_log_posteriors = jnp.where(
-        is_new_session[:, jnp.newaxis], log_posteriors, -jnp.inf
+        session_starts[:, jnp.newaxis], log_posteriors, -jnp.inf
     )
 
     # Sum over time in log-space (logsumexp ignores -inf values)
