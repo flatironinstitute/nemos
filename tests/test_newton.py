@@ -31,7 +31,9 @@ def test_newton_linear_or_ridge_regression(request, regr_setup, stepsize):
     X, y, _, params, loss = request.getfixturevalue(regr_setup)
 
     param_init = jax.tree_util.tree_map(np.zeros_like, params)
-    newton_params, state = _Newton(loss, tol=10**-12).run(param_init, X, y)
+    newton_params, state, _ = _Newton(
+        loss, lambda p, *a: (loss(p, *a), None), tol=10**-12
+    ).run(param_init, X, y)
     assert pytree_map_and_reduce(
         lambda a, b: np.allclose(a, b, atol=10**-5, rtol=0.0),
         all,
@@ -54,7 +56,7 @@ def test_newton_init_state_default(request, regr_setup):
     X, y, _, params, loss = request.getfixturevalue(regr_setup)
 
     param_init = jax.tree_util.tree_map(np.zeros_like, params)
-    newton = _Newton(loss)
+    newton = _Newton(loss, lambda p, *a: (loss(p, *a), None))
     state = newton.init_state(param_init, X, y)
 
     assert isinstance(state, NewtonState)
@@ -151,7 +153,7 @@ def test_newton_glm_initialize_hessian(glm_class, regularizer_name, linear_regre
     params_tree = GLMParams(*params)
 
     init = glm.solver._solver._hess_fn(params_tree, X, y)
-    expected = glm._get_hess_fn()(params_tree, X, y)
+    expected = glm._get_hess_fn(params_tree)(params_tree, X, y)
     np.testing.assert_allclose(init, expected)
 
 
@@ -234,7 +236,7 @@ def test_newton_glm_set_regularizer_update_recovers(
     with does_not_raise():
         glm.update(params, init_state, X, y)
     after = glm.solver._solver._hess_fn(params_tree, X, y)
-    expected = glm._get_hess_fn()(params_tree, X, y)
+    expected = glm._get_hess_fn(params_tree)(params_tree, X, y)
     np.testing.assert_allclose(after, expected)
     if regularizer_before == regularizer_after:
         assert np.allclose(after, init)
@@ -299,7 +301,7 @@ def test_newton_glm_set_regularizer_strength_recovers(
     with does_not_raise():
         glm.update(params, init_state, X, y)
     after = glm.solver._solver._hess_fn(params_tree, X, y)
-    expected = glm._get_hess_fn()(params_tree, X, y)
+    expected = glm._get_hess_fn(params_tree)(params_tree, X, y)
     np.testing.assert_allclose(after, expected)
     if regularizer_name == "Ridge":
         assert not np.allclose(after, init)
@@ -394,7 +396,7 @@ def test_newton_glm_set_observation_model_recovers(
     with does_not_raise():
         glm.update(params, init_state, X, y)
     after = glm.solver._solver._hess_fn(params_tree, X, y)
-    expected = glm._get_hess_fn()(params_tree, X, y)
+    expected = glm._get_hess_fn(params_tree)(params_tree, X, y)
     np.testing.assert_allclose(after, expected)
 
     if obs_init == obs_after:

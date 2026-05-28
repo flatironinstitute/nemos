@@ -7,6 +7,7 @@ import jax
 import jax.numpy as jnp
 import lineax as lx
 import optax
+from equinox.internal import while_loop
 
 from ..tree_utils import ravel_pytree_nest
 from ..typing import Params
@@ -43,9 +44,11 @@ class _Newton:
     def __init__(
         self,
         fun: Callable,
+        fun_with_aux: Callable,
         tol: float = 1e-6,
     ):
         self.fun = fun
+        self.fun_with_aux = fun_with_aux
         self.tol = tol
 
         self._hess_tag: HessianTag | None = None
@@ -55,9 +58,27 @@ class _Newton:
             max_backtracking_steps=30
         )
 
-        self._linear_solver = lx.LU()
+        # Cached closures and transforms, populated on first init_state
+        self._unravel: Optional[Callable] = None
+        self._fun_flat: Optional[Callable] = None
+        self._fun_flat_with_aux: Optional[Callable] = None
+        self._vag_flat_with_aux: Optional[Callable] = None
+        self._hessian_flat: Optional[Callable] = None
+
+    def _build_cache(self, init_params):
+        """Build and cache flattened functions and autodiff transforms."""
+        _, self._unravel = ravel_pytree_nest(init_params)
+        self._fun_flat = lambda x, *a: self.fun(self._unravel(x), *a)
+        self._fun_flat_with_aux = lambda x, *a: self.fun_with_aux(self._unravel(x), *a)
+        self._vag_flat_with_aux = jax.value_and_grad(
+            self._fun_flat_with_aux, has_aux=True
+        )
+        self._hessian_flat = jax.hessian(self._fun_flat)
 
     def init_state(self, init_params, *args):
+        if self._unravel is None:
+            self._build_cache(init_params)
+
         params_flat, _ = ravel_pytree_nest(init_params)
 
         ls_state = self._line_search.init(params_flat)
@@ -76,21 +97,14 @@ class _Newton:
             ls_state=ls_state,
         )
 
-    def _flat(self, params, args):
-        params_flat, unravel = ravel_pytree_nest(params)
-
-        def f(x):
-            return self.fun(unravel(x), *args)
-
-        return params_flat, unravel, f
-
-    def newton_step(self, H, g_flat, tag: HessianTag):
+    def _newton_direction(self, g_flat, H, tag: HessianTag):
+        """Compute Newton step direction from gradient and Hessian."""
         if tag.structure is BlockDiagonal and H.ndim == 3:
 
             def solve(Hb, gb):
-                return self.newton_step(
-                    Hb,
+                return self._newton_direction(
                     gb,
+                    Hb,
                     HessianTag(Full, tag.property),
                 )
 
@@ -109,6 +123,45 @@ class _Newton:
             lx.LU(),
         ).value
 
+    def _apply_or_reject(
+        self,
+        params,
+        step_tree,
+        grad_tree,
+        state: NewtonState,
+        fval,
+        *args,
+    ):
+        """Accept or reject step based on descent condition and line search."""
+        params_flat, _ = ravel_pytree_nest(params)
+        grad_flat, _ = ravel_pytree_nest(grad_tree)
+        step_flat, _ = ravel_pytree_nest(step_tree)
+        descent = jnp.vdot(grad_flat, step_flat) < 0.0
+
+        def accept(_):
+            updates, new_ls_state = self._line_search.update(
+                step_tree,
+                state.ls_state,
+                params,
+                value=fval,
+                grad=grad_tree,
+                value_fn=lambda p: self.fun(p, *args),
+            )
+
+            new_params = jax.tree_util.tree_map(
+                lambda p, u: p + u,
+                params,
+                updates,
+            )
+
+            return new_params, new_ls_state
+
+        def reject(_):
+            return params, state.ls_state
+
+        new_params, new_ls_state = jax.lax.cond(descent, accept, reject, None)
+        return new_params, new_ls_state
+
     def update(
         self,
         params,
@@ -118,10 +171,9 @@ class _Newton:
         force_autodiff_hessian: bool,
     ) -> NewtonStepResult:
 
-        params_flat, unravel, f = self._flat(params, args)
+        params_flat, _ = ravel_pytree_nest(params)
 
-        fval = f(params_flat)
-        g_flat = jax.grad(f)(params_flat)
+        (fval, aux), g_flat = self._vag_flat_with_aux(params_flat, *args)
 
         gnorm = jnp.linalg.norm(g_flat)
         converged = gnorm <= self.tol
@@ -130,38 +182,23 @@ class _Newton:
             H = (
                 self._hess_fn(params, *args)
                 if (self._hess_fn is not None and not force_autodiff_hessian)
-                else jax.hessian(f)(params_flat)
+                else self._hessian_flat(params_flat, *args)
             )
 
-            step_flat = self.newton_step(H, g_flat, self._hess_tag)
+            step_flat = self._newton_direction(g_flat, H, self._hess_tag)
+            step_tree = self._unravel(step_flat)
+            grad_tree = self._unravel(g_flat)
 
-            descent = jnp.vdot(g_flat, step_flat) < 0.0
+            new_params, new_ls_state = self._apply_or_reject(
+                params,
+                step_tree,
+                grad_tree,
+                state,
+                fval,
+                *args,
+            )
 
-            step_tree = unravel(step_flat)
-            grad_tree = unravel(g_flat)
-
-            def accept(_):
-                updates, new_ls_state = self._line_search.update(
-                    step_tree,
-                    state.ls_state,
-                    params,
-                    value=fval,
-                    grad=grad_tree,
-                    value_fn=lambda p: self.fun(p, *args),
-                )
-
-                new_params = jax.tree_util.tree_map(
-                    lambda p, u: p + u,
-                    params,
-                    updates,
-                )
-
-                return new_params, new_ls_state
-
-            def reject(_):
-                return params, state.ls_state
-
-            return jax.lax.cond(descent, accept, reject, None)
+            return new_params, new_ls_state
 
         def no_step(_):
             return params, state.ls_state
@@ -190,7 +227,7 @@ class _Newton:
             ls_state=new_ls_state,
         )
 
-        return new_params, new_state
+        return new_params, new_state, aux
 
     def run(
         self,
@@ -203,42 +240,37 @@ class _Newton:
         state = self.init_state(init_params, *args)
         params = init_params
 
+        def cond(carry):
+            p, s = carry
+            return (~s.stats.converged) & (s.stats.num_steps < maxiter)
+
+        def body(carry):
+            p, s = carry
+            return self.update(
+                p,
+                s,
+                *args,
+                maxiter=maxiter,
+                force_autodiff_hessian=force_autodiff_hessian,
+            )[
+                :2
+            ]  # Discard aux; convergence only needs params and state
+
         if jit:
-
-            def cond(carry):
-                _, s = carry
-                return (~s.stats.converged) & (s.stats.num_steps < maxiter)
-
-            def body(carry):
-                p, s = carry
-                return self.update(
-                    p,
-                    s,
-                    *args,
-                    maxiter=maxiter,
-                    force_autodiff_hessian=force_autodiff_hessian,
-                )
-
-            params, state = eqx.internal.while_loop(
+            final_params, final_state = eqx.internal.while_loop(
                 cond,
                 body,
                 (params, state),
                 kind="lax",
             )
-
         else:
-            for _ in range(maxiter):
-                params, state = self.update(
-                    params,
-                    state,
-                    *args,
-                    maxiter=maxiter,
-                    force_autodiff_hessian=force_autodiff_hessian,
-                )
-                if state.stats.converged:
-                    break
+            carry = (params, state)
+            while cond(carry):
+                carry = body(carry)
+            final_params, final_state = carry
 
-        return params, state
+        _, aux = self.fun_with_aux(final_params, *args)
+        return final_params, final_state, aux
 
 
 class Newton(NewtonSolverProtocol[NewtonState]):
@@ -254,6 +286,12 @@ class Newton(NewtonSolverProtocol[NewtonState]):
         maxiter: int = 100,
         **solver_kwargs,
     ):
+        if init_params is None:
+            raise ValueError(
+                "init_params is required for Newton solver. "
+                "It is needed to determine the parameter structure for regularization."
+            )
+
         self.jit = jit
         self.force_autodiff_hessian = force_autodiff_hessian
         self.maxiter = maxiter
@@ -273,7 +311,7 @@ class Newton(NewtonSolverProtocol[NewtonState]):
             self.fun = loss_fn
             self.fun_with_aux = lambda p, *a: (loss_fn(p, *a), None)
 
-        self._solver = _Newton(self.fun, **solver_kwargs)
+        self._solver = _Newton(self.fun, self.fun_with_aux, **solver_kwargs)
 
     def setup_hessian(
         self,
@@ -292,27 +330,22 @@ class Newton(NewtonSolverProtocol[NewtonState]):
         return self._solver.init_state(init_params, *args)
 
     def update(self, params, state, *args):
-        params, state = self._solver.update(
+        return self._solver.update(
             params,
             state,
             *args,
             maxiter=self.maxiter,
             force_autodiff_hessian=self.force_autodiff_hessian,
         )
-        _, aux = self.fun_with_aux(params, *args)
-        return params, state, aux
 
     def run(self, init_params: Params, *args):
-        params, state = self._solver.run(
+        return self._solver.run(
             init_params,
             *args,
             jit=self.jit,
             maxiter=self.maxiter,
             force_autodiff_hessian=self.force_autodiff_hessian,
         )
-
-        _, aux = self.fun_with_aux(params, *args)
-        return params, state, aux
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
