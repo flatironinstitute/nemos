@@ -381,14 +381,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         if isinstance(observation, str):
             self._observation_model = instantiate_observation_model(observation)
             self._validate_observation_class(self.observation_model)
-            self._setup_hessian()
+            self._invalidate_solver()
             return
         # check that the model has the required attributes
         # and that the attribute can be called
         obs.check_observation_model(observation)
         self._observation_model = observation
         self._validate_observation_class(self.observation_model)
-        self._setup_hessian()
+        self._invalidate_solver()
 
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
@@ -1154,6 +1154,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> new_params, new_opt_state = glm_instance.update(params, opt_state, X, y)
 
         """
+        if self._solver is None:
+            raise RuntimeError("Attempt at update when solver was in invalid state.")
+
         # find non-nans
         X, y = tree_utils.drop_nans(X, y)
 

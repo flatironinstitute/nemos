@@ -255,7 +255,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             )
             self.solver_name = None
         else:
-            self._setup_hessian()
+            self._invalidate_solver()
 
     @property
     def regularizer_strength(self) -> Any:
@@ -265,7 +265,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     @regularizer_strength.setter
     def regularizer_strength(self, strength: Any):
         self._regularizer_strength = self.regularizer._validate_strength(strength)
-        self._setup_hessian()
+        self._invalidate_solver()
 
     @property
     def solver_name(self) -> str:
@@ -332,19 +332,22 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
             )
 
-    def _get_hess_fn(self, *args, **kwargs) -> Callable | None:
-        """
-        Provide an analytic Hessian callable for models that have one.
+    def _get_hess_fn(self, params) -> Callable | None:
+        """Analytic Hessian callable for models that have one.
+
+        `params` is the initial parameter pytree passed so subclasses can close over
+        regularizer state (mask shape, structured strength) that depends on the parameter structure.
 
         Returns None to fall back to autodiff.
         """
         return None
 
-    def _setup_hessian(self) -> None:
-        if hasattr(self, "solver") and isinstance(self.solver, NewtonSolverProtocol):
-            self.solver.setup_hessian(
-                self._get_hess_fn(), self._hess_tag, self.regularizer
-            )
+    def _invalidate_solver(self):
+        self._solver = None
+        self._solver_loss_fun = None
+        self._optimizer_init_state = None
+        self._optimizer_update = None
+        self._optimizer_run = None
 
     def _instantiate_solver(
         self,

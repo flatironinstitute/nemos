@@ -1,6 +1,7 @@
 import jax
 import jax.numpy as jnp
 import numpy as np
+from contextlib import nullcontext as does_not_raise
 import optax
 import pytest
 
@@ -138,6 +139,23 @@ def test_newton_glm_initialize_state(glm_class, regularizer_name, linear_regress
 
 @pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
 @pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
+def test_newton_glm_initialize_hessian(glm_class, regularizer_name, linear_regression):
+    X, y, _, _, loss = linear_regression
+    if glm_class == nmo.glm.PopulationGLM:
+        y = np.expand_dims(y, 1)
+
+    glm = glm_class(regularizer=regularizer_name, solver_name="Newton")
+    params = glm.initialize_params(X, y)
+    init_state = glm.initialize_optimizer_and_state(params, X, y)
+    params_tree = GLMParams(*params)
+
+    init = glm.solver._solver._hess_fn(params_tree, X, y)
+    expected = glm._get_hess_fn()(params_tree, X, y)
+    np.testing.assert_allclose(init, expected)
+
+
+@pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
+@pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
 def test_newton_glm_update(glm_class, regularizer_name, linear_regression):
     X, y, _, _, loss = linear_regression
     if glm_class == nmo.glm.PopulationGLM:
@@ -161,50 +179,131 @@ def test_newton_glm_update(glm_class, regularizer_name, linear_regression):
     assert state.stats.num_steps == 1
 
 
+@pytest.mark.parametrize("regularizer_before", ["Ridge", "UnRegularized"])
+@pytest.mark.parametrize("regularizer_after", ["Ridge", "UnRegularized"])
 @pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
-def test_newton_glm_set_regularizer_update_hessian(glm_class, linear_regression):
-    X, y, _, _, loss = linear_regression
-    if glm_class == nmo.glm.PopulationGLM:
-        y = np.expand_dims(y, 1)
-
-    glm = glm_class(regularizer=Ridge(), solver_name="Newton")
-    params = glm.initialize_params(X, y)
-    glm.initialize_optimizer_and_state(params, X, y)
-    params = GLMParams(*params)
-
-    init = glm.solver._solver._hess_fn(params, X, y)
-    expected = glm._get_hess_fn()(params, X, y)
-    np.testing.assert_allclose(init, expected)
-
-    glm.regularizer = UnRegularized()
-    after = glm.solver._solver._hess_fn(params, X, y)
-    expected = glm._get_hess_fn()(params, X, y)
-    np.testing.assert_allclose(after, expected)
-    assert not np.allclose(after, init)
-
-
-@pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
-def test_newton_glm_set_regularizer_strength_update_hessian(
-    glm_class, linear_regression
+def test_newton_glm_set_regularizer_update_invalidates(
+    glm_class, regularizer_before, regularizer_after, linear_regression
 ):
     X, y, _, _, loss = linear_regression
     if glm_class == nmo.glm.PopulationGLM:
         y = np.expand_dims(y, 1)
 
-    glm = glm_class(regularizer="Ridge", solver_name="Newton", regularizer_strength=0.1)
+    glm = glm_class(regularizer=regularizer_before, solver_name="Newton")
+    params = glm.initialize_params(X, y)
+    init_state = glm.initialize_optimizer_and_state(params, X, y)
+    params_tree = GLMParams(*params)
+
+    # Update regularizer
+    glm.regularizer = regularizer_after
+
+    # Verify invalidated solver
+    assert glm._solver is None
+    assert glm._solver_loss_fun is None
+    assert glm._optimizer_init_state is None
+    assert glm._optimizer_update is None
+    assert glm._optimizer_run is None
+    with pytest.raises(
+        RuntimeError, match="Attempt at update when solver was in invalid state."
+    ):
+        glm.update(params, init_state, X, y)
+
+
+@pytest.mark.parametrize("regularizer_before", ["Ridge", "UnRegularized"])
+@pytest.mark.parametrize("regularizer_after", ["Ridge", "UnRegularized"])
+@pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
+def test_newton_glm_set_regularizer_update_recovers(
+    glm_class, regularizer_before, regularizer_after, linear_regression
+):
+    X, y, _, _, loss = linear_regression
+    if glm_class == nmo.glm.PopulationGLM:
+        y = np.expand_dims(y, 1)
+
+    glm = glm_class(regularizer=regularizer_before, solver_name="Newton")
+    params = glm.initialize_params(X, y)
+    init_state = glm.initialize_optimizer_and_state(params, X, y)
+    params_tree = GLMParams(*params)
+    init = glm.solver._solver._hess_fn(params_tree, X, y)
+
+    # Update regularizer
+    glm.regularizer = regularizer_after
+
+    # Verify reinitialisation fixes it
+    init_state = glm.initialize_optimizer_and_state(params, X, y)
+    with does_not_raise():
+        glm.update(params, init_state, X, y)
+    after = glm.solver._solver._hess_fn(params_tree, X, y)
+    expected = glm._get_hess_fn()(params_tree, X, y)
+    np.testing.assert_allclose(after, expected)
+    if regularizer_before == regularizer_after:
+        assert np.allclose(after, init)
+    else:
+        assert not np.allclose(after, init)
+
+
+@pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
+@pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
+def test_newton_glm_set_regularizer_strength_invalidates(
+    glm_class, regularizer_name, linear_regression
+):
+    X, y, _, _, loss = linear_regression
+    if glm_class == nmo.glm.PopulationGLM:
+        y = np.expand_dims(y, 1)
+
+    glm = glm_class(
+        regularizer=regularizer_name, solver_name="Newton", regularizer_strength=0.1
+    )
+    params = glm.initialize_params(X, y)
+    init_state = glm.initialize_optimizer_and_state(params, X, y)
+    params = GLMParams(*params)
+    init = glm.solver._solver._hess_fn(params, X, y)
+
+    # Update regularizer strength
+    glm.regularizer_strength = 1.0
+
+    # Verify invalidated solver
+    assert glm._solver is None
+    assert glm._solver_loss_fun is None
+    assert glm._optimizer_init_state is None
+    assert glm._optimizer_update is None
+    assert glm._optimizer_run is None
+    with pytest.raises(
+        RuntimeError, match="Attempt at update when solver was in invalid state."
+    ):
+        glm.update(params, init_state, X, y)
+
+
+@pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
+@pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
+def test_newton_glm_set_regularizer_strength_recovers(
+    glm_class, regularizer_name, linear_regression
+):
+    X, y, _, _, loss = linear_regression
+    if glm_class == nmo.glm.PopulationGLM:
+        y = np.expand_dims(y, 1)
+
+    glm = glm_class(
+        regularizer=regularizer_name, solver_name="Newton", regularizer_strength=0.1
+    )
     params = glm.initialize_params(X, y)
     glm.initialize_optimizer_and_state(params, X, y)
-    params = GLMParams(*params)
+    params_tree = GLMParams(*params)
+    init = glm.solver._solver._hess_fn(params_tree, X, y)
 
-    init = glm.solver._solver._hess_fn(params, X, y)
-    expected = glm._get_hess_fn()(params, X, y)
-    np.testing.assert_allclose(init, expected)
-
+    # Update regularizer strength
     glm.regularizer_strength = 1.0
-    after = glm.solver._solver._hess_fn(params, X, y)
-    expected = glm._get_hess_fn()(params, X, y)
+
+    # Verify reinitialisation fixes it
+    init_state = glm.initialize_optimizer_and_state(params, X, y)
+    with does_not_raise():
+        glm.update(params, init_state, X, y)
+    after = glm.solver._solver._hess_fn(params_tree, X, y)
+    expected = glm._get_hess_fn()(params_tree, X, y)
     np.testing.assert_allclose(after, expected)
-    assert not np.allclose(after, init)
+    if regularizer_name == "Ridge":
+        assert not np.allclose(after, init)
+    else:
+        assert np.allclose(after, init)
 
 
 @pytest.mark.parametrize(
@@ -226,7 +325,7 @@ def test_newton_glm_set_regularizer_strength_update_hessian(
     ],
 )
 @pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
-def test_newton_glm_set_observation_model_update_hessian(
+def test_newton_glm_set_observation_model_invalidates(
     glm_class, obs_init, obs_after, linear_regression
 ):
     X, y, _, _, loss = linear_regression
@@ -235,14 +334,69 @@ def test_newton_glm_set_observation_model_update_hessian(
 
     glm = glm_class(solver_name="Newton", observation_model=obs_init)
     params = glm.initialize_params(X, y)
-    glm.initialize_optimizer_and_state(params, X, y)
-    params = GLMParams(*params)
+    init_state = glm.initialize_optimizer_and_state(params, X, y)
+    params_tree = GLMParams(*params)
+    init = glm.solver._solver._hess_fn(params_tree, X, y)
 
-    init = glm.solver._solver._hess_fn(params, X, y)
-    expected = glm._get_hess_fn()(params, X, y)
-    np.testing.assert_allclose(init, expected)
-
+    # Update observation model
     glm.observation_model = obs_after
-    after = glm.solver._solver._hess_fn(params, X, y)
-    expected = glm._get_hess_fn()(params, X, y)
+
+    # Verify invalidated solver
+    assert glm._solver is None
+    assert glm._solver_loss_fun is None
+    assert glm._optimizer_init_state is None
+    assert glm._optimizer_update is None
+    assert glm._optimizer_run is None
+    with pytest.raises(
+        RuntimeError, match="Attempt at update when solver was in invalid state."
+    ):
+        glm.update(params, init_state, X, y)
+
+
+@pytest.mark.parametrize(
+    "obs_init",
+    [
+        "PoissonObservations",
+        "GammaObservations",
+        "GaussianObservations",
+        "BernoulliObservations",
+    ],
+)
+@pytest.mark.parametrize(
+    "obs_after",
+    [
+        "PoissonObservations",
+        "GammaObservations",
+        "GaussianObservations",
+        "BernoulliObservations",
+    ],
+)
+@pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
+def test_newton_glm_set_observation_model_recovers(
+    glm_class, obs_init, obs_after, linear_regression
+):
+    X, y, _, _, loss = linear_regression
+    if glm_class == nmo.glm.PopulationGLM:
+        y = np.expand_dims(y, 1)
+
+    glm = glm_class(solver_name="Newton", observation_model=obs_init)
+    params = glm.initialize_params(X, y)
+    init_state = glm.initialize_optimizer_and_state(params, X, y)
+    params_tree = GLMParams(*params)
+    init = glm.solver._solver._hess_fn(params_tree, X, y)
+
+    # Update observation model
+    glm.observation_model = obs_after
+
+    # Verify reinitialisation fixes it
+    init_state = glm.initialize_optimizer_and_state(params, X, y)
+    with does_not_raise():
+        glm.update(params, init_state, X, y)
+    after = glm.solver._solver._hess_fn(params_tree, X, y)
+    expected = glm._get_hess_fn()(params_tree, X, y)
     np.testing.assert_allclose(after, expected)
+
+    if obs_init == obs_after:
+        assert np.allclose(after, init)
+    else:
+        assert not np.allclose(after, init)
