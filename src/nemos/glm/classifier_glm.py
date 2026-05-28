@@ -10,12 +10,12 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike, NDArray
 
-from ..tree_utils import ravel_pytree_nest
 from .. import observation_models as obs
 from .. import tree_utils
 from ..label_encoder import LabelEncoder
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers._hess import BlockDiagonal, Full, HessianTag, PositiveSemiDefinite
+from ..tree_utils import ravel_pytree_nest
 from ..type_casting import is_numpy_array_like, support_pynapple
 from ..typing import (
     DESIGN_INPUT_TYPE,

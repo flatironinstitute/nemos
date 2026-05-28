@@ -256,7 +256,9 @@ class _Newton:
                 *args,
                 maxiter=maxiter,
                 force_autodiff_hessian=force_autodiff_hessian,
-            )[:2]  # Discard aux; convergence only needs params and state
+            )[
+                :2
+            ]  # Discard aux; convergence only needs params and state
 
         if jit:
             final_params, final_state = eqx.internal.while_loop(

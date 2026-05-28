@@ -229,6 +229,7 @@ def drop_nans(*trees):
         for par in trees
     ]
 
+
 def ravel_pytree_nest(pytree):
     """Batch-last pytree ravel that also supports non-batched pytrees."""
     leaves = jax.tree.leaves(pytree)
@@ -238,10 +239,14 @@ def ravel_pytree_nest(pytree):
 
     N = batch_dims[0]
     in_axes = jax.tree.map(lambda x: -1 if x.ndim > 0 else None, pytree)
-    sample0 = jax.tree.map(lambda x: jnp.take(x, 0, axis=-1) if x.ndim > 0 else x, pytree)
+    sample0 = jax.tree.map(
+        lambda x: jnp.take(x, 0, axis=-1) if x.ndim > 0 else x, pytree
+    )
     _, unravel_one = ravel_pytree(sample0)
 
-    flat = jax.vmap(lambda t: ravel_pytree(t)[0], in_axes=(in_axes,))(pytree).reshape(-1)
+    flat = jax.vmap(lambda t: ravel_pytree(t)[0], in_axes=(in_axes,))(pytree).reshape(
+        -1
+    )
 
     out_axes = jax.tree.map(lambda x: -1 if x.ndim > 0 else 0, sample0)
 
