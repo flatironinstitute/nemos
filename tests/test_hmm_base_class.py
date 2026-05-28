@@ -946,6 +946,8 @@ class TestHMMNewSession:
             X, y, session_starts
         )
         assert jnp.all(session_starts == expected_new_session)
+        _, _, session_starts = model._preprocess_inputs(X, y, session_starts)
+        assert session_starts[0] == 1
 
     @pytest.mark.parametrize(
         "X, y, session_starts, expected_new_session",
@@ -1021,6 +1023,8 @@ class TestHMMNewSession:
             X, y, session_starts
         )
         assert jnp.all(session_starts == expected_new_session)
+        _, _, session_starts = model._preprocess_inputs(X, y, session_starts)
+        assert session_starts[0] == 1
 
     @pytest.mark.parametrize(
         "X, y, session_starts, expected_new_session",
