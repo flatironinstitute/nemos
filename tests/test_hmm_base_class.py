@@ -1,6 +1,4 @@
 from contextlib import nullcontext as does_not_raise
-from dataclasses import dataclass
-from typing import Any, Callable, Optional, Tuple, Union
 from unittest.mock import patch
 
 import jax
@@ -10,13 +8,12 @@ import pynapple as nap
 import pytest
 import sklearn.cluster
 
+from conftest import MockHMM
 from nemos._inspect_utils import extract_literal_options
-from nemos.base_validator import RegressorValidator
 from nemos.hmm.hmm import BaseHMM
 from nemos.hmm.initialize_parameters import (
     AVAILABLE_INIT_FUNCTIONS,
     DEFAULT_INIT_FUNCTIONS,
-    HMM_INITIALIZATION_FN_DICT,
     kmeans_initial_proba_init,
     kmeans_transition_proba_init,
     random_initial_proba_init,
@@ -25,162 +22,6 @@ from nemos.hmm.initialize_parameters import (
     uniform_initial_proba_init,
     uniform_transition_proba_init,
 )
-from nemos.hmm.params import HMMParams
-from nemos.hmm.utils import initialize_session_starts
-from nemos.hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
-from nemos.params import ModelParams
-
-
-class MockHMMModelParams(ModelParams):
-    param: jnp.ndarray
-
-
-class MockHMMParams(ModelParams):
-    model_params: MockHMMModelParams
-    hmm_params: HMMParams
-
-
-MockHMMUserParams = Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
-
-
-def to_mock_params(user_params: MockHMMUserParams) -> MockHMMParams:
-    return MockHMMParams(
-        model_params=MockHMMModelParams(user_params[0]),
-        hmm_params=to_hmm_params(user_params[1:]),
-    )
-
-
-def from_mock_params(params: MockHMMParams) -> MockHMMUserParams:
-    initial_prob, transition_prob = from_hmm_params(params.hmm_params)
-    return (
-        params.model_params.param,
-        initial_prob,
-        transition_prob,
-    )
-
-
-@dataclass(frozen=True, repr=False)
-class MockHMMValidator(HMMValidator[MockHMMUserParams, MockHMMParams]):
-    model_param_names: Tuple[str] = (
-        "param",
-        *HMMValidator.model_param_names,
-    )
-    to_model_params: Callable[[MockHMMUserParams], MockHMMParams] = to_mock_params
-    from_model_params: Callable[[MockHMMParams], MockHMMUserParams] = from_mock_params
-    model_class: str = "MockHMM"
-    X_dimensionality: int = 2
-    y_dimensionality: int = 1
-    params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
-        *RegressorValidator.params_validation_sequence[:2],
-        *HMMValidator.params_validation_sequence,
-        *RegressorValidator.params_validation_sequence[3:],
-    )
-
-    def validate_consistency(self, *args, **kwargs) -> None:
-        return True
-
-
-class MockHMM(
-    BaseHMM[
-        MockHMMParams, MockHMMUserParams, HMM_INITIALIZATION_FN_DICT, MockHMMValidator
-    ]
-):
-    _validator_class = MockHMMValidator
-    _model_default_init_dict = {
-        "param_init": None,
-        "param_init_kwargs": {},
-        "param_init_custom": False,
-    }
-
-    def __init__(
-        self,
-        n_states: int,
-        dirichlet_initial_proba: Union[jnp.ndarray, None] = None,  # (n_state, )
-        dirichlet_transition_proba: Union[
-            jnp.ndarray | None
-        ] = None,  # (n_state, n_state):
-        maxiter: int = 1000,
-        tol: float = 1e-8,
-        seed=jax.random.PRNGKey(123),
-        hmm_initialization_funcs: HMM_INITIALIZATION_FN_DICT = None,
-        model_initialization_funcs: HMM_INITIALIZATION_FN_DICT = None,
-    ):
-        BaseHMM.__init__(
-            self,
-            n_states=n_states,
-            dirichlet_initial_proba=dirichlet_initial_proba,
-            dirichlet_transition_proba=dirichlet_transition_proba,
-            maxiter=maxiter,
-            tol=tol,
-            seed=seed,
-            hmm_initialization_funcs=hmm_initialization_funcs,
-        )
-        self.param_: jnp.ndarray | None = None
-        self.model_initialization_funcs = model_initialization_funcs
-
-    def _model_setup(
-        self,
-        param_init: Optional[str | Callable] = None,
-        param_init_kwargs: Optional[dict] = None,
-    ):
-        self._model_use_kmeans = {"param_init": param_init == "kmeans"}
-
-    def _check_model_is_fit(self):
-        if self.param_ is None:
-            raise ValueError("Model is not fitted yet.")
-
-    def _get_model_params(self) -> MockHMMParams:
-        return self._validator.to_model_params(
-            (
-                self.param_,
-                self.initial_prob_,
-                self.transition_prob_,
-            )
-        )
-
-    def _set_model_params(self, params):
-        param, initial_prob, transition_prob = self._validator.from_model_params(params)
-        self.param_ = param
-        self.initial_prob_ = initial_prob
-        self.transition_prob_ = transition_prob
-
-    def _log_likelihood(self, params, X, y):
-        return jnp.zeros((y.shape[0], self.n_states))
-
-    def _model_params_initialization(self, X, y, session_starts, random_key=None):
-        return (
-            jnp.arange(self._n_states),
-            False,
-        )
-
-    def fit(self, X, y, session_starts=None, init_params=None):
-        session_starts = initialize_session_starts(X, y, session_starts)
-        fit_params = self._model_specific_initialization(X, y, session_starts)
-        self._set_model_params(fit_params)
-
-    def _initialize_optimizer_and_state(self, *args, **kwargs):
-        pass
-
-    def _compute_loss(self, *args, **kwargs):
-        pass
-
-    def _get_optimal_solver_params_config(self, *args, **kwargs):
-        pass
-
-    def predict(self, *args, **kwargs):
-        pass
-
-    def simulate(self, *args, **kwargs):
-        pass
-
-    def save_params(self, *args, **kwargs):
-        pass
-
-    def update(self, *args, **kwargs):
-        pass
-
-    def score(self, *args, **kwargs):
-        pass
 
 
 class TestHMMInit:
@@ -1321,113 +1162,6 @@ class TestHMMNewSession:
             session_starts = model._validator.validate_and_cast_session_starts(
                 X, y, session_starts
             )
-
-
-def all_subclasses(cls):
-    seen = set()
-    stack = list(cls.__subclasses__())
-    while stack:
-        sub = stack.pop()
-        if sub in seen:
-            continue
-        seen.add(sub)
-        stack.extend(sub.__subclasses__())
-    return seen
-
-
-class TestHMMValidator:
-    """Test suite for input validation logic in HMMValidator."""
-
-    def test_user_param_order(self) -> None:
-        """Meta-test.
-
-        Tests that any subclasses of HMMValidator have the correct user parameter order
-        """
-        import importlib
-        import pkgutil
-
-        import nemos
-
-        # Import every submodule so all HMMValidator subclasses get registered.
-        for _, modname, _ in pkgutil.walk_packages(nemos.__path__, prefix="nemos."):
-            importlib.import_module(modname)
-
-        # Filter the classes that are subclasses of 'SuperClass'.
-        subclasses = all_subclasses(HMMValidator)
-
-        for validator in subclasses:
-            n_params = len(validator.model_param_names)
-            user_par = [0.0] * (n_params - 2) + [1.0, 1.0]
-            params = validator.to_model_params(user_par)
-            assert np.all(params.hmm_params.log_initial_prob == 0.0)
-            assert np.all(params.hmm_params.log_transition_prob == 0.0)
-
-    @pytest.mark.parametrize(
-        "X, y, expectation",
-        [
-            (
-                np.random.rand(10, 2),
-                np.random.rand(10),
-                does_not_raise(),
-            ),
-            (
-                np.random.rand(10, 2),
-                np.random.rand(9),
-                pytest.raises(ValueError, match="X and y must have"),
-            ),
-            (
-                nap.TsdFrame(
-                    t=np.arange(10),
-                    d=np.random.rand(10, 2),
-                ),
-                nap.Tsd(
-                    t=np.arange(10) + 1,
-                    d=np.random.rand(10),
-                ),
-                pytest.raises(ValueError, match="Time axis mismatch"),
-            ),
-        ],
-    )
-    def test_validate_inputs(self, X, y, expectation):
-        """Test that validate_inputs correctly validates X and y."""
-        model = MockHMM(n_states=3)
-        with expectation:
-            model._validator.validate_inputs(X, y)
-
-    @pytest.mark.parametrize(
-        "X, y, expectation",
-        [
-            # nan border y
-            (
-                np.ones((5, 1)),
-                np.array([np.nan, 1, 2, 3, np.nan]),
-                does_not_raise(),
-            ),
-            # nan border x
-            (
-                np.array([[np.nan], [2], [3], [np.nan]]),
-                np.array([0, 1, 3, 4]),
-                does_not_raise(),
-            ),
-            # nan middle y
-            (
-                np.ones((5, 1)),
-                np.array([np.nan, 1, np.nan, 2, 3]),
-                pytest.raises(ValueError, match="HMM requires continuous"),
-            ),
-            # nan middle x
-            (
-                np.array([[np.nan], [2], [np.nan], [3]]),
-                np.array([0, 1, 3, 4]),
-                pytest.raises(ValueError, match="HMM requires continuous"),
-            ),
-        ],
-    )
-    def test_nans_only_at_border(self, X, y, expectation):
-        """Test that validate_inputs allows NaNs only at the borders of the data."""
-        model = MockHMM(n_states=3)
-        with expectation:
-            model._validator.validate_inputs(X, y)
 
 
 class TestHMMInference:
