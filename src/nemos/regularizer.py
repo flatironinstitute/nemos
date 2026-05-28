@@ -459,9 +459,9 @@ class UnRegularized(Regularizer):
         "Newton",
     )
 
-    _default_solver = "LBFGS"
+    _default_solver = "Newton"
     _proximal_operator = staticmethod(prox_none)
-    _hess_tag = HessianTag(structure=Diagonal, property=PositiveDefinite)
+    _hess_tag = None
 
     def _penalty_on_subtree(self, subtree, **kwargs) -> jnp.ndarray:
         return jnp.array(0.0)
@@ -489,7 +489,7 @@ class Ridge(Regularizer):
         "Newton",
     )
 
-    _default_solver = "LBFGS"
+    _default_solver = "Newton"
 
     _proximal_operator = staticmethod(prox_ridge)
     _hess_tag = HessianTag(structure=Diagonal, property=PositiveDefinite)

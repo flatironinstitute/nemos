@@ -18,6 +18,7 @@ from ._hess import (
     General,
     HessianTag,
     PositiveDefinite,
+    PositiveSemiDefinite,
     combine_hessian_tags,
 )
 
@@ -116,6 +117,9 @@ class _Newton:
                 -g_flat,
                 lx.Cholesky(),
             ).value
+
+        if tag.property is PositiveSemiDefinite:
+            return -jnp.linalg.pinv(H) @ g_flat
 
         return lx.linear_solve(
             lx.MatrixLinearOperator(H),
@@ -252,9 +256,7 @@ class _Newton:
                 *args,
                 maxiter=maxiter,
                 force_autodiff_hessian=force_autodiff_hessian,
-            )[
-                :2
-            ]  # Discard aux; convergence only needs params and state
+            )[:2]  # Discard aux; convergence only needs params and state
 
         if jit:
             final_params, final_state = eqx.internal.while_loop(
@@ -322,7 +324,7 @@ class Newton(NewtonSolverProtocol[NewtonState]):
         self._solver._hess_fn = hess_fn
         self._solver._hess_tag = (
             hess_tag
-            if regularizer is None
+            if regularizer is None or regularizer._hess_tag is None
             else combine_hessian_tags(hess_tag, regularizer._hess_tag)
         )
 

@@ -20,6 +20,10 @@ class Symmetric(MatrixProperty):
     pass
 
 
+class PositiveSemiDefinite(MatrixProperty):
+    pass
+
+
 class PositiveDefinite(MatrixProperty):
     pass
 
@@ -29,7 +33,8 @@ class NegativeDefinite(MatrixProperty):
 
 
 PROPERTY_IMPLIES: dict[type, set[type]] = {
-    PositiveDefinite: {Symmetric, General},
+    PositiveDefinite: {PositiveSemiDefinite, Symmetric, General},
+    PositiveSemiDefinite: {Symmetric, General},
     NegativeDefinite: {Symmetric, General},
     Symmetric: {General},
     General: set(),

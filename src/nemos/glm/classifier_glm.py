@@ -14,7 +14,7 @@ from .. import observation_models as obs
 from .. import tree_utils
 from ..label_encoder import LabelEncoder
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
-from ..solvers._hess import BlockDiagonal, Full, General, HessianTag
+from ..solvers._hess import BlockDiagonal, Full, HessianTag, PositiveSemiDefinite
 from ..type_casting import is_numpy_array_like, support_pynapple
 from ..typing import (
     DESIGN_INPUT_TYPE,
@@ -725,7 +725,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
     """
 
     _validator_class = ClassifierGLMValidator
-    _hess_tag: HessianTag = HessianTag(structure=Full, property=General)
+    _hess_tag: HessianTag = HessianTag(structure=Full, property=PositiveSemiDefinite)
 
     def __init__(
         self,
@@ -1007,7 +1007,9 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     """
 
     _validator_class = PopulationClassifierGLMValidator
-    _hess_tag: HessianTag = HessianTag(structure=BlockDiagonal, property=General)
+    _hess_tag: HessianTag = HessianTag(
+        structure=BlockDiagonal, property=PositiveSemiDefinite
+    )
 
     def __init__(
         self,
