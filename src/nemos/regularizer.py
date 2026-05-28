@@ -459,7 +459,7 @@ class UnRegularized(Regularizer):
         "Newton",
     )
 
-    _default_solver = "Newton"
+    _default_solver = "LBFGS"
     _proximal_operator = staticmethod(prox_none)
     _hess_tag = None
 
@@ -489,7 +489,7 @@ class Ridge(Regularizer):
         "Newton",
     )
 
-    _default_solver = "Newton"
+    _default_solver = "LBFGS"
 
     _proximal_operator = staticmethod(prox_ridge)
     _hess_tag = HessianTag(structure=Diagonal, property=PositiveDefinite)
