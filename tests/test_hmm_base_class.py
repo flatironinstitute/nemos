@@ -1,18 +1,22 @@
 from contextlib import nullcontext as does_not_raise
 from dataclasses import dataclass
 from typing import Any, Callable, Optional, Tuple, Union
+from unittest.mock import patch
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pynapple as nap
 import pytest
+import sklearn.cluster
 
+from nemos._inspect_utils import extract_literal_options
 from nemos.base_validator import RegressorValidator
 from nemos.hmm.hmm import BaseHMM
 from nemos.hmm.initialize_parameters import (
+    AVAILABLE_INIT_FUNCTIONS,
     DEFAULT_INIT_FUNCTIONS,
-    INITIALIZATION_FN_DICT,
+    HMM_INITIALIZATION_FN_DICT,
     kmeans_initial_proba_init,
     kmeans_transition_proba_init,
     random_initial_proba_init,
@@ -76,8 +80,13 @@ class MockHMMValidator(HMMValidator[MockHMMUserParams, MockHMMParams]):
         return True
 
 
-class MockHMM(BaseHMM[MockHMMParams, MockHMMUserParams, INITIALIZATION_FN_DICT]):
+class MockHMM(BaseHMM[MockHMMParams, MockHMMUserParams, HMM_INITIALIZATION_FN_DICT]):
     _validator_class = MockHMMValidator
+    _model_default_init_dict = {
+        "param_init": None,
+        "param_init_kwargs": {},
+        "param_init_custom": False,
+    }
 
     def __init__(
         self,
@@ -89,8 +98,8 @@ class MockHMM(BaseHMM[MockHMMParams, MockHMMUserParams, INITIALIZATION_FN_DICT])
         maxiter: int = 1000,
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
-        initialization_funcs: INITIALIZATION_FN_DICT = None,
-        model_initialization_funcs: INITIALIZATION_FN_DICT = None,
+        hmm_initialization_funcs: HMM_INITIALIZATION_FN_DICT = None,
+        model_initialization_funcs: HMM_INITIALIZATION_FN_DICT = None,
     ):
         BaseHMM.__init__(
             self,
@@ -100,27 +109,17 @@ class MockHMM(BaseHMM[MockHMMParams, MockHMMUserParams, INITIALIZATION_FN_DICT])
             maxiter=maxiter,
             tol=tol,
             seed=seed,
-            initialization_funcs=initialization_funcs,
+            hmm_initialization_funcs=hmm_initialization_funcs,
         )
         self.param_: jnp.ndarray | None = None
-        self.model_initialization_funcs = {}
+        self.model_initialization_funcs = model_initialization_funcs
 
-    def setup(
+    def _model_setup(
         self,
-        initial_proba_init: Optional[str | Callable] = None,
-        initial_proba_init_kwargs: Optional[dict] = None,
-        transition_proba_init: Optional[str | Callable] = None,
-        transition_proba_init_kwargs: Optional[dict] = None,
         param_init: Optional[str | Callable] = None,
         param_init_kwargs: Optional[dict] = None,
     ):
-        BaseHMM.setup(
-            self,
-            initial_proba_init=initial_proba_init,
-            initial_proba_init_kwargs=initial_proba_init_kwargs,
-            transition_proba_init=transition_proba_init,
-            transition_proba_init_kwargs=transition_proba_init_kwargs,
-        )
+        self._model_use_kmeans = {"param_init": param_init == "kmeans"}
 
     def _check_model_is_fit(self):
         if self.param_ is None:
@@ -362,7 +361,7 @@ class TestHMMInit:
     def test_initialization_funcs_none_uses_defaults(self):
         """Test that no setting uses default initialization functions."""
         model = MockHMM(n_states=2)
-        assert model.initialization_funcs == DEFAULT_INIT_FUNCTIONS
+        assert model.hmm_initialization_funcs == DEFAULT_INIT_FUNCTIONS
 
     def test_initialization_funcs_modified(self):
         """Test that modified initialization funcs are preserved."""
@@ -374,8 +373,8 @@ class TestHMMInit:
             "initial_proba_init": custom_func,
             "initial_proba_init_kwargs": {"extra_arg": "value"},
         }
-        model = MockHMM(n_states=2, initialization_funcs=init_funcs)
-        assert model.initialization_funcs == DEFAULT_INIT_FUNCTIONS | init_funcs
+        model = MockHMM(n_states=2, hmm_initialization_funcs=init_funcs)
+        assert model.hmm_initialization_funcs == DEFAULT_INIT_FUNCTIONS | init_funcs
 
     @pytest.mark.parametrize(
         "init_funcs, expectation",
@@ -393,7 +392,7 @@ class TestHMMInit:
     def test_initialization_funcs_invalid_key_via_init(self, init_funcs, expectation):
         """Test that invalid/misspelled keys raise KeyError when passed via constructor."""
         with expectation:
-            MockHMM(n_states=2, initialization_funcs=init_funcs)
+            MockHMM(n_states=2, hmm_initialization_funcs=init_funcs)
 
     @pytest.mark.parametrize(
         "init_funcs, expectation",
@@ -412,7 +411,7 @@ class TestHMMInit:
         """Test that invalid/misspelled keys raise KeyError when assigned via setter."""
         model = MockHMM(n_states=2)
         with expectation:
-            model.initialization_funcs = init_funcs
+            model.hmm_initialization_funcs = init_funcs
 
     # -------------------------------------------------------------------------
     # Default values tests
@@ -440,9 +439,9 @@ class TestHMMSetup:
     def test_setup_with_no_input(self):
         """Test that setup leaves everything as default."""
         model = MockHMM(n_states=3)
-        assert model.initialization_funcs == DEFAULT_INIT_FUNCTIONS
+        assert model.hmm_initialization_funcs == DEFAULT_INIT_FUNCTIONS
         model.setup()
-        assert model.initialization_funcs == DEFAULT_INIT_FUNCTIONS
+        assert model.hmm_initialization_funcs == DEFAULT_INIT_FUNCTIONS
 
     @pytest.mark.parametrize(
         "func_name, func, kwargs, expectation",
@@ -493,19 +492,26 @@ class TestHMMSetup:
         with expectation:
             if func_name == "custom":
                 model.setup(initial_proba_init=func, initial_proba_init_kwargs=kwargs)
-                assert model.initialization_funcs["initial_proba_init_custom"] is True
+                assert (
+                    model.hmm_initialization_funcs["initial_proba_init_custom"] is True
+                )
             else:
                 model.setup(
                     initial_proba_init=func_name, initial_proba_init_kwargs=kwargs
                 )
-                assert model.initialization_funcs["initial_proba_init_custom"] is False
+                assert (
+                    model.hmm_initialization_funcs["initial_proba_init_custom"] is False
+                )
 
-            assert model.initialization_funcs["initial_proba_init"] == func
+            assert model.hmm_initialization_funcs["initial_proba_init"] == func
 
             if kwargs is None:
-                assert model.initialization_funcs["initial_proba_init_kwargs"] == {}
+                assert model.hmm_initialization_funcs["initial_proba_init_kwargs"] == {}
             else:
-                assert model.initialization_funcs["initial_proba_init_kwargs"] == kwargs
+                assert (
+                    model.hmm_initialization_funcs["initial_proba_init_kwargs"]
+                    == kwargs
+                )
 
     @pytest.mark.parametrize(
         "func_name, func, kwargs, expectation",
@@ -560,23 +566,28 @@ class TestHMMSetup:
                     transition_proba_init=func, transition_proba_init_kwargs=kwargs
                 )
                 assert (
-                    model.initialization_funcs["transition_proba_init_custom"] is True
+                    model.hmm_initialization_funcs["transition_proba_init_custom"]
+                    is True
                 )
             else:
                 model.setup(
                     transition_proba_init=func_name, transition_proba_init_kwargs=kwargs
                 )
                 assert (
-                    model.initialization_funcs["transition_proba_init_custom"] is False
+                    model.hmm_initialization_funcs["transition_proba_init_custom"]
+                    is False
                 )
 
-            assert model.initialization_funcs["transition_proba_init"] == func
+            assert model.hmm_initialization_funcs["transition_proba_init"] == func
 
             if kwargs is None:
-                assert model.initialization_funcs["transition_proba_init_kwargs"] == {}
+                assert (
+                    model.hmm_initialization_funcs["transition_proba_init_kwargs"] == {}
+                )
             else:
                 assert (
-                    model.initialization_funcs["transition_proba_init_kwargs"] == kwargs
+                    model.hmm_initialization_funcs["transition_proba_init_kwargs"]
+                    == kwargs
                 )
 
     def test_setup_set_all(self):
@@ -596,7 +607,7 @@ class TestHMMSetup:
         )
         expected_funcs = DEFAULT_INIT_FUNCTIONS | init_funcs
         assert all(
-            model.initialization_funcs[key] == expected_funcs[key]
+            model.hmm_initialization_funcs[key] == expected_funcs[key]
             for key in expected_funcs
         )
 
@@ -612,12 +623,12 @@ class TestHMMSetup:
         model.setup(initial_proba_init="kmeans")
         # updated
         assert (
-            model.initialization_funcs["initial_proba_init"]
+            model.hmm_initialization_funcs["initial_proba_init"]
             == init_funcs["initial_proba_init"]
         )
         # default
         assert all(
-            model.initialization_funcs[key] == DEFAULT_INIT_FUNCTIONS[key]
+            model.hmm_initialization_funcs[key] == DEFAULT_INIT_FUNCTIONS[key]
             for key in [
                 "initial_proba_init_kwargs",
                 "transition_proba_init",
@@ -628,7 +639,7 @@ class TestHMMSetup:
         model.setup(initial_proba_init_kwargs={"minimum_prob": 0.01})
         # updated
         assert all(
-            model.initialization_funcs[key] == init_funcs[key]
+            model.hmm_initialization_funcs[key] == init_funcs[key]
             for key in [
                 "initial_proba_init",
                 "initial_proba_init_kwargs",
@@ -636,7 +647,7 @@ class TestHMMSetup:
         )
         # default
         assert all(
-            model.initialization_funcs[key] == DEFAULT_INIT_FUNCTIONS[key]
+            model.hmm_initialization_funcs[key] == DEFAULT_INIT_FUNCTIONS[key]
             for key in [
                 "transition_proba_init",
                 "transition_proba_init_kwargs",
@@ -646,7 +657,7 @@ class TestHMMSetup:
         model.setup(transition_proba_init="kmeans")
         # updated
         assert all(
-            model.initialization_funcs[key] == init_funcs[key]
+            model.hmm_initialization_funcs[key] == init_funcs[key]
             for key in [
                 "initial_proba_init",
                 "initial_proba_init_kwargs",
@@ -655,14 +666,14 @@ class TestHMMSetup:
         )
         # default
         assert (
-            model.initialization_funcs["transition_proba_init_kwargs"]
+            model.hmm_initialization_funcs["transition_proba_init_kwargs"]
             == DEFAULT_INIT_FUNCTIONS["transition_proba_init_kwargs"]
         )
 
         model.setup(transition_proba_init_kwargs={"minimum_prob": 0.01})
         # updated
         assert all(
-            model.initialization_funcs[key] == init_funcs[key]
+            model.hmm_initialization_funcs[key] == init_funcs[key]
             for key in [
                 "initial_proba_init",
                 "initial_proba_init_kwargs",
@@ -676,9 +687,24 @@ class TestHMMSetup:
         """Test that kwargs are reset if method is set to something else."""
         model = MockHMM(n_states=3)
         model.setup(**{key: "kmeans", key + "_kwargs": {"minimum_prob": 0.01}})
-        assert model.initialization_funcs[key + "_kwargs"] == {"minimum_prob": 0.01}
+        assert model.hmm_initialization_funcs[key + "_kwargs"] == {"minimum_prob": 0.01}
         model.setup(**{key: "random"})
-        assert model.initialization_funcs[key + "_kwargs"] == {}
+        assert model.hmm_initialization_funcs[key + "_kwargs"] == {}
+
+    @pytest.mark.parametrize(
+        "param_name", ["initial_proba_init", "transition_proba_init"]
+    )
+    def test_setup_literal_options_match_registry(self, param_name):
+        """``BaseHMM.setup`` Literal annotations must enumerate exactly the
+        built-in string aliases declared in ``AVAILABLE_INIT_FUNCTIONS``. If a
+        new built-in is added (or one is removed) without updating the
+        signature, this test fails — preventing silent drift."""
+        literals = extract_literal_options(BaseHMM.setup, param_name)
+        registry = AVAILABLE_INIT_FUNCTIONS[param_name]
+        assert literals == set(registry.keys()), (
+            f"Literal options for {param_name!r} in BaseHMM.setup ({literals}) "
+            f"differ from registered keys ({set(registry.keys())})."
+        )
 
 
 class TestHMMInitialParams:
@@ -742,6 +768,51 @@ class TestHMMInitialParams:
             model_params.hmm_params.log_transition_prob,
             jnp.log(DEFAULT_INIT_FUNCTIONS["transition_proba_init"](3)),
         )
+
+    def test__kmeans_setup_initializer(self):
+        """Verify setter is stored and is the same for hmm and model params."""
+        model = MockHMM(n_states=3)
+        model.setup(
+            initial_proba_init="kmeans",
+            transition_proba_init="kmeans",
+            param_init="kmeans",
+        )
+        original_fit = sklearn.cluster.KMeans.fit
+        # use mock fit to assert that kmeans is only called once at initializer construction
+        with patch.object(
+            sklearn.cluster.KMeans, "fit", autospec=True, side_effect=original_fit
+        ) as mock_fit:
+            model._model_specific_initialization(
+                jnp.zeros((10, 10)), jnp.zeros(10), None
+            )
+            assert id(
+                model.hmm_initialization_funcs["initial_proba_init_kwargs"][
+                    "initializer"
+                ]
+            ) == id(
+                model.hmm_initialization_funcs["transition_proba_init_kwargs"][
+                    "initializer"
+                ]
+            )
+            assert id(
+                model.hmm_initialization_funcs["initial_proba_init_kwargs"][
+                    "initializer"
+                ]
+            ) == id(
+                model.model_initialization_funcs["param_init_kwargs"]["initializer"]
+            )
+            assert mock_fit.call_count == 1
+
+    def test_kmeans_inconsistent_kwargs_raises(self):
+        """_kmeans_resolve_model_kwargs raises when the same kwarg has conflicting values."""
+        model = MockHMM(n_states=3)
+        use_kmeans = {"param_a": True, "param_b": True}
+        init_funcs = {
+            "param_a_kwargs": {"minimum_prob": 0.01},
+            "param_b_kwargs": {"minimum_prob": 0.05},
+        }
+        with pytest.raises(ValueError, match="Inconsistent KMeans init arg"):
+            model._kmeans_resolve_model_kwargs(use_kmeans, init_funcs)
 
     @pytest.mark.parametrize(
         "key, value, expectation",

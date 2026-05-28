@@ -188,12 +188,12 @@ def _is_param(par):
 
 
 def _safe_instantiate(
-    parameter_name: str, class_name: str, **kwargs
+    param_name: str, class_name: str, **kwargs
 ) -> "Regularizer | Observations":
     if not isinstance(class_name, str):
         # this should not be hit, if it does the saved params had been modified.
         raise ValueError(
-            f"Parameter ``{parameter_name}`` cannot be initialized. "
+            f"Parameter ``{param_name}`` cannot be initialized. "
             "When a parameter specifies a class, the class name must be a string. "
             f"Class name for the loaded parameter is {class_name}."
         )
@@ -204,14 +204,14 @@ def _safe_instantiate(
         return instantiate_observation_model(class_name, **kwargs)
     else:
         # Hit when loading a custom class without mapping
-        if parameter_name == "observation_model":
+        if param_name == "observation_model":
             class_type = "observation"
         else:
             class_type = "regularization"
         raise ValueError(
             f"The class '{class_basename}' is not a native NeMoS class.\n"
             f"To load a custom {class_type} class, please provide the following mapping:\n\n"
-            f" - nemos.load_model(save_path, mapping_dict={{'{parameter_name}': {class_basename}}})"
+            f" - nemos.load_model(save_path, mapping_dict={{'{param_name}': {class_basename}}})"
         )
 
 
