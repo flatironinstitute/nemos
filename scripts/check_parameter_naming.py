@@ -138,6 +138,7 @@ VALID_PAIRS = [
     {"x_flat", "g_flat"},
     {"func", "_func"},
     {"funcs", "_func"},
+    {"fval", "val"},
 ]
 
 
