@@ -422,7 +422,9 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         )
 
         if isinstance(solver, NewtonSolverProtocol):
-            solver.setup_hessian(self._get_hess_fn(), self._hess_tag, self.regularizer)
+            solver.setup_hessian(
+                self._get_hess_fn(init_params), self._hess_tag, self.regularizer
+            )
 
         # nemos's solvers store a .fun attribute, but it's not necessary for a solver to work.
         # A test relies on having _solver_loss_fun saved, so still check and save it if possible.

@@ -843,6 +843,9 @@ class ClassifierGLM(ClassifierMixin, GLM):
         y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
 
+    def _get_hess_fn(self, params) -> Callable | None:
+        return None
+
 
 class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     """
@@ -1153,3 +1156,45 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         self._label_encoder.check_classes_is_set("score")
         y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
+
+    def _get_hess_fn(self, params):
+        # extract a single-neuron slice of the init params
+        # this is the shape the per-neuron penalized loss closure will see at call time
+        coef_neu = jax.tree_util.tree_map(lambda x: x[:, 0], params.coef)
+        params_neu_template = self._validator.to_model_params(
+            [coef_neu, params.intercept[0]]
+        )
+
+        # build the per-neuron penalized loss once
+        # the regularizer captures filter_kwargs (mask, structured strength) from params_neu_template
+        penalized_single = self.regularizer.penalized_loss(
+            super()._compute_loss,
+            params_neu_template,
+            strength=self.regularizer_strength,
+        )
+        hess_single = jax.hessian(penalized_single)
+
+        def hess(params, *args):
+            X = args[0]
+            n_neurons = params.intercept.shape[0]
+            coef = params.coef
+            if self._feature_mask is not None:
+                coef = coef * self._feature_mask
+
+            blocks = []
+            for neuron_idx in range(n_neurons):
+                if self._feature_mask is not None:
+                    mask = self._feature_mask[:, neuron_idx]
+                    X_neuron = X * mask[None, :]
+                else:
+                    X_neuron = X
+
+                coef_neu = jax.tree_util.tree_map(lambda x: x[:, neuron_idx], coef)
+                params_neu = self._validator.to_model_params(
+                    [coef_neu, params.intercept[neuron_idx]]
+                )
+                blocks.append(hess_single(params_neu, X_neuron, *args[1:]))
+
+            return jnp.stack(blocks)
+
+        return hess

@@ -1001,7 +1001,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
             rank = jnp.linalg.matrix_rank(X)
             return (n_samples - rank - 1) * jnp.ones_like(params.intercept)
 
-    def _get_hess_fn(self) -> Callable:
+    def _get_hess_fn(self, params) -> Callable | None:
         """Construct the analytic Fisher-scoring Hessian for a GLM.
 
         This function returns a callable that computes the Hessian of the penalized
@@ -1684,7 +1684,7 @@ class PopulationGLM(GLM):
             + params.intercept
         )
 
-    def _get_hess_fn(self):
+    def _get_hess_fn(self, params) -> Callable | None:
         var_of_mu = _var_func_of_mu(self)
         lam = self.regularizer_strength
 
