@@ -7,7 +7,6 @@ import jax
 import jax.numpy as jnp
 import lineax as lx
 import optax
-from equinox.internal import while_loop
 
 from ..tree_utils import ravel_pytree_nest
 from ..typing import Params
