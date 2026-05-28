@@ -490,7 +490,8 @@ class GLMHMM(
 
         >>> import jax.numpy as jnp
         >>> def my_glm_init(
-        ...     n_states, X, y, inverse_link_function, session_starts, random_key,
+        ...     n_states, X, y, inverse_link_function, observation_model,
+        ...     session_starts, random_key,
         ... ):
         ...     coef = jnp.zeros((X.shape[1], n_states))
         ...     intercept = jnp.zeros((n_states,))
@@ -1420,7 +1421,8 @@ class GLMHMM(
 
         >>> import jax.numpy as jnp
         >>> def my_glm_init(
-        ...     n_states, X, y, inverse_link_function, session_starts, random_key,
+        ...     n_states, X, y, inverse_link_function, observation_model,
+        ...     session_starts, random_key,
         ... ):
         ...     return jnp.zeros((X.shape[1], n_states)), jnp.zeros((n_states,))
         >>> model = nmo.glm_hmm.GLMHMM(n_states=2)
