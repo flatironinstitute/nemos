@@ -299,13 +299,25 @@ def _make_model_params(n_features, n_states, n_neurons=None):
 
 
 def _custom_glm_params_init(
-    n_states, X, y, inverse_link_function, session_starts, random_key
+    n_states,
+    X,
+    y,
+    inverse_link_function,
+    observation_model,
+    session_starts,
+    random_key,
 ):
     return jnp.zeros((X.shape[1], n_states)), jnp.zeros((n_states,))
 
 
 def _custom_scale_init(
-    n_states, X, y, inverse_link_function, session_starts, random_key
+    n_states,
+    X,
+    y,
+    inverse_link_function,
+    observation_model,
+    session_starts,
+    random_key,
 ):
     return jnp.ones((n_states,))
 
@@ -735,6 +747,7 @@ class TestFitDelegation:
         # keyword args: every entry the call site supplies
         assert set(kwargs) == {
             "inverse_link_function",
+            "observation_model",
             "session_starts",
             "random_key",
             "init_funcs",
@@ -1263,7 +1276,15 @@ def _collect_params(model, *, skip_solver_state=True):
     return params
 
 
-def _custom_glm_init(n_states, X, y, inverse_link_function, session_starts, random_key):
+def _custom_glm_init(
+    n_states,
+    X,
+    y,
+    inverse_link_function,
+    observation_model,
+    session_starts,
+    random_key,
+):
     """Custom GLM-params initializer used to exercise the custom-callable path."""
     return jnp.zeros((X.shape[1], n_states)), jnp.zeros((n_states,))
 
