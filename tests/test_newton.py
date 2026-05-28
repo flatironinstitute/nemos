@@ -8,7 +8,6 @@ import pytest
 
 import nemos as nmo
 from nemos.glm.params import GLMParams
-from nemos.regularizer import Ridge, UnRegularized
 from nemos.solvers._abstract_solver import OptimizationInfo
 from nemos.solvers._newton import Newton, NewtonState, _Newton
 from nemos.tree_utils import pytree_map_and_reduce
@@ -149,7 +148,7 @@ def test_newton_glm_initialize_hessian(glm_class, regularizer_name, linear_regre
 
     glm = glm_class(regularizer=regularizer_name, solver_name="Newton")
     params = glm.initialize_params(X, y)
-    init_state = glm.initialize_optimizer_and_state(params, X, y)
+    glm.initialize_optimizer_and_state(params, X, y)
     params_tree = GLMParams(*params)
 
     init = glm.solver._solver._hess_fn(params_tree, X, y)
@@ -195,7 +194,6 @@ def test_newton_glm_set_regularizer_update_invalidates(
     glm = glm_class(regularizer=regularizer_before, solver_name="Newton")
     params = glm.initialize_params(X, y)
     init_state = glm.initialize_optimizer_and_state(params, X, y)
-    params_tree = GLMParams(*params)
 
     # Update regularizer
     glm.regularizer = regularizer_after
@@ -259,7 +257,6 @@ def test_newton_glm_set_regularizer_strength_invalidates(
     params = glm.initialize_params(X, y)
     init_state = glm.initialize_optimizer_and_state(params, X, y)
     params = GLMParams(*params)
-    init = glm.solver._solver._hess_fn(params, X, y)
 
     # Update regularizer strength
     glm.regularizer_strength = 1.0
@@ -338,8 +335,6 @@ def test_newton_glm_set_observation_model_invalidates(
     glm = glm_class(solver_name="Newton", observation_model=obs_init)
     params = glm.initialize_params(X, y)
     init_state = glm.initialize_optimizer_and_state(params, X, y)
-    params_tree = GLMParams(*params)
-    init = glm.solver._solver._hess_fn(params_tree, X, y)
 
     # Update observation model
     glm.observation_model = obs_after
