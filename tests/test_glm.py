@@ -4282,29 +4282,6 @@ class TestClassifierGLM:
         pred = model.predict(X)
         assert jnp.array_equal(pred_nc, nc_labels[pred])
 
-    def test_compute_loss_with_labels(
-        self, inv_link, glm_type, model_instantiation, request
-    ):
-        """Test that compute_loss works with custom labels."""
-        X, y, model, true_params, _ = request.getfixturevalue(
-            glm_type + model_instantiation
-        )
-        model = deepcopy(model)
-        model.coef_ = true_params.coef
-        model.intercept_ = true_params.intercept
-
-        # Compute loss with default labels
-        model.set_classes(np.arange(model.n_classes))
-        loss_default = model.compute_loss((model.coef_, model.intercept_), X, y)
-
-        # Compute loss with string labels
-        label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
-        model.set_classes(label)
-        y_label = model._label_encoder.decode(y)
-        loss_label = model.compute_loss((model.coef_, model.intercept_), X, y_label)
-
-        assert jnp.allclose(loss_default, loss_label)
-
     @pytest.mark.parametrize("return_type", ["proba", "log-proba"])
     def test_predict_proba_with_labels(
         self, inv_link, glm_type, model_instantiation, request, return_type

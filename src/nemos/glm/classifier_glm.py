@@ -113,49 +113,6 @@ class ClassifierMixin:
         else:
             self._label_encoder.reset()
 
-    def compute_loss(
-        self,
-        params,
-        X,
-        y,
-        *args,
-        **kwargs,
-    ):
-        """
-        Compute the loss function for the model.
-
-        This method validates inputs, encodes class labels to internal indices,
-        and computes the loss (negative log-likelihood).
-
-        Parameters
-        ----------
-        params
-            Parameter tuple of (coefficients, intercept).
-        X
-            Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
-        y
-            Target class labels in the same format as ``classes_``.
-        *args
-            Additional positional arguments passed to the model-specific loss function.
-        **kwargs
-            Additional keyword arguments passed to the model-specific loss function.
-
-        Returns
-        -------
-        loss
-            The loss value (negative log-likelihood).
-
-        Raises
-        ------
-        RuntimeError
-            If ``classes_`` has not been set.
-        ValueError
-            If inputs or parameters have incompatible shapes or invalid values.
-        """
-        self._label_encoder.check_classes_is_set("compute_loss")
-        y = self._label_encoder.encode(y)
-        return super().compute_loss(params, X, y, *args, **kwargs)
-
     @property
     def n_classes(self):
         """Number of classes."""
