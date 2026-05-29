@@ -423,26 +423,6 @@ class GLMHMM(
         - ``glm_params_init``: ``"random"`` (default), ``"kmeans"``.
         - ``scale_init``: ``"constant"`` (default), ``"kmeans"``.
 
-        Custom callables must satisfy one of two ``typing.Protocol`` classes:
-
-        - ``initial_proba_init`` and ``transition_proba_init`` must satisfy
-          :class:`~nemos.hmm.initialize_parameters.InitFunctionHMM` and return a
-          ``jnp.ndarray`` of shape ``(n_states,)`` or ``(n_states, n_states)``
-          respectively.
-        - ``glm_params_init`` and ``scale_init`` must satisfy
-          :class:`~nemos.glm_hmm.initialize_parameters.InitFunctionGLM`.
-          ``glm_params_init`` returns ``(coef, intercept)`` matched to the design
-          and ``n_states``; ``scale_init`` returns the scale array for the
-          observation model.
-
-        To inspect a protocol's signature, import and ``help()`` it::
-
-            from nemos.hmm.initialize_parameters import InitFunctionHMM
-            from nemos.glm_hmm.initialize_parameters import InitFunctionGLM
-            help(InitFunctionHMM)  # or help(InitFunctionGLM)
-
-        All arguments must appear in the function signature even when unused, so the
-        framework can supply them uniformly.
 
         Parameters
         ----------
@@ -475,6 +455,29 @@ class GLMHMM(
             above, or if a ``*_kwargs`` entry contains keys that don't match the
             corresponding initializer's signature.
 
+        Notes
+        -----
+        Custom callables must satisfy one of two ``typing.Protocol`` classes:
+
+        - ``initial_proba_init`` and ``transition_proba_init`` must satisfy
+          :class:`~nemos.hmm.initialize_parameters.InitFunctionHMM` and return a
+          ``jnp.ndarray`` of shape ``(n_states,)`` or ``(n_states, n_states)``
+          respectively.
+        - ``glm_params_init`` and ``scale_init`` must satisfy
+          :class:`~nemos.glm_hmm.initialize_parameters.InitFunctionGLM`.
+          ``glm_params_init`` returns ``(coef, intercept)`` matched to the design
+          and ``n_states``; ``scale_init`` returns the scale array for the
+          observation model.
+
+        To inspect a protocol's signature, import and ``help()`` it::
+
+            from nemos.hmm.initialize_parameters import InitFunctionHMM
+            from nemos.glm_hmm.initialize_parameters import InitFunctionGLM
+            help(InitFunctionHMM)  # or help(InitFunctionGLM)
+
+        All arguments must appear in the function signature even when unused, so the
+        framework can supply them uniformly.
+
         Examples
         --------
         Switch a parameter to a different built-in scheme by passing its label:
@@ -487,7 +490,8 @@ class GLMHMM(
 
         >>> import jax.numpy as jnp
         >>> def my_glm_init(
-        ...     n_states, X, y, inverse_link_function, session_starts, random_key,
+        ...     n_states, X, y, inverse_link_function, observation_model,
+        ...     session_starts, random_key,
         ... ):
         ...     coef = jnp.zeros((X.shape[1], n_states))
         ...     intercept = jnp.zeros((n_states,))
@@ -644,12 +648,6 @@ class GLMHMM(
             "observation_model": self.observation_model,
         }
 
-    def _kmeans_init_func_kwargs(self) -> dict:
-        # observation_model is a required arg of kmeans_glm_params_init /
-        # kmeans_scale_init; surface it alongside the injected initializer so the
-        # upstream guard and the function signature are both satisfied.
-        return {"observation_model": self.observation_model}
-
     def _model_params_initialization(
         self,
         X: DESIGN_INPUT_TYPE,
@@ -663,6 +661,7 @@ class GLMHMM(
             X,
             y,
             inverse_link_function=self._inverse_link_function,
+            observation_model=self._observation_model,
             session_starts=session_starts,
             random_key=random_key,
             init_funcs=self._model_initialization_funcs,
@@ -795,9 +794,6 @@ class GLMHMM(
         # filter for non-nans, grab data if needed
         data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
 
-        # make sure session_starts starts with a 1
-        session_starts = session_starts.at[0].set(True)
-
         # set up optimization
         self._initialize_optimizer_and_state(init_params, data, y)
 
@@ -851,7 +847,7 @@ class GLMHMM(
         else:
             if not isinstance(n_samples, int):
                 raise TypeError(
-                    "`n_samples` must either `None` or of type `int`. Type {type(n_sample)} provided "
+                    f"`n_samples` must either `None` or of type `int`. Type {type(n_samples)} provided "
                     "instead!"
                 )
 
@@ -892,6 +888,86 @@ class GLMHMM(
             # for UnRegularized, use the rank
             rank = jnp.linalg.matrix_rank(X)
             return (n_samples - rank - dof_intercept_and_hmm) * jnp.ones(n_neurons)
+
+    def _simulate(
+        self,
+        random_key: jax.Array,
+        params: GLMHMMParams,
+        X: jnp.ndarray,
+        session_starts: jnp.ndarray,
+    ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+        """Simulate activity vis jax.lax.scan.
+
+        Parameters
+        ----------
+        random_key :
+            JAX random key.
+        params :
+            Model parameters.
+        X :
+            Design matrix of shape ``(n_time_bins, n_features)``.
+        session_starts :
+            Boolean array marking session starts.
+
+        Returns
+        -------
+        simulated_activity :
+            Simulated observations.
+        firing_rates :
+            Predicted rates conditioned on simulated states.
+        simulated_states :
+            State indices at each time point.
+        """
+        # unpack log probabilities directly (avoid exp then log in categorical)
+        log_initial_prob = params.hmm_params.log_initial_prob
+        log_transition_prob = params.hmm_params.log_transition_prob
+        scale = jnp.exp(params.model_params.log_scale)
+
+        # pre-compute rates for all states: (n_time_bins, n_states) or (n_time_bins, n_neurons, n_states)
+        all_rates = compute_rate_per_state(
+            X, params.model_params, self._inverse_link_function
+        )
+
+        # pre-generate random keys for all time steps
+        n_time_bins = jax.tree_util.tree_leaves(X)[0].shape[0]
+        all_keys = jax.random.split(random_key, n_time_bins * 2)
+        state_keys = all_keys[:n_time_bins]
+        obs_keys = all_keys[n_time_bins:]
+
+        def simulate_step(carry, inputs):
+            """Single simulation step."""
+            prev_state_idx = carry
+            rates_t, is_new_sess, state_key, obs_key = inputs
+
+            # sample state: log_initial_prob if new session, else log transition from prev
+            log_state_probs = jax.lax.cond(
+                is_new_sess,
+                lambda: log_initial_prob,
+                lambda: log_transition_prob[prev_state_idx],
+            )
+            state_idx = jax.random.categorical(state_key, log_state_probs)
+
+            # get rate and scale for sampled state
+            # handles both (n_states,) and (n_neurons, n_states)
+            rate = rates_t[..., state_idx]
+            state_scale = scale[..., state_idx]
+
+            # sample observation
+            y_t = self._observation_model.sample_generator(
+                key=obs_key, predicted_rate=rate, scale=state_scale
+            )
+
+            return state_idx, (y_t, rate, state_idx)
+
+        # initialize carry (state will be overwritten at first step since session_starts[0]=True)
+        init_carry = jnp.array(0)
+
+        # run scan
+        _, (simulated_activity, firing_rates, simulated_states) = jax.lax.scan(
+            simulate_step, init_carry, (all_rates, session_starts, state_keys, obs_keys)
+        )
+
+        return simulated_activity, firing_rates, simulated_states
 
     def simulate(
         self,
@@ -982,9 +1058,6 @@ class GLMHMM(
         data, _, session_starts = self._preprocess_inputs(
             feedforward_input, None, session_starts
         )
-
-        # ensure first time point is a session start
-        session_starts = session_starts.at[0].set(True)
 
         # run simulation
         simulated_activity, firing_rates, simulated_states = self._simulate(
@@ -1302,86 +1375,6 @@ class GLMHMM(
             X, y, session_starts=session_starts, state_format=state_format
         )
 
-    def _simulate(
-        self,
-        random_key: jax.Array,
-        params: GLMHMMParams,
-        X: jnp.ndarray,
-        session_starts: jnp.ndarray,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-        """Simulate activity vis jax.lax.scan.
-
-        Parameters
-        ----------
-        random_key :
-            JAX random key.
-        params :
-            Model parameters.
-        X :
-            Design matrix of shape ``(n_time_bins, n_features)``.
-        session_starts :
-            Boolean array marking session starts.
-
-        Returns
-        -------
-        simulated_activity :
-            Simulated observations.
-        firing_rates :
-            Predicted rates conditioned on simulated states.
-        simulated_states :
-            State indices at each time point.
-        """
-        # unpack log probabilities directly (avoid exp then log in categorical)
-        log_initial_prob = params.hmm_params.log_initial_prob
-        log_transition_prob = params.hmm_params.log_transition_prob
-        scale = jnp.exp(params.model_params.log_scale)
-
-        # pre-compute rates for all states: (n_time_bins, n_states) or (n_time_bins, n_neurons, n_states)
-        all_rates = compute_rate_per_state(
-            X, params.model_params, self._inverse_link_function
-        )
-
-        # pre-generate random keys for all time steps
-        n_time_bins = jax.tree_util.tree_leaves(X)[0].shape[0]
-        all_keys = jax.random.split(random_key, n_time_bins * 2)
-        state_keys = all_keys[:n_time_bins]
-        obs_keys = all_keys[n_time_bins:]
-
-        def simulate_step(carry, inputs):
-            """Single simulation step."""
-            prev_state_idx = carry
-            rates_t, is_new_sess, state_key, obs_key = inputs
-
-            # sample state: log_initial_prob if new session, else log transition from prev
-            log_state_probs = jax.lax.cond(
-                is_new_sess,
-                lambda: log_initial_prob,
-                lambda: log_transition_prob[prev_state_idx],
-            )
-            state_idx = jax.random.categorical(state_key, log_state_probs)
-
-            # get rate and scale for sampled state
-            # handles both (n_states,) and (n_neurons, n_states)
-            rate = rates_t[..., state_idx]
-            state_scale = scale[..., state_idx]
-
-            # sample observation
-            y_t = self._observation_model.sample_generator(
-                key=obs_key, predicted_rate=rate, scale=state_scale
-            )
-
-            return state_idx, (y_t, rate, state_idx)
-
-        # initialize carry (state will be overwritten at first step since session_starts[0]=True)
-        init_carry = jnp.array(0)
-
-        # run scan
-        _, (simulated_activity, firing_rates, simulated_states) = jax.lax.scan(
-            simulate_step, init_carry, (all_rates, session_starts, state_keys, obs_keys)
-        )
-
-        return simulated_activity, firing_rates, simulated_states
-
     def save_params(
         self,
         filename: Union[str, Path],
@@ -1428,7 +1421,8 @@ class GLMHMM(
 
         >>> import jax.numpy as jnp
         >>> def my_glm_init(
-        ...     n_states, X, y, inverse_link_function, session_starts, random_key,
+        ...     n_states, X, y, inverse_link_function, observation_model,
+        ...     session_starts, random_key,
         ... ):
         ...     return jnp.zeros((X.shape[1], n_states)), jnp.zeros((n_states,))
         >>> model = nmo.glm_hmm.GLMHMM(n_states=2)
@@ -1562,9 +1556,6 @@ class GLMHMM(
 
         # drop nans and pull pytree data
         data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
-
-        # ensure first sample is a session start
-        session_starts = session_starts.at[0].set(True)
 
         # wrap into model params (assumes init was done via
         # `initialize_optimizer_and_state` so the EM step function is in place)

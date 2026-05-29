@@ -18,6 +18,7 @@ from ..hmm.initialize_parameters import (
     _resolve_init_funcs,
     _validate_init_funcs_kwargs,
 )
+from ..observation_models import Observations
 from ..pytrees import FeaturePytree
 from ..type_casting import cast_to_jax
 from ..typing import DESIGN_INPUT_TYPE
@@ -35,6 +36,7 @@ class InitFunctionGLM(Protocol):
         X: DESIGN_INPUT_TYPE,
         y: NDArray | jnp.ndarray,
         inverse_link_function: Callable,
+        observation_model: Observations,
         session_starts: Optional[NDArray | jnp.ndarray],
         random_key: jax.Array,
         **kwargs: Any,
@@ -49,6 +51,7 @@ def random_glm_params_init(
     X: DESIGN_INPUT_TYPE,
     y: jnp.ndarray,
     inverse_link_function: Callable,
+    observation_model: Optional[Observations] = None,
     session_starts: Optional[NDArray | jnp.ndarray] = None,
     random_key: Optional[jax.Array] = None,
     std_dev=0.001,
@@ -69,6 +72,9 @@ def random_glm_params_init(
         Observations, shape (n_samples,) or (n_samples, n_neurons).
     inverse_link_function :
         Inverse link function of the GLM.
+    observation_model :
+        Observation model of the GLM. Unused for this initialization, but included for protocol
+        conformance with :class:`InitFunctionGLM`.
     session_starts :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions.
         Unused for this initialization, but included for API consistency.
@@ -142,7 +148,7 @@ class KMeansInitializerGLM(KMeansInitializer):
         X: DESIGN_INPUT_TYPE,
         y: NDArray | jnp.ndarray,
         inverse_link_function: Callable,
-        observation_model: str,
+        observation_model: Observations | str,
         session_starts: Optional[jnp.ndarray] = None,
         glm_kwargs: Optional[Dict[str, Any]] = None,
         random_key: int | jax.Array = 0,
@@ -246,10 +252,10 @@ def kmeans_glm_params_init(
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
     inverse_link_function: Callable,
-    observation_model: str,
+    observation_model: Observations | str,
     session_starts: Optional[jnp.ndarray] = None,
-    glm_kwargs: Optional[dict] = None,
     random_key: Optional[jax.Array] = None,
+    glm_kwargs: Optional[dict] = None,
     initializer: Optional[KMeansInitializer] = None,
 ):
     """
@@ -270,10 +276,10 @@ def kmeans_glm_params_init(
     session_starts :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
         (default), it is assumed that all data belongs to a single session.
-    glm_kwargs:
-        GLM parameters as keyword arguments. These are passed at model initialization.
     random_key :
         Random key for reproducibility of KMeans initialization.
+    glm_kwargs:
+        GLM parameters as keyword arguments. These are passed at model initialization.
     initializer :
         Optional instance of KMeansInitializer to use for computing initial probabilities.
 
@@ -303,10 +309,10 @@ def kmeans_scale_init(
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
     inverse_link_function: Callable,
-    observation_model: str,
+    observation_model: Observations | str,
     session_starts: Optional[jnp.ndarray] = None,
-    glm_kwargs: Optional[dict] = None,
     random_key: Optional[jax.Array] = None,
+    glm_kwargs: Optional[dict] = None,
     initializer: Optional[KMeansInitializer] = None,
 ):
     """
@@ -327,10 +333,10 @@ def kmeans_scale_init(
     session_starts :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
         (default), it is assumed that all data belongs to a single session.
-    glm_kwargs:
-        GLM parameters as keyword arguments. These are passed at model initialization.
     random_key :
         Random key for reproducibility of KMeans initialization.
+    glm_kwargs:
+        GLM parameters as keyword arguments. These are passed at model initialization.
     initializer :
         Optional instance of KMeansInitializer to use for computing initial probabilities.
 
@@ -361,6 +367,7 @@ def constant_scale_init(
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
     inverse_link_function: Callable,
+    observation_model: Optional[Observations] = None,
     session_starts: Optional[NDArray | jnp.ndarray] = None,
     random_key: Optional[jax.Array] = None,
     scale_val: float = 1.0,
@@ -380,6 +387,9 @@ def constant_scale_init(
         Observations, used to determine number of neurons from shape.
     inverse_link_function :
         Inverse link function of the GLM. Unused for this initialization, but included for API consistency.
+    observation_model :
+        Observation model of the GLM. Unused for this initialization, but included for protocol
+        conformance with :class:`InitFunctionGLM`.
     session_starts :
         Optional boolean array of shape (n_samples,). Unused for this initialization,
         but included for API consistency.
@@ -531,6 +541,7 @@ def generate_glm_hmm_initial_model_params(
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
     inverse_link_function: Callable,
+    observation_model: Observations,
     session_starts: Optional[NDArray | jnp.ndarray] = None,
     random_key: int | jax.Array = 123,
     init_funcs: Optional[dict] = None,
@@ -553,6 +564,10 @@ def generate_glm_hmm_initial_model_params(
         Output data (e.g., neural activity) of shape (n_samples,) or (n_samples, n_neurons).
     inverse_link_function :
         Inverse link function of the GLM, passed to GLM parameter and scale initialization functions.
+    observation_model :
+        Observation model of the GLM, forwarded to GLM-parameter and scale init functions as a
+        protocol-required argument. The :class:`InitFunctionGLM` protocol reserves this name, so it
+        must come from the caller (the model) rather than from user-provided init kwargs.
     session_starts :
         Boolean array of shape (n_samples,) indicating the start of new sessions. If None, a single
         session is assumed.
@@ -591,20 +606,12 @@ def generate_glm_hmm_initial_model_params(
     )
     glm_params_init_kwargs = glm_init_funcs.get("glm_params_init_kwargs") or {}
 
-    if (
-        glm_params_init is kmeans_glm_params_init
-        and "observation_model" not in glm_params_init_kwargs
-    ):
-        raise ValueError(
-            "The 'kmeans' GLM parameter initializer requires 'observation_model' to be "
-            "provided in 'glm_params_init_kwargs'."
-        )
-
     coef, intercept = glm_params_init(
         n_states=n_states,
         X=X,
         y=y,
         inverse_link_function=inverse_link_function,
+        observation_model=observation_model,
         session_starts=session_starts,
         random_key=glm_params_key,
         **glm_params_init_kwargs,
@@ -615,20 +622,12 @@ def generate_glm_hmm_initial_model_params(
     )
     scale_init_kwargs = glm_init_funcs.get("scale_init_kwargs") or {}
 
-    if (
-        scale_init_fn is kmeans_scale_init
-        and "observation_model" not in scale_init_kwargs
-    ):
-        raise ValueError(
-            "The 'kmeans' scale initializer requires 'observation_model' to be "
-            "provided in 'scale_init_kwargs'."
-        )
-
     scale = scale_init_fn(
         n_states=n_states,
         X=X,
         y=y,
         inverse_link_function=inverse_link_function,
+        observation_model=observation_model,
         session_starts=session_starts,
         random_key=scale_key,
         **scale_init_kwargs,

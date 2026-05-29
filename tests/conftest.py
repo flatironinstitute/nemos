@@ -14,9 +14,10 @@ import os
 import re
 from collections import defaultdict, namedtuple
 from copy import deepcopy
+from dataclasses import dataclass
 from functools import partial
 from types import SimpleNamespace
-from typing import Literal
+from typing import Any, Callable, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -28,6 +29,7 @@ import nemos as nmo
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
 from nemos.base_regressor import BaseRegressor
+from nemos.base_validator import RegressorValidator
 from nemos.basis import AdditiveBasis, CustomBasis, MultiplicativeBasis, Zero
 from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import BasisMixin
@@ -36,11 +38,16 @@ from nemos.glm.params import GLMParams
 from nemos.glm.validation import GLMValidator
 from nemos.glm_hmm.initialize_parameters import random_glm_params_init
 from nemos.glm_hmm.params import GLMHMMModelParams, GLMHMMParams
+from nemos.hmm.hmm import BaseHMM
 from nemos.hmm.initialize_parameters import (
+    HMM_INITIALIZATION_FN_DICT,
     sticky_transition_proba_init,
     uniform_initial_proba_init,
 )
 from nemos.hmm.params import HMMParams
+from nemos.hmm.utils import initialize_session_starts
+from nemos.hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
+from nemos.params import ModelParams
 from nemos.tree_utils import tree_full_like
 
 _totals = defaultdict(float)
@@ -577,6 +584,158 @@ class MockGLM(nmo.glm.GLM):
         pass
 
     def _set_model_params(self, params):
+        pass
+
+
+MockHMMUserParams = Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
+
+
+class MockHMMModelParams(ModelParams):
+    param: jnp.ndarray
+
+
+class MockHMMParams(ModelParams):
+    model_params: MockHMMModelParams
+    hmm_params: HMMParams
+
+
+def to_mock_params(user_params: MockHMMUserParams) -> MockHMMParams:
+    return MockHMMParams(
+        model_params=MockHMMModelParams(user_params[0]),
+        hmm_params=to_hmm_params(user_params[1:]),
+    )
+
+
+def from_mock_params(params: MockHMMParams) -> MockHMMUserParams:
+    initial_prob, transition_prob = from_hmm_params(params.hmm_params)
+    return (
+        params.model_params.param,
+        initial_prob,
+        transition_prob,
+    )
+
+
+@dataclass(frozen=True, repr=False)
+class MockHMMValidator(HMMValidator[MockHMMUserParams, MockHMMParams]):
+    model_param_names: Tuple[str] = (
+        "param",
+        *HMMValidator.model_param_names,
+    )
+    to_model_params: Callable[[MockHMMUserParams], MockHMMParams] = to_mock_params
+    from_model_params: Callable[[MockHMMParams], MockHMMUserParams] = from_mock_params
+    model_class: str = "MockHMM"
+    X_dimensionality: int = 2
+    y_dimensionality: int = 1
+    params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
+        *RegressorValidator.params_validation_sequence[:2],
+        *HMMValidator.params_validation_sequence,
+        *RegressorValidator.params_validation_sequence[3:],
+    )
+
+    def validate_consistency(self, *args, **kwargs) -> None:
+        return True
+
+
+class MockHMM(
+    BaseHMM[
+        MockHMMParams, MockHMMUserParams, HMM_INITIALIZATION_FN_DICT, MockHMMValidator
+    ]
+):
+    _validator_class = MockHMMValidator
+    _model_default_init_dict = {
+        "param_init": None,
+        "param_init_kwargs": {},
+        "param_init_custom": False,
+    }
+
+    def __init__(
+        self,
+        n_states: int,
+        dirichlet_initial_proba: Union[jnp.ndarray, None] = None,  # (n_state, )
+        dirichlet_transition_proba: Union[
+            jnp.ndarray | None
+        ] = None,  # (n_state, n_state):
+        maxiter: int = 1000,
+        tol: float = 1e-8,
+        seed=jax.random.PRNGKey(123),
+        hmm_initialization_funcs: HMM_INITIALIZATION_FN_DICT = None,
+        model_initialization_funcs: HMM_INITIALIZATION_FN_DICT = None,
+    ):
+        BaseHMM.__init__(
+            self,
+            n_states=n_states,
+            dirichlet_initial_proba=dirichlet_initial_proba,
+            dirichlet_transition_proba=dirichlet_transition_proba,
+            maxiter=maxiter,
+            tol=tol,
+            seed=seed,
+            hmm_initialization_funcs=hmm_initialization_funcs,
+        )
+        self.param_: jnp.ndarray | None = None
+        self.model_initialization_funcs = model_initialization_funcs
+
+    def _model_setup(
+        self,
+        param_init: Optional[str | Callable] = None,
+        param_init_kwargs: Optional[dict] = None,
+    ):
+        self._model_use_kmeans = {"param_init": param_init == "kmeans"}
+
+    def _check_model_is_fit(self):
+        if self.param_ is None:
+            raise ValueError("Model is not fitted yet.")
+
+    def _get_model_params(self) -> MockHMMParams:
+        return self._validator.to_model_params(
+            (
+                self.param_,
+                self.initial_prob_,
+                self.transition_prob_,
+            )
+        )
+
+    def _set_model_params(self, params):
+        param, initial_prob, transition_prob = self._validator.from_model_params(params)
+        self.param_ = param
+        self.initial_prob_ = initial_prob
+        self.transition_prob_ = transition_prob
+
+    def _log_likelihood(self, params, X, y):
+        return jnp.zeros((y.shape[0], self.n_states))
+
+    def _model_params_initialization(self, X, y, session_starts, random_key=None):
+        return (
+            jnp.arange(self._n_states),
+            False,
+        )
+
+    def fit(self, X, y, session_starts=None, init_params=None):
+        session_starts = initialize_session_starts(X, y, session_starts)
+        fit_params = self._model_specific_initialization(X, y, session_starts)
+        self._set_model_params(fit_params)
+
+    def _initialize_optimizer_and_state(self, *args, **kwargs):
+        pass
+
+    def _compute_loss(self, *args, **kwargs):
+        pass
+
+    def _get_optimal_solver_params_config(self, *args, **kwargs):
+        pass
+
+    def predict(self, *args, **kwargs):
+        pass
+
+    def simulate(self, *args, **kwargs):
+        pass
+
+    def save_params(self, *args, **kwargs):
+        pass
+
+    def update(self, *args, **kwargs):
+        pass
+
+    def score(self, *args, **kwargs):
         pass
 
 
