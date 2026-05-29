@@ -85,7 +85,7 @@ def _glm_hessian_block(
     return H
 
 
-class GLM(BaseRegressor[GLMUserParams, GLMParams]):
+class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
     r"""Generalized Linear Model (GLM) for neural activity data.
 
     This GLM implementation allows users to model neural activity based on a combination of exogenous inputs
@@ -361,23 +361,75 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
 
     @property
     def inverse_link_function(self):
-        """Getter for the inverse link function for the model."""
+        """Inverse link function mapping the linear predictor to the response space.
+
+        Always a callable. If ``None`` was passed at construction time, this is
+        resolved to the observation model's default (e.g. ``jnp.exp`` for Poisson,
+        ``1 / x`` for Gamma, ``jax.nn.sigmoid`` for Bernoulli).
+        """
         return self._inverse_link_function
 
     @inverse_link_function.setter
     def inverse_link_function(self, inverse_link_function: Callable):
-        """Setter for the inverse link function for the model."""
+        """Validate and set the inverse link function.
+
+        Parameters
+        ----------
+        inverse_link_function :
+            One of:
+
+            - ``None`` — use the observation model's default inverse link.
+            - ``str`` — name of a built-in (e.g. ``"identity"``, ``"log"``,
+              ``"logit"``); resolved by
+              :func:`nemos.inverse_link_function_utils.resolve_inverse_link_function`.
+            - ``Callable`` — a custom function. Must be JAX-traceable
+              (differentiable) and return a ``jax.numpy.ndarray`` or scalar
+              when called on a JAX array.
+
+        Raises
+        ------
+        TypeError
+            If the value is neither callable nor a string.
+        ValueError
+            If a callable is non-differentiable or returns an unsupported type.
+        """
         self._inverse_link_function = resolve_inverse_link_function(
             inverse_link_function, self._observation_model
         )
 
     @property
     def observation_model(self) -> Union[None, obs.Observations]:
-        """Getter for the ``observation_model`` attribute."""
+        """The observation model governing the conditional distribution of ``y``.
+
+        Always an instance of an :class:`~nemos.observation_models.Observations`
+        subclass. If a string alias was passed at construction time it is
+        resolved to the corresponding instance here.
+        """
         return self._observation_model
 
     @observation_model.setter
     def observation_model(self, observation: obs.Observations):
+        """Validate and set the observation model.
+
+        Parameters
+        ----------
+        observation :
+            Either an :class:`~nemos.observation_models.Observations` instance,
+            or a string alias from
+            ``{"Poisson", "Gamma", "Gaussian", "Bernoulli", "NegativeBinomial"}``.
+            String aliases are instantiated via
+            :func:`nemos.observation_models.instantiate_observation_model`.
+
+        Raises
+        ------
+        AttributeError, TypeError
+            If the instance does not implement the
+            :class:`~nemos.observation_models.Observations` interface (checked
+            via :func:`nemos.observation_models.check_observation_model`).
+        ValueError
+            If the resolved observation class is not allowed for this model
+            (e.g. ``CategoricalObservations`` is rejected by ``GLM``).
+        """
         if isinstance(observation, str):
             self._observation_model = instantiate_observation_model(observation)
             self._validate_observation_class(self.observation_model)
@@ -1241,13 +1293,13 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> # Load the model from the saved file
         >>> model = nmo.load_model("model_params.npz")
         >>> # Model has the same parameters before and after load
-        >>> for key, value in model.get_params().items():
+        >>> for key, value in model.get_params().items():  # doctest: +ELLIPSIS
         ...     print(f"{key}: {value}")
         inverse_link_function: <function one_over_x at ...>
         observation_model: GammaObservations()
         regularizer: Ridge()
-        regularizer_strength: 0.1...
-        solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
+        regularizer_strength: 0.1
+        solver_kwargs: {'maxiter': 1000, 'stepsize': 0.1, 'tol': 1e-06}
         solver_name: BFGS
 
         >>> # Saving and loading a custom inverse link function

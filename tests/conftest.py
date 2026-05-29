@@ -14,9 +14,10 @@ import os
 import re
 from collections import defaultdict, namedtuple
 from copy import deepcopy
+from dataclasses import dataclass
 from functools import partial
 from types import SimpleNamespace
-from typing import Literal
+from typing import Any, Callable, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -28,12 +29,25 @@ import nemos as nmo
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
 from nemos.base_regressor import BaseRegressor
+from nemos.base_validator import RegressorValidator
 from nemos.basis import AdditiveBasis, CustomBasis, MultiplicativeBasis, Zero
 from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import BasisMixin
 from nemos.basis._transformer_basis import TransformerBasis
 from nemos.glm.params import GLMParams
 from nemos.glm.validation import GLMValidator
+from nemos.glm_hmm.initialize_parameters import random_glm_params_init
+from nemos.glm_hmm.params import GLMHMMModelParams, GLMHMMParams
+from nemos.hmm.hmm import BaseHMM
+from nemos.hmm.initialize_parameters import (
+    HMM_INITIALIZATION_FN_DICT,
+    sticky_transition_proba_init,
+    uniform_initial_proba_init,
+)
+from nemos.hmm.params import HMMParams
+from nemos.hmm.utils import initialize_session_starts
+from nemos.hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
+from nemos.params import ModelParams
 from nemos.tree_utils import tree_full_like
 
 _totals = defaultdict(float)
@@ -95,41 +109,108 @@ def mock_glm_fit(monkeypatch):
     monkeypatch.setattr(nmo.glm.PopulationGLM, "fit", _fit)
 
 
-@pytest.fixture
-def mock_optimizer_run(monkeypatch):
-    """Bypass the JAX solver in fit() while keeping all validation logic.
+# No-op _optimizer_run per model class. Only models whose fit() unpacks _optimizer_run
+# differently from the default 3-tuple (params, state, aux) need an entry here.
+# The sole model-specific detail is return arity: GLM expects (params, state, aux),
+# GLMHMM expects (params, state) and checks state.iterations to detect non-convergence.
+_NOOP_OPTIMIZER_RUN = {
+    nmo.glm_hmm.GLMHMM: lambda p, *a, **kw: (
+        p,
+        SimpleNamespace(iterations=1, converged=True),
+    ),
+}
+_DEFAULT_NOOP_OPTIMIZER_RUN = lambda p, *a, **kw: (  # noqa: E731
+    p,
+    SimpleNamespace(converged=True),
+    None,
+)
 
-    Patches _initialize_optimizer_and_state to inject a no-op _optimizer_run
-    that returns init_params unchanged with a converged state. Use in tests
-    that only care about pipeline routing or fit side-effects (coef_/intercept_
-    shape, validation errors) and do not check solution quality.
+
+def _make_optimizer_run_patch(monkeypatch, model_cls):
+    """Patch _initialize_optimizer_and_state on any BaseRegressor subclass.
+
+    After the real initializer runs, replaces _optimizer_run with a no-op that
+    returns init_params unchanged and a converged state. All validation logic
+    executes normally; only the solver iterations are skipped.
     """
-    _real_init = nmo.glm.GLM._initialize_optimizer_and_state
+    real_init = model_cls._initialize_optimizer_and_state
+    noop = _NOOP_OPTIMIZER_RUN.get(model_cls, _DEFAULT_NOOP_OPTIMIZER_RUN)
 
-    def _patched_init(self, init_params, data, y):
-        result = _real_init(self, init_params, data, y)
-        self._optimizer_run = lambda p, d, t: (p, SimpleNamespace(converged=True), None)
+    def _patched(self, init_params, data, y):
+        result = real_init(self, init_params, data, y)
+        self._optimizer_run = noop
         return result
 
-    monkeypatch.setattr(nmo.glm.GLM, "_initialize_optimizer_and_state", _patched_init)
+    monkeypatch.setattr(model_cls, "_initialize_optimizer_and_state", _patched)
+
+
+@pytest.fixture
+def patch_optimizer_run(monkeypatch):
+    """Fixture factory: call with a model class to bypass its JAX solver.
+
+    Returns a callable ``patch(model_cls)`` that patches
+    ``_initialize_optimizer_and_state`` on *model_cls* so that ``_optimizer_run``
+    becomes a no-op returning init_params unchanged with a converged state.
+    Can be called multiple times in one test to patch several classes.
+    """
+    return lambda model_cls: _make_optimizer_run_patch(monkeypatch, model_cls)
+
+
+@pytest.fixture
+def mock_glm_optimizer_run(monkeypatch):
+    """Bypass the JAX solver in GLM.fit() while keeping all validation logic."""
+    _make_optimizer_run_patch(monkeypatch, nmo.glm.GLM)
+
+
+@pytest.fixture
+def mock_glm_hmm_optimizer_run(monkeypatch):
+    """Bypass the JAX solver in GLMHMM.fit() while keeping all validation logic."""
+    _make_optimizer_run_patch(monkeypatch, nmo.glm_hmm.GLMHMM)
+
+
+# No-op _optimizer_update per model class. Default covers GLM-family models (3-tuple);
+# GLM-HMM's update() unpacks a 2-tuple (params, state).
+# Add an entry only when a model's update() unpacks _optimizer_update differently.
+_NOOP_OPTIMIZER_UPDATE = {
+    nmo.glm_hmm.GLMHMM: lambda p, s, *a, **kw: (p, s),  # noqa: E731
+}
+_DEFAULT_NOOP_OPTIMIZER_UPDATE = lambda p, s, *a, **kw: (p, s, None)  # noqa: E731
+
+
+def _make_optimizer_update_patch(monkeypatch, model_cls):
+    """Patch _initialize_optimizer_and_state on any BaseRegressor subclass.
+
+    After the real initializer runs, replaces _optimizer_update with a no-op
+    that returns params and state unchanged. All validation logic executes
+    normally; only the solver step is skipped.
+    """
+    real_init = model_cls._initialize_optimizer_and_state
+    noop = _NOOP_OPTIMIZER_UPDATE.get(model_cls, _DEFAULT_NOOP_OPTIMIZER_UPDATE)
+
+    def _patched(self, init_params, data, y):
+        result = real_init(self, init_params, data, y)
+        self._optimizer_update = noop
+        return result
+
+    monkeypatch.setattr(model_cls, "_initialize_optimizer_and_state", _patched)
+
+
+@pytest.fixture
+def patch_optimizer_update(monkeypatch):
+    """Fixture factory: call with a model class to bypass its JAX solver step.
+
+    Returns a callable ``patch(model_cls)`` that patches
+    ``_initialize_optimizer_and_state`` on *model_cls* so that
+    ``_optimizer_update`` becomes a no-op returning params and state unchanged.
+    Can be called multiple times in one test to patch several classes.
+    """
+    return lambda model_cls: _make_optimizer_update_patch(monkeypatch, model_cls)
 
 
 @pytest.fixture
 def mock_optimizer_update(monkeypatch):
-    """Bypass the JAX solver step in update() while keeping all validation logic.
-
-    Patches _initialize_optimizer_and_state to inject a no-op _optimizer_update
-    that returns the current params and state unchanged. Do NOT use in tests
-    that assert parameters actually changed after calling update().
-    """
-    _real_init = nmo.glm.GLM._initialize_optimizer_and_state
-
-    def _patched_init(self, init_params, data, y):
-        result = _real_init(self, init_params, data, y)
-        self._optimizer_update = lambda p, s, d, t, *a, **kw: (p, s, None)
-        return result
-
-    monkeypatch.setattr(nmo.glm.GLM, "_initialize_optimizer_and_state", _patched_init)
+    """Bypass the JAX solver step in GLM.update() while keeping all validation logic."""
+    _make_optimizer_update_patch(monkeypatch, nmo.glm.GLM)
 
 
 # Named tuple for model fixture returns (clearer than tuple indexing)
@@ -503,6 +584,158 @@ class MockGLM(nmo.glm.GLM):
         pass
 
     def _set_model_params(self, params):
+        pass
+
+
+MockHMMUserParams = Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
+
+
+class MockHMMModelParams(ModelParams):
+    param: jnp.ndarray
+
+
+class MockHMMParams(ModelParams):
+    model_params: MockHMMModelParams
+    hmm_params: HMMParams
+
+
+def to_mock_params(user_params: MockHMMUserParams) -> MockHMMParams:
+    return MockHMMParams(
+        model_params=MockHMMModelParams(user_params[0]),
+        hmm_params=to_hmm_params(user_params[1:]),
+    )
+
+
+def from_mock_params(params: MockHMMParams) -> MockHMMUserParams:
+    initial_prob, transition_prob = from_hmm_params(params.hmm_params)
+    return (
+        params.model_params.param,
+        initial_prob,
+        transition_prob,
+    )
+
+
+@dataclass(frozen=True, repr=False)
+class MockHMMValidator(HMMValidator[MockHMMUserParams, MockHMMParams]):
+    model_param_names: Tuple[str] = (
+        "param",
+        *HMMValidator.model_param_names,
+    )
+    to_model_params: Callable[[MockHMMUserParams], MockHMMParams] = to_mock_params
+    from_model_params: Callable[[MockHMMParams], MockHMMUserParams] = from_mock_params
+    model_class: str = "MockHMM"
+    X_dimensionality: int = 2
+    y_dimensionality: int = 1
+    params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
+        *RegressorValidator.params_validation_sequence[:2],
+        *HMMValidator.params_validation_sequence,
+        *RegressorValidator.params_validation_sequence[3:],
+    )
+
+    def validate_consistency(self, *args, **kwargs) -> None:
+        return True
+
+
+class MockHMM(
+    BaseHMM[
+        MockHMMParams, MockHMMUserParams, HMM_INITIALIZATION_FN_DICT, MockHMMValidator
+    ]
+):
+    _validator_class = MockHMMValidator
+    _model_default_init_dict = {
+        "param_init": None,
+        "param_init_kwargs": {},
+        "param_init_custom": False,
+    }
+
+    def __init__(
+        self,
+        n_states: int,
+        dirichlet_initial_proba: Union[jnp.ndarray, None] = None,  # (n_state, )
+        dirichlet_transition_proba: Union[
+            jnp.ndarray | None
+        ] = None,  # (n_state, n_state):
+        maxiter: int = 1000,
+        tol: float = 1e-8,
+        seed=jax.random.PRNGKey(123),
+        hmm_initialization_funcs: HMM_INITIALIZATION_FN_DICT = None,
+        model_initialization_funcs: HMM_INITIALIZATION_FN_DICT = None,
+    ):
+        BaseHMM.__init__(
+            self,
+            n_states=n_states,
+            dirichlet_initial_proba=dirichlet_initial_proba,
+            dirichlet_transition_proba=dirichlet_transition_proba,
+            maxiter=maxiter,
+            tol=tol,
+            seed=seed,
+            hmm_initialization_funcs=hmm_initialization_funcs,
+        )
+        self.param_: jnp.ndarray | None = None
+        self.model_initialization_funcs = model_initialization_funcs
+
+    def _model_setup(
+        self,
+        param_init: Optional[str | Callable] = None,
+        param_init_kwargs: Optional[dict] = None,
+    ):
+        self._model_use_kmeans = {"param_init": param_init == "kmeans"}
+
+    def _check_model_is_fit(self):
+        if self.param_ is None:
+            raise ValueError("Model is not fitted yet.")
+
+    def _get_model_params(self) -> MockHMMParams:
+        return self._validator.to_model_params(
+            (
+                self.param_,
+                self.initial_prob_,
+                self.transition_prob_,
+            )
+        )
+
+    def _set_model_params(self, params):
+        param, initial_prob, transition_prob = self._validator.from_model_params(params)
+        self.param_ = param
+        self.initial_prob_ = initial_prob
+        self.transition_prob_ = transition_prob
+
+    def _log_likelihood(self, params, X, y):
+        return jnp.zeros((y.shape[0], self.n_states))
+
+    def _model_params_initialization(self, X, y, session_starts, random_key=None):
+        return (
+            jnp.arange(self._n_states),
+            False,
+        )
+
+    def fit(self, X, y, session_starts=None, init_params=None):
+        session_starts = initialize_session_starts(X, y, session_starts)
+        fit_params = self._model_specific_initialization(X, y, session_starts)
+        self._set_model_params(fit_params)
+
+    def _initialize_optimizer_and_state(self, *args, **kwargs):
+        pass
+
+    def _compute_loss(self, *args, **kwargs):
+        pass
+
+    def _get_optimal_solver_params_config(self, *args, **kwargs):
+        pass
+
+    def predict(self, *args, **kwargs):
+        pass
+
+    def simulate(self, *args, **kwargs):
+        pass
+
+    def save_params(self, *args, **kwargs):
+        pass
+
+    def update(self, *args, **kwargs):
+        pass
+
+    def score(self, *args, **kwargs):
         pass
 
 
@@ -1582,6 +1815,135 @@ def instantiate_population_classifier_glm_func(
     )
 
 
+def run_simulation_glm_hmm(
+    design_matrix: jnp.ndarray, model: nmo.glm_hmm.GLMHMM, seed: int
+):
+    n_timepoints = design_matrix.shape[0]
+    coef, intercept = model.coef_, model.intercept_
+    n_neurons = coef.shape[1] if coef.ndim > 2 else 1
+    n_states = intercept.shape[-1]
+    initial_prob = model.initial_prob_
+    transition_prob = model.transition_prob_
+
+    glm = nmo.glm.PopulationGLM(
+        observation_model=model.observation_model,
+        inverse_link_function=model.inverse_link_function,
+    )
+
+    latent_states = np.zeros((n_timepoints, n_states), dtype=int)
+    rates = np.zeros((n_timepoints, n_neurons))
+    counts = np.zeros((n_timepoints, n_neurons))
+
+    np.random.seed(seed)
+    init_prob_arr = np.asarray(initial_prob, dtype=float)
+    initial_state = np.random.choice(n_states, p=init_prob_arr / init_prob_arr.sum())
+    latent_states[0, initial_state] = 1
+
+    glm.coef_ = coef[..., initial_state].reshape(coef.shape[0], n_neurons)
+    glm.intercept_ = intercept[..., initial_state].reshape((n_neurons,))
+    glm.scale_ = 1.0
+
+    key = jax.random.PRNGKey(seed)
+    counts[0], rates[0] = glm.simulate(key, design_matrix[:1])
+
+    for t in range(1, n_timepoints):
+        key, subkey = jax.random.split(key)
+        prev_state_vec = latent_states[t - 1]
+        transition_probs = transition_prob.T @ prev_state_vec
+        next_state = jax.random.choice(subkey, jnp.arange(n_states), p=transition_probs)
+        latent_states[t, next_state] = 1
+
+        glm.coef_ = coef[..., next_state].reshape(coef.shape[0], n_neurons)
+        glm.intercept_ = intercept[..., next_state].reshape((n_neurons,))
+        key, subkey = jax.random.split(key)
+        counts[t], rates[t] = glm.simulate(subkey, design_matrix[t : t + 1])
+
+    counts = jnp.squeeze(counts)
+    rates = jnp.squeeze(rates)
+    return counts, rates, latent_states
+
+
+def instantiate_glm_hmm_func(
+    n_states: int = 3,
+    obs_model: (
+        Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+        | nmo.observation_models.Observations
+    ) = "Bernoulli",
+    regularizer: str = "UnRegularized",
+    solver_name: str = None,
+    simulate: bool = False,
+    solver_kwargs=None,
+    maxiter: int = 2,
+):
+    np.random.seed(123)
+    if solver_kwargs is None:
+        solver_kwargs = {"maxiter": 1}
+
+    model = nmo.glm_hmm.GLMHMM(
+        n_states=n_states,
+        observation_model=obs_model,
+        regularizer=regularizer,
+        solver_name=solver_name,
+        solver_kwargs=solver_kwargs,
+        maxiter=maxiter,
+    )
+    n_features = 2
+    X = np.ones((500, n_features))
+    X[:250, 0] = 0
+    X[np.arange(500) % 2 == 1, 1] = 0
+    y = np.zeros(X.shape[0])
+    y[np.random.choice(y.shape[0], size=y.shape[0] // 3, replace=False)] = 1
+
+    coef, intercept = random_glm_params_init(
+        n_states=n_states,
+        X=X,
+        y=y,
+        inverse_link_function=model.inverse_link_function,
+        session_starts=None,
+        random_key=jax.random.PRNGKey(123),
+    )
+    coef = jnp.squeeze(coef)
+    intercept = jnp.squeeze(intercept)
+    transition_prob = sticky_transition_proba_init(n_states)
+    init_prob = uniform_initial_proba_init(n_states, random_key=jax.random.PRNGKey(124))
+    scale = jnp.ones_like(intercept)
+
+    if simulate:
+        model.coef_ = coef
+        model.intercept_ = intercept
+        model.scale_ = scale
+        model.initial_prob_ = init_prob
+        model.transition_prob_ = transition_prob
+        y, rates, latent_states = run_simulation_glm_hmm(X, model, seed=1234)
+        # reset fit attributes so fixture.model is unfitted
+        model.coef_ = None
+        model.intercept_ = None
+        model.scale_ = None
+        model.initial_prob_ = None
+        model.transition_prob_ = None
+    else:
+        rates, latent_states = None, None
+
+    return ModelFixture(
+        X=X,
+        y=y,
+        model=model,
+        params=GLMHMMParams(
+            model_params=GLMHMMModelParams(
+                coef=coef,
+                intercept=intercept,
+                log_scale=scale,
+            ),
+            hmm_params=HMMParams(
+                log_initial_prob=jnp.log(init_prob),
+                log_transition_prob=jnp.log(transition_prob),
+            ),
+        ),
+        rates=rates,
+        extra=latent_states,
+    )
+
+
 _MODEL_CACHE = {}
 
 
@@ -1602,6 +1964,10 @@ MODEL_CONFIG = {
     "ClassifierPopulationGLM": {
         "is_population": True,
         "default_y_shape": (500, 3),
+    },
+    "GLMHMM": {
+        "is_population": False,
+        "default_y_shape": (500,),
     },
 }
 
@@ -1641,6 +2007,8 @@ def instantiate_base_regressor_subclass(request):
             result = instantiate_classifier_glm_func(simulate=simulate)
         elif model_name == "ClassifierPopulationGLM":
             result = instantiate_population_classifier_glm_func(simulate=simulate)
+        elif model_name == "GLMHMM":
+            result = instantiate_glm_hmm_func(obs_model=obs_model, simulate=simulate)
         else:
             raise ValueError("model_name {} unknown".format(model_name))
         _MODEL_CACHE[cache_key] = result

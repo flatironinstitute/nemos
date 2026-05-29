@@ -28,12 +28,12 @@ from nemos.hmm.initialize_parameters import (
 
 
 def _glm_mock_template(
-    n_states, X, y, inverse_link_function, is_new_session, random_key, param1=None
+    n_states, X, y, inverse_link_function, session_starts, random_key, param1=None
 ):
     pass
 
 
-def _hmm_mock_template(n_states, X, y, is_new_session, random_key, param1=None):
+def _hmm_mock_template(n_states, X, y, session_starts, random_key, param1=None):
     pass
 
 
