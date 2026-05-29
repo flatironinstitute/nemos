@@ -190,44 +190,44 @@ class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
         return GLMHMMParams(hmm_params=hmm_params, model_params=model_params)
 
 
-class ClassifierGLMHMMValidator(GLMHMMValidator):
-    extra_params: Dict[Literal["n_classes"], int] = field(kw_only=True)
-    model_class: str = "GLMHMM"
-    _glm_validator: ClassifierGLMValidator = ClassifierGLMValidator()
+# class ClassifierGLMHMMValidator(GLMHMMValidator):
+#     extra_params: Dict[Literal["n_classes"], int] = field(kw_only=True)
+#     model_class: str = "GLMHMM"
+#     _glm_validator: ClassifierGLMValidator = ClassifierGLMValidator()
 
-    def check_model_params_shape(self, params: GLMHMMUserParams) -> GLMHMMUserParams:
-        """Check the length of the glm parameters state axis."""
-        wrapped = self.wrap_user_params(params)
-        coef, intercept = wrapped[:2]
-        flat_coef = jax.tree_util.tree_leaves(coef)
-        invalid_shapes = jax.tree_util.tree_map(
-            lambda x: x.shape[-1] != self.n_states, flat_coef
-        )
-        if any(invalid_shapes):
-            raise ValueError(
-                "GLM coef must be of shape ``(n_features, n_classes, n_states)`` or a dict of arrays "
-                "with shape ``(n_features, n_classes, n_states)``. "
-                f"n_states is {self.n_states} but coef has shape(s) ``{invalid_shapes}``."
-            )
-        if intercept.shape[-1] != self.n_states:
-            raise ValueError(
-                "GLM intercept must be of shape ``(n_classes, n_states)``. "
-                f"n_states is {self.n_states} but coef has shape ``{intercept.shape}``."
-            )
-        return params
+#     def check_model_params_shape(self, params: GLMHMMUserParams) -> GLMHMMUserParams:
+#         """Check the length of the glm parameters state axis."""
+#         wrapped = self.wrap_user_params(params)
+#         coef, intercept = wrapped[:2]
+#         flat_coef = jax.tree_util.tree_leaves(coef)
+#         invalid_shapes = jax.tree_util.tree_map(
+#             lambda x: x.shape[-1] != self.n_states, flat_coef
+#         )
+#         if any(invalid_shapes):
+#             raise ValueError(
+#                 "GLM coef must be of shape ``(n_features, n_classes, n_states)`` or a dict of arrays "
+#                 "with shape ``(n_features, n_classes, n_states)``. "
+#                 f"n_states is {self.n_states} but coef has shape(s) ``{invalid_shapes}``."
+#             )
+#         if intercept.shape[-1] != self.n_states:
+#             raise ValueError(
+#                 "GLM intercept must be of shape ``(n_classes, n_states)``. "
+#                 f"n_states is {self.n_states} but coef has shape ``{intercept.shape}``."
+#             )
+#         return params
 
-    def get_empty_params(self, X, y) -> GLMHMMParams:
-        """Return the param shape given the input data."""
-        n_classes = self.extra_params["n_classes"]
-        empty_coef = jax.tree_util.tree_map(
-            lambda x: jnp.empty((x.shape[1], n_classes, self.n_states)), X
-        )
-        empty_intercept = jnp.empty((self.n_states,))
-        model_params = GLMParams(coef=empty_coef, intercept=empty_intercept)
-        empty_init_proba = jnp.empty((self.n_states,))
-        empty_transition_proba = jnp.empty((self.n_states, self.n_states))
-        hmm_params = HMMParams(
-            log_initial_prob=empty_init_proba,
-            log_transition_prob=empty_transition_proba,
-        )
-        return GLMHMMParams(hmm_params=hmm_params, model_params=model_params)
+#     def get_empty_params(self, X, y) -> GLMHMMParams:
+#         """Return the param shape given the input data."""
+#         n_classes = self.extra_params["n_classes"]
+#         empty_coef = jax.tree_util.tree_map(
+#             lambda x: jnp.empty((x.shape[1], n_classes, self.n_states)), X
+#         )
+#         empty_intercept = jnp.empty((self.n_states,))
+#         model_params = GLMParams(coef=empty_coef, intercept=empty_intercept)
+#         empty_init_proba = jnp.empty((self.n_states,))
+#         empty_transition_proba = jnp.empty((self.n_states, self.n_states))
+#         hmm_params = HMMParams(
+#             log_initial_prob=empty_init_proba,
+#             log_transition_prob=empty_transition_proba,
+#         )
+#         return GLMHMMParams(hmm_params=hmm_params, model_params=model_params)

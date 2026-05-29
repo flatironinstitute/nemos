@@ -672,6 +672,57 @@ class BaseHMM(
         )
         return -jnp.sum(log_norm)
 
+    @cast_to_jax
+    def compute_loss(
+        self,
+        params: HMMUserProvidedParamsT,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        session_starts: jnp.array,
+        *args,
+        **kwargs,
+    ) -> jnp.ndarray:
+        """Compute the loss function for the model.
+
+        This method validates inputs and converts user-provided parameters to the internal
+        representation before computing the loss.
+
+        Parameters
+        ----------
+        params
+            Parameter tuple of (coefficients, intercept).
+        X
+            Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
+        y
+            Target data, array of shape ``(n_time_bins,)`` for single neuron models or
+            ``(n_time_bins, n_neurons)`` for population models.
+        session_starts
+            Array indicating start indices of new sessions, shape ``(n_time_bins,)`` for
+            boolean array or array of 0s and 1s or ``(n_sessions,)`` for integer array.
+        *args
+            Additional positional arguments passed to the model-specific loss function.
+        **kwargs
+            Additional keyword arguments passed to the model-specific loss function.
+
+        Returns
+        -------
+        loss
+            The loss value (negative log-likelihood).
+
+        Raises
+        ------
+        ValueError
+            If inputs or parameters have incompatible shapes or invalid values.
+        """
+        params = self._validator.validate_and_cast_params(params)
+        self._validator.validate_inputs(X, y)
+        self._validator.validate_consistency(params, X, y)
+        session_starts = self._validator.validate_and_cast_session_starts(
+            X=X, y=y, session_starts=session_starts
+        )
+        X, y = self._preprocess_inputs(X, y, session_starts)
+        return self._compute_loss(params, X, y, session_starts, *args, **kwargs)
+
     def score(
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
