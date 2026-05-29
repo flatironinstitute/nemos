@@ -730,6 +730,7 @@ def test_all_solvers_use_aux_in_run(request, aux_gen_fn):
             regularizer=nmo.regularizer.UnRegularized(),
             regularizer_strength=None,
             has_aux=True,
+            init_params=param_init,
         )
         run_params, run_state, run_aux = solver.run(param_init, X, y)
 
@@ -775,6 +776,7 @@ def test_all_solvers_use_aux_in_update(request, aux_gen_fn):
             regularizer=nmo.regularizer.UnRegularized(),
             regularizer_strength=None,
             has_aux=True,
+            init_params=param_init,
         )
         init_state = solver.init_state(param_init, X, y)
 
@@ -812,6 +814,7 @@ def test_all_solvers_work_without_aux(request):
             unregularized_loss=loss,
             regularizer=nmo.regularizer.UnRegularized(),
             regularizer_strength=None,
+            init_params=param_init,
             has_aux=False,
             tol=1e-12,
         )
