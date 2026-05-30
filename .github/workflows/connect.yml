@@ -32,4 +32,4 @@ jobs:
           python -m pip install --upgrade pip   # Upgrade pip
 
       - name: Setup tmate session (copy paste ssh command to connect to runner)   # Step to set up tmate session
-        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101 #v3
+        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101 # v3.23
