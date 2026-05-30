@@ -1354,7 +1354,7 @@ def _var_func_of_mu(model) -> Callable:
     var_funcs = {
         "PoissonObservations": lambda mu: mu,
         "GammaObservations": lambda mu: mu**2,
-        "GaussianObservations": lambda mu: jnp.ones_like(mu),
+        "GaussianObservations": lambda mu: jnp.full_like(mu, 0.5),
         "BernoulliObservations": lambda mu: mu * (1.0 - mu),
     }
     if obs_name not in var_funcs:
