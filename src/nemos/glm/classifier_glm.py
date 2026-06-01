@@ -183,6 +183,281 @@ class ClassifierMixin:
         """Get validator extra parameters."""
         return {"n_classes": self._label_encoder.n_classes}
 
+
+class ClassifierGLM(ClassifierMixin, GLM):
+    """
+    Generalized Linear Model for multi-class classification.
+
+    This model predicts discrete class labels from input features using a
+    softmax (multinomial logistic) model. It uses an over-parameterized
+    representation with one set of coefficients per class, resulting in
+    coefficient shape ``(n_features, n_classes)`` and intercept shape ``(n_classes,)``.
+
+    Parameters
+    ----------
+    n_classes
+        The number of classes. Must be >= 2.
+    inverse_link_function
+        The inverse link function. Default is ``log_softmax``.
+    regularizer
+        The regularization scheme. Default is ``Ridge``. Note that the
+        model is over-parameterized: one set of coefficients for each class.
+        Regularization makes the parameters identifiable. Setting ``UnRegularized``
+        will result in non-identifiable coefficients, see note below.
+    regularizer_strength
+        The strength of the regularization.
+    solver_name
+        The solver to use for optimization.
+    solver_kwargs
+        Additional keyword arguments for the solver.
+
+    Attributes
+    ----------
+    coef_
+        Fitted coefficients of shape ``(n_features, n_classes)`` after calling :meth:`fit`.
+    intercept_
+        Fitted intercepts of shape ``(n_classes,)`` after calling :meth:`fit`.
+
+    Notes
+    -----
+    **Identifiability**
+
+    This model uses an over-parameterized (symmetric) representation where each class
+    has its own set of coefficients. Since probabilities from softmax are invariant to
+    adding a constant to all linear predictors, the parameters are not uniquely
+    identifiable without regularization. For example, if ``(coef, intercept)`` is a
+    solution, so is ``(coef + c, intercept + c)`` for any constant ``c``.
+
+    Using regularization (default is ``Ridge``) resolves this ambiguity by penalizing
+    the parameter magnitudes, effectively centering the solution. If you use
+    ``UnRegularized``, the optimization may converge to different equivalent solutions
+    depending on initialization, though predictions will be identical.
+
+    **Class Labels**
+
+    The target array ``y`` can contain any hashable class labels that can be stored
+    in a NumPy array, including integers, strings, or other hashable types. The model
+    internally maps these labels to indices ``[0, n_classes - 1]`` for computation
+    and maps them back when returning predictions.
+
+    **Performance Considerations**
+
+    For optimal performance, use integer labels ``[0, 1, ..., n_classes - 1]``. When
+    labels follow this convention, the model skips the encoding/decoding steps entirely.
+    Using other label formats (e.g., ``["cat", "dog"]`` or ``[5, 10, 15]``) incurs a
+    small overhead for label translation.
+
+    **Setting Class Labels**
+
+    The :meth:`fit` and :meth:`initialize_optimizer_and_state` methods automatically infer
+    class labels from the provided ``y``. If you set ``coef_`` and ``intercept_`` manually,
+    you must call :meth:`set_classes` before using :meth:`predict`, :meth:`predict_proba`,
+    :meth:`simulate`, :meth:`score`, or :meth:`compute_loss`.
+
+    See Also
+    --------
+    ClassifierPopulationGLM : Multi-class classification for multiple neurons.
+    GLM : Generalized Linear Model for continuous/count responses.
+
+    Examples
+    --------
+    **Fit a ClassifierGLM**
+
+    Basic binary classification:
+
+    >>> import jax.numpy as jnp
+    >>> import numpy as np
+    >>> import nemos as nmo
+    >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
+    >>> y = jnp.array([0, 0, 1, 1])
+    >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y)
+    >>> model.coef_.shape
+    (2, 2)
+
+    **Predict Class Labels**
+
+    Get predicted class labels:
+
+    >>> predictions = model.predict(X)
+    >>> predictions.shape
+    (4,)
+
+    **Predict Class Probabilities**
+
+    Get class probabilities or log-probabilities:
+
+    >>> proba = model.predict_proba(X, return_type="proba")
+    >>> proba.shape
+    (4, 2)
+    >>> log_proba = model.predict_proba(X, return_type="log-proba")
+    >>> log_proba.shape
+    (4, 2)
+
+    **Use String Labels**
+
+    Class labels can be strings or any hashable type:
+
+    >>> y_str = np.array(["cat", "cat", "dog", "dog"])
+    >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y_str)
+    >>> model.classes_
+    array(['cat', 'dog'], dtype='<U3')
+    >>> model.predict(X)  # doctest: +NORMALIZE_WHITESPACE
+    array(['cat', 'cat', 'dog', 'dog'], dtype='<U3')
+
+    **Multi-class Classification**
+
+    Classify into more than two classes:
+
+    >>> X = jnp.array([[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]])
+    >>> y = jnp.array([0, 0, 1, 1, 2, 2])
+    >>> model = nmo.glm.ClassifierGLM(n_classes=3).fit(X, y)
+    >>> model.coef_.shape
+    (2, 3)
+
+    **Use Regularization**
+
+    Change regularization strength:
+
+    >>> model = nmo.glm.ClassifierGLM(
+    ...     n_classes=2,
+    ...     regularizer="Ridge",
+    ...     regularizer_strength=0.5
+    ... )
+    >>> model.regularizer
+    Ridge()
+
+    **Use a Pytree of arrays as Input**
+
+    Features can be passed as any JAX pytree of 2-D arrays; the fitted
+    ``coef_`` will share the same pytree structure:
+
+    >>> X_dict = {"feature_1": X[:, :1], "feature_2": X[:, 1:]}
+    >>> model = nmo.glm.ClassifierGLM(n_classes=3).fit(X_dict, y)
+    >>> # The coefficient structure matches the input
+    >>> type(model.coef_)
+    <class 'dict'>
+    """
+
+    _validator_class = ClassifierGLMValidator
+
+    def __init__(
+        self,
+        n_classes: Optional[int] = 2,
+        inverse_link_function: Optional[Callable] = None,
+        regularizer: Optional[Union[str, Regularizer]] = None,
+        regularizer_strength: Any = None,
+        solver_name: str = None,
+        solver_kwargs: dict = None,
+    ):
+        self.n_classes = n_classes
+        observation_model = obs.CategoricalObservations()
+        if regularizer is None:
+            regularizer = "Ridge"
+        super().__init__(
+            observation_model=observation_model,
+            inverse_link_function=inverse_link_function,
+            regularizer=regularizer,
+            regularizer_strength=regularizer_strength,
+            solver_name=solver_name,
+            solver_kwargs=solver_kwargs,
+        )
+
+    def fit(
+        self,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: ArrayLike,
+        init_params: Optional[GLMUserParams] = None,
+    ):
+        """
+        Fit the model to training data.
+
+        Parameters
+        ----------
+        X
+            Training input samples of shape ``(n_samples, n_features)`` or a pytree of arrays of the same shape.
+        y
+            Target class labels of shape ``(n_samples,)``. Labels can be any hashable
+            type (integers, strings, etc.). Float arrays with integer values are
+            accepted and converted automatically.
+        init_params
+            Initial parameter values as tuple of ``(coef, intercept)``. If None,
+            parameters are initialized automatically.
+
+        Returns
+        -------
+        :
+            The fitted model.
+
+        Notes
+        -----
+        ``fit`` calls :meth:`set_classes` internally, so ``classes_`` is always
+        consistent with the labels in ``y``.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> import nemos as nmo
+        >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
+        >>> y = jnp.array([0, 0, 1, 1])
+        >>> model = nmo.glm.ClassifierGLM(n_classes=2)
+        >>> model = model.fit(X, y)
+        >>> model.coef_.shape
+        (2, 2)
+        """
+        self.set_classes(y)
+        y = self._label_encoder.encode(y)
+        return super().fit(X, y, init_params)
+
+    def score(
+        self,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: ArrayLike,
+        score_type: Literal[
+            "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
+        ] = "log-likelihood",
+        aggregate_sample_scores: Optional[Callable] = jnp.mean,
+    ) -> jnp.ndarray:
+        """
+        Score the model on test data.
+
+        Parameters
+        ----------
+        X
+            Test input samples of shape ``(n_samples, n_features)`` or a pytree of arrays of the same shape.
+        y
+            True class labels of shape ``(n_samples,)``. Labels must be a subset
+            of ``classes_``.
+        score_type
+            The type of score to compute.
+        aggregate_sample_scores
+            Function to aggregate per-sample scores.
+
+        Returns
+        -------
+        :
+            The computed score.
+
+        Notes
+        -----
+        All labels in ``y`` must be present in ``classes_``. Passing labels not
+        in ``classes_`` will raise an error.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> import nemos as nmo
+        >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
+        >>> y = jnp.array([0, 0, 1, 1])
+        >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y)
+        >>> score = model.score(X, y)
+        """
+        # check if classes are not set, aka user set the coef and intercept
+        # manually, raise otherwise there may be ambiguity in interpreting
+        # the labels.
+        self._label_encoder.check_classes_is_set("score")
+        y = self._label_encoder.encode(y)
+        return super().score(X, y, score_type, aggregate_sample_scores)
+
     def _preprocess_inputs(
         self,
         X: DESIGN_INPUT_TYPE,
@@ -567,281 +842,6 @@ class ClassifierMixin:
         return super().update(
             params, opt_state, X, y, *args, n_samples=n_samples, **kwargs
         )
-
-
-class ClassifierGLM(ClassifierMixin, GLM):
-    """
-    Generalized Linear Model for multi-class classification.
-
-    This model predicts discrete class labels from input features using a
-    softmax (multinomial logistic) model. It uses an over-parameterized
-    representation with one set of coefficients per class, resulting in
-    coefficient shape ``(n_features, n_classes)`` and intercept shape ``(n_classes,)``.
-
-    Parameters
-    ----------
-    n_classes
-        The number of classes. Must be >= 2.
-    inverse_link_function
-        The inverse link function. Default is ``log_softmax``.
-    regularizer
-        The regularization scheme. Default is ``Ridge``. Note that the
-        model is over-parameterized: one set of coefficients for each class.
-        Regularization makes the parameters identifiable. Setting ``UnRegularized``
-        will result in non-identifiable coefficients, see note below.
-    regularizer_strength
-        The strength of the regularization.
-    solver_name
-        The solver to use for optimization.
-    solver_kwargs
-        Additional keyword arguments for the solver.
-
-    Attributes
-    ----------
-    coef_
-        Fitted coefficients of shape ``(n_features, n_classes)`` after calling :meth:`fit`.
-    intercept_
-        Fitted intercepts of shape ``(n_classes,)`` after calling :meth:`fit`.
-
-    Notes
-    -----
-    **Identifiability**
-
-    This model uses an over-parameterized (symmetric) representation where each class
-    has its own set of coefficients. Since probabilities from softmax are invariant to
-    adding a constant to all linear predictors, the parameters are not uniquely
-    identifiable without regularization. For example, if ``(coef, intercept)`` is a
-    solution, so is ``(coef + c, intercept + c)`` for any constant ``c``.
-
-    Using regularization (default is ``Ridge``) resolves this ambiguity by penalizing
-    the parameter magnitudes, effectively centering the solution. If you use
-    ``UnRegularized``, the optimization may converge to different equivalent solutions
-    depending on initialization, though predictions will be identical.
-
-    **Class Labels**
-
-    The target array ``y`` can contain any hashable class labels that can be stored
-    in a NumPy array, including integers, strings, or other hashable types. The model
-    internally maps these labels to indices ``[0, n_classes - 1]`` for computation
-    and maps them back when returning predictions.
-
-    **Performance Considerations**
-
-    For optimal performance, use integer labels ``[0, 1, ..., n_classes - 1]``. When
-    labels follow this convention, the model skips the encoding/decoding steps entirely.
-    Using other label formats (e.g., ``["cat", "dog"]`` or ``[5, 10, 15]``) incurs a
-    small overhead for label translation.
-
-    **Setting Class Labels**
-
-    The :meth:`fit` and :meth:`initialize_optimizer_and_state` methods automatically infer
-    class labels from the provided ``y``. If you set ``coef_`` and ``intercept_`` manually,
-    you must call :meth:`set_classes` before using :meth:`predict`, :meth:`predict_proba`,
-    :meth:`simulate`, :meth:`score`, or :meth:`compute_loss`.
-
-    See Also
-    --------
-    ClassifierPopulationGLM : Multi-class classification for multiple neurons.
-    GLM : Generalized Linear Model for continuous/count responses.
-
-    Examples
-    --------
-    **Fit a ClassifierGLM**
-
-    Basic binary classification:
-
-    >>> import jax.numpy as jnp
-    >>> import numpy as np
-    >>> import nemos as nmo
-    >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
-    >>> y = jnp.array([0, 0, 1, 1])
-    >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y)
-    >>> model.coef_.shape
-    (2, 2)
-
-    **Predict Class Labels**
-
-    Get predicted class labels:
-
-    >>> predictions = model.predict(X)
-    >>> predictions.shape
-    (4,)
-
-    **Predict Class Probabilities**
-
-    Get class probabilities or log-probabilities:
-
-    >>> proba = model.predict_proba(X, return_type="proba")
-    >>> proba.shape
-    (4, 2)
-    >>> log_proba = model.predict_proba(X, return_type="log-proba")
-    >>> log_proba.shape
-    (4, 2)
-
-    **Use String Labels**
-
-    Class labels can be strings or any hashable type:
-
-    >>> y_str = np.array(["cat", "cat", "dog", "dog"])
-    >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y_str)
-    >>> model.classes_
-    array(['cat', 'dog'], dtype='<U3')
-    >>> model.predict(X)  # doctest: +NORMALIZE_WHITESPACE
-    array(['cat', 'cat', 'dog', 'dog'], dtype='<U3')
-
-    **Multi-class Classification**
-
-    Classify into more than two classes:
-
-    >>> X = jnp.array([[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]])
-    >>> y = jnp.array([0, 0, 1, 1, 2, 2])
-    >>> model = nmo.glm.ClassifierGLM(n_classes=3).fit(X, y)
-    >>> model.coef_.shape
-    (2, 3)
-
-    **Use Regularization**
-
-    Change regularization strength:
-
-    >>> model = nmo.glm.ClassifierGLM(
-    ...     n_classes=2,
-    ...     regularizer="Ridge",
-    ...     regularizer_strength=0.5
-    ... )
-    >>> model.regularizer
-    Ridge()
-
-    **Use a Pytree of arrays as Input**
-
-    Features can be passed as any JAX pytree of 2-D arrays; the fitted
-    ``coef_`` will share the same pytree structure:
-
-    >>> X_dict = {"feature_1": X[:, :1], "feature_2": X[:, 1:]}
-    >>> model = nmo.glm.ClassifierGLM(n_classes=3).fit(X_dict, y)
-    >>> # The coefficient structure matches the input
-    >>> type(model.coef_)
-    <class 'dict'>
-    """
-
-    _validator_class = ClassifierGLMValidator
-
-    def __init__(
-        self,
-        n_classes: Optional[int] = 2,
-        inverse_link_function: Optional[Callable] = None,
-        regularizer: Optional[Union[str, Regularizer]] = None,
-        regularizer_strength: Any = None,
-        solver_name: str = None,
-        solver_kwargs: dict = None,
-    ):
-        self.n_classes = n_classes
-        observation_model = obs.CategoricalObservations()
-        if regularizer is None:
-            regularizer = "Ridge"
-        super().__init__(
-            observation_model=observation_model,
-            inverse_link_function=inverse_link_function,
-            regularizer=regularizer,
-            regularizer_strength=regularizer_strength,
-            solver_name=solver_name,
-            solver_kwargs=solver_kwargs,
-        )
-
-    def fit(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: ArrayLike,
-        init_params: Optional[GLMUserParams] = None,
-    ):
-        """
-        Fit the model to training data.
-
-        Parameters
-        ----------
-        X
-            Training input samples of shape ``(n_samples, n_features)`` or a pytree of arrays of the same shape.
-        y
-            Target class labels of shape ``(n_samples,)``. Labels can be any hashable
-            type (integers, strings, etc.). Float arrays with integer values are
-            accepted and converted automatically.
-        init_params
-            Initial parameter values as tuple of ``(coef, intercept)``. If None,
-            parameters are initialized automatically.
-
-        Returns
-        -------
-        :
-            The fitted model.
-
-        Notes
-        -----
-        ``fit`` calls :meth:`set_classes` internally, so ``classes_`` is always
-        consistent with the labels in ``y``.
-
-        Examples
-        --------
-        >>> import jax.numpy as jnp
-        >>> import nemos as nmo
-        >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
-        >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.ClassifierGLM(n_classes=2)
-        >>> model = model.fit(X, y)
-        >>> model.coef_.shape
-        (2, 2)
-        """
-        self.set_classes(y)
-        y = self._label_encoder.encode(y)
-        return super().fit(X, y, init_params)
-
-    def score(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: ArrayLike,
-        score_type: Literal[
-            "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
-        ] = "log-likelihood",
-        aggregate_sample_scores: Optional[Callable] = jnp.mean,
-    ) -> jnp.ndarray:
-        """
-        Score the model on test data.
-
-        Parameters
-        ----------
-        X
-            Test input samples of shape ``(n_samples, n_features)`` or a pytree of arrays of the same shape.
-        y
-            True class labels of shape ``(n_samples,)``. Labels must be a subset
-            of ``classes_``.
-        score_type
-            The type of score to compute.
-        aggregate_sample_scores
-            Function to aggregate per-sample scores.
-
-        Returns
-        -------
-        :
-            The computed score.
-
-        Notes
-        -----
-        All labels in ``y`` must be present in ``classes_``. Passing labels not
-        in ``classes_`` will raise an error.
-
-        Examples
-        --------
-        >>> import jax.numpy as jnp
-        >>> import nemos as nmo
-        >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
-        >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y)
-        >>> score = model.score(X, y)
-        """
-        # check if classes are not set, aka user set the coef and intercept
-        # manually, raise otherwise there may be ambiguity in interpreting
-        # the labels.
-        self._label_encoder.check_classes_is_set("score")
-        y = self._label_encoder.encode(y)
-        return super().score(X, y, score_type, aggregate_sample_scores)
 
 
 class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
