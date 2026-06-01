@@ -13,7 +13,7 @@ import pynapple as nap
 from .params import GLMHMMParams, GLMHMMUserParams
 
 
-class ClassifierGLMHMM(GLMHMM, ClassifierMixin):
+class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
     def __init__(
         self,
         n_states: int,
@@ -40,7 +40,7 @@ class ClassifierGLMHMM(GLMHMM, ClassifierMixin):
             inverse_link_function=inverse_link_function,
             regularizer=regularizer,
             regularizer_strength=regularizer_strength,
-            dirichlet_initial_proba=dirichlet_initial_proba,
+            dirichlet_initial_proba=dirichlet_transition_proba,
             dirichlet_transition_proba=dirichlet_transition_proba,
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
