@@ -40,7 +40,7 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
             inverse_link_function=inverse_link_function,
             regularizer=regularizer,
             regularizer_strength=regularizer_strength,
-            dirichlet_initial_proba=dirichlet_transition_proba,
+            dirichlet_initial_proba=dirichlet_initial_proba,
             dirichlet_transition_proba=dirichlet_transition_proba,
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,

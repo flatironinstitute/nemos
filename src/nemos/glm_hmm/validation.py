@@ -193,7 +193,7 @@ class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
 class ClassifierGLMHMMValidator(GLMHMMValidator):
     extra_params: Dict[Literal["n_classes"], int] = field(kw_only=True)
     model_class: str = "GLMHMM"
-    _glm_validator: ClassifierGLMValidator = ClassifierGLMValidator()
+    # _glm_validator: ClassifierGLMValidator = ClassifierGLMValidator()
 
     def check_model_params_shape(self, params: GLMHMMUserParams) -> GLMHMMUserParams:
         """Check the length of the glm parameters state axis."""

@@ -32,7 +32,7 @@ __all__ = ["ClassifierGLM", "ClassifierPopulationGLM"]
 
 
 class ClassifierMixin:
-    """GLM for classification."""
+    """Additional methods for classification models."""
 
     # observation model inferred
     _invalid_observation_types = ()
@@ -187,14 +187,22 @@ class ClassifierMixin:
         self,
         X: DESIGN_INPUT_TYPE,
         y: Optional[jnp.ndarray] = None,
+        *args: jnp.ndarray,
         drop_nans: bool = True,
     ) -> Tuple[dict[str, jnp.ndarray] | jnp.ndarray, jnp.ndarray | None]:
         """Preprocess inputs before initializing state."""
-        X, y = super()._preprocess_inputs(X, y=y, drop_nans=drop_nans)
+        if args:
+            X, y, args = super()._preprocess_inputs(X, y, *args, drop_nans=drop_nans)
+        else:
+            X, y = super()._preprocess_inputs(X, y=y, drop_nans=drop_nans)
         if y is not None:
             y = self._validator.check_and_cast_y_to_integer(y)
             y = jax.nn.one_hot(y, self._label_encoder.n_classes)
         return X, y
+
+
+class ClassifierGLMMixin(ClassifierMixin):
+    """GLM methods for Classifier models"""
 
     # Note: necessary double decorator. The super().predict is decorated as well,
     # but the pynapple metadata would be dropped if we do not decorate here.
@@ -569,7 +577,7 @@ class ClassifierMixin:
         )
 
 
-class ClassifierGLM(ClassifierMixin, GLM):
+class ClassifierGLM(ClassifierGLMMixin, GLM):
     """
     Generalized Linear Model for multi-class classification.
 
@@ -844,7 +852,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         return super().score(X, y, score_type, aggregate_sample_scores)
 
 
-class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
+class ClassifierPopulationGLM(ClassifierGLMMixin, PopulationGLM):
     """
     Population Generalized Linear Model for multi-class classification.
 
