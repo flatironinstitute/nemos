@@ -238,3 +238,41 @@ for api_rst in api_order:
     api_index += "\n".join(contents)
 
 (api_dir / "index.rst").write_text(api_index)
+
+# ---- Download admonition for runnable notebook docs ----
+# Every jupytext MyST .md doc is written to _build/jupyter_execute/<doc>.ipynb
+# by myst_nb on each build, and the {nb-download} role links to that generated
+# notebook. We inject the admonition just after the jupytext frontmatter so all
+# runnable tutorials/how-to/background pages get a download link automatically,
+# without editing the source files.
+_NB_DOC_ROOTS = ("tutorials/", "how_to_guide/", "background/")
+
+
+def add_download_admonition(app, docname, source):
+    if not (docname.startswith(_NB_DOC_ROOTS) or docname == "quickstart"):
+        return
+    lines = source[0].splitlines(keepends=True)
+    # require a jupytext frontmatter block (fenced by ---) to skip plain .md
+    # pages such as the README index files living in these directories
+    if not lines or lines[0].strip() != "---":
+        return
+    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+    if end is None or "jupytext" not in "".join(lines[1:end]):
+        return
+    stem = docname.split("/")[-1]
+    admonition = (
+        "\n"
+        ":::{admonition} Download\n"
+        ":class: important\n"
+        "\n"
+        f"Download this notebook: **{{nb-download}}`{stem}.ipynb`**!\n"
+        "\n"
+        ":::\n"
+        "\n"
+    )
+    lines.insert(end + 1, admonition)
+    source[0] = "".join(lines)
+
+
+def setup(app):
+    app.connect("source-read", add_download_admonition)
