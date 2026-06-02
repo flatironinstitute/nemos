@@ -263,3 +263,28 @@ class TestInstantiateSolverOverrides:
         actual_kwargs = mock_solver_cls.call_args.kwargs
         for k, v in expected.items():
             assert actual_kwargs[k] == v
+
+
+def test_repr_mimebundle_unfitted(mock_regressor):
+    """Test the mimebundle HTML representation for an unfitted model."""
+    bundle = mock_regressor._repr_mimebundle_()
+    assert "text/html" in bundle
+    html = bundle["text/html"]
+
+    assert 'Model State: <span style="color: #dc3545;">Unfitted</span>' in html
+    assert "Neurons:</strong>" not in html
+    assert "Features:</strong>" not in html
+
+
+def test_repr_mimebundle_fitted(mock_regressor):
+    """Test the mimebundle HTML representation for a fitted model."""
+    mock_regressor.coef_ = jnp.array([[1.0, 2.0], [3.0, 4.0]])
+    mock_regressor.intercept_ = jnp.array([0.5, -0.5])
+
+    bundle = mock_regressor._repr_mimebundle_()
+    assert "text/html" in bundle
+    html = bundle["text/html"]
+
+    assert 'Model State: <span style="color: #28a745;">Fitted</span>' in html
+    assert "Neurons:</strong> 2" in html
+    assert "Features:</strong> 2" in html
