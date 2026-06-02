@@ -403,7 +403,7 @@ class TransformerBasis:
         By default, scikit-learn tries to clone the object by calling __init__ using the output of get_params,
         which fails in our case.
 
-        For more info: https://scikit-learn.org/stable/developers/develop.html#cloningi
+        For more info: https://scikit-learn.org/stable/developers/develop.html#cloning
         """
         cloned = (
             self.basis.__sklearn_clone__()
