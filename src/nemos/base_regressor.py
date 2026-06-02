@@ -866,3 +866,95 @@ class BaseRegressor(
         Provide instance specific validator configuration if needed.
         """
         return {}
+
+    def _repr_mimebundle_(self, **kwargs):
+        """Mimebundle representation of the model.
+
+        Wraps the default scikit-learn diagram with a small nemos diagnostics bar.
+
+        Parameters
+        ----------
+        **kwargs : dict
+            Keyword arguments passed to the default scikit-learn mimebundle generator.
+
+        Returns
+        -------
+        dict
+            A dictionary mapping mime types to representation data.
+        """
+        bundle_func = getattr(super(), "_repr_mimebundle_", None)
+        bundle = bundle_func(**kwargs) if bundle_func else {}
+
+        if "text/html" not in bundle:
+            html_func = getattr(super(), "_repr_html_", None)
+            bundle["text/html"] = html_func() if html_func else repr(self)
+
+        state = self._get_fit_state()
+        coef = state.get("coef_")
+        is_fitted = coef is not None
+
+        state_color, state_text = (
+            ("#28a745", "Fitted") if is_fitted else ("#dc3545", "Unfitted")
+        )
+        diagnostics = ""
+
+        if is_fitted:
+            intercept_shape = getattr(state.get("intercept_"), "shape", ())
+            n_neurons = (
+                1
+                if intercept_shape in ((), (1,))
+                else getattr(intercept_shape, "__getitem__", lambda x: "N/A")(0)
+            )
+
+            def get_features(x):
+                return getattr(x, "shape", (1,))[-1] if getattr(x, "ndim", 0) > 0 else 1
+
+            n_features = "Unknown"
+            try:
+                n_features = sum(
+                    jax.tree_util.tree_flatten(
+                        jax.tree_util.tree_map(get_features, coef)
+                    )[0]
+                )
+            except Exception:
+                pass
+
+            conv_html = ""
+            optim_info = state.get("optim_info_")
+            if optim_info is not None:
+                c_color, c_text = (
+                    ("#28a745", "Yes") if optim_info.converged else ("#dc3545", "No")
+                )
+                conv_html = f'<span><strong>Converged:</strong> <span style="color: {c_color};">{c_text}</span></span>'
+
+            diagnostics = f"""
+            <span style="margin-right: 15px;"><strong>Neurons:</strong> {n_neurons}</span>
+            <span style="margin-right: 15px;"><strong>Features:</strong> {n_features}</span>
+            {conv_html}
+            """
+
+        nemos_html = f"""
+        <div style="
+            font-family: sans-serif;
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            border-left: 4px solid {state_color};
+            background-color: #f8f9fa;
+            color: #333;
+            border-radius: 4px;
+            display: inline-block;
+            font-size: 13px;
+        ">
+            <span style="font-weight: bold; margin-right: 15px;">
+                Model State: <span style="color: {state_color};">{state_text}</span>
+            </span>
+            {diagnostics}
+        </div>
+        """
+
+        bundle["text/html"] = nemos_html + bundle.get("text/html", "")
+        return bundle
+
+    def _repr_html_(self) -> str:
+        """HTML representation of the model."""
+        return self._repr_mimebundle_().get("text/html", repr(self))
