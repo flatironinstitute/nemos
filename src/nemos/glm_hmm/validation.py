@@ -9,10 +9,9 @@ from jax.typing import DTypeLike
 
 from ..base_validator import RegressorValidator
 from ..glm.validation import GLMValidator, ClassifierGLMValidator
-from ..hmm.params import HMMParams
 from ..hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
 from ..typing import DESIGN_INPUT_TYPE
-from .params import GLMHMMModelParams, GLMHMMParams, GLMHMMUserParams, GLMParams
+from .params import GLMHMMModelParams, GLMHMMParams, GLMHMMUserParams
 
 
 def to_glm_hmm_params(user_params: GLMHMMUserParams) -> GLMHMMParams:
@@ -181,19 +180,22 @@ class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
         model_params = GLMHMMModelParams(
             coef=empty_coef, intercept=empty_intercept, log_scale=empty_scale
         )
-        empty_init_proba = jnp.empty((self.n_states,))
-        empty_transition_proba = jnp.empty((self.n_states, self.n_states))
-        hmm_params = HMMParams(
-            log_initial_prob=empty_init_proba,
-            log_transition_prob=empty_transition_proba,
-        )
+        hmm_params = HMMValidator.get_empty_params(X, y)
         return GLMHMMParams(hmm_params=hmm_params, model_params=model_params)
 
 
+@dataclass(frozen=True, repr=False)
 class ClassifierGLMHMMValidator(GLMHMMValidator):
     extra_params: Dict[Literal["n_classes"], int] = field(kw_only=True)
-    model_class: str = "GLMHMM"
-    # _glm_validator: ClassifierGLMValidator = ClassifierGLMValidator()
+    model_class: str = "ClassifierGLMHMM"
+    _glm_validator: ClassifierGLMValidator = field(init=False, default=None)
+
+    def __post_init__(self):
+        object.__setattr__(
+            self,
+            "_glm_validator",
+            ClassifierGLMValidator(extra_params=self.extra_params),
+        )
 
     def check_model_params_shape(self, params: GLMHMMUserParams) -> GLMHMMUserParams:
         """Check the length of the glm parameters state axis."""
@@ -222,12 +224,10 @@ class ClassifierGLMHMMValidator(GLMHMMValidator):
         empty_coef = jax.tree_util.tree_map(
             lambda x: jnp.empty((x.shape[1], n_classes, self.n_states)), X
         )
-        empty_intercept = jnp.empty((self.n_states,))
-        model_params = GLMParams(coef=empty_coef, intercept=empty_intercept)
-        empty_init_proba = jnp.empty((self.n_states,))
-        empty_transition_proba = jnp.empty((self.n_states, self.n_states))
-        hmm_params = HMMParams(
-            log_initial_prob=empty_init_proba,
-            log_transition_prob=empty_transition_proba,
+        empty_intercept = jnp.empty((n_classes, self.n_states))
+        empty_scale = jnp.empty_like(empty_intercept)
+        model_params = GLMHMMModelParams(
+            coef=empty_coef, intercept=empty_intercept, log_scale=empty_scale
         )
+        hmm_params = HMMValidator.get_empty_params(X, y)
         return GLMHMMParams(hmm_params=hmm_params, model_params=model_params)
