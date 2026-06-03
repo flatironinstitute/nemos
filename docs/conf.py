@@ -7,6 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 import sys, os
+import typing
 from pathlib import Path
 
 from importlib.metadata import version
@@ -199,13 +200,14 @@ intersphinx_mapping = {
 # ---- API index generation ----
 api_order = [
     "glm.rst",
-    "io.rst",
+    "glm_hmm.rst",
     "basis.rst",
     "observation_models.rst",
     "regularizers.rst",
-    "simulations.rst",
-    "convolve.rst",
+    "io.rst",
     "solvers.rst",
+    "convolve.rst",
+    "simulations.rst",
     "identifiability.rst",
 ]
 api_dir = Path("api")
@@ -274,5 +276,14 @@ def add_download_admonition(app, docname, source):
     source[0] = "".join(lines)
 
 
+def strip_generic_bases(app, name, obj, options, bases):
+    """Render ``Base[...]`` as bare ``Base`` in the Bases: line (drops generic clutter)."""
+    for i, base in enumerate(bases):
+        origin = typing.get_origin(base)
+        if origin is not None:
+            bases[i] = origin
+
+
 def setup(app):
     app.connect("source-read", add_download_admonition)
+    app.connect("autodoc-process-bases", strip_generic_bases)
