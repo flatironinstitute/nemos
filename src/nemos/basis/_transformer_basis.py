@@ -381,7 +381,7 @@ class TransformerBasis:
         ValueError('Only setting basis or existing attributes of basis is allowed. Attempt to set `rand_atrr`.')
         """
         # allow self.basis = basis and other attrs of self to be retrievable
-        if name in ["basis", "_wrapped_methods", "_basis"]:
+        if name in ["basis", "_wrapped_methods", "_basis", "_parent_callback_ctx"]:
             super().__setattr__(name, value)
         # allow changing existing attributes of self.basis
         elif hasattr(self.basis, name):
