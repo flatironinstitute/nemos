@@ -163,7 +163,7 @@ html_js_files = [
 ]
 
 # Copybutton settings (to hide prompt)
-copybutton_prompt_text = r">>> |\$ |# "
+copybutton_prompt_text = r">>> |\$ "
 copybutton_prompt_is_regexp = True
 
 sphinxemoji_style = 'twemoji'
