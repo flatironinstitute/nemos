@@ -230,15 +230,15 @@ if path.exists():
   fig.savefig(path / "plot_03_population_glm.svg")
 ```
 
-## FeaturePytree
-[`PopulationGLM`](nemos.glm.PopulationGLM) is compatible with [`FeaturePytree`](nemos.pytrees.FeaturePytree). If you structured your predictors
-in a [`FeaturePytree`](nemos.pytrees.FeaturePytree), the `feature_mask` needs to be a dictionary of the same structure, containing arrays
+## Pytrees
+[`PopulationGLM`](nemos.glm.PopulationGLM) is compatible with JAX [`pytrees`](https://docs.jax.dev/en/latest/pytrees.html), which are general, potentially nested, container-like structures. Pytrees include lists, dictionaries, tuples or any combination thereof. If you structure your predictors
+in a pytree, the `feature_mask` must be a pytree of the same structure, containing arrays
 of shape `(n_neurons, )`.
-The example above can be reformulated as follows,
+For example, if we use a Python `dict`, the example above can be reformulated as follows,
 
 ```{code-cell} ipython3
-# restructure the input as FeaturePytree
-pytree_features = nmo.pytrees.FeaturePytree(
+# restructure the input as dict (a type of pytree)
+pytree_features = dict(
     shared=input_features[:, :1],
     neu_0=input_features[:, 1:2],
     neu_1=input_features[:, 2:]

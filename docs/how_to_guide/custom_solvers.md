@@ -13,7 +13,7 @@ kernelspec:
 
 # Creating custom solvers for use with NeMoS
 
-To support flexibility and long-term maintenance, NeMoS now has a backend-agnostic solver interface, allowing the use of solvers from different backend libraries with different interfaces.  
+To support flexibility and long-term maintenance, NeMoS now has a backend-agnostic solver interface, allowing the use of solvers from different backend libraries with different interfaces.
 This also means that users can provide their own solvers, and as long as they adhere to the interface defined by `AbstractSolver`, they should be compatible with NeMoS and can be used for fitting models.
 
 In the following we will walk through how one can create a NeMoS-compatible solver that uses [`scipy.optimize.minimize` with the modified Powell method](https://docs.scipy.org/doc/scipy/reference/optimize.minimize-powell.html#optimize-minimize-powell), an algorithm not present in NeMoS by default.
@@ -28,7 +28,6 @@ In order to adhere to the `AbstractSolver` interface, we have to define the foll
 - `update`: Take one step of the optimization algorithm.
 - `run`: Run a full optimization.
 - `get_accepted_arguments`: Set of argument names that can be passed to `__init__`.
-- `get_optim_info`: Collect diagnostic information about the optimization run into an `OptimizationInfo` namedtuple.
 
 ```{code-cell} ipython3
 import jax
@@ -51,6 +50,8 @@ class ScipySolverState(NamedTuple):
     iter_num: int
     # res is for storing the results of the optimization run.
     res: dict
+    # for notifying nemos if the optimization was succesful
+    converged: bool
 
 
 # NOTE: Omitting most types here for simplicity.
@@ -113,7 +114,7 @@ class ScipySolver:
 
         Has to accept `init_params` and `*args` even if it doesn't use them.
         """
-        return ScipySolverState(0, {})
+        return ScipySolverState(0, {}, False)
 
     def run(self, init_params, *args):
         """
@@ -128,7 +129,7 @@ class ScipySolver:
         # unpack res, which has a custom type defined in scipy into a regular dict
         return (
             unstacked_final_params,
-            ScipySolverState(res.nit, {**res}),
+            ScipySolverState(res.nit, {**res}, res.success),
             None,
         )
 
@@ -142,7 +143,7 @@ class ScipySolver:
         assert res.nit <= 1
         return (
             unstacked_final_params,
-            ScipySolverState(state.iter_num + res.nit, {**res}),
+            ScipySolverState(state.iter_num + res.nit, {**res}, False),
             None,
         )
 
@@ -179,18 +180,6 @@ class ScipySolver:
         )
 
         return unflattener_fun(res.x), res
-
-    def get_optim_info(self, state):
-        """
-        Read out the relevant optimization info from the results
-        we stored in the state.
-        """
-        return OptimizationInfo(
-            state.res["fun"],
-            state.res["nit"],
-            state.res["success"],
-            state.res["nit"] >= self.max_steps,
-        )
 
 
 class ScipyPowell(ScipySolver):
@@ -290,9 +279,9 @@ Setting this to `True` would tell NeMoS that we want to use this as the default 
 
 +++
 
-### Create the model and fit 
+### Create the model and fit
 
-Passing `"Powell"` as the solver_name to `GLM`, it will now look up this class in the solver registry, and `model.fit` will call `ScipyPowell.run`. 
+Passing `"Powell"` as the solver_name to `GLM`, it will now look up this class in the solver registry, and `model.fit` will call `ScipyPowell.run`.
 
 If we have multiple implementations of a given algorithm (for example because we created and registered `ScipyLBFGS` instead), specifying only the algorithm's name will use the implementation set as the default for the given algorithm.
 <br>
@@ -326,8 +315,8 @@ Finally, we can inspect the model to show that it is using `ScipyPowell`:
 print(model.solver_name)
 # the actual solver instance that is created from the string or class
 print(model._solver)
-# GLM._solver_run (called within GLM.fit) corresponds to this instance's .run method
-print(model._solver_run)
+# GLM.optimizer_run (called within GLM.fit) corresponds to this instance's .run method
+print(model.optimizer_run)
 ```
 
 ### Test the update method
@@ -340,7 +329,7 @@ Repeatedly calling a `model.update` calls `ScipyPowell.update` to perform a sing
 import matplotlib.pyplot as plt
 
 params = model.initialize_params(X, y)
-state = model.initialize_solver_and_state(X, y, params)
+state = model.initialize_optimizer_and_state(params, X, y)
 
 fig, ax = plt.subplots()
 scores = []

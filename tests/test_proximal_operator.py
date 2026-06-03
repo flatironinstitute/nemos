@@ -1,3 +1,4 @@
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import pytest
@@ -12,6 +13,49 @@ from nemos.proximal_operator import (
     prox_ridge,
 )
 from nemos.tree_utils import tree_full_like
+from nemos.utils import get_flattener_unflattener
+
+
+class _TwoLeafModule(eqx.Module):
+    w: jnp.ndarray
+    b: jnp.ndarray
+
+
+def _make_dict_data():
+    params = {"w": jnp.array([1.0, -2.0, 3.0]), "b": jnp.array([0.5])}
+    strength = tree_full_like(params, 0.5)
+    mask = {
+        "w": jnp.array([[1, 1, 0], [0, 0, 1]], dtype=float),
+        "b": jnp.zeros((2, 1), dtype=float),
+    }
+    return params, strength, mask
+
+
+def _make_eqx_module_data():
+    params = _TwoLeafModule(w=jnp.array([1.0, -2.0, 3.0]), b=jnp.array([0.5]))
+    strength = tree_full_like(params, 0.5)
+    mask = _TwoLeafModule(
+        w=jnp.array([[1, 1, 0], [0, 0, 1]], dtype=float),
+        b=jnp.zeros((2, 1), dtype=float),
+    )
+    return params, strength, mask
+
+
+def _make_dict_list_data():
+    params = dict(w=[jnp.array([1.0, -2.0, 3.0])], b=jnp.array([0.5]))
+    strength = tree_full_like(params, 0.5)
+    mask = dict(
+        w=[jnp.array([[1, 1, 0], [0, 0, 1]], dtype=float)],
+        b=jnp.zeros((2, 1), dtype=float),
+    )
+    return params, strength, mask
+
+
+_PYTREE_DATA_CASES = [
+    pytest.param(_make_dict_data, id="dict"),
+    pytest.param(_make_eqx_module_data, id="eqx_module"),
+    pytest.param(_make_dict_list_data, id="dict_list"),
+]
 
 
 @pytest.mark.parametrize(
@@ -609,3 +653,133 @@ def test_prox_group_lasso_pytree_strength_broadcast_and_shape():
     # Structure preserved
     assert out_weak["w"].shape == params["w"].shape
     assert out_strong["w"].shape == params["w"].shape
+
+
+# === Tests: proximal operators work with arbitrary pytree param structures ===
+
+
+@pytest.mark.parametrize("make_data", _PYTREE_DATA_CASES)
+def test_prox_none_pytree_types(make_data):
+    """prox_none returns input unchanged for dict, eqx.Module, and dict_list pytrees."""
+    params, strength, _ = make_data()
+    out = prox_none(params, strength=strength, scaling=1.0)
+    assert jax.tree_util.tree_structure(out) == jax.tree_util.tree_structure(params)
+
+
+@pytest.mark.parametrize("make_data", _PYTREE_DATA_CASES)
+def test_prox_ridge_pytree_types(make_data):
+    """prox_ridge preserves structure and shape for dict, eqx.Module, and dict_list pytrees."""
+    params, strength, _ = make_data()
+    out = prox_ridge(params, strength=strength, scaling=1.0)
+    assert jax.tree_util.tree_structure(out) == jax.tree_util.tree_structure(params)
+    for out_leaf, in_leaf in zip(
+        jax.tree_util.tree_leaves(out), jax.tree_util.tree_leaves(params)
+    ):
+        assert out_leaf.shape == in_leaf.shape
+
+
+@pytest.mark.parametrize("make_data", _PYTREE_DATA_CASES)
+def test_prox_lasso_pytree_types(make_data):
+    """prox_lasso preserves structure and shape for dict, eqx.Module, and dict_list pytrees."""
+    params, strength, _ = make_data()
+    out = prox_lasso(params, strength=strength, scaling=1.0)
+    assert jax.tree_util.tree_structure(out) == jax.tree_util.tree_structure(params)
+    for out_leaf, in_leaf in zip(
+        jax.tree_util.tree_leaves(out), jax.tree_util.tree_leaves(params)
+    ):
+        assert out_leaf.shape == in_leaf.shape
+
+
+@pytest.mark.parametrize("make_data", _PYTREE_DATA_CASES)
+def test_prox_elastic_net_pytree_types(make_data):
+    """prox_elastic_net preserves structure and shape for dict, eqx.Module, and dict_list pytrees."""
+    params, _, _ = make_data()
+    # elastic net expects per-leaf (strength, ratio) tuples
+    strength = tree_full_like(params, (0.5, 0.5))
+    out = prox_elastic_net(params, strength=strength, scaling=1.0)
+    assert jax.tree_util.tree_structure(out) == jax.tree_util.tree_structure(params)
+    for out_leaf, in_leaf in zip(
+        jax.tree_util.tree_leaves(out), jax.tree_util.tree_leaves(params)
+    ):
+        assert out_leaf.shape == in_leaf.shape
+
+
+@pytest.mark.parametrize("make_data", _PYTREE_DATA_CASES)
+def test_prox_group_lasso_pytree_types(make_data):
+    """prox_group_lasso preserves structure and shape for dict, eqx.Module, and dict_list pytrees."""
+    params, strength, mask = make_data()
+    out = prox_group_lasso(params, strength=strength, mask=mask, scaling=1.0)
+    assert jax.tree_util.tree_structure(out) == jax.tree_util.tree_structure(params)
+    for out_leaf, in_leaf in zip(
+        jax.tree_util.tree_leaves(out), jax.tree_util.tree_leaves(params)
+    ):
+        assert out_leaf.shape == in_leaf.shape
+
+
+# === Array vs pytree equivalence: element-wise operators ===
+# prox_none, prox_ridge, prox_lasso, and prox_elastic_net are element-wise
+# with uniform strength, so applying them to a pytree must give the same
+# numerical result as applying them to the equivalent flat 1-D array (then
+# re-shaped back).
+#
+# For each operator the (tree_strength, flat_strength) pair is:
+#   prox_none         -> (0.5, 0.5)          strength is ignored
+#   prox_ridge        -> (0.5, 0.5)          scalar broadcasts element-wise
+#   prox_lasso        -> (0.5, 0.5)          scalar broadcasts element-wise
+#   prox_elastic_net  -> ((0.5, 0.5), (0.5, 0.5))  per-leaf (s, r) tuple
+
+_ELEMENTWISE_PROX_CASES = [
+    pytest.param(
+        prox_none,
+        lambda params: tree_full_like(params, 0.5),
+        0.5,
+        id="prox_none",
+    ),
+    pytest.param(
+        prox_ridge,
+        lambda params: tree_full_like(params, 0.5),
+        0.5,
+        id="prox_ridge",
+    ),
+    pytest.param(
+        prox_lasso,
+        lambda params: tree_full_like(params, 0.5),
+        0.5,
+        id="prox_lasso",
+    ),
+    pytest.param(
+        prox_elastic_net,
+        lambda params: tree_full_like(params, (0.5, 0.5)),
+        (0.5, 0.5),
+        id="prox_elastic_net",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "prox_op, tree_strength_fn, flat_strength", _ELEMENTWISE_PROX_CASES
+)
+@pytest.mark.parametrize("make_data", _PYTREE_DATA_CASES)
+def test_prox_operator_tree_vs_array_equivalence(
+    make_data, prox_op, tree_strength_fn, flat_strength
+):
+    """Proximal operator on a pytree matches element-wise application to its flat array."""
+    params, _, _ = make_data()
+    _flat, _unflat = get_flattener_unflattener(params)
+
+    scaling = 1.0
+
+    # Apply to pytree with uniform per-leaf strength
+    out_tree = prox_op(params, strength=tree_strength_fn(params), scaling=scaling)
+
+    # Apply to the equivalent flat 1-D array
+    flat_params = jnp.array(_flat(params))
+    out_flat_unflat = _unflat(
+        prox_op(flat_params, strength=flat_strength, scaling=scaling)
+    )
+
+    for tree_leaf, flat_leaf in zip(
+        jax.tree_util.tree_leaves(out_tree),
+        jax.tree_util.tree_leaves(out_flat_unflat),
+    ):
+        assert jnp.allclose(jnp.asarray(tree_leaf), jnp.asarray(flat_leaf))
