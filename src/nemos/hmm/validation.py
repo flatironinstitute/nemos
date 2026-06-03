@@ -134,7 +134,8 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
             self.extra_params["n_states"],
         ):
             raise ValueError(
-                f"transition_prob must be a 2-dimensional array of shape ``({self.extra_params["n_states"]}, {self.extra_params["n_states"]})``."
+                "transition_prob must be a 2-dimensional array of shape "
+                f"``({self.extra_params["n_states"]}, {self.extra_params["n_states"]})``."
                 f"Provided transition_prob is of shape ``{transition_prob.shape}`` instead."
             )
         return params

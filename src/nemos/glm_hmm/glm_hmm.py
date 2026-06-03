@@ -779,20 +779,20 @@ class GLMHMM(
             X, y, session_starts=session_starts
         )
 
+        # filter for non-nans, grab data if needed
+        data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
+
         # validate the inputs & initialize solver
         # initialize params if no params are provided
         if init_params is None:
-            init_params = self._model_specific_initialization(X, y, session_starts)
+            init_params = self._model_specific_initialization(data, y, session_starts)
         else:
             init_params = self._validator.validate_and_cast_params(init_params)
-            self._validator.validate_consistency(init_params, X=X, y=y)
+            self._validator.validate_consistency(init_params, X=data, y=y)
 
         self._validator.feature_mask_consistency(
             getattr(self, "_feature_mask", None), init_params
         )
-
-        # filter for non-nans, grab data if needed
-        data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
 
         # set up optimization
         self._initialize_optimizer_and_state(init_params, data, y)

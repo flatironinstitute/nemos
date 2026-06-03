@@ -14,18 +14,22 @@ if TYPE_CHECKING:
 from .utils import one_over_x
 
 
-def _make_wrapper(func, name, description):
+def _make_wrapper(func_exec, name, description):
     """Create a wrapper function with combined docstrings."""
+    if isinstance(func_exec, functools.partial):
+        func = func_exec.func
+    else:
+        func = func_exec
 
     @functools.wraps(func)
     def wrapper(x):
-        return func(x)
+        return func_exec(x)
 
     # Combine the custom description with original docstring
     original_doc = func.__doc__ or "No docstring available."
     wrapper.__doc__ = f"""{description}
 
-Wrapper of `{func.__module__}.{func.__name__}`. Below the original jax docstring.
+Wrapper of `{func.__module__}.{func.__name__}`. Below is the original jax docstring.
 
 {original_doc}"""
 

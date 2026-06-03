@@ -5,7 +5,7 @@ from typing import Any, Callable, Optional, Tuple, Union, Dict, Literal
 
 import jax
 import jax.numpy as jnp
-from jax.typing import DTypeLike
+from jax.typing import DTypeLike, ArrayLike
 
 from ..base_validator import RegressorValidator
 from ..glm.validation import GLMValidator, ClassifierGLMValidator
@@ -207,16 +207,36 @@ class ClassifierGLMHMMValidator(GLMHMMValidator):
         )
         if any(invalid_shapes):
             raise ValueError(
-                "GLM coef must be of shape ``(n_features, n_classes, n_states)`` or a dict of arrays "
+                "Classifier GLM-HMM coef must be of shape ``(n_features, n_classes, n_states)`` or a dict of arrays "
                 "with shape ``(n_features, n_classes, n_states)``. "
                 f"n_states is {self.extra_params["n_states"]} but coef has shape(s) ``{invalid_shapes}``."
             )
         if intercept.shape[-1] != self.extra_params["n_states"]:
             raise ValueError(
-                "GLM intercept must be of shape ``(n_classes, n_states)``. "
+                "Classifier GLM-HMM intercept must be of shape ``(n_classes, n_states)``. "
                 f"n_states is {self.extra_params["n_states"]} but coef has shape ``{intercept.shape}``."
             )
+
+        # also check n_classes consistency with extra_params
+        invalid_shapes = jax.tree_util.tree_map(
+            lambda x: x.shape[-2] != self.extra_params["n_classes"], flat_coef
+        )
+        if any(invalid_shapes):
+            raise ValueError(
+                "Classifier GLM-HMM coef must be of shape ``(n_features, n_classes, n_states)`` or a dict of arrays "
+                "with shape ``(n_features, n_classes, n_states)``. "
+                f"n_classes is {self.extra_params["n_classes"]} but coef has shape(s) ``{invalid_shapes}``."
+            )
+        if intercept.shape[-2] != self.extra_params["n_classes"]:
+            raise ValueError(
+                "Classifier GLM-HMM intercept must be of shape ``(n_classes, n_states)``. "
+                f"n_classes is {self.extra_params["n_classes"]} but coef has shape ``{intercept.shape}``."
+            )
         return params
+
+    @staticmethod
+    def check_and_cast_y_to_integer(y: ArrayLike) -> jnp.ndarray:
+        return ClassifierGLMValidator.check_and_cast_y_to_integer(y)
 
     def get_empty_params(self, X, y) -> GLMHMMParams:
         """Return the param shape given the input data."""

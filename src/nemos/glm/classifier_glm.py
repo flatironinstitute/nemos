@@ -191,14 +191,11 @@ class ClassifierMixin:
         drop_nans: bool = True,
     ) -> Tuple[dict[str, jnp.ndarray] | jnp.ndarray, jnp.ndarray | None]:
         """Preprocess inputs before initializing state."""
-        if args:
-            X, y, args = super()._preprocess_inputs(X, y, *args, drop_nans=drop_nans)
-        else:
-            X, y = super()._preprocess_inputs(X, y=y, drop_nans=drop_nans)
+        X, y, *args = super()._preprocess_inputs(X, y, *args, drop_nans=drop_nans)
         if y is not None:
             y = self._validator.check_and_cast_y_to_integer(y)
             y = jax.nn.one_hot(y, self._label_encoder.n_classes)
-        return X, y
+        return (X, y, *args)
 
 
 class ClassifierGLMMixin(ClassifierMixin):
