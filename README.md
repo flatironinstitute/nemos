@@ -14,10 +14,12 @@
 NeMoS (Neural ModelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](https://jax.readthedocs.io/en/latest/).
 It streamlines the process of creating and selecting models, through a collection of easy-to-use methods for feature design.
 
-The core of NeMoS includes GPU-accelerated, well-tested implementations of standard statistical models, currently
-focusing on the Generalized Linear Model (GLM).
+The core of NeMoS includes GPU-accelerated, well-tested implementations of standard statistical models for systems neuroscience.
 
-We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for calcium or voltage imaging traces.
+We provide:
+- A [`GLM`](https://nemos.readthedocs.io/en/latest/api/generated/glm/nemos.glm.GLM.html) for single neurons and a [`PopulationGLM`](https://nemos.readthedocs.io/en/latest/api/generated/glm/nemos.glm.PopulationGLM.html), with a choice of [observation models](https://nemos.readthedocs.io/en/latest/api/observation_models.html) ([`Poisson`](https://nemos.readthedocs.io/en/latest/api/generated/observation_models/nemos.observation_models.PoissonObservations.html), [`Negative Binomial`](https://nemos.readthedocs.io/en/latest/api/generated/observation_models/nemos.observation_models.NegativeBinomialObservations.html), [`Gamma`](https://nemos.readthedocs.io/en/latest/api/generated/observation_models/nemos.observation_models.GammaObservations.html), [`Gaussian`](https://nemos.readthedocs.io/en/latest/api/generated/observation_models/nemos.observation_models.GaussianObservations.html), [`Bernoulli`](https://nemos.readthedocs.io/en/latest/api/generated/observation_models/nemos.observation_models.BernoulliObservations.html)) and a [`ClassifierGLM`](https://nemos.readthedocs.io/en/latest/api/generated/glm/nemos.glm.ClassifierGLM.html) for categorical responses.
+- A composable [basis module](https://nemos.readthedocs.io/en/latest/api/basis.html) for constructing and transforming model features.
+- Multiple [regularization schemes](https://nemos.readthedocs.io/en/latest/api/regularizers.html): [`Ridge`](https://nemos.readthedocs.io/en/latest/api/generated/regularizer/nemos.regularizer.Ridge.html), [`Lasso`](https://nemos.readthedocs.io/en/latest/api/generated/regularizer/nemos.regularizer.Lasso.html), [`GroupLasso`](https://nemos.readthedocs.io/en/latest/api/generated/regularizer/nemos.regularizer.GroupLasso.html), and [`ElasticNet`](https://nemos.readthedocs.io/en/latest/api/generated/regularizer/nemos.regularizer.ElasticNet.html).
 
 The package is under active development and more methods will be added in the future.
 
