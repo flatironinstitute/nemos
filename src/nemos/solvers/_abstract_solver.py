@@ -3,25 +3,34 @@
 from __future__ import annotations
 
 import abc
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Generic, Protocol, runtime_checkable
 
 from ..typing import Params, SolverState, StepResult
 
 if TYPE_CHECKING:
     from ..regularizer import Regularizer
+import equinox as eqx
+import jax
 
 
-@dataclass
-class OptimizationInfo:
+class SolverAdapterState(eqx.Module, Generic[SolverState]):
+    solver_state: SolverState  # backend-specific internal state
+    stats: OptimizationInfo  # num_steps, converged, etc. — computed during run, valid JAX pytree
+
+
+class OptimizationInfo(eqx.Module):
     """Basic diagnostic information about finished optimization runs."""
 
     # Not all JAXopt solvers store the function value.
     # None means missing value, while NaN usually indicates a diverged optimization
-    function_val: float | None  #: Function value. Optional as not all solvers store it.
-    num_steps: int  #: Number of optimization steps taken.
-    converged: bool  #: Whether the optimization converged.
-    reached_max_steps: bool  #: Reached the maximum number of allowed steps.
+    function_val: (
+        jax.numpy.ndarray | None
+    )  #: Function value. Optional as not all solvers store it.
+    num_steps: jax.numpy.ndarray  #: Number of optimization steps taken, array of int.
+    converged: jax.numpy.ndarray  #: Whether the optimization converged, array of bool.
+    reached_max_steps: (
+        jax.numpy.ndarray
+    )  #: Reached the maximum number of allowed steps.
 
 
 class AbstractSolver(abc.ABC, Generic[SolverState]):
@@ -106,7 +115,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         pass
 
     @abc.abstractmethod
-    def get_optim_info(self, state: SolverState) -> OptimizationInfo:
+    def _get_optim_info(self, state: SolverState, **kwargs) -> OptimizationInfo:
         """Extract some commong info about the optimization process.
 
         Currently, the following info is extracted:
@@ -145,5 +154,3 @@ class SolverProtocol(Protocol, Generic[SolverState]):
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]: ...
-
-    def get_optim_info(self, state: SolverState) -> OptimizationInfo: ...

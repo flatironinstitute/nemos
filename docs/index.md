@@ -14,7 +14,7 @@ Quickstart <quickstart>
 Background <background/README>
 How-To Guide <how_to_guide/README>
 Tutorials <tutorials/README>
-API Reference <api_reference>
+API Reference <api/index>
 Getting Help <getting_help>
 Citation Guide <citation>
 For Developers <developers_notes/README>
@@ -27,11 +27,12 @@ For Developers <developers_notes/README>
 NeMoS (Neural ModelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](https://jax.readthedocs.io/en/latest/).
 It streamlines the process of defining and selecting models, through a collection of easy-to-use methods for feature design.
 
-The core of NeMoS includes GPU-accelerated, well-tested implementations of standard statistical models, currently
-focusing on the Generalized Linear Model (GLM).
+The core of NeMoS includes GPU-accelerated, well-tested implementations of standard statistical models for systems neuroscience.
 
-We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for calcium or voltage imaging traces.
-
+We provide:
+- A {class}`GLM <nemos.glm.GLM>` for single neurons and a {class}`PopulationGLM <nemos.glm.PopulationGLM>`, with a choice of {ref}`observation models <observation_models>` ({class}`Poisson <nemos.observation_models.PoissonObservations>`, {class}`Negative Binomial <nemos.observation_models.NegativeBinomialObservations>`, {class}`Gamma <nemos.observation_models.GammaObservations>`, {class}`Gaussian <nemos.observation_models.GaussianObservations>`, {class}`Bernoulli <nemos.observation_models.BernoulliObservations>`) and a {class}`ClassifierGLM <nemos.glm.ClassifierGLM>` for categorical responses.
+- A composable {ref}`basis module <nemos_basis>` for constructing and transforming model features.
+- Multiple {ref}`regularization schemes <regularizers>`: {class}`Ridge <nemos.regularizer.Ridge>`, {class}`Lasso <nemos.regularizer.Lasso>`, {class}`GroupLasso <nemos.regularizer.GroupLasso>`, and {class}`ElasticNet <nemos.regularizer.ElasticNet>`.
 
 ::::{grid} 1 2 3 3
 
@@ -104,7 +105,7 @@ Explore fully worked examples to learn how to analyze neural recordings from scr
 :::
 
 :::{grid-item-card} <span class="iconify" data-icon="mdi:cog"></span> &nbsp; **API Reference**
-:link: api_reference.html
+:link: api/index.html
 :link-alt: API Reference
 
 ---

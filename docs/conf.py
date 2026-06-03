@@ -7,6 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 import sys, os
+import typing
 from pathlib import Path
 
 from importlib.metadata import version
@@ -137,7 +138,7 @@ html_theme_options = {
       "image_dark": "_static/NeMoS_Logo_CMYK_White.svg",
    },
     "secondary_sidebar_items": {
-        "**": ["page-toc", "sourcelink"],
+        "[!a]?[!p]?[!i]**": ["page-toc", "sourcelink"],
         "background/basis/README": [],
     },
 }
@@ -162,7 +163,7 @@ html_js_files = [
 ]
 
 # Copybutton settings (to hide prompt)
-copybutton_prompt_text = r">>> |\$ |# "
+copybutton_prompt_text = r">>> |\$ "
 copybutton_prompt_is_regexp = True
 
 sphinxemoji_style = 'twemoji'
@@ -195,3 +196,94 @@ intersphinx_mapping = {
     "jax": ("https://jax.readthedocs.io/en/latest/", None),
     "scipy": ("https://docs.scipy.org/doc/scipy/", None),
 }
+
+# ---- API index generation ----
+api_order = [
+    "glm.rst",
+    "glm_hmm.rst",
+    "basis.rst",
+    "observation_models.rst",
+    "regularizers.rst",
+    "io.rst",
+    "solvers.rst",
+    "convolve.rst",
+    "simulations.rst",
+    "identifiability.rst",
+]
+api_dir = Path("api")
+# API index page (api/index.rst) is auto-generated. It starts with a hidden toctree
+# including all the rst pages above, and then includes their text (in order), without
+# the sphinx anchor and the toctree argument to the autosummary directive
+api_index = """.. _api:
+
+API Reference
+=============
+
+.. toctree::
+   :hidden:
+
+"""
+api_index += "   "
+api_index += "\n   ".join(mod.replace(".rst", "") for mod in api_order)
+api_index += "\n"
+
+for api_rst in api_order:
+    api_rst = api_dir / api_rst
+    contents = api_rst.read_text().split("\n")
+    # two lines we want to throw away: the sphinx anchor (e.g., ".. _synthesis-api") and
+    # the line that tells autosummary to create a toctree (e.g., ":toctree: generated")
+    contents = [
+        c
+        for c in contents
+        if not c.strip().startswith(".. _") and not c.strip().startswith(":toctree:")
+    ]
+    api_index += "\n".join(contents)
+
+(api_dir / "index.rst").write_text(api_index)
+
+# ---- Download admonition for runnable notebook docs ----
+# Every jupytext MyST .md doc is written to _build/jupyter_execute/<doc>.ipynb
+# by myst_nb on each build, and the {nb-download} role links to that generated
+# notebook. We inject the admonition just after the jupytext frontmatter so all
+# runnable tutorials/how-to/background pages get a download link automatically,
+# without editing the source files.
+_NB_DOC_ROOTS = ("tutorials/", "how_to_guide/", "background/")
+
+
+def add_download_admonition(app, docname, source):
+    if not (docname.startswith(_NB_DOC_ROOTS) or docname == "quickstart"):
+        return
+    lines = source[0].splitlines(keepends=True)
+    # require a jupytext frontmatter block (fenced by ---) to skip plain .md
+    # pages such as the README index files living in these directories
+    if not lines or lines[0].strip() != "---":
+        return
+    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+    if end is None or "jupytext" not in "".join(lines[1:end]):
+        return
+    stem = docname.split("/")[-1]
+    admonition = (
+        "\n"
+        ":::{admonition} Download\n"
+        ":class: important\n"
+        "\n"
+        f"Download this notebook: **{{nb-download}}`{stem}.ipynb`**!\n"
+        "\n"
+        ":::\n"
+        "\n"
+    )
+    lines.insert(end + 1, admonition)
+    source[0] = "".join(lines)
+
+
+def strip_generic_bases(app, name, obj, options, bases):
+    """Render ``Base[...]`` as bare ``Base`` in the Bases: line (drops generic clutter)."""
+    for i, base in enumerate(bases):
+        origin = typing.get_origin(base)
+        if origin is not None:
+            bases[i] = origin
+
+
+def setup(app):
+    app.connect("source-read", add_download_admonition)
+    app.connect("autodoc-process-bases", strip_generic_bases)

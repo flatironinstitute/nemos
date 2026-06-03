@@ -10,6 +10,7 @@ from typing import (
     Tuple,
     TypeAlias,
     TypeVar,
+    Union,
 )
 
 import jax.numpy as jnp
@@ -19,12 +20,14 @@ from numpy.typing import NDArray
 if TYPE_CHECKING:
     import pynapple as nap
 
+    from .base_validator import RegressorValidator
+
 Pytree: TypeAlias = Any
 Params: TypeAlias = Pytree
 Aux = TypeVar("Aux")
 SolverState = TypeVar("SolverState")
 StepResult: TypeAlias = Tuple[Params, SolverState, Aux]
-DESIGN_INPUT_TYPE = "Union[jnp.ndarray, FeaturePytree, nap.TsdFrame]"
+DESIGN_INPUT_TYPE: TypeAlias = "Union[jnp.ndarray, Pytree, nap.TsdFrame]"
 
 # copying jax.random's annotation
 KeyArrayLike = ArrayLike
@@ -66,9 +69,11 @@ ProximalOperator = Callable[
     Tuple[jnp.ndarray, jnp.ndarray],
 ]
 
-FeatureMatrix: TypeAlias = "nap.TsdFrame | NDArray"
+FeatureMatrix: TypeAlias = "nap.TsdFrame | NDArray | jnp.ndarray"
 
 # User provided init_params (e.g. for GLMs Tuple[array, array])
 UserProvidedParamsT = TypeVar("UserProvidedParamsT")
 # Model internal representation (e.g. for GLMs nemos.glm.glm.GLMParams)
 ModelParamsT = TypeVar("ModelParamsT")
+# Validator type associated with a regressor (e.g. GLMValidator for GLM)
+ValidatorT = TypeVar("ValidatorT", bound="RegressorValidator")

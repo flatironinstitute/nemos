@@ -11,6 +11,7 @@ kernelspec:
   name: python3
 ---
 
+(variable_selection_group_lasso)=
 # Selecting Covariates via Group Lasso
 
 ## Overview
@@ -53,9 +54,15 @@ counts = np.random.poisson(firing)
 
 ## Fitting a Group Lasso GLM
 
-Next, we model the neuronal response using both position and speed as candidate predictors. We represent each covariate with a [basis expansion](table-basis), creating multiple coefficients per covariate. We organize these features into a [FeaturePytree](pytrees_howto), which allows Group Lasso to treat each covariate's coefficients as a separate group.
+Next, we model the neuronal response using both position and speed as candidate predictors. We represent each covariate with a [basis expansion](table-basis), creating multiple coefficients per covariate. Since NeMoS GLM supports any JAX PyTrees input type, we can organize these features into a Python `dict`, which allows Group Lasso to treat each covariate's coefficients as a separate group.
 
-**Key insight**: When using `FeaturePytree` with Group Lasso (without specifying a custom mask), each feature in the PyTree is automatically treated as a separate group. This means the model can shrink all coefficients for a particular covariate (e.g., "speed") to zero together, effectively performing variable selection.
+:::{admonition} JAX PyTrees
+:class: note
+
+Features can be organized in any [JAX PyTree](https://docs.jax.dev/en/latest/pytrees.html), of which `dict` is just a possible example. See our [background note](pytrees_background) on PyTrees to learn more about the topic.
+:::
+
+**Key insight**: When using `dict` or any other PyTree with Group Lasso (without specifying a custom mask), each feature in the PyTree is automatically treated as a separate group. This means the model can shrink all coefficients for a particular covariate (e.g., "speed") to zero together, effectively performing variable selection.
 
 ```{code-cell}
 import matplotlib.pyplot as plt
@@ -67,12 +74,11 @@ bas = (
 predictors = bas.compute_features(position, speed)
 print(predictors.shape)
 
-# Create a FeaturePytree of predictors
-predictors = nmo.pytrees.FeaturePytree(**bas.split_by_feature(predictors))
-print("Pytree predictors:", predictors)
+predictors = bas.split_by_feature(predictors)
+print(f"Dictionary of predictors with keys: {predictors.keys()}")
 
 # Define a GroupLasso GLM
-# Each element in the FeaturePytree is treated as a group and shrunk jointly
+# Each leaf of the pytree is treated as a group and shrunk jointly
 model = nmo.glm.GLM(regularizer="GroupLasso", solver_kwargs={"maxiter": 5000})
 
 # Range of regularization strengths
@@ -136,7 +142,7 @@ The Group Lasso correctly identifies `position` as the most informative covariat
 
 ## Advanced: Custom Grouping Structures
 
-While the automatic grouping (one group per FeaturePytree feature) is convenient for covariate selection, Group Lasso also supports custom grouping structures via explicit masks. This is useful when:
+While the automatic grouping (one group per leaf feature) is convenient for covariate selection, Group Lasso also supports custom grouping structures via explicit masks. This is useful when:
 
 - You want to group coefficients within a single covariate (e.g., grouping spline coefficients by spatial regions)
 - Working with multi-neuron recordings where you want to enforce joint sparsity across neurons
@@ -149,7 +155,7 @@ For details on specifying custom masks, see the [GroupLasso API documentation](n
 Group Lasso provides a principled approach to covariate selection in neural encoding models:
 
 - **Structured sparsity**: Removes entire groups of coefficients together
-- **Automatic grouping**: Works seamlessly with FeaturePytree for covariate-level selection
+- **Automatic grouping**: Works seamlessly with PyTrees for covariate-level selection
 - **Flexible**: Supports custom masks for advanced grouping structures
 - **Interpretable**: Produces models with fewer, more interpretable predictors
 

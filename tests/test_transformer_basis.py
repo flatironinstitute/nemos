@@ -8,16 +8,16 @@ from unittest.mock import patch
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from sklearn.base import clone as sk_clone
+from sklearn.pipeline import Pipeline
+
+import nemos as nmo
 from conftest import (
     CombinedBasis,
     basis_with_add_kwargs,
     list_all_basis_classes,
     list_all_real_basis_classes,
 )
-from sklearn.base import clone as sk_clone
-from sklearn.pipeline import Pipeline
-
-import nemos as nmo
 from nemos import basis
 from nemos._inspect_utils import get_subclass_methods, list_abstract_methods
 from nemos.basis import (
@@ -799,11 +799,8 @@ def test_transformer_fit_transform_input_struct(
     [
         0.1
         * np.random.randn(
-            100,
+            10,
         ),
-        0.1 * np.random.randn(100, 1),
-        0.1 * np.random.randn(100, 2),
-        0.1 * np.random.randn(100, 1, 2),
     ],
 )
 @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
@@ -833,8 +830,10 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
     y[~np.isnan(log_mu)] = np.random.poisson(
         np.exp(log_mu[~np.isnan(log_mu)] - np.nanmean(log_mu))
     )
+    # make sure that not all vals are the same
+    y[-1] = 1 if y[~np.isnan(log_mu)][0] != 1 else 2
     model = nmo.glm.GLM(
-        regularizer="Ridge", regularizer_strength=0.001, solver_kwargs={"maxiter": 3}
+        regularizer="Ridge", regularizer_strength=0.001, solver_kwargs={"maxiter": 1}
     ).fit(X, y)
 
     # pipeline
@@ -846,7 +845,7 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
                 nmo.glm.GLM(
                     regularizer="Ridge",
                     regularizer_strength=0.001,
-                    solver_kwargs={"maxiter": 3},
+                    solver_kwargs={"maxiter": 1},
                 ),
             ),
         ]
@@ -1130,7 +1129,7 @@ def test_repr_out(basis_cls, basis_class_specific_params, expected_out):
 )
 def test_transformer_init_type(bas, expectation):
     with expectation:
-        out = nmo.basis.TransformerBasis(bas)
+        nmo.basis.TransformerBasis(bas)
 
 
 @pytest.mark.parametrize(

@@ -156,7 +156,9 @@ class HistoryBasis(AtomicBasisMixin, Basis):
             Identity matrix of shape ``(*samples.shape, n_basis_funcs)``.
 
         """
-        sample_pts = jnp.squeeze(jnp.asarray(sample_pts))
+        # allow only array with one non-trivial axis: (n_samples,1,1,1,1,...) are ok.
+        squeeze = tuple([k + 1 for (k, s) in enumerate(sample_pts.shape[1:]) if s == 1])
+        sample_pts = jnp.squeeze(jnp.asarray(sample_pts), axis=squeeze)
         if sample_pts.ndim != 1:
             raise ValueError("`evaluate` for HistoryBasis allows 1D input only.")
         # this is called by set kernel.

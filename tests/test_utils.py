@@ -131,10 +131,10 @@ class TestPadding:
     @pytest.mark.parametrize("array", [np.zeros([2, 4, 5])])
     @pytest.mark.parametrize("pad_size", [0.1, -1, 0, 1, 2, 3, 5, 6])
     def test_padding_nan_causal(self, pad_size, array):
-        raise_exception = (not isinstance(pad_size, int)) or (pad_size <= 0)
+        raise_exception = (not isinstance(pad_size, int)) or (pad_size < 0)
         if raise_exception:
             with pytest.raises(
-                ValueError, match="pad_size must be a positive integer!"
+                ValueError, match="pad_size must be a non-negative integer!"
             ):
                 utils.nan_pad(array, pad_size, "anti-causal")
         else:
@@ -152,10 +152,10 @@ class TestPadding:
     @pytest.mark.parametrize("array", [np.zeros([2, 5, 4])])
     @pytest.mark.parametrize("pad_size", [0, 1, 2, 3, 5, 6])
     def test_padding_nan_anti_causal(self, pad_size, array):
-        raise_exception = (not isinstance(pad_size, int)) or (pad_size <= 0)
+        raise_exception = (not isinstance(pad_size, int)) or (pad_size < 0)
         if raise_exception:
             with pytest.raises(
-                ValueError, match="pad_size must be a positive integer!"
+                ValueError, match="pad_size must be a non-negative integer!"
             ):
                 utils.nan_pad(array, pad_size, "anti-causal")
         else:
@@ -173,10 +173,10 @@ class TestPadding:
     @pytest.mark.parametrize("array", [np.zeros([2, 5, 4])])
     @pytest.mark.parametrize("pad_size", [-1, 0.2, 0, 1, 3, 5])
     def test_padding_nan_acausal(self, pad_size, array):
-        raise_exception = (not isinstance(pad_size, int)) or (pad_size <= 0)
+        raise_exception = (not isinstance(pad_size, int)) or (pad_size < 0)
         if raise_exception:
             with pytest.raises(
-                ValueError, match="pad_size must be a positive integer!"
+                ValueError, match="pad_size must be a non-negative integer!"
             ):
                 utils.nan_pad(array, pad_size, "acausal")
 
@@ -281,11 +281,15 @@ class TestPadding:
         [
             (
                 -1,
-                pytest.raises(ValueError, match="pad_size must be a positive integer"),
+                pytest.raises(
+                    ValueError, match="pad_size must be a non-negative integer"
+                ),
             ),
             (
                 1.0,
-                pytest.raises(ValueError, match="pad_size must be a positive integer"),
+                pytest.raises(
+                    ValueError, match="pad_size must be a non-negative integer"
+                ),
             ),
             (1, does_not_raise()),
             (2, does_not_raise()),
@@ -577,7 +581,7 @@ class ComplexParam(Base):
             nmo.glm.GLM(inverse_link_function=deepcopy(jax.numpy.exp)),
             None,
             [],
-            f"GLM(observation_model=PoissonObservations(), inverse_link_function=<PjitFunction>, regularizer=UnRegularized(), solver_name='GradientDescent[{nmo.solvers._solver_registry._resolve_backend('GradientDescent', False)}]')",
+            "GLM(observation_model=PoissonObservations(), inverse_link_function=<PjitFunction>, regularizer=UnRegularized(), solver_name='LBFGS')",
         ),
     ],
 )
@@ -629,7 +633,7 @@ def test_inspect_npz(tmp_path, model_class, monkeypatch, capsys):
     monkeypatch.setattr("nemos.base_regressor.get_env_metadata", fake_env_metadata)
     monkeypatch.setattr("nemos.io.io.get_env_metadata", fake_env_metadata)
 
-    file_path = tmp_path / f"test_model.npz"
+    file_path = tmp_path / "test_model.npz"
 
     # Initialize the model with some parameters
     model = model_class(
@@ -669,7 +673,7 @@ def test_inspect_npz(tmp_path, model_class, monkeypatch, capsys):
         "regularizer            : {'class': 'nemos.regularizer.Ridge'}",
         "regularizer_strength   : 0.1",
         "solver_kwargs          : None",
-        f"solver_name            : BFGS[{nmo.solvers._solver_registry._resolve_backend('BFGS', False)}]",
+        "solver_name            : BFGS",
         "",
         "Model fit parameters",
         "--------------------",

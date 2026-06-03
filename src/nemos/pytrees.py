@@ -5,6 +5,7 @@ These objects can be used as inputs to NeMoS models. The fitted coefficients wil
 dictionaries with matching keys, facilitating interpretation of the model output.
 """
 
+import warnings
 from collections import UserDict
 
 import jax
@@ -26,8 +27,24 @@ class FeaturePytree(UserDict):
     """
 
     def __init__(self, **kwargs):
+        warnings.warn(
+            "FeaturePytree is deprecated as of 0.2.8 and will be removed in a future release. "
+            "Replace it with a plain Python dict: {'key': array, ...}.",
+            FutureWarning,
+            stacklevel=2,
+        )
         self._num_time_points = None
         super().__init__(kwargs)
+
+    @classmethod
+    def _from_dict(cls, d):
+        """Construct without emitting the deprecation warning (used internally)."""
+        obj = object.__new__(cls)
+        obj._num_time_points = None
+        UserDict.__init__(obj, {})
+        for k, v in d.items():
+            obj[k] = v
+        return obj
 
     @property
     def shape(self):
@@ -103,6 +120,6 @@ class FeaturePytree(UserDict):
     def tree_unflatten(cls, aux_data, children):
         """Unflatten the data dict and return the class."""
         try:
-            return cls(**jax.tree_util.tree_unflatten(aux_data, children))
+            return cls._from_dict(jax.tree_util.tree_unflatten(aux_data, children))
         except ValueError:
             return jax.tree_util.tree_unflatten(aux_data, children)

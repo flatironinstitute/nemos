@@ -199,15 +199,18 @@ def nan_pad(
     Raises
     ------
     ValueError
-        - If `pad_size` is not a positive integer.
+        - If `pad_size` is negative.
         - If `predictor_causality` is not one of the expected values ('causal', 'acausal', 'anti-causal').
         - If `axis` is not a valid axis for any of the arrays in `conv_time_series`, specifically
           if `axis >= array.ndim` for any array.
         - If any array in `conv_time_series` does not have a floating-point data type.
     """
-    if not isinstance(pad_size, int) or pad_size <= 0:
+    if pad_size == 0:
+        return conv_time_series
+
+    if not isinstance(pad_size, int) or pad_size < 0:
         raise ValueError(
-            f"pad_size must be a positive integer! Pad size of {pad_size} provided instead!"
+            f"pad_size must be a non-negative integer! Pad size of {pad_size} provided instead!"
         )
 
     causality_choices = ["causal", "acausal", "anti-causal"]
@@ -805,6 +808,12 @@ def _unpack_params(params_dict: dict, string_attrs: list = None) -> dict:
             cls_name = _get_name(value)
             params = _unpack_params(value.get_params(deep=False), string_attrs)
             out[key] = {"class": cls_name, "params": params}
+        elif isinstance(value, dict):
+            # serialize callable/class leaves inside plain dicts by their name,
+            # so npz can store them as strings instead of pickled object arrays.
+            out[key] = jax.tree_util.tree_map(
+                lambda v: _get_name(v) if _is_callable_or_class(v) else v, value
+            )
         else:
             # if the parameter is in string_attrs, store its name
             if string_attrs is not None and (

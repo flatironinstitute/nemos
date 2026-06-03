@@ -1,38 +1,34 @@
 """Initialization functions and related utility functions."""
 
-import inspect
-from typing import Any, Callable, Literal, Optional, Protocol, Tuple
+from __future__ import annotations
+
+from typing import Any, Callable, Dict, Literal, Optional, Protocol, Tuple
 
 import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
+from ..glm import GLM, PopulationGLM
 from ..glm.initialize_parameters import initialize_intercept_matching_mean_rate
 from ..glm.params import GLMUserParams
-from ..type_casting import is_numpy_array_like
+from ..hmm.initialize_parameters import (
+    InitFunctionHMM,
+    KMeansInitializer,
+    _resolve_existing_slots,
+    _resolve_init_funcs,
+    _validate_init_funcs_kwargs,
+)
+from ..observation_models import Observations
+from ..pytrees import FeaturePytree
+from ..type_casting import cast_to_jax
 from ..typing import DESIGN_INPUT_TYPE
-from .params import GLMHMMUserParams
+from .algorithm_configs import has_fixed_scale
 
 RANDOM_KEY = jax.Array
 
 
-class InitFunctionHMM(Protocol):
-    """Protocol for HMM probability initialization functions (initial and transition)."""
-
-    def __call__(
-        self,
-        n_states: int,
-        X: DESIGN_INPUT_TYPE,
-        y: NDArray | jnp.ndarray,
-        random_key: RANDOM_KEY,
-        **kwargs: Any,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        """Initialize HMM probabilities."""
-        ...
-
-
-class InitFuncGLMParams(Protocol):
-    """Protocol for GLM parameters (coef, intercept) initialization functions."""
+class InitFunctionGLM(Protocol):
+    """Protocol for GLM parameter initialization functions (coefficients, intercept, scale)."""
 
     def __call__(
         self,
@@ -40,49 +36,31 @@ class InitFuncGLMParams(Protocol):
         X: DESIGN_INPUT_TYPE,
         y: NDArray | jnp.ndarray,
         inverse_link_function: Callable,
-        random_key: RANDOM_KEY,
-        **kwargs: Any,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        """Initialize GLM coefficients and intercept."""
-        ...
-
-
-class InitFuncGLMScale(Protocol):
-    """Protocol for GLM scale initialization functions."""
-
-    def __call__(
-        self,
-        n_states: int,
-        X: DESIGN_INPUT_TYPE,
-        y: NDArray | jnp.ndarray,
-        random_key: RANDOM_KEY,
+        observation_model: Observations,
+        session_starts: Optional[NDArray | jnp.ndarray],
+        random_key: jax.Array,
         **kwargs: Any,
     ) -> jnp.ndarray:
-        """Initialize GLM scale parameter."""
+        """Initialize GLM parameters and scale."""
         ...
 
 
-INITIALIZATION_FN_DICT = dict[
-    Literal[
-        "glm_params_init", "scale_init", "initial_proba_init", "transition_proba_init"
-    ],
-    InitFunctionHMM | InitFuncGLMScale | InitFuncGLMParams,
-]
-
-
+@cast_to_jax(dtype=None)
 def random_glm_params_init(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
     y: jnp.ndarray,
     inverse_link_function: Callable,
-    random_key=jax.random.PRNGKey(123),
+    observation_model: Optional[Observations] = None,
+    session_starts: Optional[NDArray | jnp.ndarray] = None,
+    random_key: Optional[jax.Array] = None,
     std_dev=0.001,
 ) -> GLMUserParams:
     """
     Initialize GLM coefficients and intercept with random normal values.
 
     Generates random GLM parameters for each HMM state by sampling from a normal
-    distribution scaled by 0.1.
+    distribution scaled by `std_dev`.
 
     Parameters
     ----------
@@ -94,6 +72,12 @@ def random_glm_params_init(
         Observations, shape (n_samples,) or (n_samples, n_neurons).
     inverse_link_function :
         Inverse link function of the GLM.
+    observation_model :
+        Observation model of the GLM. Unused for this initialization, but included for protocol
+        conformance with :class:`InitFunctionGLM`.
+    session_starts :
+        Optional boolean array of shape (n_samples,) indicating the start of new sessions.
+        Unused for this initialization, but included for API consistency.
     random_key : jax.random.PRNGKey
         Random key for reproducibility. Default is PRNGKey(123).
     std_dev :
@@ -102,486 +86,551 @@ def random_glm_params_init(
 
     Returns
     -------
-    coef : jnp.ndarray
-        Coefficient matrix of shape (n_features, n_neurons, n_states).
+    coef : Any
+        Coefficient, a pytree with the same structure as X with leaves
+         of shape (n_features, n_neurons, n_states).
     intercept : jnp.ndarray
         Intercept array of shape (n_neurons, n_states).
     """
-    n_features = X.shape[1]
+    if random_key is None:
+        random_key = jax.random.PRNGKey(123)
     is_one_dim = y.ndim == 1
     n_neurons = 1 if is_one_dim else y.shape[1]
-
+    if isinstance(X, FeaturePytree):
+        X = X.data
     # small random noisy coef
-    coef = std_dev * jax.random.normal(random_key, (n_features, n_neurons, n_states))
+    coef = jax.tree_util.tree_map(
+        lambda x: std_dev
+        * jax.random.normal(random_key, (x.shape[1], n_neurons, n_states)),
+        X,
+    )
     # mean-rate
     intercept = initialize_intercept_matching_mean_rate(inverse_link_function, y)
     intercept = jnp.tile(intercept[:, jnp.newaxis], (1, n_states))
     if is_one_dim:
-        coef = jnp.squeeze(coef, axis=1)
+        coef = jax.tree_util.tree_map(lambda x: jnp.squeeze(x, axis=1), coef)
         intercept = jnp.squeeze(intercept, axis=0)
     return coef, intercept
 
 
-def ones_scale_init(
+class KMeansInitializerGLM(KMeansInitializer):
+    """
+    Initializer class that uses KMeans clustering to initialize HMM parameters.
+
+    This class fits a KMeans model to the combined predictors and output data to assign states, then computes
+    initial state probabilities and transition probabilities based on the assigned states. It can be used to provide
+    a more informed initialization for HMM parameters based on the structure of the data.
+
+    Parameters
+    ----------
+    n_states :
+        Number of HMM states.
+    X :
+        Predictor data (e.g., model design for GLM) of shape (n_samples, n_features).
+    y :
+        Output data (e.g., neural activity) of shape (n_samples,).
+    inverse_link_function :
+        Inverse link function of the GLM.
+    observation_model :
+        Observation model of the GLM.
+    session_starts :
+        Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
+        (default), it is assumed that all data belongs to a single session.
+    glm_kwargs:
+        Keyword arguments defining the GLM model: observation model, regularization etc.
+    random_key :
+        Random key for reproducibility of KMeans initialization.
+    """
+
+    def __init__(
+        self,
+        n_states: int,
+        X: DESIGN_INPUT_TYPE,
+        y: NDArray | jnp.ndarray,
+        inverse_link_function: Callable,
+        observation_model: Observations | str,
+        session_starts: Optional[jnp.ndarray] = None,
+        glm_kwargs: Optional[Dict[str, Any]] = None,
+        random_key: int | jax.Array = 0,
+    ):
+        super().__init__(
+            n_states,
+            X,
+            y,
+            session_starts,
+            random_key=random_key,
+        )
+        self._X = jax.tree_util.tree_map(jnp.asarray, X)
+        if isinstance(self._X, FeaturePytree):
+            self._X = self._X.data
+        self._y = jnp.asarray(y)
+        self.inverse_link_function = inverse_link_function
+        self.observation_model = observation_model
+        self.glm_kwargs = glm_kwargs if glm_kwargs is not None else {}
+        if self._y.ndim == 1:
+            self._glm_models = {
+                i: GLM(
+                    observation_model=observation_model,
+                    inverse_link_function=inverse_link_function,
+                    **self.glm_kwargs,
+                )
+                for i in range(self.n_states)
+            }
+            self._is_population = False
+        else:
+            self._glm_models = {
+                i: PopulationGLM(
+                    observation_model=observation_model,
+                    inverse_link_function=inverse_link_function,
+                    **self.glm_kwargs,
+                )
+                for i in range(self.n_states)
+            }
+            self._is_population = True
+
+    def fit(self) -> "KMeansInitializerGLM":
+        """Fit one GLM per state on samples assigned to that state by KMeans."""
+        states = self.states.astype(bool)
+        for i, (state_mask, model) in enumerate(
+            zip(states.T, self._glm_models.values())
+        ):
+            X_state, y_state = self._X[state_mask], self._y[state_mask]
+            if X_state.shape[0] == 0:
+                raise ValueError(
+                    f"KMeans assigned 0 samples to state {i}. Try reducing n_states "
+                    f"or using a different initialization method."
+                )
+            model.fit(X_state, y_state)
+        return self
+
+    def glm_params(self) -> GLMUserParams:
+        """Generate GLM parameters for initialization."""
+        if self._glm_models[0].coef_ is None:
+            self.fit()
+        key = jax.random.PRNGKey(self.random_key)
+        states = self.states.astype(bool)
+        coef, intercept = random_glm_params_init(
+            states.shape[1],
+            self._X,
+            self._y,
+            self.inverse_link_function,
+            std_dev=0.0,
+            random_key=key,
+        )
+        for i, m in enumerate(self._glm_models.values()):
+            coef = jax.tree_util.tree_map(
+                lambda c, mc: c.at[..., i].set(mc), coef, m.coef_
+            )
+            if self._is_population:
+                intercept = intercept.at[..., i].set(m.intercept_)
+            else:
+                intercept = intercept.at[i : i + 1].set(m.intercept_)
+        return coef, intercept
+
+    def scale(self) -> jnp.ndarray:
+        """KMeans-based scale estimate."""
+        is_population = self._y.ndim > 1
+        if is_population:
+            n_neurons = self._y.shape[1]
+            scale = jnp.ones((n_neurons, self.n_states))
+        else:
+            scale = jnp.ones((self.n_states,))
+
+        if has_fixed_scale(self._glm_models[0].observation_model):
+            return scale
+
+        if self._glm_models[0].scale_ is None:
+            self.fit()
+
+        for i, m in enumerate(self._glm_models.values()):
+            scale = scale.at[..., i].set(m.scale_)
+        return scale
+
+
+def kmeans_glm_params_init(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
-    random_key=jax.random.PRNGKey(124),
+    inverse_link_function: Callable,
+    observation_model: Observations | str,
+    session_starts: Optional[jnp.ndarray] = None,
+    random_key: Optional[jax.Array] = None,
+    glm_kwargs: Optional[dict] = None,
+    initializer: Optional[KMeansInitializer] = None,
 ):
-    """Initialize scale to ones."""
+    """
+    Initialize the glm parameters using KMeans clustering.
+
+    Parameters
+    ----------
+    n_states :
+        Number of HMM states.
+    X :
+        Predictor data (e.g., model design for GLM) of shape (n_samples, n_features).
+    y :
+        Output data (e.g., neural activity) of shape (n_samples,).
+    inverse_link_function :
+        Inverse link function of the GLM.
+    observation_model :
+        Observation model of the GLM.
+    session_starts :
+        Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
+        (default), it is assumed that all data belongs to a single session.
+    random_key :
+        Random key for reproducibility of KMeans initialization.
+    glm_kwargs:
+        GLM parameters as keyword arguments. These are passed at model initialization.
+    initializer :
+        Optional instance of KMeansInitializer to use for computing initial probabilities.
+
+    Returns
+    -------
+    coef, intercept :
+        The glm coefficients and intercept.
+    """
+    if random_key is None:
+        random_key = jax.random.PRNGKey(123)
+    if initializer is None:
+        initializer = KMeansInitializerGLM(
+            n_states,
+            X,
+            y,
+            inverse_link_function,
+            observation_model,
+            session_starts,
+            glm_kwargs,
+            random_key,
+        )
+    return initializer.glm_params()
+
+
+def kmeans_scale_init(
+    n_states: int,
+    X: DESIGN_INPUT_TYPE,
+    y: NDArray | jnp.ndarray,
+    inverse_link_function: Callable,
+    observation_model: Observations | str,
+    session_starts: Optional[jnp.ndarray] = None,
+    random_key: Optional[jax.Array] = None,
+    glm_kwargs: Optional[dict] = None,
+    initializer: Optional[KMeansInitializer] = None,
+):
+    """
+    Initialize the scale parameters using KMeans clustering.
+
+    Parameters
+    ----------
+    n_states :
+        Number of HMM states.
+    X :
+        Predictor data (e.g., model design for GLM) of shape (n_samples, n_features).
+    y :
+        Output data (e.g., neural activity) of shape (n_samples,).
+    inverse_link_function :
+        Inverse link function of the GLM.
+    observation_model :
+        Observation model of the GLM.
+    session_starts :
+        Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
+        (default), it is assumed that all data belongs to a single session.
+    random_key :
+        Random key for reproducibility of KMeans initialization.
+    glm_kwargs:
+        GLM parameters as keyword arguments. These are passed at model initialization.
+    initializer :
+        Optional instance of KMeansInitializer to use for computing initial probabilities.
+
+    Returns
+    -------
+    scale :
+        The inital scale.
+    """
+    if random_key is None:
+        random_key = jax.random.PRNGKey(123)
+    if initializer is None:
+        initializer = KMeansInitializerGLM(
+            n_states,
+            X,
+            y,
+            inverse_link_function,
+            observation_model,
+            session_starts,
+            glm_kwargs,
+            random_key,
+        )
+    return initializer.scale()
+
+
+@cast_to_jax(dtype=None)
+def constant_scale_init(
+    n_states: int,
+    X: DESIGN_INPUT_TYPE,
+    y: NDArray | jnp.ndarray,
+    inverse_link_function: Callable,
+    observation_model: Optional[Observations] = None,
+    session_starts: Optional[NDArray | jnp.ndarray] = None,
+    random_key: Optional[jax.Array] = None,
+    scale_val: float = 1.0,
+):
+    """
+    Initialize scale to a constant value.
+
+    Creates a scale parameter array where all elements are set to the same value.
+
+    Parameters
+    ----------
+    n_states : int
+        Number of HMM states.
+    X : DESIGN_INPUT_TYPE
+        Design matrix, unused but included for API consistency.
+    y : NDArray | jnp.ndarray
+        Observations, used to determine number of neurons from shape.
+    inverse_link_function :
+        Inverse link function of the GLM. Unused for this initialization, but included for API consistency.
+    observation_model :
+        Observation model of the GLM. Unused for this initialization, but included for protocol
+        conformance with :class:`InitFunctionGLM`.
+    session_starts :
+        Optional boolean array of shape (n_samples,). Unused for this initialization,
+        but included for API consistency.
+    random_key : jax.random.PRNGKey
+        Random key, unused for this initialization, but included for API consistency.
+    scale_val : float
+        The constant value to initialize all scale parameters to. Default is 1.0.
+
+    Returns
+    -------
+    scale : jnp.ndarray
+        Scale array of shape (n_states,) for single neuron or (n_neurons, n_states)
+        for multiple neurons, with all values set to `scale_val`.
+    """
     is_one_dim = y.ndim == 1
     n_neurons = 1 if is_one_dim else y.shape[1]
-    scale = jnp.ones((n_neurons, n_states), dtype=float)
+    scale = jnp.full((n_neurons, n_states), scale_val, dtype=float)
     if is_one_dim:
         scale = jnp.squeeze(scale, axis=0)
     return scale
 
 
-def sticky_transition_proba_init(
-    n_states: int,
-    X: DESIGN_INPUT_TYPE,
-    y: NDArray | jnp.ndarray,
-    random_key: jax.numpy.ndarray = jax.random.PRNGKey(123),
-    prob_stay=0.95,
-) -> jnp.ndarray:
-    """
-    Initialize transition probabilities with sticky dynamics.
+DEFAULT_INIT_FUNCTIONS_GLMHMM = {
+    "glm_params_init": random_glm_params_init,
+    "glm_params_init_kwargs": {},
+    "glm_params_init_custom": False,
+    "scale_init": constant_scale_init,
+    "scale_init_kwargs": {},
+    "scale_init_custom": False,
+}
 
-    Creates a transition probability matrix that favors staying in the current state.
-    The diagonal entries (probability of staying in current state) are set to `prob_stay`,
-    while off-diagonal entries (probability of transitioning to other states) are set to
-    (1 - prob_stay) / (n_states - 1).
-
-    Parameters
-    ----------
-    n_states : int
-        Number of HMM states. Must be greater than 1.
-    X : DESIGN_INPUT_TYPE
-        Design matrix, unused but included for API consistency.
-    y : NDArray | jnp.ndarray
-        Observations, unused but included for API consistency.
-    random_key : jax.random.PRNGKey
-        Random key, unused for this particular initialization, but added for API consistency.
-    prob_stay : float
-        Probability of staying in the current state. Default is 0.95.
-
-    Returns
-    -------
-    transition_matrix : jnp.ndarray
-        Transition probability matrix of shape (n_states, n_states).
-    """
-    # assume n_state is > 1
-    if n_states == 1:
-        prob_leave = 0.0
-    else:
-        prob_leave = (1 - prob_stay) / (n_states - 1)
-    return jnp.full((n_states, n_states), prob_leave) + jnp.diag(
-        (prob_stay - prob_leave) * jnp.ones(n_states)
-    )
-
-
-def uniform_transition_proba_init(
-    n_states: int,
-    X: DESIGN_INPUT_TYPE,
-    y: NDArray | jnp.ndarray,
-    random_key: jax.numpy.ndarray = jax.random.PRNGKey(123),
-) -> jnp.ndarray:
-    """
-    Initialize transition probabilities with uniform dynamics.
-
-    Creates a transition probability matrix that assign equal probability of
-    transitioning to any of the states.
-
-    Parameters
-    ----------
-    n_states : int
-        Number of HMM states. Must be greater than 1.
-    X : DESIGN_INPUT_TYPE
-        Design matrix, unused but included for API consistency.
-    y : NDArray | jnp.ndarray
-        Observations, unused but included for API consistency.
-    random_key : jax.random.PRNGKey
-        Random key, unused for this particular initialization, but added for API consistency.
-
-    Returns
-    -------
-    transition_matrix : jnp.ndarray
-        Transition probability matrix of shape (n_states, n_states).
-    """
-    prob_transition = 1.0 / n_states
-    return jnp.full((n_states, n_states), prob_transition, dtype=float)
-
-
-def uniform_initial_proba_init(
-    n_states: int,
-    X: DESIGN_INPUT_TYPE,
-    y: NDArray | jnp.ndarray,
-    random_key=jax.random.PRNGKey(124),
-) -> jnp.ndarray:
-    """
-    Initialize initial state probabilities from a uniform distribution.
-
-    Generates random initial state probabilities by sampling from a uniform
-    distribution and normalizing to ensure they sum to 1.
-
-    Parameters
-    ----------
-    n_states : int
-        Number of HMM states.
-    X : DESIGN_INPUT_TYPE
-        Design matrix, unused but included for API consistency.
-    y : NDArray | jnp.ndarray
-        Observations, unused but included for API consistency.
-    random_key : jax.random.PRNGKey
-        Random key for reproducibility. Default is PRNGKey(124).
-
-    Returns
-    -------
-    initial_probs : jnp.ndarray
-        Initial state probability vector of shape (n_states,) that sums to 1.
-
-    Examples
-    --------
-    >>> import jax
-    >>> import jax.numpy as jnp
-    >>> from nemos.glm_hmm.initialize_parameters import uniform_initial_proba_init
-    >>>
-    >>> # Generate initial probabilities for 3 states
-    >>> n_states = 3
-    >>> X_dummy, y_dummy = jnp.ones((3, 2)), jnp.ones(3)
-    >>> init_probs = uniform_initial_proba_init(n_states, X_dummy, y_dummy)
-    >>> init_probs.shape
-    (3,)
-    >>> jnp.isclose(jnp.sum(init_probs), 1.0)
-    Array(True, dtype=bool)
-    """
-    prob = jnp.ones((n_states,), dtype=float)
-    return prob / jnp.sum(prob)
-
-
-AVAILABLE_INIT_FUNCTIONS = {
+AVAIL_INIT_FUNCTIONS_GLM = {
     "glm_params_init": {
         "random": random_glm_params_init,
+        "kmeans": kmeans_glm_params_init,
     },
-    "scale_init": {
-        "ones": ones_scale_init,
-    },
-    "transition_proba_init": {
-        "sticky": sticky_transition_proba_init,
-        "uniform": uniform_transition_proba_init,
-    },
-    "initial_proba_init": {
-        "uniform": uniform_initial_proba_init,
-    },
+    "scale_init": {"constant": constant_scale_init, "kmeans": kmeans_scale_init},
 }
 
-_IO_AVAILABLE_INIT_FUNCTIONS = AVAILABLE_INIT_FUNCTIONS.copy()
-_IO_AVAILABLE_INIT_FUNCTIONS["glm_params_init"].update(
-    {
-        "nemos.glm_hmm.initialize_parameters.random_glm_params_init": random_glm_params_init
-    }
-)
-_IO_AVAILABLE_INIT_FUNCTIONS["scale_init"].update(
-    {"nemos.glm_hmm.initialize_parameters.ones_scale_init": ones_scale_init}
-)
-_IO_AVAILABLE_INIT_FUNCTIONS["transition_proba_init"].update(
-    {
-        "nemos.glm_hmm.initialize_parameters.sticky_transition_proba_init": sticky_transition_proba_init
-    }
-)
-_IO_AVAILABLE_INIT_FUNCTIONS["initial_proba_init"].update(
-    {
-        "nemos.glm_hmm.initialize_parameters.uniform_initial_proba_init": uniform_initial_proba_init
-    }
-)
-
-DEFAULT_INIT_FUNCTION: INITIALIZATION_FN_DICT = {
-    "glm_params_init": random_glm_params_init,
-    "scale_init": ones_scale_init,
-    "transition_proba_init": sticky_transition_proba_init,
-    "initial_proba_init": uniform_initial_proba_init,
-}
+GLMHMM_INITIALIZATION_FN_DICT = dict[
+    Literal[
+        "glm_params_init",
+        "glm_params_init_kwargs",
+        "glm_params_init_custom",
+        "scale_init",
+        "scale_init_kwargs",
+        "scale_init_custom",
+    ],
+    InitFunctionGLM | InitFunctionHMM | dict[str, Any] | bool,
+]
 
 
-def glm_hmm_initialization(
+def setup_glm_hmm_initialization(
+    glm_params_init: Optional[str | Callable] = None,
+    glm_params_init_kwargs: Optional[dict] = None,
+    scale_init: Optional[str | Callable] = None,
+    scale_init_kwargs: Optional[dict] = None,
+    init_funcs: Optional[dict | GLMHMM_INITIALIZATION_FN_DICT] = None,
+) -> GLMHMM_INITIALIZATION_FN_DICT:
+    """
+    Set up GLM-HMM initialization functions based on user input, merging with defaults.
+
+    This function takes user-specified initialization functions (either as strings for built-in functions or callables
+    for custom functions) for both initial state probabilities and transition probabilities, and merges
+    them with default initialization functions for ones that are not provided. It ensures that the provided functions
+    and kwargs are valid and conform to expected signatures.
+    Note that this function assumes pre-validated function keys, this is convenient because keys are model specific.
+
+    Parameters
+    ----------
+    glm_params_init:
+        Initialization function for the GLM coefficient and intercept.
+    glm_params_init_kwargs:
+        Keyword arguments to pass to the GLM coefficient and intercept initialization function.
+    scale_init:
+        Initialization function for the scale of the observation model.
+    scale_init_kwargs:
+        Kwargs of the initialization function for the scale of the observation model.
+    init_funcs :
+        Existing dictionary of initialization functions to update. If None, a fresh copy of
+        ``DEFAULT_INIT_FUNCTIONS_GLMHMM`` is used. Keys must already be validated before calling
+        this function; use the class ``initialization_funcs`` setter for key validation.
+
+    Returns
+    -------
+    init_funcs :
+        Updated dictionary of initialization functions based on provided inputs.
+    """
+
+    if init_funcs is None:
+        glm_init_funcs = DEFAULT_INIT_FUNCTIONS_GLMHMM.copy()
+    else:
+        glm_init_funcs = init_funcs.copy()
+
+    # Resolve string-valued slots (written by save_params) back to callables and
+    # set *_custom = False so the validate-params guard treats them as built-ins.
+    _resolve_existing_slots(
+        glm_init_funcs,
+        ("glm_params_init", "scale_init"),
+        AVAIL_INIT_FUNCTIONS_GLM,
+        InitFunctionGLM,
+    )
+
+    # update functions and kwargs for glm params and scale
+    # if a function is passed but not kwargs, kwargs will be reset
+    # if kwargs are passed but not function, kwargs will be validated against existing function in init_funcs
+    if glm_params_init is not None:
+        (
+            glm_init_funcs["glm_params_init"],
+            glm_init_funcs["glm_params_init_kwargs"],
+            glm_init_funcs["glm_params_init_custom"],
+        ) = _resolve_init_funcs(
+            "glm_params_init",
+            glm_params_init,
+            glm_params_init_kwargs,
+            AVAIL_INIT_FUNCTIONS_GLM,
+            protocol=InitFunctionGLM,
+        )
+    elif glm_params_init_kwargs is not None:
+        glm_init_funcs["glm_params_init_kwargs"] = _validate_init_funcs_kwargs(
+            glm_init_funcs["glm_params_init"],
+            glm_params_init_kwargs,
+            protocol=InitFunctionGLM,
+        )
+
+    if scale_init is not None:
+        (
+            glm_init_funcs["scale_init"],
+            glm_init_funcs["scale_init_kwargs"],
+            glm_init_funcs["scale_init_custom"],
+        ) = _resolve_init_funcs(
+            "scale_init",
+            scale_init,
+            scale_init_kwargs,
+            AVAIL_INIT_FUNCTIONS_GLM,
+            protocol=InitFunctionGLM,
+        )
+    elif scale_init_kwargs is not None:
+        glm_init_funcs["scale_init_kwargs"] = _validate_init_funcs_kwargs(
+            glm_init_funcs["scale_init"],
+            scale_init_kwargs,
+            protocol=InitFunctionGLM,
+        )
+    return glm_init_funcs
+
+
+def generate_glm_hmm_initial_model_params(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
     inverse_link_function: Callable,
-    random_key=jax.random.PRNGKey(123),
-    init_registry: Optional[dict] = None,
-    init_kwargs: Optional[dict] = None,
-) -> GLMHMMUserParams:
+    observation_model: Observations,
+    session_starts: Optional[NDArray | jnp.ndarray] = None,
+    random_key: int | jax.Array = 123,
+    init_funcs: Optional[dict] = None,
+) -> Tuple[Any, jnp.ndarray, jnp.ndarray]:
     """
-    Initialize all GLM-HMM parameters.
+    Generate initial GLM model parameters for a GLM-HMM.
 
-    Coordinates initialization of GLM parameters (coefficients and intercept) and
-    HMM parameters (initial state probabilities and transition matrix) using the
-    specified initialization functions.
+    Calls the specified initialization functions for GLM coefficients, intercept, and scale,
+    splitting the random key to ensure independent random states for each component.
+    HMM parameters (initial and transition probabilities) are initialized separately via
+    :meth:`~nemos.hmm.BaseHMM._hmm_params_initialization`.
 
     Parameters
     ----------
-    n_states : int
+    n_states :
         Number of HMM states.
-    X : DESIGN_INPUT_TYPE
-        Design matrix with shape (n_samples, n_features).
-    y : NDArray | jnp.ndarray
-        Observations, shape (n_samples,) or (n_samples, n_units).
-    inverse_link_function:
-        The inverse link function of the GLM.
-    random_key : jax.random.PRNGKey
-        Random key for reproducibility. Default is PRNGKey(123).
-    init_registry : dict, optional
-        Dictionary mapping parameter names to initialization functions. Valid keys are:
-        - 'glm_params_init': Function to initialize GLM coefficients and intercept
-        - 'initial_proba_init': Function to initialize initial state probabilities
-        - 'transition_proba_init': Function to initialize transition probabilities
-        If None, uses DEFAULT_INIT_FUNCTION. If partial dict, missing keys use defaults.
+    X :
+        Predictor data of shape (n_samples, n_features).
+    y :
+        Output data (e.g., neural activity) of shape (n_samples,) or (n_samples, n_neurons).
+    inverse_link_function :
+        Inverse link function of the GLM, passed to GLM parameter and scale initialization functions.
+    observation_model :
+        Observation model of the GLM, forwarded to GLM-parameter and scale init functions as a
+        protocol-required argument. The :class:`InitFunctionGLM` protocol reserves this name, so it
+        must come from the caller (the model) rather than from user-provided init kwargs.
+    session_starts :
+        Boolean array of shape (n_samples,) indicating the start of new sessions. If None, a single
+        session is assumed.
+    random_key :
+        Key for random number generation. Split into two independent subkeys for GLM params
+        and scale respectively.
+    init_funcs :
+        Dictionary containing initialization functions and their kwargs for GLM parameters.
+        Can be constructed with :func:`setup_glm_hmm_initialization`. GLM-specific keys missing
+        from the dict fall back to ``GLM_INIT_FUNCS`` defaults.
 
     Returns
     -------
-    coef : jnp.ndarray
-        Coefficient matrix of shape (n_features, n_states) or
-         (n_features, n_neurons, n_states).
-    intercept : jnp.ndarray
-        Intercept array of shape (n_states,) or (n_neurons, n_states).
-    scale: jnp.ndarray
-        Scale of the GLM, shape (n_states,) or (n_neurons, n_states).
-    initial_proba : jnp.ndarray
-        Initial state probability vector of shape (n_states,).
-    transition_proba : jnp.ndarray
-        Transition probability matrix of shape (n_states, n_states).
+    coef :
+        GLM coefficients, a pytree matching the structure of X with leaves of shape
+        ``(n_features, n_neurons, n_states)`` or ``(n_features, n_states)`` for single-neuron.
+    intercept :
+        Intercept array of shape ``(n_neurons, n_states)`` or ``(n_states,)`` for single-neuron.
+    scale :
+        Scale array of shape ``(n_states,)`` for single-neuron or ``(n_neurons, n_states)`` for population.
+
+    See Also
+    --------
+    :func:`nemos.glm_hmm.initialize_parameters.setup_glm_hmm_initialization`
+        Function to set up the initialization functions and their kwargs based on user input.
     """
-    if init_registry is None:
-        init_registry = DEFAULT_INIT_FUNCTION
-    else:
-        init_registry = _resolve_init_funcs_registry(init_registry)
-    if init_kwargs is None:
-        init_kwargs = {}
-    random_key, subkey = jax.random.split(random_key)
-    kwargs = init_kwargs.get("glm_params_init", {})
-    coef, intercept = init_registry["glm_params_init"](
-        n_states, X, y, inverse_link_function, subkey, **kwargs
+    glm_init_funcs = {} if init_funcs is None else init_funcs.copy()
+    if isinstance(random_key, int):
+        random_key = jax.random.PRNGKey(random_key)
+
+    glm_params_key, scale_key = jax.random.split(random_key, 2)
+
+    glm_params_init = (
+        glm_init_funcs.get("glm_params_init")
+        or DEFAULT_INIT_FUNCTIONS_GLMHMM["glm_params_init"]
     )
-    random_key, subkey = jax.random.split(random_key)
-    kwargs = init_kwargs.get("scale_init", {})
-    scale = init_registry["scale_init"](n_states, X, y, subkey, **kwargs)
-    random_key, subkey = jax.random.split(random_key)
-    kwargs = init_kwargs.get("initial_proba_init", {})
-    initial_proba = init_registry["initial_proba_init"](
-        n_states, X, y, subkey, **kwargs
-    )
-    _, subkey = jax.random.split(random_key)
-    kwargs = init_kwargs.get("transition_proba_init", {})
-    transition_proba = init_registry["transition_proba_init"](
-        n_states, X, y, subkey, **kwargs
-    )
-    return coef, intercept, scale, initial_proba, transition_proba
+    glm_params_init_kwargs = glm_init_funcs.get("glm_params_init_kwargs") or {}
 
-
-def _resolve_init_funcs_registry(
-    registry: INITIALIZATION_FN_DICT | None,
-) -> INITIALIZATION_FN_DICT:
-    """
-    Merge and validate a partial initialization registry with defaults.
-
-    Takes a partial registry (with only some keys) and merges it with the default
-    registry, validating each provided function.
-
-    Parameters
-    ----------
-    registry :
-        Dictionary mapping parameter names to initialization functions. Must contain
-        only valid keys from DEFAULT_INIT_FUNCTION.
-
-    Returns
-    -------
-    updated_registry :
-        Complete registry with user-provided functions merged with defaults.
-
-    Raises
-    ------
-    KeyError
-        If registry contains invalid keys.
-    """
-    if registry is None:
-        registry = DEFAULT_INIT_FUNCTION
-    elif not set(registry.keys()).issubset(DEFAULT_INIT_FUNCTION.keys()):
-        invalid = set(registry.keys()).difference(DEFAULT_INIT_FUNCTION.keys())
-        raise KeyError(
-            f"Invalid key(s) for initialization dictionary: {invalid}.\n"
-            f"Valid keys are {DEFAULT_INIT_FUNCTION.keys()}."
-        )
-    updated_registry = DEFAULT_INIT_FUNCTION.copy()
-    for func_name, func in registry.items():
-        updated_registry[func_name] = _resolve_init_func(func_name, func)
-    return updated_registry
-
-
-def _is_native_init_registry(registry: INITIALIZATION_FN_DICT) -> bool:
-    """Return true if a function is a native initialization function."""
-    return all(
-        [fn in AVAILABLE_INIT_FUNCTIONS[key].values() for key, fn in registry.items()]
+    coef, intercept = glm_params_init(
+        n_states=n_states,
+        X=X,
+        y=y,
+        inverse_link_function=inverse_link_function,
+        observation_model=observation_model,
+        session_starts=session_starts,
+        random_key=glm_params_key,
+        **glm_params_init_kwargs,
     )
 
+    scale_init_fn = (
+        glm_init_funcs.get("scale_init") or DEFAULT_INIT_FUNCTIONS_GLMHMM["scale_init"]
+    )
+    scale_init_kwargs = glm_init_funcs.get("scale_init_kwargs") or {}
 
-def _resolve_init_func(
-    func_name: str, init_func: Callable | str
-) -> InitFunctionHMM | InitFuncGLMScale | InitFuncGLMParams:
-    """
-    Validate and resolve an initialization function.
-
-    Checks that the provided initialization function has the correct signature
-    (at least 4 parameters: n_states, X, y, key, with any additional parameters
-    having default values). Can accept either a string name or a callable.
-
-    Parameters
-    ----------
-    func_name : str
-        Name of the initialization function (e.g., 'glm_params_init').
-    init_func : Callable, str, or None
-        Initialization function to validate. Can be:
-        - None: returns the default function
-        - str: looks up the function by name in AVAILABLE_INIT_FUNCTIONS
-        - Callable: validates and returns the function
-
-    Returns
-    -------
-    init_func : Callable
-        Validated initialization function.
-
-    Raises
-    ------
-    ValueError
-        If the function signature is invalid (wrong number of parameters or
-        extra parameters without defaults), or if string name is not found.
-    TypeError
-        If init_func is not callable, string, or None.
-    """
-    if init_func is None:
-        # assign default
-        return DEFAULT_INIT_FUNCTION[func_name]
-
-    # Handle string inputs (lookup by name)
-    elif isinstance(init_func, str):
-        available = _IO_AVAILABLE_INIT_FUNCTIONS.get(func_name, {})
-        if init_func not in available:
-            raise ValueError(
-                f"Unknown initialization method '{init_func}' for '{func_name}'.\n"
-                f"Available methods: {list(available.keys())}"
-            )
-        return available[init_func]
-
-    # Check if it's a pre-defined function
-    elif callable(init_func):
-        # Check if it's in the available functions
-        available_funcs = [
-            f
-            for funcs in AVAILABLE_INIT_FUNCTIONS.get(func_name, {}).values()
-            for f in [funcs]
-        ]
-        if init_func in available_funcs:
-            return init_func
-
-        # Validate signature for custom functions
-        sig = inspect.signature(init_func)
-        n_params = len(sig.parameters)
-
-        # GLM params init needs inverse_link_function, so expects 5 params
-        # Other init functions expect 4 params (n_states, X, y, key)
-        expected_params = 5 if func_name == "glm_params_init" else 4
-        param_desc = (
-            "(n_states, X, y, inverse_link_function, key)"
-            if func_name == "glm_params_init"
-            else "(n_states, X, y, key)"
-        )
-
-        # Check minimum number of parameters
-        if n_params < expected_params:
-            param_names = list(sig.parameters.keys())
-            raise ValueError(
-                f"'{func_name}' initialization function must have at least {expected_params} parameters: "
-                f"{param_desc}, but got {n_params} parameter(s): {param_names}.\n"
-            )
-
-        # Check that extra parameters have defaults
-        params = list(sig.parameters.values())
-        params_without_defaults = [
-            p.name
-            for p in params[expected_params:]
-            if p.default is inspect.Parameter.empty
-        ]
-
-        if params_without_defaults:
-            raise ValueError(
-                f"All parameters beyond the required {expected_params} {param_desc} must have default values.\n"
-                f"Parameters without defaults: {params_without_defaults}"
-            )
-
-        return init_func
-
-    # Provide appropriate signature based on function type
-    if func_name == "glm_params_init":
-        signature_desc = (
-            "(n_states: int, X: DESIGN_INPUT_TYPE, y: jnp.ndarray, "
-            "inverse_link_function: Callable, key: jax.random.PRNGKey, **kwargs)"
-        )
-    else:
-        signature_desc = (
-            "(n_states: int, X: DESIGN_INPUT_TYPE, y: jnp.ndarray, "
-            "key: jax.random.PRNGKey, **kwargs)"
-        )
-
-    raise TypeError(
-        f"Invalid initialization function: {func_name}.\n"
-        "The initialization function should be:\n"
-        "- A string (e.g., 'random', 'sticky', 'uniform')\n"
-        f"- A callable with signature: {signature_desc}"
+    scale = scale_init_fn(
+        n_states=n_states,
+        X=X,
+        y=y,
+        inverse_link_function=inverse_link_function,
+        observation_model=observation_model,
+        session_starts=session_starts,
+        random_key=scale_key,
+        **scale_init_kwargs,
     )
 
-
-def _resolve_dirichlet_priors(
-    alphas: Any, expected_shape: Tuple[int, ...]
-) -> jnp.ndarray | None:
-    """Validate and convert Dirichlet prior alpha parameters.
-
-    Parameters
-    ----------
-    alphas :
-        Dirichlet prior alpha parameters. Can be None or array-like.
-    expected_shape :
-        Expected shape of the alpha parameter array.
-
-    Returns
-    -------
-    jnp.ndarray | None
-        Validated alpha parameters as a JAX array, or None if input is None.
-
-    Raises
-    ------
-    ValueError
-        If the shape doesn't match expected_shape or if any alpha < 1.
-    TypeError
-        If alphas is not None or array-like.
-    """
-    if alphas is None:
-        return None
-    elif is_numpy_array_like(alphas)[1]:
-        alphas = jnp.asarray(alphas, dtype=float)
-        if alphas.shape != expected_shape:
-            raise ValueError(
-                f"Dirichlet prior alpha parameters for initial state probabilities "
-                f"must have shape ``{expected_shape}``, "
-                f"but got shape ``{alphas.shape}``."
-            )
-        if not jnp.all(alphas >= 1):
-            raise ValueError(
-                f"Dirichlet prior alpha parameters must be >= 1, but got values < 1"
-                f":\n{alphas}"
-            )
-        return alphas
-    else:
-        raise TypeError(
-            f"Invalid type for Dirichlet prior alpha parameters: ``{type(alphas).__name__}``. "
-            f"Must be None or an array-like object of shape ``{expected_shape}`` with strictly positive values."
-        )
+    return coef, intercept, scale
