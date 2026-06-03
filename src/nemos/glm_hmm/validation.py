@@ -92,18 +92,18 @@ class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
         coef, intercept = wrapped[:2]
         flat_coef = jax.tree_util.tree_leaves(coef)
         invalid_shapes = jax.tree_util.tree_map(
-            lambda x: x.shape[-1] != self.n_states, flat_coef
+            lambda x: x.shape[-1] != self.extra_params["n_states"], flat_coef
         )
         if any(invalid_shapes):
             raise ValueError(
                 "GLM coef must be of shape ``(n_features, n_states)`` or a dict of arrays "
                 "with shape ``(n_features, n_states)``. "
-                f"n_states is {self.n_states} but coef has shape(s) ``{invalid_shapes}``."
+                f"n_states is {self.extra_params["n_states"]} but coef has shape(s) ``{invalid_shapes}``."
             )
-        if intercept.shape[-1] != self.n_states:
+        if intercept.shape[-1] != self.extra_params["n_states"]:
             raise ValueError(
                 "GLM intercept must be of shape ``(n_states,)``. "
-                f"n_states is {self.n_states} but coef has shape ``{intercept.shape}``."
+                f"n_states is {self.extra_params["n_states"]} but coef has shape ``{intercept.shape}``."
             )
         return params
 
@@ -173,14 +173,14 @@ class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
     def get_empty_params(self, X, y) -> GLMHMMParams:
         """Return the param shape given the input data."""
         empty_coef = jax.tree_util.tree_map(
-            lambda x: jnp.empty((x.shape[1], self.n_states)), X
+            lambda x: jnp.empty((x.shape[1], self.extra_params["n_states"])), X
         )
-        empty_intercept = jnp.empty((self.n_states,))
+        empty_intercept = jnp.empty((self.extra_params["n_states"],))
         empty_scale = jnp.empty_like(empty_intercept)
         model_params = GLMHMMModelParams(
             coef=empty_coef, intercept=empty_intercept, log_scale=empty_scale
         )
-        hmm_params = HMMValidator.get_empty_params(X, y)
+        hmm_params = HMMValidator.get_empty_params(self, X, y)
         return GLMHMMParams(hmm_params=hmm_params, model_params=model_params)
 
 
@@ -203,18 +203,18 @@ class ClassifierGLMHMMValidator(GLMHMMValidator):
         coef, intercept = wrapped[:2]
         flat_coef = jax.tree_util.tree_leaves(coef)
         invalid_shapes = jax.tree_util.tree_map(
-            lambda x: x.shape[-1] != self.n_states, flat_coef
+            lambda x: x.shape[-1] != self.extra_params["n_states"], flat_coef
         )
         if any(invalid_shapes):
             raise ValueError(
                 "GLM coef must be of shape ``(n_features, n_classes, n_states)`` or a dict of arrays "
                 "with shape ``(n_features, n_classes, n_states)``. "
-                f"n_states is {self.n_states} but coef has shape(s) ``{invalid_shapes}``."
+                f"n_states is {self.extra_params["n_states"]} but coef has shape(s) ``{invalid_shapes}``."
             )
-        if intercept.shape[-1] != self.n_states:
+        if intercept.shape[-1] != self.extra_params["n_states"]:
             raise ValueError(
                 "GLM intercept must be of shape ``(n_classes, n_states)``. "
-                f"n_states is {self.n_states} but coef has shape ``{intercept.shape}``."
+                f"n_states is {self.extra_params["n_states"]} but coef has shape ``{intercept.shape}``."
             )
         return params
 
@@ -222,12 +222,13 @@ class ClassifierGLMHMMValidator(GLMHMMValidator):
         """Return the param shape given the input data."""
         n_classes = self.extra_params["n_classes"]
         empty_coef = jax.tree_util.tree_map(
-            lambda x: jnp.empty((x.shape[1], n_classes, self.n_states)), X
+            lambda x: jnp.empty((x.shape[1], n_classes, self.extra_params["n_states"])),
+            X,
         )
-        empty_intercept = jnp.empty((n_classes, self.n_states))
+        empty_intercept = jnp.empty((n_classes, self.extra_params["n_states"]))
         empty_scale = jnp.empty_like(empty_intercept)
         model_params = GLMHMMModelParams(
             coef=empty_coef, intercept=empty_intercept, log_scale=empty_scale
         )
-        hmm_params = HMMValidator.get_empty_params(X, y)
+        hmm_params = HMMValidator.get_empty_params(self, X, y)
         return GLMHMMParams(hmm_params=hmm_params, model_params=model_params)

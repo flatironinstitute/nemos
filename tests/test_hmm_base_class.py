@@ -33,7 +33,7 @@ class TestHMMInit:
         """Test that setting n_states creates a GLMHMMValidator."""
         model = MockHMM(n_states=3)
         assert hasattr(model, "_validator")
-        assert model._validator.n_states == 3
+        assert model._validator.extra_params["n_states"] == 3
 
     @pytest.mark.parametrize(
         "n_states, expectation",

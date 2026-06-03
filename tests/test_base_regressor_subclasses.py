@@ -42,7 +42,9 @@ VALIDATOR_REGISTRY = {
         extra_params={"n_classes": 4}
     ),
     "PopulationGLM": PopulationGLMValidator(),
-    "GLMHMM": GLMHMMValidator(n_states=3),  # n_states=3 matches the fixture default
+    "GLMHMM": GLMHMMValidator(
+        extra_params={"n_states": 3}
+    ),  # n_states=3 matches the fixture default
 }
 
 INIT_PARAM_LENGTH = {

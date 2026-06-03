@@ -235,18 +235,11 @@ class BaseHMM(
         )
         self._model_setup(**kwargs)
 
-    @property
-    def n_states(self) -> int:
-        """Number of hidden states of the HMM."""
-        return self._n_states
-
-    @n_states.setter
-    def n_states(self, n_states: int):
-        """Set the number of hidden states and validator."""
+    def _set_n_states(self, n_states: int):
+        """Check and set internal _n_states."""
         # quick sanity check and assignment
         if isinstance(n_states, int) and n_states > 0:
             self._n_states = n_states
-            self._validator = self._validator_class(n_states=n_states)
             return
 
         # further checks for other valid numeric types (like non-negative float with no-decimals)
@@ -267,7 +260,24 @@ class BaseHMM(
                 f"n_states must be a positive integer. ``{n_states}`` provided instead."
             )
         self._n_states = int_n_states
-        self._validator = self._validator_class(n_states=n_states)
+
+    @property
+    def n_states(self) -> int:
+        """Number of hidden states of the HMM."""
+        return self._n_states
+
+    @n_states.setter
+    def n_states(self, n_states: int):
+        """Set the number of hidden states and validator."""
+        if (hasattr(self, "_n_states") is False) or (self._n_states != n_states):
+            self._set_n_states(n_states)
+        self._validator = self._validator_class(
+            extra_params=self._get_validator_extra_params()
+        )
+
+    def _get_validator_extra_params(self) -> dict:
+        """Get validator extra parameters."""
+        return {"n_states": self._n_states}
 
     @property
     def maxiter(self):

@@ -241,7 +241,7 @@ class TestHMMValidator:
                 nap.TsdFrame(
                     t=np.arange(5),
                     d=np.array([[0], [0], [np.nan], [0], [0]]),
-                    time_support=nap.IntervalSet([0, 2], [2, 5]),
+                    time_support=nap.IntervalSet([0, 2], [1.9, 5]),
                 ),
                 np.zeros(5),
                 does_not_raise(),

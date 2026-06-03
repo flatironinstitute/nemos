@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Optional, Tuple
+from typing import Any, Optional, Tuple, Dict, Literal
 
 import jax
 import jax.numpy as jnp
@@ -75,7 +75,7 @@ def from_hmm_params(params: HMMParams) -> HMMUserParams:
 class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
     """Validate HMM parameters. Meant to be used as a mixin class for models that use HMMs."""
 
-    n_states: int = field(kw_only=True)  # keyword only and required.
+    extra_params: Dict[Literal["n_states"], int] = field(kw_only=True)
     model_param_names: Tuple[str] = ("initial_prob", "transition_prob")
     model_class: str = "HMM"
     params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
@@ -124,14 +124,17 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
     ) -> HMMUserProvidedParamsT:
         """Check initial and transition probabilities shape."""
         initial_prob, transition_prob = self.wrap_user_params(params)[-2:]
-        if initial_prob.shape != (self.n_states,):
+        if initial_prob.shape != (self.extra_params["n_states"],):
             raise ValueError(
-                f"initial_prob must be a 1-dimensional array of shape ``({self.n_states},)``. "
+                f"initial_prob must be a 1-dimensional array of shape ``({self.extra_params["n_states"]},)``. "
                 f"Provided initial_prob is of shape ``{initial_prob.shape}`` instead."
             )
-        if transition_prob.shape != (self.n_states, self.n_states):
+        if transition_prob.shape != (
+            self.extra_params["n_states"],
+            self.extra_params["n_states"],
+        ):
             raise ValueError(
-                f"transition_prob must be a 2-dimensional array of shape ``({self.n_states}, {self.n_states})``."
+                f"transition_prob must be a 2-dimensional array of shape ``({self.extra_params["n_states"]}, {self.extra_params["n_states"]})``."
                 f"Provided transition_prob is of shape ``{transition_prob.shape}`` instead."
             )
         return params
@@ -237,6 +240,8 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
     def get_empty_params(self, X, y) -> HMMModelParamsT:
         """Return the param shape given the input data."""
         return HMMParams(
-            log_initial_prob=jnp.empty((self.n_states,)),
-            log_transition_prob=jnp.empty((self.n_states, self.n_states)),
+            log_initial_prob=jnp.empty((self.extra_params["n_states"],)),
+            log_transition_prob=jnp.empty(
+                (self.extra_params["n_states"], self.extra_params["n_states"])
+            ),
         )

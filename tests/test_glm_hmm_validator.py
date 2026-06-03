@@ -23,7 +23,7 @@ N_FEATURES = 2
 
 @pytest.fixture
 def validator():
-    return GLMHMMValidator(n_states=N_STATES)
+    return GLMHMMValidator(extra_params={"n_states": N_STATES})
 
 
 @pytest.fixture

@@ -11,9 +11,12 @@ from numpy.typing import ArrayLike, NDArray
 from ..typing import DESIGN_INPUT_TYPE
 import pynapple as nap
 from .params import GLMHMMParams, GLMHMMUserParams
+from .validation import ClassifierGLMHMMValidator
 
 
 class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
+    _validator_class = ClassifierGLMHMMValidator
+
     def __init__(
         self,
         n_states: int,
@@ -33,6 +36,8 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
         hmm_initialization_funcs: Optional[HMM_INITIALIZATION_FN_DICT] = None,
         model_initialization_funcs: Optional[GLMHMM_INITIALIZATION_FN_DICT] = None,
     ):
+        # set _n_states before n_classes so validator can access it
+        self._set_n_states(n_states)
         self.n_classes = n_classes
         super().__init__(
             n_states=n_states,
@@ -50,6 +55,10 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
             hmm_initialization_funcs=hmm_initialization_funcs,
             model_initialization_funcs=model_initialization_funcs,
         )
+
+    def _get_validator_extra_params(self) -> dict:
+        """Get validator extra parameters."""
+        return {"n_classes": self._label_encoder.n_classes, "n_states": self._n_states}
 
     def fit(
         self,
