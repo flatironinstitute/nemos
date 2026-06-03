@@ -896,7 +896,7 @@ class BaseRegressor(
         state_color, state_text = (
             ("#28a745", "Fitted") if is_fitted else ("#dc3545", "Unfitted")
         )
-        diagnostics = ""
+        diagnostics = "</div>"
 
         if is_fitted:
             intercept_shape = getattr(state.get("intercept_"), "shape", ())
@@ -907,7 +907,7 @@ class BaseRegressor(
             )
 
             def get_features(x):
-                return getattr(x, "shape", (1,))[-1] if getattr(x, "ndim", 0) > 0 else 1
+                return getattr(x, "shape", (1,))[0] if getattr(x, "ndim", 0) > 0 else 1
 
             n_features = "Unknown"
             try:
@@ -920,24 +920,27 @@ class BaseRegressor(
                 pass
 
             conv_html = ""
-            optim_info = state.get("optim_info_")
-            if optim_info is not None:
+            solver_state = state.get("solver_state_")
+            if solver_state is not None:
                 c_color, c_text = (
-                    ("#28a745", "Yes") if optim_info.converged else ("#dc3545", "No")
+                    ("#28a745", "Yes")
+                    if solver_state.stats.converged.item()
+                    else ("#dc3545", "No")
                 )
                 conv_html = f'<span><strong>Converged:</strong> <span style="color: {c_color};">{c_text}</span></span>'
 
-            diagnostics = f"""
-            <span style="margin-right: 15px;"><strong>Neurons:</strong> {n_neurons}</span>
-            <span style="margin-right: 15px;"><strong>Features:</strong> {n_features}</span>
-            {conv_html}
-            """
+            diagnostics = f"""<span style="margin-right: 15px;"><strong>Neurons:</strong> {n_neurons}</span>
+            </div>
+            <div style="margin-top: 8px;">
+                <span style="margin-right: 15px;"><strong>Features:</strong> {n_features}</span>
+                {conv_html}
+            </div>"""
 
         nemos_html = f"""
         <div style="
             font-family: sans-serif;
             margin-bottom: 10px;
-            padding: 8px 12px;
+            padding: 10px 14px;
             border-left: 4px solid {state_color};
             background-color: #f8f9fa;
             color: #333;
@@ -945,10 +948,11 @@ class BaseRegressor(
             display: inline-block;
             font-size: 13px;
         ">
-            <span style="font-weight: bold; margin-right: 15px;">
-                Model State: <span style="color: {state_color};">{state_text}</span>
-            </span>
-            {diagnostics}
+            <div>
+                <span style="font-weight: bold; margin-right: 15px;">
+                    Model State: <span style="color: {state_color};">{state_text}</span>
+                </span>
+                {diagnostics}
         </div>
         """
 
