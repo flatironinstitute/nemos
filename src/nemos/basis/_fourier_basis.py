@@ -6,7 +6,16 @@ import itertools
 import math
 import warnings
 from numbers import Number
-from typing import TYPE_CHECKING, Any, Callable, Generator, List, Literal, Optional, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Generator,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+)
 
 import jax
 import jax.numpy as jnp
@@ -719,7 +728,9 @@ class FourierBasis(AtomicBasisMixin, Basis):
 def _se_quadrature(
     lengthscale: float, variance: float, eps: float, L: float
 ) -> Tuple[jnp.ndarray, jnp.ndarray, float, int]:
-    """Finds the nodes of the equispaced quadrature in Fourier domain
+    """Find the nodes of the equispaced quadrature in Fourier domain.
+
+    This function finds the nodes of the equispaced quadrature in Fourier domain
     (discretized inverse Fourier transform) for a 1-D squared-exponential
     kernel. This involves finding the spacing between nodes ``h`` and the
     number of nodes ``2m + 1``. This is done from a formula in --
@@ -755,26 +766,26 @@ def _se_quadrature(
     m :
         number of positive frequencies
     """
-    l = float(lengthscale)
-    var = float(variance)
-    eps_use = float(eps) / var
+    lengthscale = float(lengthscale)
+    variance = float(variance)
+    eps_use = float(eps) / variance
 
     # Heuristic for h and m
-    h = 1.0 / (L + l * math.sqrt(2.0 * math.log(12.0 / eps_use)))
-    m = math.ceil(math.sqrt(math.log(16.0 / eps_use) / 2.0) / math.pi / l / h)
+    h = 1.0 / (L + lengthscale * math.sqrt(2.0 * math.log(12.0 / eps_use)))
+    m = math.ceil(math.sqrt(math.log(16.0 / eps_use) / 2.0) / math.pi / lengthscale / h)
 
     j = jnp.arange(m + 1, dtype=float)
     xis = j * h
 
     # 1d se spectral density: S(xi) = var * sqrt(2*pi*l^2) * exp(-2*pi^2*l^2*xi^2)
-    prefactor = var * math.sqrt(2.0 * math.pi * l ** 2)
-    S = prefactor * jnp.exp(-2.0 * (math.pi * l) ** 2 * xis ** 2)
+    prefactor = variance * math.sqrt(2.0 * math.pi * lengthscale**2)
+    S = prefactor * jnp.exp(-2.0 * (math.pi * lengthscale) ** 2 * xis**2)
     w = jnp.sqrt(S * h)  # efgp per-mode weight, shape (m + 1,)
 
     # convert standard efgp xis with +/- modes into a positive-only modes.
     sqrt2 = math.sqrt(2.0)
-    w_cos = w.at[1:].multiply(sqrt2)   # cos columns: w_0, sqrt(2)*w_1, ...
-    w_sin = sqrt2 * w[1:]              # sin columns: sqrt(2)*w_1, ...
+    w_cos = w.at[1:].multiply(sqrt2)  # cos columns: w_0, sqrt(2)*w_1, ...
+    w_sin = sqrt2 * w[1:]  # sin columns: sqrt(2)*w_1, ...
     weights = jnp.concatenate([w_cos, w_sin])
     return xis, weights, h, m
 
@@ -834,23 +845,18 @@ class FourierSEBasis(EvalBasisMixin, AtomicBasisMixin, Basis):
         variance = float(variance)
         eps = float(eps)
         if lengthscale <= 0:
-            raise ValueError(
-                f"``lengthscale`` must be positive, got {lengthscale}."
-            )
+            raise ValueError(f"``lengthscale`` must be positive, got {lengthscale}.")
         if variance <= 0:
             raise ValueError(f"``variance`` must be positive, got {variance}.")
         if eps <= 0:
             raise ValueError(f"``eps`` must be positive, got {eps}.")
         if not (isinstance(domain, (tuple, list)) and len(domain) == 2):
             raise TypeError(
-                "``domain`` must be a 2-element tuple ``(t0, t1)``; "
-                f"got {domain!r}."
+                "``domain`` must be a 2-element tuple ``(t0, t1)``; " f"got {domain!r}."
             )
         t0, t1 = float(domain[0]), float(domain[1])
         if not t0 < t1:
-            raise ValueError(
-                f"``domain`` must satisfy ``t0 < t1``; got ({t0}, {t1})."
-            )
+            raise ValueError(f"``domain`` must satisfy ``t0 < t1``; got ({t0}, {t1}).")
 
         self._lengthscale = lengthscale
         self._variance = variance
@@ -881,7 +887,7 @@ class FourierSEBasis(EvalBasisMixin, AtomicBasisMixin, Basis):
 
     @property
     def eps(self) -> float:
-        """kernel error approximation tolerance."""
+        """Kernel error approximation tolerance."""
         return self._eps
 
     @property
@@ -938,8 +944,8 @@ class FourierSEBasis(EvalBasisMixin, AtomicBasisMixin, Basis):
         phases = (
             2.0 * jnp.pi * (x_flat - self._xcen)[:, None] * self._xis[None, :]
         )  # (N, m + 1)
-        cos_part = jnp.cos(phases)            # (N, m + 1), includes j = 0
-        sin_part = jnp.sin(phases[:, 1:])     # (N, m), drops j = 0
+        cos_part = jnp.cos(phases)  # (N, m + 1), includes j = 0
+        sin_part = jnp.sin(phases[:, 1:])  # (N, m), drops j = 0
         out = jnp.concatenate([cos_part, sin_part], axis=-1)
         out = out * self._weights[None, :]
         return out.reshape(*shape, out.shape[-1])
