@@ -3,10 +3,11 @@ from typing import List, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+import numpy as np
+import pynapple as nap
 from numpy.typing import ArrayLike
-from pynapple import IntervalSet
 
-from ..typing import DESIGN_INPUT_TYPE
+from .log_likelihood import X_ppglm, mc_sample_ppglm, y_ppglm
 
 
 ### SCAN UTILS
@@ -62,24 +63,24 @@ def reshape_coef_for_scan(weights: jnp.ndarray, n_basis_funcs: int):
 
 
 @partial(jax.jit, static_argnums=1)
-def reshape_input_for_scan(times: tuple, scan_size: int):
+def reshape_input_for_scan(data: y_ppglm | mc_sample_ppglm, scan_size: int):
     """
     Reshape time series into scan inputs of equal size. Pad the last input with copies of
     the last time point if needed.
 
     Parameters
     ----------
-    times : tuple of jnp.ndarray, length n_channels
-        Marked time series to scan over. Each array has shape (n_time_points,).
+    data :
+        Preprocessed spike / sample times to scan over.
     scan_size :
         the number of time points to process in each scan
 
     Returns
     -------
-    padded_times_reshaped : tuple of jnp.ndarray, length n_channels
-        Reshaped padded input. Each array has shape (n_scans, scan_size).
-    padding_value: tuple of jnp.ndarray, length n_channels
-        The last time point.
+    reshaped : y_ppglm
+        Reshaped padded input. Each field has shape (n_scans, scan_size).
+    padding_values : y_ppglm
+        The last value of each field.
     padding_len :
         Number of padding time points appended to make n_points divisible by scan_size.
     """
@@ -87,16 +88,16 @@ def reshape_input_for_scan(times: tuple, scan_size: int):
     def reshape_one(arr):
         padding_len = -arr.shape[0] % scan_size
         padded = jnp.concatenate([arr, jnp.full((padding_len,), arr[-1])])
-        return padded.reshape(-1, scan_size)  # (n_scans, scan_size)
+        return padded.reshape(-1, scan_size)
 
-    padding_len = -times[0].shape[0] % scan_size
-    padding_values = tuple(arr[-1] for arr in times)
-    reshaped = tuple(reshape_one(arr) for arr in times)
+    padding_len = -data.times.shape[0] % scan_size
+    padding_values = jax.tree_util.tree_map(lambda arr: arr[-1], data)
+    reshaped = jax.tree_util.tree_map(reshape_one, data)
 
     return reshaped, padding_values, padding_len
 
 
-def build_mc_sampling_grid(recording_time: IntervalSet, M_samples: int):
+def build_mc_sampling_grid(recording_time: nap.IntervalSet, M_samples: int):
     """
     Build a stratified sampling grid of bin midpoints for Monte Carlo integration
     of the conditional intensity function over the recording.
@@ -131,6 +132,60 @@ def build_mc_sampling_grid(recording_time: IntervalSet, M_samples: int):
 
 
 ### DATA PREPROCESSING UTILS
+def to_tsgroup(time_series) -> nap.TsGroup:
+    """Convert various spike timestamp formats to a re-indexed TsGroup.
+
+    If time_series is a pynapple object, the output will preserve its time support.
+    """
+
+    error_message = "All time series must be non-empty. "
+
+    # --- TsGroup ---
+    if isinstance(time_series, nap.TsGroup):
+        if any(len(ts) == 0 for ts in time_series.values()):
+            raise ValueError(error_message)
+        return nap.TsGroup(
+            {i: ts for i, ts in enumerate(time_series.values())},
+            time_support=time_series.time_support,
+        )
+
+    # --- single Ts ---
+    if isinstance(time_series, nap.Ts):
+        if len(time_series) == 0:
+            raise ValueError(error_message)
+        return nap.TsGroup({0: time_series}, time_support=time_series.time_support)
+
+    # --- dict ---
+    if isinstance(time_series, dict):
+        if any(len(arr) == 0 for arr in time_series.values()):
+            raise ValueError(error_message)
+        return nap.TsGroup(
+            {i: nap.Ts(np.asarray(arr)) for i, arr in enumerate(time_series.values())}
+        )
+
+    # --- np.ndarray or list ---
+    if isinstance(time_series, (np.ndarray, list)):
+        if len(time_series) > 0 and np.isscalar(time_series[0]):
+            times = np.asarray(time_series, dtype=float).ravel()
+            if len(times) == 0:
+                raise ValueError(error_message)
+            return nap.TsGroup({0: nap.Ts(times)})
+        else:
+            if any(len(s) == 0 for s in time_series):
+                raise ValueError(error_message)
+            return nap.TsGroup(
+                {
+                    i: nap.Ts(np.asarray(s, dtype=float))
+                    for i, s in enumerate(time_series)
+                }
+            )
+
+    raise TypeError(
+        f"Unsupported type for input: {type(time_series)}. "
+        "Expected np.ndarray, list, dict, pynapple.Ts, or pynapple.TsGroup."
+    )
+
+
 @jax.jit
 def compute_max_window_size(
     bounds: Union[ArrayLike, List, Tuple],
@@ -164,48 +219,45 @@ def compute_max_window_size(
 
 @partial(jax.jit, static_argnums=(1, 2))
 def adjust_indices_and_spike_times(
-    X: DESIGN_INPUT_TYPE,
+    X: X_ppglm,
     history_window: float,
     max_window: int,
-    y: Optional[tuple] = None,
-):
+    y: Optional[y_ppglm] = None,
+) -> tuple[X_ppglm, Optional[y_ppglm]]:
     """
     Add padding to the events array so that history window selection near
     the start of the recording never goes out of bounds.
 
     Adds max_window out-of-bound dummy events before the real event times
-    and shifts indexing of y spikes to  account for this offset (if provided).
+    and shifts indexing of y spikes to account for this offset (if provided).
 
     Parameters
     ----------
-    X :
-        Event time array to be padded. Shape (2, n_events).
-    history_window :
+    X : X_ppglm
+        Preprocessed predictor time series to be padded.
+    history_window : float
         Duration of the history window (s).
-    max_window :
-        Number of dummy events to prepend.
-    y :
-        Spike time series: (times: float (n_spikes,), neuron_ids: int (n_spikes,),
-        event_indices: int (n_spikes,)).
+    max_window : int
+        The maximum number of events in the history window.
+    y : y_ppglm, optional
+        Preprocessed postsynaptic spike train.
 
     Returns
     -------
-    shifted_X :
-        Padded event array. Shape (2, max_window + n_events).
-    shifted_y :
-        Index-corrected spike time array (only returned if y is not None).
-        Shape (3, n_spikes).
+    shifted_X : X_ppglm
+        Padded predictor time series with max_window dummy events prepended.
+    shifted_y : y_ppglm, optional
+        Spike train with idx shifted by max_window. Only returned if y is not None.
     """
-    shifted_X = (
-        jnp.concatenate([jnp.full(max_window, -history_window - 1), X[0]]),
-        jnp.concatenate([jnp.zeros(max_window, dtype=jnp.int32), X[1]]),
+    shifted_X = X_ppglm(
+        times=jnp.concatenate([jnp.full(max_window, -history_window - 1), X.times]),
+        ids=jnp.concatenate([jnp.zeros(max_window, dtype=jnp.int32), X.ids]),
     )
     if y is not None:
-        shifted_y = (
-            y[0],
-            y[1],
-            y[2] + max_window,
+        shifted_y = y_ppglm(
+            times=y.times,
+            ids=y.ids,
+            idx=y.idx + max_window,
         )
         return shifted_X, shifted_y
-    else:
-        return shifted_X
+    return shifted_X, None

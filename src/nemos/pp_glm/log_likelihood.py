@@ -1,15 +1,36 @@
 from functools import partial
 from typing import Callable, Dict, Union
+from jaxtyping import Array, Float, Int
 
 import jax
 import jax.numpy as jnp
+import equinox as eqx
 from pynapple import IntervalSet
 
-from ..typing import DESIGN_INPUT_TYPE
 from . import utils
-from .params import PPGLMParams, PPGLMParamsWithKey
+from .params import GLMParams, PPGLMParamsWithKey
 
 jax.config.update("jax_enable_x64", True)
+
+
+class X_ppglm(eqx.Module):
+    """Preprocessed predictors for PP-GLM."""
+
+    times: Float[Array, "n_events"]
+    ids: Int[Array, "n_events"]
+
+
+class y_ppglm(eqx.Module):
+    """Preprocessed spikes for PP-GLM."""
+
+    times: Float[Array, "n_spikes"]
+    ids: Int[Array, "n_spikes"]
+    idx: Int[Array, "n_spikes"]
+
+
+class mc_sample_ppglm(eqx.Module):
+    times: Float[Array, "n_samples"]
+    idx: Int[Array, "n_samples"]
 
 
 def _compute_lam_tilde(
@@ -47,12 +68,12 @@ def _compute_lam_tilde(
 
 
 def _draw_mc_sample(
-    X: DESIGN_INPUT_TYPE,
+    X: X_ppglm,
     random_key: jnp.ndarray,
-    M_samples,
-    recording_time,
+    M_samples: int,
+    recording_time: IntervalSet,
     M_grid,
-) -> tuple:
+) -> mc_sample_ppglm:
     """
     Draw stratified sample time points for Monte Carlo estimate
     of the conditional intensity function.
@@ -62,33 +83,33 @@ def _draw_mc_sample(
 
     Parameters
     ----------
-    X :
-         Padded event time series: (times: float (n_events,), predictor_ids: int (n_events,)).
+    X : X_ppglm
+        Preprocessed predictors with fields ``times`` (event timestamps) and
+        ``ids`` (predictor neuron indices).
     random_key :
         JAX PRNG key for sampling the jitter.
 
     Returns
     -------
-    :
-        Tuple of jnp.ndarray. Contains:
-            - sample time points. Shape (M_samples,).
-            - indices into X. Shape (M_samples,).
+    mc_sample_pts : mc_sample_ppglm
+        Monte Carlo samples with fields ``times`` (sampled timestamps) and
+        ``idx`` (indices into event times).
     """
     dt = recording_time.tot_length() / M_samples
     epsilon_m = jax.random.uniform(
         random_key, shape=(M_samples,), minval=0.0, maxval=dt
     )
     tau_m = M_grid + epsilon_m
-    tau_m_idx = jnp.searchsorted(X[0], tau_m)
-    mc_spikes = (tau_m, tau_m_idx)
+    tau_m_idx = jnp.searchsorted(X.times, tau_m)
+    mc_sample_pts = mc_sample_ppglm(times=tau_m, idx=tau_m_idx)
 
-    return mc_spikes
+    return mc_sample_pts
 
 
 def _scan_fn_log_lam_y(
     lam_sum: jnp.ndarray,
-    i: tuple,
-    X: DESIGN_INPUT_TYPE,
+    i: y_ppglm,
+    X: X_ppglm,
     weights: jnp.ndarray,
     bias: jnp.ndarray,
     eval_function: Callable,
@@ -106,12 +127,14 @@ def _scan_fn_log_lam_y(
     lam_sum :
         Running scalar sum of log-firing rates (scan carry).
     i :
-        Current eval point. Entries are (spike_time, spike_neuron_id, preceding_event_idx).
+        Current eval point with fields ``times`` (spike timestamp), ``ids``
+        (postsynaptic neuron index), and ``idx`` (index into event times).
 
     Closed over via ``functools.partial``
     --------------------------------------
     X :
-         Padded event time series: (times: float (n_events,), predictor_ids: int (n_events,)).
+         Preprocessed predictors with fields ``times`` (event timestamps) and
+        ``ids`` (predictor neuron indices).
     weights :
         Reshaped basis coefficients. Shape (n_predictors, n_basis_funcs, n_neurons).
     bias :
@@ -130,23 +153,26 @@ def _scan_fn_log_lam_y(
     None
         No concatenated per-step output (required by jax.lax.scan).
     """
-    spk_in_window = utils.slice_array(X[0], i[-1], max_window)
-    ids_in_window = utils.slice_array(X[1], i[-1], max_window)
-    dts = i[0] - spk_in_window
+    history_slice = jax.tree_util.tree_map(
+        lambda arr: utils.slice_array(arr, i.idx, max_window), X
+    )
+
+    dts = i.times - history_slice.times
     lam_tilde = _compute_lam_tilde(
         dts,
-        weights[ids_in_window, :, i[1], None],
-        bias[i[1]],
+        weights[history_slice.ids, :, i.ids, None],
+        bias[i.ids],
         eval_function,
     )
     lam_sum += jnp.log(inverse_link_function(lam_tilde)).sum()
+
     return lam_sum, None
 
 
 def _scan_fn_mc_est(
     lam_sum: jnp.ndarray,
-    i: tuple,
-    X: DESIGN_INPUT_TYPE,
+    i: mc_sample_ppglm,
+    X: X_ppglm,
     weights: jnp.ndarray,
     bias: jnp.ndarray,
     eval_function: Callable,
@@ -165,12 +191,14 @@ def _scan_fn_mc_est(
     lam_sum :
         Running scalar sum of log-firing rates (scan carry).
     i :
-        Current eval point. Entries are (sample_time, preceding_event_idx).
+        Current eval point with fields ``times`` (sampled timestamps) and
+        ``idx`` (indices into event times).
 
     Closed over via ``functools.partial``
     --------------------------------------
     X :
-         Padded event time series: (times: float (n_events,), predictor_ids: int (n_events,)).
+        Preprocessed predictors with fields ``times`` (event timestamps) and
+        ``ids`` (predictor neuron indices).
     weights :
         Reshaped basis coefficients. Shape (n_predictors, n_basis_funcs, n_neurons).
     bias :
@@ -189,12 +217,13 @@ def _scan_fn_mc_est(
     None
         No concatenated per-step output (required by jax.lax.scan).
     """
-    spk_in_window = utils.slice_array(X[0], i[-1], max_window)
-    ids_in_window = utils.slice_array(X[1], i[-1], max_window)
-    dts = i[0] - spk_in_window
+    history_slice = jax.tree_util.tree_map(
+        lambda arr: utils.slice_array(arr, i.idx, max_window), X
+    )
+    dts = i.times - history_slice.times
     lam_tilde = _compute_lam_tilde(
         dts,
-        weights[ids_in_window],
+        weights[history_slice.ids],
         bias,
         eval_function,
     )
@@ -203,9 +232,9 @@ def _scan_fn_mc_est(
 
 
 def _log_likelihood_scan(
-    X: DESIGN_INPUT_TYPE,
-    eval_pts: tuple,
-    params: PPGLMParams,
+    X: X_ppglm,
+    eval_pts: y_ppglm | mc_sample_ppglm,
+    params: GLMParams,
     scan_function: Callable,
     inverse_link_function,
     n_basis_funcs,
@@ -224,12 +253,13 @@ def _log_likelihood_scan(
     Parameters
     ----------
     X :
-        Padded event time series: (times: float (n_events,), predictor_ids: int (n_events,)).
+        Preprocessed predictors with fields ``times`` (event timestamps) and ``ids`` (predictor neuron indices).
     eval_pts :
-        Observed spike time series or MC sample points. Either (times: float (n_spikes,), neuron_ids: int (n_spikes,),
-        event_indices: int (n_spikes,)) or (times: float (M_samples,), event_indices: int (M_samples,)), respectively.
+        Observed spike time series with fields ``times`` (spike timestamps), ``ids``(postsynaptic neuron indices),
+        and ``idx`` (indices into event times) or MC sample points with fields ``times`` (sampled timestamps) and
+        ``idx`` (indices into event times).
     params :
-        PPGLMParams containing the basis coefficients and bias terms.
+        GLMParams containing the basis coefficients and bias terms.
     scan_function :
         Either _scan_fn_log_lam_y for the first NLL term or _scan_fn_mc_est for the second term .
 
@@ -269,9 +299,9 @@ def _log_likelihood_scan(
 
 
 def _negative_log_likelihood(
-    params: PPGLMParams,
-    X: DESIGN_INPUT_TYPE,
-    y: tuple,
+    params: GLMParams,
+    X: X_ppglm,
+    y: y_ppglm,
     random_key: jnp.ndarray,
     inverse_link_function: Callable,
     M_samples: int,
@@ -297,12 +327,12 @@ def _negative_log_likelihood(
     Parameters
     ----------
     X :
-        Padded event time series: (times: float (n_events,), predictor_ids: int (n_events,)).
+        Preprocessed predictors with fields ``times`` (event timestamps) and ``ids`` (predictor neuron indices).
     y :
-         Spike time series: (times: float (n_spikes,), neuron_ids: int (n_spikes,),
-        event_indices: int (n_spikes,)).
+        Preprocessed spikes with fields ``times`` (spike timestamps), ``ids``
+        (postsynaptic neuron indices), and ``idx`` (indices into event times).
     params :
-        PPGLMParams containing the basis coefficients and bias terms.
+        GLMParams containing the basis coefficients and bias terms.
     random_key :
         JAX PRNG key used to jitter the MC integration grid.
 
@@ -364,13 +394,13 @@ def _negative_log_likelihood(
 
     nll_sum = ((recording_time.tot_length() / M_samples) * mc_estimate) - log_lambda_y
 
-    return aggregate_sample_scores(nll_sum, y[0])
+    return aggregate_sample_scores(nll_sum, y.times)
 
 
 def _compute_loss(
     params_with_key: PPGLMParamsWithKey,
-    X: DESIGN_INPUT_TYPE,
-    y: tuple,
+    X: X_ppglm,
+    y: y_ppglm,
     *args,
     **kwargs,
 ) -> jnp.ndarray:
@@ -385,17 +415,10 @@ def _compute_loss(
         PPGLMParamsWithKey instance combining model params (coef, intercept) and
         a random key used for MC sampling.
     X :
-        Padded event time series for all predictors (spikes, stimuli, etc.).
-        Stored as (times, predictor_ids) where:
-            - times : jnp.ndarray of float, shape (n_events,) — event timestamps
-            - prededictor_ids : jnp.ndarray of int, shape (n_events,) — predictor ids(neuron ids, stimulus
-            ids, etc.)
+        Preprocessed predictors with fields ``times`` (event timestamps) and ``ids`` (predictor neuron indices).
     y :
-        Spike time series for the neurons being modeled.
-        Stored as (times, neuron_ids, event_indices) where:
-            - times : jnp.ndarray of float, shape (n_spikes,) — spike timestamps
-            - neuron_ids : jnp.ndarray of int, shape (n_spikes,) — neuron indices
-            - event_indices : jnp.ndarray of int, shape (n_spikes,) — indices into X.times
+        Preprocessed spikes with fields ``times`` (spike timestamps), ``ids``
+        (postsynaptic neuron indices), and ``idx`` (indices into event times).
 
     Returns
     -------
