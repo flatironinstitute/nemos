@@ -48,9 +48,9 @@ class Category(EvalBasisMixin, AtomicBasisMixin, Basis):
         - ``int``: interpreted as the number of categories; labels default to
           ``[0, 1, ..., categories-1]``.
         - ``list`` or ``NDArray``: the explicit list of unique category labels. Note
-          that the category labels will be sorted internally. Column ``i`` of the
-          one-hot encoding will correspond to ``basis.categories[i]``. When a list
-          is provided, it is converted to an ``NDArray`` via ``np.asarray``.
+          that the provided category labels will be sorted and stored as an attribute.
+          Column ``i`` of the one-hot encoding will correspond to ``basis.categories[i]``.
+          When a list is provided, it is converted to an ``NDArray`` via ``np.asarray``.
           Mixed-type lists will be cast to a common dtype (e.g., ``["a", 1]``
           becomes ``array(['a', '1'], dtype='<U21')``).
 
@@ -92,16 +92,25 @@ class Category(EvalBasisMixin, AtomicBasisMixin, Basis):
     3
     >>> labels = np.array([0, 1, 2, 0])
     >>> features = basis.compute_features(labels)
-    >>> features.shape
-    (4, 3)
+    >>> features
+    Array([[1., 0., 0.],
+           [0., 1., 0.],
+           [0., 0., 1.],
+           [1., 0., 0.]], dtype=...)
+
+    y    The 4 input labels map to a ``(4, 3)`` matrix: a 1 in column ``k`` of row ``i`` means
+    sample ``i`` has label ``basis.categories[k]``.
 
     Standalone categorical predictor with reference coding (drop one column):
 
-    >>> basis = Category(["Tri", "Sq"])
-    >>> X = basis.compute_features(np.array(["Tri", "Sq", "Tri", "Sq"]))
-    >>> X = X[:, 1:]  # "Tri" is the reference; remaining column is the "Sq" contrast
-    >>> X.shape
-    (4, 1)
+    >>> basis = Category(["L", "R"])
+    >>> X = basis.compute_features(np.array(["L", "R", "L", "R"]))
+    >>> X = X[:, 1:]  # "Tri" is the reference; remaining column is the contrast between "Sq" and "Tri"
+    >>> X
+    Array([[0.],
+           [1.],
+           [0.],
+           [1.]], dtype=...)
 
     Category-specific tuning curves via basis product (no column dropping needed):
 
@@ -259,6 +268,10 @@ class Category(EvalBasisMixin, AtomicBasisMixin, Basis):
                 [1., 0., 0.]]], dtype=...)
         >>> x.shape, out.shape
         ((2, 4), (2, 4, 3))
+
+        The input shape ``(2, 4)`` is preserved and a length-3 category axis is appended,
+        giving ``(2, 4, 3)``. A 1 at ``out[i, j, k]`` means that ``x[i, j]`` equals
+        ``basis.categories[k]``.
         """
         # Encoded could be an array or nap tsd, with integer dtype.
         if not self.out_of_category and not isinstance(xi, Tracer):
@@ -342,7 +355,7 @@ class Category(EvalBasisMixin, AtomicBasisMixin, Basis):
 
         For a categorical basis the grid is intrinsically fixed: one point per
         category. The ``n_samples`` argument is kept for interface compatibility
-        with continuous bases but must equal ``n_basis_funcs``.
+        with continuous bases but must equal ``self.n_basis_funcs``.
 
         Parameters
         ----------
