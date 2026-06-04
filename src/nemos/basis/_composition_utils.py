@@ -41,6 +41,7 @@ __PUBLIC_BASES__ = [
     "AdditiveBasis",
     "MultiplicativeBasis",
     "CustomBasis",
+    "Category",
 ]
 
 
