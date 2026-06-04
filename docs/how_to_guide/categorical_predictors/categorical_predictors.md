@@ -41,14 +41,14 @@ as a standalone predictor introduces perfect collinearity — the column sum
 equals the intercept column. Always drop one column per categorical variable
 when using categories as main effects.
 For a detailed discussion of identifiability and the effect of regularization,
-see [Identifiability of Categorical Predictors](categorical_identifiability).
+see [](categorical_identifiability).
 :::
 
 ## Splitting a Continuous Variable by Category
 
-The primary use of the [`Category`](nemos.basis.Category) basis in NeMoS is to estimate category-specific tuning curves by multiplying it with a continuous basis.
+The [`Category`](nemos.basis.Category) basis in NeMoS also allows you to estimate category-specific tuning curves by multiplying it with a continuous basis.
 
-Continuing the previous example, let's assume that we have also recorded the average animal speed per trial and suppose we want to learn how the neuron responds to speed depending on the turn side. You can use the `Category` basis to produce an appropriate design matrix:
+Continuing the previous example, let's assume that we have also recorded the average animal speed per trial and suppose we want to learn how the neuron responds to speed depending on the turn side. You can multiply the `Category` basis by another basis to produce an appropriate design matrix:
 
 ```{code-cell} ipython3
 speed = np.array([10., 3., 2., 20.])
@@ -59,7 +59,8 @@ X = bas.compute_features(turn_side, speed)
 print("X.shape: ", X.shape)  # (4, 6): 3 basis functions × 2 categories
 ```
 
-## Complex Designs
+(complex-designs)=
+## Complex Designs with `patsy` and `formulaic`
 
 :::{dropdown} Additional requirements
 :color: warning
@@ -83,10 +84,16 @@ or non-default contrast coding (sum-to-zero, Helmert, etc.), use
 to construct the design matrix. Those libraries resolve redundancies automatically and
 support a wide range of coding schemes.
 
+Both libraries accept the same formula and produce equivalent design matrices; pick whichever
+you prefer.
+
+::::{tab-set}
+:::{tab-item} patsy
+:sync: patsy
+
 ```{code-cell} ipython3
 import pandas as pd
-from patsy import dmatrix
-from formulaic import model_matrix
+import patsy
 
 data = pd.DataFrame({
     'stimulus': ['Tri', 'Sq', 'Tri', 'Sq'],
@@ -95,17 +102,38 @@ data = pd.DataFrame({
 })
 
 formula = "stimulus + context + stimulus:context"
-design_df = dmatrix(formula, data, return_type="dataframe")
+design_df = patsy.dmatrix(formula, data, return_type="dataframe")
 
-# patsy adds an intercept; drop it since NeMoS GLMs include one implicitly
+# patsy adds an intercept;
+# drop it since NeMoS GLMs include one implicitly
 design_df = design_df.drop(columns=["Intercept"])
 print("patsy:\n\n", design_df)
-
-# formulaic equivalent
-design_df = model_matrix(formula, data)
-design_df = design_df.drop(columns=["Intercept"])
-print("\n\nformulaic:\n\n", design_df)
 ```
+:::
+
+:::{tab-item} formulaic
+:sync: formulaic
+
+```{code-cell} ipython3
+import pandas as pd
+import formulaic
+
+data = pd.DataFrame({
+    'stimulus': ['Tri', 'Sq', 'Tri', 'Sq'],
+    'context':  ['C',   'C',   'S',  'S'],
+    'counts': [10, 5, 2, 0],
+})
+
+formula = "stimulus + context + stimulus:context"
+design_df = formulaic.model_matrix(formula, data)
+
+# formulaic also adds an intercept;
+# drop it since NeMoS GLMs include one implicitly
+design_df = design_df.drop(columns=["Intercept"])
+print("formulaic:\n\n", design_df)
+```
+:::
+::::
 
 :::{dropdown} Understanding `patsy`'s output
 :color: info
@@ -124,13 +152,46 @@ for sum-to-zero, Helmert, and other coding schemes.
 
 Full one-hot encoding of each term in the formula — the two categorical variables and their interaction — would have produced 8 columns, 4 of which would be redundant. `patsy` detects and drops all redundant columns automatically, guaranteeing that model coefficients are identifiable.
 
+:::{dropdown} Checking identifiability yourself
+:color: info
+:icon: info
+
+A design is identifiable only if the rank of its design matrix equals its number of columns.
+You can check this with
+[`numpy.linalg.matrix_rank`](https://numpy.org/doc/stable/reference/generated/numpy.linalg.matrix_rank.html);
+see [](categorical_identifiability) for the full explanation.
+
+```{code-cell} ipython3
+import numpy as np
+
+# Full one-hot of both variables and their interaction (8 columns)
+stim_bas = nmo.basis.Category(["Tri", "Sq"])
+context_bas = nmo.basis.Category(["C", "S"])
+full = (
+    stim_bas
+    + context_bas
+    + stim_bas * context_bas
+)
+X_full = full.compute_features(
+    data["stimulus"],
+    data["context"],
+    data["stimulus"],
+    data["context"],
+)
+print(X_full.shape[1], "columns, rank", np.linalg.matrix_rank(X_full))
+```
+
+The rank is smaller than the number of columns: 4 of the 8 are redundant. This is exactly the
+redundancy `patsy`/`formulaic` remove for you.
+:::
+
 ```{code-cell} ipython3
 model = nmo.glm.GLM().fit(design_df, counts)
 ```
 
-NeMoS [`Category`](nemos.basis.Category) basis provides a simple dummy coding of categorical variables. This is just one of the many encoding schemes that `patsy` provides.
+NeMoS [`Category`](nemos.basis.Category) basis provides a simple one-hot encoding of categorical variables. This is just one of the many encoding schemes that `patsy` provides.
 
-For example, the dummy code for one categorical predictor in NeMoS,
+For example, the encoding for one categorical predictor in NeMoS,
 
 ```{code-cell} ipython3
 nmo.basis.Category(["Tri","Sq"]).compute_features(data["stimulus"])
@@ -139,10 +200,10 @@ nmo.basis.Category(["Tri","Sq"]).compute_features(data["stimulus"])
 is equivalent to `patsy`'s,
 
 ```{code-cell} ipython3
-dmatrix("0 + stimulus", data, return_type="dataframe")
+patsy.dmatrix("0 + stimulus", data, return_type="dataframe")
 ```
 
-Similarly, the dummy code for the interaction of two categories,
+Similarly, the encoding for the interaction of two categories,
 
 ```{code-cell} ipython3
 interaction = nmo.basis.Category(["Tri","Sq"]) * nmo.basis.Category(["C","S"])
@@ -152,7 +213,7 @@ interaction.compute_features(data["stimulus"], data["context"])
 is equivalent to `patsy`'s
 
 ```{code-cell} ipython3
-dmatrix("0 + context:stimulus", data, return_type="dataframe")
+patsy.dmatrix("0 + context:stimulus", data, return_type="dataframe")
 ```
 
 NeMoS `Category` covers only basic encodings; for more complex design schemes, see [`patsy`](https://patsy.readthedocs.io) and [`formulaic`](https://matthewwardrop.github.io/formulaic/).

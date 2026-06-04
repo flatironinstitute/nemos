@@ -75,14 +75,14 @@ Models with parameters $[c, \mathbf{w}]$ and $[c, \mathbf{w}] + \alpha \cdot \ma
 This is **non-identifiability**: the data alone cannot distinguish between them, and there is no unique optimal solution.
 
 A practical way to detect this redundancy is to check whether the rank of $X_\text{aug}$ is strictly less than number of its columns.
-[**The rank is the number of linearly independent columns**](https://en.wikipedia.org/wiki/Rank_(linear_algebra)?utm_source=chatgpt.com), so if it is smaller than the total number of columns, some columns must be redundant. In that case, a non-trivial null space exists, i.e., there are non-zero vectors $\mathbf{v}$ such that $X_\text{aug} \cdot \mathbf{v} = 0$:
+[**The rank is the number of linearly independent columns**](https://en.wikipedia.org/wiki/Rank_(linear_algebra)), so if it is smaller than the total number of columns, some columns must be redundant. In that case, a non-trivial null space exists, i.e., there are non-zero vectors $\mathbf{v}$ such that $X_\text{aug} \cdot \mathbf{v} = 0$:
 
 ```{code-cell} ipython3
 print(f"Rank of [1 | X]:   {np.linalg.matrix_rank(X_aug)}")
 print(f"Number of columns: {X_aug.shape[1]}")
 ```
 
-As we can see, the rank is less than the number of columns, and therefore there is a non-empty null space and the model is non-identifiable.
+As we can see, in this example, the rank is less than the number of columns, and therefore there is a non-empty null space and the model is non-identifiable.
 
 ## Reference Coding: A Simple Way to Recover Identifiability
 
@@ -118,7 +118,7 @@ print("Number of columns:", X_interact_aug.shape[1])
 print("Rank:             ", np.linalg.matrix_rank(X_interact_aug))
 ```
 
-See [Construct Design Matrices for Categorical Features](categorical_design_matrices) for worked
+See [](categorical_design_matrices) for worked
 examples of this pattern.
 
 ## Effect of Regularization
