@@ -91,7 +91,7 @@ you prefer.
 :::{tab-item} patsy
 :sync: patsy
 
-```{code-cell} ipython3
+```ipython
 import pandas as pd
 import patsy
 
@@ -107,14 +107,13 @@ design_df = patsy.dmatrix(formula, data, return_type="dataframe")
 # patsy adds an intercept;
 # drop it since NeMoS GLMs include one implicitly
 design_df = design_df.drop(columns=["Intercept"])
-print("patsy:\n\n", design_df)
 ```
 :::
 
 :::{tab-item} formulaic
 :sync: formulaic
 
-```{code-cell} ipython3
+```ipython
 import pandas as pd
 import formulaic
 
@@ -127,13 +126,36 @@ data = pd.DataFrame({
 formula = "stimulus + context + stimulus:context"
 design_df = formulaic.model_matrix(formula, data)
 
-# formulaic also adds an intercept;
+# formulaic adds an intercept;
 # drop it since NeMoS GLMs include one implicitly
 design_df = design_df.drop(columns=["Intercept"])
-print("formulaic:\n\n", design_df)
 ```
 :::
 ::::
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+import pandas as pd
+import patsy
+
+data = pd.DataFrame({
+    'stimulus': ['Tri', 'Sq', 'Tri', 'Sq'],
+    'context':  ['C',   'C',   'S',  'S'],
+    'counts': [10, 5, 2, 0],
+})
+
+formula = "stimulus + context + stimulus:context"
+design_df = patsy.dmatrix(formula, data, return_type="dataframe")
+
+# patsy adds an intercept;
+# drop it since NeMoS GLMs include one implicitly
+design_df = design_df.drop(columns=["Intercept"])
+```
+
+```{code-cell} ipython3
+print("Design matrix:\n\n", design_df)
+```
 
 :::{dropdown} Understanding `patsy`'s output
 :color: info
@@ -184,6 +206,7 @@ print(X_full.shape[1], "columns, rank", np.linalg.matrix_rank(X_full))
 The rank is smaller than the number of columns: 4 of the 8 are redundant. This is exactly the
 redundancy `patsy`/`formulaic` remove for you.
 :::
+
 
 ```{code-cell} ipython3
 model = nmo.glm.GLM().fit(design_df, counts)
