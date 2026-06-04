@@ -1,5 +1,10 @@
 """Register a custom option in root."""
 
+import matplotlib
+
+# Force a non-interactive backend during test runs so doctests that call
+# ``plt.show()`` never block, even when pytest is invoked directly (outside tox).
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pytest
 
