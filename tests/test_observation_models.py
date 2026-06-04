@@ -995,6 +995,7 @@ class TestCommonObservationModels:
         with expectation:
             obs.pseudo_r2(y, rate, score_type)
 
+    @pytest.mark.requires_x64
     @pytest.mark.parametrize("score_type", ["pseudo-r2-Cohen", "pseudo-r2-McFadden"])
     def test_pseudo_r2_mean(
         self, score_type, observation_model_string, observation_model_rate_and_samples

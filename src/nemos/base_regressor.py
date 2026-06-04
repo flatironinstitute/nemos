@@ -26,7 +26,6 @@ from numpy.typing import NDArray
 from . import solvers, tree_utils, utils
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
-from .base_validator import RegressorValidator
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
@@ -40,6 +39,7 @@ from .typing import (
     SolverUpdate,
     StepResult,
     UserProvidedParamsT,
+    ValidatorT,
 )
 from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
 
@@ -71,7 +71,9 @@ def strip_metadata(arg_num: Optional[int] = None, arg_name: Optional[str] = None
     return decorator
 
 
-class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
+class BaseRegressor(
+    abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT, ValidatorT]
+):
     """Abstract base class for GLM regression models.
 
     This class encapsulates the common functionality for Generalized Linear Models (GLM)
@@ -114,7 +116,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     - [`PopulationGLM`](../glm/#nemos.glm.PopulationGLM): A population GLM implementation.
     """
 
-    _validator: RegressorValidator = None
+    _validator: ValidatorT
 
     # overwrite this in subclasses if their objective functions return aux
     _has_aux: bool = False
@@ -426,11 +428,6 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         pass
 
     @abc.abstractmethod
-    def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:
-        """Predict rates based on fit parameters."""
-        pass
-
-    @abc.abstractmethod
     def score(
         self,
         X: DESIGN_INPUT_TYPE,
@@ -469,15 +466,13 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         *args,
         **kwargs,
     ):
-        """Unpenalized loss function for optimization.
+        """Unpenalized scalar loss given parameters and data.
 
-        This method computes the unpenalized loss (e.g., negative log-likelihood)
-        that is passed to the solver during optimization. The solver adds
-        regularization penalties internally.
-
-        Subclasses that use gradient-based optimization (e.g., GLM) should
-        override this method. Models using other optimization approaches
-        (e.g., EM algorithm) may not need to implement this.
+        For GLM-family models this is the negative log-likelihood passed to
+        gradient-based solvers (the solver adds the regularization penalty on
+        top). For HMM-family models the EM solver does not consume this method,
+        but it is still implemented as the negative marginal log-likelihood so
+        that ``score`` and ``compute_loss`` work uniformly across the hierarchy.
 
         Parameters
         ----------
@@ -495,16 +490,10 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         Returns
         -------
         :
-            The unpenalized loss value.
-
-        Raises
-        ------
-        NotImplementedError
-            If the subclass does not override this method.
+            The unpenalized loss value (a scalar).
         """
         raise NotImplementedError(
-            f"{self.__class__.__name__} does not implement `_compute_loss`. "
-            "This method is only required for models using gradient-based optimization."
+            f"{self.__class__.__name__} does not implement `_compute_loss`."
         )
 
     @cast_to_jax
@@ -550,21 +539,6 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         self._validator.validate_consistency(params, X, y)
         X, y = self._preprocess_inputs(X, y)
         return self._compute_loss(params, X, y, *args, **kwargs)
-
-    def _validate(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, jnp.ndarray],
-        y: Union[NDArray, jnp.ndarray],
-        init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
-    ):
-        # check input dimensionality
-        self._validator.validate_inputs(X, y)
-
-        # validate input and params consistency
-        init_params = self._validator.validate_and_cast_params(init_params)
-
-        # validate input and params consistency
-        self._validator.validate_consistency(init_params, X=X, y=y)
 
     @abc.abstractmethod
     def update(
@@ -650,17 +624,26 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         """Convert a user-provided GroupLasso mask into the internal structured format.
 
         Mutates ``self.regularizer.mask`` in place. No-op if the mask is already
-        in the structured format (i.e. already an instance of the params type).
+        in the structured format (i.e. already an instance of the solved params
+        type). For composite models (e.g. GLM-HMM) the numerical solver optimizes
+        only a sub-pytree of the full parameters; the mask is interpreted at that
+        level.
         """
         import equinox as eqx
 
         model_pars = self._validator.get_empty_params(data, y)
-        if isinstance(self.regularizer.mask, type(model_pars)):
+        # composite models solve only a sub-pytree; flat models solve the full
+        # params. The regularizer and its mask act at the solved level.
+        solver_subtree = getattr(
+            model_pars, "solver_param_subtree", lambda: lambda p: p
+        )()
+        solver_pars = solver_subtree(model_pars)
+        if isinstance(self.regularizer.mask, type(solver_pars)):
             return
 
         select_subtrees = (
-            model_pars.regularizable_subtrees()
-            if hasattr(model_pars, "regularizable_subtrees")
+            solver_pars.regularizable_subtrees()
+            if hasattr(solver_pars, "regularizable_subtrees")
             else [lambda p: p]
         )
         if len(select_subtrees) == 1:
@@ -675,7 +658,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
                 )
 
         for where, m in zip(select_subtrees, mask_list):
-            expected = jax.tree_util.tree_structure(where(model_pars))
+            expected = jax.tree_util.tree_structure(where(solver_pars))
             actual = jax.tree_util.tree_structure(m)
             if expected != actual:
                 raise ValueError(
@@ -685,7 +668,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
                     f"list, the mask must also be a list)."
                 )
 
-        struct = jax.tree_util.tree_structure(model_pars)
+        struct = jax.tree_util.tree_structure(solver_pars)
         mask_tree = jax.tree_util.tree_unflatten(struct, [None] * struct.num_leaves)
         for where, m in zip(select_subtrees, mask_list):
             mask_tree = eqx.tree_at(where, mask_tree, m, is_leaf=lambda x: x is None)

@@ -251,8 +251,8 @@ class TestTransitionProbaInitialization:
 
 def generate_kmeans_data(n_states=3, min_prob=0.02):
     n_samples = n_states * 5000
-    is_new_session = np.zeros((n_samples,), dtype=bool)
-    is_new_session[0::340] = True
+    session_starts = np.zeros((n_samples,), dtype=bool)
+    session_starts[0::340] = True
 
     # generate data from sklearn and sort it to create temporal dynamics
     X, y = make_blobs(
@@ -268,12 +268,12 @@ def generate_kmeans_data(n_states=3, min_prob=0.02):
     X_tree = {"feature1": X[:, :2], "feature2": X[:, 2:]}
 
     state = jax.nn.one_hot(y, n_states)
-    initial_probability = state[is_new_session].sum(axis=0)
+    initial_probability = state[session_starts].sum(axis=0)
     initial_probability = (initial_probability / initial_probability.sum()) + min_prob
     initial_probability = initial_probability / initial_probability.sum()
 
     transition_probability = (
-        state[:-1][~is_new_session[1:]].T @ state[1:][~is_new_session[1:]]
+        state[:-1][~session_starts[1:]].T @ state[1:][~session_starts[1:]]
     )
     transition_probability = (
         transition_probability / transition_probability.sum(axis=1, keepdims=True)
@@ -286,7 +286,7 @@ def generate_kmeans_data(n_states=3, min_prob=0.02):
         X_tree,
         y,
         y_pop,
-        is_new_session,
+        session_starts,
         initial_probability,
         transition_probability,
     )
@@ -305,7 +305,7 @@ class TestKMeansInitialization:
             X[1],
             y[0],
             y[1],
-            is_new_session,
+            session_starts,
             expected_initial_prob,
             expected_transition_prob,
         ) = generate_kmeans_data(n_states)
@@ -313,7 +313,7 @@ class TestKMeansInitialization:
             n_states,
             X[pytree],
             y[population],
-            is_new_session,
+            session_starts,
             random_key=jax.random.PRNGKey(123),
         )
         initial_prob, transition_prob = (
@@ -331,12 +331,12 @@ class TestKMeansInitialization:
     @pytest.mark.parametrize("population", [0, 1])
     def test_output_shape_and_type(self, n_states, pytree, population):
         X, y = [[], []], [[], []]
-        X[0], X[1], y[0], y[1], is_new_session, _, _ = generate_kmeans_data(n_states)
+        X[0], X[1], y[0], y[1], session_starts, _, _ = generate_kmeans_data(n_states)
         initial_prob = kmeans_initial_proba_init(
-            n_states, X[pytree], y[population], is_new_session
+            n_states, X[pytree], y[population], session_starts
         )
         transition_prob = kmeans_transition_proba_init(
-            n_states, X[pytree], y[population], is_new_session
+            n_states, X[pytree], y[population], session_starts
         )
 
         assert initial_prob.shape == (n_states,)
@@ -348,20 +348,20 @@ class TestKMeansInitialization:
         """Test that k-means initialization is non-deterministic across different random keys."""
         # the sorted values will be the same, but the state identities will differ
         n_states = 5
-        X, _, y, _, is_new_session, _, _ = generate_kmeans_data(n_states)
+        X, _, y, _, session_starts, _, _ = generate_kmeans_data(n_states)
 
         initial_prob1 = kmeans_initial_proba_init(
-            n_states, X, y, is_new_session, random_key=jax.random.PRNGKey(1)
+            n_states, X, y, session_starts, random_key=jax.random.PRNGKey(1)
         )
         transition_prob1 = kmeans_transition_proba_init(
-            n_states, X, y, is_new_session, random_key=jax.random.PRNGKey(1)
+            n_states, X, y, session_starts, random_key=jax.random.PRNGKey(1)
         )
 
         initial_prob2 = kmeans_initial_proba_init(
-            n_states, X, y, is_new_session, random_key=jax.random.PRNGKey(2)
+            n_states, X, y, session_starts, random_key=jax.random.PRNGKey(2)
         )
         transition_prob2 = kmeans_transition_proba_init(
-            n_states, X, y, is_new_session, random_key=jax.random.PRNGKey(2)
+            n_states, X, y, session_starts, random_key=jax.random.PRNGKey(2)
         )
 
         assert not jnp.allclose(initial_prob1, initial_prob2)
@@ -370,8 +370,8 @@ class TestKMeansInitialization:
     def test_shared_initializer(self):
         """Test that k-means initializer is used when specified in setup_hmm_initialization."""
         n_states = 5
-        X, _, y, _, is_new_session, _, _ = generate_kmeans_data(n_states)
-        default_initializer = KMeansInitializer(n_states, X, y, is_new_session)
+        X, _, y, _, session_starts, _, _ = generate_kmeans_data(n_states)
+        default_initializer = KMeansInitializer(n_states, X, y, session_starts)
 
         original_fit = sklearn.cluster.KMeans.fit
         # use mock fit to assert that kmeans is only called once at initializer construction
@@ -379,11 +379,11 @@ class TestKMeansInitialization:
             sklearn.cluster.KMeans, "fit", autospec=True, side_effect=original_fit
         ) as mock_fit:
             used_initializer = KMeansInitializer(
-                n_states, X, y, is_new_session, random_key=jax.random.PRNGKey(2)
+                n_states, X, y, session_starts, random_key=jax.random.PRNGKey(2)
             )
             # initial probability
             init_prob = kmeans_initial_proba_init(
-                n_states, X, y, is_new_session, initializer=used_initializer
+                n_states, X, y, session_starts, initializer=used_initializer
             )
             assert not jnp.allclose(
                 init_prob, default_initializer.initial_probability()
@@ -391,7 +391,7 @@ class TestKMeansInitialization:
             assert jnp.allclose(init_prob, used_initializer.initial_probability())
             # transition probability
             transition_prob = kmeans_transition_proba_init(
-                n_states, X, y, is_new_session, initializer=used_initializer
+                n_states, X, y, session_starts, initializer=used_initializer
             )
             assert not jnp.allclose(
                 transition_prob, default_initializer.transition_probability()
@@ -434,7 +434,7 @@ class TestSetupHMMInitialization:
         "init_func, expectation",
         [
             (
-                lambda n_states, X, y, is_new_session, random_key: jnp.ones((n_states,))
+                lambda n_states, X, y, session_starts, random_key: jnp.ones((n_states,))
                 / n_states,
                 does_not_raise(),
             ),
@@ -475,7 +475,7 @@ class TestSetupHMMInitialization:
         "init_func, expectation",
         [
             (
-                lambda n_states, X, y, is_new_session, random_key: jnp.ones(
+                lambda n_states, X, y, session_starts, random_key: jnp.ones(
                     (n_states, n_states)
                 )
                 / n_states,
@@ -507,7 +507,7 @@ class TestSetupHMMInitialization:
     def custom_init_func(self, init_func, key):
         if init_func:
             return (
-                lambda n_states, X, y, is_new_session, random_key, extra_key=2: jnp.ones(
+                lambda n_states, X, y, session_starts, random_key, extra_key=2: jnp.ones(
                     shape=((n_states, n_states) if "transition" in key else (n_states,))
                 )
                 / n_states
@@ -576,7 +576,7 @@ class TestSetupHMMInitialization:
             ),
             (
                 "initial_proba_init",
-                lambda n_states, X, y, is_new_session, random_key, extra_kwarg=1: jnp.ones(
+                lambda n_states, X, y, session_starts, random_key, extra_kwarg=1: jnp.ones(
                     (n_states,)
                 )
                 / n_states,
@@ -585,7 +585,7 @@ class TestSetupHMMInitialization:
             ),
             (
                 "transition_proba_init",
-                lambda n_states, X, y, is_new_session, random_key, extra_kwarg=1: jnp.ones(
+                lambda n_states, X, y, session_starts, random_key, extra_kwarg=1: jnp.ones(
                     (n_states, n_states)
                 )
                 / n_states,
@@ -619,12 +619,12 @@ class TestSetupHMMInitialization:
             ),
             (
                 "initial_proba_init",
-                lambda n_states, X, y, is_new_session, random_key: jnp.ones((n_states,))
+                lambda n_states, X, y, session_starts, random_key: jnp.ones((n_states,))
                 / n_states,
             ),
             (
                 "transition_proba_init",
-                lambda n_states, X, y, is_new_session, random_key: jnp.ones(
+                lambda n_states, X, y, session_starts, random_key: jnp.ones(
                     (n_states, n_states)
                 )
                 / n_states,
@@ -705,10 +705,10 @@ class TestGenerateHMMInitParams:
             "transition_proba_init_kwargs": None,
         }
         result1 = generate_hmm_initial_params(
-            n_states=3, X=None, y=None, is_new_session=None, init_funcs=init_funcs
+            n_states=3, X=None, y=None, session_starts=None, init_funcs=init_funcs
         )
         result2 = generate_hmm_initial_params(
-            n_states=3, X=None, y=None, is_new_session=None
+            n_states=3, X=None, y=None, session_starts=None
         )
         assert jnp.allclose(jnp.vstack(result1), jnp.vstack(result2))
 
@@ -716,7 +716,7 @@ class TestGenerateHMMInitParams:
     def test_output_shapes_and_types(self, n_states):
         """Test that output shapes and types are correct."""
         initial_prob, transition_prob = generate_hmm_initial_params(
-            n_states=n_states, X=None, y=None, is_new_session=None
+            n_states=n_states, X=None, y=None, session_starts=None
         )
 
         assert initial_prob.shape == (n_states,)
