@@ -92,4 +92,16 @@ plot_06_calcium_imaging.md
 ```
 :::
 
+:::{grid-item-card}
+
+<figure>
+<img src="../_static/thumbnails/tutorials/plot_07_behavioral_states.svg" style="height: 100px", alt="GLMHMM weights."/>
+</figure>
+
+```{toctree}
+:maxdepth: 2
+plot_07_behavioral_states.md
+```
+:::
+
 ::::
