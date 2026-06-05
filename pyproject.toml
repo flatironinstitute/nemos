@@ -95,6 +95,7 @@ docs = [
     "patsy",
     "tqdm",
     "formulaic",                    # Design matrix constuction package, used in a doc note
+    "one-api"
 ]
 examples = [
     "scikit-learn",
