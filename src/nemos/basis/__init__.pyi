@@ -1,6 +1,7 @@
 """Basis module stubs."""
 
 from ._basis import AdditiveBasis, MultiplicativeBasis
+from ._category import Category
 from ._custom_basis import CustomBasis
 from ._transformer_basis import TransformerBasis
 from .basis import (
@@ -25,6 +26,7 @@ from .basis import (
 __all__ = [
     "AdditiveBasis",
     "MultiplicativeBasis",
+    "Category",
     "CustomBasis",
     "TransformerBasis",
     "BSplineConv",

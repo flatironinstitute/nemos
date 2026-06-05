@@ -6,11 +6,31 @@ if [[ -z "$MARKDOWN_LINK_CHECK" ]]; then
     exit 1
 fi
 
-CONFIG=".mlc.external.json"
+# Mode selects which links are validated:
+#   external (default, used by CI): skip links to the NeMoS docs site. The README on
+#     main points to API pages that only exist once this branch's docs are deployed,
+#     so checking them on every PR would fail on not-yet-published URLs. The scheduled
+#     check-readme-links workflow runs "full" mode to catch genuine drift.
+#   full (scheduled job): validate every link, including https://nemos.readthedocs.io/...
+MODE="${1:-external}"
+BASE_CONFIG=".mlc.external.json"
+
+if [[ "$MODE" == "full" ]]; then
+    CONFIG="$BASE_CONFIG"
+else
+    if ! command -v jq >/dev/null 2>&1; then
+        echo "❌ ERROR: jq is required for '$MODE' mode (to derive the CI link-check config)."
+        exit 1
+    fi
+    CONFIG="$(mktemp)"
+    trap 'rm -f "$CONFIG"' EXIT
+    jq '.ignorePatterns += [{"pattern": "^https://nemos\\.readthedocs\\.io/"}]' "$BASE_CONFIG" > "$CONFIG"
+fi
+
 FAILED_FILES=()
 FAILED_DETAILS=""
 
-echo "🔍 Checking external Markdown links..."
+echo "🔍 Checking external Markdown links (mode: $MODE)..."
 echo "🔎 Using config: $CONFIG"
 
 check_file() {
