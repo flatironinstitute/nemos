@@ -138,6 +138,8 @@ def remap_parameters(method):
 
 class BasisMixin:
     _allow_inputs_of_different_shape = True
+    _convert_to_float = True
+    _is_discrete = False
 
     def __init__(self, label: Optional[str] = None):
         if not hasattr(self, "_input_shape_"):
@@ -149,6 +151,16 @@ class BasisMixin:
         # initialize parent to None. This should not end in "_" because it is
         # a permanent property of a basis, defined at composite basis init
         self._parent: Optional["BasisMixin"] = None
+
+    def __getattr__(self, name):
+        if name == "bounds" and self._is_discrete:
+            raise AttributeError(f"{self.__class__.__name__} has no bounds.")
+        super().__getattribute__(name)
+
+    def __setattr__(self, name, value):
+        if name == "bounds" and self._is_discrete:
+            raise AttributeError(f"{self.__class__.__name__} has no bounds.")
+        super().__setattr__(name, value)
 
     def __repr__(self):
         bounds = getattr(self, "bounds", None)
@@ -520,7 +532,8 @@ class EvalBasisMixin:
     def __init__(
         self, bounds: Optional[Tuple[float, float]] = None, fill_value: float = jnp.nan
     ):
-        self.bounds = bounds
+        if not getattr(self, "_is_discrete", False):
+            self.bounds = bounds
         self.fill_value = fill_value
 
     def _compute_features(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor):
@@ -549,7 +562,11 @@ class EvalBasisMixin:
 
         """
         out = self.evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
-        if self._apply_bounds_fill and self.bounds is not None:
+        if (
+            self._apply_bounds_fill
+            and (not self._is_discrete)
+            and self.bounds is not None
+        ):
             out = self._apply_fill_value(*xi, out=out)
         return np.reshape(out, (out.shape[0], -1))
 

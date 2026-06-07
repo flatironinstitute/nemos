@@ -212,7 +212,7 @@ class LabelEncoder:
 
         return y
 
-    def decode(self, indices: NDArray[int]) -> NDArray | jnp.ndarray:
+    def decode(self, indices: NDArray[int] | jnp.ndarray) -> NDArray | jnp.ndarray:
         """Convert internal indices [0, n_classes-1] back to user-provided class labels."""
         if self._skip_encoding:
             return indices
@@ -315,19 +315,17 @@ class LabelEncoder:
         y_encoded = jnp.searchsorted(self.classes_, y)
         return y_encoded
 
-    def __repr__(self):
-        """Represent encoder object.
+    def __eq__(self, other):
+        """Check if two encoders are equal.
 
-        Notes
-        -----
-        This class is for internal use only, a simple repr is sufficient.
-        Using `utils.format_repr` requires inheriting `BaseRegressor` which is an overkill.
+        Encoders are equal if they encode the same classes, or, if classes
+        are not set yet, if they have the same number of classes.
         """
-        cls_name = self.__class__.__name__
-        if self.classes_ is None:
-            args = f"(n_classes={self.n_classes})"
-        else:
-            args = (
-                f"(\n    n_classes={self.n_classes},\n    classes_={self.classes_}\n)"
-            )
-        return cls_name + args
+        if not isinstance(other, self.__class__):
+            return False
+        elif self._n_classes != other._n_classes:
+            return False
+        same_classes = self.classes_ == other.classes_
+        if isinstance(same_classes, bool):
+            return same_classes and other._n_classes == self._n_classes
+        return all(same_classes)
