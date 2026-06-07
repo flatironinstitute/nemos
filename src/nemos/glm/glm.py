@@ -1216,7 +1216,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         data = X.data if isinstance(X, FeaturePytree) else X
 
         # wrap into GLM params, this assumes params are well structured,
-        # if initializaiton is done via `initialize_optimizer_and_state` it
+        # if initialization is done via `initialize_optimizer_and_state` it
         # should be fine
         params = self._validator.to_model_params(params)
 
@@ -1736,15 +1736,15 @@ class PopulationGLM(GLM):
             + params.intercept
         )
 
-    def _get_hess_fn(self, params) -> Callable | None:
+    def _get_hess_fn(self, params, use_autodiff: bool = False) -> Callable | None:
+        if use_autodiff:
+            return jax.vmap(jax.hessian(self._compute_loss), in_axes=(None, None, 1))
+
         var_of_mu = _var_func_of_mu(self)
         lam = self.regularizer_strength
 
         def hess(params, *args):
             X = args[0]
-
-            n_neurons = params.intercept.shape[0]
-
             coef = params.coef
 
             # Match prediction function exactly
@@ -1753,28 +1753,23 @@ class PopulationGLM(GLM):
 
             eta = X @ coef + params.intercept
 
-            blocks = []
-
-            for neuron_idx in range(n_neurons):
-                if self._feature_mask is not None:
-                    mask = self._feature_mask[:, neuron_idx]
-
-                    # preserve dimensionality
-                    X_neuron = X * mask[None, :]
-                else:
-                    X_neuron = X
-
-                block = _glm_hessian_block(
-                    X_neuron,
-                    eta[:, neuron_idx],
-                    self.inverse_link_function,
-                    var_of_mu,
-                    lam,
+            if self._feature_mask is not None:
+                X = jnp.moveaxis(
+                    X[:, :, None] * self._feature_mask[None, :, :],
+                    2,
+                    0,
                 )
 
-                blocks.append(block)
-
-            return jnp.stack(blocks)
+            return jax.vmap(
+                _glm_hessian_block,
+                in_axes=(None, 1, None, None, None),
+            )(
+                X,
+                eta,
+                self.inverse_link_function,
+                var_of_mu,
+                lam,
+            )
 
         return hess
 
