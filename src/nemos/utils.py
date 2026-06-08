@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 import os
 import warnings
+from functools import wraps
 from importlib.metadata import version
 from typing import TYPE_CHECKING, Any, Callable, List, Literal, Optional, Union
 
@@ -555,6 +556,28 @@ def _get_terminal_size():
 def one_over_x(x: NDArray):
     """Implement 1/x."""
     return jnp.power(x, -1)
+
+
+def _elementwise_derivative(f: Callable) -> Callable:
+    """Construct the element-wise derivative of a function using forward-mode AD.
+
+    Parameters
+    ----------
+    f :
+        A function acting element-wise on an array.
+
+    Returns
+    -------
+    Callable
+        A function that computes the derivative of ``f`` evaluated element-wise.
+    """
+
+    @wraps(f)
+    def df(x):
+        _, grad = jax.jvp(f, (x,), (jnp.ones_like(x),))
+        return grad
+
+    return df
 
 
 def _encode_dict_key(k):
