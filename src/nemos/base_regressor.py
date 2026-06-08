@@ -114,6 +114,11 @@ class BaseRegressor(
     _validator: ValidatorT
     _hess_tag: HessianTag | None = None
 
+    # Optional model-level default solver, used in place of the regularizer's default
+    # when allowed by the regularizer. Subclasses set this to express a model-specific
+    # preference (e.g. GLMs default to Newton).
+    _default_solver: str | None = None
+
     # overwrite this in subclasses if their objective functions return aux
     _has_aux: bool = False
 
@@ -291,8 +296,13 @@ class BaseRegressor(
     def solver_spec(self) -> SolverSpec:
         """Getter for the solver specification."""
         if self._solver_spec is None:
-            spec = solvers.get_solver(self.regularizer.default_solver)
-            return spec
+            default = self.regularizer.default_solver
+            if (
+                self._default_solver is not None
+                and self._default_solver in self.regularizer.allowed_solvers
+            ):
+                default = self._default_solver
+            return solvers.get_solver(default)
         return self._solver_spec
 
     @property
