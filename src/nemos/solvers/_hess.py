@@ -41,16 +41,36 @@ def _expand_property(p) -> set[type]:
     return {cls} | PROPERTY_IMPLIES.get(cls, set())
 
 
-def combine_property(p1, p2) -> type | None:
-    common = _expand_property(p1) & _expand_property(p2)
-    if not common:
-        return None
-    most_specific = [
-        p
-        for p in common
-        if not any(p in PROPERTY_IMPLIES.get(q, set()) for q in common)
-    ]
-    return most_specific[0] if len(most_specific) == 1 else None
+def combine_property(p1, p2) -> type:
+    """Resolve the definiteness of the sum ``H1 + H2`` from the summands' properties.
+
+    Used for additive objectives (e.g. loss + regularizer), where the Hessian of a sum
+    is the sum of the Hessians. Definiteness combines as:
+
+    - ``General`` on either side yields ``General`` (no structure survives a general term).
+    - a strictly definite term absorbs a same-signed semidefinite one, e.g.
+      ``PositiveDefinite + PositiveSemiDefinite -> PositiveDefinite``; like-signed definite
+      terms stay definite.
+    - any other combination of symmetric terms degrades to ``Symmetric`` (no definiteness
+      guarantee, e.g. mixing positive and negative curvature).
+    """
+    c1 = p1 if isinstance(p1, type) else type(p1)
+    c2 = p2 if isinstance(p2, type) else type(p2)
+    pair = {c1, c2}
+
+    if General in pair:
+        return General
+
+    positive = {PositiveDefinite, PositiveSemiDefinite}
+    if pair <= positive:
+        return PositiveDefinite if PositiveDefinite in pair else PositiveSemiDefinite
+
+    if pair == {NegativeDefinite}:
+        return NegativeDefinite
+
+    # both summands are symmetric (PD/PSD/NegDef/Symmetric) but the combination
+    # carries no definiteness guarantee.
+    return Symmetric
 
 
 # --- Structures ---

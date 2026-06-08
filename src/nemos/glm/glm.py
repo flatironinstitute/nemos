@@ -26,7 +26,7 @@ from ..solvers._hess import (
     BlockDiagonal,
     Full,
     HessianTag,
-    PositiveDefinite,
+    PositiveSemiDefinite,
 )
 from ..type_casting import cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, SolverState, StepResult
@@ -63,6 +63,7 @@ def _glm_hessian_block(
     var_of_mu,
     lam=0.0,
 ):
+    X = jnp.concatenate(jax.tree_util.tree_leaves(X), axis=1)
     n_samples, n_features = X.shape
 
     gprime = _elementwise_derivative(inverse_link_function)
@@ -114,7 +115,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
     +---------------+------------------+---------------------------------------------------------------------+
     | Regularizer   | Default Solver   | Available Solvers                                                   |
     +===============+==================+=====================================================================+
-    | UnRegularized | Newton           | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
+    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
     +---------------+------------------+---------------------------------------------------------------------+
     | Ridge         | Newton           | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
     +---------------+------------------+---------------------------------------------------------------------+
@@ -123,11 +124,13 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
     | GroupLasso    | ProximalGradient | ProximalGradient                                                    |
     +---------------+------------------+---------------------------------------------------------------------+
 
-    For ``UnRegularized`` and ``Ridge`` problems the default solver is ``Newton``, which converges in
-    a handful of iterations for the feature counts typical of neural GLMs. Each Newton step solves a
-    dense Hessian system, costing ``O(d**2)`` memory and ``O(d**3)`` compute in the number of features
-    ``d``, so for models with many features ``LBFGS`` is preferable: it is memory-light and more robust
-    on noisy objective landscapes. Switch by passing ``solver_name="LBFGS"`` at initialization.
+    The default solver for ``Ridge`` is ``Newton``: the ridge penalty makes the Hessian positive
+    definite, so each step is a stable Cholesky solve that converges in a handful of iterations at the
+    feature counts typical of neural GLMs. ``Newton`` is also available for ``UnRegularized`` problems
+    but is not the default there, since the unpenalized Hessian can be singular. A Newton step solves a
+    Hessian system, costing ``O(d**2)`` memory and ``O(d**3)`` compute in the number of features ``d``,
+    so for models with many features ``LBFGS`` is preferable: it is memory-light and more robust on
+    noisy objective landscapes. Switch solver by passing ``solver_name=...`` at initialization.
 
     **Fitting Large Models**
 
@@ -284,8 +287,21 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
     _invalid_observation_types = (obs.CategoricalObservations,)
     _validator_class = GLMValidator
-    _hess_tag: HessianTag = HessianTag(structure=Full, property=PositiveDefinite)
-    _default_solver: str = "Newton"
+    # The unregularized GLM loss Hessian (Fisher information) is positive
+    # semidefinite; a strictly positive-definite regularizer (e.g. Ridge) promotes
+    # it to positive definite via ``combine_hessian_tags``.
+    _hess_tag: HessianTag = HessianTag(structure=Full, property=PositiveSemiDefinite)
+
+    def _resolve_default_solver(self) -> str:
+        # Newton is the default for Ridge: the ridge penalty makes the penalized
+        # Hessian positive definite, so the Cholesky-based Newton step is stable.
+        # For other regularizers (e.g. UnRegularized, whose Hessian can be only
+        # positive semidefinite) defer to the regularizer's own default.
+        if isinstance(self.regularizer, Ridge) and (
+            "Newton" in self.regularizer.allowed_solvers
+        ):
+            return "Newton"
+        return super()._resolve_default_solver()
 
     def __init__(
         self,
@@ -1086,7 +1102,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         def hess(params, *args):
             X = args[0]
 
-            eta = X @ params.coef + params.intercept
+            eta = (
+                jax.tree.reduce(jnp.add, jax.tree.map(jnp.dot, X, params.coef))
+                + params.intercept
+            )
 
             return _glm_hessian_block(
                 X,
@@ -1383,7 +1402,7 @@ class PopulationGLM(GLM):
     +---------------+------------------+---------------------------------------------------------------------+
     | Regularizer   | Default Solver   | Available Solvers                                                   |
     +===============+==================+=====================================================================+
-    | UnRegularized | Newton           | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
+    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
     +---------------+------------------+---------------------------------------------------------------------+
     | Ridge         | Newton           | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
     +---------------+------------------+---------------------------------------------------------------------+
@@ -1392,11 +1411,13 @@ class PopulationGLM(GLM):
     | GroupLasso    | ProximalGradient | ProximalGradient                                                    |
     +---------------+------------------+---------------------------------------------------------------------+
 
-    For ``UnRegularized`` and ``Ridge`` problems the default solver is ``Newton``, which converges in
-    a handful of iterations for the feature counts typical of neural GLMs. Each Newton step solves a
-    dense Hessian system, costing ``O(d**2)`` memory and ``O(d**3)`` compute in the number of features
-    ``d``, so for models with many features ``LBFGS`` is preferable: it is memory-light and more robust
-    on noisy objective landscapes. Switch by passing ``solver_name="LBFGS"`` at initialization.
+    The default solver for ``Ridge`` is ``Newton``: the ridge penalty makes the Hessian positive
+    definite, so each step is a stable Cholesky solve that converges in a handful of iterations at the
+    feature counts typical of neural GLMs. ``Newton`` is also available for ``UnRegularized`` problems
+    but is not the default there, since the unpenalized Hessian can be singular. A Newton step solves a
+    Hessian system, costing ``O(d**2)`` memory and ``O(d**3)`` compute in the number of features ``d``,
+    so for models with many features ``LBFGS`` is preferable: it is memory-light and more robust on
+    noisy objective landscapes. Switch solver by passing ``solver_name=...`` at initialization.
 
     **Fitting Large Models**
 
@@ -1555,7 +1576,7 @@ class PopulationGLM(GLM):
 
     _validator_class = PopulationGLMValidator
     _hess_tag: HessianTag = HessianTag(
-        structure=BlockDiagonal, property=PositiveDefinite
+        structure=BlockDiagonal, property=PositiveSemiDefinite
     )
 
     def __init__(
@@ -1755,38 +1776,37 @@ class PopulationGLM(GLM):
         def hess(params, *args):
             X = args[0]
 
-            n_neurons = params.intercept.shape[0]
-
             coef = params.coef
-
-            # Match prediction function exactly
+            # Match the prediction function: the mask multiplies the coefficients.
             if self._feature_mask is not None:
-                coef = coef * self._feature_mask
+                coef = jax.tree.map(jnp.multiply, coef, self._feature_mask)
 
-            eta = X @ coef + params.intercept
+            # eta: (n_samples, n_neurons)
+            eta = (
+                jax.tree.reduce(jnp.add, jax.tree.map(jnp.dot, X, coef))
+                + params.intercept
+            )
 
-            blocks = []
+            # One block per neuron. The neuron dimension is the trailing axis of eta
+            # (and of the feature mask), so we vmap over it instead of looping; X and
+            # the mask are pytrees, handled leaf-wise via tree_map.
+            if self._feature_mask is None:
 
-            for neuron_idx in range(n_neurons):
-                if self._feature_mask is not None:
-                    mask = self._feature_mask[:, neuron_idx]
+                def per_neuron(eta_n):
+                    return _glm_hessian_block(
+                        X, eta_n, self.inverse_link_function, var_of_mu, lam
+                    )
 
-                    # preserve dimensionality
-                    X_neuron = X * mask[None, :]
-                else:
-                    X_neuron = X
+                return jax.vmap(per_neuron, in_axes=1)(eta)
 
-                block = _glm_hessian_block(
-                    X_neuron,
-                    eta[:, neuron_idx],
-                    self.inverse_link_function,
-                    var_of_mu,
-                    lam,
+            def per_neuron(eta_n, mask_neu):
+                # zero out features not connected to this neuron (preserve sample dim)
+                X_neuron = jax.tree.map(lambda x, m: x * m[None, :], X, mask_neu)
+                return _glm_hessian_block(
+                    X_neuron, eta_n, self.inverse_link_function, var_of_mu, lam
                 )
 
-                blocks.append(block)
-
-            return jnp.stack(blocks)
+            return jax.vmap(per_neuron, in_axes=(1, 1))(eta, self._feature_mask)
 
         return hess
 

@@ -1792,9 +1792,10 @@ class TestGLMObservationModel:
         """
         Fixture for test_repr_out
         """
-        # GLMs override the regularizer default with a model-level default (Newton)
+        # These repr models are all UnRegularized, whose default solver is LBFGS
+        # (GLMs only override the default to Newton for Ridge).
         default_solver_name = nmo.solvers.get_solver(
-            nmo.glm.GLM._default_solver
+            nmo.regularizer.UnRegularized().default_solver
         ).algo_name
         lbfgs_solver_name = nmo.solvers.get_solver("LBFGS").algo_name
         if "poisson" in model_instantiation:

@@ -1171,10 +1171,25 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
             [coef_neu, params.intercept[0]]
         )
 
+        # Per-neuron negative log-likelihood. The categorical feature mask has shape
+        # (n_features, ..., n_classes) and acts on the coefficients (which carry the
+        # class axis), not on X. We apply it inside the prediction only -- via the
+        # mask-free ``GLM._predict`` to avoid re-applying the full population mask --
+        # so masked entries carry no likelihood curvature, while the regularizer still
+        # penalizes the unmasked coefficients (matching the full model).
+        def _single_neuron_nll(params_neu, X, y_neu, mask_neu):
+            coef = params_neu.coef
+            if mask_neu is not None:
+                coef = jax.tree_util.tree_map(lambda c, m: c * m, coef, mask_neu)
+            rate = GLM._predict(
+                self, self._validator.to_model_params([coef, params_neu.intercept]), X
+            )
+            return self._observation_model._negative_log_likelihood(y_neu, rate)
+
         # build the per-neuron penalized loss once;
         # the regularizer captures filter_kwargs (mask, structured strength) from params_neu_template
         penalized_single = self.regularizer.penalized_loss(
-            super()._compute_loss,
+            _single_neuron_nll,
             params_neu_template,
             strength=self.regularizer_strength,
         )
@@ -1183,29 +1198,28 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
             X = args[0]
             y = args[1]
             n_neurons = params.intercept.shape[0]
-            coef = params.coef
-            if self._feature_mask is not None:
-                coef = coef * self._feature_mask
 
             blocks = []
             for neuron_idx in range(n_neurons):
-                if self._feature_mask is not None:
-                    mask = self._feature_mask[:, neuron_idx]
-                    X_neuron = X * mask[None, :]
-                else:
-                    X_neuron = X
-
-                coef_neu = jax.tree_util.tree_map(lambda x: x[:, neuron_idx], coef)
+                coef_neu = jax.tree_util.tree_map(
+                    lambda x: x[:, neuron_idx], params.coef
+                )
                 params_neu = self._validator.to_model_params(
                     [coef_neu, params.intercept[neuron_idx]]
                 )
 
                 flat_params, unravel = ravel_pytree_nest(params_neu)
 
-                def flat_loss(p):
-                    return penalized_single(
-                        unravel(p), X_neuron, y[:, neuron_idx], *args[2:]
-                    )
+                mask_neu = (
+                    None
+                    if self._feature_mask is None
+                    else self._feature_mask[:, neuron_idx]
+                )
+
+                def flat_loss(
+                    p, unravel=unravel, mask_neu=mask_neu, neuron_idx=neuron_idx
+                ):
+                    return penalized_single(unravel(p), X, y[:, neuron_idx], mask_neu)
 
                 blocks.append(jax.hessian(flat_loss)(flat_params))
 

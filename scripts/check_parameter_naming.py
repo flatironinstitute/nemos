@@ -139,6 +139,7 @@ VALID_PAIRS = [
     {"func", "_func"},
     {"funcs", "_func"},
     {"fval", "val"},
+    {"params_neu", "param_name"},
 ]
 
 
