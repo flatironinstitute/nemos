@@ -27,11 +27,10 @@ from ..solvers._hess import (
     Full,
     HessianTag,
     PositiveDefinite,
-    _elementwise_derivative,
 )
 from ..type_casting import cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, SolverState, StepResult
-from ..utils import format_repr
+from ..utils import _elementwise_derivative, format_repr
 from .initialize_parameters import initialize_intercept_matching_mean_rate
 from .params import GLMParams, GLMUserParams
 from .validation import (
@@ -112,17 +111,23 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
     Below is a table listing the default and available solvers for each regularizer.
 
-    +---------------+------------------+----------------------------------------------------------------------+
-    | Regularizer   | Default Solver   | Available Solvers                                                    |
-    +===============+==================+======================================================================+
-    | UnRegularized | Newton            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
-    +---------------+------------------+----------------------------------------------------------------------+
-    | Ridge         | Newton            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
-    +---------------+------------------+----------------------------------------------------------------------+
-    | Lasso         | ProximalGradient | ProximalGradient                                                     |
-    +---------------+------------------+----------------------------------------------------------------------+
-    | GroupLasso    | ProximalGradient | ProximalGradient                                                     |
-    +---------------+------------------+----------------------------------------------------------------------+
+    +---------------+------------------+---------------------------------------------------------------------+
+    | Regularizer   | Default Solver   | Available Solvers                                                   |
+    +===============+==================+=====================================================================+
+    | UnRegularized | Newton           | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
+    +---------------+------------------+---------------------------------------------------------------------+
+    | Ridge         | Newton           | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
+    +---------------+------------------+---------------------------------------------------------------------+
+    | Lasso         | ProximalGradient | ProximalGradient                                                    |
+    +---------------+------------------+---------------------------------------------------------------------+
+    | GroupLasso    | ProximalGradient | ProximalGradient                                                    |
+    +---------------+------------------+---------------------------------------------------------------------+
+
+    For ``UnRegularized`` and ``Ridge`` problems the default solver is ``Newton``, which converges in
+    a handful of iterations for the feature counts typical of neural GLMs. Each Newton step solves a
+    dense Hessian system, costing ``O(d**2)`` memory and ``O(d**3)`` compute in the number of features
+    ``d``, so for models with many features ``LBFGS`` is preferable: it is memory-light and more robust
+    on noisy objective landscapes. Switch by passing ``solver_name="LBFGS"`` at initialization.
 
     **Fitting Large Models**
 
@@ -280,6 +285,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
     _invalid_observation_types = (obs.CategoricalObservations,)
     _validator_class = GLMValidator
     _hess_tag: HessianTag = HessianTag(structure=Full, property=PositiveDefinite)
+    _default_solver: str = "Newton"
 
     def __init__(
         self,
@@ -1374,17 +1380,23 @@ class PopulationGLM(GLM):
     stored in tabular format, shape (n_timebins, num_features) or as a pytree of arrays of the same shape.
     Below is a table listing the default and available solvers for each regularizer.
 
-    +---------------+------------------+----------------------------------------------------------------------+
-    | Regularizer   | Default Solver   | Available Solvers                                                    |
-    +===============+==================+======================================================================+
-    | UnRegularized | Newton            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
-    +---------------+------------------+----------------------------------------------------------------------+
-    | Ridge         | Newton            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
-    +---------------+------------------+----------------------------------------------------------------------+
-    | Lasso         | ProximalGradient | ProximalGradient                                                     |
-    +---------------+------------------+----------------------------------------------------------------------+
-    | GroupLasso    | ProximalGradient | ProximalGradient                                                     |
-    +---------------+------------------+----------------------------------------------------------------------+
+    +---------------+------------------+---------------------------------------------------------------------+
+    | Regularizer   | Default Solver   | Available Solvers                                                   |
+    +===============+==================+=====================================================================+
+    | UnRegularized | Newton           | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
+    +---------------+------------------+---------------------------------------------------------------------+
+    | Ridge         | Newton           | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
+    +---------------+------------------+---------------------------------------------------------------------+
+    | Lasso         | ProximalGradient | ProximalGradient                                                    |
+    +---------------+------------------+---------------------------------------------------------------------+
+    | GroupLasso    | ProximalGradient | ProximalGradient                                                    |
+    +---------------+------------------+---------------------------------------------------------------------+
+
+    For ``UnRegularized`` and ``Ridge`` problems the default solver is ``Newton``, which converges in
+    a handful of iterations for the feature counts typical of neural GLMs. Each Newton step solves a
+    dense Hessian system, costing ``O(d**2)`` memory and ``O(d**3)`` compute in the number of features
+    ``d``, so for models with many features ``LBFGS`` is preferable: it is memory-light and more robust
+    on noisy objective landscapes. Switch by passing ``solver_name="LBFGS"`` at initialization.
 
     **Fitting Large Models**
 
