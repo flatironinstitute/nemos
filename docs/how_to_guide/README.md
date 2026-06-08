@@ -144,10 +144,12 @@ define_a_custom_basis.md
 ```{toctree}
 :maxdepth: 2
 
-categorical_predictors.md
+categorical_predictors/README.md
 ```
 
 :::
+
+
 
 :::{grid-item-card}
 

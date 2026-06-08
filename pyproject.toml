@@ -94,6 +94,7 @@ docs = [
     "ipykernel",
     "patsy",
     "tqdm",
+    "formulaic",                    # Design matrix constuction package, used in a doc note
 ]
 examples = [
     "scikit-learn",
@@ -111,7 +112,7 @@ jaxopt = [
 
 
 [tool.black]
-target-version = ['py310', 'py311', 'py312']
+target-version = ['py312', 'py313', 'py314']
 skip-string-normalization = false
 exclude = '''
 (
