@@ -1,9 +1,4 @@
 from dataclasses import dataclass
-from functools import wraps
-from typing import Callable
-
-import jax
-import jax.numpy as jnp
 
 # --- Properties ---
 
@@ -116,25 +111,3 @@ def combine_hessian_tags(
         structure=combine_structure(t1.structure, t2.structure),
         property=prop,
     )
-
-
-def _elementwise_derivative(f: Callable) -> Callable:
-    """Construct the element-wise derivative of a function using forward-mode AD.
-
-    Parameters
-    ----------
-    f :
-        A function acting element-wise on an array.
-
-    Returns
-    -------
-    Callable
-        A function that computes the derivative of ``f`` evaluated element-wise.
-    """
-
-    @wraps(f)
-    def df(x):
-        _, grad = jax.jvp(f, (x,), (jnp.ones_like(x),))
-        return grad
-
-    return df
