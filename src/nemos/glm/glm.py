@@ -1736,10 +1736,7 @@ class PopulationGLM(GLM):
             + params.intercept
         )
 
-    def _get_hess_fn(self, params, use_autodiff: bool = False) -> Callable | None:
-        if use_autodiff:
-            return jax.vmap(jax.hessian(self._compute_loss), in_axes=(None, None, 1))
-
+    def _get_hess_fn(self, params, use_autodiff: bool = True) -> Callable | None:
         var_of_mu = _var_func_of_mu(self)
         lam = self.regularizer_strength
 

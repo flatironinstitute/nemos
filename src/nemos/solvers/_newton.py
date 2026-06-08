@@ -182,11 +182,12 @@ class _Newton:
         converged = gnorm <= self.tol
 
         def step(_):
-            H = (
-                self._hess_fn(params, *args)
-                if (self._hess_fn is not None and not force_autodiff_hessian)
-                else self._hessian_flat(params_flat, *args)
-            )
+            H = self._hess_fn(params_flat, *args)
+            # H = (
+            #    self._hess_fn(params_flat, *args)
+            #    if (self._hess_fn is not None and not force_autodiff_hessian)
+            #    else self._hessian_flat(params_flat, *args)
+            # )
 
             step_flat = self._newton_direction(g_flat, H, self._hess_tag)
             step_tree = self._unravel(step_flat)
