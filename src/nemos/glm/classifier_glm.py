@@ -39,6 +39,12 @@ class ClassifierMixin:
     # observation model inferred
     _invalid_observation_types = ()
 
+    def _hess_property_override(self) -> type | None:
+        # The softmax loss is singular along the (unregularized) uniform intercept
+        # shift, so Ridge does not make the penalized Hessian positive definite. Unlike
+        # a plain GLM, this loss certifies nothing extra -- no override.
+        return None
+
     def set_classes(self, y: ArrayLike) -> ClassifierMixin:
         """
         Infer unique class labels and set the ``classes_`` attribute.

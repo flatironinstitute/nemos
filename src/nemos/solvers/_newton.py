@@ -17,7 +17,6 @@ from ._hess import (
     General,
     HessianTag,
     PositiveDefinite,
-    PositiveSemiDefinite,
     combine_hessian_tags,
 )
 
@@ -28,6 +27,8 @@ class NewtonSolverProtocol(SolverProtocol[SolverState], Protocol, Generic[Solver
         self,
         hess_fn: Callable | None,
         hess_tag: HessianTag | None,
+        reg_tag: HessianTag | None = None,
+        property_override: type | None = None,
     ) -> None: ...
 
 
@@ -117,13 +118,12 @@ class _Newton:
                 lx.Cholesky(),
             ).value
 
-        if tag.property is PositiveSemiDefinite:
-            return -jnp.linalg.pinv(H) @ g_flat
-
+        # Any non-PD case (semidefinite / singular / indefinite): a robust
+        # least-squares solve that tolerates a rank-deficient operator.
         return lx.linear_solve(
             lx.MatrixLinearOperator(H),
             -g_flat,
-            lx.LU(),
+            lx.AutoLinearSolver(well_posed=False),
         ).value
 
     def _apply_or_reject(
@@ -320,14 +320,17 @@ class Newton(NewtonSolverProtocol[NewtonState]):
         self,
         hess_fn: Optional[Callable] = None,
         hess_tag: HessianTag | None = None,
-        regularizer: Optional[Any] = None,
+        reg_tag: HessianTag | None = None,
+        property_override: Optional[type] = None,
     ):
+        # ``reg_tag`` is the regularizer's coverage-resolved tag; combine it with the
+        # model's loss tag, then let the model override the definiteness when it can
+        # certify more than coverage alone (e.g. GLM + Ridge is positive definite).
+        tag = hess_tag if reg_tag is None else combine_hessian_tags(hess_tag, reg_tag)
+        if property_override is not None and tag is not None:
+            tag = HessianTag(tag.structure, property_override)
         self._solver._hess_fn = hess_fn
-        self._solver._hess_tag = (
-            hess_tag
-            if regularizer is None or regularizer._hess_tag is None
-            else combine_hessian_tags(hess_tag, regularizer._hess_tag)
-        )
+        self._solver._hess_tag = tag
 
     def init_state(self, init_params: Params, *args):
         return self._solver.init_state(init_params, *args)

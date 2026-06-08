@@ -287,6 +287,16 @@ class BaseRegressor(
             self._regularizer.check_solver(spec.algo_name)
             self._solver_spec = spec
 
+    def _hess_property_override(self) -> type | None:
+        """Definiteness the model can certify beyond what coverage inference sees.
+
+        Defaults to None (use the combined loss+regularizer tag). A subclass returns a
+        matrix-property type when its loss supplies definiteness on the subtrees the
+        regularizer leaves unpenalized (e.g. a GLM whose loss is positive definite on
+        the unregularized intercept, making a Ridge-penalized Hessian positive definite).
+        """
+        return None
+
     def _resolve_default_solver(self) -> str:
         """Name of the default solver when the user has not set one.
 
@@ -433,7 +443,10 @@ class BaseRegressor(
 
         if isinstance(solver, NewtonSolverProtocol):
             solver.setup_hessian(
-                self._get_hess_fn(init_params), self._hess_tag, self.regularizer
+                self._get_hess_fn(init_params),
+                self._hess_tag,
+                self.regularizer.resolve_hess_tag(init_params),
+                self._hess_property_override(),
             )
 
         # nemos's solvers store a .fun attribute, but it's not necessary for a solver to work.

@@ -26,6 +26,7 @@ from ..solvers._hess import (
     BlockDiagonal,
     Full,
     HessianTag,
+    PositiveDefinite,
     PositiveSemiDefinite,
 )
 from ..type_casting import cast_to_jax, support_pynapple
@@ -302,6 +303,15 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         ):
             return "Newton"
         return super()._resolve_default_solver()
+
+    def _hess_property_override(self) -> type | None:
+        # The GLM loss is positive definite on the intercept (its all-ones column is
+        # independent of X), the one subtree Ridge leaves unpenalized. So a Ridge-
+        # penalized GLM Hessian is positive definite even though coverage inference,
+        # seeing only the regularizer, certifies no more than General.
+        if isinstance(self.regularizer, Ridge):
+            return PositiveDefinite
+        return None
 
     def __init__(
         self,

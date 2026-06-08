@@ -15,7 +15,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from nemos.solvers._hess import Diagonal, HessianTag, PositiveDefinite
+from nemos.solvers._hess import Diagonal, General, HessianTag, PositiveDefinite
 
 from . import tree_utils
 from .base_class import Base
@@ -181,6 +181,31 @@ class Regularizer(Base, abc.ABC):
     _default_solver: str
     _proximal_operator: Callable
     _hess_tag: HessianTag | None = None
+
+    def resolve_hess_tag(self, params: Any) -> HessianTag | None:
+        """Hessian tag of this regularizer's curvature for the given parameters.
+
+        The regularizer's Hessian is positive definite only on the subtrees it
+        penalizes (``params.regularizable_subtrees``); if it does not cover every
+        parameter it offers no global definiteness guarantee, so the property is
+        downgraded to ``General``.
+        """
+        if self._hess_tag is None:
+            return None
+        if hasattr(params, "regularizable_subtrees"):
+            regularized = {
+                id(leaf)
+                for where in params.regularizable_subtrees()
+                for leaf in jax.tree_util.tree_leaves(where(params))
+            }
+            all_regularized = regularized == {
+                id(leaf) for leaf in jax.tree_util.tree_leaves(params)
+            }
+        else:
+            all_regularized = True
+        if all_regularized:
+            return self._hess_tag
+        return HessianTag(self._hess_tag.structure, General)
 
     @property
     def allowed_solvers(self) -> Tuple[str]:
