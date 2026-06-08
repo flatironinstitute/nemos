@@ -66,6 +66,10 @@ class _Newton:
         self._vag_flat_with_aux: Optional[Callable] = None
         self._hessian_flat: Optional[Callable] = None
 
+        # Linear solver + operator tags, resolved once from the Hessian tag in init_state
+        self._linear_solver = lx.AutoLinearSolver(well_posed=False)
+        self._operator_tags = ()
+
     def _build_cache(self, init_params):
         """Build and cache flattened functions and autodiff transforms."""
         _, self._unravel = ravel_pytree_nest(init_params)
@@ -86,6 +90,15 @@ class _Newton:
 
         if self._hess_tag is None:
             self._hess_tag = HessianTag(structure=Full, property=General)
+
+        # Resolve the linear solver once: Cholesky for positive-definite Hessians,
+        # otherwise a robust least-squares solve that tolerates rank deficiency.
+        if self._hess_tag.property is PositiveDefinite:
+            self._linear_solver = lx.Cholesky()
+            self._operator_tags = lx.positive_semidefinite_tag
+        else:
+            self._linear_solver = lx.AutoLinearSolver(well_posed=False)
+            self._operator_tags = ()
 
         return NewtonState(
             grad_norm=jnp.inf,
@@ -111,20 +124,10 @@ class _Newton:
 
             return jax.vmap(solve)(H, g_flat.reshape(H.shape[0], -1))
 
-        if tag.property is PositiveDefinite:
-            return lx.linear_solve(
-                lx.MatrixLinearOperator(H, lx.positive_semidefinite_tag),
-                -g_flat,
-                lx.Cholesky(),
-            ).value
-
-        # Any non-PD case (semidefinite / singular / indefinite): a robust
-        # least-squares solve that tolerates a rank-deficient operator.
-        return lx.linear_solve(
-            lx.MatrixLinearOperator(H),
-            -g_flat,
-            lx.AutoLinearSolver(well_posed=False),
-        ).value
+        # Solver and operator tags were resolved once from the Hessian tag in
+        # init_state; reuse them rather than re-inferring per iteration.
+        operator = lx.MatrixLinearOperator(H, self._operator_tags)
+        return lx.linear_solve(operator, -g_flat, self._linear_solver).value
 
     def _apply_or_reject(
         self,
