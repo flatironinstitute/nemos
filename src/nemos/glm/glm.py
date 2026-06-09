@@ -11,6 +11,8 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike
+from jax.flatten_util import ravel_pytree
+
 from sklearn.utils import InputTags, TargetTags
 
 from .. import observation_models as obs
@@ -21,6 +23,8 @@ from ..exceptions import NotFittedError
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
+from ..type_casting import _is_scalar_or_0d
+
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from ..solvers._hess import (
     BlockDiagonal,
@@ -59,10 +63,11 @@ REGRESSION_GLM_TYPES = Union[
 
 def _glm_hessian_block(
     X,
+    params,
     eta,
     inverse_link_function,
     var_of_mu,
-    lam=0.0,
+    lam: Any = 0.0,
 ):
     X = jnp.concatenate(jax.tree_util.tree_leaves(X), axis=1)
     n_samples, n_features = X.shape
@@ -79,9 +84,12 @@ def _glm_hessian_block(
     )
 
     H = X_aug.T @ (w[:, None] * X_aug)
-
-    if lam is not None and lam > 0:
-        H = H.at[:-1, :-1].add(lam * jnp.eye(n_features))
+    if lam is not None:
+        if _is_scalar_or_0d(lam.coef):
+            lam = lam.coef * jnp.eye(n_features)
+        else:
+            lam = jnp.diag(jnp.concatenate(jax.tree_util.tree_leaves(lam.coef)))
+        H = H.at[:-1, :-1].add(lam)
 
     return H
 
@@ -1085,29 +1093,69 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             rank = jnp.linalg.matrix_rank(X)
             return (n_samples - rank - 1) * jnp.ones_like(params.intercept)
 
-    def _get_hess_fn(self, params) -> Callable | None:
-        """Construct the analytic Fisher-scoring Hessian for a GLM.
+    def _get_hess_fn(
+        self, params, solver, use_autodiff: bool = False
+    ) -> Callable | None:
+        """
+        Construct a function to compute the Hessian of the penalized log-likelihood.
 
-        This function returns a callable that computes the Hessian of the penalized
-        mean log-likelihood for a generalized linear model using the Fisher scoring
-        approximation. This avoids the computational cost of automatic
-        differentiation-based Hessian evaluation.
+        This function returns a callable that computes the Hessian of the GLM's
+        penalized mean log-likelihood with respect to the model parameters. It
+        supports two modes:
+
+        1. Automatic differentiation (`use_autodiff=True`):
+           Computes the Hessian via JAX's `jax.hessian`, flattening any PyTree
+           parameters to a vector. The resulting Hessian is a 2D square array of
+           shape `(d, d)`, where `d` is the total number of parameters (including
+           the intercept).
+
+        2. Analytic Fisher-scoring (`use_autodiff=False`):
+           Computes the Hessian using the Fisher information matrix approximation
+           for GLMs. Regularization is applied if `self.regularizer_strength` is set.
+
+        Parameters
+        ----------
+        params : PyTree
+            Model parameters. Can be a tree of arrays, typically including `coef`
+            and `intercept`.
+        solver : object
+            An optimizer object that provides `solver.fun(params, *args)` to compute
+            the loss or mean log-likelihood.
+        use_autodiff : bool, default=True
+            If True, use automatic differentiation to compute the Hessian. If False,
+            use the analytic Fisher-scoring approximation.
 
         Returns
         -------
-        Callable
-            A function with signature ``(params, X, *args) -> (d, d)`` returning the
-            Hessian matrix in flattened parameter space, where ``d`` is the number of
-            parameters (including intercept).
+        Callable[[PyTree, array, ...], jnp.ndarray]
+            A function that takes `(params, X, *args)` and returns a Hessian matrix
+            in flattened parameter space:
+            - If `use_autodiff=True`, the Hessian is computed via `jax.hessian`.
+            - If `use_autodiff=False`, the Hessian uses the Fisher-scoring approximation
+              and includes the effect of regularization if applicable.
+            The returned Hessian is a square 2D array of shape `(d, d)`.
 
         Notes
         -----
-        The Hessian is currently only used with the Newton solver.
-        The returned Hessian corresponds to the Fisher information matrix scaled by
-        the number of samples, consistent with a mean loss formulation.
+        - The Hessian returned in analytic mode corresponds to the Fisher information
+          matrix scaled by the number of samples, consistent with a mean loss formulation.
+        - The function currently assumes that `X` is the first argument in `*args`
+          when calling the Hessian function.
         """
+        if use_autodiff:
+
+            def autodiff_hess(params_tree, *args):
+                params, unravel_fn = ravel_pytree(params_tree)
+                return jax.hessian(lambda x: solver.fun(unravel_fn(x), *args))(params)
+
+            return autodiff_hess
+
         var_of_mu = _var_func_of_mu(self)
         lam = self.regularizer_strength
+        if lam is not None:
+            lam = self.regularizer._validate_strength_structure(
+                params, self.regularizer_strength
+            )
 
         def hess(params, *args):
             X = args[0]
@@ -1119,6 +1167,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
             return _glm_hessian_block(
                 X,
+                params,
                 eta,
                 self.inverse_link_function,
                 var_of_mu,
@@ -1779,46 +1828,19 @@ class PopulationGLM(GLM):
             + params.intercept
         )
 
-    def _get_hess_fn(self, params) -> Callable | None:
-        var_of_mu = _var_func_of_mu(self)
-        lam = self.regularizer_strength
+    def _get_hess_fn(self, params, solver, use_autodiff: bool = False):
+        base_hess_fn = super()._get_hess_fn(params, solver, use_autodiff)
 
-        def hess(params, *args):
-            X = args[0]
+        def _slice_params(params, i):
+            mask = self._feature_mask[:, i] if self._feature_mask is not None else 1
+            sliced_coef = jax.tree_util.tree_map(lambda c: c[:, i] * mask, params.coef)
+            return type(params)(coef=sliced_coef, intercept=params.intercept[i])
 
-            coef = params.coef
-            # Match the prediction function: the mask multiplies the coefficients.
-            if self._feature_mask is not None:
-                coef = jax.tree.map(jnp.multiply, coef, self._feature_mask)
+        def hess_fn(params, X, *args):
+            compute = lambda i: base_hess_fn(_slice_params(params, i), X, *args)
+            return jax.vmap(compute)(jnp.arange(params.coef.shape[1]))
 
-            # eta: (n_samples, n_neurons)
-            eta = (
-                jax.tree.reduce(jnp.add, jax.tree.map(jnp.dot, X, coef))
-                + params.intercept
-            )
-
-            # One block per neuron. The neuron dimension is the trailing axis of eta
-            # (and of the feature mask), so we vmap over it instead of looping; X and
-            # the mask are pytrees, handled leaf-wise via tree_map.
-            if self._feature_mask is None:
-
-                def per_neuron(eta_n):
-                    return _glm_hessian_block(
-                        X, eta_n, self.inverse_link_function, var_of_mu, lam
-                    )
-
-                return jax.vmap(per_neuron, in_axes=1)(eta)
-
-            def per_neuron(eta_n, mask_neu):
-                # zero out features not connected to this neuron (preserve sample dim)
-                X_neuron = jax.tree.map(lambda x, m: x * m[None, :], X, mask_neu)
-                return _glm_hessian_block(
-                    X_neuron, eta_n, self.inverse_link_function, var_of_mu, lam
-                )
-
-            return jax.vmap(per_neuron, in_axes=(1, 1))(eta, self._feature_mask)
-
-        return hess
+        return hess_fn
 
     def __sklearn_clone__(self) -> PopulationGLM:
         """Clone the PopulationGLM, dropping feature_mask."""

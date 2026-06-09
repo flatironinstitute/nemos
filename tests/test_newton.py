@@ -152,7 +152,7 @@ def test_newton_glm_initialize_hessian(glm_class, regularizer_name, linear_regre
     params_tree = GLMParams(*params)
 
     init = glm.solver._solver._hess_fn(params_tree, X, y)
-    expected = glm._get_hess_fn(params_tree)(params_tree, X, y)
+    expected = glm._get_hess_fn(params_tree, glm._solver)(params_tree, X, y)
     np.testing.assert_allclose(init, expected)
 
 
@@ -234,7 +234,7 @@ def test_newton_glm_set_regularizer_update_recovers(
     with does_not_raise():
         glm.update(params, init_state, X, y)
     after = glm.solver._solver._hess_fn(params_tree, X, y)
-    expected = glm._get_hess_fn(params_tree)(params_tree, X, y)
+    expected = glm._get_hess_fn(params_tree, glm._solver)(params_tree, X, y)
     np.testing.assert_allclose(after, expected)
     if regularizer_before == regularizer_after:
         assert np.allclose(after, init)
@@ -298,7 +298,7 @@ def test_newton_glm_set_regularizer_strength_recovers(
     with does_not_raise():
         glm.update(params, init_state, X, y)
     after = glm.solver._solver._hess_fn(params_tree, X, y)
-    expected = glm._get_hess_fn(params_tree)(params_tree, X, y)
+    expected = glm._get_hess_fn(params_tree, glm._solver)(params_tree, X, y)
     np.testing.assert_allclose(after, expected)
     if regularizer_name == "Ridge":
         assert not np.allclose(after, init)
@@ -391,10 +391,76 @@ def test_newton_glm_set_observation_model_recovers(
     with does_not_raise():
         glm.update(params, init_state, X, y)
     after = glm.solver._solver._hess_fn(params_tree, X, y)
-    expected = glm._get_hess_fn(params_tree)(params_tree, X, y)
+    expected = glm._get_hess_fn(params_tree, glm._solver)(params_tree, X, y)
     np.testing.assert_allclose(after, expected)
 
     if obs_init == obs_after:
         assert np.allclose(after, init)
     else:
         assert not np.allclose(after, init)
+
+
+def test_newton_glm_regularizer_strength_scalar(linear_regression):
+    X, y, _, _, _ = linear_regression
+
+    # Get UnRegularized hessian
+    glm = nmo.glm.GLM(regularizer="UnRegularized", solver_name="Newton")
+    params = glm.initialize_params(X, y)
+    glm.initialize_optimizer_and_state(params, X, y)
+    params_tree = GLMParams(*params)
+    H = glm._get_hess_fn(params_tree, glm._solver)(params_tree, X, y)
+
+    # Get Ridge hessian
+    glm.regularizer = "Ridge"
+    glm.regularizer_strength = 0.1
+    glm.initialize_optimizer_and_state(params, X, y)
+    regularized_hess = glm._get_hess_fn(params_tree, glm._solver)(params_tree, X, y)
+
+    assert not np.allclose(H, regularized_hess)
+    np.testing.assert_allclose(
+        H.at[:-1, :-1].add(0.1 * jnp.eye(len(H) - 1)), regularized_hess
+    )
+
+
+def test_newton_glm_regularizer_strength_array(linear_regression):
+    X, y, _, _, _ = linear_regression
+
+    # Get UnRegularized hessian
+    glm = nmo.glm.GLM(regularizer="UnRegularized", solver_name="Newton")
+    params = glm.initialize_params(X, y)
+    glm.initialize_optimizer_and_state(params, X, y)
+    params_tree = GLMParams(*params)
+    H = glm._get_hess_fn(params_tree, glm._solver)(params_tree, X, y)
+
+    # Get Ridge hessian
+    glm.regularizer = "Ridge"
+    glm.regularizer_strength = [0.1, 0.2, 0.3]
+    glm.initialize_optimizer_and_state(params, X, y)
+    regularized_hess = glm._get_hess_fn(params_tree, glm._solver)(params_tree, X, y)
+
+    assert not np.allclose(H, regularized_hess)
+    np.testing.assert_allclose(
+        H.at[:-1, :-1].add(jnp.diag(jnp.array([0.1, 0.2, 0.3]))), regularized_hess
+    )
+
+
+def test_newton_glm_regularizer_strength_dict(linear_regression_tree):
+    X, y, _, _, _ = linear_regression_tree
+
+    # Get UnRegularized hessian
+    glm = nmo.glm.GLM(regularizer="UnRegularized", solver_name="Newton")
+    params = glm.initialize_params(X, y)
+    glm.initialize_optimizer_and_state(params, X, y)
+    params_tree = GLMParams(*params)
+    H = glm._get_hess_fn(params_tree, glm._solver)(params_tree, X, y)
+
+    # Get Ridge hessian
+    glm.regularizer = "Ridge"
+    glm.regularizer_strength = {"input_1": [0.1, 0.2], "input_2": [0.3]}
+    glm.initialize_optimizer_and_state(params, X, y)
+    regularized_hess = glm._get_hess_fn(params_tree, glm._solver)(params_tree, X, y)
+
+    assert not np.allclose(H, regularized_hess)
+    np.testing.assert_allclose(
+        H.at[:-1, :-1].add(jnp.diag(jnp.array([0.1, 0.2, 0.3]))), regularized_hess
+    )
