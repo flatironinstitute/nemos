@@ -852,8 +852,10 @@ class ClassifierGLM(ClassifierMixin, GLM):
         y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
 
-    def _get_hess_fn(self, params) -> Callable | None:
-        return None
+    def _get_hess_fn(
+        self, params, solver, use_autodiff: bool = False
+    ) -> Callable | None:
+        super()._get_hess_fn(params, solver, use_autodiff=True)
 
 
 class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
@@ -1169,66 +1171,31 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
 
-    def _get_hess_fn(self, params):
-        # extract a single-neuron slice of the init params;
-        # this is the shape the per-neuron penalized loss closure will see at call time
-        coef_neu = jax.tree_util.tree_map(lambda x: x[:, 0], params.coef)
-        params_neu_template = self._validator.to_model_params(
-            [coef_neu, params.intercept[0]]
-        )
+    def _get_hess_fn(self, params, solver, use_autodiff: bool = False):
 
-        # Per-neuron negative log-likelihood. The categorical feature mask has shape
-        # (n_features, ..., n_classes) and acts on the coefficients (which carry the
-        # class axis), not on X. We apply it inside the prediction only -- via the
-        # mask-free ``GLM._predict`` to avoid re-applying the full population mask --
-        # so masked entries carry no likelihood curvature, while the regularizer still
-        # penalizes the unmasked coefficients (matching the full model).
-        def _single_neuron_nll(params_neu, X, y_neu, mask_neu):
-            coef = params_neu.coef
+        def _slice_params(params, i, y):
+            coef_neu = jax.tree_util.tree_map(lambda c: c[:, i], params.coef)
+            mask_neu = None if self._feature_mask is None else self._feature_mask[:, i]
             if mask_neu is not None:
-                coef = jax.tree_util.tree_map(lambda c, m: c * m, coef, mask_neu)
-            rate = GLM._predict(
-                self, self._validator.to_model_params([coef, params_neu.intercept]), X
+                coef_neu = jax.tree_util.tree_map(
+                    lambda c, m: c * m, coef_neu, mask_neu
+                )
+            return (
+                self._validator.to_model_params([coef_neu, params.intercept[i]]),
+                y[:, i],
             )
-            return self._observation_model._negative_log_likelihood(y_neu, rate)
 
-        # build the per-neuron penalized loss once;
-        # the regularizer captures filter_kwargs (mask, structured strength) from params_neu_template
-        penalized_single = self.regularizer.penalized_loss(
-            _single_neuron_nll,
-            params_neu_template,
-            strength=self.regularizer_strength,
-        )
-
-        def hess(params, *args):
-            X = args[0]
-            y = args[1]
+        def hess_fn(params, X, *args):
+            y = args[0]
             n_neurons = params.intercept.shape[0]
 
-            blocks = []
-            for neuron_idx in range(n_neurons):
-                coef_neu = jax.tree_util.tree_map(
-                    lambda x: x[:, neuron_idx], params.coef
-                )
-                params_neu = self._validator.to_model_params(
-                    [coef_neu, params.intercept[neuron_idx]]
-                )
-
+            def single_neuron_hess(i):
+                params_neu, y_neu = _slice_params(params, i, y)
                 flat_params, unravel = ravel_pytree_nest(params_neu)
-
-                mask_neu = (
-                    None
-                    if self._feature_mask is None
-                    else self._feature_mask[:, neuron_idx]
+                return jax.hessian(lambda p: solver.fun(unravel(p), X, y_neu))(
+                    flat_params
                 )
 
-                def flat_loss(
-                    p, unravel=unravel, mask_neu=mask_neu, neuron_idx=neuron_idx
-                ):
-                    return penalized_single(unravel(p), X, y[:, neuron_idx], mask_neu)
+            return jnp.stack([single_neuron_hess(i) for i in range(n_neurons)])
 
-                blocks.append(jax.hessian(flat_loss)(flat_params))
-
-            return jnp.stack(blocks)
-
-        return hess
+        return hess_fn

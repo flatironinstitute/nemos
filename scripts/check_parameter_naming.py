@@ -140,6 +140,7 @@ VALID_PAIRS = [
     {"funcs", "_func"},
     {"fval", "val"},
     {"params_neu", "param_name"},
+    {"params_tree", "parameter_tree"},
 ]
 
 

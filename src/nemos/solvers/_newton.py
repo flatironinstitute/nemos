@@ -174,7 +174,6 @@ class _Newton:
         state: NewtonState,
         *args,
         maxiter: int,
-        force_autodiff_hessian: bool,
     ) -> NewtonStepResult:
 
         params_flat, _ = ravel_pytree_nest(params)
@@ -187,7 +186,7 @@ class _Newton:
         def step(_):
             H = (
                 self._hess_fn(params, *args)
-                if (self._hess_fn is not None and not force_autodiff_hessian)
+                if self._hess_fn is not None
                 else self._hessian_flat(params_flat, *args)
             )
 
@@ -240,7 +239,6 @@ class _Newton:
         init_params,
         *args,
         jit: bool = True,
-        force_autodiff_hessian: bool = False,
         maxiter: int = 100,
     ):
         state = self.init_state(init_params, *args)
@@ -257,7 +255,6 @@ class _Newton:
                 s,
                 *args,
                 maxiter=maxiter,
-                force_autodiff_hessian=force_autodiff_hessian,
             )[
                 :2
             ]  # Discard aux; convergence only needs params and state
@@ -288,7 +285,7 @@ class Newton(NewtonSolverProtocol[NewtonState]):
         has_aux: bool,
         init_params: Params | None = None,
         jit: bool = True,
-        force_autodiff_hessian: bool = False,
+        use_autodiff: bool = False,
         maxiter: int = 100,
         **solver_kwargs,
     ):
@@ -299,7 +296,7 @@ class Newton(NewtonSolverProtocol[NewtonState]):
             )
 
         self.jit = jit
-        self.force_autodiff_hessian = force_autodiff_hessian
+        self.use_autodiff = use_autodiff
         self.maxiter = maxiter
         self.has_aux = has_aux
 
@@ -344,7 +341,6 @@ class Newton(NewtonSolverProtocol[NewtonState]):
             state,
             *args,
             maxiter=self.maxiter,
-            force_autodiff_hessian=self.force_autodiff_hessian,
         )
 
     def run(self, init_params: Params, *args):
@@ -353,7 +349,6 @@ class Newton(NewtonSolverProtocol[NewtonState]):
             *args,
             jit=self.jit,
             maxiter=self.maxiter,
-            force_autodiff_hessian=self.force_autodiff_hessian,
         )
 
     @classmethod
@@ -361,7 +356,7 @@ class Newton(NewtonSolverProtocol[NewtonState]):
         return {
             "maxiter",
             "tol",
-            "force_autodiff_hessian",
+            "use_autodiff",
             "jit",
         }
 

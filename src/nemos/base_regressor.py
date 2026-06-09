@@ -352,14 +352,7 @@ class BaseRegressor(
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
             )
 
-    def _get_hess_fn(self, params) -> Callable | None:
-        """Analytic Hessian callable for models that have one.
-
-        `params` is the initial parameter pytree passed so subclasses can close over
-        regularizer state (mask shape, structured strength) that depends on the parameter structure.
-
-        Returns None to fall back to autodiff.
-        """
+    def _get_hess_fn(self, params, solver, use_autodiff: bool) -> Callable | None:
         return None
 
     def _invalidate_solver(self):
@@ -443,7 +436,9 @@ class BaseRegressor(
 
         if isinstance(solver, NewtonSolverProtocol):
             solver.setup_hessian(
-                self._get_hess_fn(init_params, solver),
+                self._get_hess_fn(
+                    init_params, solver, use_autodiff=solver.use_autodiff
+                ),
                 self._hess_tag,
                 self.regularizer.resolve_hess_tag(init_params),
                 self._hess_property_override(),

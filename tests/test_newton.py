@@ -91,7 +91,7 @@ def test_newton_glm_passes_solver_kwargs(regularizer_name, glm_class):
     solver_kwargs = {
         "maxiter": np.random.randint(1, 100),
         "jit": False,
-        "force_autodiff_hessian": True,
+        "use_autodiff": True,
     }
 
     glm = glm_class(
@@ -441,6 +441,30 @@ def test_newton_glm_regularizer_strength_array(linear_regression):
     assert not np.allclose(H, regularized_hess)
     np.testing.assert_allclose(
         H.at[:-1, :-1].add(jnp.diag(jnp.array([0.1, 0.2, 0.3]))), regularized_hess
+    )
+
+
+def test_newton_population_glm_regularizer_strength_dict(linear_regression_tree):
+    X, y, _, _, _ = linear_regression_tree
+    y = np.expand_dims(y, 1)
+
+    # Get UnRegularized hessian
+    glm = nmo.glm.PopulationGLM(regularizer="UnRegularized", solver_name="Newton")
+    params = glm.initialize_params(X, y)
+    glm.initialize_optimizer_and_state(params, X, y)
+    params_tree = GLMParams(*params)
+    H = glm._get_hess_fn(params_tree, glm._solver)(params_tree, X, y)
+
+    # Get Ridge hessian
+    glm.regularizer = "Ridge"
+    glm.regularizer_strength = {"input_1": [[0.1], [0.2]], "input_2": [[0.3]]}
+    glm.initialize_optimizer_and_state(params, X, y)
+    regularized_hess = glm._get_hess_fn(params_tree, glm._solver)(params_tree, X, y)
+
+    assert not np.allclose(H, regularized_hess)
+    np.testing.assert_allclose(
+        desired=H.at[0, :-1, :-1].add(jnp.diag(jnp.array([0.1, 0.2, 0.3]))),
+        actual=regularized_hess,
     )
 
 

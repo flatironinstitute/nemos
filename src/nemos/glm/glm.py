@@ -1148,9 +1148,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             return autodiff_hess
 
         var_of_mu = _var_func_of_mu(self)
-        lam = self.regularizer_strength
-        if lam is not None:
-            lam = self.regularizer._validate_strength_structure(
+        regularizer_strength = self.regularizer_strength
+        if regularizer_strength is not None:
+            regularizer_strength = self.regularizer._validate_strength_structure(
                 params, self.regularizer_strength
             )
 
@@ -1168,7 +1168,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
                 eta,
                 self.inverse_link_function,
                 var_of_mu,
-                lam,
+                regularizer_strength,
             )
 
         return hess
@@ -1826,19 +1826,62 @@ class PopulationGLM(GLM):
         )
 
     def _get_hess_fn(self, params, solver, use_autodiff: bool = False):
-        base_hess_fn = super()._get_hess_fn(params, solver, use_autodiff)
+
+        if use_autodiff:
+
+            def hess_fn(params, X, *args):
+                n_neurons = params.intercept.shape[0]
+
+                def single(i):
+                    params_i = _slice_params(params, i)
+                    flat_params, unravel = ravel_pytree(params_i)
+                    return jax.hessian(lambda p: solver.fun(unravel(p), X, *args))(
+                        flat_params
+                    )
+
+                return jax.vmap(single)(jnp.arange(n_neurons))
+
+            return hess_fn
+
+        var_of_mu = _var_func_of_mu(self)
+
+        strength = None
+        if self.regularizer_strength is not None:
+            strength = self.regularizer._validate_strength_structure(
+                params, self.regularizer_strength
+            )
 
         def _slice_params(params, i):
             mask = self._feature_mask[:, i] if self._feature_mask is not None else 1
             sliced_coef = jax.tree_util.tree_map(lambda c: c[:, i] * mask, params.coef)
-            return type(params)(coef=sliced_coef, intercept=params.intercept[i])
+            return self._validator.to_model_params([sliced_coef, params.intercept[i]])
+
+        def _slice_strength(i):
+            if strength is None:
+                return None
+            return jax.tree_util.tree_map(
+                lambda s: s if _is_scalar_or_0d(s) else s[:, i], strength
+            )
 
         def hess_fn(params, X, *args):
+            n_neurons = params.intercept.shape[0]
 
-            def hess_fn_single(i):
-                return base_hess_fn(_slice_params(params, i), X, *args)
+            def single(i):
+                params_i = _slice_params(params, i)
+                eta = (
+                    jax.tree.reduce(jnp.add, jax.tree.map(jnp.dot, X, params_i.coef))
+                    + params_i.intercept
+                )
+                return _glm_hessian_block(
+                    X,
+                    params_i,
+                    eta,
+                    self.inverse_link_function,
+                    var_of_mu,
+                    _slice_strength(i),
+                )
 
-            return jax.vmap(hess_fn_single)(jnp.arange(params.coef.shape[1]))
+            return jax.vmap(single)(jnp.arange(n_neurons))
 
         return hess_fn
 
