@@ -10,9 +10,8 @@ from typing import Any, Callable, Literal, Optional, Tuple, Union
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from numpy.typing import ArrayLike
 from jax.flatten_util import ravel_pytree
-
+from numpy.typing import ArrayLike
 from sklearn.utils import InputTags, TargetTags
 
 from .. import observation_models as obs
@@ -23,8 +22,6 @@ from ..exceptions import NotFittedError
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
-from ..type_casting import _is_scalar_or_0d
-
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from ..solvers._hess import (
     BlockDiagonal,
@@ -33,7 +30,7 @@ from ..solvers._hess import (
     PositiveDefinite,
     PositiveSemiDefinite,
 )
-from ..type_casting import cast_to_jax, support_pynapple
+from ..type_casting import _is_scalar_or_0d, cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, SolverState, StepResult
 from ..utils import _elementwise_derivative, format_repr
 from .initialize_parameters import initialize_intercept_matching_mean_rate
