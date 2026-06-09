@@ -1834,8 +1834,11 @@ class PopulationGLM(GLM):
             return type(params)(coef=sliced_coef, intercept=params.intercept[i])
 
         def hess_fn(params, X, *args):
-            compute = lambda i: base_hess_fn(_slice_params(params, i), X, *args)
-            return jax.vmap(compute)(jnp.arange(params.coef.shape[1]))
+
+            def hess_fn_single(i):
+                return base_hess_fn(_slice_params(params, i), X, *args)
+
+            return jax.vmap(hess_fn_single)(jnp.arange(params.coef.shape[1]))
 
         return hess_fn
 
