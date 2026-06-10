@@ -1202,7 +1202,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
                 params, self.regularizer_strength
             )
 
-        def hess_fn(params, X, y, *args):
+        def hess_fn(params, X, *args):
             n_neurons = params.intercept.shape[0]
 
             def single(i):
@@ -1214,7 +1214,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
                     self._compute_loss, params_i, strength_i
                 )
                 flat_params, unravel = ravel_pytree(params_i)
-                return jax.hessian(lambda p: loss(unravel(p), X, y, *args))(flat_params)
+                return jax.hessian(lambda p: loss(unravel(p), X, *args))(flat_params)
 
             return jax.vmap(single)(jnp.arange(n_neurons))
 
