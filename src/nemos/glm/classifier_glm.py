@@ -8,6 +8,7 @@ from typing import Any, Callable, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+from jax.flatten_util import ravel_pytree
 from numpy.typing import ArrayLike, NDArray
 
 from .. import observation_models as obs
@@ -852,7 +853,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         return super().score(X, y, score_type, aggregate_sample_scores)
 
     def _get_hess_fn(self, params, autodiff: bool = False) -> Callable | None:
-        super()._get_hess_fn(params, autodiff=True)
+        return None
 
 
 class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
@@ -1195,8 +1196,6 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         return self._validator.to_model_params([coef_neu, intercept])
 
     def _get_hess_fn(self, params, autodiff: bool = False):
-        from jax.flatten_util import ravel_pytree
-
         strength = self.regularizer_strength
         if self.regularizer_strength is not None:
             strength = self.regularizer._validate_strength_structure(

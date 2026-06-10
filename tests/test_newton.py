@@ -456,6 +456,80 @@ def test_newton_glm_regularizer_strength(
 @pytest.mark.parametrize(
     "regularizer_strength, diag, structure",
     [
+        (0.1, [[[0.1] * 5] * 3] * 3, ""),
+        (
+            [[[0.1, 0.3, 0.2]] * 3] * 5,
+            [[[0.1, 0.3, 0.2]] * 5, [[0.1, 0.3, 0.2]] * 5, [[0.1, 0.3, 0.2]] * 5],
+            "",
+        ),
+        (
+            {
+                "input_1": [[[0.1, 0.3, 0.2]] * 3] * 3,
+                "input_2": [[[0.1, 0.3, 0.2]] * 3] * 2,
+            },
+            [[[0.1, 0.3, 0.2]] * 5, [[0.1, 0.3, 0.2]] * 5, [[0.1, 0.3, 0.2]] * 5],
+            "_pytree",
+        ),
+    ],
+)
+def test_newton_population_classifier_glm_regularizer_strength(
+    regularizer_strength, diag, structure, request
+):
+    X, y, model, params, _ = request.getfixturevalue(
+        "population_classifierGLM_model_instantiation" + structure
+    )
+
+    # Get UnRegularized hessian
+    model.solver_name = "Newton"
+    H = model._get_hess_fn(params)(params, X, y)
+
+    # Get Ridge hessian
+    model.regularizer = "Ridge"
+    model.regularizer_strength = regularizer_strength
+    regularized_hess = model._get_hess_fn(params)(params, X, y)
+
+    # Test not UnRegularized
+    assert not np.allclose(H, regularized_hess)
+    # Test Ridge
+    diag = jnp.stack([jnp.diag(jnp.array(d).ravel()) for d in diag], axis=0)
+    H = H.at[:, :-3, :-3].add(diag)
+    np.testing.assert_allclose(desired=H, actual=regularized_hess)
+
+
+@pytest.mark.parametrize("regularizer ", ["UnRegularized", "Ridge"])
+@pytest.mark.parametrize(
+    "regularizer_strength, structure",
+    [
+        (0.1, ""),
+        (
+            [[[0.1, 0.3, 0.2]] * 3] * 5,
+            "",
+        ),
+        (
+            {
+                "input_1": [[0.1, 0.3, 0.2]] * 3,
+                "input_2": [[0.1, 0.3, 0.2]] * 2,
+            },
+            "_pytree",
+        ),
+    ],
+)
+def test_newton_classifier_glm_regularizer_strength(
+    regularizer, regularizer_strength, structure, request
+):
+    X, y, model, _, _ = request.getfixturevalue(
+        "classifierGLM_model_instantiation" + structure
+    )
+    model.regularizer = regularizer
+    model.regularizer_strenth = regularizer_strength
+
+    with does_not_raise():
+        model.fit(X, y)
+
+
+@pytest.mark.parametrize(
+    "regularizer_strength, diag, structure",
+    [
         (0.1, [[0.1] * 5] * 3, ""),
         (
             [[0.1, 0.3, 0.2]] * 5,

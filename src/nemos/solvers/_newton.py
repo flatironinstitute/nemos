@@ -255,7 +255,9 @@ class _Newton:
                 s,
                 *args,
                 maxiter=maxiter,
-            )[:2]  # Discard aux; convergence only needs params and state
+            )[
+                :2
+            ]  # Discard aux; convergence only needs params and state
 
         if jit:
             final_params, final_state = eqx.internal.while_loop(
