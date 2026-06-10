@@ -152,11 +152,6 @@ In  Ashwood et al. (2022)<span id="cite1c"></span><a href="#ref1c">[1c]</a>, onl
  1) Subset sessions which include 50-50 trials
  2) Exclude sessions with >10 violation trials
 
-Let's do some pandas wrangling to keep only the sessions that have:
-1. Filter to sessions that went through all testing blocks (in particular all 50-50, 20-80 and 80-20 blocks).
-2. Get the initial 50-50 trial block.
-3. Fewer than 10 invalid trials in that block.
-
 ```{code-cell} ipython3
 :tags: [render-all]
 
@@ -215,9 +210,7 @@ stim_right = df_example_session['contrastRight'].reset_index(drop=True)
 rewarded = df_example_session['feedbackType'].reset_index(drop=True)
 ```
 
-For the first predictor: signed contrast.
-- Replace NaN contrast values with 0 using `np.nan_to_num`.
-- Compute the signed contrast (difference between left and right)
+For the first predictor, signed contrast:
 
 ```{code-cell} ipython3
 # Create stim vector
@@ -227,14 +220,10 @@ stim_right = np.nan_to_num(stim_right, nan=0)
 # now get 1D stim
 signed_contrast = stim_left - stim_right
 print(signed_contrast)
-```
-- Get the index of the valid trials with `np.flatnonzero`
 
-```{code-cell} ipython3
 # Get rid of violation trials
 valid_choices_idx = np.flatnonzero(choices != viol_val)
 ```
-
 With those two elements we can compute our design matrix for this session. We will do this using the NeMoS basis class ```nmo.basis```, which will make the process a lot easier.
 
 A basis is a collection of functions that, when combined, can represent more complex relationships. NeMoS has a lot of different basis functions, but here we are interested in using two: ```HistoryConv``` and ```IdentityEval```.
@@ -245,20 +234,9 @@ A basis is a collection of functions that, when combined, can represent more com
 
 It is very easy to declare our basis objects:
 
-Let's use the `basis` module from NeMoS to define the design matrix.
-
-What we need is:
-
-- A `HistoryConv` basis to capture the choice history. We need a `window_size`=1 to include the previous 1 choice as predictor.
-
-
 ```{code-cell} ipython3
 # Prev history with history of 1
 prev_choice_basis = nmo.basis.HistoryConv(1)
-```
-- A `IdentityEval` basis to include the signed contrast as is. This may seem pointless, but will allow us to add the basis and form the full design matrix in one go.
-
-```{code-cell} ipython3
 # Identity basis for stimuli
 stimuli_basis = nmo.basis.IdentityEval()
 ```
@@ -437,8 +415,7 @@ X[:, 0] = zscore(X[:, 0])
 choices = np.where(choices == -1, 0, choices)
 ```
 
-Importantly, do not do 3000 trials at once! Instead, they generally do several sessions of 100-300 trials, and we use all the sessions together to fit our model. For our model to be accurate, we need to tell it when our session boundaries are: we don't want it to compute all sessions as if they were one. 
-
+Importantly, we don't fit all 3000 trials as one continuous block. The data come as separate sessions of 100–300 trials, and we fit the model on all of them together. For our model to be accurate, we need to tell it when our session boundaries are: we don't want it to compute all sessions as if they were one.
 
 In NeMoS we have two ways of indicating the beginning of a new session. You can use a Pynapple Tsd or TsdFrame to demarcate sessions, in which case session demarcations are inherited from the pynapple objects. Alternatively, when using a design matrix and a choice vector that are Numpy objects, it is necessary to pass a session indicator. This can be:
 - a boolean array or integer array of 1s and 0s indicating session starts, shape ``(n_samples,)``
@@ -447,12 +424,18 @@ In NeMoS we have two ways of indicating the beginning of a new session. You can 
 
 ```{code-cell} ipython3
 # Mark where session changes
-new_sess_mouse = np.ones(len(session), dtype=int)
-new_sess_mouse[1:] = (session[1:] != session[:-1])
+new_sess_mouse = np.flatnonzero(session[1:] != session[:-1]) + 1
+```
+
+```{admonition} How does this one-liner find the session starts? 
+:class: note 
+:class: dropdown
+
+Dession holds one session id per trial. Comparing `s`ession[1:] (every trial but the first) with `session[:-1]` (every trial but the last) yields a boolean array that is `True` wherever a trial's session id differs from the previous trial's — that is, exactly at the session boundaries. `np.flatnonzero` returns the indices where this is `True`, and we add 1 because the comparison is shifted by one (position `i` in the comparison corresponds to trial `i+1`). The result is the array of indices at which a new session begins. 
 ```
 
 ## Model fitting
-We will use a Bernoulli GLM to model this mouse's choices. For this, we first need to initialize the ```GLMHMM``` object. The only required parameter is the number of states. Ashwood et al. (2022) <span id="cite1d"></span><a href="#ref1d">[1d]</a> found that most mice used 3 decision-making states when performing this task. Following that work, we will initialize our ```GLMHMM``` object with 3 states.
+Let's initialize the ```GLMHMM``` object. The only required parameter is the number of states. Ashwood et al. (2022) <span id="cite1d"></span><a href="#ref1d">[1d]</a> found that most mice used 3 decision-making states when performing this task. Following that work, we will initialize our ```GLMHMM``` object with 3 states.
 
 ```{admonition} GLM-HMM observation models
 :class: note
@@ -483,8 +466,7 @@ print(model)
 ```{admonition} "Importance of initial parameters in GLM-HMMs"
 :class: question
 :class: dropdown
-When fitting a GLM-HMMs, the likelihood surface is non-convex, and EM-based fitting can converge to different local optima depending on starting values. As a result, different initializations can lead to qualitatively different parameters. In practice, this makes it necessary to either run multiple random restarts or use informed initializations derived from simpler models (e.g. logistic regression or clustering of behavior).
-
+The likelihood of a GLM-HMM is non-convex, so the EM algorithm used to fit it can converge to different local optima depending on the starting parameters. NeMoS initializes the model for you: by default, the per-state intercepts are set to match the empirical choice probability, and the GLM coefficients are drawn from a Gaussian centered at zero with a small standard deviation. The seed argument controls this random draw, so in practice you should refit the model with several seeds and keep the solution with the highest log-likelihood.
 ```
 
 +++
@@ -516,28 +498,25 @@ model.coef_ = model.coef_[:, permutation]
 model.intercept_ = model.intercept_[permutation]
 model.transition_prob_ = model.transition_prob_[permutation][:, permutation]
 ```
+The GLM coefficients and intercept, and the HMM initial and transition probabilities are stored in the following attributes:
 
-If we want to see our glm-hmm weights, we can call ```model.coef_```. This will output the coefficients of the glm per state, with shape (n_features, n_states).
+- `model.coef_`
+- `model.intercept_`
+- `model.initial_prob_`
+- `model.transition_prob_`
 
-```{code-cell} ipython3
-print(f"glm weights shape \n {model.coef_.shape} \n")
-print(f"glm weights \n {model.coef_}")
-```
 
-Similarly, to see the intercept, we can call ```model.intercept_```, which will output the intercept per state. The shape of this object is (n_states)
-
-```{code-cell} ipython3
-print(f"intercept shape \n {model.intercept_.shape} \n")
-print(f"intercept \n {model.intercept_}")
-```
-
-We can also see the estimated transition matrix with ```model.transition_prob``` and the initial probatilities with ```model.initial_prob```, with shapes (n_states, n_states) and (n_states,), respectively.
+Let's print them
 
 ```{code-cell} ipython3
-print(f"transition matrix shape \n {model.transition_prob_.shape}")
-print(f"transition matrix \n {model.transition_prob_}")
+:tags: [render-all]
 
-print(f"initial probabilities shape \n {model.initial_prob_.shape}")
+print("GLM parameters\n==============")
+print(f"glm weights:\n{model.coef_}\n")
+print(f"intercept:\n{model.intercept_}")
+
+print("\n\nHMM parameters\n==============")
+print(f"transition matrix \n {model.transition_prob_}\n")
 print(f"initial probabilities \n {model.initial_prob_}")
 ```
 
@@ -621,8 +600,10 @@ plot_glm_weights(model)
 
 We can see that the coefficients on state 1 have a large weight on the stimulus and low weight on the other predictors. Conversely, in states 2 and 3, the stimulus coefficient is comparatively lower. State 2 has a large positive weight on bias, while State 3 has a large negative weight on bias. Since the sign of our predictors indicates the side of evidence (>0 : left; <0 : right, see the table of variables in section 01) and their magnitude indicates the strength of such evidence, State 2 coefficients suggest a large bias towards leftward choice, while State 3 coefficients suggest a large bias to a rightward choice. All states have similarly low coefficients for prev. choice and wsls, with State 1 showing the smallest of them. 
 
-As a reminder, the task consisted on indicating whether the stimulus was located at the right or the left of the screen using the stimulus contrast information. Thus, the optimal strategy is to maximally use stimulus contrast to guide decision making, and not rely on bias, previous choice or wsls.
+As a reminder, the task required indicating whether the stimulus was on the right or the left of the screen, using the stimulus contrast. The optimal strategy is therefore to rely on stimulus contrast as much as possible, rather than on bias, previous choice, or WSLS.
 
+- State 1 have larger weight on the stimulus and low on the other predictors.
+- The bias weight is larger in absolute value for state 2 and 3, but of opposite sign. (>0 : left; <0 : right)
 +++
 
 ### Interpreting the transition matrix
@@ -663,7 +644,7 @@ plot_transition_matrix(model)
 ### Using ```smooth_proba``` to see and interpret posterior state probabilities
 To better understand the temporal structure of decision making behavior, we can compute the probability of being in each state at each trial, conditioned on the entire observed sequence. For this, we can use ```smooth_proba```. This method uses the forward-backward algorithm to incorporate information from past and future observations. It answers to the question: "Given all observations, what is the probability that the system was in state $k$ at time $t$?"
 
-```smooth_proba``` takes two arguments: a design matrix X and the observed neural activity y. The output is either a ```TsdFrame``` or an array of  posterior probabilities, shape ``(n_time_points, n_states)``. Each row sums to 1 and represents the probability distribution over states at that time point.
+`smooth_proba` takes two arguments: a design matrix `X` and `y` the observed choices. The output is either a `TsdFrame` or an array of posterior probabilities, shape `(n_time_points, n_states)`. Each row sums to 1 and represents the probability distribution over states at that time point.
 
 ```{code-cell} ipython3
 # Compute smooth_proba
@@ -680,8 +661,9 @@ print(
     f"Each row sums to 1: {np.allclose(posteriors[valid].sum(axis=1), 1)}"
 )
 ```
+The first trial of each session is `NaN`: the posterior depends on the transition from the previous trial's state, which doesn't exist at a session start. Hence we mask out the NaNs before checking that the rows sum to one.
 
-And we can plot it!
+Let's now use the utility function to plot the three sessions shown in Fig. 3a of <span id="cite1e"></span><a href="#ref1e">[1e]</a>.
 
 ```{code-cell} ipython3
 :tags: [hide-input]
@@ -762,18 +744,17 @@ In these sessions, the posterior over latent states can be tracked at each trial
 
 +++
 
-### Computing fraction of occupancy and accuracy per state using ```decode_state``` or ```smooth_proba```
+### Understanding mice behavior in different states
 
 +++
-
-We can also be interested in quantify state occupancies (i.e what proportion of the trials a given animal spent in each state) and accuracies per state. For this, we need the inferred sequence of states, and there are (at least) two ways in which we can obtain it: using ```decode_state``` or using ```smooth_proba```.
+We can also be interested in quantify state occupancies (i.e what proportion of the trials a given animal spent in each state) and accuracies (i.e. how often it chose the correct side) per state. For this, we need the inferred sequence of states, and there are (at least) two ways in which we can obtain it: using `decode_state` or using `smooth_proba`.
 
 +++
 
 #### Using ```decode_state```
-This method finds the single most likely sequence of hidden states that best explains the observed data. It uses the Viterbi algorithm to compute the state sequence that maximizes the joint probability of states and observations.
+This method finds the single most likely sequence of hidden states that best explains the observed data: the state sequence that maximizes the joint probability of states and observations. It does so by using the [Viterbi algorithm](https://en.wikipedia.org/wiki/Viterbi_algorithm).
 
-This function takes three mandatory parameters, a matrix of predictors X of shape (n_timepoints,n_features), a np.array or nap.Tsd of observations of shap (n_time_points,), and the format of the returned states, either in one-hot encoding format or as an array of shape (n_time_points,) containing the decoded state at each timepoint.
+It takes three mandatory parameters, a matrix of predictors `X` of shape `(n_timepoints,n_features)`, a `np.array` or `nap.Tsd` of observations of shape `(n_time_points,)`, and the format of the returned states, either in one-hot encoding format or as an array of shape `(n_time_points,)` containing the decoded state at each timepoint.
 
 ```{code-cell} ipython3
 # get output of viterbi in one-hot encoding
