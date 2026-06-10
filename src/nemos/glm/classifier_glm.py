@@ -853,9 +853,9 @@ class ClassifierGLM(ClassifierMixin, GLM):
         return super().score(X, y, score_type, aggregate_sample_scores)
 
     def _get_hess_fn(
-        self, params, loss: Callable, use_autodiff: bool = False
+        self, params, loss: Callable, autodiff: bool = False
     ) -> Callable | None:
-        super()._get_hess_fn(params, loss, use_autodiff=True)
+        super()._get_hess_fn(params, loss, autodiff=True)
 
 
 class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
@@ -1171,7 +1171,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
 
-    def _get_hess_fn(self, params, loss: Callable, use_autodiff: bool = False):
+    def _get_hess_fn(self, params, loss: Callable, autodiff: bool = False):
 
         def _slice_params(params, i, y):
             coef_neu = jax.tree_util.tree_map(lambda c: c[:, i], params.coef)

@@ -352,7 +352,7 @@ class BaseRegressor(
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
             )
 
-    def _get_hess_fn(self, params, solver, use_autodiff: bool) -> Callable | None:
+    def _get_hess_fn(self, params, solver, autodiff: bool) -> Callable | None:
         return None
 
     def _invalidate_solver(self):
@@ -436,9 +436,7 @@ class BaseRegressor(
 
         if isinstance(solver, NewtonSolverProtocol):
             solver.setup_hessian(
-                self._get_hess_fn(
-                    init_params, loss=solver.fun, use_autodiff=solver.use_autodiff
-                ),
+                self._get_hess_fn(init_params, autodiff=solver.autodiff),
                 self._hess_tag,
                 self.regularizer.resolve_hess_tag(init_params),
                 self._hess_property_override(),

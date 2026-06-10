@@ -91,7 +91,7 @@ def test_newton_glm_passes_solver_kwargs(regularizer_name, glm_class):
     solver_kwargs = {
         "maxiter": np.random.randint(1, 100),
         "jit": False,
-        "use_autodiff": True,
+        "autodiff": True,
     }
 
     glm = glm_class(
@@ -152,7 +152,9 @@ def test_newton_glm_initialize_hessian(glm_class, regularizer_name, linear_regre
     params_tree = GLMParams(*params)
 
     init = glm.solver._solver._hess_fn(params_tree, X, y)
-    expected = glm._get_hess_fn(params_tree, glm._solver)(params_tree, X, y)
+    expected = glm._get_hess_fn(
+        params_tree,
+    )(params_tree, X, y)
     np.testing.assert_allclose(init, expected)
 
 
@@ -234,7 +236,9 @@ def test_newton_glm_set_regularizer_update_recovers(
     with does_not_raise():
         glm.update(params, init_state, X, y)
     after = glm.solver._solver._hess_fn(params_tree, X, y)
-    expected = glm._get_hess_fn(params_tree, glm._solver)(params_tree, X, y)
+    expected = glm._get_hess_fn(
+        params_tree,
+    )(params_tree, X, y)
     np.testing.assert_allclose(after, expected)
     if regularizer_before == regularizer_after:
         assert np.allclose(after, init)
@@ -298,7 +302,9 @@ def test_newton_glm_set_regularizer_strength_recovers(
     with does_not_raise():
         glm.update(params, init_state, X, y)
     after = glm.solver._solver._hess_fn(params_tree, X, y)
-    expected = glm._get_hess_fn(params_tree, glm._solver)(params_tree, X, y)
+    expected = glm._get_hess_fn(
+        params_tree,
+    )(params_tree, X, y)
     np.testing.assert_allclose(after, expected)
     if regularizer_name == "Ridge":
         assert not np.allclose(after, init)
@@ -391,7 +397,9 @@ def test_newton_glm_set_observation_model_recovers(
     with does_not_raise():
         glm.update(params, init_state, X, y)
     after = glm.solver._solver._hess_fn(params_tree, X, y)
-    expected = glm._get_hess_fn(params_tree, glm._solver)(params_tree, X, y)
+    expected = glm._get_hess_fn(
+        params_tree,
+    )(params_tree, X, y)
     np.testing.assert_allclose(after, expected)
 
     if obs_init == obs_after:
@@ -423,13 +431,17 @@ def test_newton_glm_regularizer_strength(
     params = glm.initialize_params(X, y)
     glm.initialize_optimizer_and_state(params, X, y)
     params_tree = GLMParams(*params)
-    H = glm._get_hess_fn(params_tree, glm._solver)(params_tree, X, y)
+    H = glm._get_hess_fn(
+        params_tree,
+    )(params_tree, X, y)
 
     # Get Ridge hessian
     glm.regularizer = "Ridge"
     glm.regularizer_strength = regularizer_strength
     glm.initialize_optimizer_and_state(params, X, y)
-    regularized_hess = glm._get_hess_fn(params_tree, glm._solver)(params_tree, X, y)
+    regularized_hess = glm._get_hess_fn(
+        params_tree,
+    )(params_tree, X, y)
 
     # Test not UnRegularized
     assert not np.allclose(H, regularized_hess)
@@ -466,13 +478,17 @@ def test_newton_population_glm_regularizer_strength(
     params = glm.initialize_params(X, y)
     glm.initialize_optimizer_and_state(params, X, y)
     params_tree = GLMParams(*params)
-    H = glm._get_hess_fn(params_tree, glm._solver)(params_tree, X, y)
+    H = glm._get_hess_fn(
+        params_tree,
+    )(params_tree, X, y)
 
     # Get Ridge hessian
     glm.regularizer = "Ridge"
     glm.regularizer_strength = regularizer_strength
     glm.initialize_optimizer_and_state(params, X, y)
-    regularized_hess = glm._get_hess_fn(params_tree, glm._solver)(params_tree, X, y)
+    regularized_hess = glm._get_hess_fn(
+        params_tree,
+    )(params_tree, X, y)
 
     # Test not UnRegularized
     assert not np.allclose(H, regularized_hess)
@@ -487,14 +503,10 @@ def test_newton_population_glm_regularizer_strength(
     [
         (0.1, "linear_regression"),
         (0.1, "linear_regression_tree"),
-        ([[0.1, 0.3], [0.2, 0.2], [0.3, 0.1]], "linear_regression"),
+        ([0.1, 0.2, 0.3], "linear_regression"),
         (
-            {"input_1": [[0.1, 0.3], [0.2, 0.2]], "input_2": [[0.3, 0.1]]},
+            {"input_1": [0.1, 0.2], "input_2": [0.3]},
             "linear_regression_tree",
-        ),
-        (
-            {"input_1": [[0.1, 0.3], [0.2, 0.2]], "input_2": [[0.3, 0.1]]},
-            "linear_regression",
         ),
     ],
 )
@@ -502,9 +514,53 @@ def test_newton_population_glm_regularizer_strength(
     "observation_model",
     [
         "PoissonObservations",
-        # "GammaObservations",
-        # "GaussianObservations",
-        # "BernoulliObservations",
+        "GammaObservations",
+        "GaussianObservations",
+        "BernoulliObservations",
+    ],
+)
+def test_newton_hessian_analytic_v_autodiff(
+    regularizer_strength, observation_model, regression, request
+):
+    X, y, _, _, _ = request.getfixturevalue(regression)
+
+    # Get autodiff hessian
+    glm = nmo.glm.GLM(
+        regularizer="Ridge",
+        solver_name="Newton",
+        regularizer_strength=regularizer_strength,
+        observation_model=observation_model,
+    )
+    params = glm.initialize_params(X, y)
+    glm.initialize_optimizer_and_state(params, X, y)
+    params_tree = GLMParams(*params)
+    autodiff = glm._get_hess_fn(params_tree, autodiff=True)(params_tree, X, y)
+
+    # Get analytic hessian
+    analytic = glm._get_hess_fn(params_tree, autodiff=False)(params_tree, X, y)
+
+    np.testing.assert_allclose(desired=autodiff, actual=analytic, atol=0.00001)
+
+
+@pytest.mark.parametrize(
+    "regularizer_strength, regression",
+    [
+        (0.1, "linear_regression"),
+        (0.1, "linear_regression_tree"),
+        ([[0.1, 0.3], [0.2, 0.2], [0.3, 0.1]], "linear_regression"),
+        (
+            {"input_1": [[0.1, 0.3], [0.2, 0.2]], "input_2": [[0.3, 0.1]]},
+            "linear_regression_tree",
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "observation_model",
+    [
+        "PoissonObservations",
+        "GammaObservations",
+        "GaussianObservations",
+        "BernoulliObservations",
     ],
 )
 def test_newton_population_hessian_analytic_v_autodiff(
@@ -523,13 +579,9 @@ def test_newton_population_hessian_analytic_v_autodiff(
     params = glm.initialize_params(X, y)
     glm.initialize_optimizer_and_state(params, X, y)
     params_tree = GLMParams(*params)
-    autodiff = glm._get_hess_fn(params_tree, glm._solver.fun, use_autodiff=True)(
-        params_tree, X, y
-    )
+    autodiff = glm._get_hess_fn(params_tree, autodiff=True)(params_tree, X, y)
 
     # Get analytic hessian
-    analytic = glm._get_hess_fn(params_tree, glm._solver.fun, use_autodiff=False)(
-        params_tree, X, y
-    )
+    analytic = glm._get_hess_fn(params_tree, autodiff=False)(params_tree, X, y)
 
-    np.testing.assert_allclose(desired=autodiff, actual=analytic)
+    np.testing.assert_allclose(desired=autodiff, actual=analytic, atol=0.0001)

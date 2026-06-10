@@ -255,9 +255,7 @@ class _Newton:
                 s,
                 *args,
                 maxiter=maxiter,
-            )[
-                :2
-            ]  # Discard aux; convergence only needs params and state
+            )[:2]  # Discard aux; convergence only needs params and state
 
         if jit:
             final_params, final_state = eqx.internal.while_loop(
@@ -285,7 +283,7 @@ class Newton(NewtonSolverProtocol[NewtonState]):
         has_aux: bool,
         init_params: Params | None = None,
         jit: bool = True,
-        use_autodiff: bool = False,
+        autodiff: bool = False,
         maxiter: int = 100,
         **solver_kwargs,
     ):
@@ -296,7 +294,7 @@ class Newton(NewtonSolverProtocol[NewtonState]):
             )
 
         self.jit = jit
-        self.use_autodiff = use_autodiff
+        self.autodiff = autodiff
         self.maxiter = maxiter
         self.has_aux = has_aux
 
@@ -356,7 +354,7 @@ class Newton(NewtonSolverProtocol[NewtonState]):
         return {
             "maxiter",
             "tol",
-            "use_autodiff",
+            "autodiff",
             "jit",
         }
 
