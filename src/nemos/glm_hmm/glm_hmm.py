@@ -377,15 +377,19 @@ class GLMHMM(
 
         Use cached values to avoid unnecessary computations.
         """
+        is_population_glm = y.ndim > 2 if self._is_categorical_glm else y.ndim > 1
         cache_key = (
-            y.ndim > 1,
+            is_population_glm,
             self._observation_model,
             self._inverse_link_function,
         )
         ll_func = self._log_like_cache.get(cache_key)
         if ll_func is None:
             ll_func = prepare_estep_log_likelihood(
-                y.ndim > 1, self._observation_model, self._inverse_link_function
+                is_population_glm,
+                self._is_categorical_glm,
+                self._observation_model,
+                self._inverse_link_function,
             )
             self._log_like_cache[cache_key] = ll_func
         return ll_func(params, X, y)
@@ -574,11 +578,17 @@ class GLMHMM(
         """
         if isinstance(observation, str):
             self._observation_model = instantiate_observation_model(observation)
+            self._is_categorical_glm = isinstance(
+                self._observation_model, obs.CategoricalObservations
+            )
             return
         # check that the model has the required attributes
         # and that the attribute can be called
         obs.check_observation_model(observation)
         self._observation_model = observation
+        self._is_categorical_glm = isinstance(
+            self._observation_model, obs.CategoricalObservations
+        )
 
     @property
     def inverse_link_function(self):
@@ -1589,9 +1599,10 @@ class GLMHMM(
     ) -> SolverState:
         """Initialize the optimizer and state of the model."""
         # glm params m-step setup
-        is_population = y.ndim > 1
+        is_population = (y.ndim > 2) if self._is_categorical_glm else (y.ndim > 1)
         m_step_update = prepare_mstep_update_fn(
             is_population_glm=is_population,
+            is_categorical_glm=self._is_categorical_glm,
             observation_model=self._observation_model,
             inverse_link_function=self._inverse_link_function,
             setup_solver=self._instantiate_solver,

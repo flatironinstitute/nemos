@@ -1776,11 +1776,12 @@ class CategoricalObservations(Observations):
 
     @property
     def default_inverse_link_function(self):
-        return _make_wrapper(
-            partial(log_softmax, axis=self.class_axis),
-            log_softmax.__name__,
-            log_softmax.__doc__,
-        )
+        return log_softmax
+        # return _make_wrapper(
+        #     partial(jax.nn.log_softmax, axis=self.class_axis),
+        #     log_softmax.__name__,
+        #     log_softmax.__doc__,
+        # )
 
     def _negative_log_likelihood(
         self,
@@ -1822,7 +1823,7 @@ class CategoricalObservations(Observations):
         (1 if category :math:`k` was observed, 0 otherwise), and the predicted_rate input
         contains :math:`\log(p_{tnk})`.
         """
-        nll = jnp.sum(y * predicted_rate, axis=self.class_axis)
+        nll = jnp.sum(y * predicted_rate, axis=-1)
         return -aggregate_sample_scores(nll)
 
     def log_likelihood(

@@ -12,6 +12,7 @@ from ..typing import DESIGN_INPUT_TYPE
 import pynapple as nap
 from .params import GLMHMMParams, GLMHMMUserParams
 from .validation import ClassifierGLMHMMValidator
+from .algorithm_configs import prepare_estep_log_likelihood
 
 
 class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
