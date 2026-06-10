@@ -15,7 +15,6 @@ from .. import tree_utils
 from ..label_encoder import LabelEncoder
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers._hess import BlockDiagonal, Full, HessianTag, PositiveSemiDefinite
-from ..tree_utils import ravel_pytree_nest
 from ..type_casting import is_numpy_array_like, support_pynapple
 from ..typing import (
     DESIGN_INPUT_TYPE,
@@ -852,10 +851,8 @@ class ClassifierGLM(ClassifierMixin, GLM):
         y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
 
-    def _get_hess_fn(
-        self, params, loss: Callable, autodiff: bool = False
-    ) -> Callable | None:
-        super()._get_hess_fn(params, loss, autodiff=True)
+    def _get_hess_fn(self, params, autodiff: bool = False) -> Callable | None:
+        super()._get_hess_fn(params, autodiff=True)
 
 
 class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
@@ -1171,29 +1168,55 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
 
-    def _get_hess_fn(self, params, loss: Callable, autodiff: bool = False):
+    def _slice_params(self, params, i):
+        coef_neu = jax.tree_util.tree_map(
+            lambda c: jnp.take(c, i, axis=1),
+            params.coef,
+        )
 
-        def _slice_params(params, i, y):
-            coef_neu = jax.tree_util.tree_map(lambda c: c[:, i], params.coef)
-            mask_neu = None if self._feature_mask is None else self._feature_mask[:, i]
-            if mask_neu is not None:
-                coef_neu = jax.tree_util.tree_map(
-                    lambda c, m: c * m, coef_neu, mask_neu
-                )
-            return (
-                self._validator.to_model_params([coef_neu, params.intercept[i]]),
-                y[:, i],
+        mask_neu = (
+            None
+            if self._feature_mask is None
+            else jax.tree_util.tree_map(
+                lambda m: jnp.take(m, i, axis=1),
+                self._feature_mask,
+            )
+        )
+
+        if mask_neu is not None:
+            coef_neu = jax.tree_util.tree_map(
+                lambda c, m: c * m,
+                coef_neu,
+                mask_neu,
             )
 
-        def hess_fn(params, X, *args):
-            y = args[0]
+        intercept = jnp.take(params.intercept, i, axis=0)
+
+        return self._validator.to_model_params([coef_neu, intercept])
+
+    def _get_hess_fn(self, params, autodiff: bool = False):
+        from jax.flatten_util import ravel_pytree
+
+        strength = self.regularizer_strength
+        if self.regularizer_strength is not None:
+            strength = self.regularizer._validate_strength_structure(
+                params, self.regularizer_strength
+            )
+
+        def hess_fn(params, X, y, *args):
             n_neurons = params.intercept.shape[0]
 
-            def single_neuron_hess(i):
-                params_neu, y_neu = _slice_params(params, i, y)
-                flat_params, unravel = ravel_pytree_nest(params_neu)
-                return jax.hessian(lambda p: loss(unravel(p), X, y_neu))(flat_params)
+            def single(i):
+                params_i = self._slice_params(params, i)
+                strength_i = self._slice_strength(strength, i)
+                if strength_i is not None:
+                    strength_i = strength_i.coef
+                loss = self.regularizer.penalized_loss(
+                    self._compute_loss, params_i, strength_i
+                )
+                flat_params, unravel = ravel_pytree(params_i)
+                return jax.hessian(lambda p: loss(unravel(p), X, y, *args))(flat_params)
 
-            return jnp.stack([single_neuron_hess(i) for i in range(n_neurons)])
+            return jax.vmap(single)(jnp.arange(n_neurons))
 
         return hess_fn

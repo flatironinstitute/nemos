@@ -409,39 +409,42 @@ def test_newton_glm_set_observation_model_recovers(
 
 
 @pytest.mark.parametrize(
-    "regularizer_strength, diag, regression",
+    "regularizer_strength, diag, structure",
     [
-        (0.1, [0.1] * 3, "linear_regression_tree"),
-        (0.1, [0.1] * 3, "linear_regression"),
-        ([0.1, 0.2, 0.3], [0.1, 0.2, 0.3], "linear_regression"),
+        (0.1, [0.1] * 5, ""),
+        (0.1, [0.1] * 5, ""),
+        ([0.1, 0.2, 0.3, 0.4, 0.5], [0.1, 0.2, 0.3, 0.4, 0.5], ""),
         (
-            {"input_1": [0.1, 0.2], "input_2": [0.3]},
-            [0.1, 0.2, 0.3],
-            "linear_regression_tree",
+            {"input_1": [0.1, 0.2, 0.3], "input_2": [0.4, 0.5]},
+            [0.1, 0.2, 0.3, 0.4, 0.5],
+            "_pytree",
         ),
     ],
 )
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "gammaGLM",
+        "bernoulliGLM",
+        "gaussianGLM",
+    ],
+)
 def test_newton_glm_regularizer_strength(
-    regularizer_strength, diag, regression, request
+    regularizer_strength, diag, structure, model_instantiation, request
 ):
-    X, y, _, _, _ = request.getfixturevalue(regression)
+    X, y, model, params, _ = request.getfixturevalue(
+        model_instantiation + "_model_instantiation" + structure
+    )
 
     # Get UnRegularized hessian
-    glm = nmo.glm.GLM(regularizer="UnRegularized", solver_name="Newton")
-    params = glm.initialize_params(X, y)
-    glm.initialize_optimizer_and_state(params, X, y)
-    params_tree = GLMParams(*params)
-    H = glm._get_hess_fn(
-        params_tree,
-    )(params_tree, X, y)
+    model.solver_name = "Newton"
+    H = model._get_hess_fn(params)(params, X, y)
 
     # Get Ridge hessian
-    glm.regularizer = "Ridge"
-    glm.regularizer_strength = regularizer_strength
-    glm.initialize_optimizer_and_state(params, X, y)
-    regularized_hess = glm._get_hess_fn(
-        params_tree,
-    )(params_tree, X, y)
+    model.regularizer = "Ridge"
+    model.regularizer_strength = regularizer_strength
+    regularized_hess = model._get_hess_fn(params)(params, X, y)
 
     # Test not UnRegularized
     assert not np.allclose(H, regularized_hess)
@@ -451,44 +454,52 @@ def test_newton_glm_regularizer_strength(
 
 
 @pytest.mark.parametrize(
-    "regularizer_strength, diag, regression",
+    "regularizer_strength, diag, structure",
     [
-        (0.1, [[0.1] * 3] * 2, "linear_regression_tree"),
-        (0.1, [[0.1] * 3] * 2, "linear_regression"),
+        (0.1, [[0.1] * 5] * 3, ""),
         (
-            [[0.1, 0.3], [0.2, 0.2], [0.3, 0.1]],
-            [[0.1, 0.2, 0.3], [0.3, 0.2, 0.1]],
-            "linear_regression",
+            [[0.1, 0.3, 0.2]] * 5,
+            [[0.1] * 5, [0.3] * 5, [0.2] * 5],
+            "",
         ),
         (
-            {"input_1": [[0.1, 0.3], [0.2, 0.2]], "input_2": [[0.3, 0.1]]},
-            [[0.1, 0.2, 0.3], [0.3, 0.2, 0.1]],
-            "linear_regression_tree",
+            {
+                "input_1": [[0.1, 0.3, 0.2], [0.2, 0.2, 0.2], [0.3, 0.1, 0.1]],
+                "input_2": [[0.1, 0.3, 0.2], [0.2, 0.2, 0.2]],
+            },
+            [
+                [0.1, 0.2, 0.3, 0.1, 0.2],
+                [0.3, 0.2, 0.1, 0.3, 0.2],
+                [0.2, 0.2, 0.1, 0.2, 0.2],
+            ],
+            "_pytree",
         ),
     ],
 )
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "_poissonGLM",
+        "_gammaGLM",
+        "_bernoulliGLM",
+        "_gaussianGLM",
+    ],
+)
 def test_newton_population_glm_regularizer_strength(
-    regularizer_strength, diag, regression, request
+    regularizer_strength, diag, model_instantiation, structure, request
 ):
-    X, y, _, _, _ = request.getfixturevalue(regression)
-    y = np.stack([y, y], axis=1)
+    X, y, model, params, _ = request.getfixturevalue(
+        "population" + model_instantiation + "_model_instantiation" + structure
+    )
 
     # Get UnRegularized hessian
-    glm = nmo.glm.PopulationGLM(regularizer="UnRegularized", solver_name="Newton")
-    params = glm.initialize_params(X, y)
-    glm.initialize_optimizer_and_state(params, X, y)
-    params_tree = GLMParams(*params)
-    H = glm._get_hess_fn(
-        params_tree,
-    )(params_tree, X, y)
+    model.solver_name = "Newton"
+    H = model._get_hess_fn(params)(params, X, y)
 
     # Get Ridge hessian
-    glm.regularizer = "Ridge"
-    glm.regularizer_strength = regularizer_strength
-    glm.initialize_optimizer_and_state(params, X, y)
-    regularized_hess = glm._get_hess_fn(
-        params_tree,
-    )(params_tree, X, y)
+    model.regularizer = "Ridge"
+    model.regularizer_strength = regularizer_strength
+    regularized_hess = model._get_hess_fn(params)(params, X, y)
 
     # Test not UnRegularized
     assert not np.allclose(H, regularized_hess)
@@ -499,89 +510,95 @@ def test_newton_population_glm_regularizer_strength(
 
 
 @pytest.mark.parametrize(
-    "regularizer_strength, regression",
+    "regularizer_strength, structure",
     [
-        (0.1, "linear_regression"),
-        (0.1, "linear_regression_tree"),
-        ([0.1, 0.2, 0.3], "linear_regression"),
+        (0.1, ""),
         (
-            {"input_1": [0.1, 0.2], "input_2": [0.3]},
-            "linear_regression_tree",
+            [[0.1, 0.3, 0.2]] * 5,
+            "",
+        ),
+        (
+            {
+                "input_1": [[0.1, 0.3, 0.2], [0.2, 0.2, 0.2], [0.3, 0.1, 0.1]],
+                "input_2": [[0.1, 0.3, 0.2], [0.2, 0.2, 0.2]],
+            },
+            "_pytree",
         ),
     ],
 )
 @pytest.mark.parametrize(
-    "observation_model",
+    "regularizer",
     [
-        "PoissonObservations",
-        "GammaObservations",
-        "GaussianObservations",
-        "BernoulliObservations",
+        "UnRegularized",
+        "Ridge",
     ],
 )
-def test_newton_hessian_analytic_v_autodiff(
-    regularizer_strength, observation_model, regression, request
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "_poissonGLM",
+        "_gammaGLM",
+        "_bernoulliGLM",
+        "_gaussianGLM",
+    ],
+)
+def test_newton_population_glm_analytic_v_autodiff(
+    regularizer, regularizer_strength, model_instantiation, structure, request
 ):
-    X, y, _, _, _ = request.getfixturevalue(regression)
-
-    # Get autodiff hessian
-    glm = nmo.glm.GLM(
-        regularizer="Ridge",
-        solver_name="Newton",
-        regularizer_strength=regularizer_strength,
-        observation_model=observation_model,
+    X, y, model, params, _ = request.getfixturevalue(
+        "population" + model_instantiation + "_model_instantiation" + structure
     )
-    params = glm.initialize_params(X, y)
-    glm.initialize_optimizer_and_state(params, X, y)
-    params_tree = GLMParams(*params)
-    autodiff = glm._get_hess_fn(params_tree, autodiff=True)(params_tree, X, y)
+    model.solver_name = "Newton"
+    model.regularizer = regularizer
+    model.regularizer_strength = regularizer_strength
 
-    # Get analytic hessian
-    analytic = glm._get_hess_fn(params_tree, autodiff=False)(params_tree, X, y)
+    autodiff = model._get_hess_fn(params, autodiff=True)(params, X, y)
+    analytic = model._get_hess_fn(params, autodiff=False)(params, X, y)
 
     np.testing.assert_allclose(desired=autodiff, actual=analytic, atol=0.00001)
 
 
 @pytest.mark.parametrize(
-    "regularizer_strength, regression",
+    "regularizer_strength, structure",
     [
-        (0.1, "linear_regression"),
-        (0.1, "linear_regression_tree"),
-        ([[0.1, 0.3], [0.2, 0.2], [0.3, 0.1]], "linear_regression"),
+        (0.1, ""),
         (
-            {"input_1": [[0.1, 0.3], [0.2, 0.2]], "input_2": [[0.3, 0.1]]},
-            "linear_regression_tree",
+            [0.1, 0.3, 0.2, 0.4, 0.3],
+            "",
+        ),
+        (
+            {"input_1": [0.1, 0.3, 0.2], "input_2": [0.1, 0.3]},
+            "_pytree",
         ),
     ],
 )
 @pytest.mark.parametrize(
-    "observation_model",
+    "regularizer",
     [
-        "PoissonObservations",
-        "GammaObservations",
-        "GaussianObservations",
-        "BernoulliObservations",
+        "UnRegularized",
+        "Ridge",
     ],
 )
-def test_newton_population_hessian_analytic_v_autodiff(
-    regularizer_strength, observation_model, regression, request
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "gammaGLM",
+        "bernoulliGLM",
+        "gaussianGLM",
+    ],
+)
+def test_newton_glm_analytic_v_autodiff(
+    regularizer, regularizer_strength, model_instantiation, structure, request
 ):
-    X, y, _, _, _ = request.getfixturevalue(regression)
-    y = np.stack([y, y], axis=1)
-
-    # Get autodiff hessian
-    glm = nmo.glm.PopulationGLM(
-        regularizer="Ridge",
-        solver_name="Newton",
-        regularizer_strength=regularizer_strength,
-        observation_model=observation_model,
+    X, y, model, params, _ = request.getfixturevalue(
+        model_instantiation + "_model_instantiation" + structure
     )
-    params = glm.initialize_params(X, y)
-    glm.initialize_optimizer_and_state(params, X, y)
-    params_tree = GLMParams(*params)
-    autodiff = glm._get_hess_fn(params_tree, autodiff=True)(params_tree, X, y)
+    model.solver_name = "Newton"
+    model.regularizer = regularizer
+    model.regularizer_strength = regularizer_strength
 
-    # Get analytic hessian
-    analytic = glm._get_hess_fn(params_tree, autodiff=False)(params_tree, X, y)
+    autodiff = model._get_hess_fn(params, autodiff=True)(params, X, y)
+    analytic = model._get_hess_fn(params, autodiff=False)(params, X, y)
 
-    np.testing.assert_allclose(desired=autodiff, actual=analytic, atol=0.0001)
+    np.testing.assert_allclose(desired=autodiff, actual=analytic, atol=0.00001)
