@@ -141,6 +141,7 @@ VALID_PAIRS = [
     {"fval", "val"},
     {"params_neu", "param_name"},
     {"params_tree", "parameter_tree"},
+    {"leaf", "x_leaf"},
 ]
 
 

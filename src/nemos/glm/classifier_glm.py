@@ -853,9 +853,9 @@ class ClassifierGLM(ClassifierMixin, GLM):
         return super().score(X, y, score_type, aggregate_sample_scores)
 
     def _get_hess_fn(
-        self, params, solver, use_autodiff: bool = False
+        self, params, loss: Callable, use_autodiff: bool = False
     ) -> Callable | None:
-        super()._get_hess_fn(params, solver, use_autodiff=True)
+        super()._get_hess_fn(params, loss, use_autodiff=True)
 
 
 class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
@@ -1171,7 +1171,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
 
-    def _get_hess_fn(self, params, solver, use_autodiff: bool = False):
+    def _get_hess_fn(self, params, loss: Callable, use_autodiff: bool = False):
 
         def _slice_params(params, i, y):
             coef_neu = jax.tree_util.tree_map(lambda c: c[:, i], params.coef)
@@ -1192,9 +1192,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
             def single_neuron_hess(i):
                 params_neu, y_neu = _slice_params(params, i, y)
                 flat_params, unravel = ravel_pytree_nest(params_neu)
-                return jax.hessian(lambda p: solver.fun(unravel(p), X, y_neu))(
-                    flat_params
-                )
+                return jax.hessian(lambda p: loss(unravel(p), X, y_neu))(flat_params)
 
             return jnp.stack([single_neuron_hess(i) for i in range(n_neurons)])
 

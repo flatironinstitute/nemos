@@ -66,8 +66,8 @@ def _glm_hessian_block(
     var_of_mu,
     lam: Any = 0.0,
 ):
-    X = jnp.concatenate(jax.tree_util.tree_leaves(X), axis=1)
-    n_samples, n_features = X.shape
+    _X = jnp.concatenate(jax.tree_util.tree_leaves(X), axis=1)
+    n_samples, n_features = _X.shape
 
     gprime = _elementwise_derivative(inverse_link_function)
 
@@ -76,17 +76,26 @@ def _glm_hessian_block(
     w = gprime(eta) ** 2 / var_of_mu(mu) / n_samples
 
     X_aug = jnp.concatenate(
-        [X, jnp.ones((n_samples, 1))],
+        [_X, jnp.ones((n_samples, 1))],
         axis=1,
     )
 
     H = X_aug.T @ (w[:, None] * X_aug)
     if lam is not None:
-        if _is_scalar_or_0d(lam.coef):
-            lam = lam.coef * jnp.eye(n_features)
-        else:
-            lam = jnp.diag(jnp.concatenate(jax.tree_util.tree_leaves(lam.coef)))
-        H = H.at[:-1, :-1].add(lam)
+
+        def expand_lam(x_leaf, lam_leaf):
+            ncols = x_leaf.shape[1]
+            lam_leaf = jnp.asarray(lam_leaf)
+
+            if lam_leaf.ndim == 0:
+                return jnp.full(ncols, lam_leaf)
+
+            return jnp.ravel(lam_leaf)
+
+        lam = jnp.concatenate(
+            jax.tree_util.tree_leaves(jax.tree_util.tree_map(expand_lam, X, lam.coef))
+        )
+        H = H.at[:-1, :-1].add(jnp.diag(lam))
 
     return H
 
@@ -1091,7 +1100,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             return (n_samples - rank - 1) * jnp.ones_like(params.intercept)
 
     def _get_hess_fn(
-        self, params, solver, use_autodiff: bool = False
+        self, params, loss: Callable, use_autodiff: bool = False
     ) -> Callable | None:
         """
         Construct a function to compute the Hessian of the penalized log-likelihood.
@@ -1143,7 +1152,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
             def autodiff_hess(params_tree, *args):
                 params, unravel_fn = ravel_pytree(params_tree)
-                return jax.hessian(lambda x: solver.fun(unravel_fn(x), *args))(params)
+                return jax.hessian(lambda x: loss(unravel_fn(x), *args))(params)
 
             return autodiff_hess
 
@@ -1825,23 +1834,7 @@ class PopulationGLM(GLM):
             + params.intercept
         )
 
-    def _get_hess_fn(self, params, solver, use_autodiff: bool = False):
-
-        if use_autodiff:
-
-            def hess_fn(params, X, *args):
-                n_neurons = params.intercept.shape[0]
-
-                def single(i):
-                    params_i = _slice_params(params, i)
-                    flat_params, unravel = ravel_pytree(params_i)
-                    return jax.hessian(lambda p: solver.fun(unravel(p), X, *args))(
-                        flat_params
-                    )
-
-                return jax.vmap(single)(jnp.arange(n_neurons))
-
-            return hess_fn
+    def _get_hess_fn(self, params, loss: Callable, use_autodiff: bool = False):
 
         var_of_mu = _var_func_of_mu(self)
 
@@ -1862,6 +1855,22 @@ class PopulationGLM(GLM):
             return jax.tree_util.tree_map(
                 lambda s: s if _is_scalar_or_0d(s) else s[:, i], strength
             )
+
+        if use_autodiff:
+
+            def hess_fn(params, X, y, *args):
+                n_neurons = params.intercept.shape[0]
+
+                def single(i, y_i):
+                    params_i = _slice_params(params, i)
+                    flat_params, unravel = ravel_pytree(params_i)
+                    return jax.hessian(lambda p: loss(unravel(p), X, y_i, *args))(
+                        flat_params
+                    )
+
+                return jax.vmap(single)(jnp.arange(n_neurons), y.T)
+
+            return hess_fn
 
         def hess_fn(params, X, *args):
             n_neurons = params.intercept.shape[0]

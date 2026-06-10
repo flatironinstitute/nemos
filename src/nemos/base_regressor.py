@@ -437,7 +437,7 @@ class BaseRegressor(
         if isinstance(solver, NewtonSolverProtocol):
             solver.setup_hessian(
                 self._get_hess_fn(
-                    init_params, solver, use_autodiff=solver.use_autodiff
+                    init_params, loss=solver.fun, use_autodiff=solver.use_autodiff
                 ),
                 self._hess_tag,
                 self.regularizer.resolve_hess_tag(init_params),
