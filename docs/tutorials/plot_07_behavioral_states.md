@@ -96,7 +96,8 @@ print(trials.columns)
 
 `one.search()` returns session IDs (eids) that exist as session records in Alyx, while `load_aggregate()` downloads a pre-computed file with trial data pooled across multiple sessions. If you want to get all sessions from a single animal, it is recommended to use `load_aggregate`, because some sessions may be located in a dataframe without a session identifier in itself (but containing multiple sessions with their own session identifiers).
 ```
-We can take a subset of those columns to keep only the relevant sources of information. We are modeling choice as result of observables and behavioral state, so we need choice, stimuli presented and reward obtained. Additionally, we want to keep the information of the probability of the stimulus appearing in a given position since this changes within a session, and the session id to know when sessions start and end.
+
+`trials` is a pandas DataFrame, with one row per trial and one column per measured variable. We can take a subset of those columns to keep only the relevant sources of information. We are modeling choice as result of observables and behavioral state, so we need choice, stimuli presented and reward obtained. Additionally, we want to keep the information of the probability of the stimulus appearing in a given position since this changes within a session, and the session id to know when sessions start and end.
 
 | Variable            | Description |
 |---------------------|-------------|
@@ -107,11 +108,14 @@ We can take a subset of those columns to keep only the relevant sources of infor
 | probabilityLeft     | probability of stimulus being presented on the left of the screen |
 | session             | id of session |
 
-Let's extract the meaningful data and see how it looks
+Let's extract what we need,
 
 ```{code-cell} ipython3
 trials = trials[["choice", "contrastLeft", "contrastRight", "feedbackType", "probabilityLeft", "session"]]
+```
+and inspect its contents.
 
+```{code-cell} ipython3
 print(f"choice \nvalues: {trials.choice.unique()}, data type: {trials.choice.dtype}, shape:  \n")
 print(f"contrast left \nvalues: {trials.contrastLeft.unique()}, data type: {trials.contrastLeft.dtype} \n")
 
@@ -123,15 +127,17 @@ print(f"probability of stimulus on left \nvalues: {trials.probabilityLeft.unique
 
 print(f"session \n(some) values: {trials.session.unique()[:5]}, data type: {trials.session.dtype}\n")
 ```
-
-Now, we will restrict the analysis to the first 90 trials of each session to match the work of Ashwood et al. (2022) <span id="cite1b"></span><a href="#ref1b">[1b]</a>. In this segment, the stimulus appears on the left and right with equal probability (0.5/0.5), and thus choices should be driven primarily by sensory evidence rather than learned expectations about stimulus probability.
+Finally, let's focus our analysis on one example session. 
 
 ```{code-cell} ipython3
 # Choose example session
 sess_ex = '726b6915-e7de-4b55-a38e-ff4c461211d3'
 # Subset session trials
 trials_sess = trials[trials.session == sess_ex].reset_index()
+```
+Now, we will restrict the analysis to the first 90 trials of each session to match the work of Ashwood et al. (2022) <span id="cite1b"></span><a href="#ref1b">[1b]</a>. In this segment, the stimulus appears on the left and right with equal probability (0.5/0.5), and thus choices should be driven primarily by sensory evidence rather than learned expectations about stimulus probability.
 
+```{code-cell} ipython3
 # Plot
 plt.plot(trials_sess["probabilityLeft"][:300])
 plt.axvspan(0, 90, color="skyblue", alpha=0.3, label="first 90 trials")
@@ -146,45 +152,39 @@ In  Ashwood et al. (2022)<span id="cite1c"></span><a href="#ref1c">[1c]</a>, onl
  1) Subset sessions which include 50-50 trials
  2) Exclude sessions with >10 violation trials
 
+Let's do some pandas wrangling to keep only the sessions that have:
+1. Filter to sessions that went through all testing blocks (in particular all 50-50, 20-80 and 80-20 blocks).
+2. Get the initial 50-50 trial block.
+3. Fewer than 10 invalid trials in that block.
+
 ```{code-cell} ipython3
-# Create a list of ids
-sessions_ids = trials.session.unique()
+:tags: [render-all]
 
-# keep only relevant columns for filtering
-df_trials = trials[["session", "probabilityLeft", "choice"]]
-
-# Get which sessions contain exactly {0.2, 0.5, 0.8}
-valid_prob_sessions = (
-    df_trials.groupby("session")["probabilityLeft"]
-      .agg(lambda x: set(x.unique()) == {0.2, 0.5, 0.8})
-)
-
-# Compute violations only on 50-50 trials
+# Invalid choice marker
 viol_val = 0
-violations = (
-    df_trials[df_trials["probabilityLeft"] == 0.5]
-    .groupby("session")["choice"]
-    .apply(lambda x: (x == viol_val).sum())
+
+# Selecting the sessions as in the Ashwood at al. paper
+# Boolean mask selecting sessions with 50-50, 20-80 and 80-20 blocks
+has_three_blocks = (
+    trials.groupby("session")["probabilityLeft"]
+          .agg(lambda s: set(s.unique()) == {0.2, 0.5, 0.8})
 )
 
-# Apply both restrictions
-valid_sessions = violations[
-    (violations < 10) & (violations.index.isin(valid_prob_sessions[valid_prob_sessions == True].index))
-].index.tolist()
+# Boolean mask selecing sessions with < 10 invalid trials in the 50-50 block
+violations = (
+    trials.query("probabilityLeft == 0.5")
+          .groupby("session")["choice"]
+          .agg(lambda s: s.eq(viol_val).sum())
+)
 
-# Make sure they maintain the order of the original dataset (we don't want scrambled trials)
-valid_set = set(valid_sessions)
-valid_sessions = [
-    s for s in trials["session"].drop_duplicates()
-    if s in valid_set
-]
-print(f"# of sessions before restrictions {len(df_trials.session.unique())}")
+valid_sessions = has_three_blocks.index[has_three_blocks & (violations < 10)]
 
-# Now we can select only the valid sessions for subsequent analyses
-df_trials = trials[
-    (trials["session"].isin(valid_sessions)) & (df_trials["probabilityLeft"] == 0.5)
-]
-print(f"# of sessions after restrictions {len(df_trials.session.unique())}")
+print(f"# of sessions before restrictions {trials['session'].nunique()}")
+
+# Keep only the 50/50 trials from valid sessions (row order preserved by the filter)
+df_trials = trials.query("session in @valid_sessions and probabilityLeft == 0.5")
+
+print(f"# of sessions after restrictions {df_trials['session'].nunique()}")
 ```
 
 ## Design matrix
@@ -216,6 +216,8 @@ rewarded = df_example_session['feedbackType'].reset_index(drop=True)
 ```
 
 For the first predictor: signed contrast.
+- Replace NaN contrast values with 0 using `np.nan_to_num`.
+- Compute the signed contrast (difference between left and right)
 
 ```{code-cell} ipython3
 # Create stim vector
@@ -226,10 +228,11 @@ stim_right = np.nan_to_num(stim_right, nan=0)
 signed_contrast = stim_left - stim_right
 print(signed_contrast)
 ```
+- Get the index of the valid trials with `np.flatnonzero`
 
 ```{code-cell} ipython3
 # Get rid of violation trials
-valid_choices_idx = np.where(~choices.isin([viol_val]))[0]
+valid_choices_idx = np.flatnonzero(choices != viol_val)
 ```
 
 With those two elements we can compute our design matrix for this session. We will do this using the NeMoS basis class ```nmo.basis```, which will make the process a lot easier.
@@ -238,18 +241,31 @@ A basis is a collection of functions that, when combined, can represent more com
 
 - ```HistoryConv``` includes the history of the samples as predictor. It is intended to be used for including raw history as predictor. You can decide how much history in the past you want to have, but now we only want one choice in the past. We can use this to create the previous choice predictor.
 
-- ```IdentityEval``` includes the samples themselves as predictors. The point of this basis is to make the predictor into a NeMoS object. We can use this for the stimuli predictor. 
+- ```IdentityEval``` uses the samples themselves as predictors; its purpose is simply to wrap them as a NeMoS object. We use this for the stimuli predictor.
 
 It is very easy to declare our basis objects:
+
+Let's use the `basis` module from NeMoS to define the design matrix.
+
+What we need is:
+
+- A `HistoryConv` basis to capture the choice history. We need a `window_size`=1 to include the previous 1 choice as predictor.
+
 
 ```{code-cell} ipython3
 # Prev history with history of 1
 prev_choice_basis = nmo.basis.HistoryConv(1)
+```
+- A `IdentityEval` basis to include the signed contrast as is. This may seem pointless, but will allow us to add the basis and form the full design matrix in one go.
+
+```{code-cell} ipython3
 # Identity basis for stimuli
 stimuli_basis = nmo.basis.IdentityEval()
 ```
 
 However, we are still missing one predictor: win-stay lose-shift. This is an interaction of previous choice with previous reward. To capture interaction between variables, we can use a [multiplicative basis object](../background/basis/plot_02_ND_basis_function.md), which takes the outer product of the elements that compose it.
+- Win-stay lose-shift is the product of previous choice and previous reward, $WSLS_t = c_{t-1} \dot r_{t-1}$
+- We can use basis multiplication to construct that predictor.
 
 ```{code-cell} ipython3
 # Create lagged reward predictor
@@ -478,7 +494,7 @@ Once we created our object, we can fit our model. The fit function takes two man
 ```{code-cell} ipython3
 model.fit(X, 
           choices,
-          is_new_session=new_sess_mouse
+          session_starts=new_sess_mouse
 )
 ```
 
@@ -654,7 +670,7 @@ To better understand the temporal structure of decision making behavior, we can 
 posteriors = model.smooth_proba(
     X, 
     choices,
-    is_new_session=new_sess_mouse
+    session_starts=new_sess_mouse
 )
 print(f"First five osteriors \n{posteriors[:5]} \n")
 
@@ -764,7 +780,7 @@ This function takes three mandatory parameters, a matrix of predictors X of shap
 decoded_states = model.decode_state(
     X,
     choices,
-    is_new_session=new_sess_mouse,
+    session_starts=new_sess_mouse,
     state_format = "one-hot"
 )
 print(f"{decoded_states} \n")
