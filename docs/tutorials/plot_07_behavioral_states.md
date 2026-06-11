@@ -28,7 +28,7 @@ We have four main goals for this tutorial:
 3. Show how to fit choice data using a GLM-HMM
 4. Show how to interpret GLM-HMM fitting results
 
-Importantly, throughout the notebook we will assume you already have a solid theoretical understanding of GLMs and GLM-HMMs. 
+Importantly, throughout the notebook we will assume you already have a solid theoretical understanding of GLMs and GLM-HMMs.
 
 +++
 
@@ -75,12 +75,13 @@ Task illustration. Modified from IBL et al. (2021) <span id="cite2b"></span><a h
 ```
 
 
-We will analyze the IBL decision-making task  (IBL et al., 2021) <span id="cite2a"></span><a href="#ref2a">[2a]</a>, which is a variation of the two-alternative forced-choice perceptual detection task (Burgess et al. (2021) <span id="cite3"></span><a href="#ref3">[3]</a>. During this task, a sinusoidal grating with varying contrast [0\%-100\%] appeared either at the right or left side of the screen. The goal for the mice was to indicate this side turning a little wheel so that this turn would accordingly move the stimuli to the center of the screen (Burgess et al. (2021) <span id="cite3"></span><a href="#ref3">[3]</a>. If the mice chose the side correctly, they would receive a water reward; if not, they would get a noise burst and there would be a 1 second timeout. For the first 90 trials of each session in the task, the stimulus appeared randomly on either side of the screen; after that, the stimulus appeared on one side with fixed probability 0.8 and alternate randomly every 20-100 trials. 
+We will analyze the IBL decision-making task  (IBL et al., 2021) <span id="cite2a"></span><a href="#ref2a">[2a]</a>, which is a variation of the two-alternative forced-choice perceptual detection task (Burgess et al. (2021) <span id="cite3"></span><a href="#ref3">[3]</a>. During this task, a sinusoidal grating with varying contrast [0\%-100\%] appeared either at the right or left side of the screen. The goal for the mice was to indicate this side turning a little wheel so that this turn would accordingly move the stimuli to the center of the screen (Burgess et al. (2021) <span id="cite3"></span><a href="#ref3">[3]</a>. If the mice chose the side correctly, they would receive a water reward; if not, they would get a noise burst and there would be a 1 second timeout. For the first 90 trials of each session in the task, the stimulus appeared randomly on either side of the screen; after that, the stimulus appeared on one side with fixed probability 0.8 and alternate randomly every 20-100 trials.
 
 First, let's download the data using [Open Neurophysiology Environment (ONE)](https://docs.internationalbrainlab.org/notebooks_external/one_quickstart.html)
 
 ```{code-cell} ipython3
 # Instantiate the ONE object
+ONE.setup(base_url='https://openalyx.internationalbrainlab.org', silent=True)
 one = ONE(password = 'international')
 
 # Then we need to choose our subject and run load_aggregate
@@ -127,7 +128,7 @@ print(f"probability of stimulus on left \nvalues: {trials.probabilityLeft.unique
 
 print(f"session \n(some) values: {trials.session.unique()[:5]}, data type: {trials.session.dtype}\n")
 ```
-Finally, let's focus our analysis on one example session. 
+Finally, let's focus our analysis on one example session.
 
 ```{code-cell} ipython3
 # Choose example session
@@ -199,10 +200,10 @@ Let's go through the process of building the design matrix with one session.
 
 ```{code-cell} ipython3
 # Select an example session
-example_session_id = valid_sessions[0]  
+example_session_id = valid_sessions[0]
 df_example_session = df_trials[df_trials["session"] == example_session_id]
 
-# We can select all the necessary values for the design matrix: 
+# We can select all the necessary values for the design matrix:
 # choice, contrast of stimuli and reward
 choices = df_example_session['choice'].reset_index(drop=True)
 stim_left = df_example_session['contrastLeft'].reset_index(drop=True)
@@ -253,10 +254,10 @@ prev_reward_basis = nmo.basis.HistoryConv(1)
 wsls_basis = prev_choice_basis*prev_reward_basis
 ```
 
-Now we have all our bases. We can create an additive basis including all of them and then all we need to do now is to apply the basis transformation to the input data. We can do this by using ```compute_features```. This method is designed to be a high-level interface for transforming input data using the basis functions. 
+Now we have all our bases. We can create an additive basis including all of them and then all we need to do now is to apply the basis transformation to the input data. We can do this by using ```compute_features```. This method is designed to be a high-level interface for transforming input data using the basis functions.
 
 Even though we need just a few lines of code, there is a lot going on. Here's a breakdown of what is happening:
-1. We will create an additive basis ```basis_object``` with our bases ```stimuli_basis```, ```wsls_basis``` and ```prev_choice_basis```. 
+1. We will create an additive basis ```basis_object``` with our bases ```stimuli_basis```, ```wsls_basis``` and ```prev_choice_basis```.
 2. ```wsls_basis``` is a multiplicative basis that takes two inputs.
 3. We will compute the features for our ```basis_object``` using ```compute_features```. Since the bases in our composite basis take a total of 4 inputs (```stimuli_basis``` takes 1 input, ```wsls_basis``` takes 2 inputs and ```prev_choice_basis``` takes 1 input), we need to pass 4 features to ```compute_features```.
 
@@ -274,9 +275,9 @@ X_unnormalized = basis_object.compute_features(
     choices[valid_choices_idx],             # input 2 : wsls input 1: choice
     rewarded[valid_choices_idx],            # input 3 : wsls input 2: reward
     choices[valid_choices_idx]              # input 4 : processed with prev_choice
-)        
+)
 
-print(X_unnormalized[:5,:])     
+print(X_unnormalized[:5,:])
 ```
 
 And that's it! We have our unnormalized design matrix with signed contrast, win-stay lose-shift and previous choice as predictors.
@@ -289,12 +290,12 @@ X = np.copy(X_unnormalized)
 X[:, 0] = zscore(X[:, 0])
 ```
 
-```{admonition} "Why do we normalize our stimuli predictor?" 
+```{admonition} "Why do we normalize our stimuli predictor?"
 :class: question
 :class: dropdown
-When fitting a GLM-HMM, we are fitting a separate weight for each feature. However, if the features are on different numerical scales for reasons that are not related to the actual influence of each predictor, that renders the weights incomparable. Here we have three predictors:  
+When fitting a GLM-HMM, we are fitting a separate weight for each feature. However, if the features are on different numerical scales for reasons that are not related to the actual influence of each predictor, that renders the weights incomparable. Here we have three predictors:
 - (1) Previous choice and (2) WSLS are always exactly −1 or +1. Their values are discrete and bounded, and they already share the same scale.
-- (3) Stimuli contrast is continuous. While it can reach −1 or +1 (full contrast), this value rarely occurs. 
+- (3) Stimuli contrast is continuous. While it can reach −1 or +1 (full contrast), this value rarely occurs.
 
 Because the stimuli contrast values are much smaller in typical magnitude than +/-1, the model compensates by assigning a larger weight to match the output scale, simply because its values are numerically smaller. In practice, this results in an artifact of scale that is not reflective of the  true influence of the predictor.
 
@@ -310,13 +311,13 @@ and see our design matrix.
 
 def plot_design_matrix():
     fig, axes = plt.subplots(
-        1, 
-        2, 
-        figsize=(3.5, 8), 
+        1,
+        2,
+        figsize=(3.5, 8),
         sharey=True,
     )
 
-    # ---- define signed contrast bins 
+    # ---- define signed contrast bins
 
     cmap_cat = LinearSegmentedColormap.from_list(
         "bias_map",
@@ -335,7 +336,7 @@ def plot_design_matrix():
     )
 
     axes[0].set_xticks([0.5, 1.5, 2.5],
-                    ["Sign. contr.", "WSLS", "Prev. choice",], 
+                    ["Sign. contr.", "WSLS", "Prev. choice",],
                     rotation=90)
     axes[0].set_yticks([])
     axes[0].set_ylabel("Trials")
@@ -352,8 +353,8 @@ def plot_design_matrix():
         vmax= 2.4
     )
     axes[0].set_yticks([])
-    axes[1].set_xticks([0.5], 
-                    ["Choices"], 
+    axes[1].set_xticks([0.5],
+                    ["Choices"],
                     rotation=90)
 
     plt.tight_layout()
@@ -405,7 +406,7 @@ X_unnormalized = basis_object.compute_features(
     choices[valid_choices_idx],             # input 2 : wsls input 1: choice
     rewarded[valid_choices_idx],            # input 3 : wsls input 2: reward
     choices[valid_choices_idx]              # input 4 : processed with prev_choice
-)   
+)
 
 # And then normalize across the signed contrast
 X = np.copy(X_unnormalized)
@@ -427,11 +428,11 @@ In NeMoS we have two ways of indicating the beginning of a new session. You can 
 new_sess_mouse = np.flatnonzero(session[1:] != session[:-1]) + 1
 ```
 
-```{admonition} How does this one-liner find the session starts? 
-:class: note 
+```{admonition} How does this one-liner find the session starts?
+:class: note
 :class: dropdown
 
-Dession holds one session id per trial. Comparing `s`ession[1:] (every trial but the first) with `session[:-1]` (every trial but the last) yields a boolean array that is `True` wherever a trial's session id differs from the previous trial's — that is, exactly at the session boundaries. `np.flatnonzero` returns the indices where this is `True`, and we add 1 because the comparison is shifted by one (position `i` in the comparison corresponds to trial `i+1`). The result is the array of indices at which a new session begins. 
+Dession holds one session id per trial. Comparing `s`ession[1:] (every trial but the first) with `session[:-1]` (every trial but the last) yields a boolean array that is `True` wherever a trial's session id differs from the previous trial's — that is, exactly at the session boundaries. `np.flatnonzero` returns the indices where this is `True`, and we add 1 because the comparison is shifted by one (position `i` in the comparison corresponds to trial `i+1`). The result is the array of indices at which a new session begins.
 ```
 
 ## Model fitting
@@ -445,7 +446,7 @@ The default observation model for the GLM-HMM is Bernoulli, but Categorical (Mul
 For more information, refer to Escola et al (2011)<span id="cite4"></span><a href="#ref4">[4]</a>.
 ```
 ____
-If required, you can further personalize the ```GLMHMM``` object settings. Beyond the number of states, the observation model and the inverse link function, you can also initialization functions for to aid parameter estimation. 
+If required, you can further personalize the ```GLMHMM``` object settings. Beyond the number of states, the observation model and the inverse link function, you can also initialization functions for to aid parameter estimation.
 
 If you don't set up any initialization settings, you would use the NeMoS defaults:
 - ``"glm_params_init"``: ``"random"`` - small random coefficients, mean-rate intercept
@@ -474,7 +475,7 @@ The likelihood of a GLM-HMM is non-convex, so the EM algorithm used to fit it ca
 Once we created our object, we can fit our model. The fit function takes two mandatory arguments: the design matrix ```X```we created in section 02 and the ```choices```. Additionally, we will also include ```new_sess_mouse```, the new session indicator.
 
 ```{code-cell} ipython3
-model.fit(X, 
+model.fit(X,
           choices,
           session_starts=new_sess_mouse
 )
@@ -537,7 +538,7 @@ def plot_glm_weights(model, n_states = n_states):
     n_features = model.coef_.shape[0]+1 # add 1 for the intercept
 
     # Change order of weights so output matches Ashwood et al. (2022) 2e plot
-    recovered_weights = np.zeros((n_features,n_states)) 
+    recovered_weights = np.zeros((n_features,n_states))
     recovered_weights[0,:] = model.coef_[0,:] # stimulus
     recovered_weights[1,:] = model.intercept_ # bias
     recovered_weights[2,:] = model.coef_[2,:] # prev choice, wsls
@@ -562,7 +563,7 @@ def plot_glm_weights(model, n_states = n_states):
             label=state_labels[state],
             linestyle="-",
         )
-            
+
     plt.yticks([-2.5, 0, 2.5, 5])
     plt.ylabel("GLM weight")
     plt.xlabel("Covariate")
@@ -590,7 +591,7 @@ def plot_glm_weights(model, n_states = n_states):
 
     if path.exists():
         fig.savefig(path / "plot_07_behavioral_states.svg")
-    
+
     return None
 ```
 
@@ -598,7 +599,7 @@ def plot_glm_weights(model, n_states = n_states):
 plot_glm_weights(model)
 ```
 
-We can see that the coefficients on state 1 have a large weight on the stimulus and low weight on the other predictors. Conversely, in states 2 and 3, the stimulus coefficient is comparatively lower. State 2 has a large positive weight on bias, while State 3 has a large negative weight on bias. Since the sign of our predictors indicates the side of evidence (>0 : left; <0 : right, see the table of variables in section 01) and their magnitude indicates the strength of such evidence, State 2 coefficients suggest a large bias towards leftward choice, while State 3 coefficients suggest a large bias to a rightward choice. All states have similarly low coefficients for prev. choice and wsls, with State 1 showing the smallest of them. 
+We can see that the coefficients on state 1 have a large weight on the stimulus and low weight on the other predictors. Conversely, in states 2 and 3, the stimulus coefficient is comparatively lower. State 2 has a large positive weight on bias, while State 3 has a large negative weight on bias. Since the sign of our predictors indicates the side of evidence (>0 : left; <0 : right, see the table of variables in section 01) and their magnitude indicates the strength of such evidence, State 2 coefficients suggest a large bias towards leftward choice, while State 3 coefficients suggest a large bias to a rightward choice. All states have similarly low coefficients for prev. choice and wsls, with State 1 showing the smallest of them.
 
 As a reminder, the task required indicating whether the stimulus was on the right or the left of the screen, using the stimulus contrast. The optimal strategy is therefore to rely on stimulus contrast as much as possible, rather than on bias, previous choice, or WSLS.
 
@@ -649,7 +650,7 @@ To better understand the temporal structure of decision making behavior, we can 
 ```{code-cell} ipython3
 # Compute smooth_proba
 posteriors = model.smooth_proba(
-    X, 
+    X,
     choices,
     session_starts=new_sess_mouse
 )
@@ -692,7 +693,7 @@ def plot_posteriors(posteriors):
             # Plot all trials for a given session and state
             ax[i].plot(
                 posteriors[sess_ex][:, state],
-                label="State " + str(state + 1), 
+                label="State " + str(state + 1),
                 lw=3,
                 color=colors[state]
     )
@@ -700,38 +701,38 @@ def plot_posteriors(posteriors):
             if i == 0:
                 ax[i].set_xticks(
                     [
-                        0, 
-                        45, 
+                        0,
+                        45,
                         90
-                    ], 
+                    ],
                     [
-                        "0", 
-                        "45", 
+                        "0",
+                        "45",
                         "90"
-                    ], 
+                    ],
                 )
                 ax[i].set_ylabel("P(state)")
                 ax[i].set_xlabel("Trial #")
                 ax[i].set_yticks(
-                    [0, 0.5, 1], 
-                    ["0", "0.5", "1"], 
+                    [0, 0.5, 1],
+                    ["0", "0.5", "1"],
                 )
             else:
                 ax[i].set_xticks(
                     [
-                        0, 
-                        45, 
+                        0,
+                        45,
                         90
-                    ], 
+                    ],
                     [
-                        " ", 
-                        " ", 
+                        " ",
+                        " ",
                         " "
-                    ], 
+                    ],
                 )
                 ax[i].set_yticks(
-                    [0, 0.5, 1], 
-                    [" ", " ", " "], 
+                    [0, 0.5, 1],
+                    [" ", " ", " "],
                 )
     return None
 ```
@@ -788,7 +789,7 @@ correct_ans_task = np.sign(non_zero_contrast)
 correct_ans_task_remapped = (correct_ans_task+ 1) / 2
 
 # Get accuracy i.e how many choices match / how many choices were made
-correct_ans_mouse = np.sum(choices[non_zero_contrast_loc] == correct_ans_task_remapped) 
+correct_ans_mouse = np.sum(choices[non_zero_contrast_loc] == correct_ans_task_remapped)
 
 total_accuracy = correct_ans_mouse/len(correct_ans_task)
 
@@ -802,29 +803,29 @@ accuracies_to_plot_viterbi[0] = total_accuracy
 And then we can use our output of ```decode_state``` to segment the trials into the estimated states and compute the accuracy within each state.
 
 ```{code-cell} ipython3
-for state in range(n_states): 
+for state in range(n_states):
     # index of trials per state
     idx_this_state = np.where(decoded_states[:,state] == 1)
-    
+
     # Get contrast and choices for this state
     signed_contrast_this_state = signed_contrast[idx_this_state]
     choices_this_state = choices[idx_this_state]
-    
+
     # See where the input is not 0
     not_zero_contrast_loc_this_state = np.where(signed_contrast_this_state != 0)[0]
     non_zero_contrast_this_state = signed_contrast_this_state[not_zero_contrast_loc_this_state]
-    
+
     # Get correct answer by looking at sign
     correct_ans_this_state = np.sign(non_zero_contrast_this_state)
-    
+
     # Transform into 0-1 to compare with choices
     correct_ans_task_this_state_remapped = (correct_ans_this_state+ 1) / 2
 
     # Get accuracy i.e how many choices match / how many choices were made
-    correct_ans_mouse_this_state = np.sum(choices_this_state[not_zero_contrast_loc_this_state] == correct_ans_task_this_state_remapped) 
-    
+    correct_ans_mouse_this_state = np.sum(choices_this_state[not_zero_contrast_loc_this_state] == correct_ans_task_this_state_remapped)
+
     accuracy_this_state = correct_ans_mouse_this_state / len(correct_ans_this_state)
-    
+
     # Add state accuracy for plotting
     accuracies_to_plot_viterbi[state+1] = accuracy_this_state
 
@@ -889,7 +890,7 @@ According to state occupancy derived with the Viterbi algorithm, this mouse spen
 +++
 
 #### Using ```smooth_proba```
-Now we can compute the same quantities but using ```smooth_probs```. We used this method to compute the posterior probabilities! In contrast to ```decode_state```, which outputs the globally optimally state sequence, ```smooth_proba``` outputs probabilistic posteriors. With this alternative, we can go by the approach used in Ashwood et al. (2022): we can compute the posterior probability for each state at all times, and subset the trials for which there is high confidence (+90% probability) of being in a given state; then, we can assign each trial to its most likely state and count the fraction of trials assigned to each state. 
+Now we can compute the same quantities but using ```smooth_probs```. We used this method to compute the posterior probabilities! In contrast to ```decode_state```, which outputs the globally optimally state sequence, ```smooth_proba``` outputs probabilistic posteriors. With this alternative, we can go by the approach used in Ashwood et al. (2022): we can compute the posterior probability for each state at all times, and subset the trials for which there is high confidence (+90% probability) of being in a given state; then, we can assign each trial to its most likely state and count the fraction of trials assigned to each state.
 
 The process is very similar to the one we used in the previous section, with the difference in how we slice the trials and assign them to a specific state. We can start with the fraction of occupancy.
 
@@ -910,7 +911,7 @@ print(f"Fraction of occupancy {frac_occupancy_smooth_proba } \n")
 ```{code-cell} ipython3
 # Segment trials into states estimated on a trial by trial basis
 idx_per_state = []
-for state in range(n_states): 
+for state in range(n_states):
     idx_per_state.append(np.where(posteriors[:, state] >= 0.9)[0])
 ```
 
@@ -924,29 +925,29 @@ def get_accuracies_to_plot(idx_per_state, total_accuracy=total_accuracy, n_state
     accuracies_to_plot = np.zeros([4,])
     # Use previously calculated total_accuracy
     accuracies_to_plot[0] = total_accuracy
-    for state in range(n_states): 
+    for state in range(n_states):
         # index of trials per state
         idx_this_state = idx_per_state[state]
 
         # Get contrast and choices for this state
         signed_contrast_this_state = signed_contrast[idx_this_state]
         choices_this_state = choices[idx_this_state]
-        
+
         # See where the input is not 0
         not_zero_contrast_loc_this_state = np.where(signed_contrast_this_state != 0)[0]
         non_zero_contrast_this_state = signed_contrast_this_state[not_zero_contrast_loc_this_state]
-        
+
         # Get correct answer by looking at sign
         correct_ans_this_state = np.sign(non_zero_contrast_this_state)
-        
+
         # Transform into 0-1 to compare with choices
         correct_ans_task_this_state_remapped = (correct_ans_this_state+ 1) / 2
 
         # Get accuracy i.e how many choices match / how many choices were made
-        correct_ans_mouse_this_state = np.sum(choices_this_state[not_zero_contrast_loc_this_state] == correct_ans_task_this_state_remapped) 
-        
+        correct_ans_mouse_this_state = np.sum(choices_this_state[not_zero_contrast_loc_this_state] == correct_ans_task_this_state_remapped)
+
         accuracy_this_state = correct_ans_mouse_this_state / len(correct_ans_this_state)
-        
+
         # Add state accuracy for plotting
         accuracies_to_plot[state+1] = accuracy_this_state
     return accuracies_to_plot
@@ -989,7 +990,7 @@ X_unnormalized = basis_object.compute_features(
     choices[valid_choices_idx],             # input 2 : wsls input 1: choice
     rewarded[valid_choices_idx],            # input 3 : wsls input 2: reward
     choices[valid_choices_idx]              # input 4 : processed with prev_choice
-)           
+)
 ```
 Similarly, the fitting process using NeMoS was also very fast and easy:
 ```
@@ -999,7 +1000,7 @@ model = nmo.glm_hmm.GLMHMM(
     n_states,
     regularizer = "Ridge")
 
-model.fit(X, 
+model.fit(X,
           np.asarray(choices),
           is_new_session=new_sess_mouse
 )
