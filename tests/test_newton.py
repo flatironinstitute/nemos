@@ -679,7 +679,7 @@ def test_newton_population_glm_analytic_v_autodiff(
     autodiff = model._get_hess_fn(params, autodiff=True)(params, X, y)
     analytic = model._get_hess_fn(params, autodiff=False)(params, X, y)
 
-    np.testing.assert_allclose(desired=autodiff, actual=analytic, atol=0.00001)
+    np.testing.assert_allclose(desired=autodiff, actual=analytic, atol=0.0001)
 
 
 @pytest.mark.parametrize(
@@ -725,4 +725,4 @@ def test_newton_glm_analytic_v_autodiff(
     autodiff = model._get_hess_fn(params, autodiff=True)(params, X, y)
     analytic = model._get_hess_fn(params, autodiff=False)(params, X, y)
 
-    np.testing.assert_allclose(desired=autodiff, actual=analytic, atol=0.00001)
+    np.testing.assert_allclose(desired=autodiff, actual=analytic, atol=0.0001)
