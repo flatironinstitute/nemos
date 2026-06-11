@@ -1852,16 +1852,19 @@ class PopulationGLM(GLM):
             )
 
         if autodiff:
+            # AUTODIFF PATH
 
             def hess_fn(params, X, y, *args):
                 n_neurons = params.intercept.shape[0]
 
                 def _loss_i(params_i, X, y_i):
+                    """Simplified loss function that doesn't apply mask."""
                     rate = GLM._predict(self, params_i, X)
                     return self._observation_model._negative_log_likelihood(y_i, rate)
 
                 def _hess_fn_i(i, y_i):
-                    params_i, strength_i = self._get_subprobem(params, strength, i)
+                    """Hessian function for a single subproblem."""
+                    params_i, strength_i = self._get_subproblem(params, strength, i)
                     if strength_i is not None:
                         strength_i = strength_i.coef
                     loss = self.regularizer.penalized_loss(
@@ -1870,17 +1873,19 @@ class PopulationGLM(GLM):
                     flat_params, unravel = ravel_pytree(params_i)
                     return jax.hessian(lambda p: loss(unravel(p), X, y_i))(flat_params)
 
+                # vmap autodiff hessian function across neurons
                 return jax.vmap(_hess_fn_i, in_axes=(0, 1))(jnp.arange(n_neurons), y)
 
             return hess_fn
 
+        # ANALYTIC PATH
         var_of_mu = _var_func_of_mu(self)
 
         def hess_fn(params, X, *args):
             n_neurons = params.intercept.shape[0]
 
             def _hess_fn_i(i):
-                params_i, strength_i = self._get_subprobem(params, strength, i)
+                params_i, strength_i = self._get_subproblem(params, strength, i)
                 eta = (
                     jax.tree.reduce(jnp.add, jax.tree.map(jnp.dot, X, params_i.coef))
                     + params_i.intercept
@@ -1889,6 +1894,7 @@ class PopulationGLM(GLM):
                     X, eta, self.inverse_link_function, var_of_mu, strength_i
                 )
 
+            # vmap analytic hessian function across neurons
             return jax.vmap(_hess_fn_i)(jnp.arange(n_neurons))
 
         return hess_fn
