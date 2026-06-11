@@ -30,7 +30,7 @@ from ..solvers._hess import (
     PositiveDefinite,
     PositiveSemiDefinite,
 )
-from ..type_casting import _is_scalar_or_0d, cast_to_jax, support_pynapple
+from ..type_casting import cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, SolverState, StepResult
 from ..utils import _elementwise_derivative, format_repr
 from .initialize_parameters import initialize_intercept_matching_mean_rate
@@ -1833,28 +1833,15 @@ class PopulationGLM(GLM):
             + params.intercept
         )
 
-    def _slice_strength(self, strength, i):
-        if strength is None:
-            return None
-        return jax.tree_util.tree_map(
-            lambda s: s if _is_scalar_or_0d(s) else jnp.take(s, i, axis=1), strength
-        )
-
-    def _slice_params(self, params, i):
-        mask = (
-            jnp.take(self._feature_mask, i, axis=1)
-            if self._feature_mask is not None
-            else 1
-        )
-
-        sliced_coef = jax.tree_util.tree_map(
-            lambda c: jnp.take(c, i, axis=1) * mask,
-            params.coef,
-        )
-
-        intercept = jnp.take(params.intercept, i, axis=0)
-
-        return self._validator.to_model_params([sliced_coef, intercept])
+    def _get_subproblem(self, params, strength, i):
+        mask_i = tree_utils.tree_take(self._feature_mask, i)
+        coef_i = tree_utils.tree_take(params.coef, i)
+        if mask_i is not None:
+            coef_i = jax.tree_util.tree_map(lambda c, m: c * m, coef_i, mask_i)
+        intercept_i = jnp.take(params.intercept, i, axis=0)
+        params_i = self._validator.to_model_params([coef_i, intercept_i])
+        strength_i = tree_utils.tree_take(strength, i)
+        return params_i, strength_i
 
     def _get_hess_fn(self, params, autodiff: bool = False):
 
@@ -1869,18 +1856,19 @@ class PopulationGLM(GLM):
             def hess_fn(params, X, y, *args):
                 n_neurons = params.intercept.shape[0]
 
+                def _loss_i(params_i, X, y_i):
+                    rate = GLM._predict(self, params_i, X)
+                    return self._observation_model._negative_log_likelihood(y_i, rate)
+
                 def _hess_fn_i(i, y_i):
-                    params_i = self._slice_params(params, i)
-                    strength_i = self._slice_strength(strength, i)
+                    params_i, strength_i = self._get_subprobem(params, strength, i)
                     if strength_i is not None:
                         strength_i = strength_i.coef
                     loss = self.regularizer.penalized_loss(
-                        self._compute_loss, params_i, strength_i
+                        _loss_i, params_i, strength_i
                     )
                     flat_params, unravel = ravel_pytree(params_i)
-                    return jax.hessian(lambda p: loss(unravel(p), X, y_i, *args))(
-                        flat_params
-                    )
+                    return jax.hessian(lambda p: loss(unravel(p), X, y_i))(flat_params)
 
                 return jax.vmap(_hess_fn_i, in_axes=(0, 1))(jnp.arange(n_neurons), y)
 
@@ -1892,8 +1880,7 @@ class PopulationGLM(GLM):
             n_neurons = params.intercept.shape[0]
 
             def _hess_fn_i(i):
-                params_i = self._slice_params(params, i)
-                strength_i = self._slice_strength(strength, i)
+                params_i, strength_i = self._get_subprobem(params, strength, i)
                 eta = (
                     jax.tree.reduce(jnp.add, jax.tree.map(jnp.dot, X, params_i.coef))
                     + params_i.intercept
