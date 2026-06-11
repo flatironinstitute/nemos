@@ -3,11 +3,13 @@ from typing import Union
 from unittest.mock import MagicMock, patch
 
 import jax.numpy as jnp
+import numpy as np
 import pytest
 from numpy.typing import NDArray
 
 from nemos.base_class import Base
 from nemos.base_regressor import BaseRegressor
+from nemos.glm import PopulationGLM
 from nemos.regularizer import Lasso, Ridge
 
 
@@ -263,3 +265,36 @@ class TestInstantiateSolverOverrides:
         actual_kwargs = mock_solver_cls.call_args.kwargs
         for k, v in expected.items():
             assert actual_kwargs[k] == v
+
+
+def test_repr_mimebundle_unfitted(mock_regressor):
+    """Test the mimebundle HTML representation for an unfitted model."""
+    bundle = mock_regressor._repr_mimebundle_()
+    assert "text/html" in bundle
+    html = bundle["text/html"]
+
+    assert 'Model State: <span style="color: #dc3545;">Unfitted</span>' in html
+    assert "Neurons:</strong>" not in html
+    assert "Features:</strong>" not in html
+    assert "Converged:</strong>" not in html
+
+
+def test_repr_mimebundle_fitted():
+    """Test the mimebundle HTML representation for an actual fitted model."""
+
+    np.random.seed(123)
+    n_samples, n_features, n_neurons = 100, 3, 2
+    X = np.random.normal(size=(n_samples, n_features))
+    y = np.random.poisson(lam=np.exp(np.random.normal(size=(n_samples, n_neurons))))
+
+    model = PopulationGLM(regularizer="Ridge", regularizer_strength=0.1)
+    model.fit(X, y)
+
+    bundle = model._repr_mimebundle_()
+    assert "text/html" in bundle
+    html = bundle["text/html"]
+
+    assert 'Model State: <span style="color: #28a745;">Fitted</span>' in html
+    assert f"Neurons:</strong> {n_neurons}" in html
+    assert f"Features:</strong> {n_features}" in html
+    assert 'Converged:</strong> <span style="color: #28a745;">Yes</span>' in html
