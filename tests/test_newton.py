@@ -11,6 +11,8 @@ from nemos.glm.params import GLMParams
 from nemos.solvers._abstract_solver import OptimizationInfo
 from nemos.solvers._newton import Newton, NewtonState, _Newton
 from nemos.tree_utils import pytree_map_and_reduce
+from conftest import initialize_feature_mask_for_population_glm
+
 
 # Register every test here as solver-related
 pytestmark = pytest.mark.solver_related
@@ -472,14 +474,28 @@ def test_newton_glm_regularizer_strength(
         ),
     ],
 )
+@pytest.mark.parametrize(
+    "feature_mask",
+    [True, False],
+)
 def test_newton_population_classifier_glm_regularizer_strength(
-    regularizer_strength, diag, structure, request
+    feature_mask, regularizer_strength, diag, structure, request
 ):
     X, y, model, params, _ = request.getfixturevalue(
         "population_classifierGLM_model_instantiation" + structure
     )
     y = model._label_encoder.encode(y, safe=False)
     y = jax.nn.one_hot(y, model.n_classes)
+
+    if feature_mask:
+        feature_mask = initialize_feature_mask_for_population_glm(
+            X, y.shape[1], coef=params.coef
+        )
+        if structure == "_pytree":
+            feature_mask["input_1"] = np.zeros_like(feature_mask["input_1"])
+        else:
+            feature_mask = feature_mask.at[:, 1].set(0)
+        model._feature_mask = feature_mask
 
     # Get UnRegularized hessian
     model.solver_name = "Newton"
@@ -563,12 +579,25 @@ def test_newton_classifier_glm_regularizer_strength(
         "_gaussianGLM",
     ],
 )
+@pytest.mark.parametrize(
+    "feature_mask",
+    [True, False],
+)
 def test_newton_population_glm_regularizer_strength(
-    regularizer_strength, diag, model_instantiation, structure, request
+    feature_mask, regularizer_strength, diag, model_instantiation, structure, request
 ):
     X, y, model, params, _ = request.getfixturevalue(
         "population" + model_instantiation + "_model_instantiation" + structure
     )
+    if feature_mask:
+        feature_mask = initialize_feature_mask_for_population_glm(
+            X, y.shape[1], coef=params.coef
+        )
+        if structure == "_pytree":
+            feature_mask["input_1"] = np.zeros_like(feature_mask["input_1"])
+        else:
+            feature_mask = feature_mask.at[:, 1].set(0)
+        model._feature_mask = feature_mask
 
     # Get UnRegularized hessian
     model.solver_name = "Newton"
@@ -620,8 +649,17 @@ def test_newton_population_glm_regularizer_strength(
         "_gaussianGLM",
     ],
 )
+@pytest.mark.parametrize(
+    "feature_mask",
+    [True, False],
+)
 def test_newton_population_glm_analytic_v_autodiff(
-    regularizer, regularizer_strength, model_instantiation, structure, request
+    regularizer,
+    regularizer_strength,
+    model_instantiation,
+    structure,
+    feature_mask,
+    request,
 ):
     X, y, model, params, _ = request.getfixturevalue(
         "population" + model_instantiation + "_model_instantiation" + structure
@@ -629,6 +667,15 @@ def test_newton_population_glm_analytic_v_autodiff(
     model.solver_name = "Newton"
     model.regularizer = regularizer
     model.regularizer_strength = regularizer_strength
+    if feature_mask:
+        feature_mask = initialize_feature_mask_for_population_glm(
+            X, y.shape[1], coef=params.coef
+        )
+        if structure == "_pytree":
+            feature_mask["input_1"] = np.zeros_like(feature_mask["input_1"])
+        else:
+            feature_mask = feature_mask.at[:, 1].set(0)
+        model._feature_mask = feature_mask
 
     autodiff = model._get_hess_fn(params, autodiff=True)(params, X, y)
     analytic = model._get_hess_fn(params, autodiff=False)(params, X, y)
