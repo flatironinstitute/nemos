@@ -13,7 +13,6 @@ from nemos.solvers._newton import Newton, NewtonState, _Newton
 from nemos.tree_utils import pytree_map_and_reduce
 from conftest import initialize_feature_mask_for_population_glm
 
-
 # Register every test here as solver-related
 pytestmark = pytest.mark.solver_related
 
