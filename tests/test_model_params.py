@@ -20,13 +20,12 @@ import jax.numpy as jnp
 import pytest
 
 import nemos
+from conftest import all_subclasses
 from nemos._inspect_utils import is_abstract
+from nemos.glm.params import GLMParams
 from nemos.params import ModelParams
 from nemos.regularizer import Ridge, UnRegularized
 from nemos.solvers._hess import Diagonal, General, HessianTag, PositiveDefinite
-
-# Reuse the subclass walker defined for the HMM validator meta-test.
-from test_hmm_validator import all_subclasses
 
 # Import every submodule so all ModelParams subclasses are registered before the
 # parametrizations below are collected (same idiom as test_hmm_validator).
@@ -114,10 +113,10 @@ class _FullyCoveredParams(ModelParams):
 @pytest.mark.parametrize(
     "params_cls, expected_property",
     [
-        pytest.param(_FullyCoveredParams, PositiveDefinite, id="full-coverage-keeps-tag"),
         pytest.param(
-            nemos.glm.params.GLMParams, General, id="partial-coverage-downgrades"
+            _FullyCoveredParams, PositiveDefinite, id="full-coverage-keeps-tag"
         ),
+        pytest.param(GLMParams, General, id="partial-coverage-downgrades"),
     ],
 )
 def test_resolve_hess_tag_coverage(params_cls, expected_property):
@@ -129,5 +128,5 @@ def test_resolve_hess_tag_coverage(params_cls, expected_property):
 
 def test_resolve_hess_tag_unregularized_is_none():
     """A regularizer without a Hessian tag resolves to None."""
-    params = _dummy_instance(nemos.glm.params.GLMParams)
+    params = _dummy_instance(GLMParams)
     assert UnRegularized().resolve_hess_tag(params) is None
