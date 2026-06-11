@@ -8,7 +8,6 @@ from typing import Any, Callable, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-from jax.flatten_util import ravel_pytree
 from numpy.typing import ArrayLike, NDArray
 
 from .. import observation_models as obs
@@ -1169,53 +1168,5 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
 
-    def _slice_params(self, params, i):
-        coef_neu = jax.tree_util.tree_map(
-            lambda c: jnp.take(c, i, axis=1),
-            params.coef,
-        )
-
-        mask_neu = (
-            None
-            if self._feature_mask is None
-            else jax.tree_util.tree_map(
-                lambda m: jnp.take(m, i, axis=1),
-                self._feature_mask,
-            )
-        )
-
-        if mask_neu is not None:
-            coef_neu = jax.tree_util.tree_map(
-                lambda c, m: c * m,
-                coef_neu,
-                mask_neu,
-            )
-
-        intercept = jnp.take(params.intercept, i, axis=0)
-
-        return self._validator.to_model_params([coef_neu, intercept])
-
     def _get_hess_fn(self, params, autodiff: bool = False):
-        strength = self.regularizer_strength
-        if self.regularizer_strength is not None:
-            strength = self.regularizer._validate_strength_structure(
-                params, self.regularizer_strength
-            )
-
-        def hess_fn(params, X, *args):
-            n_neurons = params.intercept.shape[0]
-
-            def single(i):
-                params_i = self._slice_params(params, i)
-                strength_i = self._slice_strength(strength, i)
-                if strength_i is not None:
-                    strength_i = strength_i.coef
-                loss = self.regularizer.penalized_loss(
-                    self._compute_loss, params_i, strength_i
-                )
-                flat_params, unravel = ravel_pytree(params_i)
-                return jax.hessian(lambda p: loss(unravel(p), X, *args))(flat_params)
-
-            return jax.vmap(single)(jnp.arange(n_neurons))
-
-        return hess_fn
+        return super()._get_hess_fn(params, autodiff=True)

@@ -1858,8 +1858,6 @@ class PopulationGLM(GLM):
 
     def _get_hess_fn(self, params, autodiff: bool = False):
 
-        var_of_mu = _var_func_of_mu(self)
-
         strength = self.regularizer_strength
         if self.regularizer_strength is not None:
             strength = self.regularizer._validate_strength_structure(
@@ -1871,7 +1869,7 @@ class PopulationGLM(GLM):
             def hess_fn(params, X, y, *args):
                 n_neurons = params.intercept.shape[0]
 
-                def single(i, y_i):
+                def _hess_fn_i(i, y_i):
                     params_i = self._slice_params(params, i)
                     strength_i = self._slice_strength(strength, i)
                     if strength_i is not None:
@@ -1884,14 +1882,16 @@ class PopulationGLM(GLM):
                         flat_params
                     )
 
-                return jax.vmap(single, in_axes=(0, 1))(jnp.arange(n_neurons), y)
+                return jax.vmap(_hess_fn_i, in_axes=(0, 1))(jnp.arange(n_neurons), y)
 
             return hess_fn
+
+        var_of_mu = _var_func_of_mu(self)
 
         def hess_fn(params, X, *args):
             n_neurons = params.intercept.shape[0]
 
-            def single(i):
+            def _hess_fn_i(i):
                 params_i = self._slice_params(params, i)
                 strength_i = self._slice_strength(strength, i)
                 eta = (
@@ -1902,7 +1902,7 @@ class PopulationGLM(GLM):
                     X, eta, self.inverse_link_function, var_of_mu, strength_i
                 )
 
-            return jax.vmap(single)(jnp.arange(n_neurons))
+            return jax.vmap(_hess_fn_i)(jnp.arange(n_neurons))
 
         return hess_fn
 

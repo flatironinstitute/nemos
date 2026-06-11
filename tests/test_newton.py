@@ -385,7 +385,7 @@ def test_newton_glm_set_observation_model_recovers(
 
     glm = glm_class(solver_name="Newton", observation_model=obs_init)
     params = glm.initialize_params(X, y)
-    init_state = glm.initialize_optimizer_and_state(params, X, y)
+    glm.initialize_optimizer_and_state(params, X, y)
     params_tree = GLMParams(*params)
     init = glm.solver._solver._hess_fn(params_tree, X, y)
 
@@ -478,6 +478,8 @@ def test_newton_population_classifier_glm_regularizer_strength(
     X, y, model, params, _ = request.getfixturevalue(
         "population_classifierGLM_model_instantiation" + structure
     )
+    y = model._label_encoder.encode(y, safe=False)
+    y = jax.nn.one_hot(y, model.n_classes)
 
     # Get UnRegularized hessian
     model.solver_name = "Newton"
@@ -525,6 +527,8 @@ def test_newton_classifier_glm_regularizer_strength(
 
     with does_not_raise():
         model.fit(X, y)
+
+    # ClassifierGLM always uses autodiff so we do not check the hessian
 
 
 @pytest.mark.parametrize(
