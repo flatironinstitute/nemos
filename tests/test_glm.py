@@ -2254,6 +2254,81 @@ class TestGLMObservationModel:
             model.coef_
         ) == jax.tree_util.tree_structure(X)
 
+    @pytest.mark.solver_related
+    def test_get_model_params_round_trip(
+        self, request, glm_type, model_instantiation, mock_glm_fit
+    ):
+        """get_model_params returns the fitted coef_ and intercept_."""
+        X, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        model.fit(X, y)
+        assert pytree_map_and_reduce(
+            jnp.array_equal,
+            all,
+            model.get_model_params(),
+            (model.coef_, model.intercept_),
+        )
+
+    @pytest.mark.parametrize("pytree_x_factory", _PYTREE_X_FACTORIES)
+    @pytest.mark.solver_related
+    def test_get_model_params_round_trip_pytree_x(
+        self,
+        pytree_x_factory,
+        request,
+        glm_type,
+        model_instantiation,
+        mock_optimizer_run,
+    ):
+        """get_model_params returns the fitted params for pytree-valued coef."""
+        _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        X = pytree_x_factory(y.shape[0])
+        model.fit(X, y)
+        assert pytree_map_and_reduce(
+            jnp.array_equal,
+            all,
+            model.get_model_params(),
+            (model.coef_, model.intercept_),
+        )
+
+    @pytest.mark.parametrize(
+        "pytree_x_factory, mutate_coef",
+        [
+            pytest.param(
+                lambda n: {"a": jnp.ones((n, 1)), "b": jnp.ones((n, 1))},
+                lambda coef: coef.clear(),
+                id="dict",
+            ),
+            pytest.param(
+                lambda n: {"a": [jnp.ones((n, 1))], "b": jnp.ones((n, 1))},
+                lambda coef: coef["a"].clear(),
+                id="dict_list",
+            ),
+        ],
+    )
+    @pytest.mark.solver_related
+    def test_get_model_params_mutating_returned_containers_does_not_affect_model(
+        self,
+        pytree_x_factory,
+        mutate_coef,
+        request,
+        glm_type,
+        model_instantiation,
+        mock_optimizer_run,
+    ):
+        """Mutating returned mutable containers does not affect model.coef_."""
+        _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        X = pytree_x_factory(y.shape[0])
+        model.fit(X, y)
+
+        coef, _ = model.get_model_params()
+        before = deepcopy(model.coef_)
+
+        mutate_coef(coef)
+
+        assert jax.tree_util.tree_structure(
+            model.coef_
+        ) == jax.tree_util.tree_structure(before)
+        assert pytree_map_and_reduce(jnp.array_equal, all, model.coef_, before)
+
     ######################
     # Optimizer defaults #
     ######################
