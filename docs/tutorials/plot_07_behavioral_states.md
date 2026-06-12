@@ -459,7 +459,8 @@ n_states = 3
 
 model = nmo.glm_hmm.GLMHMM(
     n_states,
-    regularizer = "Ridge")
+    regularizer = "Ridge",
+)
 
 print(model)
 ```
