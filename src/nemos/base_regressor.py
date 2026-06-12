@@ -286,6 +286,7 @@ class BaseRegressor(
             spec = solvers.get_solver(solver_name)
             self._regularizer.check_solver(spec.algo_name)
             self._solver_spec = spec
+        self._invalidate_solver()
 
     def _hess_property_override(self) -> type | None:
         """Definiteness the model can certify beyond what coverage inference sees.
@@ -325,6 +326,7 @@ class BaseRegressor(
             solver_cls = self.solver_spec.implementation
             self._check_solver_kwargs(solver_cls, solver_kwargs)
         self._solver_kwargs = solver_kwargs
+        self._invalidate_solver()
 
     @staticmethod
     def _check_solver_kwargs(solver_class: Type, solver_kwargs: dict[str, Any]) -> None:
@@ -352,7 +354,7 @@ class BaseRegressor(
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
             )
 
-    def _get_hess_fn(self, params, solver, autodiff: bool) -> Callable | None:
+    def _get_hess_fn(self, params, autodiff: bool) -> Callable | None:
         return None
 
     def _invalidate_solver(self):

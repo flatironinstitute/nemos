@@ -63,7 +63,7 @@ def _glm_hessian_block(
     eta,
     inverse_link_function,
     var_of_mu,
-    lam: Any = 0.0,
+    lam: Any = None,
 ):
     _X = jnp.concatenate(jax.tree_util.tree_leaves(X), axis=1)
     n_samples, n_features = _X.shape

@@ -23,6 +23,8 @@ from ._hess import (
 
 @runtime_checkable
 class NewtonSolverProtocol(SolverProtocol[SolverState], Protocol, Generic[SolverState]):
+    autodiff: bool
+
     def setup_hessian(
         self,
         hess_fn: Callable | None,
@@ -284,10 +286,7 @@ class Newton(NewtonSolverProtocol[NewtonState]):
         regularizer_strength: float | None,
         has_aux: bool,
         init_params: Params | None = None,
-        jit: bool = True,
-        autodiff: bool = False,
-        maxiter: int = 100,
-        **solver_kwargs,
+        **solver_init_kwargs,
     ):
         if init_params is None:
             raise ValueError(
@@ -295,9 +294,9 @@ class Newton(NewtonSolverProtocol[NewtonState]):
                 "It is needed to determine the parameter structure for regularization."
             )
 
-        self.jit = jit
-        self.autodiff = autodiff
-        self.maxiter = maxiter
+        self.jit = solver_init_kwargs.get("jit", False)
+        self.autodiff = solver_init_kwargs.get("autodiff", False)
+        self.maxiter = solver_init_kwargs.get("maxiter", False)
         self.has_aux = has_aux
 
         loss_fn = regularizer.penalized_loss(
@@ -314,7 +313,7 @@ class Newton(NewtonSolverProtocol[NewtonState]):
             self.fun = loss_fn
             self.fun_with_aux = lambda p, *a: (loss_fn(p, *a), None)
 
-        self._solver = _Newton(self.fun, self.fun_with_aux, **solver_kwargs)
+        self._solver = _Newton(self.fun, self.fun_with_aux, **solver_init_kwargs)
 
     def setup_hessian(
         self,
