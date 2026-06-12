@@ -23,7 +23,7 @@ from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
 from .solvers._hess import HessianTag
-from .solvers._newton import NewtonSolverProtocol
+from .solvers._newton import Newton
 from .type_casting import cast_to_jax, is_numpy_array_like
 from .typing import (
     DESIGN_INPUT_TYPE,
@@ -436,7 +436,7 @@ class BaseRegressor(
             **solver_kwargs,
         )
 
-        if isinstance(solver, NewtonSolverProtocol):
+        if isinstance(solver, Newton):
             solver.setup_hessian(
                 self._get_hess_fn(init_params, autodiff=solver.autodiff),
                 self._hess_tag,

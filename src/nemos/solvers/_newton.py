@@ -1,6 +1,6 @@
 """Newton-based optimization solvers."""
 
-from typing import Any, Callable, Generic, Optional, Protocol, runtime_checkable
+from typing import Any, Callable, Optional
 
 import equinox as eqx
 import jax
@@ -10,7 +10,7 @@ import optax
 
 from ..tree_utils import ravel_pytree_nest
 from ..typing import Params
-from ._abstract_solver import OptimizationInfo, SolverProtocol, SolverState
+from ._abstract_solver import OptimizationInfo
 from ._hess import (
     BlockDiagonal,
     Full,
@@ -20,18 +20,8 @@ from ._hess import (
     combine_hessian_tags,
 )
 
-
-@runtime_checkable
-class NewtonSolverProtocol(SolverProtocol[SolverState], Protocol, Generic[SolverState]):
-    autodiff: bool
-
-    def setup_hessian(
-        self,
-        hess_fn: Callable | None,
-        hess_tag: HessianTag | None,
-        reg_tag: HessianTag | None = None,
-        property_override: type | None = None,
-    ) -> None: ...
+DEFAULT_ATOL = 1e-4
+DEFAULT_MAX_STEPS = 100
 
 
 class NewtonState(eqx.Module):
@@ -43,16 +33,44 @@ class NewtonState(eqx.Module):
 NewtonStepResult = tuple[Params, NewtonState]
 
 
-class _Newton:
+class Newton:
     def __init__(
         self,
-        fun: Callable,
-        fun_with_aux: Callable,
+        unregularized_loss: Callable,
+        regularizer,
+        regularizer_strength: float | None,
+        has_aux: bool,
+        init_params: Params | None = None,
+        jit: bool = True,
+        autodiff: bool = False,
+        maxiter: int = 100,
         tol: float = 1e-6,
     ):
-        self.fun = fun
-        self.fun_with_aux = fun_with_aux
+        if init_params is None:
+            raise ValueError(
+                "init_params is required for Newton solver. "
+                "It is needed to determine the parameter structure for regularization."
+            )
+
+        self.has_aux = has_aux
+        self.jit = jit
+        self.autodiff = autodiff
+        self.maxiter = maxiter
         self.tol = tol
+
+        loss_fn = regularizer.penalized_loss(
+            unregularized_loss,
+            params=init_params,
+            strength=regularizer_strength,
+        )
+
+        # split scalar vs aux
+        if has_aux:
+            self.fun_with_aux = loss_fn
+            self.fun = lambda p, *a: loss_fn(p, *a)[0]
+        else:
+            self.fun = loss_fn
+            self.fun_with_aux = lambda p, *a: (loss_fn(p, *a), None)
 
         self._hess_tag: HessianTag | None = None
         self._hess_fn: Callable | None = None
@@ -71,6 +89,22 @@ class _Newton:
         # Linear solver + operator tags, resolved once from the Hessian tag in init_state
         self._linear_solver = lx.AutoLinearSolver(well_posed=False)
         self._operator_tags = ()
+
+    def setup_hessian(
+        self,
+        hess_fn: Optional[Callable] = None,
+        hess_tag: HessianTag | None = None,
+        reg_tag: HessianTag | None = None,
+        property_override: Optional[type] = None,
+    ):
+        # ``reg_tag`` is the regularizer's coverage-resolved tag; combine it with the
+        # model's loss tag, then let the model override the definiteness when it can
+        # certify more than coverage alone (e.g. GLM + Ridge is positive definite).
+        tag = hess_tag if reg_tag is None else combine_hessian_tags(hess_tag, reg_tag)
+        if property_override is not None and tag is not None:
+            tag = HessianTag(tag.structure, property_override)
+        self._hess_fn = hess_fn
+        self._hess_tag = tag
 
     def _build_cache(self, init_params):
         """Build and cache flattened functions and autodiff transforms."""
@@ -175,7 +209,6 @@ class _Newton:
         params,
         state: NewtonState,
         *args,
-        maxiter: int,
     ) -> NewtonStepResult:
 
         params_flat, _ = ravel_pytree_nest(params)
@@ -229,7 +262,7 @@ class _Newton:
                 function_val=fval,
                 num_steps=new_iter,
                 converged=converged,
-                reached_max_steps=new_iter >= maxiter,
+                reached_max_steps=new_iter >= self.maxiter,
             ),
             ls_state=new_ls_state,
         )
@@ -240,15 +273,13 @@ class _Newton:
         self,
         init_params,
         *args,
-        jit: bool = True,
-        maxiter: int = 100,
     ):
         state = self.init_state(init_params, *args)
         params = init_params
 
         def cond(carry):
             p, s = carry
-            return (~s.stats.converged) & (s.stats.num_steps < maxiter)
+            return (~s.stats.converged) & (s.stats.num_steps < self.maxiter)
 
         def body(carry):
             p, s = carry
@@ -256,12 +287,11 @@ class _Newton:
                 p,
                 s,
                 *args,
-                maxiter=maxiter,
             )[
                 :2
             ]  # Discard aux; convergence only needs params and state
 
-        if jit:
+        if self.jit:
             final_params, final_state = eqx.internal.while_loop(
                 cond,
                 body,
@@ -277,87 +307,9 @@ class _Newton:
         _, aux = self.fun_with_aux(final_params, *args)
         return final_params, final_state, aux
 
-
-class Newton(NewtonSolverProtocol[NewtonState]):
-    def __init__(
-        self,
-        unregularized_loss: Callable,
-        regularizer,
-        regularizer_strength: float | None,
-        has_aux: bool,
-        init_params: Params | None = None,
-        **solver_init_kwargs,
-    ):
-        if init_params is None:
-            raise ValueError(
-                "init_params is required for Newton solver. "
-                "It is needed to determine the parameter structure for regularization."
-            )
-
-        self.jit = solver_init_kwargs.get("jit", False)
-        self.autodiff = solver_init_kwargs.get("autodiff", False)
-        self.maxiter = solver_init_kwargs.get("maxiter", False)
-        self.has_aux = has_aux
-
-        loss_fn = regularizer.penalized_loss(
-            unregularized_loss,
-            params=init_params,
-            strength=regularizer_strength,
-        )
-
-        # split scalar vs aux
-        if has_aux:
-            self.fun_with_aux = loss_fn
-            self.fun = lambda p, *a: loss_fn(p, *a)[0]
-        else:
-            self.fun = loss_fn
-            self.fun_with_aux = lambda p, *a: (loss_fn(p, *a), None)
-
-        self._solver = _Newton(self.fun, self.fun_with_aux)
-
-    def setup_hessian(
-        self,
-        hess_fn: Optional[Callable] = None,
-        hess_tag: HessianTag | None = None,
-        reg_tag: HessianTag | None = None,
-        property_override: Optional[type] = None,
-    ):
-        # ``reg_tag`` is the regularizer's coverage-resolved tag; combine it with the
-        # model's loss tag, then let the model override the definiteness when it can
-        # certify more than coverage alone (e.g. GLM + Ridge is positive definite).
-        tag = hess_tag if reg_tag is None else combine_hessian_tags(hess_tag, reg_tag)
-        if property_override is not None and tag is not None:
-            tag = HessianTag(tag.structure, property_override)
-        self._solver._hess_fn = hess_fn
-        self._solver._hess_tag = tag
-
-    def init_state(self, init_params: Params, *args):
-        return self._solver.init_state(init_params, *args)
-
-    def update(self, params, state, *args):
-        return self._solver.update(
-            params,
-            state,
-            *args,
-            maxiter=self.maxiter,
-        )
-
-    def run(self, init_params: Params, *args):
-        return self._solver.run(
-            init_params,
-            *args,
-            jit=self.jit,
-            maxiter=self.maxiter,
-        )
-
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
-        return {
-            "maxiter",
-            "tol",
-            "autodiff",
-            "jit",
-        }
+        return {"maxiter", "tol", "autodiff", "jit"}
 
     def _get_optim_info(
         self,

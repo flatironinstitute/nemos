@@ -1,3 +1,4 @@
+from nemos.regularizer import UnRegularized, Ridge
 from contextlib import nullcontext as does_not_raise
 
 import jax
@@ -10,36 +11,11 @@ import nemos as nmo
 from conftest import initialize_feature_mask_for_population_glm
 from nemos.glm.params import GLMParams
 from nemos.solvers._abstract_solver import OptimizationInfo
-from nemos.solvers._newton import Newton, NewtonState, _Newton
+from nemos.solvers._newton import Newton, NewtonState
 from nemos.tree_utils import pytree_map_and_reduce
 
 # Register every test here as solver-related
 pytestmark = pytest.mark.solver_related
-
-
-@pytest.mark.parametrize(
-    ("regr_setup", "stepsize"),
-    [
-        ("linear_regression", 1e-3),
-        ("ridge_regression", 1e-4),
-        ("linear_regression_tree", 1e-4),
-        ("ridge_regression_tree", 1e-4),
-    ],
-)
-@pytest.mark.requires_x64
-def test_newton_linear_or_ridge_regression(request, regr_setup, stepsize):
-    X, y, _, params, loss = request.getfixturevalue(regr_setup)
-
-    param_init = jax.tree_util.tree_map(np.zeros_like, params)
-    newton_params, state, _ = _Newton(
-        loss, lambda p, *a: (loss(p, *a), None), tol=10**-12
-    ).run(param_init, X, y)
-    assert pytree_map_and_reduce(
-        lambda a, b: np.allclose(a, b, atol=10**-5, rtol=0.0),
-        all,
-        params,
-        newton_params,
-    )
 
 
 @pytest.mark.parametrize(
@@ -52,11 +28,48 @@ def test_newton_linear_or_ridge_regression(request, regr_setup, stepsize):
     ],
 )
 @pytest.mark.requires_x64
-def test_newton_init_state_default(request, regr_setup):
+def test_newton_linear_or_ridge_regression(request, regr_setup):
     X, y, _, params, loss = request.getfixturevalue(regr_setup)
 
     param_init = jax.tree_util.tree_map(np.zeros_like, params)
-    newton = _Newton(loss, lambda p, *a: (loss(p, *a), None))
+    newton_params, state, _ = Newton(
+        loss,
+        regularizer=UnRegularized(),
+        regularizer_strength=0.0,
+        has_aux=False,
+        tol=10**-12,
+        init_params=param_init,
+    ).run(param_init, X, y)
+    assert pytree_map_and_reduce(
+        lambda a, b: np.allclose(a, b, atol=10**-5, rtol=0.0),
+        all,
+        params,
+        newton_params,
+    )
+
+
+@pytest.mark.parametrize(
+    "regr_setup, regularizer",
+    [
+        ("linear_regression", UnRegularized()),
+        ("ridge_regression", Ridge()),
+        ("linear_regression_tree", UnRegularized()),
+        ("ridge_regression_tree", Ridge()),
+    ],
+)
+@pytest.mark.requires_x64
+def test_newton_init_state_default(request, regr_setup, regularizer):
+    X, y, _, params, loss = request.getfixturevalue(regr_setup)
+
+    param_init = jax.tree_util.tree_map(np.zeros_like, params)
+    newton = Newton(
+        loss,
+        regularizer=regularizer,
+        regularizer_strength=0.5,
+        has_aux=True,
+        tol=10**-12,
+        init_params=param_init,
+    )
     state = newton.init_state(param_init, X, y)
 
     assert isinstance(state, NewtonState)
@@ -83,7 +96,6 @@ def test_newton_glm_instantiate_solver(regularizer_name, glm_class):
     # currently glm._solver is a Wrapped(Prox)SVRG
     assert glm.solver_name == "Newton"
     assert isinstance(solver, Newton)
-    assert isinstance(solver._solver, _Newton)
 
 
 @pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
@@ -93,6 +105,7 @@ def test_newton_glm_passes_solver_kwargs(regularizer_name, glm_class):
         "maxiter": np.random.randint(1, 100),
         "jit": False,
         "autodiff": True,
+        "tol": 1e-6,
     }
 
     glm = glm_class(
@@ -152,7 +165,7 @@ def test_newton_glm_initialize_hessian(glm_class, regularizer_name, linear_regre
     glm.initialize_optimizer_and_state(params, X, y)
     params_tree = GLMParams(*params)
 
-    init = glm.solver._solver._hess_fn(params_tree, X, y)
+    init = glm.solver._hess_fn(params_tree, X, y)
     expected = glm._get_hess_fn(
         params_tree,
     )(params_tree, X, y)
