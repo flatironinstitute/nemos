@@ -5,9 +5,9 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.19.1
+    jupytext_version: 1.19.3
 kernelspec:
-  display_name: glm_hmm_notebook (3.12.10)
+  display_name: nemos (3.13.3.final.0)
   language: python
   name: python3
 ---
@@ -30,17 +30,9 @@ We have four main goals for this tutorial:
 
 Importantly, throughout the notebook we will assume you already have a solid theoretical understanding of GLMs and GLM-HMMs.
 
-+++
-
-```{code-cell} ipython3
-# Imports that will go away
-import nemos as nmo
-from nemos.glm_hmm import GLMHMM
-nmo.GLMHMM = GLMHMM # this is the only way I got the GLM HMM module to work when using my own installation...I don't really know why but it won't be a problem when we release anyway
-```
-
 ```{code-cell} ipython3
 # Imports
+import nemos as nmo
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -54,8 +46,6 @@ from matplotlib.colors import BoundaryNorm, LinearSegmentedColormap
 ```{code-cell} ipython3
 :tags: [hide-input]
 
-seed = 65  # Random seed for reproducibility
-np.random.seed(seed)
 jax.config.update("jax_enable_x64", True)
 
 # Parameters for plotting
@@ -112,6 +102,7 @@ Let's extract what we need,
 ```{code-cell} ipython3
 trials = trials[["choice", "contrastLeft", "contrastRight", "feedbackType", "probabilityLeft", "session"]]
 ```
+
 and inspect its contents.
 
 ```{code-cell} ipython3
@@ -127,6 +118,7 @@ print(f"probability of stimulus on left \nvalues: {np.sort(trials.probabilityLef
 
 print(f"session \n(some) values: {trials.session.unique()[:5]}, data type: {trials.session.dtype}\n")
 ```
+
 Finally, let's focus our analysis on one example session.
 
 ```{code-cell} ipython3
@@ -135,6 +127,7 @@ sess_ex = '726b6915-e7de-4b55-a38e-ff4c461211d3'
 # Subset session trials
 trials_sess = trials[trials.session == sess_ex].reset_index()
 ```
+
 Now, we will restrict the analysis to the first 90 trials of each session to match the work of Ashwood et al. (2022) <span id="cite1b"></span><a href="#ref1b">[1b]</a>. In this segment, the stimulus appears on the left and right with equal probability (0.5/0.5), and thus choices should be driven primarily by sensory evidence rather than learned expectations about stimulus probability.
 
 ```{code-cell} ipython3
@@ -224,6 +217,7 @@ print(signed_contrast)
 # Get rid of violation trials
 valid_choices_idx = np.flatnonzero(choices != viol_val)
 ```
+
 With those two elements we can compute our design matrix for this session. We will do this using the NeMoS basis class ```nmo.basis```, which will make the process a lot easier.
 
 A basis is a collection of functions that, when combined, can represent more complex relationships. NeMoS has a lot of different basis functions, but here we are interested in using two: ```HistoryConv``` and ```IdentityEval```.
@@ -263,15 +257,18 @@ Even though we need just a few lines of code, there is a lot going on. Here's a 
 ```{code-cell} ipython3
 # Create a composite basis using our three basis
 basis_object = (
-    stimuli_basis +                         # will process one input
-    wsls_basis +                            # will process two inputs (choice & reward)
-    prev_choice_basis                       # will process one input
+    # will process one input
+    stimuli_basis +  
+    # will process two inputs (choice & reward)                       
+    wsls_basis + 
+    # will process one input                         
+    prev_choice_basis                    
 )
 
 # Compute features
 X_unnormalized = basis_object.compute_features(
     # input 1 : processed with stimuli_basis
-    signed_contrast[valid_choices_idx], 
+    signed_contrast[valid_choices_idx],
     # input 2 : wsls input 1: choice        
     choices[valid_choices_idx],
     # input 3 : wsls input 2: reward
@@ -351,7 +348,7 @@ def plot_design_matrix():
 
     # ---- heatmap 2: choices ----
     sns.heatmap(
-        choices[valid_choices_idx].to_numpy().reshape(-1, 1)[:20],
+        choices[valid_choices_idx].reshape(-1, 1)[:20],
         ax=axes[1],
         square=True,
         cmap=cmap_cat,
@@ -418,8 +415,17 @@ X_unnormalized = basis_object.compute_features(
 # And then normalize across the signed contrast
 X = np.copy(X_unnormalized)
 X[:, 0] = zscore(X[:, 0])
+```
 
-# For fitting a Bernoulli, our variables need to be in 0-1 space. So we will remap them so 1: Left and 0: Right
+```{code-cell} ipython3
+# Mark where session changes
+new_sess_mouse = np.flatnonzero(session[1:] != session[:-1]) + 1
+```
+
+## Model fitting
+We are going to fit a Bernoulli GLM-HMM to model binary choices. For this reason, we must convert choices from the original −1,1 encoding to 0,1.
+
+```{code-cell} ipython3
 choices = np.where(choices == -1, 0, choices)
 ```
 
@@ -435,14 +441,15 @@ In NeMoS we have two ways of indicating the beginning of a new session. You can 
 new_sess_mouse = np.flatnonzero(session[1:] != session[:-1]) + 1
 ```
 
-```{admonition} How does this one-liner find the session starts?
-:class: note
+```{admonition} How does this one-liner find the session starts? 
+:class: note 
 :class: dropdown
 
-Dession holds one session id per trial. Comparing `s`ession[1:] (every trial but the first) with `session[:-1]` (every trial but the last) yields a boolean array that is `True` wherever a trial's session id differs from the previous trial's — that is, exactly at the session boundaries. `np.flatnonzero` returns the indices where this is `True`, and we add 1 because the comparison is shifted by one (position `i` in the comparison corresponds to trial `i+1`). The result is the array of indices at which a new session begins.
-```
+`session` holds one session id per trial. Comparing `session[1:]` (every trial but the first) with `session[:-1]` (every trial but the last) yields a boolean array that is `True` wherever a trial's session id differs from the previous trial's — that is, exactly at the session boundaries. `np.flatnonzero` returns the indices where this is `True`, and we add 1 because the comparison is shifted by one (position `i` in the comparison corresponds to trial `i+1`). The result is the array of indices at which a new session begins. ```
 
-## Model fitting
+
++++
+
 Let's initialize the ```GLMHMM``` object. The only required parameter is the number of states. Ashwood et al. (2022) <span id="cite1d"></span><a href="#ref1d">[1d]</a> found that most mice used 3 decision-making states when performing this task. Following that work, we will initialize our ```GLMHMM``` object with 3 states.
 
 ```{admonition} GLM-HMM observation models
@@ -467,6 +474,8 @@ n_states = 3
 model = nmo.glm_hmm.GLMHMM(
     n_states,
     regularizer = "Ridge",
+    # change this to try multiple init
+    seed=jax.random.PRNGKey(12), 
 )
 
 print(model)
@@ -483,9 +492,10 @@ The likelihood of a GLM-HMM is non-convex, so the EM algorithm used to fit it ca
 Once we created our object, we can fit our model. The fit function takes two mandatory arguments: the design matrix ```X```we created in section 02 and the ```choices```. Additionally, we will also include ```new_sess_mouse```, the new session indicator.
 
 ```{code-cell} ipython3
-model.fit(X,
-          choices,
-          session_starts=new_sess_mouse
+model.fit(
+    X,
+    choices,
+    session_starts=new_sess_mouse
 )
 ```
 
@@ -507,6 +517,7 @@ model.coef_ = model.coef_[:, permutation]
 model.intercept_ = model.intercept_[permutation]
 model.transition_prob_ = model.transition_prob_[permutation][:, permutation]
 ```
+
 The GLM coefficients and intercept, and the HMM initial and transition probabilities are stored in the following attributes:
 
 - `model.coef_`
@@ -613,6 +624,7 @@ As a reminder, the task required indicating whether the stimulus was on the righ
 
 - State 1 have larger weight on the stimulus and low on the other predictors.
 - The bias weight is larger in absolute value for state 2 and 3, but of opposite sign. (>0 : left; <0 : right)
+
 +++
 
 ### Interpreting the transition matrix
@@ -662,14 +674,17 @@ posteriors = model.smooth_proba(
     choices,
     session_starts=new_sess_mouse
 )
-print(f"First five osteriors \n{posteriors[:5]} \n")
+
+print(f"First five posteriors \n{posteriors[:5]} \n")
 
 # Each (non nan) row sums to 1
 valid = ~np.isnan(posteriors).any(axis=1)
+
 print(
     f"Each row sums to 1: {np.allclose(posteriors[valid].sum(axis=1), 1)}"
 )
 ```
+
 The first trial of each session is `NaN`: the posterior depends on the transition from the previous trial's state, which doesn't exist at a session start. Hence we mask out the NaNs before checking that the rows sum to one.
 
 Let's now use the utility function to plot the three sessions shown in Fig. 3a of <span id="cite1e"></span><a href="#ref1e">[1e]</a>.
@@ -754,11 +769,8 @@ In these sessions, the posterior over latent states can be tracked at each trial
 +++
 
 ### Understanding mice behavior in different states
-
-+++
 We can also be interested in quantify state occupancies (i.e what proportion of the trials a given animal spent in each state) and accuracies (i.e. how often it chose the correct side) per state. For this, we need the inferred sequence of states, and there are (at least) two ways in which we can obtain it: using `decode_state` or using `smooth_proba`.
 
-+++
 
 #### Using ```decode_state```
 This method finds the single most likely sequence of hidden states that best explains the observed data: the state sequence that maximizes the joint probability of states and observations. It does so by using the [Viterbi algorithm](https://en.wikipedia.org/wiki/Viterbi_algorithm).
@@ -771,7 +783,7 @@ decoded_states = model.decode_state(
     X,
     choices,
     session_starts=new_sess_mouse,
-    state_format = "one-hot"
+    state_format="one-hot"
 )
 print(f"{decoded_states} \n")
 
@@ -779,65 +791,44 @@ print(f"{decoded_states} \n")
 print(f"Total instances of each state {np.nansum(decoded_states, axis=0)} \n")
 
 # calculate fraction of occupancy
-frac_occupancy_viterbi= np.nansum(decoded_states, axis=0)/len(choices)
+valid = np.all(~np.isnan(decoded_states), axis=1)
+frac_occupancy_viterbi= np.nansum(decoded_states, axis=0) / valid.sum()
 print(f"Fraction of occupancy {frac_occupancy_viterbi} \n")
 ```
 
 Now, we can compute the general accuracy.
 
 ```{code-cell} ipython3
-# See where the input is not 0
-non_zero_contrast_loc = np.where(signed_contrast!=0)
-non_zero_contrast = signed_contrast[non_zero_contrast_loc]
+# mask out the 0 contrast stimuli
+mask = signed_contrast != 0
 
-# Get correct answer by looking at sign
-correct_ans_task = np.sign(non_zero_contrast)
+# compute stimulus and choice side
+stim_side = signed_contrast > 0
 
-# Transform into 0-1 to compare with choices
-correct_ans_task_remapped = (correct_ans_task+ 1) / 2
+# get the correct choices boolean
+correct_choices = choices == stim_side
 
-# Get accuracy i.e how many choices match / how many choices were made
-correct_ans_mouse = np.sum(choices[non_zero_contrast_loc] == correct_ans_task_remapped)
+# compute the total accuracy applying the mask
+total_accuracy = np.mean(correct_choices[mask])
 
-total_accuracy = correct_ans_mouse/len(correct_ans_task)
-
-# Create array of accuracies for plotting
-accuracies_to_plot_viterbi = np.zeros([4,])
-
-# Add total accuracy
+# store in an array of dim 4
+accuracies_to_plot_viterbi = np.zeros(4)
 accuracies_to_plot_viterbi[0] = total_accuracy
 ```
 
 And then we can use our output of ```decode_state``` to segment the trials into the estimated states and compute the accuracy within each state.
 
 ```{code-cell} ipython3
-for state in range(n_states):
-    # index of trials per state
-    idx_this_state = np.where(decoded_states[:,state] == 1)
+accuracy_per_state = np.zeros(n_states)
+for s in range(n_states):
+  in_state = (decoded_states[:, s] == 1) & mask
+  accuracy_per_state[s] = correct_choices[in_state].mean()
 
-    # Get contrast and choices for this state
-    signed_contrast_this_state = signed_contrast[idx_this_state]
-    choices_this_state = choices[idx_this_state]
+accuracies_to_plot_viterbi[1:] = accuracy_per_state
+```
 
-    # See where the input is not 0
-    not_zero_contrast_loc_this_state = np.where(signed_contrast_this_state != 0)[0]
-    non_zero_contrast_this_state = signed_contrast_this_state[not_zero_contrast_loc_this_state]
-
-    # Get correct answer by looking at sign
-    correct_ans_this_state = np.sign(non_zero_contrast_this_state)
-
-    # Transform into 0-1 to compare with choices
-    correct_ans_task_this_state_remapped = (correct_ans_this_state+ 1) / 2
-
-    # Get accuracy i.e how many choices match / how many choices were made
-    correct_ans_mouse_this_state = np.sum(choices_this_state[not_zero_contrast_loc_this_state] == correct_ans_task_this_state_remapped)
-
-    accuracy_this_state = correct_ans_mouse_this_state / len(correct_ans_this_state)
-
-    # Add state accuracy for plotting
-    accuracies_to_plot_viterbi[state+1] = accuracy_this_state
-
-print(accuracies_to_plot_viterbi)
+```{code-cell} ipython3
+decoded_states[:, s] == 1
 ```
 
 And we can plot this :)
@@ -913,46 +904,28 @@ frac_occupancy_smooth_proba = occupancy_per_state / valid.sum()
 print(f"Fraction of occupancy {frac_occupancy_smooth_proba} \n")
 ```
 
+```{code-cell} ipython3
+np.argmax(posteriors[valid], axis=1).shape # this should have more nans...
+```
+
 With this segmentation, we can calculate accuracy in the exact same manner as in the previous section.
 
 ```{code-cell} ipython3
-:tags: [hide-input]
+# store in an array of dim 4
+accuracies_to_plot_smooth_proba = np.zeros(4)
+# same total accuracy as viterbi
+accuracies_to_plot_smooth_proba[0] = total_accuracy
 
-def get_accuracies_to_plot(idx_per_state, total_accuracy=total_accuracy, n_states=n_states, signed_contrast=signed_contrast, choices=choices):
-    # Total accuracy remains the same
-    accuracies_to_plot = np.zeros([4,])
-    # Use previously calculated total_accuracy
-    accuracies_to_plot[0] = total_accuracy
-    for state in range(n_states):
-        # index of trials per state
-        idx_this_state = idx_per_state[state]
+accuracy_per_state = np.zeros(n_states)
 
-        # Get contrast and choices for this state
-        signed_contrast_this_state = signed_contrast[idx_this_state]
-        choices_this_state = choices[idx_this_state]
+for s in range(n_states):
+  in_state = (np.where(states_max_posterior==s, True, False)) & mask[valid]
+  
+  accuracy_per_state[s] = correct_choices[valid][in_state].mean()
 
-        # See where the input is not 0
-        not_zero_contrast_loc_this_state = np.where(signed_contrast_this_state != 0)[0]
-        non_zero_contrast_this_state = signed_contrast_this_state[not_zero_contrast_loc_this_state]
+accuracies_to_plot_smooth_proba[1:] = accuracy_per_state
 
-        # Get correct answer by looking at sign
-        correct_ans_this_state = np.sign(non_zero_contrast_this_state)
-
-        # Transform into 0-1 to compare with choices
-        correct_ans_task_this_state_remapped = (correct_ans_this_state+ 1) / 2
-
-        # Get accuracy i.e how many choices match / how many choices were made
-        correct_ans_mouse_this_state = np.sum(choices_this_state[not_zero_contrast_loc_this_state] == correct_ans_task_this_state_remapped)
-
-        accuracy_this_state = correct_ans_mouse_this_state / len(correct_ans_this_state)
-
-        # Add state accuracy for plotting
-        accuracies_to_plot[state+1] = accuracy_this_state
-    return accuracies_to_plot
-```
-
-```{code-cell} ipython3
-accuracies_to_plot_smooth_proba = get_accuracies_to_plot(idx_per_state)
+print(accuracies_to_plot_smooth_proba.shape)
 
 plot_accuracy_and_occupancy(frac_occupancy_smooth_proba,accuracies_to_plot_smooth_proba)
 ```
@@ -975,19 +948,26 @@ prev_reward_basis = nmo.basis.HistoryConv(1)
 # Multiplicative basis: interaction between prev. choice and reward
 wsls_basis = prev_choice_basis*prev_reward_basis
 
-# Additive basis using our three basis
+# Composite basis using our three basis
 basis_object = (
-    stimuli_basis +                         # will process one input
-    wsls_basis +                            # will process two inputs (choice & reward)
-    prev_choice_basis                       # will process one input
+    # will process one input
+    stimuli_basis +      
+    # will process two inputs (choice & reward)                   
+    wsls_basis +    
+    # will process one input                        
+    prev_choice_basis                       
 )
 
 # Compute features
 X_unnormalized = basis_object.compute_features(
-    signed_contrast[valid_choices_idx],     # input 1 : processed with stimuli_basis
-    choices[valid_choices_idx],             # input 2 : wsls input 1: choice
-    rewarded[valid_choices_idx],            # input 3 : wsls input 2: reward
-    choices[valid_choices_idx]              # input 4 : processed with prev_choice
+    # input 1 : processed with stimuli_basis
+    signed_contrast[valid_choices_idx],  
+    # input 2 : wsls input 1: choice   
+    choices[valid_choices_idx],  
+    # input 3 : wsls input 2: reward           
+    rewarded[valid_choices_idx],   
+    # input 4 : processed with prev_choice         
+    choices[valid_choices_idx]              
 )
 ```
 Similarly, the fitting process using NeMoS was also very fast and easy:
@@ -996,11 +976,15 @@ n_states = 3
 
 model = nmo.glm_hmm.GLMHMM(
     n_states,
-    regularizer = "Ridge")
+    regularizer = "Ridge",
+    # change this to try multiple init
+    seed=jax.random.PRNGKey(12), 
+)
 
-model.fit(X,
-          np.asarray(choices),
-          is_new_session=new_sess_mouse
+model.fit(
+    X,
+    choices,
+    session_starts=new_sess_mouse
 )
 ```
 After fitting, we saw that across sessions, behavior could be described as a mixture of a small number of latent strategies that persist over multiple trials rather than independent lapses around a single policy. This is visible in the inferred posterior trajectories and in the Viterbi-decoded state sequences, which show extended dwell times within states. State occupancy and performance analyses further showed that behavioral accuracy is not uniform across latent states. The stimulus-driven state yields higher task-aligned performance, while biased states show reduced accuracy, consistent with reduced sensitivity to sensory evidence.
