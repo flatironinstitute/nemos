@@ -319,7 +319,9 @@ def get_data(config: dict, path: str = ".") -> Tuple[jnp.ndarray, jnp.ndarray]:
         return get_hd_data(config["file_name"], **config["get_hd_data_kwargs"])
     file_path = Path(path) / (dict_to_filename(config["input_shapes"]) + ".npz")
     npz = jnp.load(str(file_path))
-    return jnp.asarray(npz["X"], dtype=jnp.float64), jnp.asarray(npz["y"], dtype=jnp.float64)
+    return jnp.asarray(npz["X"], dtype=jnp.float64), jnp.asarray(
+        npz["y"], dtype=jnp.float64
+    )
 
 
 def _get_git_commit() -> str:
