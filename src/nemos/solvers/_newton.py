@@ -313,7 +313,7 @@ class Newton(NewtonSolverProtocol[NewtonState]):
             self.fun = loss_fn
             self.fun_with_aux = lambda p, *a: (loss_fn(p, *a), None)
 
-        self._solver = _Newton(self.fun, self.fun_with_aux, **solver_init_kwargs)
+        self._solver = _Newton(self.fun, self.fun_with_aux)
 
     def setup_hessian(
         self,
