@@ -47,7 +47,6 @@ import numpy as np
 import pynapple as nap
 import seaborn as sns
 from one.api import ONE
-from scipy.stats import zscore
 import matplotlib.pyplot as plt
 from matplotlib.colors import BoundaryNorm, LinearSegmentedColormap
 from nemos.glm_hmm.utils import compute_rate_per_state
@@ -117,14 +116,15 @@ trials = trials[["choice", "contrastLeft", "contrastRight", "feedbackType", "pro
 and inspect its contents.
 
 ```{code-cell} ipython3
-print(f"choice \nvalues: {trials.choice.unique()}, data type: {trials.choice.dtype}, shape:  \n")
-print(f"contrast left \nvalues: {trials.contrastLeft.unique()}, data type: {trials.contrastLeft.dtype} \n")
+print(f"choice \nvalues: {np.sort(trials.choice.unique())}, data type: {trials.choice.dtype}, shape:  \n")
 
-print(f"contrast right \nvalues: {trials.contrastRight.unique()}, data type: {trials.contrastRight.dtype} \n")
+print(f"contrast left \nvalues: {np.sort(trials.contrastLeft.unique())}, data type: {trials.contrastLeft.dtype} \n")
 
-print(f"reward \nvalues: {trials.feedbackType.unique()}, data type: {trials.feedbackType.dtype} \n")
+print(f"contrast right \nvalues: {np.sort(trials.contrastRight.unique())}, data type: {trials.contrastRight.dtype} \n")
 
-print(f"probability of stimulus on left \nvalues: {trials.probabilityLeft.unique()}, data type: {trials.probabilityLeft.dtype} \n")
+print(f"reward \nvalues: {np.sort(trials.feedbackType.unique())}, data type: {trials.feedbackType.dtype} \n")
+
+print(f"probability of stimulus on left \nvalues: {np.sort(trials.probabilityLeft.unique())}, data type: {trials.probabilityLeft.dtype} \n")
 
 print(f"session \n(some) values: {trials.session.unique()[:5]}, data type: {trials.session.dtype}\n")
 ```
@@ -205,10 +205,10 @@ df_example_session = df_trials[df_trials["session"] == example_session_id]
 
 # We can select all the necessary values for the design matrix:
 # choice, contrast of stimuli and reward
-choices = df_example_session['choice'].reset_index(drop=True)
-stim_left = df_example_session['contrastLeft'].reset_index(drop=True)
-stim_right = df_example_session['contrastRight'].reset_index(drop=True)
-rewarded = df_example_session['feedbackType'].reset_index(drop=True)
+choices = df_example_session['choice'].values
+stim_left = df_example_session['contrastLeft'].values
+stim_right = df_example_session['contrastRight'].values
+rewarded = df_example_session['feedbackType'].values
 ```
 
 For the first predictor, signed contrast:
@@ -271,10 +271,14 @@ basis_object = (
 
 # Compute features
 X_unnormalized = basis_object.compute_features(
-    signed_contrast[valid_choices_idx],     # input 1 : processed with stimuli_basis
-    choices[valid_choices_idx],             # input 2 : wsls input 1: choice
-    rewarded[valid_choices_idx],            # input 3 : wsls input 2: reward
-    choices[valid_choices_idx]              # input 4 : processed with prev_choice
+    # input 1 : processed with stimuli_basis
+    signed_contrast[valid_choices_idx], 
+    # input 2 : wsls input 1: choice        
+    choices[valid_choices_idx],
+    # input 3 : wsls input 2: reward
+    rewarded[valid_choices_idx],
+    # input 4 : processed with prev_choice        
+    choices[valid_choices_idx]              
 )
 
 print(X_unnormalized[:5,:])
@@ -285,8 +289,12 @@ And that's it! We have our unnormalized design matrix with signed contrast, win-
 As as last step, we now need to normalize our signed contrast predictor.
 
 ```{code-cell} ipython3
-# Normalize across the signed contrast
+from scipy.stats import zscore
+
+# Copy the array (we'll need the un-normalized later)
 X = np.copy(X_unnormalized)
+
+# Apply z-scoring
 X[:, 0] = zscore(X[:, 0])
 ```
 
@@ -369,11 +377,11 @@ Similarly, we can do this process for all the sessions
 
 ```{code-cell} ipython3
 # Subset all relevant data
-stim_left = df_trials['contrastLeft'].reset_index(drop=True)
-stim_right = df_trials['contrastRight'].reset_index(drop=True)
-rewarded = df_trials['feedbackType'].reset_index(drop=True)
-choices = df_trials['choice'].reset_index(drop=True).to_numpy()
-session = df_trials['session'].reset_index(drop=True).to_numpy()
+stim_left = df_trials['contrastLeft'].values
+stim_right = df_trials['contrastRight'].values
+rewarded = df_trials['feedbackType'].values
+choices = df_trials['choice'].values
+session = df_trials['session'].values
 
 # Select valid choices
 valid_choices_idx = np.where(~(choices == viol_val))[0]
