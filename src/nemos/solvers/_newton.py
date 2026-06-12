@@ -43,8 +43,8 @@ class Newton:
         init_params: Params | None = None,
         jit: bool = True,
         autodiff: bool = False,
-        maxiter: int = 100,
-        tol: float = 1e-6,
+        maxiter: int = DEFAULT_MAX_STEPS,
+        tol: float = DEFAULT_ATOL,
     ):
         if init_params is None:
             raise ValueError(
