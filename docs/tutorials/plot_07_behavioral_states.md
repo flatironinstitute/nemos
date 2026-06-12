@@ -50,7 +50,6 @@ from one.api import ONE
 from scipy.stats import zscore
 import matplotlib.pyplot as plt
 from matplotlib.colors import BoundaryNorm, LinearSegmentedColormap
-from nemos.glm_hmm.utils import compute_rate_per_state
 ```
 
 ```{code-cell} ipython3
