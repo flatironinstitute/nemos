@@ -289,7 +289,7 @@ class BaseHMM(
 
         The algorithm stops when the absolute change in log-likelihood between
         consecutive iterations falls below this threshold:
-        |log_likelihood_current - log_likelihood_previous| < tol
+         ``|log_likelihood_current - log_likelihood_previous| < tol``
 
         Returns
         -------

@@ -4,20 +4,8 @@ import numpy as np
 import pynapple as nap
 import pytest
 
-from conftest import MockHMM
+from conftest import MockHMM, all_subclasses
 from nemos.hmm.validation import HMMValidator
-
-
-def all_subclasses(cls):
-    seen = set()
-    stack = list(cls.__subclasses__())
-    while stack:
-        sub = stack.pop()
-        if sub in seen:
-            continue
-        seen.add(sub)
-        stack.extend(sub.__subclasses__())
-    return seen
 
 
 class TestHMMValidator:

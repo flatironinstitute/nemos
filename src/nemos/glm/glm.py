@@ -30,7 +30,7 @@ from ..solvers._hess import (
     PositiveDefinite,
     PositiveSemiDefinite,
 )
-from ..type_casting import _is_scalar_or_0d, cast_to_jax, support_pynapple
+from ..type_casting import cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, SolverState, StepResult
 from ..utils import _elementwise_derivative, format_repr
 from .initialize_parameters import initialize_intercept_matching_mean_rate
@@ -63,7 +63,7 @@ def _glm_hessian_block(
     eta,
     inverse_link_function,
     var_of_mu,
-    lam: Any = 0.0,
+    lam: Any = None,
 ):
     _X = jnp.concatenate(jax.tree_util.tree_leaves(X), axis=1)
     n_samples, n_features = _X.shape
@@ -1160,7 +1160,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         regularizer_strength = self.regularizer_strength
         if regularizer_strength is not None:
             regularizer_strength = self.regularizer._validate_strength_structure(
-                params, self.regularizer_strength
+                params, regularizer_strength
             )
 
         def hess(params, *args):
@@ -1833,9 +1833,17 @@ class PopulationGLM(GLM):
             + params.intercept
         )
 
-    def _get_hess_fn(self, params, autodiff: bool = False):
+    def _get_subproblem(self, params, strength, i):
+        mask_i = tree_utils.tree_take(self._feature_mask, i)
+        coef_i = tree_utils.tree_take(params.coef, i)
+        if mask_i is not None:
+            coef_i = jax.tree_util.tree_map(lambda c, m: c * m, coef_i, mask_i)
+        intercept_i = jnp.take(params.intercept, i, axis=0)
+        params_i = self._validator.to_model_params([coef_i, intercept_i])
+        strength_i = tree_utils.tree_take(strength, i)
+        return params_i, strength_i
 
-        var_of_mu = _var_func_of_mu(self)
+    def _get_hess_fn(self, params, autodiff: bool = False):
 
         strength = self.regularizer_strength
         if self.regularizer_strength is not None:
@@ -1843,62 +1851,51 @@ class PopulationGLM(GLM):
                 params, self.regularizer_strength
             )
 
-        def _slice_params(params, i):
-            mask = (
-                self._feature_mask[:, i]
-                if self._feature_mask is not None and not autodiff
-                else 1
-            )
-            sliced_coef = jax.tree_util.tree_map(lambda c: c[:, i] * mask, params.coef)
-            return self._validator.to_model_params([sliced_coef, params.intercept[i]])
-
-        def _slice_strength(i):
-            if strength is None:
-                return None
-            return jax.tree_util.tree_map(
-                lambda s: s if _is_scalar_or_0d(s) else s[:, i], strength
-            )
-
         if autodiff:
+            # AUTODIFF PATH
 
             def hess_fn(params, X, y, *args):
                 n_neurons = params.intercept.shape[0]
 
-                def single(i, y_i):
-                    params_i = _slice_params(params, i)
-                    strength_i = _slice_strength(i)
+                def _loss_i(params_i, X, y_i):
+                    """Simplified loss function that doesn't apply mask."""
+                    rate = GLM._predict(self, params_i, X)
+                    return self._observation_model._negative_log_likelihood(y_i, rate)
+
+                def _hess_fn_i(i, y_i):
+                    """Hessian function for a single subproblem."""
+                    params_i, strength_i = self._get_subproblem(params, strength, i)
                     if strength_i is not None:
                         strength_i = strength_i.coef
                     loss = self.regularizer.penalized_loss(
-                        self._compute_loss, params_i, strength_i
+                        _loss_i, params_i, strength_i
                     )
                     flat_params, unravel = ravel_pytree(params_i)
-                    return jax.hessian(lambda p: loss(unravel(p), X, y_i, *args))(
-                        flat_params
-                    )
+                    return jax.hessian(lambda p: loss(unravel(p), X, y_i))(flat_params)
 
-                return jax.vmap(single, in_axes=(0, 1))(jnp.arange(n_neurons), y)
+                # vmap autodiff hessian function across neurons
+                return jax.vmap(_hess_fn_i, in_axes=(0, 1))(jnp.arange(n_neurons), y)
 
             return hess_fn
+
+        # ANALYTIC PATH
+        var_of_mu = _var_func_of_mu(self)
 
         def hess_fn(params, X, *args):
             n_neurons = params.intercept.shape[0]
 
-            def single(i):
-                params_i = _slice_params(params, i)
+            def _hess_fn_i(i):
+                params_i, strength_i = self._get_subproblem(params, strength, i)
                 eta = (
                     jax.tree.reduce(jnp.add, jax.tree.map(jnp.dot, X, params_i.coef))
                     + params_i.intercept
                 )
                 return _glm_hessian_block(
-                    X,
-                    eta,
-                    self.inverse_link_function,
-                    var_of_mu,
-                    _slice_strength(i),
+                    X, eta, self.inverse_link_function, var_of_mu, strength_i
                 )
 
-            return jax.vmap(single)(jnp.arange(n_neurons))
+            # vmap analytic hessian function across neurons
+            return jax.vmap(_hess_fn_i)(jnp.arange(n_neurons))
 
         return hess_fn
 

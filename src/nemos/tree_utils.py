@@ -166,6 +166,40 @@ def tree_slice(data: Any, idx, is_leaf: Optional[Callable] = None):
     return jax.tree_util.tree_map(lambda x: x[idx], data, is_leaf=is_leaf)
 
 
+def tree_take(data, i, axis=1, is_leaf=None):
+    """
+    Apply ``jnp.take`` to each non-scalar leaf in a pytree.
+
+    Scalar and 0-dimensional leaves are returned unchanged. All other leaves
+    are sliced using ``jnp.take(x, i, axis=axis)``.
+
+    Parameters
+    ----------
+    data :
+        Pytree whose leaves are arrays or array-like objects.
+    i :
+        Indices passed to ``jnp.take``.
+    axis :
+        Axis along which to select values. Passed directly to ``jnp.take``.
+    is_leaf :
+        Optional predicate specifying additional pytree leaves. Forwarded to
+        ``jax.tree_util.tree_map``.
+
+    Returns
+    -------
+    Any
+        A pytree with the same structure as ``data``, where each non-scalar
+        leaf has been indexed using ``jnp.take`` along the specified axis.
+    """
+    from .type_casting import _is_scalar_or_0d
+
+    return jax.tree_util.tree_map(
+        lambda x: x if _is_scalar_or_0d(x) else jnp.take(x, i, axis=axis),
+        data,
+        is_leaf=is_leaf,
+    )
+
+
 # The following functions are adapted from jaxopt.tree_utils
 
 tree_add = partial(jax.tree_util.tree_map, operator.add)

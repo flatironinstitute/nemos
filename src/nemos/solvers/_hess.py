@@ -125,8 +125,6 @@ def combine_hessian_tags(
     if t1 is None or t2 is None:
         return None
     prop = combine_property(t1.property, t2.property)
-    if prop is None:
-        return None
     return HessianTag(
         structure=combine_structure(t1.structure, t2.structure),
         property=prop,

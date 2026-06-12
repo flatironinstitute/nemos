@@ -84,6 +84,24 @@ def pytest_terminal_summary(terminalreporter):
         )
 
 
+def all_subclasses(cls):
+    """Recursively collect every (direct and indirect) subclass of ``cls``.
+
+    Only classes already imported are found; meta-tests that need exhaustive
+    coverage should first import all nemos submodules (see the
+    ``pkgutil.walk_packages`` idiom in test_hmm_validator/test_model_params).
+    """
+    seen = set()
+    stack = list(cls.__subclasses__())
+    while stack:
+        sub = stack.pop()
+        if sub in seen:
+            continue
+        seen.add(sub)
+        stack.extend(sub.__subclasses__())
+    return seen
+
+
 @pytest.fixture
 def mock_glm_fit(monkeypatch):
     """Replace GLM.fit with a pure-Python no-op that sets coef_/intercept_ from X/y shapes.

@@ -132,7 +132,7 @@ ll = glm.score(X, spike_counts)
 ```
 
 For a deeper dive, see our [Quickstart](https://nemos.readthedocs.io/en/latest/quickstart.html)  guide and consider using [pynapple](https://github.com/pynapple-org/pynapple) for data exploration and preprocessing. When initializing the GLM object, you may optionally specify an [observation
-model](https://nemos.readthedocs.io/en/latest/api_reference.html#the-nemos-observation-models-module) and a [regularizer](https://nemos.readthedocs.io/en/latest/api_reference.html#the-nemos-regularizer-module).
+model](https://nemos.readthedocs.io/en/latest/api/observation_models.html) and a [regularizer](https://nemos.readthedocs.io/en/latest/api/regularizers.html).
 
 > **Note: Multi-epoch Convolution**
 >
