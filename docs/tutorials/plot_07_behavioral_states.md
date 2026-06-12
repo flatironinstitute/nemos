@@ -49,7 +49,6 @@ import seaborn as sns
 from one.api import ONE
 import matplotlib.pyplot as plt
 from matplotlib.colors import BoundaryNorm, LinearSegmentedColormap
-from nemos.glm_hmm.utils import compute_rate_per_state
 ```
 
 ```{code-cell} ipython3
@@ -904,24 +903,14 @@ Now we can compute the same quantities but using ```smooth_probs```. We used thi
 The process is very similar to the one we used in the previous section, with the difference in how we slice the trials and assign them to a specific state. We can start with the fraction of occupancy.
 
 ```{code-cell} ipython3
-# Get most likely state on a trial by trial basis
-states_max_posterior = np.argmax(posteriors, axis=1)
-print(f"Most likely state trial by trial \n {states_max_posterior} \n")
+# Most likely state per trial, ignoring session-start NaNs
+valid = ~np.isnan(posteriors).any(axis=1)
+states_max_posterior = np.argmax(posteriors[valid], axis=1)
 
-# Calculate how many instances of occupancy there is in each of them
-occupancy_per_state = np.unique(states_max_posterior, return_counts=True)[1]
-print(f"Total instances of each state {occupancy_per_state} \n")
-
-# calculate fraction of occupancy
-frac_occupancy_smooth_proba = occupancy_per_state/len(choices)
-print(f"Fraction of occupancy {frac_occupancy_smooth_proba } \n")
-```
-
-```{code-cell} ipython3
-# Segment trials into states estimated on a trial by trial basis
-idx_per_state = []
-for state in range(n_states):
-    idx_per_state.append(np.where(posteriors[:, state] >= 0.9)[0])
+# Count and normalize over valid trials
+occupancy_per_state = np.bincount(states_max_posterior, minlength=n_states)
+frac_occupancy_smooth_proba = occupancy_per_state / valid.sum()
+print(f"Fraction of occupancy {frac_occupancy_smooth_proba} \n")
 ```
 
 With this segmentation, we can calculate accuracy in the exact same manner as in the previous section.
