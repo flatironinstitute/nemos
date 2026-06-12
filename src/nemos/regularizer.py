@@ -15,6 +15,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from nemos.solvers._hess import Diagonal, General, HessianTag, PositiveDefinite
+
 from . import tree_utils
 from .base_class import Base
 from .proximal_operator import (
@@ -178,6 +180,32 @@ class Regularizer(Base, abc.ABC):
     _allowed_solvers: Tuple[str]
     _default_solver: str
     _proximal_operator: Callable
+    _hess_tag: HessianTag | None = None
+
+    def resolve_hess_tag(self, params: Any) -> HessianTag | None:
+        """Hessian tag of this regularizer's curvature for the given parameters.
+
+        The regularizer's Hessian is positive definite only on the subtrees it
+        penalizes (``params.regularizable_subtrees``); if it does not cover every
+        parameter it offers no global definiteness guarantee, so the property is
+        downgraded to ``General``.
+        """
+        if self._hess_tag is None:
+            return None
+        if hasattr(params, "regularizable_subtrees"):
+            regularized = {
+                id(leaf)
+                for where in params.regularizable_subtrees()
+                for leaf in jax.tree_util.tree_leaves(where(params))
+            }
+            all_regularized = regularized == {
+                id(leaf) for leaf in jax.tree_util.tree_leaves(params)
+            }
+        else:
+            all_regularized = True
+        if all_regularized:
+            return self._hess_tag
+        return HessianTag(self._hess_tag.structure, General)
 
     @property
     def allowed_solvers(self) -> Tuple[str]:
@@ -453,10 +481,12 @@ class UnRegularized(Regularizer):
         "ProximalGradient",
         "SVRG",
         "ProxSVRG",
+        "Newton",
     )
 
     _default_solver = "LBFGS"
     _proximal_operator = staticmethod(prox_none)
+    _hess_tag = None
 
     def _penalty_on_subtree(self, subtree, **kwargs) -> jnp.ndarray:
         return jnp.array(0.0)
@@ -481,11 +511,13 @@ class Ridge(Regularizer):
         "ProximalGradient",
         "SVRG",
         "ProxSVRG",
+        "Newton",
     )
 
     _default_solver = "LBFGS"
 
     _proximal_operator = staticmethod(prox_ridge)
+    _hess_tag = HessianTag(structure=Diagonal, property=PositiveDefinite)
 
     def _penalty_on_subtree(self, subtree, strength: Any, **kwargs) -> jnp.ndarray:
         """
