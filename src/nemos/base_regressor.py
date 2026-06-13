@@ -533,50 +533,6 @@ class BaseRegressor(
             f"{self.__class__.__name__} does not implement `_compute_loss`."
         )
 
-    @cast_to_jax
-    def compute_loss(
-        self,
-        params: UserProvidedParamsT,
-        X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
-        *args,
-        **kwargs,
-    ) -> jnp.ndarray:
-        """Compute the loss function for the model.
-
-        This method validates inputs and converts user-provided parameters to the internal
-        representation before computing the loss.
-
-        Parameters
-        ----------
-        params
-            Parameter tuple of (coefficients, intercept).
-        X
-            Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
-        y
-            Target data, array of shape ``(n_time_bins,)`` for single neuron models or
-            ``(n_time_bins, n_neurons)`` for population models.
-        *args
-            Additional positional arguments passed to the model-specific loss function.
-        **kwargs
-            Additional keyword arguments passed to the model-specific loss function.
-
-        Returns
-        -------
-        loss
-            The loss value (negative log-likelihood).
-
-        Raises
-        ------
-        ValueError
-            If inputs or parameters have incompatible shapes or invalid values.
-        """
-        self._validator.validate_inputs(X, y)
-        params = self._validator.validate_and_cast_params(params)
-        self._validator.validate_consistency(params, X, y)
-        X, y = self._preprocess_inputs(X, y)
-        return self._compute_loss(params, X, y, *args, **kwargs)
-
     @abc.abstractmethod
     def update(
         self,
