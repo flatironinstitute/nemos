@@ -263,7 +263,7 @@ convolve_large_arrays.md
 ```{toctree}
 :maxdepth: 2
 
-plot_04_batch_glm.md
+batching/README.md
 ```
 :::
 
