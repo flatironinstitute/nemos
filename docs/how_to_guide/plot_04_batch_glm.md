@@ -106,7 +106,7 @@ NeMoS ships two built-in loaders that cover most cases:
 - [`LazyArrayDataLoader`](nemos.batching.LazyArrayDataLoader): use with lazy/out-of-memory arrays, such as dask, zarr, HDF5.
 
 Here, for illustration, we show how to create a custom data loader.
-We will use `pynapple` to create batches of data: it samples a random 5 s interval, bins spikes into counts, and passes the counts through the basis to build a design matrix.
+We will use `pynapple` to create batches of data: it samples a random 1 s interval, bins spikes into counts, and passes the counts through the basis to build a design matrix.
 
 To create a data loader, we have to define 3 things:
 - `__iter__`: called every epoch; yields `(X_batch, y_batch)` tuples. Must return a fresh iterator each call (re-iterable). Note the use of `yield` in the code.
