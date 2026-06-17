@@ -7,7 +7,7 @@ import numpy as np
 import pynapple as nap
 from numpy.typing import ArrayLike
 
-from .log_likelihood import X_ppglm, mc_sample_ppglm, y_ppglm
+from .params import X_ppglm, y_ppglm, mc_sample_ppglm
 
 
 ### SCAN UTILS
@@ -139,6 +139,10 @@ def to_tsgroup(time_series) -> nap.TsGroup:
     """
 
     error_message = "All time series must be non-empty. "
+
+    # --- convert jax to numpy ---
+    if isinstance(time_series, jax.Array):
+        time_series = np.asarray(time_series)
 
     # --- TsGroup ---
     if isinstance(time_series, nap.TsGroup):

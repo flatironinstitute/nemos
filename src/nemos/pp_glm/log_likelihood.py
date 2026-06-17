@@ -1,36 +1,16 @@
 from functools import partial
 from typing import Callable, Dict, Union
-from jaxtyping import Array, Float, Int
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
-import equinox as eqx
+from jaxtyping import Array, Float, Int
 from pynapple import IntervalSet
 
 from . import utils
-from .params import GLMParams, PPGLMParamsWithKey
+from .params import GLMParams, PPGLMParamsWithKey, X_ppglm, y_ppglm, mc_sample_ppglm
 
 jax.config.update("jax_enable_x64", True)
-
-
-class X_ppglm(eqx.Module):
-    """Preprocessed predictors for PP-GLM."""
-
-    times: Float[Array, "n_events"]
-    ids: Int[Array, "n_events"]
-
-
-class y_ppglm(eqx.Module):
-    """Preprocessed spikes for PP-GLM."""
-
-    times: Float[Array, "n_spikes"]
-    ids: Int[Array, "n_spikes"]
-    idx: Int[Array, "n_spikes"]
-
-
-class mc_sample_ppglm(eqx.Module):
-    times: Float[Array, "n_samples"]
-    idx: Int[Array, "n_samples"]
 
 
 def _compute_lam_tilde(

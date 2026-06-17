@@ -7,7 +7,7 @@ from pynapple import IntervalSet
 from nemos.basis import RaisedCosineLogEval
 from nemos.glm.validation import to_glm_params
 from nemos.pp_glm import log_likelihood, utils
-from nemos.pp_glm.log_likelihood import X_ppglm, mc_sample_ppglm, y_ppglm
+from nemos.pp_glm.params import X_ppglm, y_ppglm, mc_sample_ppglm
 from nemos.pp_glm.validation import to_pp_glm_params_with_key
 
 
@@ -374,7 +374,10 @@ class TestLogLikelihood:
 
         np.testing.assert_almost_equal(log_lam_y, bias_contrib)
 
-    def _test_for_loop_ppglm_ll(self, all_to_one):
+    @pytest.mark.parametrize(
+        "all_to_one", [True, False], ids=["single_neuron", "population"]
+    )
+    def test_for_loop_ppglm_ll(self, all_to_one):
         """
         Test the model nll computation against a numpy loop implementation.
 
@@ -495,15 +498,3 @@ class TestLogLikelihood:
         loss_loop /= n_spikes
 
         np.testing.assert_almost_equal(loss_loop, loss_scan)
-
-    def test_for_loop_single_neuron_ppglm_ll(self):
-        """
-        Test the model nll computation against a numpy loop implementation for a single neuron dataset.
-        """
-        self._test_for_loop_ppglm_ll(all_to_one=True)
-
-    def test_for_loop_population_ppglm_ll(self):
-        """
-        Test the model nll computation against a numpy loop implementation for a population dataset.
-        """
-        self._test_for_loop_ppglm_ll(all_to_one=False)
