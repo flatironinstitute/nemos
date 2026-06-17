@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Union
+from functools import partial
+from typing import Any, Iterable, Union
+
+from numpy.typing import ArrayLike
+
+from .typing import DESIGN_INPUT_TYPE
 
 
 @dataclass(frozen=True)
@@ -229,6 +234,79 @@ class SolverConvergenceCallback(Callback):
         )
         if converged:
             ctx.request_stop("Satisfied the solver's convergence criterion.")
+
+
+class TestLossLogger(Callback):
+    """
+    Log the loss evaluated on a fixed test set at the requested events.
+
+    Appends ``model.compute_loss(params, X_test, y_test)`` to ``loss_history``
+    each time one of the requested ``events`` fires.
+
+    Parameters
+    ----------
+    X_test :
+        Test input (design matrix).
+    y_test :
+        Test target (e.g. spike counts).
+    events :
+        Event name or names at which to log the test score. Each must be one
+        of ``{"train_begin", "train_end", "epoch_begin", "epoch_end",
+        "batch_begin", "batch_end"}``.
+
+    Attributes
+    ----------
+    loss_history :
+        List of ``(event, epoch_idx, batch_idx, test_score)`` tuples, one per
+        logged event, recording which event fired and the training position at
+        the time.
+    """
+
+    # Tell pytest not to collect this as a test class; "Test" refers to the
+    # held-out test set, not a unit test.
+    __test__ = False
+
+    _VALID_EVENTS = frozenset(
+        {
+            "train_begin",
+            "train_end",
+            "epoch_begin",
+            "epoch_end",
+            "batch_begin",
+            "batch_end",
+        }
+    )
+
+    def __init__(
+        self,
+        X_test: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y_test: ArrayLike,
+        events: str | Iterable[str],
+    ):
+        self.loss_history = []
+        self.X_test = X_test
+        self.y_test = y_test
+
+        events = {events} if isinstance(events, str) else set(events)
+        invalid = events - self._VALID_EVENTS
+        if invalid:
+            raise ValueError(
+                f"Unknown events {sorted(invalid)}; "
+                f"valid events are {sorted(self._VALID_EVENTS)}."
+            )
+        self.events = events
+
+        # Wire only the requested hooks; the rest stay no-ops from the base class.
+        for event in events:
+            setattr(self, f"on_{event}", partial(self._log_test_score, event))
+
+    def _log_test_score(self, event: str, ctx: TrainingContext) -> None:
+        test_score = ctx.model.compute_loss(
+            (ctx.params.coef, ctx.params.intercept),
+            self.X_test,
+            self.y_test,
+        )
+        self.loss_history.append((event, ctx.epoch_idx, ctx.batch_idx, test_score))
 
 
 def _normalize_callbacks(

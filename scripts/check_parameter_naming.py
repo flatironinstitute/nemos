@@ -134,6 +134,8 @@ VALID_PAIRS = [
     {"is_nan", "is_nap"},
     {"dirichlet_initial_proba", "dirichlet_transition_proba"},
     {"random_key_pair", "random_key"},
+    {"event", "events"},
+    {"X_test", "y_test"},
 ]
 
 

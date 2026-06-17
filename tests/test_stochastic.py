@@ -1,6 +1,7 @@
 """Tests for the stochastic optimization interface."""
 
 from contextlib import nullcontext as does_not_raise
+from types import SimpleNamespace
 
 import jax
 import jax.numpy as jnp
@@ -15,6 +16,7 @@ from nemos.callbacks import (
     CallbackList,
     SolverConvergenceCallback,
     StochasticFitSummary,
+    TestLossLogger,
     TrainingContext,
     _normalize_callbacks,
 )
@@ -76,6 +78,27 @@ if solvers.JAXOPT_AVAILABLE:
             solvers.JaxoptNonlinearCG,
         ]
     )
+
+
+def _logging_ctx(epoch_idx=0, batch_idx=0, loss=1.0):
+    """
+    Build a TrainingContext with a fake model recording compute_loss calls.
+
+    Returns the context plus the list that records each ``compute_loss`` call as
+    ``(params, X, y)``, so tests can assert on the forwarded arguments.
+    """
+    calls = []
+
+    def compute_loss(params, X, y):
+        calls.append((params, X, y))
+        return loss
+
+    model = SimpleNamespace(compute_loss=compute_loss)
+    params = SimpleNamespace(coef="COEF", intercept="INT")
+    ctx = TrainingContext(
+        model=model, params=params, epoch_idx=epoch_idx, batch_idx=batch_idx
+    )
+    return ctx, calls
 
 
 class TestSolverStochasticSupport:
@@ -167,6 +190,75 @@ class TestCallbackSystem:
         ctx = TrainingContext(solver=None)
         cl.on_epoch_end(ctx)
         assert calls == ["a", "b"]
+
+    def test_loss_logger_requires_events(self):
+        """events is a required argument."""
+        with pytest.raises(TypeError):
+            TestLossLogger(X_test=None, y_test=None)
+
+    def test_loss_logger_invalid_event_raises(self):
+        """Unknown event names raise ValueError listing valid events."""
+        with pytest.raises(ValueError, match="Unknown events"):
+            TestLossLogger(None, None, events="epoch_ended")
+
+    @pytest.mark.parametrize(
+        "events, wired, not_wired",
+        [
+            ("epoch_end", ["on_epoch_end"], ["on_batch_end", "on_train_begin"]),
+            (
+                ["epoch_end", "batch_end"],
+                ["on_epoch_end", "on_batch_end"],
+                ["on_train_end"],
+            ),
+        ],
+    )
+    def test_loss_logger_wires_only_requested_hooks(self, events, wired, not_wired):
+        """Requested hooks fire; the rest stay base-class no-ops."""
+        cb = TestLossLogger(None, None, events=events)
+        ctx, _ = _logging_ctx()
+        # unrequested hooks are inherited no-ops and append nothing
+        for hook in not_wired:
+            getattr(cb, hook)(ctx)
+        assert cb.loss_history == []
+        # requested hooks each append one entry
+        for hook in wired:
+            getattr(cb, hook)(ctx)
+        assert len(cb.loss_history) == len(wired)
+
+    def test_loss_logger_string_normalized_to_set(self):
+        """A single string event is stored as a set."""
+        cb = TestLossLogger(None, None, events="epoch_end")
+        assert cb.events == {"epoch_end"}
+
+    def test_loss_logger_forwards_compute_loss_args(self):
+        """compute_loss receives (coef, intercept), X_test, y_test."""
+        cb = TestLossLogger("X", "Y", events="epoch_end")
+        ctx, calls = _logging_ctx()
+        cb.on_epoch_end(ctx)
+        assert calls == [(("COEF", "INT"), "X", "Y")]
+
+    def test_loss_logger_records_tuple(self):
+        """Each entry is (event, epoch_idx, batch_idx, score)."""
+        cb = TestLossLogger(None, None, events="epoch_end")
+        ctx, _ = _logging_ctx(epoch_idx=2, batch_idx=5, loss=0.7)
+        cb.on_epoch_end(ctx)
+        assert cb.loss_history == [("epoch_end", 2, 5, 0.7)]
+
+    def test_loss_logger_disambiguates_events(self):
+        """Mixed-event history carries the correct event label per entry."""
+        cb = TestLossLogger(None, None, events=["epoch_end", "batch_end"])
+        ctx, _ = _logging_ctx(epoch_idx=1, batch_idx=3)
+        cb.on_batch_end(ctx)
+        cb.on_epoch_end(ctx)
+        events = [entry[0] for entry in cb.loss_history]
+        assert events == ["batch_end", "epoch_end"]
+
+    def test_loss_logger_works_in_callback_list(self):
+        """Dispatched through CallbackList, the wired hook still fires."""
+        cb = TestLossLogger(None, None, events="epoch_end")
+        ctx, _ = _logging_ctx()
+        CallbackList([cb]).on_epoch_end(ctx)
+        assert len(cb.loss_history) == 1
 
 
 class TestGLMStochasticFit:
@@ -294,6 +386,23 @@ class TestGLMStochasticFit:
             model_early.solver_state_.stats.num_steps
             < model_baseline.solver_state_.stats.num_steps
         )
+
+    @pytest.mark.parametrize("solver", _stochastic_solver_names)
+    def test_loss_logger_callback_during_fit(self, simple_data, solver):
+        """loss_history accumulates one finite entry per epoch over a real fit."""
+        X, y = simple_data
+        num_epochs = 3
+        loader = ArrayDataLoader(X, y, batch_size=32, shuffle="full")
+
+        solver_kwargs = self._default_solver_kwargs(solver)
+
+        cb = TestLossLogger(X, y, events="epoch_end")
+        model = nmo.glm.GLM(solver_name=solver, solver_kwargs=solver_kwargs)
+        model.stochastic_fit(loader, num_epochs=num_epochs, callbacks=cb)
+
+        assert len(cb.loss_history) == num_epochs
+        assert [entry[0] for entry in cb.loss_history] == ["epoch_end"] * num_epochs
+        assert all(np.isfinite(entry[-1]) for entry in cb.loss_history)
 
     @pytest.mark.parametrize("solver", _stochastic_solver_names)
     def test_batch_callback_stops_early(self, simple_data, solver):
