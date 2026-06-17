@@ -140,7 +140,7 @@ from nemos.batching import ArrayDataLoader
 X = np.random.normal(size=(10000, 3))
 w = np.array([0.5, 1.0, 2.0])
 y = np.random.poisson(np.exp(X @ w))
-loader = ArrayDataLoader(X, y, batch_size=200, shuffle=True)
+loader = ArrayDataLoader(X, y, batch_size=200, shuffle="full")
 
 # Fit model using stochastic optimization
 model = nmo.glm.GLM(

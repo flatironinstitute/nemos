@@ -894,7 +894,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams]):
         >>> from nemos.callbacks import SolverConvergenceCallback
         >>> X = jnp.ones((100, 5))
         >>> y = jnp.ones((100,))
-        >>> loader = ArrayDataLoader(X, y, batch_size=32, shuffle=True)
+        >>> loader = ArrayDataLoader(X, y, batch_size=32, shuffle="full")
         >>> model = nmo.glm.GLM(solver_name="GradientDescent", solver_kwargs={"stepsize": 0.01, "acceleration" : False})
         >>> # Stop early when the solver's convergence criterion is met.
         >>> model = model.stochastic_fit(

@@ -192,7 +192,7 @@ class TestGLMStochasticFit:
     def test_stochastic_fit(self, simple_data, solver):
         """Test basic stochastic_fit functionality."""
         X, y = simple_data
-        loader = ArrayDataLoader(X, y, batch_size=32, shuffle=True)
+        loader = ArrayDataLoader(X, y, batch_size=32, shuffle="full")
 
         model = nmo.glm.GLM(
             solver_name=solver, solver_kwargs=self._default_solver_kwargs(solver)
@@ -231,7 +231,7 @@ class TestGLMStochasticFit:
         X, y = simple_data
         n_epochs = 100
         batch_size = 100
-        loader = ArrayDataLoader(X, y, batch_size=batch_size, shuffle=True)
+        loader = ArrayDataLoader(X, y, batch_size=batch_size, shuffle="full")
 
         solver_kwargs = self._default_solver_kwargs(solver, maxiter=10_000)
 
@@ -269,7 +269,7 @@ class TestGLMStochasticFit:
         """Test that a custom epoch callback stops optimization early."""
         X, y = simple_data
         num_epochs = 5
-        loader = ArrayDataLoader(X, y, batch_size=32, shuffle=True)
+        loader = ArrayDataLoader(X, y, batch_size=32, shuffle="full")
 
         solver_kwargs = self._default_solver_kwargs(solver, maxiter=10_000)
 
@@ -300,7 +300,7 @@ class TestGLMStochasticFit:
         """Test that a batch callback requesting stop halts optimization early."""
         X, y = simple_data
         num_epochs = 5
-        loader = ArrayDataLoader(X, y, batch_size=32, shuffle=True)
+        loader = ArrayDataLoader(X, y, batch_size=32, shuffle="full")
 
         solver_kwargs = self._default_solver_kwargs(solver, maxiter=10_000)
 
@@ -694,7 +694,7 @@ class TestPopulationGLMStochasticFit:
     def test_basic_population_stochastic_fit(self, population_data, solver):
         """Test basic stochastic_fit for PopulationGLM."""
         X, y = population_data
-        loader = ArrayDataLoader(X, y, batch_size=32, shuffle=True)
+        loader = ArrayDataLoader(X, y, batch_size=32, shuffle="full")
 
         solver_kwargs = {"stepsize": 0.001, "maxiter": 100}
         solver_class = solvers.get_solver(solver).implementation
@@ -732,7 +732,7 @@ class TestSolverStochasticRun:
         X = np.random.randn(1000, 3)
         y = X @ np.array([1.0, 2.0, 3.0]) + np.random.randn(1000) * 0.1
 
-        loader = ArrayDataLoader(X, y, batch_size=32, shuffle=True)
+        loader = ArrayDataLoader(X, y, batch_size=32, shuffle="full")
 
         def loss(params, X, y):
             pred = X @ params
@@ -923,7 +923,7 @@ def test_svrg_compute_full_gradient_streaming():
 
     X = np.random.randn(N, 3)
     y = X @ np.array([1.0, 2.0, 3.0]) + np.random.randn(N) * 0.1
-    loader = ArrayDataLoader(X, y, batch_size=batch_size, shuffle=True)
+    loader = ArrayDataLoader(X, y, batch_size=batch_size, shuffle="full")
     params = np.random.randn(3)
 
     def loss_mean(params, X, y):

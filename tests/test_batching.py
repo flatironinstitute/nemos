@@ -100,7 +100,7 @@ class DataLoaderCommonTests:
         with pytest.raises(ValueError, match="same number of samples"):
             self.loader_cls(X, y, batch_size=32)
 
-    @pytest.mark.parametrize("shuffle", [True, False])
+    @pytest.mark.parametrize("shuffle", ["none", "chunk", "full"])
     @pytest.mark.parametrize("iterate_between_calls", [True, False])
     def test_sample_batch(self, shuffle, iterate_between_calls):
         """Test sample_batch yields correct type, shapes, and is deterministic."""
@@ -143,7 +143,41 @@ class DataLoaderCommonTests:
         assert batch_data[1].shape == (32,)
         assert batch_data[2].shape == (32, 3)
 
-    @pytest.mark.parametrize("shuffle", [True, False])
+    def test_sample_batch_skips_invalid_leading_region(self):
+        """Test that sample_batch skips an all-invalid leading batch (e.g. conv warmup)."""
+        batch_size = 32
+        X = np.arange(N_SAMPLES * 5, dtype=float).reshape(N_SAMPLES, 5)
+        y = np.arange(N_SAMPLES, dtype=float)
+        # make the entire first batch invalid, mimicking the NaN warmup of a
+        # convolutional basis
+        X[:batch_size] = np.nan
+        loader = self.make_loader(X, y, batch_size=batch_size, shuffle="chunk")
+
+        X_batch, y_batch = loader.sample_batch()
+
+        assert X_batch.shape == (batch_size, 5)
+        # the next contiguous batch, which is fully valid, is returned
+        assert not np.any(np.isnan(X_batch))
+        np.testing.assert_array_equal(y_batch, y[batch_size : 2 * batch_size])
+
+    def test_sample_batch_all_invalid_falls_back_to_first(self):
+        """Test that an all-invalid dataset returns the first batch (for downstream error)."""
+        batch_size = 32
+        X = np.full((N_SAMPLES, 5), np.nan)
+        y = np.arange(N_SAMPLES, dtype=float)
+        loader = self.make_loader(X, y, batch_size=batch_size, shuffle="none")
+
+        X_batch, _ = loader.sample_batch()
+
+        assert X_batch.shape == (batch_size, 5)
+        assert np.all(np.isnan(X_batch))
+
+    def test_invalid_shuffle_strategy_raises(self):
+        """Test that an unrecognized shuffle strategy raises."""
+        with pytest.raises(ValueError, match="shuffle must be one of"):
+            self.loader_cls(*random_data(), batch_size=32, shuffle="bogus")
+
+    @pytest.mark.parametrize("shuffle", ["none", "chunk", "full"])
     def test_one_batch_smaller(self, shuffle):
         """Test that one of the batches can be smaller than batch_size."""
         batch_size = 32
@@ -152,7 +186,7 @@ class DataLoaderCommonTests:
         batch_sizes = set([X_b.shape[0] for X_b, _ in loader])
         assert batch_sizes == {batch_size, N_SAMPLES % batch_size}
 
-    @pytest.mark.parametrize("shuffle", [True, False])
+    @pytest.mark.parametrize("shuffle", ["none", "chunk", "full"])
     def test_iteration_yields_all_data(self, shuffle):
         """Test that iteration covers all samples."""
         loader = self.make_loader(shuffle=shuffle)
@@ -166,7 +200,7 @@ class DataLoaderCommonTests:
         X_concat = jnp.concatenate(all_X)
         y_concat = jnp.concatenate(all_y)
 
-        if shuffle:
+        if shuffle != "none":
             sort_idx = jnp.argsort(y_concat)
             # shuffle should actually shuffle
             assert not np.array_equal(sort_idx, jnp.arange(y_concat.shape[0]))
@@ -186,7 +220,7 @@ class DataLoaderCommonTests:
 
     def test_re_iterable(self):
         """Test that DataLoader is re-iterable."""
-        loader = self.make_loader(shuffle=False)
+        loader = self.make_loader(shuffle="none")
 
         batches_1 = list(loader)
         batches_2 = list(loader)
@@ -197,9 +231,10 @@ class DataLoaderCommonTests:
             np.testing.assert_array_equal(X1, X2)
             np.testing.assert_array_equal(y1, y2)
 
-    def test_shuffle_different_epochs(self):
+    @pytest.mark.parametrize("shuffle", ["chunk", "full"])
+    def test_shuffle_different_epochs(self, shuffle):
         """Test shuffling produces different order (statistically) across epochs."""
-        loader = self.make_loader(batch_size=32, shuffle=True)
+        loader = self.make_loader(batch_size=32, shuffle=shuffle)
 
         all_y1, all_y2 = [], []
         for _, y_batch in loader:
@@ -216,20 +251,22 @@ class DataLoaderCommonTests:
         assert np.array_equal(jnp.sort(y_concat1), self.y)
         assert np.array_equal(jnp.sort(y_concat2), self.y)
 
+    @pytest.mark.parametrize("shuffle", ["chunk", "full"])
     @pytest.mark.parametrize("seed", [0, 123])
-    def test_same_seed(self, seed):
+    def test_same_seed(self, seed, shuffle):
         """Test that two shuffling data loaders with the same seed produce the same order."""
-        loader1 = self.make_loader(shuffle=True, seed=seed)
-        loader2 = self.make_loader(shuffle=True, seed=seed)
+        loader1 = self.make_loader(shuffle=shuffle, seed=seed)
+        loader2 = self.make_loader(shuffle=shuffle, seed=seed)
 
         for b1, b2 in zip(loader1, loader2):
             np.testing.assert_array_equal(b1[0], b2[0])
             np.testing.assert_array_equal(b1[1], b2[1])
 
-    def test_different_seeds(self):
+    @pytest.mark.parametrize("shuffle", ["chunk", "full"])
+    def test_different_seeds(self, shuffle):
         """Test shuffling produces different ordering for different seeds."""
-        loader1 = self.make_loader(batch_size=32, shuffle=True, seed=0)
-        loader2 = self.make_loader(batch_size=32, shuffle=True, seed=123)
+        loader1 = self.make_loader(batch_size=32, shuffle=shuffle, seed=0)
+        loader2 = self.make_loader(batch_size=32, shuffle=shuffle, seed=123)
 
         all_y1, all_y2 = [], []
         for _, y_batch in loader1:
@@ -272,6 +309,24 @@ class TestArrayDataLoader(DataLoaderCommonTests):
         loader = self.make_loader()
         for arr in loader.arrays:
             assert isinstance(arr, jnp.ndarray)
+
+    def test_chunk_shuffle_keeps_contiguous_batches(self):
+        """Test that shuffle='chunk' keeps each batch a contiguous block, reordered."""
+        batch_size = 100
+        loader = ArrayDataLoader(
+            *ordered_data(), batch_size=batch_size, shuffle="chunk", seed=0
+        )
+
+        for _, y_batch in loader:
+            # y is np.arange, so a contiguous block is a run of consecutive integers
+            ys = np.sort(np.asarray(y_batch))
+            assert np.array_equal(ys, np.arange(ys[0], ys[0] + ys.shape[0]))
+
+        # chunk order differs across epochs but covers the same chunks
+        epoch1 = [int(np.asarray(y_b).min()) for _, y_b in loader]
+        epoch2 = [int(np.asarray(y_b).min()) for _, y_b in loader]
+        assert set(epoch1) == set(epoch2)
+        assert epoch1 != epoch2
 
 
 class TestLazyArrayDataLoader(DataLoaderCommonTests):
@@ -364,7 +419,7 @@ class TestLazyArrayDataLoader(DataLoaderCommonTests):
 
     def test_shuffle_changes_chunk_order(self, lazy_arrays):
         """Test that chunk order changes between epochs."""
-        loader = LazyArrayDataLoader(*lazy_arrays, batch_size=32, shuffle=True)
+        loader = LazyArrayDataLoader(*lazy_arrays, batch_size=32, shuffle="chunk")
 
         epoch1 = list(iter(loader))
         epoch2 = list(iter(loader))
@@ -383,7 +438,7 @@ class TestLazyArrayDataLoader(DataLoaderCommonTests):
     def test_shuffle_within_batch(self, lazy_arrays):
         """Test that samples within a batch are shuffled."""
         loader = LazyArrayDataLoader(
-            *lazy_arrays, batch_size=self.X.shape[0], shuffle=True
+            *lazy_arrays, batch_size=self.X.shape[0], shuffle="chunk"
         )
 
         # With batch_size == n_samples, there's one chunk so chunk shuffle
@@ -393,37 +448,27 @@ class TestLazyArrayDataLoader(DataLoaderCommonTests):
         assert not np.array_equal(y_batch, self.y)
 
     def test_slice_only_array(self):
-        """Test that with fancy indexing disabled, source arrays are only sliced, never fancy-indexed."""
+        """Test that with chunk shuffling, source arrays are only sliced, never fancy-indexed."""
         X = SliceOnlyArray(np.random.randn(100, 5))
         y = SliceOnlyArray(np.random.randn(100))
-        loader = LazyArrayDataLoader(X, y, batch_size=32, shuffle=True)
+        loader = LazyArrayDataLoader(X, y, batch_size=32, shuffle="chunk")
 
         # Should not raise — shuffle happens after jnp.asarray conversion
         batches = list(loader)
         assert len(batches) == 4
 
-    def test_fancy_index_raises_with_slice_only_array(self):
+    def test_full_shuffle_raises_with_slice_only_array(self):
+        """Test that shuffle='full' fancy-indexes the source, raising on slice-only arrays."""
         X = SliceOnlyArray(np.random.randn(100, 5))
         y = SliceOnlyArray(np.random.randn(100))
-        loader = LazyArrayDataLoader(
-            X, y, batch_size=32, shuffle=True, fancy_index=True
-        )
+        loader = LazyArrayDataLoader(X, y, batch_size=32, shuffle="full")
 
         with pytest.raises(TypeError, match="sequential"):
             next(iter(loader))
 
-    def test_fancy_index_requires_shuffle(self):
-        """Test that fancy_index=True without shuffle raises error."""
-        with pytest.raises(ValueError, match="fancy_index if shuffling"):
-            LazyArrayDataLoader(
-                *random_data(), batch_size=32, shuffle=False, fancy_index=True
-            )
-
-    def test_fancy_index_yields_all_data(self, lazy_arrays):
-        """Test that fancy_index iteration covers all samples."""
-        loader = LazyArrayDataLoader(
-            *lazy_arrays, batch_size=32, shuffle=True, fancy_index=True
-        )
+    def test_full_shuffle_yields_all_data(self, lazy_arrays):
+        """Test that shuffle='full' iteration covers all samples."""
+        loader = LazyArrayDataLoader(*lazy_arrays, batch_size=32, shuffle="full")
 
         all_X = []
         all_y = []
@@ -438,24 +483,20 @@ class TestLazyArrayDataLoader(DataLoaderCommonTests):
         np.testing.assert_array_equal(X_concat[sort_idx], self.X)
         np.testing.assert_array_equal(y_concat[sort_idx], self.y)
 
-    def test_fancy_index_shuffles(self, lazy_arrays):
-        """Test that fancy_index mode actually shuffles the data."""
+    def test_full_shuffle_shuffles(self, lazy_arrays):
+        """Test that shuffle='full' actually shuffles the data."""
         X, y = lazy_arrays
         n_samples = X.shape[0]
-        loader = LazyArrayDataLoader(
-            X, y, batch_size=n_samples, shuffle=True, fancy_index=True
-        )
+        loader = LazyArrayDataLoader(X, y, batch_size=n_samples, shuffle="full")
 
         X_batch, y_batch = next(iter(loader))
         assert not np.array_equal(X_batch, self.X)
         assert not np.array_equal(y_batch, self.y)
 
-    def test_fancy_index_re_iterable(self, lazy_arrays):
-        """Test that fancy_index loader produces different shuffles across epochs."""
+    def test_full_shuffle_re_iterable(self, lazy_arrays):
+        """Test that shuffle='full' produces different shuffles across epochs."""
         X, y = lazy_arrays
-        loader = LazyArrayDataLoader(
-            X, y, batch_size=32, shuffle=True, fancy_index=True
-        )
+        loader = LazyArrayDataLoader(X, y, batch_size=32, shuffle="full")
 
         y1 = jnp.concatenate([y_b for _, y_b in loader])
         y2 = jnp.concatenate([y_b for _, y_b in loader])
@@ -466,11 +507,9 @@ class TestLazyArrayDataLoader(DataLoaderCommonTests):
         # but in different order
         assert not np.array_equal(y1, y2)
 
-    def test_fancy_index_last_batch_smaller(self, lazy_arrays):
-        """Test that the last batch can be smaller with fancy_index."""
-        loader = LazyArrayDataLoader(
-            *lazy_arrays, batch_size=32, shuffle=True, fancy_index=True
-        )
+    def test_full_shuffle_last_batch_smaller(self, lazy_arrays):
+        """Test that the last batch can be smaller with shuffle='full'."""
+        loader = LazyArrayDataLoader(*lazy_arrays, batch_size=32, shuffle="full")
 
         batch_sizes = set([X_b.shape[0] for X_b, _ in loader])
         assert batch_sizes == {32, N_SAMPLES % 32}
@@ -483,7 +522,7 @@ class TestPreprocessedDataLoader:
         """Test that preprocessing is applied to batches."""
         X = np.random.randn(100, 5)
         y = np.random.randn(100)
-        loader = ArrayDataLoader(X, y, batch_size=32, shuffle=False)
+        loader = ArrayDataLoader(X, y, batch_size=32, shuffle="none")
 
         # Preprocessing function that scales X by 2
         def preprocess(X, y):
@@ -587,7 +626,7 @@ class TestCompilation:
         """Even split: one unique shape, one compilation."""
         X = np.random.randn(100, 5)
         y = np.random.randn(100)
-        loader = loader_cls(X, y, batch_size=20, shuffle=False)
+        loader = loader_cls(X, y, batch_size=20, shuffle="none")
 
         trace_count = 0
 
@@ -606,7 +645,7 @@ class TestCompilation:
         """Uneven split: two unique shapes, two compilations."""
         X = np.random.randn(100, 5)
         y = np.random.randn(100)
-        loader = loader_cls(X, y, batch_size=32, shuffle=False)
+        loader = loader_cls(X, y, batch_size=32, shuffle="none")
 
         trace_count = 0
 
