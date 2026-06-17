@@ -20,7 +20,12 @@ from .tree_utils import get_valid_multitree
 BatchData: TypeAlias = tuple[Any, ...]
 
 #: Supported shuffle strategies (see ``_BaseArrayDataLoader``).
-SHUFFLE_STRATEGIES: tuple[str, ...] = ("none", "chunk", "full")
+SHUFFLE_STRATEGIES: tuple[str, ...] = (
+    "none",
+    "chunk_order",
+    "chunk_and_samples",
+    "full",
+)
 
 
 @runtime_checkable
@@ -78,12 +83,16 @@ class _BaseArrayDataLoader:
     ``_iter_shuffle_whole``, which differs by whether the backend needs sorted
     indices for fancy indexing.
 
-    Three shuffle strategies are supported (see ``SHUFFLE_STRATEGIES``):
+    Four shuffle strategies are supported (see ``SHUFFLE_STRATEGIES``):
 
     - ``"none"``: sequential, contiguous batches.
-    - ``"chunk"``: contiguous batches whose order is shuffled each epoch, with the
-      samples permuted within each batch. Batch membership is fixed, so this only
-      requires contiguous reads.
+    - ``"chunk_order"``: contiguous batches whose order is shuffled each epoch, with
+      the samples kept in their original order within each batch. Batch membership is
+      fixed, so this only requires contiguous reads. Because each batch is an intact,
+      in-order segment, this is the strategy to use when wrapping the loader to do
+      order-dependent per-batch processing (e.g. temporal convolution).
+    - ``"chunk_and_samples"``: like ``"chunk_order"``, but additionally permutes the
+      samples within each batch. Still requires only contiguous reads.
     - ``"full"``: every sample may land in any batch (requires random access).
     """
 
@@ -105,7 +114,8 @@ class _BaseArrayDataLoader:
         batch_size :
             Number of samples per batch.
         shuffle :
-            Shuffle strategy: one of ``"none"``, ``"chunk"``, or ``"full"``.
+            Shuffle strategy: one of ``"none"``, ``"chunk_order"``,
+            ``"chunk_and_samples"``, or ``"full"``.
         seed :
             Random seed for shuffling. Default is None.
 
@@ -162,8 +172,18 @@ class _BaseArrayDataLoader:
             end = min(start + self.batch_size, n)
             yield self._materialize(slice(start, end))
 
-    def _iter_shuffle_chunks(self) -> Iterator[tuple[jnp.ndarray, ...]]:
-        """Yield contiguous batches in shuffled order, permuted within each batch."""
+    def _iter_shuffle_chunks(
+        self, shuffle_within: bool
+    ) -> Iterator[tuple[jnp.ndarray, ...]]:
+        """
+        Yield contiguous batches in shuffled order.
+
+        Parameters
+        ----------
+        shuffle_within :
+            If True, also permute the samples within each batch. If False, samples
+            keep their original (e.g. temporal) order within each batch.
+        """
         n = self.n_samples
         chunks = [
             (start, min(start + self.batch_size, n))
@@ -174,8 +194,9 @@ class _BaseArrayDataLoader:
         for start, end in chunks:
             batch = self._materialize(slice(start, end))
 
-            local_perm = self._rng.permutation(end - start)
-            batch = tuple(b[local_perm] for b in batch)
+            if shuffle_within:
+                local_perm = self._rng.permutation(end - start)
+                batch = tuple(b[local_perm] for b in batch)
 
             yield batch
 
@@ -188,8 +209,10 @@ class _BaseArrayDataLoader:
         match self.shuffle:
             case "none":
                 return self._iter_no_shuffle()
-            case "chunk":
-                return self._iter_shuffle_chunks()
+            case "chunk_order":
+                return self._iter_shuffle_chunks(shuffle_within=False)
+            case "chunk_and_samples":
+                return self._iter_shuffle_chunks(shuffle_within=True)
             case "full":
                 return self._iter_shuffle_whole()
             case _:
@@ -266,8 +289,8 @@ class ArrayDataLoader(_BaseArrayDataLoader):
         batch_size :
             Number of samples per batch.
         shuffle :
-            Shuffle strategy: one of ``"none"``, ``"chunk"``, or ``"full"``.
-            Default is ``"full"``.
+            Shuffle strategy: one of ``"none"``, ``"chunk_order"``,
+            ``"chunk_and_samples"``, or ``"full"``. Default is ``"full"``.
         seed :
             Random seed for shuffling. Default is None.
         """
@@ -297,9 +320,10 @@ class LazyArrayDataLoader(_BaseArrayDataLoader):
     to JAX on the fly. This keeps memory usage proportional to batch size rather
     than dataset size.
 
-    The default shuffle strategy is ``"chunk"`` (approximate): chunk order is
-    randomized each epoch and samples within each batch are permuted after loading,
-    but samples within the same chunk always end up in the same batch. Passing
+    The default shuffle strategy is ``"chunk_order"`` (approximate): chunk order is
+    randomized each epoch, but samples within the same chunk always stay together in
+    the same batch and keep their original order. Use ``"chunk_and_samples"`` to also
+    permute samples within each batch. Both require only contiguous reads. Passing
     ``shuffle="full"`` shuffles the whole dataset like ``ArrayDataLoader``. This
     requires the arrays to support fancy indexing and may be slower than reading
     contiguous segments. Indices within each batch are sorted to support HDF5
@@ -314,7 +338,7 @@ class LazyArrayDataLoader(_BaseArrayDataLoader):
     >>> from nemos.batching import LazyArrayDataLoader
     >>> X = np.ones((100, 5))
     >>> y = np.ones((100,))
-    >>> loader = LazyArrayDataLoader(X, y, batch_size=32, shuffle="chunk")
+    >>> loader = LazyArrayDataLoader(X, y, batch_size=32, shuffle="chunk_order")
     >>> for X_batch, y_batch in loader:
     ...     pass  # Train on batch
     """
@@ -323,7 +347,7 @@ class LazyArrayDataLoader(_BaseArrayDataLoader):
         self,
         *arrays: ArrayLike,
         batch_size: int,
-        shuffle: str = "chunk",
+        shuffle: str = "chunk_order",
         seed: int | None = None,
     ):
         """
@@ -338,8 +362,8 @@ class LazyArrayDataLoader(_BaseArrayDataLoader):
         batch_size :
             Number of samples per batch.
         shuffle :
-            Shuffle strategy: one of ``"none"``, ``"chunk"``, or ``"full"``.
-            Default is ``"chunk"``.
+            Shuffle strategy: one of ``"none"``, ``"chunk_order"``,
+            ``"chunk_and_samples"``, or ``"full"``. Default is ``"chunk_order"``.
         seed :
             Random seed for shuffling. Default is None.
         """

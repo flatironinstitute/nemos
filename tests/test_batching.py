@@ -100,7 +100,9 @@ class DataLoaderCommonTests:
         with pytest.raises(ValueError, match="same number of samples"):
             self.loader_cls(X, y, batch_size=32)
 
-    @pytest.mark.parametrize("shuffle", ["none", "chunk", "full"])
+    @pytest.mark.parametrize(
+        "shuffle", ["none", "chunk_order", "chunk_and_samples", "full"]
+    )
     @pytest.mark.parametrize("iterate_between_calls", [True, False])
     def test_sample_batch(self, shuffle, iterate_between_calls):
         """Test sample_batch yields correct type, shapes, and is deterministic."""
@@ -151,7 +153,7 @@ class DataLoaderCommonTests:
         # make the entire first batch invalid, mimicking the NaN warmup of a
         # convolutional basis
         X[:batch_size] = np.nan
-        loader = self.make_loader(X, y, batch_size=batch_size, shuffle="chunk")
+        loader = self.make_loader(X, y, batch_size=batch_size, shuffle="chunk_order")
 
         X_batch, y_batch = loader.sample_batch()
 
@@ -177,7 +179,9 @@ class DataLoaderCommonTests:
         with pytest.raises(ValueError, match="shuffle must be one of"):
             self.loader_cls(*random_data(), batch_size=32, shuffle="bogus")
 
-    @pytest.mark.parametrize("shuffle", ["none", "chunk", "full"])
+    @pytest.mark.parametrize(
+        "shuffle", ["none", "chunk_order", "chunk_and_samples", "full"]
+    )
     def test_one_batch_smaller(self, shuffle):
         """Test that one of the batches can be smaller than batch_size."""
         batch_size = 32
@@ -186,7 +190,9 @@ class DataLoaderCommonTests:
         batch_sizes = set([X_b.shape[0] for X_b, _ in loader])
         assert batch_sizes == {batch_size, N_SAMPLES % batch_size}
 
-    @pytest.mark.parametrize("shuffle", ["none", "chunk", "full"])
+    @pytest.mark.parametrize(
+        "shuffle", ["none", "chunk_order", "chunk_and_samples", "full"]
+    )
     def test_iteration_yields_all_data(self, shuffle):
         """Test that iteration covers all samples."""
         loader = self.make_loader(shuffle=shuffle)
@@ -231,7 +237,7 @@ class DataLoaderCommonTests:
             np.testing.assert_array_equal(X1, X2)
             np.testing.assert_array_equal(y1, y2)
 
-    @pytest.mark.parametrize("shuffle", ["chunk", "full"])
+    @pytest.mark.parametrize("shuffle", ["chunk_order", "chunk_and_samples", "full"])
     def test_shuffle_different_epochs(self, shuffle):
         """Test shuffling produces different order (statistically) across epochs."""
         loader = self.make_loader(batch_size=32, shuffle=shuffle)
@@ -251,7 +257,7 @@ class DataLoaderCommonTests:
         assert np.array_equal(jnp.sort(y_concat1), self.y)
         assert np.array_equal(jnp.sort(y_concat2), self.y)
 
-    @pytest.mark.parametrize("shuffle", ["chunk", "full"])
+    @pytest.mark.parametrize("shuffle", ["chunk_order", "chunk_and_samples", "full"])
     @pytest.mark.parametrize("seed", [0, 123])
     def test_same_seed(self, seed, shuffle):
         """Test that two shuffling data loaders with the same seed produce the same order."""
@@ -262,7 +268,7 @@ class DataLoaderCommonTests:
             np.testing.assert_array_equal(b1[0], b2[0])
             np.testing.assert_array_equal(b1[1], b2[1])
 
-    @pytest.mark.parametrize("shuffle", ["chunk", "full"])
+    @pytest.mark.parametrize("shuffle", ["chunk_order", "chunk_and_samples", "full"])
     def test_different_seeds(self, shuffle):
         """Test shuffling produces different ordering for different seeds."""
         loader1 = self.make_loader(batch_size=32, shuffle=shuffle, seed=0)
@@ -280,6 +286,49 @@ class DataLoaderCommonTests:
         assert not np.array_equal(y_concat1, y_concat2)
         assert np.array_equal(jnp.sort(y_concat1), self.y)
         assert np.array_equal(jnp.sort(y_concat2), self.y)
+
+    @pytest.mark.parametrize("shuffle", ["chunk_order", "chunk_and_samples"])
+    def test_chunk_keeps_chunk_membership(self, shuffle):
+        """Test that both chunk strategies keep each batch a whole contiguous chunk."""
+        loader = self.make_loader(batch_size=100, shuffle=shuffle, seed=0)
+
+        for _, y_batch in loader:
+            # y is np.arange, so a whole chunk sorts to a run of consecutive integers
+            ys = np.sort(np.asarray(y_batch))
+            assert np.array_equal(ys, np.arange(ys[0], ys[0] + ys.shape[0]))
+
+    def test_chunk_order_preserves_within_batch_order(self):
+        """Test that shuffle='chunk_order' keeps samples ordered within each batch."""
+        loader = self.make_loader(batch_size=100, shuffle="chunk_order", seed=0)
+
+        for _, y_batch in loader:
+            ys = np.asarray(y_batch)
+            # y is np.arange, so preserved order means each batch is ascending
+            assert np.array_equal(ys, np.sort(ys))
+
+    def test_chunk_and_samples_permutes_within_batch(self):
+        """Test that shuffle='chunk_and_samples' permutes samples within each batch."""
+        # batch_size divides N_SAMPLES evenly, so there is no singleton batch (which
+        # would be trivially in order); the fixed seed makes the result deterministic.
+        loader = self.make_loader(batch_size=100, shuffle="chunk_and_samples", seed=0)
+
+        for _, y_batch in loader:
+            ys = np.asarray(y_batch)
+            assert not np.array_equal(ys, np.sort(ys))
+
+    @pytest.mark.parametrize("shuffle", ["chunk_order", "chunk_and_samples"])
+    def test_chunk_order_differs_across_epochs(self, shuffle):
+        """Test that chunk order is reshuffled each epoch, covering the same chunks."""
+        loader = self.make_loader(batch_size=100, shuffle=shuffle, seed=0)
+
+        # the min of a batch is its chunk's start value, which is invariant to any
+        # within-batch shuffling, so this identifies the chunk for both strategies
+        epoch1 = [int(np.asarray(y_b).min()) for _, y_b in loader]
+        epoch2 = [int(np.asarray(y_b).min()) for _, y_b in loader]
+
+        # same set of chunks, but in a different order
+        assert set(epoch1) == set(epoch2)
+        assert epoch1 != epoch2
 
 
 class TestArrayDataLoader(DataLoaderCommonTests):
@@ -309,24 +358,6 @@ class TestArrayDataLoader(DataLoaderCommonTests):
         loader = self.make_loader()
         for arr in loader.arrays:
             assert isinstance(arr, jnp.ndarray)
-
-    def test_chunk_shuffle_keeps_contiguous_batches(self):
-        """Test that shuffle='chunk' keeps each batch a contiguous block, reordered."""
-        batch_size = 100
-        loader = ArrayDataLoader(
-            *ordered_data(), batch_size=batch_size, shuffle="chunk", seed=0
-        )
-
-        for _, y_batch in loader:
-            # y is np.arange, so a contiguous block is a run of consecutive integers
-            ys = np.sort(np.asarray(y_batch))
-            assert np.array_equal(ys, np.arange(ys[0], ys[0] + ys.shape[0]))
-
-        # chunk order differs across epochs but covers the same chunks
-        epoch1 = [int(np.asarray(y_b).min()) for _, y_b in loader]
-        epoch2 = [int(np.asarray(y_b).min()) for _, y_b in loader]
-        assert set(epoch1) == set(epoch2)
-        assert epoch1 != epoch2
 
 
 class TestLazyArrayDataLoader(DataLoaderCommonTests):
@@ -417,43 +448,14 @@ class TestLazyArrayDataLoader(DataLoaderCommonTests):
         assert isinstance(X_batch, jnp.ndarray)
         assert isinstance(y_batch, jnp.ndarray)
 
-    def test_shuffle_changes_chunk_order(self, lazy_arrays):
-        """Test that chunk order changes between epochs."""
-        loader = LazyArrayDataLoader(*lazy_arrays, batch_size=32, shuffle="chunk")
-
-        epoch1 = list(iter(loader))
-        epoch2 = list(iter(loader))
-
-        def chunk_id(batch):
-            """First element of y_batch."""
-            return int(batch[1].min())
-
-        epoch1_order = [chunk_id(b) for b in epoch1]
-        epoch2_order = [chunk_id(b) for b in epoch2]
-
-        # same chunks, but in different order
-        assert set(epoch1_order) == set(epoch2_order)
-        assert epoch1_order != epoch2_order
-
-    def test_shuffle_within_batch(self, lazy_arrays):
-        """Test that samples within a batch are shuffled."""
-        loader = LazyArrayDataLoader(
-            *lazy_arrays, batch_size=self.X.shape[0], shuffle="chunk"
-        )
-
-        # With batch_size == n_samples, there's one chunk so chunk shuffle
-        # is a no-op, but within-batch shuffle should still permute.
-        X_batch, y_batch = next(iter(loader))
-        assert not np.array_equal(X_batch, self.X)
-        assert not np.array_equal(y_batch, self.y)
-
-    def test_slice_only_array(self):
-        """Test that with chunk shuffling, source arrays are only sliced, never fancy-indexed."""
+    @pytest.mark.parametrize("shuffle", ["chunk_order", "chunk_and_samples"])
+    def test_slice_only_array(self, shuffle):
+        """Test that chunk strategies only slice the source arrays, never fancy-index."""
         X = SliceOnlyArray(np.random.randn(100, 5))
         y = SliceOnlyArray(np.random.randn(100))
-        loader = LazyArrayDataLoader(X, y, batch_size=32, shuffle="chunk")
+        loader = LazyArrayDataLoader(X, y, batch_size=32, shuffle=shuffle)
 
-        # Should not raise — shuffle happens after jnp.asarray conversion
+        # Should not raise — any within-batch shuffle happens after jnp.asarray
         batches = list(loader)
         assert len(batches) == 4
 
