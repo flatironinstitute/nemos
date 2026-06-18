@@ -65,6 +65,10 @@ np.random.seed(123)
 ## Simulate data
 
 ```{code-cell} ipython3
+# TODO: Move generation and saving to disk into a helper used by all notebooks
+# TODO: Save the generated features too. Then explain how they were generated.
+# TODO: Hide this cell
+
 n_neurons = 10
 T = 50  # seconds
 bin_size = 0.005  # seconds
@@ -105,6 +109,7 @@ NeMoS ships two built-in loaders that cover most cases:
 - [`ArrayDataLoader`](nemos.batching.ArrayDataLoader): use with in-memory arrays. Input and output are converted to jax arrays before use. Useful if data fits into memory, but calculations run out of memory, as well as for quick prototyping.
 - [`LazyArrayDataLoader`](nemos.batching.LazyArrayDataLoader): use with lazy/out-of-memory arrays, such as dask, zarr, HDF5.
 
+# TODO: Move this part into custom_dataloader.md
 Here, for illustration, we show how to create a custom data loader.
 We will use `pynapple` to create batches of data: it samples a random 1 s interval, bins spikes into counts, and passes the counts through the basis to build a design matrix.
 
@@ -181,10 +186,11 @@ For convenience, the model being fit is also added to the context.
 
 Custom callbacks should inherit from [`nmo.callbacks.Callback`](nemos.callbacks.Callback) and overwrite the required methods. In the current example we will implement `on_train_begin` and `on_batch_end` to log the test score after parameters were updated on each batch of data.
 
+# TODO: Move this part into custom_callbacks_and_termination.md
 Since the dataset is small, we will use all of it for loss logging and evaluate at every batch. In practice this would be expensive, and you would evaluate on a held-out test set every N-th batch or at the end of each epoch.
 
 ```{code-cell} ipython3
-class TestScoreLoggingCallback(nmo.callbacks.Callback):
+class TestLossLogger(nmo.callbacks.Callback):
     """
     Log the loss evaluated on a fixed test set at every batch.
 
@@ -267,7 +273,7 @@ Since the dataset fits in memory, we reuse the full dataset as the "test set" fo
 full_counts = units.count(bin_size)
 X = basis.compute_features(full_counts)
 
-batch_logger = TestScoreLoggingCallback(X, full_counts)
+batch_logger = TestLossLogger(X, full_counts)
 ```
 
 ## Model configuration
@@ -331,7 +337,9 @@ We're getting closer, but still need some training.
 
 +++
 
+# TODO: Move this to custom_callbacks_and_termination.md and reference it in the basic tutorial
 ## Stopping the optimization
+
 
 Instead of guessing how many epochs we need, undershooting and restarting, or overshooting and waiting too long, we can use callbacks to stop optimization on convergence.
 
@@ -430,6 +438,8 @@ ax.legend()
 ```{code-cell} ipython3
 :tags: [hide-input]
 
+# TODO: Decide where to put this
+
 # save image for thumbnail
 import os
 from pathlib import Path
@@ -482,7 +492,7 @@ Support for models that require post-hoc estimation of residual degrees of freed
 :::
 
 ```{code-cell} ipython3
-full_model = nmo.glm.PopulationGLM(solver_kwargs={"tol" : 1e-3}).fit(X, full_counts)
+full_model = nmo.glm.PopulationGLM(solver_kwargs={"tol": 1e-3}).fit(X, full_counts)
 ```
 
 Now that the full model is fitted, we score the full model and the batch model against the full dataset using pseudo-R2:
