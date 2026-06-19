@@ -8,14 +8,7 @@ from abc import abstractmethod
 from copy import deepcopy
 from functools import wraps
 from pathlib import Path
-from typing import (
-    Any,
-    Generic,
-    Optional,
-    Tuple,
-    Type,
-    Union,
-)
+from typing import Any, Callable, Generic, Optional, Tuple, Type, Union
 
 import jax
 import jax.numpy as jnp
@@ -25,11 +18,12 @@ from numpy.typing import NDArray
 from . import solvers, tree_utils, utils
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
-from .base_validator import RegressorValidator
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
-from .type_casting import cast_to_jax
+from .solvers._hess import HessianTag
+from .solvers._newton import Newton
+from .type_casting import cast_to_jax, is_numpy_array_like
 from .typing import (
     DESIGN_INPUT_TYPE,
     ModelParamsT,
@@ -39,6 +33,7 @@ from .typing import (
     SolverUpdate,
     StepResult,
     UserProvidedParamsT,
+    ValidatorT,
 )
 from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
 
@@ -70,7 +65,9 @@ def strip_metadata(arg_num: Optional[int] = None, arg_name: Optional[str] = None
     return decorator
 
 
-class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
+class BaseRegressor(
+    abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT, ValidatorT]
+):
     """Abstract base class for GLM regression models.
 
     This class encapsulates the common functionality for Generalized Linear Models (GLM)
@@ -113,7 +110,8 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     - [`PopulationGLM`](../glm/#nemos.glm.PopulationGLM): A population GLM implementation.
     """
 
-    _validator: RegressorValidator = None
+    _validator: ValidatorT
+    _hess_tag: HessianTag | None = None
 
     # overwrite this in subclasses if their objective functions return aux
     _has_aux: bool = False
@@ -257,6 +255,8 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
                 stacklevel=2,
             )
             self.solver_name = None
+        else:
+            self._invalidate_solver()
 
     @property
     def regularizer_strength(self) -> Any:
@@ -266,6 +266,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
     @regularizer_strength.setter
     def regularizer_strength(self, strength: Any):
         self._regularizer_strength = self.regularizer._validate_strength(strength)
+        self._invalidate_solver()
 
     @property
     def solver_name(self) -> str:
@@ -284,13 +285,32 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             spec = solvers.get_solver(solver_name)
             self._regularizer.check_solver(spec.algo_name)
             self._solver_spec = spec
+        self._invalidate_solver()
+
+    def _hess_property_override(self) -> type | None:
+        """Definiteness the model can certify beyond what coverage inference sees.
+
+        Defaults to None (use the combined loss+regularizer tag). A subclass returns a
+        matrix-property type when its loss supplies definiteness on the subtrees the
+        regularizer leaves unpenalized (e.g. a GLM whose loss is positive definite on
+        the unregularized intercept, making a Ridge-penalized Hessian positive definite).
+        """
+        return None
+
+    def _resolve_default_solver(self) -> str:
+        """Name of the default solver when the user has not set one.
+
+        Defaults to the regularizer's own default solver. Subclasses may override to
+        express a model- and regularizer-specific preference (e.g. GLMs default to
+        Newton when the regularizer makes the Hessian positive definite).
+        """
+        return self.regularizer.default_solver
 
     @property
     def solver_spec(self) -> SolverSpec:
         """Getter for the solver specification."""
         if self._solver_spec is None:
-            spec = solvers.get_solver(self.regularizer.default_solver)
-            return spec
+            return solvers.get_solver(self._resolve_default_solver())
         return self._solver_spec
 
     @property
@@ -305,6 +325,7 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             solver_cls = self.solver_spec.implementation
             self._check_solver_kwargs(solver_cls, solver_kwargs)
         self._solver_kwargs = solver_kwargs
+        self._invalidate_solver()
 
     @staticmethod
     def _check_solver_kwargs(solver_class: Type, solver_kwargs: dict[str, Any]) -> None:
@@ -331,6 +352,16 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             raise NameError(
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
             )
+
+    def _get_hess_fn(self, params, autodiff: bool) -> Callable | None:
+        return None
+
+    def _invalidate_solver(self):
+        self._solver = None
+        self._solver_loss_fun = None
+        self._optimizer_init_state = None
+        self._optimizer_update = None
+        self._optimizer_run = None
 
     def _instantiate_solver(
         self,
@@ -404,6 +435,14 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
             **solver_kwargs,
         )
 
+        if isinstance(solver, Newton):
+            solver.setup_hessian(
+                self._get_hess_fn(init_params, autodiff=solver.autodiff),
+                self._hess_tag,
+                self.regularizer.resolve_hess_tag(init_params),
+                self._hess_property_override(),
+            )
+
         # nemos's solvers store a .fun attribute, but it's not necessary for a solver to work.
         # A test relies on having _solver_loss_fun saved, so still check and save it if possible.
         # But it's not a problem if .fun doesn't exist in user-defined solvers.
@@ -422,11 +461,6 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         init_params: Optional[UserProvidedParamsT] = None,
     ) -> BaseRegressor[UserProvidedParamsT, ModelParamsT]:
         """Fit the model to neural activity."""
-        pass
-
-    @abc.abstractmethod
-    def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:
-        """Predict rates based on fit parameters."""
         pass
 
     @abc.abstractmethod
@@ -488,15 +522,13 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         *args,
         **kwargs,
     ):
-        """Unpenalized loss function for optimization.
+        """Unpenalized scalar loss given parameters and data.
 
-        This method computes the unpenalized loss (e.g., negative log-likelihood)
-        that is passed to the solver during optimization. The solver adds
-        regularization penalties internally.
-
-        Subclasses that use gradient-based optimization (e.g., GLM) should
-        override this method. Models using other optimization approaches
-        (e.g., EM algorithm) may not need to implement this.
+        For GLM-family models this is the negative log-likelihood passed to
+        gradient-based solvers (the solver adds the regularization penalty on
+        top). For HMM-family models the EM solver does not consume this method,
+        but it is still implemented as the negative marginal log-likelihood so
+        that ``score`` and ``compute_loss`` work uniformly across the hierarchy.
 
         Parameters
         ----------
@@ -514,16 +546,10 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         Returns
         -------
         :
-            The unpenalized loss value.
-
-        Raises
-        ------
-        NotImplementedError
-            If the subclass does not override this method.
+            The unpenalized loss value (a scalar).
         """
         raise NotImplementedError(
-            f"{self.__class__.__name__} does not implement `_compute_loss`. "
-            "This method is only required for models using gradient-based optimization."
+            f"{self.__class__.__name__} does not implement `_compute_loss`."
         )
 
     @cast_to_jax
@@ -569,21 +595,6 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         self._validator.validate_consistency(params, X, y)
         X, y = self._preprocess_inputs(X, y)
         return self._compute_loss(params, X, y, *args, **kwargs)
-
-    def _validate(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, jnp.ndarray],
-        y: Union[NDArray, jnp.ndarray],
-        init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
-    ):
-        # check input dimensionality
-        self._validator.validate_inputs(X, y)
-
-        # validate input and params consistency
-        init_params = self._validator.validate_and_cast_params(init_params)
-
-        # validate input and params consistency
-        self._validator.validate_consistency(init_params, X=X, y=y)
 
     @abc.abstractmethod
     def update(
@@ -651,45 +662,73 @@ class BaseRegressor(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
         data = X.data if isinstance(X, FeaturePytree) else X
 
         if isinstance(self.regularizer, GroupLasso):
-            if self.regularizer.mask is None and not isinstance(data, dict):
-                # User is calling GroupLasso but not using the FeaturePytree to
-                # group variables nor providing mask.
+            if self.regularizer.mask is None and is_numpy_array_like(data)[1]:
                 warnings.warn(
                     "Mask has not been set. Defaulting to a single group for all parameters. "
                     "Please see the documentation on GroupLasso regularization for defining a mask."
                 )
             elif self.regularizer.mask is not None:
-                import equinox as eqx
-
-                model_pars = self._validator.get_empty_params(data, y)
-                # Skip if mask is already in the internal structured format.
-                if not isinstance(self.regularizer.mask, type(model_pars)):
-                    select_subtrees = (
-                        model_pars.regularizable_subtrees()
-                        if hasattr(model_pars, "regularizable_subtrees")
-                        else [lambda p: p]
-                    )
-                    if len(select_subtrees) == 1:
-                        # Single regularizable param: mask matches its pytree structure (e.g. coef_).
-                        mask_list = [self.regularizer.mask]
-                    else:
-                        mask_list = list(self.regularizer.mask)
-                        if len(mask_list) != len(select_subtrees):
-                            raise ValueError(
-                                f"{type(self).__name__} has {len(select_subtrees)} regularizable "
-                                f"parameters but {len(mask_list)} masks were provided."
-                            )
-                    struct = jax.tree_util.tree_structure(model_pars)
-                    mask_tree = jax.tree_util.tree_unflatten(
-                        struct, [None] * struct.num_leaves
-                    )
-                    for where, m in zip(select_subtrees, mask_list):
-                        mask_tree = eqx.tree_at(
-                            where, mask_tree, m, is_leaf=lambda x: x is None
-                        )
-                    self.regularizer.mask = mask_tree
+                self._wrap_grouplasso_mask(data, y)
 
         return data, y, *args
+
+    def _wrap_grouplasso_mask(
+        self,
+        data: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+    ) -> None:
+        """Convert a user-provided GroupLasso mask into the internal structured format.
+
+        Mutates ``self.regularizer.mask`` in place. No-op if the mask is already
+        in the structured format (i.e. already an instance of the solved params
+        type). For composite models (e.g. GLM-HMM) the numerical solver optimizes
+        only a sub-pytree of the full parameters; the mask is interpreted at that
+        level.
+        """
+        import equinox as eqx
+
+        model_pars = self._validator.get_empty_params(data, y)
+        # composite models solve only a sub-pytree; flat models solve the full
+        # params. The regularizer and its mask act at the solved level.
+        solver_subtree = getattr(
+            model_pars, "solver_param_subtree", lambda: lambda p: p
+        )()
+        solver_pars = solver_subtree(model_pars)
+        if isinstance(self.regularizer.mask, type(solver_pars)):
+            return
+
+        select_subtrees = (
+            solver_pars.regularizable_subtrees()
+            if hasattr(solver_pars, "regularizable_subtrees")
+            else [lambda p: p]
+        )
+        if len(select_subtrees) == 1:
+            mask_list = [self.regularizer.mask]
+        else:
+            mask_list = jax.tree_util.tree_leaves(self.regularizer.mask)
+            if len(mask_list) != len(select_subtrees):
+                raise ValueError(
+                    f"{type(self).__name__} has {len(select_subtrees)} regularizable "
+                    f"parameters but the mask pytree has {len(mask_list)} leaves; "
+                    f"provide a pytree with one leaf per regularizable parameter."
+                )
+
+        for where, m in zip(select_subtrees, mask_list):
+            expected = jax.tree_util.tree_structure(where(solver_pars))
+            actual = jax.tree_util.tree_structure(m)
+            if expected != actual:
+                raise ValueError(
+                    f"Mask pytree structure {actual} does not match the expected "
+                    f"parameter structure {expected}. The mask must mirror the "
+                    f"structure of the corresponding parameter (e.g. if X is a "
+                    f"list, the mask must also be a list)."
+                )
+
+        struct = jax.tree_util.tree_structure(solver_pars)
+        mask_tree = jax.tree_util.tree_unflatten(struct, [None] * struct.num_leaves)
+        for where, m in zip(select_subtrees, mask_list):
+            mask_tree = eqx.tree_at(where, mask_tree, m, is_leaf=lambda x: x is None)
+        self.regularizer.mask = mask_tree
 
     @abc.abstractmethod
     def _initialize_optimizer_and_state(

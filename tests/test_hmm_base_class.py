@@ -1,18 +1,19 @@
 from contextlib import nullcontext as does_not_raise
-from dataclasses import dataclass
-from typing import Any, Callable, Optional, Tuple, Union
+from unittest.mock import patch
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pynapple as nap
 import pytest
+import sklearn.cluster
 
-from nemos.base_validator import RegressorValidator
+from conftest import MockHMM
+from nemos._inspect_utils import extract_literal_options
 from nemos.hmm.hmm import BaseHMM
 from nemos.hmm.initialize_parameters import (
+    AVAILABLE_INIT_FUNCTIONS,
     DEFAULT_INIT_FUNCTIONS,
-    INITIALIZATION_FN_DICT,
     kmeans_initial_proba_init,
     kmeans_transition_proba_init,
     random_initial_proba_init,
@@ -21,163 +22,6 @@ from nemos.hmm.initialize_parameters import (
     uniform_initial_proba_init,
     uniform_transition_proba_init,
 )
-from nemos.hmm.params import HMMParams
-from nemos.hmm.utils import initialize_is_new_session
-from nemos.hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
-from nemos.params import ModelParams
-
-
-class MockHMMModelParams(ModelParams):
-    param: jnp.ndarray
-
-
-class MockHMMParams(ModelParams):
-    model_params: MockHMMModelParams
-    hmm_params: HMMParams
-
-
-MockHMMUserParams = Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
-
-
-def to_mock_params(user_params: MockHMMUserParams) -> MockHMMParams:
-    return MockHMMParams(
-        model_params=MockHMMModelParams(user_params[0]),
-        hmm_params=to_hmm_params(user_params[1:]),
-    )
-
-
-def from_mock_params(params: MockHMMParams) -> MockHMMUserParams:
-    initial_prob, transition_prob = from_hmm_params(params.hmm_params)
-    return (
-        params.model_params.param,
-        initial_prob,
-        transition_prob,
-    )
-
-
-@dataclass(frozen=True, repr=False)
-class MockHMMValidator(HMMValidator[MockHMMUserParams, MockHMMParams]):
-    model_param_names: Tuple[str] = (
-        "param",
-        *HMMValidator.model_param_names,
-    )
-    to_model_params: Callable[[MockHMMUserParams], MockHMMParams] = to_mock_params
-    from_model_params: Callable[[MockHMMParams], MockHMMUserParams] = from_mock_params
-    model_class: str = "MockHMM"
-    X_dimensionality: int = 2
-    y_dimensionality: int = 1
-    params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
-        *RegressorValidator.params_validation_sequence[:2],
-        *HMMValidator.params_validation_sequence,
-        *RegressorValidator.params_validation_sequence[3:],
-    )
-
-    def validate_consistency(self, *args, **kwargs) -> None:
-        return True
-
-
-class MockHMM(BaseHMM[MockHMMParams, MockHMMUserParams, INITIALIZATION_FN_DICT]):
-    _validator_class = MockHMMValidator
-
-    def __init__(
-        self,
-        n_states: int,
-        dirichlet_initial_proba: Union[jnp.ndarray, None] = None,  # (n_state, )
-        dirichlet_transition_proba: Union[
-            jnp.ndarray | None
-        ] = None,  # (n_state, n_state):
-        maxiter: int = 1000,
-        tol: float = 1e-8,
-        seed=jax.random.PRNGKey(123),
-        initialization_funcs: INITIALIZATION_FN_DICT = None,
-        model_initialization_funcs: INITIALIZATION_FN_DICT = None,
-    ):
-        BaseHMM.__init__(
-            self,
-            n_states=n_states,
-            dirichlet_initial_proba=dirichlet_initial_proba,
-            dirichlet_transition_proba=dirichlet_transition_proba,
-            maxiter=maxiter,
-            tol=tol,
-            seed=seed,
-            initialization_funcs=initialization_funcs,
-        )
-        self.param_: jnp.ndarray | None = None
-        self.model_initialization_funcs = {}
-
-    def setup(
-        self,
-        initial_proba_init: Optional[str | Callable] = None,
-        initial_proba_init_kwargs: Optional[dict] = None,
-        transition_proba_init: Optional[str | Callable] = None,
-        transition_proba_init_kwargs: Optional[dict] = None,
-        param_init: Optional[str | Callable] = None,
-        param_init_kwargs: Optional[dict] = None,
-    ):
-        BaseHMM.setup(
-            self,
-            initial_proba_init=initial_proba_init,
-            initial_proba_init_kwargs=initial_proba_init_kwargs,
-            transition_proba_init=transition_proba_init,
-            transition_proba_init_kwargs=transition_proba_init_kwargs,
-        )
-
-    def _check_model_is_fit(self):
-        if self.param_ is None:
-            raise ValueError("Model is not fitted yet.")
-
-    def _get_model_params(self) -> MockHMMParams:
-        return self._validator.to_model_params(
-            (
-                self.param_,
-                self.initial_prob_,
-                self.transition_prob_,
-            )
-        )
-
-    def _set_model_params(self, params):
-        param, initial_prob, transition_prob = self._validator.from_model_params(params)
-        self.param_ = param
-        self.initial_prob_ = initial_prob
-        self.transition_prob_ = transition_prob
-
-    def _log_likelihood(self, params, X, y):
-        return jnp.zeros((y.shape[0], self.n_states))
-
-    def _model_params_initialization(self, X, y, is_new_session, random_key=None):
-        return (
-            jnp.arange(self._n_states),
-            False,
-        )
-
-    def fit(self, X, y, is_new_session=None, init_params=None):
-        is_new_session = initialize_is_new_session(X, y, is_new_session)
-        fit_params = self._model_specific_initialization(X, y, is_new_session)
-        self._set_model_params(fit_params)
-
-    def _initialize_optimizer_and_state(self, *args, **kwargs):
-        pass
-
-    def _compute_loss(self, *args, **kwargs):
-        pass
-
-    def _get_optimal_solver_params_config(self, *args, **kwargs):
-        pass
-
-    def predict(self, *args, **kwargs):
-        pass
-
-    def simulate(self, *args, **kwargs):
-        pass
-
-    def save_params(self, *args, **kwargs):
-        pass
-
-    def update(self, *args, **kwargs):
-        pass
-
-    def score(self, *args, **kwargs):
-        pass
 
 
 class TestHMMInit:
@@ -362,7 +206,7 @@ class TestHMMInit:
     def test_initialization_funcs_none_uses_defaults(self):
         """Test that no setting uses default initialization functions."""
         model = MockHMM(n_states=2)
-        assert model.initialization_funcs == DEFAULT_INIT_FUNCTIONS
+        assert model.hmm_initialization_funcs == DEFAULT_INIT_FUNCTIONS
 
     def test_initialization_funcs_modified(self):
         """Test that modified initialization funcs are preserved."""
@@ -374,8 +218,8 @@ class TestHMMInit:
             "initial_proba_init": custom_func,
             "initial_proba_init_kwargs": {"extra_arg": "value"},
         }
-        model = MockHMM(n_states=2, initialization_funcs=init_funcs)
-        assert model.initialization_funcs == DEFAULT_INIT_FUNCTIONS | init_funcs
+        model = MockHMM(n_states=2, hmm_initialization_funcs=init_funcs)
+        assert model.hmm_initialization_funcs == DEFAULT_INIT_FUNCTIONS | init_funcs
 
     @pytest.mark.parametrize(
         "init_funcs, expectation",
@@ -393,7 +237,7 @@ class TestHMMInit:
     def test_initialization_funcs_invalid_key_via_init(self, init_funcs, expectation):
         """Test that invalid/misspelled keys raise KeyError when passed via constructor."""
         with expectation:
-            MockHMM(n_states=2, initialization_funcs=init_funcs)
+            MockHMM(n_states=2, hmm_initialization_funcs=init_funcs)
 
     @pytest.mark.parametrize(
         "init_funcs, expectation",
@@ -412,7 +256,7 @@ class TestHMMInit:
         """Test that invalid/misspelled keys raise KeyError when assigned via setter."""
         model = MockHMM(n_states=2)
         with expectation:
-            model.initialization_funcs = init_funcs
+            model.hmm_initialization_funcs = init_funcs
 
     # -------------------------------------------------------------------------
     # Default values tests
@@ -440,9 +284,9 @@ class TestHMMSetup:
     def test_setup_with_no_input(self):
         """Test that setup leaves everything as default."""
         model = MockHMM(n_states=3)
-        assert model.initialization_funcs == DEFAULT_INIT_FUNCTIONS
+        assert model.hmm_initialization_funcs == DEFAULT_INIT_FUNCTIONS
         model.setup()
-        assert model.initialization_funcs == DEFAULT_INIT_FUNCTIONS
+        assert model.hmm_initialization_funcs == DEFAULT_INIT_FUNCTIONS
 
     @pytest.mark.parametrize(
         "func_name, func, kwargs, expectation",
@@ -469,7 +313,7 @@ class TestHMMSetup:
             ),
             (
                 "custom",
-                lambda n_states, X, y, is_new_session, random_key, extra_arg: jnp.full(
+                lambda n_states, X, y, session_starts, random_key, extra_arg: jnp.full(
                     (n_states,), 1.0
                 )
                 / n_states,
@@ -478,7 +322,7 @@ class TestHMMSetup:
             ),
             (
                 "custom",
-                lambda n_states, X, y, is_new_session, random_key: jnp.full(
+                lambda n_states, X, y, session_starts, random_key: jnp.full(
                     (n_states,), 1.0
                 )
                 / n_states,
@@ -493,19 +337,26 @@ class TestHMMSetup:
         with expectation:
             if func_name == "custom":
                 model.setup(initial_proba_init=func, initial_proba_init_kwargs=kwargs)
-                assert model.initialization_funcs["initial_proba_init_custom"] is True
+                assert (
+                    model.hmm_initialization_funcs["initial_proba_init_custom"] is True
+                )
             else:
                 model.setup(
                     initial_proba_init=func_name, initial_proba_init_kwargs=kwargs
                 )
-                assert model.initialization_funcs["initial_proba_init_custom"] is False
+                assert (
+                    model.hmm_initialization_funcs["initial_proba_init_custom"] is False
+                )
 
-            assert model.initialization_funcs["initial_proba_init"] == func
+            assert model.hmm_initialization_funcs["initial_proba_init"] == func
 
             if kwargs is None:
-                assert model.initialization_funcs["initial_proba_init_kwargs"] == {}
+                assert model.hmm_initialization_funcs["initial_proba_init_kwargs"] == {}
             else:
-                assert model.initialization_funcs["initial_proba_init_kwargs"] == kwargs
+                assert (
+                    model.hmm_initialization_funcs["initial_proba_init_kwargs"]
+                    == kwargs
+                )
 
     @pytest.mark.parametrize(
         "func_name, func, kwargs, expectation",
@@ -533,7 +384,7 @@ class TestHMMSetup:
             ),
             (
                 "custom",
-                lambda n_states, X, y, is_new_session, random_key, extra_arg: jnp.full(
+                lambda n_states, X, y, session_starts, random_key, extra_arg: jnp.full(
                     (n_states, n_states), 1.0
                 )
                 / n_states,
@@ -542,7 +393,7 @@ class TestHMMSetup:
             ),
             (
                 "custom",
-                lambda n_states, X, y, is_new_session, random_key: jnp.full(
+                lambda n_states, X, y, session_starts, random_key: jnp.full(
                     (n_states, n_states), 1.0
                 )
                 / n_states,
@@ -560,23 +411,28 @@ class TestHMMSetup:
                     transition_proba_init=func, transition_proba_init_kwargs=kwargs
                 )
                 assert (
-                    model.initialization_funcs["transition_proba_init_custom"] is True
+                    model.hmm_initialization_funcs["transition_proba_init_custom"]
+                    is True
                 )
             else:
                 model.setup(
                     transition_proba_init=func_name, transition_proba_init_kwargs=kwargs
                 )
                 assert (
-                    model.initialization_funcs["transition_proba_init_custom"] is False
+                    model.hmm_initialization_funcs["transition_proba_init_custom"]
+                    is False
                 )
 
-            assert model.initialization_funcs["transition_proba_init"] == func
+            assert model.hmm_initialization_funcs["transition_proba_init"] == func
 
             if kwargs is None:
-                assert model.initialization_funcs["transition_proba_init_kwargs"] == {}
+                assert (
+                    model.hmm_initialization_funcs["transition_proba_init_kwargs"] == {}
+                )
             else:
                 assert (
-                    model.initialization_funcs["transition_proba_init_kwargs"] == kwargs
+                    model.hmm_initialization_funcs["transition_proba_init_kwargs"]
+                    == kwargs
                 )
 
     def test_setup_set_all(self):
@@ -596,7 +452,7 @@ class TestHMMSetup:
         )
         expected_funcs = DEFAULT_INIT_FUNCTIONS | init_funcs
         assert all(
-            model.initialization_funcs[key] == expected_funcs[key]
+            model.hmm_initialization_funcs[key] == expected_funcs[key]
             for key in expected_funcs
         )
 
@@ -612,12 +468,12 @@ class TestHMMSetup:
         model.setup(initial_proba_init="kmeans")
         # updated
         assert (
-            model.initialization_funcs["initial_proba_init"]
+            model.hmm_initialization_funcs["initial_proba_init"]
             == init_funcs["initial_proba_init"]
         )
         # default
         assert all(
-            model.initialization_funcs[key] == DEFAULT_INIT_FUNCTIONS[key]
+            model.hmm_initialization_funcs[key] == DEFAULT_INIT_FUNCTIONS[key]
             for key in [
                 "initial_proba_init_kwargs",
                 "transition_proba_init",
@@ -628,7 +484,7 @@ class TestHMMSetup:
         model.setup(initial_proba_init_kwargs={"minimum_prob": 0.01})
         # updated
         assert all(
-            model.initialization_funcs[key] == init_funcs[key]
+            model.hmm_initialization_funcs[key] == init_funcs[key]
             for key in [
                 "initial_proba_init",
                 "initial_proba_init_kwargs",
@@ -636,7 +492,7 @@ class TestHMMSetup:
         )
         # default
         assert all(
-            model.initialization_funcs[key] == DEFAULT_INIT_FUNCTIONS[key]
+            model.hmm_initialization_funcs[key] == DEFAULT_INIT_FUNCTIONS[key]
             for key in [
                 "transition_proba_init",
                 "transition_proba_init_kwargs",
@@ -646,7 +502,7 @@ class TestHMMSetup:
         model.setup(transition_proba_init="kmeans")
         # updated
         assert all(
-            model.initialization_funcs[key] == init_funcs[key]
+            model.hmm_initialization_funcs[key] == init_funcs[key]
             for key in [
                 "initial_proba_init",
                 "initial_proba_init_kwargs",
@@ -655,14 +511,14 @@ class TestHMMSetup:
         )
         # default
         assert (
-            model.initialization_funcs["transition_proba_init_kwargs"]
+            model.hmm_initialization_funcs["transition_proba_init_kwargs"]
             == DEFAULT_INIT_FUNCTIONS["transition_proba_init_kwargs"]
         )
 
         model.setup(transition_proba_init_kwargs={"minimum_prob": 0.01})
         # updated
         assert all(
-            model.initialization_funcs[key] == init_funcs[key]
+            model.hmm_initialization_funcs[key] == init_funcs[key]
             for key in [
                 "initial_proba_init",
                 "initial_proba_init_kwargs",
@@ -676,9 +532,24 @@ class TestHMMSetup:
         """Test that kwargs are reset if method is set to something else."""
         model = MockHMM(n_states=3)
         model.setup(**{key: "kmeans", key + "_kwargs": {"minimum_prob": 0.01}})
-        assert model.initialization_funcs[key + "_kwargs"] == {"minimum_prob": 0.01}
+        assert model.hmm_initialization_funcs[key + "_kwargs"] == {"minimum_prob": 0.01}
         model.setup(**{key: "random"})
-        assert model.initialization_funcs[key + "_kwargs"] == {}
+        assert model.hmm_initialization_funcs[key + "_kwargs"] == {}
+
+    @pytest.mark.parametrize(
+        "param_name", ["initial_proba_init", "transition_proba_init"]
+    )
+    def test_setup_literal_options_match_registry(self, param_name):
+        """``BaseHMM.setup`` Literal annotations must enumerate exactly the
+        built-in string aliases declared in ``AVAILABLE_INIT_FUNCTIONS``. If a
+        new built-in is added (or one is removed) without updating the
+        signature, this test fails — preventing silent drift."""
+        literals = extract_literal_options(BaseHMM.setup, param_name)
+        registry = AVAILABLE_INIT_FUNCTIONS[param_name]
+        assert literals == set(registry.keys()), (
+            f"Literal options for {param_name!r} in BaseHMM.setup ({literals}) "
+            f"differ from registered keys ({set(registry.keys())})."
+        )
 
 
 class TestHMMInitialParams:
@@ -707,7 +578,7 @@ class TestHMMInitialParams:
     def test__hmm_params_initialization_custom_validation(self):
         model = MockHMM(n_states=3)
         model.setup(
-            initial_proba_init=lambda n_states, X, y, is_new_session, random_key: jnp.full(
+            initial_proba_init=lambda n_states, X, y, session_starts, random_key: jnp.full(
                 (n_states,), 1.0
             )
             / n_states
@@ -720,7 +591,7 @@ class TestHMMInitialParams:
 
         model = MockHMM(n_states=3)
         model.setup(
-            transition_proba_init=lambda n_states, X, y, is_new_session, random_key: jnp.full(
+            transition_proba_init=lambda n_states, X, y, session_starts, random_key: jnp.full(
                 (n_states, n_states), 1.0
             )
             / n_states
@@ -743,18 +614,63 @@ class TestHMMInitialParams:
             jnp.log(DEFAULT_INIT_FUNCTIONS["transition_proba_init"](3)),
         )
 
+    def test__kmeans_setup_initializer(self):
+        """Verify setter is stored and is the same for hmm and model params."""
+        model = MockHMM(n_states=3)
+        model.setup(
+            initial_proba_init="kmeans",
+            transition_proba_init="kmeans",
+            param_init="kmeans",
+        )
+        original_fit = sklearn.cluster.KMeans.fit
+        # use mock fit to assert that kmeans is only called once at initializer construction
+        with patch.object(
+            sklearn.cluster.KMeans, "fit", autospec=True, side_effect=original_fit
+        ) as mock_fit:
+            model._model_specific_initialization(
+                jnp.zeros((10, 10)), jnp.zeros(10), None
+            )
+            assert id(
+                model.hmm_initialization_funcs["initial_proba_init_kwargs"][
+                    "initializer"
+                ]
+            ) == id(
+                model.hmm_initialization_funcs["transition_proba_init_kwargs"][
+                    "initializer"
+                ]
+            )
+            assert id(
+                model.hmm_initialization_funcs["initial_proba_init_kwargs"][
+                    "initializer"
+                ]
+            ) == id(
+                model.model_initialization_funcs["param_init_kwargs"]["initializer"]
+            )
+            assert mock_fit.call_count == 1
+
+    def test_kmeans_inconsistent_kwargs_raises(self):
+        """_kmeans_resolve_model_kwargs raises when the same kwarg has conflicting values."""
+        model = MockHMM(n_states=3)
+        use_kmeans = {"param_a": True, "param_b": True}
+        init_funcs = {
+            "param_a_kwargs": {"minimum_prob": 0.01},
+            "param_b_kwargs": {"minimum_prob": 0.05},
+        }
+        with pytest.raises(ValueError, match="Inconsistent KMeans init arg"):
+            model._kmeans_resolve_model_kwargs(use_kmeans, init_funcs)
+
     @pytest.mark.parametrize(
         "key, value, expectation",
         [
             (
                 "initial_proba_init",
-                lambda n_states, X, y, is_new_session, random_key: jnp.ones((n_states,))
+                lambda n_states, X, y, session_starts, random_key: jnp.ones((n_states,))
                 / n_states,
                 does_not_raise(),
             ),
             (
                 "transition_proba_init",
-                lambda n_states, X, y, is_new_session, random_key: jnp.ones(
+                lambda n_states, X, y, session_starts, random_key: jnp.ones(
                     (n_states, n_states)
                 )
                 / n_states,
@@ -762,28 +678,28 @@ class TestHMMInitialParams:
             ),
             (
                 "initial_proba_init",
-                lambda n_states, X, y, is_new_session, random_key: jnp.ones(
+                lambda n_states, X, y, session_starts, random_key: jnp.ones(
                     (n_states - 1,)
                 ),
                 pytest.raises(ValueError, match="initial_prob must be"),
             ),
             (
                 "transition_proba_init",
-                lambda n_states, X, y, is_new_session, random_key: jnp.ones(
+                lambda n_states, X, y, session_starts, random_key: jnp.ones(
                     (n_states - 1, n_states - 1)
                 ),
                 pytest.raises(ValueError, match="transition_prob must be"),
             ),
             (
                 "initial_proba_init",
-                lambda n_states, X, y, is_new_session, random_key: jnp.ones(
+                lambda n_states, X, y, session_starts, random_key: jnp.ones(
                     (n_states,)
                 ),
                 pytest.raises(ValueError, match="must sum to 1"),
             ),
             (
                 "transition_proba_init",
-                lambda n_states, X, y, is_new_session, random_key: jnp.ones(
+                lambda n_states, X, y, session_starts, random_key: jnp.ones(
                     (n_states, n_states)
                 ),
                 pytest.raises(ValueError, match="rows must sum to 1"),
@@ -802,11 +718,11 @@ class TestHMMInitialParams:
 class TestHMMNewSession:
 
     @pytest.mark.parametrize(
-        "X, y, is_new_session, expected_new_session",
+        "X, y, session_starts, expected_new_session",
         [
-            # No is_new_session provided
+            # No session_starts provided
             (np.ones((3, 1)), np.ones((3,)), None, jnp.array([1, 0, 0])),
-            # Explicit is_new_session provided by user
+            # Explicit session_starts provided by user
             # boolean array or integer array with 1s and 0s
             (
                 np.ones((3, 1)),
@@ -864,16 +780,18 @@ class TestHMMNewSession:
             ),
         ],
     )
-    def test_initialize_new_session(self, X, y, is_new_session, expected_new_session):
+    def test_initialize_new_session(self, X, y, session_starts, expected_new_session):
         """Test that session boundaries are correctly initialized."""
         model = MockHMM(n_states=3)
-        is_new_session = model._validator.validate_and_cast_is_new_session(
-            X, y, is_new_session
+        session_starts = model._validator.validate_and_cast_session_starts(
+            X, y, session_starts
         )
-        assert jnp.all(is_new_session == expected_new_session)
+        assert jnp.all(session_starts == expected_new_session)
+        _, _, session_starts = model._preprocess_inputs(X, y, session_starts)
+        assert session_starts[0] == 1
 
     @pytest.mark.parametrize(
-        "X, y, is_new_session, expected_new_session",
+        "X, y, session_starts, expected_new_session",
         [
             # NaN at start in y
             (np.ones((3, 1)), np.array([np.nan, 0, 0]), None, jnp.array([0, 1, 0])),
@@ -912,7 +830,7 @@ class TestHMMNewSession:
                 None,
                 jnp.array([0, 1, 0, 0, 0]),
             ),
-            # Explicit is_new_session provided by user
+            # Explicit session_starts provided by user
             # beginning session shifted
             (
                 np.ones((3, 1)),
@@ -938,19 +856,21 @@ class TestHMMNewSession:
         ],
     )
     def test_initialize_new_session_with_nan_shift(
-        self, X, y, is_new_session, expected_new_session
+        self, X, y, session_starts, expected_new_session
     ):
         """Test that session boundaries are correctly moved when there are NaN values."""
         model = MockHMM(n_states=3)
-        is_new_session = model._validator.validate_and_cast_is_new_session(
-            X, y, is_new_session
+        session_starts = model._validator.validate_and_cast_session_starts(
+            X, y, session_starts
         )
-        assert jnp.all(is_new_session == expected_new_session)
+        assert jnp.all(session_starts == expected_new_session)
+        _, _, session_starts = model._preprocess_inputs(X, y, session_starts)
+        assert session_starts[0] == 1
 
     @pytest.mark.parametrize(
-        "X, y, is_new_session, expected_new_session",
+        "X, y, session_starts, expected_new_session",
         [
-            # no is_new_session provided
+            # no session_starts provided
             # inferred time support should only find one new session at start
             (
                 nap.TsdFrame(
@@ -1045,7 +965,7 @@ class TestHMMNewSession:
                 None,
                 jnp.array([1, 0, 0, 0, 1, 0]),
             ),
-            # intervalset passed as is_new_session
+            # intervalset passed as session_starts
             (
                 nap.TsdFrame(
                     t=np.arange(3),
@@ -1116,25 +1036,67 @@ class TestHMMNewSession:
             ),
         ],
     )
-    def test_compute_is_new_session_from_pynapple(
-        self, X, y, is_new_session, expected_new_session
+    def test_compute_session_starts_from_pynapple(
+        self, X, y, session_starts, expected_new_session
     ):
-        """Test that is_new_session is correctly computed from pynapple time support and interval sets"""
+        """Test that session_starts is correctly computed from pynapple time support and interval sets"""
         model = MockHMM(n_states=3)
-        is_new_session = model._validator.validate_and_cast_is_new_session(
-            X, y, is_new_session
+        session_starts = model._validator.validate_and_cast_session_starts(
+            X, y, session_starts
         )
-        assert jnp.all(is_new_session == expected_new_session)
+        assert jnp.all(session_starts == expected_new_session)
 
     @pytest.mark.parametrize(
-        "X, y, is_new_session, expectation",
+        "X, y, session_starts, expected",
+        [
+            # Use provided iset
+            (
+                nap.TsdFrame(
+                    t=np.arange(3),
+                    d=np.zeros((3, 3)),
+                    time_support=nap.IntervalSet([0, 1.5], [1.0, 2.0]),
+                ),
+                nap.Tsd(
+                    t=np.arange(3),
+                    d=np.zeros((3,)),
+                    time_support=nap.IntervalSet([0, 1.5], [1.0, 2.0]),
+                ),
+                nap.IntervalSet(1, 10),
+                jnp.array([True, True, False]),
+            ),
+            # Use iset from Tsds
+            (
+                nap.TsdFrame(
+                    t=np.arange(3),
+                    d=np.zeros((3, 3)),
+                    time_support=nap.IntervalSet([0, 1.5], [1.0, 2.0]),
+                ),
+                nap.Tsd(
+                    t=np.arange(3),
+                    d=np.zeros((3,)),
+                    time_support=nap.IntervalSet([0, 1.5], [1.0, 2.0]),
+                ),
+                None,
+                jnp.array([True, False, True]),
+            ),
+        ],
+    )
+    def test_session_starts_resolution_hierarchy(self, X, y, session_starts, expected):
+        model = MockHMM(n_states=3)
+        session_starts = model._validator.validate_and_cast_session_starts(
+            X, y, session_starts
+        )
+        np.testing.assert_array_equal(session_starts, expected)
+
+    @pytest.mark.parametrize(
+        "X, y, session_starts, expectation",
         [
             # wrong shape for boolean array
             (
                 np.ones((3, 1)),
                 np.ones((3,)),
                 jnp.array([True, False, False, False]),
-                pytest.raises(ValueError, match="is_new_session must have shape"),
+                pytest.raises(ValueError, match="session_starts must have shape"),
             ),
             # wrong length for integer array
             (
@@ -1142,7 +1104,7 @@ class TestHMMNewSession:
                 np.ones((3,)),
                 jnp.array([1, 0, 0, 0]),
                 pytest.raises(
-                    ValueError, match="is_new_session array must have length"
+                    ValueError, match="session_starts array must have length"
                 ),
             ),
             # integer out of bounds
@@ -1150,14 +1112,14 @@ class TestHMMNewSession:
                 np.ones((3, 1)),
                 np.ones((3,)),
                 jnp.array([0, 3]),
-                pytest.raises(ValueError, match="is_new_session values must be"),
+                pytest.raises(ValueError, match="session_starts values must be"),
             ),
             # negative integer
             (
                 np.ones((3, 1)),
                 np.ones((3,)),
                 jnp.array([-1]),
-                pytest.raises(ValueError, match="is_new_session values must be"),
+                pytest.raises(ValueError, match="session_starts values must be"),
             ),
             # wrong dtype
             (
@@ -1166,17 +1128,17 @@ class TestHMMNewSession:
                 jnp.array([0.0, 3.0]),
                 pytest.raises(
                     TypeError,
-                    match="is_new_session must be a boolean or integer array",
+                    match="session_starts must be a boolean or integer array",
                 ),
             ),
             # wrong dtype
             (
                 np.ones((3, 1)),
                 np.ones((3,)),
-                "is_new_session",
+                "session_starts",
                 pytest.raises(
                     TypeError,
-                    match="is_new_session must be a boolean or integer array",
+                    match="session_starts must be a boolean or integer array",
                 ),
             ),
             # interval set when no pynapple objects are used
@@ -1192,121 +1154,14 @@ class TestHMMNewSession:
         ],
     )
     def test_initialize_and_compute_new_session_errors(
-        self, X, y, is_new_session, expectation
+        self, X, y, session_starts, expectation
     ):
         """Test that session boundaries are correctly initialized and moved when there are NaN values."""
         model = MockHMM(n_states=3)
         with expectation:
-            is_new_session = model._validator.validate_and_cast_is_new_session(
-                X, y, is_new_session
+            session_starts = model._validator.validate_and_cast_session_starts(
+                X, y, session_starts
             )
-
-
-def all_subclasses(cls):
-    seen = set()
-    stack = list(cls.__subclasses__())
-    while stack:
-        sub = stack.pop()
-        if sub in seen:
-            continue
-        seen.add(sub)
-        stack.extend(sub.__subclasses__())
-    return seen
-
-
-class TestHMMValidator:
-    """Test suite for input validation logic in HMMValidator."""
-
-    def test_user_param_order(self) -> None:
-        """Meta-test.
-
-        Tests that any subclasses of HMMValidator have the correct user parameter order
-        """
-        import importlib
-        import pkgutil
-
-        import nemos
-
-        # Import every submodule so all HMMValidator subclasses get registered.
-        for _, modname, _ in pkgutil.walk_packages(nemos.__path__, prefix="nemos."):
-            importlib.import_module(modname)
-
-        # Filter the classes that are subclasses of 'SuperClass'.
-        subclasses = all_subclasses(HMMValidator)
-
-        for validator in subclasses:
-            n_params = len(validator.model_param_names)
-            user_par = [0.0] * (n_params - 2) + [1.0, 1.0]
-            params = validator.to_model_params(user_par)
-            assert np.all(params.hmm_params.log_initial_prob == 0.0)
-            assert np.all(params.hmm_params.log_transition_prob == 0.0)
-
-    @pytest.mark.parametrize(
-        "X, y, expectation",
-        [
-            (
-                np.random.rand(10, 2),
-                np.random.rand(10),
-                does_not_raise(),
-            ),
-            (
-                np.random.rand(10, 2),
-                np.random.rand(9),
-                pytest.raises(ValueError, match="X and y must have"),
-            ),
-            (
-                nap.TsdFrame(
-                    t=np.arange(10),
-                    d=np.random.rand(10, 2),
-                ),
-                nap.Tsd(
-                    t=np.arange(10) + 1,
-                    d=np.random.rand(10),
-                ),
-                pytest.raises(ValueError, match="Time axis mismatch"),
-            ),
-        ],
-    )
-    def test_validate_inputs(self, X, y, expectation):
-        """Test that validate_inputs correctly validates X and y."""
-        model = MockHMM(n_states=3)
-        with expectation:
-            model._validator.validate_inputs(X, y)
-
-    @pytest.mark.parametrize(
-        "X, y, expectation",
-        [
-            # nan border y
-            (
-                np.ones((5, 1)),
-                np.array([np.nan, 1, 2, 3, np.nan]),
-                does_not_raise(),
-            ),
-            # nan border x
-            (
-                np.array([[np.nan], [2], [3], [np.nan]]),
-                np.array([0, 1, 3, 4]),
-                does_not_raise(),
-            ),
-            # nan middle y
-            (
-                np.ones((5, 1)),
-                np.array([np.nan, 1, np.nan, 2, 3]),
-                pytest.raises(ValueError, match="HMM requires continuous"),
-            ),
-            # nan middle x
-            (
-                np.array([[np.nan], [2], [np.nan], [3]]),
-                np.array([0, 1, 3, 4]),
-                pytest.raises(ValueError, match="HMM requires continuous"),
-            ),
-        ],
-    )
-    def test_nans_only_at_border(self, X, y, expectation):
-        """Test that validate_inputs allows NaNs only at the borders of the data."""
-        model = MockHMM(n_states=3)
-        with expectation:
-            model._validator.validate_inputs(X, y)
 
 
 class TestHMMInference:
@@ -1715,7 +1570,7 @@ class TestHMMInference:
     @pytest.mark.parametrize(
         "method_name", ["smooth_proba", "filter_proba", "decode_state"]
     )
-    def test_is_new_session_is_used(self, method_name):
+    def test_session_starts_is_used(self, method_name):
         model = MockHMM(n_states=3)
         X = np.random.rand(10, 2)
         y = np.random.rand(10)
@@ -1725,7 +1580,7 @@ class TestHMMInference:
             [[0.1, 0.8, 0.1], [0.1, 0.1, 0.8], [0.8, 0.1, 0.1]]
         )
         out_all_new_sess = getattr(model, method_name)(
-            X, y, is_new_session=np.ones(10, dtype=bool)
+            X, y, session_starts=np.ones(10, dtype=bool)
         )
         assert np.all(
             out_all_new_sess == out_all_new_sess[0]
@@ -1735,7 +1590,7 @@ class TestHMMInference:
             out_all_new_sess, out_default
         ), "Output with all new sessions should not match default output"
         out_no_new_sess = getattr(model, method_name)(
-            X, y, is_new_session=np.zeros(10, dtype=bool)
+            X, y, session_starts=np.zeros(10, dtype=bool)
         )
         assert jnp.allclose(
             out_no_new_sess, out_default

@@ -20,10 +20,10 @@ if TYPE_CHECKING:
     import pynapple as nap
 
 
-def initialize_is_new_session(
+def initialize_session_starts(
     X: DESIGN_INPUT_TYPE,
     y: ArrayLike | None,
-    is_new_session: ArrayLike | nap.IntervalSet | None = None,
+    session_starts: ArrayLike | nap.IntervalSet | None = None,
 ):
     """
     Initialize and validate session boundary indicators for HMM inference.
@@ -36,13 +36,13 @@ def initialize_is_new_session(
     ----------
     X :
         Input data/design matrix, shape ``(n_samples, n_features)``. Used to infer
-        session boundaries if is_new_session is a pynapple.IntervalSet and y is not
+        session boundaries if session_starts is a pynapple.IntervalSet and y is not
         a pynapple Tsd or TsdFrame.
     y :
         Output data/observations, shape ``(n_samples, n_observations)``. Used to get
-        n_samples and to infer session boundaries if is_new_session is a pynapple.IntervalSet.
+        n_samples and to infer session boundaries if session_starts is a pynapple.IntervalSet.
         If None (e.g. during simulation), n_samples is inferred from X.
-    is_new_session :
+    session_starts :
         Optional array indicating user-provided session boundaries. Can be:
         - a boolean array or integer array of 1s and 0s indicating session starts, shape ``(n_samples,)``
         - an integer array of indices marking session starts, shape ``(n_sessions,)``
@@ -52,7 +52,7 @@ def initialize_is_new_session(
 
     Returns
     -------
-    is_new_session :
+    session_starts :
         Validated boolean array with session boundaries, shape ``(n_samples,)``.
         The first element is always True.
 
@@ -66,65 +66,65 @@ def initialize_is_new_session(
         y.shape[0] if y is not None else jax.tree_util.tree_leaves(X)[0].shape[0]
     )
     # If new_sess is not provided, assume one session
-    if is_new_session is None:
+    if session_starts is None:
         # default: all False, but first time bin must be True (set at end)
-        is_new_session = jnp.zeros(n_samples, dtype=bool)
-    elif hasattr(is_new_session, "start") and hasattr(is_new_session, "end"):
-        is_new_session = compute_is_new_session_from_pynapple(X, y, is_new_session)
-    elif hasattr(is_new_session, "dtype"):
-        if jnp.issubdtype(is_new_session.dtype, jnp.bool_):
-            if is_new_session.shape != (n_samples,):
+        session_starts = jnp.zeros(n_samples, dtype=bool)
+    elif hasattr(session_starts, "start") and hasattr(session_starts, "end"):
+        session_starts = compute_session_starts_from_pynapple(X, y, session_starts)
+    elif hasattr(session_starts, "dtype"):
+        if jnp.issubdtype(session_starts.dtype, jnp.bool_):
+            if session_starts.shape != (n_samples,):
                 raise ValueError(
-                    f"Boolean is_new_session must have shape (n_samples,), but got shape {is_new_session.shape}."
+                    f"Boolean session_starts must have shape (n_samples,), but got shape {session_starts.shape}."
                 )
             # force jax boolean array
-            is_new_session = jnp.asarray(is_new_session, dtype=bool)
+            session_starts = jnp.asarray(session_starts, dtype=bool)
 
-        elif jnp.issubdtype(is_new_session.dtype, jnp.integer):
-            if (jnp.max(is_new_session) >= n_samples) or (jnp.min(is_new_session) < 0):
+        elif jnp.issubdtype(session_starts.dtype, jnp.integer):
+            if (jnp.max(session_starts) >= n_samples) or (jnp.min(session_starts) < 0):
                 raise ValueError(
-                    "Integer is_new_session values must be between 0 and n_samples-1, "
-                    f"but got min {jnp.min(is_new_session)} and max {jnp.max(is_new_session)}."
+                    "Integer session_starts values must be between 0 and n_samples-1, "
+                    f"but got min {jnp.min(session_starts)} and max {jnp.max(session_starts)}."
                 )
-            elif len(is_new_session) > n_samples:
+            elif len(session_starts) > n_samples:
                 raise ValueError(
-                    f"Integer is_new_session array must have length <= n_samples, but got length {len(is_new_session)} "
+                    f"Integer session_starts array must have length <= n_samples, but got length {len(session_starts)} "
                     f"and n_samples {n_samples}."
                 )
 
             if (
-                (is_new_session == 0) | (is_new_session == 1)
-            ).all() and is_new_session.shape == (n_samples,):
+                (session_starts == 0) | (session_starts == 1)
+            ).all() and session_starts.shape == (n_samples,):
                 # should be treated as a boolean array
-                is_new_session = jnp.asarray(is_new_session, dtype=bool)
+                session_starts = jnp.asarray(session_starts, dtype=bool)
             else:
-                is_new_session = (
+                session_starts = (
                     jnp.zeros(n_samples, dtype=bool)
-                    .at[jnp.asarray(is_new_session, dtype=int)]
+                    .at[jnp.asarray(session_starts, dtype=int)]
                     .set(True)
                 )
         else:
             raise TypeError(
-                "is_new_session must be a boolean or integer array, but got dtype "
-                f"{is_new_session.dtype}."
+                "session_starts must be a boolean or integer array, but got dtype "
+                f"{session_starts.dtype}."
             )
     else:
         raise TypeError(
-            "is_new_session must be a boolean or integer array, but got type "
-            f"{type(is_new_session)}."
+            "session_starts must be a boolean or integer array, but got type "
+            f"{type(session_starts)}."
         )
 
     # force first time bin to be True
-    is_new_session = jax.lax.dynamic_update_index_in_dim(
-        jnp.asarray(is_new_session, dtype=bool), True, 0, axis=0
+    session_starts = jax.lax.dynamic_update_index_in_dim(
+        jnp.asarray(session_starts, dtype=bool), True, 0, axis=0
     )
-    return is_new_session
+    return session_starts
 
 
-def compute_is_new_session_from_pynapple(
+def compute_session_starts_from_pynapple(
     X: nap.Tsd | nap.TsdFrame,
     y: nap.Tsd | nap.TsdFrame,
-    is_new_session: nap.IntervalSet,
+    session_starts: nap.IntervalSet,
 ) -> jnp.ndarray:
     """Compute indicator vector marking the start of new sessions.
 
@@ -139,13 +139,13 @@ def compute_is_new_session_from_pynapple(
     y :
         Output data/observations, shape ``(n_samples, n_observations)``. Used primarily when
         retrieving sample time stamps.
-    is_new_session :
+    session_starts :
         pynapple.IntervalSet marking the start and end times of sessions, where start times
         are used to identify session boundaries.
 
     Returns
     -------
-    is_new_session :
+    session_starts :
         Binary indicator array of shape ``(n_time_points,)`` where 1 indicates the start
         of a new session and 0 otherwise.
     """
@@ -155,22 +155,22 @@ def compute_is_new_session_from_pynapple(
             "a pynapple.IntervalSet object."
         )
     time = y.t if is_pynapple_tsd(y) else X.t
-    start = is_new_session.start
-    is_new_session = (
+    start = session_starts.start
+    session_starts = (
         jax.numpy.zeros_like(time, dtype=bool)
         .at[jax.numpy.searchsorted(time, start)]
         .set(True)
     )
-    return is_new_session
+    return session_starts
 
 
-def shift_nan_is_new_session(
-    is_new_session: jnp.ndarray, is_nan: jnp.ndarray
+def shift_nan_session_starts(
+    session_starts: jnp.ndarray, is_nan: jnp.ndarray
 ) -> jnp.ndarray:
     """
     Shift session-start markers off NaN samples to the next valid sample.
 
-    Any ``True`` in ``is_new_session`` that falls on an index marked by ``is_nan``
+    Any ``True`` in ``session_starts`` that falls on an index marked by ``is_nan``
     is moved forward to the first subsequent index where ``is_nan`` is ``False``.
     Markers already on valid samples are preserved. If no valid sample follows a
     misplaced marker, it is dropped. This ensures that after dropping NaN values,
@@ -178,7 +178,7 @@ def shift_nan_is_new_session(
 
     Parameters
     ----------
-    is_new_session :
+    session_starts :
         Boolean array of session-start indicators, shape ``(n_samples,)``.
     is_nan :
         Boolean mask of NaN samples, shape ``(n_samples,)``.
@@ -188,9 +188,9 @@ def shift_nan_is_new_session(
     :
         Updated boolean session-start indicators, shape ``(n_samples,)``.
     """
-    n = is_new_session.shape[0]
+    n = session_starts.shape[0]
     valid = jnp.arange(n)[~is_nan]  # non-NaN indices
-    invalid_session_idx = jnp.arange(n)[is_nan & is_new_session]  # misplaced markers
+    invalid_session_idx = jnp.arange(n)[is_nan & session_starts]  # misplaced markers
 
     # Append sentinel n: searchsorted returning len(valid) (no valid sample after
     # the marker) then maps to n, which mode="drop" discards. The append copies
@@ -199,7 +199,7 @@ def shift_nan_is_new_session(
     shifted_idx = jnp.append(valid, n)[pos]
 
     return (
-        is_new_session.at[invalid_session_idx]
+        session_starts.at[invalid_session_idx]
         .set(False)
         .at[shifted_idx]
         .set(True, mode="drop")

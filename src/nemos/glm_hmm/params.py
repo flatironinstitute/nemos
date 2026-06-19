@@ -30,6 +30,17 @@ class GLMHMMParams(ModelParams):
         """Filter regularizable subtrees."""
         return [lambda p: p.model_params.coef]
 
+    @staticmethod
+    def solver_param_subtree() -> Callable[["GLMHMMParams"], GLMHMMModelParams]:
+        """Accessor for the sub-pytree the numerical solver and regularizer operate on.
+
+        GLM-HMM is a composite model: its EM M-step optimizes only the GLM-level
+        params (coef, intercept, scale). The regularizer and its GroupLasso mask are
+        interpreted at this level. Flat models have no such method — consumers must
+        treat its absence as the identity accessor.
+        """
+        return lambda p: p.model_params
+
 
 # Tuple[coef, intercept, scale, init_proba, transition_proba]
 GLMHMMUserParams = Tuple[

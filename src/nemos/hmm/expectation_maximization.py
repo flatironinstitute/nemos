@@ -34,7 +34,7 @@ def compute_xi_log(
     log_betas,
     log_conditional_prob,
     log_normalization,
-    is_new_session,
+    session_starts,
     log_transition_prob,
 ):
     """
@@ -53,7 +53,7 @@ def compute_xi_log(
         Log observation likelihoods log p(y_t | z_t), shape ``(n_time_bins, n_states)``.
     log_normalization :
         Log normalization constants from forward pass, shape ``(n_time_bins,)``.
-    is_new_session :
+    session_starts :
         Boolean array, True at start of new sessions, shape ``(n_time_bins,)``.
     log_transition_prob :
         Log transition probability matrix, shape ``(n_states, n_states)``.
@@ -73,7 +73,7 @@ def compute_xi_log(
 
     # mask out steps where t is a new session
     norm_log_alpha = jnp.where(
-        is_new_session[1:, jnp.newaxis], -jnp.inf, norm_log_alpha
+        session_starts[1:, jnp.newaxis], -jnp.inf, norm_log_alpha
     )
 
     # Compute xi sum in one matmul
@@ -90,7 +90,7 @@ def _forward_pass(
     log_initial_prob: Array,
     log_transition_prob: Array,
     log_conditional_prob: Array,
-    is_new_session: Array,
+    session_starts: Array,
 ) -> Tuple[Array, Array]:
     """
     Forward pass of an HMM in log-space.
@@ -113,9 +113,9 @@ def _forward_pass(
         Array of shape ``(n_time_bins, n_states)``, representing the observation log-likelihood
         ``log p(y_t | z_t)`` at each time step for each state.
 
-    is_new_session :
+    session_starts :
         Boolean array of shape ``(n_time_bins,)`` indicating the start of new sessions. When
-        ``is_new_session[t]`` is True, the recursion at time ``t`` is reset using ``log_initial_prob``.
+        ``session_starts[t]`` is True, the recursion at time ``t`` is reset using ``log_initial_prob``.
 
     Returns
     -------
@@ -170,10 +170,10 @@ def _forward_pass(
 
     def body_fn(carry, xs):
         log_alpha_previous = carry
-        log_posterior, is_new_session = xs
+        log_posterior, session_starts = xs
 
         log_alpha = jax.lax.cond(
-            is_new_session,
+            session_starts,
             initial_compute,
             transition_compute,
             log_posterior,
@@ -186,7 +186,7 @@ def _forward_pass(
     init = jnp.full_like(log_conditional_prob[0], -jnp.inf)  # log(0)
     log_transition_prob = log_transition_prob.T
     _, (log_alphas, log_normalizers) = jax.lax.scan(
-        body_fn, init, (log_conditional_prob, is_new_session)
+        body_fn, init, (log_conditional_prob, session_starts)
     )
     return log_alphas, log_normalizers
 
@@ -197,7 +197,7 @@ def forward_pass(
     X: Array,
     y: Array,
     log_likelihood_func: Callable[[Array, Array, Array], Array],
-    is_new_session: Array | None = None,
+    session_starts: Array | None = None,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
     Compute filtering probabilities (forward messages) for an HMM.
@@ -225,7 +225,7 @@ def forward_pass(
     log_likelihood_func :
         Function computing observation log-likelihoods per sample, i.e. no aggregation
         should be performed across samples.
-    is_new_session :
+    session_starts :
         Boolean array of shape ``(n_time_bins,)`` marking session starts.
         If None, treats all data as a single continuous session.
 
@@ -257,9 +257,9 @@ def forward_pass(
     log_transition_prob = params.hmm_params.log_transition_prob
 
     # Initialize variables
-    is_new_session = (
-        is_new_session
-        if is_new_session is not None
+    session_starts = (
+        session_starts
+        if session_starts is not None
         else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
     )
 
@@ -268,7 +268,7 @@ def forward_pass(
 
     # Compute forward pass
     log_alphas, log_normalizers = _forward_pass(
-        log_initial_prob, log_transition_prob, log_conditionals, is_new_session
+        log_initial_prob, log_transition_prob, log_conditionals, session_starts
     )  # these are equivalent to the forward pass with python loop
     return log_alphas, log_normalizers
 
@@ -277,7 +277,7 @@ def _backward_pass(
     log_transition_prob: Array,
     log_conditional_prob: Array,
     log_normalizers: Array,
-    is_new_session: Array,
+    session_starts: Array,
 ):
     """
     Run the backward pass of the HMM inference algorithm to compute log-beta messages.
@@ -302,9 +302,9 @@ def _backward_pass(
         Array of shape ``(n_time_bins,)`` containing the log-normalization constants from the forward
         pass. These are used to normalize the backward recursion in log-space.
 
-    is_new_session :
+    session_starts :
         Boolean array of shape ``(n_time_bins,)`` indicating the start of new sessions. When
-        ``is_new_session[t]`` is True, the backward message at time ``t`` is reset to a vector of zeros
+        ``session_starts[t]`` is True, the backward message at time ``t`` is reset to a vector of zeros
         (corresponding to log(1) for each state).
 
     Returns
@@ -373,7 +373,7 @@ def _backward_pass(
     _, log_betas = jax.lax.scan(
         body_fn,
         init,
-        (log_conditional_prob, log_normalizers, is_new_session),
+        (log_conditional_prob, log_normalizers, session_starts),
         reverse=True,
     )
     return log_betas
@@ -385,7 +385,7 @@ def forward_backward(
     X: Array,
     y: Array,
     log_likelihood_func: Callable[[Array, Array, Array], Array],
-    is_new_session: Array | None = None,
+    session_starts: Array | None = None,
 ):
     """
     Run the forward-backward Baum-Welch algorithm.
@@ -412,7 +412,7 @@ def forward_backward(
         Function computing the elementwise log-likelihood of observations.
         Must return an array of shape ``(n_time_bins, n_states)``.
 
-    is_new_session :
+    session_starts :
         Boolean array marking the start of a new session.
         If unspecified or empty, treats the full set of trials as a single session.
 
@@ -448,9 +448,9 @@ def forward_backward(
 
     # Initialize variables
     n_time_bins = y.shape[0]
-    is_new_session = (
-        is_new_session
-        if is_new_session is not None
+    session_starts = (
+        session_starts
+        if session_starts is not None
         else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
     )
 
@@ -459,12 +459,12 @@ def forward_backward(
 
     # Compute forward pass
     log_alphas, log_normalization = _forward_pass(
-        log_initial_prob, log_transition_prob, log_conditionals, is_new_session
+        log_initial_prob, log_transition_prob, log_conditionals, session_starts
     )  # these are equivalent to the forward pass with python loop
 
     # Compute backward pass
     log_betas = _backward_pass(
-        log_transition_prob, log_conditionals, log_normalization, is_new_session
+        log_transition_prob, log_conditionals, log_normalization, session_starts
     )
 
     log_likelihood = jnp.sum(
@@ -486,7 +486,7 @@ def forward_backward(
         log_betas,
         log_conditionals,
         log_normalization,
-        is_new_session,
+        session_starts,
         log_transition_prob,
     )
     return (
@@ -511,7 +511,7 @@ def run_m_step(
     y: Array,
     log_posteriors: Array,
     log_joint_posterior: Array,
-    is_new_session: Array,
+    session_starts: Array,
     m_step_fn_model_params: Callable[
         [ModelParamsT, Array, Array, Array], Tuple[ModelParamsT, SolverState, Aux]
     ],
@@ -537,7 +537,7 @@ def run_m_step(
     log_joint_posterior :
         Log joint posterior probabilities over pairs of states summed over samples. Shape ``(n_states, n_states)``.
         :math:`\sum_t P(z_{t-1}, z_t \mid X, y, \theta_{\text{old}})`.
-    is_new_session :
+    session_starts :
         Boolean mask marking the first observation of each session. Shape ``(n_samples,)``.
     m_step_fn_model_params :
         Callable that performs the M-step update for model parameters (e.g., coefficients and intercepts for a GLM).
@@ -566,7 +566,7 @@ def run_m_step(
     # Update Initial state probability Eq. 13.18
     log_initial_prob = _analytical_m_step_log_initial_prob(
         log_posteriors,
-        is_new_session=is_new_session,
+        session_starts=session_starts,
         dirichlet_prior_alphas=dirichlet_initial_proba,
     )
     log_transition_prob = _analytical_m_step_log_transition_prob(
@@ -596,7 +596,7 @@ def _em_step(
     m_step_fn_model_params: Callable[
         [ModelParamsT, Array, Array, Array], Tuple[ModelParamsT, SolverState, Aux]
     ],
-    is_new_session: Array,
+    session_starts: Array,
 ) -> EMCarry:
     """
     Execute a single EM iteration combining E-step and M-step.
@@ -618,7 +618,7 @@ def _em_step(
         Log-likelihood function for the E-step.
     m_step_fn_model_params :
         M-step update function for GLM coefficients and intercepts.
-    is_new_session :
+    session_starts :
         Boolean array marking session boundaries.
 
     Returns
@@ -641,7 +641,7 @@ def _em_step(
         X,
         y,
         log_likelihood_func,
-        is_new_session,
+        session_starts,
     )
 
     new_params, _ = run_m_step(
@@ -650,7 +650,7 @@ def _em_step(
         y,
         log_posteriors=log_posteriors,
         log_joint_posterior=log_joint_posterior,
-        is_new_session=is_new_session,
+        session_starts=session_starts,
         m_step_fn_model_params=m_step_fn_model_params,
     )
 
@@ -674,7 +674,7 @@ def em_step(
     y: Array,
     log_likelihood_func: Callable,
     m_step_fn_model_params: Callable,
-    is_new_session: Array,
+    session_starts: Array,
 ) -> Tuple[ModelParamsT, EMState]:
     """
     Perform a single EM iteration step for an HMM.
@@ -700,7 +700,7 @@ def em_step(
         Function computing the log-likelihood or log emissions probability.
     m_step_fn_model_params :
         Callable that performs the M-step update for model parameters.
-    is_new_session :
+    session_starts :
         Boolean mask for the first observation of each session.
 
     Returns
@@ -720,7 +720,7 @@ def em_step(
         y=y,
         log_likelihood_func=log_likelihood_func,
         m_step_fn_model_params=m_step_fn_model_params,
-        is_new_session=is_new_session,
+        session_starts=session_starts,
     )
 
     return params, state
@@ -762,7 +762,7 @@ def em_hmm(
     y: Array,
     log_likelihood_func: Callable,
     m_step_fn_model_params: Callable,
-    is_new_session: Optional[Array] = None,
+    session_starts: Optional[Array] = None,
     maxiter: int = 10**3,
     tol: float = 1e-8,
     check_convergence: Callable = check_log_likelihood_increment,
@@ -792,7 +792,7 @@ def em_hmm(
         Callable that performs the M-step update for the model parameters.
         Should have signature: ``f(model_params, X, y, posteriors) -> (updated_params, state)``.
         Typically created by configuring a solver with the appropriate regularizer/prior.
-    is_new_session :
+    session_starts :
         Boolean mask for the first observation of each session.
     maxiter :
         Maximum number of EM iterations.
@@ -808,9 +808,9 @@ def em_hmm(
     state :
         Final EMState containing all parameters and diagnostics.
     """
-    is_new_session = (
-        is_new_session
-        if is_new_session is not None
+    session_starts = (
+        session_starts
+        if session_starts is not None
         else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
     )
 
@@ -828,7 +828,7 @@ def em_hmm(
         y=y,
         log_likelihood_func=log_likelihood_func,
         m_step_fn_model_params=m_step_fn_model_params,
-        is_new_session=is_new_session,
+        session_starts=session_starts,
     )
 
     def stopping_condition_while(carry):
@@ -863,7 +863,7 @@ def max_sum(
     X: Array,
     y: Array,
     log_likelihood_func: Callable[[Array, Array, Array], Array],
-    is_new_session: Array | None = None,
+    session_starts: Array | None = None,
     return_index: bool = False,
 ):
     """
@@ -888,7 +888,7 @@ def max_sum(
     log_likelihood_func :
         Function computing log p(y | model_parameters) for the emissions model.
 
-    is_new_session :
+    session_starts :
         Boolean array marking the start of a new session.
         If unspecified or empty, treats the full set of trials as a single session.
 
@@ -909,9 +909,9 @@ def max_sum(
     n_states = log_init.shape[0]
 
     # initialize new session
-    is_new_session = (
-        is_new_session
-        if is_new_session is not None
+    session_starts = (
+        session_starts
+        if session_starts is not None
         else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
     )
 
@@ -944,11 +944,11 @@ def max_sum(
 
         return omega, (omega, max_prob_state)
 
-    # Initialize with dummy value (won't be used since is_new_session[0] = True)
+    # Initialize with dummy value (won't be used since session_starts[0] = True)
     init_omega = jnp.full(n_states, -jnp.inf)
 
     _, (omegas, max_prob_states) = jax.lax.scan(
-        forward_max_sum, init_omega, (log_emission, is_new_session)
+        forward_max_sum, init_omega, (log_emission, session_starts)
     )
 
     # Backward pass

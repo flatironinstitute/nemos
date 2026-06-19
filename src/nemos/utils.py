@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 import os
 import warnings
+from functools import wraps
 from importlib.metadata import version
 from typing import TYPE_CHECKING, Any, Callable, List, Literal, Optional, Union
 
@@ -557,6 +558,28 @@ def one_over_x(x: NDArray):
     return jnp.power(x, -1)
 
 
+def _elementwise_derivative(f: Callable) -> Callable:
+    """Construct the element-wise derivative of a function using forward-mode AD.
+
+    Parameters
+    ----------
+    f :
+        A function acting element-wise on an array.
+
+    Returns
+    -------
+    Callable
+        A function that computes the derivative of ``f`` evaluated element-wise.
+    """
+
+    @wraps(f)
+    def df(x):
+        _, grad = jax.jvp(f, (x,), (jnp.ones_like(x),))
+        return grad
+
+    return df
+
+
 def _encode_dict_key(k):
     """
     Encode a dict key with type prefix to distinguish from list/tuple indices.
@@ -808,6 +831,12 @@ def _unpack_params(params_dict: dict, string_attrs: list = None) -> dict:
             cls_name = _get_name(value)
             params = _unpack_params(value.get_params(deep=False), string_attrs)
             out[key] = {"class": cls_name, "params": params}
+        elif isinstance(value, dict):
+            # serialize callable/class leaves inside plain dicts by their name,
+            # so npz can store them as strings instead of pickled object arrays.
+            out[key] = jax.tree_util.tree_map(
+                lambda v: _get_name(v) if _is_callable_or_class(v) else v, value
+            )
         else:
             # if the parameter is in string_attrs, store its name
             if string_attrs is not None and (

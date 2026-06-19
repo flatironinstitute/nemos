@@ -6,7 +6,8 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-import sys, os
+import sys, os, urllib.request
+import typing
 from pathlib import Path
 
 from importlib.metadata import version
@@ -146,6 +147,7 @@ html_sidebars = {
     "index": [],
     "installation":[],
     "quickstart": [],
+    "benchmarking": [],
     "background/README": [],
     "how_to_guide/README": [],
     "tutorials/README": [],
@@ -154,7 +156,7 @@ html_sidebars = {
 
 
 # Path for static files (custom stylesheets or JavaScript)
-html_static_path = ['assets/stylesheets', "assets"]
+html_static_path = ['assets/stylesheets', "assets", "javascripts"]
 html_css_files = ['custom.css']
 
 html_js_files = [
@@ -162,7 +164,7 @@ html_js_files = [
 ]
 
 # Copybutton settings (to hide prompt)
-copybutton_prompt_text = r">>> |\$ |# "
+copybutton_prompt_text = r">>> |\$ "
 copybutton_prompt_is_regexp = True
 
 sphinxemoji_style = 'twemoji'
@@ -199,13 +201,14 @@ intersphinx_mapping = {
 # ---- API index generation ----
 api_order = [
     "glm.rst",
-    "io.rst",
+    "glm_hmm.rst",
     "basis.rst",
     "observation_models.rst",
     "regularizers.rst",
-    "simulations.rst",
-    "convolve.rst",
+    "io.rst",
     "solvers.rst",
+    "convolve.rst",
+    "simulations.rst",
     "identifiability.rst",
 ]
 api_dir = Path("api")
@@ -238,3 +241,74 @@ for api_rst in api_order:
     api_index += "\n".join(contents)
 
 (api_dir / "index.rst").write_text(api_index)
+
+# ---- Download admonition for runnable notebook docs ----
+# Every jupytext MyST .md doc is written to _build/jupyter_execute/<doc>.ipynb
+# by myst_nb on each build, and the {nb-download} role links to that generated
+# notebook. We inject the admonition just after the jupytext frontmatter so all
+# runnable tutorials/how-to/background pages get a download link automatically,
+# without editing the source files.
+_NB_DOC_ROOTS = ("tutorials/", "how_to_guide/", "background/")
+
+
+def add_download_admonition(app, docname, source):
+    if not (docname.startswith(_NB_DOC_ROOTS) or docname == "quickstart"):
+        return
+    lines = source[0].splitlines(keepends=True)
+    # require a jupytext frontmatter block (fenced by ---) to skip plain .md
+    # pages such as the README index files living in these directories
+    if not lines or lines[0].strip() != "---":
+        return
+    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+    if end is None or "jupytext" not in "".join(lines[1:end]):
+        return
+    stem = docname.split("/")[-1]
+    admonition = (
+        "\n"
+        ":::{admonition} Download\n"
+        ":class: important\n"
+        "\n"
+        f"Download this notebook: **{{nb-download}}`{stem}.ipynb`**!\n"
+        "\n"
+        ":::\n"
+        "\n"
+    )
+    lines.insert(end + 1, admonition)
+    source[0] = "".join(lines)
+
+
+def strip_generic_bases(app, name, obj, options, bases):
+    """Render ``Base[...]`` as bare ``Base`` in the Bases: line (drops generic clutter)."""
+    for i, base in enumerate(bases):
+        origin = typing.get_origin(base)
+        if origin is not None:
+            bases[i] = origin
+
+
+# Download the latest benchmark summary so the DataTable can be served same-origin.
+_benchmark_csv_url = "https://users.flatironinstitute.org/~ebalzani/nemos/benchmark/aggregate_summary.csv"
+_benchmark_csv_dst = Path("assets") / "aggregate_summary.csv"
+try:
+    urllib.request.urlretrieve(_benchmark_csv_url, _benchmark_csv_dst)
+    print(f"Downloaded benchmark summary -> {_benchmark_csv_dst}")
+except Exception as e:
+    raise RuntimeError(
+        f"Could not fetch benchmark summary from {_benchmark_csv_url}."
+    ) from e
+
+
+def _add_benchmark_assets(app, pagename, templatename, context, doctree):
+    if pagename != "benchmarking":
+        return
+    app.add_css_file("https://cdn.datatables.net/2.0.0/css/dataTables.dataTables.min.css")
+    app.add_js_file("https://code.jquery.com/jquery-3.7.0.js")
+    app.add_js_file("https://cdn.datatables.net/2.0.0/js/dataTables.min.js")
+    app.add_js_file("https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js")
+    app.add_js_file("https://cdn.plot.ly/plotly-2.35.2.min.js")
+    app.add_js_file("benchmark-table.js")
+
+
+def setup(app):
+    app.connect("source-read", add_download_admonition)
+    app.connect("autodoc-process-bases", strip_generic_bases)
+    app.connect("html-page-context", _add_benchmark_assets)

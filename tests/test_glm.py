@@ -176,7 +176,7 @@ def model_instantiation_type(glm_class_type):
 @pytest.mark.solver_related
 @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
 def test_get_fit_attrs(
-    request, glm_class_type, model_instantiation_type, mock_optimizer_run
+    request, glm_class_type, model_instantiation_type, mock_glm_optimizer_run
 ):
     X, y, model = request.getfixturevalue(model_instantiation_type)[:3]
     expected_state = {
@@ -243,7 +243,7 @@ class TestGLM:
         request,
         glm_class_type,
         model_instantiation_type,
-        mock_optimizer_run,
+        mock_glm_optimizer_run,
     ):
         """
         Test the `fit` method with weight matrices of different dimensionalities.
@@ -278,7 +278,7 @@ class TestGLM:
         request,
         glm_class_type,
         model_instantiation_type,
-        mock_optimizer_run,
+        mock_glm_optimizer_run,
     ):
         """
         Test the `fit` method with intercepts of different dimensionalities. Check for correct dimensionality.
@@ -434,7 +434,7 @@ class TestGLM:
         model_instantiation_type,
         expectation,
         init_params_by_model,
-        mock_optimizer_run,
+        mock_glm_optimizer_run,
     ):
         """
         Test the `fit` method with various types of initial parameters. Ensure that the provided initial parameters
@@ -463,7 +463,7 @@ class TestGLM:
         request,
         glm_class_type,
         model_instantiation_type,
-        mock_optimizer_run,
+        mock_glm_optimizer_run,
     ):
         """
         Test the `fit` method for inconsistencies between data features and initial weights provided.
@@ -1792,6 +1792,8 @@ class TestGLMObservationModel:
         """
         Fixture for test_repr_out
         """
+        # These repr models are all UnRegularized, whose default solver is LBFGS
+        # (GLMs only override the default to Newton for Ridge).
         default_solver_name = nmo.solvers.get_solver(
             nmo.regularizer.UnRegularized().default_solver
         ).algo_name
@@ -2230,7 +2232,7 @@ class TestGLMObservationModel:
     def test_coef_tree_structure_after_initialize_params_pytree_x(
         self, pytree_x_factory, request, glm_type, model_instantiation
     ):
-        """coef tree structure matches X structure after initialize_params with pytree X."""
+        """Coef tree structure matches X structure after initialize_params with pytree X."""
         _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
         X = pytree_x_factory(y.shape[0])
         coef, _ = model.initialize_params(X, y)
@@ -2244,7 +2246,7 @@ class TestGLMObservationModel:
         request,
         glm_type,
         model_instantiation,
-        mock_optimizer_run,
+        mock_glm_optimizer_run,
     ):
         """model.coef_ tree structure matches X structure after fit with pytree X."""
         _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
@@ -2430,7 +2432,7 @@ class TestGLMObservationModel:
     @pytest.mark.solver_related
     @pytest.mark.requires_x64
     def test_fit_mask_grouplasso(
-        self, glm_type, model_instantiation, request, mock_optimizer_run
+        self, glm_type, model_instantiation, request, mock_glm_optimizer_run
     ):
         """Test that the group lasso fit goes through"""
         X, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
@@ -2513,7 +2515,7 @@ def _make_valid_group_mask(n_groups, n_features):
     ],
 )
 def test_grouplasso_mask_wrapping_and_refit(
-    make_mask, make_X, check_coef, mock_optimizer_run
+    make_mask, make_X, check_coef, mock_glm_optimizer_run
 ):
     """User-provided mask wraps into GLMParams on first fit; re-fit leaves it unchanged.
 
@@ -2555,6 +2557,53 @@ def test_grouplasso_mask_wrapping_and_refit(
         mask_coef_after_first,
         model.regularizer.mask.coef,
     )
+
+
+@pytest.mark.parametrize(
+    "make_X, make_mask, expectation",
+    [
+        pytest.param(
+            lambda arr: arr,
+            lambda arr: arr,
+            does_not_raise(),
+            id="array_X-array_mask-match",
+        ),
+        pytest.param(
+            lambda arr: arr,
+            lambda arr: [arr],
+            pytest.raises(ValueError, match="Mask pytree structure"),
+            id="array_X-list_mask-mismatch",
+        ),
+        pytest.param(
+            lambda arr: [arr],
+            lambda arr: [arr],
+            does_not_raise(),
+            id="list_X-list_mask-match",
+        ),
+        pytest.param(
+            lambda arr: [arr],
+            lambda arr: arr,
+            pytest.raises(ValueError, match="Mask pytree structure"),
+            id="list_X-array_mask-mismatch",
+        ),
+    ],
+)
+def test_grouplasso_mask_structure_mismatch(
+    make_X, make_mask, expectation, mock_glm_optimizer_run
+):
+    """Mask pytree structure must mirror X; mismatch raises ValueError before shape checks."""
+    rng = np.random.default_rng(0)
+    n_samples, n_features, n_groups = 50, 4, 2
+    X = make_X(rng.standard_normal((n_samples, n_features)))
+    y = rng.poisson(1, size=n_samples)
+    mask = make_mask(_make_valid_group_mask(n_groups, n_features))
+
+    model = nmo.glm.GLM(
+        regularizer=nmo.regularizer.GroupLasso(mask=mask),
+        regularizer_strength=1.0,
+    )
+    with expectation:
+        model.fit(X, y)
 
 
 @pytest.mark.parametrize(
@@ -2804,7 +2853,7 @@ class TestPopulationGLM:
         ],
     )
     def test_metadata_pynapple_fit(
-        self, model_suffix, request, model_instantiation, mock_optimizer_run
+        self, model_suffix, request, model_instantiation, mock_glm_optimizer_run
     ):
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation + model_suffix
@@ -2825,7 +2874,7 @@ class TestPopulationGLM:
         ],
     )
     def test_metadata_pynapple_is_deepcopied(
-        self, model_suffix, model_instantiation, request, mock_optimizer_run
+        self, model_suffix, model_instantiation, request, mock_glm_optimizer_run
     ):
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation + model_suffix
@@ -2849,7 +2898,7 @@ class TestPopulationGLM:
         ],
     )
     def test_metadata_pynapple_predict(
-        self, model_suffix, model_instantiation, request, mock_optimizer_run
+        self, model_suffix, model_instantiation, request, mock_glm_optimizer_run
     ):
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation + model_suffix
@@ -3359,6 +3408,7 @@ class TestPoissonGLM:
     )
     @pytest.mark.parametrize("batch_size", [None, 1, 10])
     @pytest.mark.parametrize("stepsize", [None, 0.01])
+    @pytest.mark.parametrize("inverse_link_function", [jax.nn.softplus, "softplus"])
     @pytest.mark.solver_related
     def test_glm_optimal_config_set_initial_state(
         self,
@@ -3367,14 +3417,13 @@ class TestPoissonGLM:
         stepsize,
         reg,
         obs,
+        inverse_link_function,
         request,
         glm_class_type,
         model_instantiation_type,
         reg_setup,
     ):
-        """
-        Test special initialization of Poisson GLM + softmax inverse link function for SVRG and ProxSVRG.
-        """
+        """Test special initialization of Poisson GLM + softplus inverse link function for SVRG and ProxSVRG."""
         glm_class = request.getfixturevalue(glm_class_type)
         X, y, _, true_params, _ = request.getfixturevalue(
             model_instantiation_type + reg_setup
@@ -3387,7 +3436,7 @@ class TestPoissonGLM:
                 reg = nmo.regularizer.GroupLasso()
         model = glm_class(
             solver_name=solver_name,
-            inverse_link_function=jax.nn.softplus,
+            inverse_link_function=inverse_link_function,
             solver_kwargs=dict(batch_size=batch_size, stepsize=stepsize),
             observation_model=obs,
             regularizer=reg,
@@ -3408,6 +3457,49 @@ class TestPoissonGLM:
         else:
             assert isinstance(solver.batch_size, int)
             assert solver.batch_size > 0
+
+    @pytest.mark.parametrize(
+        "solver_name, regularizer",
+        [("SVRG", "UnRegularized"), ("ProxSVRG", "Lasso")],
+    )
+    @pytest.mark.parametrize(
+        "inverse_link_function, has_defaults",
+        [(jax.nn.softplus, True), ("softplus", True), (jax.numpy.exp, False)],
+    )
+    @pytest.mark.solver_related
+    def test_svrg_defaults_detect_softplus_string_and_callable(
+        self,
+        solver_name,
+        regularizer,
+        inverse_link_function,
+        has_defaults,
+        glm_class_type,
+        request,
+    ):
+        """Test Poisson SVRG defaults handle both softplus specifications."""
+        glm_class = request.getfixturevalue(glm_class_type)
+        X = jnp.array([[1.0, 2.0], [3.0, 1.0], [2.0, 4.0], [5.0, 3.0]])
+        y = jnp.array([1.0, 2.0, 3.0, 4.0])
+        if glm_class_type == "population_glm_class":
+            y = y[:, None]
+        model = glm_class(
+            solver_name=solver_name,
+            inverse_link_function=inverse_link_function,
+            observation_model=nmo.observation_models.PoissonObservations(),
+            regularizer=regularizer,
+            regularizer_strength=None if regularizer == "UnRegularized" else 1.0,
+        )
+
+        solver_kwargs = model._optimize_solver_params(X, y)
+
+        if has_defaults:
+            assert isinstance(solver_kwargs["batch_size"], int)
+            assert solver_kwargs["batch_size"] > 0
+            assert isinstance(solver_kwargs["stepsize"], float)
+            assert solver_kwargs["stepsize"] > 0
+        else:
+            assert "batch_size" not in solver_kwargs
+            assert "stepsize" not in solver_kwargs
 
     @pytest.mark.parametrize(
         "regularizer, expected_type_convexity",
@@ -3431,7 +3523,11 @@ class TestPoissonGLM:
     )
     @pytest.mark.parametrize(
         "inv_link_func, expected_type_link",
-        [(jax.nn.softplus, Callable), (jax.numpy.exp, type(None))],
+        [
+            (jax.nn.softplus, Callable),
+            ("softplus", Callable),
+            (jax.numpy.exp, type(None)),
+        ],
     )
     def test_optimal_config_outputs(
         self,
@@ -4347,3 +4443,275 @@ def test_glm_public_api_matches_subclasses():
         f"Missing from __all__: {expected_public - public}\n"
         f"Unexpected in __all__: {public - expected_public}"
     )
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+@pytest.mark.parametrize("solver_name", [None, "LBFGS", "Newton"])
+def test_glm_set_solver_name_invalidates(solver_name, model_instantiation, request):
+    X, y, model, params, state = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update solver
+    model.solver_name = solver_name
+
+    # Verify invalidated solver
+    assert model._solver is None
+    assert model._solver_loss_fun is None
+    assert model._optimizer_init_state is None
+    assert model._optimizer_update is None
+    assert model._optimizer_run is None
+    with pytest.raises(
+        RuntimeError, match="Attempt at update when solver was in invalid state."
+    ):
+        model.update(params, state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+@pytest.mark.parametrize("solver_name", [None, "LBFGS", "Newton"])
+def test_glm_set_solver_name_recovers(solver_name, model_instantiation, request):
+    X, y, model, params, _ = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update solver
+    model.solver_name = solver_name
+
+    # Verify reinitialisation fixes it
+    init_state = model.initialize_optimizer_and_state(
+        [params.coef, params.intercept], X, y
+    )
+    with does_not_raise():
+        model.update([params.coef, params.intercept], init_state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_solver_kwargs_invalidates(model_instantiation, request):
+    X, y, model, params, state = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update solver kwargs
+    model.solver_kwargs = {"maxiter": 2000}
+
+    # Verify invalidated solver
+    assert model._solver is None
+    assert model._solver_loss_fun is None
+    assert model._optimizer_init_state is None
+    assert model._optimizer_update is None
+    assert model._optimizer_run is None
+    with pytest.raises(
+        RuntimeError, match="Attempt at update when solver was in invalid state."
+    ):
+        model.update(params, state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_solver_kwargs_recovers(model_instantiation, request):
+    X, y, model, params, _ = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update solver kwargs
+    model.solver_kwargs = {"maxiter": 2000}
+
+    # Verify reinitialisation fixes it
+    init_state = model.initialize_optimizer_and_state(
+        [params.coef, params.intercept], X, y
+    )
+    with does_not_raise():
+        model.update([params.coef, params.intercept], init_state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_regularizer_invalidates(model_instantiation, request):
+    X, y, model, params, state = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update regularizer
+    model.regularizer = "Ridge"
+
+    # Verify invalidated solver
+    assert model._solver is None
+    assert model._solver_loss_fun is None
+    assert model._optimizer_init_state is None
+    assert model._optimizer_update is None
+    assert model._optimizer_run is None
+    with pytest.raises(
+        RuntimeError, match="Attempt at update when solver was in invalid state."
+    ):
+        model.update(params, state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_regularizer_recovers(model_instantiation, request):
+    X, y, model, params, _ = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update regularizer
+    model.regularizer = "Ridge"
+
+    # Verify reinitialisation fixes it
+    init_state = model.initialize_optimizer_and_state(
+        [params.coef, params.intercept], X, y
+    )
+    with does_not_raise():
+        model.update([params.coef, params.intercept], init_state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_regularizer_strength_invalidates(model_instantiation, request):
+    X, y, model, params, state = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update regularizer strength
+    model.regularizer_strength = 0.2
+
+    # Verify invalidated solver
+    assert model._solver is None
+    assert model._solver_loss_fun is None
+    assert model._optimizer_init_state is None
+    assert model._optimizer_update is None
+    assert model._optimizer_run is None
+    with pytest.raises(
+        RuntimeError, match="Attempt at update when solver was in invalid state."
+    ):
+        model.update(params, state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_regularizer_strength_recovers(model_instantiation, request):
+    X, y, model, params, _ = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update regularizer strength
+    model.regularizer_strength = 0.2
+
+    # Verify reinitialisation fixes it
+    init_state = model.initialize_optimizer_and_state(
+        [params.coef, params.intercept], X, y
+    )
+    with does_not_raise():
+        model.update([params.coef, params.intercept], init_state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_observation_model_invalidates(model_instantiation, request):
+    X, y, model, params, state = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update observation model
+    model.observation_model = "GammaObservations"
+
+    # Verify invalidated solver
+    assert model._solver is None
+    assert model._solver_loss_fun is None
+    assert model._optimizer_init_state is None
+    assert model._optimizer_update is None
+    assert model._optimizer_run is None
+    with pytest.raises(
+        RuntimeError, match="Attempt at update when solver was in invalid state."
+    ):
+        model.update(params, state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_observation_model_recovers(model_instantiation, request):
+    X, y, model, params, _ = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update observation model
+    model.observation_model = "GammaObservations"
+
+    # Verify reinitialisation fixes it
+    init_state = model.initialize_optimizer_and_state(
+        [params.coef, params.intercept], X, y
+    )
+    with does_not_raise():
+        model.update([params.coef, params.intercept], init_state, X, y)

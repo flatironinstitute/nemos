@@ -34,8 +34,11 @@ To fix a failing test:
 Note on lazy_loader behavior:
 - lazy.load("module") adds a lazy wrapper to sys.modules immediately
 - The actual module code only runs when an attribute is accessed
-- Therefore we check for heavy sub-dependencies (e.g., numba for pynapple)
-  rather than the top-level module name
+- Therefore we check for a submodule of the lazy package (e.g. "pynapple.core")
+  rather than the top-level name: the lazy stub never populates submodules,
+  so any "pynapple.<sub>" in sys.modules proves __init__.py actually executed.
+  Checking unrelated downstream deps (e.g. numba) is unreliable because they
+  can be pulled in by other packages (e.g. jaxopt).
 """
 
 import subprocess
@@ -87,13 +90,14 @@ print('IMPORTED' if imported else 'NOT_IMPORTED')
 # Test 1: Base nemos import should not load heavy dependencies
 # =============================================================================
 
-# Check for heavy sub-dependencies to detect actual loading (not lazy wrappers)
-# - pynapple -> numba (pynapple's heavy compiled dependency)
-# - sklearn -> sklearn.base (sklearn doesn't use lazy loading)
+# Detect actual package loading vs. a lazy_loader stub.
+# - pynapple -> pynapple.core (a submodule only created when __init__ executes;
+#   the lazy_loader stub does not pre-populate submodules)
+# - sklearn -> sklearn (sklearn doesn't use lazy loading)
 # - dandi, h5py, pynwb, fsspec are checked directly (not lazy-wrapped by nemos)
 LAZY_MODULES_BASE = [
-    ("pynapple", "numba"),  # Check numba to detect pynapple actually loading
-    ("sklearn", "sklearn"),  # sklearn doesn't use lazy loading
+    ("pynapple", "pynapple.core"),
+    ("sklearn", "sklearn"),
     ("dandi", "dandi"),
     ("h5py", "h5py"),
     ("pynwb", "pynwb"),
@@ -149,9 +153,9 @@ print(f'{elapsed:.3f}')
 def test_support_pynapple_decorator_no_pynapple_data():
     """Test that using support_pynapple decorator without pynapple data doesn't fully load pynapple.
 
-    We check for numba (pynapple's heavy dependency) rather than pynapple itself,
-    because lazy.load() adds a lazy wrapper to sys.modules but doesn't execute
-    pynapple's code until an attribute is accessed.
+    We check whether any "pynapple.<sub>" submodule landed in sys.modules:
+    lazy.load() only registers a stub for the top-level name, so a submodule
+    in sys.modules proves pynapple's __init__ actually executed.
     """
     code = """
 import sys
@@ -165,8 +169,8 @@ def my_func(x):
 # Call with numpy array (no pynapple)
 result = my_func(np.array([1, 2, 3]))
 
-# Check for numba - pynapple's heavy dependency that loads when pynapple actually runs
-imported = 'numba' in sys.modules
+# Any pynapple submodule in sys.modules means pynapple's __init__ executed.
+imported = 'pynapple.core' in sys.modules
 print('IMPORTED' if imported else 'NOT_IMPORTED')
 """
     result = subprocess.run(
@@ -179,7 +183,7 @@ print('IMPORTED' if imported else 'NOT_IMPORTED')
     is_lazy = output == "NOT_IMPORTED"
 
     assert is_lazy, (
-        f"pynapple was fully loaded (numba in sys.modules) when using support_pynapple with numpy data.\n"
+        f"pynapple was fully loaded (pynapple.core in sys.modules) when using support_pynapple with numpy data.\n"
         f"The decorator should only load pynapple when pynapple objects are passed.\n"
         f"stderr: {result.stderr}"
     )
@@ -246,9 +250,11 @@ def test_jax_not_loaded(import_stmt: str):
 # =============================================================================
 
 # These import statements should not fully load pynapple.
-# We check for numba (pynapple's heavy dependency) rather than pynapple itself,
-# because lazy.load() adds a lazy wrapper to sys.modules but doesn't execute
-# pynapple's code until an attribute is accessed.
+# We check for a pynapple submodule rather than the top-level name:
+# lazy.load() only registers a stub for "pynapple" itself, so a submodule
+# in sys.modules proves pynapple's __init__ actually executed. Earlier this
+# check looked at "numba", but numba is also pulled in by jaxopt (via
+# jaxopt.isotonic) and other unrelated packages, producing false positives.
 # For lazy-stub subpackages (nemos.glm, nemos.solvers, nemos.fetch) we use direct
 # attribute imports so that lazy_loader is forced to actually load the submodule
 # files rather than stopping at the stub wrapper.
@@ -274,13 +280,13 @@ PYNAPPLE_FREE_IMPORTS = [
 def test_pynapple_not_loaded(import_stmt: str):
     """Test that modules that don't need pynapple don't fully load it.
 
-    We check for numba (pynapple's heavy dependency) rather than pynapple itself,
-    because lazy.load() adds a lazy wrapper to sys.modules but doesn't execute
-    pynapple's code until an attribute is accessed.
+    We check whether "pynapple.core" landed in sys.modules: lazy.load() only
+    registers a stub for the top-level "pynapple", so any submodule in
+    sys.modules proves __init__.py actually executed.
     """
-    is_lazy, error_msg = _check_module_not_imported_after(import_stmt, "numba")
+    is_lazy, error_msg = _check_module_not_imported_after(import_stmt, "pynapple.core")
     assert is_lazy, (
-        f"pynapple was fully loaded (numba in sys.modules) by `{import_stmt}`.\n"
+        f"pynapple was fully loaded (pynapple.core in sys.modules) by `{import_stmt}`.\n"
         f"This module should not depend on pynapple.\n"
         f"{error_msg}"
     )

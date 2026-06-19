@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import difflib
 import warnings
-from typing import Any, Callable, List, Optional
+from collections.abc import Collection
+from typing import Any, Callable, Optional
 
 import jax
 import jax.numpy as jnp
@@ -422,7 +423,7 @@ def _check_batch_size_larger_than_convolution_window(
 
 
 def _suggest_keys(
-    unmatched_keys: List[str], valid_keys: List[str], cutoff: float = 0.6
+    unmatched_keys: Collection[str], valid_keys: Collection[str], cutoff: float = 0.6
 ):
     """
     Suggest the closest matching valid key for each unmatched key using fuzzy string matching.
