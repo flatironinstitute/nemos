@@ -356,6 +356,37 @@ class TestGLMStochasticFit:
         assert n_steps_taken_no_stopping == batches_per_epoch * n_epochs
         assert n_steps_taken_stopping < n_steps_taken_no_stopping
 
+    @pytest.mark.skipif(not solvers.JAXOPT_AVAILABLE, reason="JAXopt is not installed.")
+    def test_solver_convergence_callback_jaxopt_fixed_stepsize(self, simple_data):
+        """
+        ``SolverConvergenceCallback`` on jaxopt GradientDescent with a fixed step size must not raise.
+
+        Regression test for the jaxopt convergence criterion, which reads the
+        step size from the solver's per-iteration state
+        (``state.solver_state.stepsize``). A fixed (non-line-search) step size
+        is the case where that field might not exist if the if it was e.g. stored as
+        the solver's attribute instead on the state, so pin it explicitly to guard
+        against an ``AttributeError``.
+        """
+        X, y = simple_data
+        loader = ArrayDataLoader(X, y, batch_size=32, shuffle="full")
+
+        solver_name = "GradientDescent[jaxopt]"
+        # fixed step size, no line search.
+        solver_kwargs = self._default_solver_kwargs(solver_name, stepsize=0.001)
+        model = nmo.glm.GLM(solver_name=solver_name, solver_kwargs=solver_kwargs)
+
+        # Invoking the criterion through the callback must not raise.
+        with does_not_raise():
+            model.stochastic_fit(
+                loader, num_epochs=2, callbacks=SolverConvergenceCallback()
+            )
+
+        # check that the fit actually exercised the fixed-step-size path.
+        assert model.solver.linesearch_turned_on is False
+        assert np.all(np.isfinite(model.coef_))
+        assert np.all(np.isfinite(model.intercept_))
+
     @pytest.mark.parametrize("solver", _stochastic_solver_names)
     def test_custom_epoch_callback_stops_early(self, simple_data, solver):
         """Test that a custom epoch callback stops optimization early."""
