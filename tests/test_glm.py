@@ -2278,7 +2278,7 @@ class TestGLMObservationModel:
         request,
         glm_type,
         model_instantiation,
-        mock_optimizer_run,
+        mock_glm_optimizer_run,
     ):
         """get_model_params returns the fitted params for pytree-valued coef."""
         _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
@@ -2314,7 +2314,7 @@ class TestGLMObservationModel:
         request,
         glm_type,
         model_instantiation,
-        mock_optimizer_run,
+        mock_glm_optimizer_run,
     ):
         """Mutating returned mutable containers does not affect model.coef_."""
         _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
