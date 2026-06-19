@@ -265,10 +265,16 @@ Now that the full model is fitted, we score the full model and the batch model a
 
 ```{code-cell} ipython3
 full_scores = full_model.score(
-    X, spike_trains, aggregate_sample_scores=lambda x: np.mean(x, axis=0), score_type="pseudo-r2-McFadden"
+    X,
+    spike_trains,
+    aggregate_sample_scores=lambda x: np.mean(x, axis=0),
+    score_type="pseudo-r2-McFadden",
 )
 batch_scores = glm.score(
-    X, spike_trains, aggregate_sample_scores=lambda x: np.mean(x, axis=0), score_type="pseudo-r2-McFadden"
+    X,
+    spike_trains,
+    aggregate_sample_scores=lambda x: np.mean(x, axis=0),
+    score_type="pseudo-r2-McFadden",
 )
 ```
 

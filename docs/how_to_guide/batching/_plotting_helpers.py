@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+
 def plot_loss_history(loss_history: list[tuple], ax=None):
     """Plot ``loss_history`` per batch, marking epoch boundaries."""
     if ax is None:

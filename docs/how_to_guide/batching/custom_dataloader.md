@@ -68,7 +68,9 @@ class PynappleDataLoader(nmo.batching.DataLoader):
         self.basis = basis
         self.batch_size = batch_size
         self.bin_size = bin_size
-        self.n_batches_per_epoch = int(spike_times.time_support.tot_length() // self.batch_size)
+        self.n_batches_per_epoch = int(
+            spike_times.time_support.tot_length() // self.batch_size
+        )
         self.rng = np.random.default_rng(seed=123)
 
         self._sample_batch = None
@@ -76,7 +78,7 @@ class PynappleDataLoader(nmo.batching.DataLoader):
     def __iter__(self):
         """
         Yield one batch per step for a full epoch.
-        
+
         Defining this is what lets `stochastic_fit` loop over the loader
         (`for X_batch, y_batch in loader`) one batch at a time.
         It is called once at the start of every epoch, so it has to begin a
