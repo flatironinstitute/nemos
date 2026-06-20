@@ -10,14 +10,16 @@ from pynapple import IntervalSet, Tsd
 from ..base_validator import RegressorValidator
 from ..glm.params import GLMParams, GLMUserParams
 from ..glm.validation import GLMValidator, from_glm_params, to_glm_params
+from .data import PredictorsPPGLM, SpikesPPGLM
 from .params import PPGLMParamsWithKey
-from .data import X_ppglm, y_ppglm
 
 
 def to_pp_glm_params_with_key(params: GLMParams, random_key: jnp.array):
-    """Map from PPGLMParams to PPGLMParamsWithKey by appending a jax random key.
+    """Map from PPGLMParams to PPGLMParamsWithKey.
+
+     Map from PPGLMParams to PPGLMParamsWithKey by appending a jax random key.
     The key is converted from uint32 to float to avoid solver initialization error"""
-    return PPGLMParamsWithKey(params, random_key.astype(float))
+    return PPGLMParamsWithKey(params, random_key.astype(params.coef.dtype))
 
 
 @dataclass(frozen=True, repr=False)
@@ -84,8 +86,8 @@ class PPGLMValidator(GLMValidator):
     def validate_consistency(
         self,
         params: GLMParams,
-        X: Optional[X_ppglm] = None,
-        y: Optional[y_ppglm] = None,
+        X: Optional[PredictorsPPGLM] = None,
+        y: Optional[SpikesPPGLM] = None,
     ):
         """
         Validate consistency between parameters and inputs for PP-GLM.
@@ -105,8 +107,7 @@ class PPGLMValidator(GLMValidator):
                     f"X has {predictors_X.size} groups instead!"
                 )
 
-            # there might be a better way to do this
-            if not jnp.allclose(jnp.arange(predictors_X.size), predictors_X):
+            if not all(predictors_X == jnp.arange(predictors_X.size)):
                 raise ValueError(
                     "Inconsistent predictor IDs. "
                     f"Predictor IDs must be consecutive integers from 0 to {predictors_X.size - 1}."
@@ -179,8 +180,8 @@ class PopulationPPGLMValidator(PPGLMValidator):
     def validate_consistency(
         self,
         params: GLMParams,
-        X: Optional[X_ppglm] = None,
-        y: Optional[y_ppglm] = None,
+        X: Optional[PredictorsPPGLM] = None,
+        y: Optional[SpikesPPGLM] = None,
     ):
 
         # First validate X consistency (features) using parent implementation

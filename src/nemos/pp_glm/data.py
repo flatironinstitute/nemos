@@ -3,23 +3,24 @@
 import equinox as eqx
 from jaxtyping import Array, Float, Int
 
-class X_ppglm(eqx.Module):
+
+class PredictorsPPGLM(eqx.Module):
     """Preprocessed predictors for PP-GLM."""
 
     times: Float[Array, "n_events"]
-    ids: Int[Array, "n_events"]
+    predictor_ids: Int[Array, "n_events"]
 
 
-class y_ppglm(eqx.Module):
+class SpikesPPGLM(eqx.Module):
     """Preprocessed spikes for PP-GLM."""
 
     times: Float[Array, "n_spikes"]
-    ids: Int[Array, "n_spikes"]
-    idx: Int[Array, "n_spikes"]
+    neuron_ids: Int[Array, "n_spikes"]
+    timestamp_idx: Int[Array, "n_spikes"]
 
 
-class mc_sample_ppglm(eqx.Module):
+class MCSamplePPGLM(eqx.Module):
     """Preprocessed Monte Carlo sample points for PP-GLM."""
 
     times: Float[Array, "n_samples"]
-    idx: Int[Array, "n_samples"]
+    timestamp_idx: Int[Array, "n_samples"]

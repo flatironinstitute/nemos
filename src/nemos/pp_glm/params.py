@@ -19,4 +19,3 @@ class PPGLMParamsWithKey(ModelParams):
         list[Callable[["PPGLMParamsWithKey"], jnp.ndarray | dict]]
     ):
         return [lambda p: p.params.coef]
-
