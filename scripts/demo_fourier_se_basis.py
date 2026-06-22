@@ -19,6 +19,7 @@ Usage:
 import os
 
 import jax
+
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 import matplotlib
@@ -28,7 +29,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from nemos.basis import FourierSEBasis
-
 
 # ---------------------------------------------------------------------------
 # 1. Build the basis
@@ -50,17 +50,19 @@ print(f"  xis = {np.asarray(basis.xis)}")
 # 2. Implied covariance vs SE kernel
 # ---------------------------------------------------------------------------
 x = jnp.linspace(domain[0], domain[1], 400)
-Phi = np.asarray(basis.evaluate(x))   # (N, n_basis_funcs)
-K_impl = Phi @ Phi.T                  # implied covariance under N(0, I) prior
+Phi = np.asarray(basis.evaluate(x))  # (N, n_basis_funcs)
+K_impl = Phi @ Phi.T  # implied covariance under N(0, I) prior
 
 x_np = np.asarray(x)
 i_mid = len(x_np) // 2
 r = x_np - x_np[i_mid]
-K_exact = variance * np.exp(-(r ** 2) / (2 * lengthscale ** 2))
+K_exact = variance * np.exp(-(r**2) / (2 * lengthscale**2))
 K_slice = K_impl[i_mid]
 
-print(f"\nmax |K_impl - K_SE| (interior, |r| < L/2): "
-      f"{np.max(np.abs(K_slice[np.abs(r) < 0.5] - K_exact[np.abs(r) < 0.5])):.3e}")
+print(
+    f"\nmax |K_impl - K_SE| (interior, |r| < L/2): "
+    f"{np.max(np.abs(K_slice[np.abs(r) < 0.5] - K_exact[np.abs(r) < 0.5])):.3e}"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -68,7 +70,7 @@ print(f"\nmax |K_impl - K_SE| (interior, |r| < L/2): "
 # ---------------------------------------------------------------------------
 n_samples = 5
 key = jax.random.PRNGKey(0)
-samples = np.asarray(basis.sample(x, key, n_samples=n_samples))   # (n_samples, N)
+samples = np.asarray(basis.sample(x, key, n_samples=n_samples))  # (n_samples, N)
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +108,8 @@ fig.suptitle(
 )
 fig.tight_layout()
 
-out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                        "demo_fourier_se_basis.png")
+out_path = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "demo_fourier_se_basis.png"
+)
 fig.savefig(out_path, dpi=140, bbox_inches="tight")
 print(f"\nSaved plot to {out_path}")
