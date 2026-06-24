@@ -3264,39 +3264,30 @@ class TestFourierBasis(BasisFuncsTesting):
     @pytest.mark.parametrize(
         "frequency_mask, expectation, output_pairs",
         [
+            # box is now the signed (3, 3) grid: axis 0 = [0, 1, 2], axis 1 index
+            # 0, 1, 2 maps to frequency -1, 0, 1. "all" keeps the 8 half-space
+            # combinations, DC first.
             (
                 None,
                 does_not_raise(),
                 np.array(
                     [
-                        [
-                            0,
-                            0,
-                            1,
-                            1,
-                            2,
-                            2,
-                        ],
-                        [
-                            0,
-                            1,
-                            0,
-                            1,
-                            0,
-                            1,
-                        ],
+                        [0, 0, 1, 1, 1, 2, 2, 2],
+                        [0, 1, -1, 0, 1, -1, 0, 1],
                     ]
                 ),
             ),
             (
-                np.array([[1, 0], [1, 1], [0, 1]]),
+                np.array([[1, 0, 1], [1, 1, 1], [0, 1, 0]]),
                 does_not_raise(),
-                np.array([[0, 1, 1, 2], [0, 0, 1, 1]]),
+                np.array([[0, 1, 1, 1, 2], [1, -1, 0, 1, 0]]),
             ),
             (
-                np.array([[False, True], [False, False], [True, True]]),
+                np.array(
+                    [[False, True, False], [False, False, True], [True, True, True]]
+                ),
                 does_not_raise(),
-                np.array([[0, 2, 2], [1, 0, 1]]),
+                np.array([[0, 1, 2, 2, 2], [0, 1, -1, 0, 1]]),
             ),
             (
                 lambda *x: x[0] < 2 and x[1] == 1,
@@ -3304,9 +3295,9 @@ class TestFourierBasis(BasisFuncsTesting):
                 np.array([[0, 1], [1, 1]]),
             ),
             (
-                np.array([[1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]),
+                np.array([[1.0, 1.0, 1.0], [1.0, 0.0, 1.0], [0.0, 0.0, 0.0]]),
                 does_not_raise(),
-                np.array([[0, 1, 1, 2], [0, 0, 1, 1]]),
+                np.array([[0, 0, 1, 1], [0, 1, -1, 1]]),
             ),
             (
                 np.array([1.0, 0.0, 5.0]),
@@ -3376,22 +3367,8 @@ class TestFourierBasis(BasisFuncsTesting):
                 does_not_raise(),
                 np.array(
                     [
-                        [
-                            0,
-                            0,
-                            1,
-                            1,
-                            2,
-                            2,
-                        ],
-                        [
-                            0,
-                            1,
-                            0,
-                            1,
-                            0,
-                            1,
-                        ],
+                        [0, 0, 1, 1, 1, 2, 2, 2],
+                        [0, 1, -1, 0, 1, -1, 0, 1],
                     ]
                 ),
             ),
@@ -3401,22 +3378,8 @@ class TestFourierBasis(BasisFuncsTesting):
                 does_not_raise(),
                 np.array(
                     [
-                        [
-                            0,
-                            0,
-                            1,
-                            1,
-                            2,
-                            2,
-                        ],
-                        [
-                            0,
-                            1,
-                            0,
-                            1,
-                            0,
-                            1,
-                        ],
+                        [0, 0, 1, 1, 1, 2, 2, 2],
+                        [0, 1, -1, 0, 1, -1, 0, 1],
                     ]
                 ),
             ),
@@ -3444,6 +3407,64 @@ class TestFourierBasis(BasisFuncsTesting):
             # check setter directly
             bas.frequency_mask = frequency_mask
             np.testing.assert_array_equal(bas._freq_combinations, output_pairs)
+
+    @pytest.mark.parametrize("mode", ["eval"])
+    def test_frequency_mask_wrong_shape(self, mode):
+        # The array mask covers the signed box, not the non-negative orthant:
+        # for ``[arange(3), arange(2)]`` that is ``(3, 3)``, not ``(3, 2)``.
+        with pytest.raises(ValueError, match="Invalid shape for ``frequency_mask``"):
+            self.cls[mode](
+                frequencies=[np.arange(3), np.arange(2)],
+                ndim=2,
+                frequency_mask=np.ones((3, 2)),
+            )
+
+    @pytest.mark.parametrize("mode", ["eval"])
+    def test_frequency_mask_equator_symmetry_2d(self, mode):
+        cls = self.cls[mode]
+        freqs = [np.arange(3), np.arange(2)]  # signed box (3, 3); axis 1: -1, 0, 1
+
+        # Asymmetric on the J0 = 0 equator: (0, -1) dropped, its mirror (0, 1)
+        # kept. They are the same basis function, so this must raise and name
+        # the pair.
+        asym = np.ones((3, 3))
+        asym[0, 0] = 0
+        with pytest.raises(
+            ValueError, match="inconsistent across redundant frequency pairs"
+        ) as err:
+            cls(frequencies=freqs, ndim=2, frequency_mask=asym)
+        assert "(0, -1)" in str(err.value) and "(0, 1)" in str(err.value)
+
+        # Making the equator symmetric (drop the mirror too) is accepted.
+        sym = np.ones((3, 3))
+        sym[0, 0] = 0
+        sym[0, 2] = 0
+        cls(frequencies=freqs, ndim=2, frequency_mask=sym)
+
+        # Off the equator there is no redundancy: (1, -1) and (1, 1) are distinct
+        # basis functions, so dropping only one must NOT raise.
+        off = np.ones((3, 3))
+        off[1, 0] = 0
+        cls(frequencies=freqs, ndim=2, frequency_mask=off)
+
+    @pytest.mark.parametrize("mode", ["eval"])
+    def test_frequency_mask_equator_symmetry_3d_mixed_sign(self, mode):
+        # Guards the full-reflection symmetry check: a mismatch only in a
+        # mixed-sign mirror pair (0, 1, -1) / (0, -1, 1) must be caught, even
+        # though both nonzero coordinates have opposite signs.
+        cls = self.cls[mode]
+        freqs = [np.arange(2)] * 3  # signed box (2, 3, 3)
+
+        mask = np.ones((2, 3, 3))
+        mask[0, 2, 0] = 0  # drops (0, 1, -1); mirror (0, -1, 1) at [0, 0, 2] kept
+        with pytest.raises(
+            ValueError, match="inconsistent across redundant frequency pairs"
+        ):
+            cls(frequencies=freqs, ndim=3, frequency_mask=mask)
+
+        # dropping the mirror too restores symmetry -> accepted
+        mask[0, 0, 2] = 0
+        cls(frequencies=freqs, ndim=3, frequency_mask=mask)
 
     @pytest.mark.parametrize("mode", ["eval"])
     @pytest.mark.parametrize(
@@ -3565,36 +3586,36 @@ class TestFourierBasis(BasisFuncsTesting):
         "frequency_mask, ndim, expected_output_shape",
         [
             (None, 1, (1, 9)),  # 5 * 2 -1
-            (None, 2, (1, 49)),  # 5 * 5 * 2 -1
+            # 2D half-space: |H| = ((2*4+1)**2 + 1) / 2 = 41 combinations; 2*41 - 1
+            (None, 2, (1, 81)),
             # drop tree frequencies
             (jax.numpy.ones(5).at[1:4].set(0), 1, (1, 3)),  # (5 - 3) * 2 - 1
             # drop tree elements, including 0
             (jax.numpy.ones(5).at[:3].set(0), 1, (1, 4)),  # (5 - 3) * 2
             (lambda x: x < 3.1, 1, (1, 7)),  # 4 * 2 - 1
-            # # The lambda func below returns true for 11 values:
-            # - (0, 0), (0, 1), (0, 2), (0, 3)
-            # - (1, 0), (1, 1), (1, 2)
-            # - (2, 0), (2, 1), (2, 2)
-            # - (3, 0)
-            (lambda x, y: np.sqrt(x**2 + y**2) < 3.1, 2, (1, 21)),  # 11 * 2 - 1
-            # set 3 entries to 0 from the 5 x 5 mask
+            # 15 half-space combinations have norm < 3.1 (mixed-sign pairs such
+            # as (1, -2), (2, -1) are now included); DC kept. 2*15 - 1
+            (lambda x, y: np.sqrt(x**2 + y**2) < 3.1, 2, (1, 29)),
+            # mask over the signed (5, 9) box: drop 3 combinations off the
+            # J0 = 0 slice (no symmetry constraint there). 41 - 3 = 38; 2*38 - 1
             (
-                jax.numpy.ones((5, 5))
-                .at[jax.numpy.array([1, 2, 3]), jax.numpy.array([2, 2, 4])]
+                jax.numpy.ones((5, 9))
+                .at[jax.numpy.array([1, 2, 3]), jax.numpy.array([2, 7, 8])]
                 .set(0),
                 2,
-                (10, 43),  # (5 * 5 - 3) * 2 - 1
+                (10, 75),
             ),
-            # set 3 entries to 0 from the 5 x 5 mask, including (0, 0)
+            # mask over the signed (5, 9) box: drop the DC term and the symmetric
+            # equator pair (0, 1)/(0, -1). 41 - 2 = 39 combinations, no DC; 2*39
             (
-                jax.numpy.ones((5, 5))
-                .at[jax.numpy.array([0, 2, 3]), jax.numpy.array([0, 2, 4])]
+                jax.numpy.ones((5, 9))
+                .at[jax.numpy.array([0, 0, 0]), jax.numpy.array([3, 4, 5])]
                 .set(0),
                 2,
-                (1, 44),  # (5 * 5 - 3) * 2
+                (1, 78),
             ),
             (jax.numpy.zeros((5,)), 1, (1, 0)),
-            (jax.numpy.zeros((5, 5)), 2, (1, 0)),
+            (jax.numpy.zeros((5, 9)), 2, (1, 0)),
         ],
     )
     def test_n_basis_function_compute(

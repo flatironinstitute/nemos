@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
-import itertools
 import warnings
 from numbers import Number
-from typing import TYPE_CHECKING, Any, Callable, List, Literal, Optional, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    List,
+    Literal,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 import jax
 import jax.numpy as jnp
@@ -17,10 +25,14 @@ if TYPE_CHECKING:
     from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..type_casting import is_at_least_1d_numpy_array_like, support_pynapple
-from ..typing import FeatureMatrix
+from ..typing import Array, FeatureMatrix
 from ..utils import format_repr
 from ._basis import Basis, check_transform_input, min_max_rescale_samples
 from ._basis_mixin import AtomicBasisMixin
+
+# A collection of frequency arrays only needs to be indexable/sliceable and
+# iterable, hence ``Sequence``; each element is a NumPy or JAX ``Array``.
+FreqArrays = Sequence[Array]
 
 FREQUENCY_ERROR_MSGS = {
     "has_negative_values": "The provided frequencies contain negative values. Valid frequencies must be"
@@ -207,22 +219,24 @@ def _get_frequency_pairs_from_callable(
     frequency_mask :
         A function with signature: frequency_mask(*freqs) -> bool (or 0/1).
     frequencies :
-        1D arrays of frequencies (one per dimension).
+        Non-negative 1D frequency arrays (one per dimension).
 
     Returns
     -------
     :
-        Shape (D, K): columns are the selected frequency tuples.
+        Shape (D, K): columns are the selected frequency tuples, taken from the
+        half-space combinations (DC first when kept).
     """
-    all_pairs = itertools.product(*frequencies)  # shape (D, N)
-
     if not callable(frequency_mask):
         raise TypeError(
             "`frequency_mask` must be a callable like frequency_mask(*freqs) -> bool."
         )
 
+    combinations = _combinator_builder(frequencies)  # (D, K), DC first
+
     selected = []
-    for j, freqs in enumerate(all_pairs):
+    for j in range(combinations.shape[1]):
+        freqs = np.asarray(combinations[:, j]).tolist()
         try:
             include = frequency_mask(*freqs)
         except Exception as e:
@@ -250,13 +264,174 @@ def _get_frequency_pairs_from_callable(
             )
 
         if include:
-            selected.append(jnp.asarray(freqs))
+            selected.append(j)
 
-    return (
-        jnp.stack(selected, axis=1)
-        if selected
-        else jnp.zeros((len(frequencies), 0), dtype=int)
-    )
+    if selected:
+        return combinations[:, jnp.asarray(selected)]
+    return jnp.zeros((len(frequencies), 0), dtype=int)
+
+
+def _signed_box_axes(freq_arrays: FreqArrays) -> List[Array]:
+    """Mirror every axis except the first to include negative frequencies.
+
+    The first axis stays non-negative; every other axis is extended symmetrically
+    with the negatives of its positive entries (the zero/DC entry, if present, is
+    not duplicated). Keeping the first axis non-negative is what lets
+    :func:`_half_space_selection` pick exactly one of each ``{J, -J}`` pair later.
+
+    Parameters
+    ----------
+    freq_arrays:
+        Non-negative, ascending frequency arrays, one per dimension.
+
+    Returns
+    -------
+    :
+        Per-axis arrays defining the signed bounding box of the half-space. The
+        first axis is unchanged; each remaining axis runs from ``-max`` to ``max``.
+    """
+    return [freq_arrays[0]] + [
+        np.concatenate([-f[f > 0][::-1], f]) for f in freq_arrays[1:]
+    ]
+
+
+def _half_space_selection(grid: Array) -> NDArray:
+    """Keep one frequency from each redundant ``{J, -J}`` pair.
+
+    A frequency multi-index ``J`` and its negation ``-J`` produce the same pair
+    of Fourier features (cosine is even, sine is odd), so only one of each pair
+    is kept: the origin, or whichever of ``J``/``-J`` has its first non-zero
+    coordinate positive (scanning coordinates left to right). For example, of
+    ``(0, 1)`` and ``(0, -1)`` it keeps ``(0, 1)``; of ``(1, -2)`` and
+    ``(-1, 2)`` it keeps ``(1, -2)``. This "first non-zero coordinate positive"
+    rule is the set known formally as the lexicographic positive half-space.
+
+    Parameters
+    ----------
+    grid:
+        Array of shape ``(ndim, n_combinations)`` whose columns are frequency
+        multi-indices.
+
+    Returns
+    -------
+    :
+        Boolean array of shape ``(n_combinations,)``, ``True`` for the columns to
+        keep.
+    """
+    non_zero = grid != 0
+    first_nonzero = np.argmax(non_zero, axis=0)
+    first_val = grid[first_nonzero, np.arange(grid.shape[1])]
+    return (~non_zero.any(axis=0)) | (first_val > 0)
+
+
+def _move_dc_first(combinations: Array) -> Array:
+    """Move the all-zero (DC) combination to the first column when present.
+
+    ``evaluate`` and ``_has_zero_phase`` assume the DC term is the first column,
+    because its sine contribution is identically zero and is dropped.
+
+    Parameters
+    ----------
+    combinations:
+        Array of shape ``(ndim, n_combinations)``.
+
+    Returns
+    -------
+    :
+        The same columns with the DC column first, when present.
+    """
+    is_dc = np.all(combinations == 0, axis=0)
+    if is_dc.any():
+        order = np.concatenate([np.flatnonzero(is_dc), np.flatnonzero(~is_dc)])
+        combinations = combinations[:, order]
+    return combinations
+
+
+def _combinator_builder(freq_arrays: FreqArrays) -> Array:
+    """Generate the half-space frequency combinations from non-negative axes.
+
+    Mirrors every axis but the first to a signed bounding box, takes the full
+    Cartesian product, and keeps one representative of each redundant ``J``/``-J``
+    pair (see :func:`_half_space_selection`). The DC term, if present, is placed
+    first.
+
+    Parameters
+    ----------
+    freq_arrays:
+        Non-negative, ascending frequency arrays, one per dimension.
+
+    Returns
+    -------
+    :
+        Array of shape ``(ndim, n_combinations)`` whose columns are the retained
+        frequency multi-indices.
+    """
+    grid = _get_all_frequency_pairs(_signed_box_axes(freq_arrays))
+    combinations = grid[:, _half_space_selection(grid)]
+    return _move_dc_first(combinations)
+
+
+def _check_mask_symmetry(mask: Array) -> Tuple[bool, Optional[Tuple[NDArray, ...]]]:
+    """Check that a boolean mask treats redundant frequency pairs coherently.
+
+    ``mask`` covers the signed frequency box of shape
+    ``(len(f0), 2*m1+1, ..., 2*mn+1)``. The only redundant ``{J, -J}`` pairs that
+    both fall inside this box lie on the ``J0 = 0`` slice, where ``(0, f)`` and
+    ``(0, -f)`` map to the same Fourier basis function and must therefore be
+    masked identically. Negating all of ``f`` at once is the same as reversing
+    every trailing axis of the ``J0 = 0`` slice, i.e. reflecting it through its
+    centre; this function checks that the slice equals that reflection.
+
+    Parameters
+    ----------
+    mask:
+        Boolean array over the signed frequency box.
+
+    Returns
+    -------
+    is_valid:
+        ``True`` if every redundant pair is masked coherently.
+    invalid:
+        ``None`` when valid; otherwise the box indices of the offending cells, as
+        a tuple of integer arrays (one per dimension), with the leading ``J0 = 0``
+        index prepended. Each offending pair appears twice (once as ``J`` and once
+        as ``-J``).
+    """
+    valid = np.flip(mask[0]) == mask[0]
+    is_valid = np.all(valid)
+    if not is_valid:
+        invalid = np.where(np.logical_not(valid))
+        invalid = (np.zeros(invalid[0].shape[0], dtype=invalid[0].dtype), *invalid)
+    else:
+        invalid = None
+    return is_valid, invalid
+
+
+def _format_invalid_pairs(
+    invalid_freqs: Tuple[NDArray, ...],
+    signed_frequencies: FreqArrays,
+    max_show: int = 5,
+) -> str:
+    """Render the invalid ``{J, -J}`` mask cells as a readable string.
+
+    Maps the box indices returned by :func:`_check_mask_symmetry` back to
+    frequency multi-indices through ``signed_frequencies`` and deduplicates the
+    mirror copies so each pair is reported once.
+    """
+    idx = np.stack(invalid_freqs)  # (ndim, n_flagged)
+    combos = np.stack([np.asarray(f)[idx[d]] for d, f in enumerate(signed_frequencies)])
+    seen: set = set()
+    pairs = []
+    for col in combos.T:
+        key = tuple(int(v) for v in col)
+        if tuple(-v for v in key) in seen:
+            continue
+        seen.add(key)
+        pairs.append(f"{key} and {tuple(-v for v in key)}")
+    out = ", ".join(pairs[:max_show])
+    if len(pairs) > max_show:
+        out += f", ... (+{len(pairs) - max_show} more)"
+    return out
 
 
 class FourierBasis(AtomicBasisMixin, Basis):
@@ -300,10 +475,18 @@ class FourierBasis(AtomicBasisMixin, Basis):
             * ``no-intercept``: drop the all-zero frequency (DC component).
             * ``"all"``: Keep all frequencies
             * **None** : Keep all frequencies.
-            * **array_like** of {0, 1} or booleans : Shape must match the number
-              of possible frequency combinations for the given ``frequencies``.
-              - In 1D: shape = (n_freq,).
-              - In nD: shape = (n_freq_dim1, n_freq_dim2, ..., n_freq_dimN).
+            * **array_like** of {0, 1} or booleans : a mask over the *signed*
+              frequency grid. The first axis keeps the non-negative frequencies
+              as provided, while every other axis is extended to both signs
+              (``-max ... max``), since combinations such as ``(f1, -f2)`` and
+              ``(f1, f2)`` are distinct. So an axis with ``p`` positive
+              frequencies including the DC term has ``2*p + 1`` entries.
+              - In 1D: shape = (n_freq,), unchanged.
+              - In nD, e.g. ``frequencies=[np.arange(2), np.arange(3)]``: shape =
+                ``(2, 5)``.
+              On the ``f1 = 0`` slice, ``(0, f)`` and ``(0, -f)`` are the same
+              basis function and must be assigned the same mask value, otherwise
+              a ``ValueError`` is raised.
             * **callable** : A function applied to each tuple of frequency
               coordinates, returning a single boolean or {0, 1}. For example:
               ``lambda f1, f2, ...: condition``.
@@ -436,13 +619,15 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
         if isinstance(values, str) and values == "no-intercept":
             self._frequency_mask = "no-intercept"
-            self._freq_combinations = _get_all_frequency_pairs(self._frequencies)
-            if jnp.all(self._freq_combinations[..., 0] == 0):
-                self._freq_combinations = self._freq_combinations[..., 1:]
+            combinations = _combinator_builder(self._frequencies)
+            # the DC term, if present, is the first column; drop it.
+            if combinations.shape[1] and jnp.all(combinations[:, 0] == 0):
+                combinations = combinations[:, 1:]
+            self._freq_combinations = combinations
 
         elif values is None or isinstance(values, str) and values == "all":
             self._frequency_mask = "all"
-            self._freq_combinations = _get_all_frequency_pairs(self._frequencies)
+            self._freq_combinations = _combinator_builder(self._frequencies)
 
         elif callable(values):
             self._freq_combinations = _get_frequency_pairs_from_callable(
@@ -450,44 +635,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
             )
             self._frequency_mask = values
         else:
-            try:
-                values = jnp.asarray(values)
-            except Exception as e:
-                raise ValueError(
-                    f"``frequency_mask`` {values} cannot be converted to a jax array of boolean."
-                ) from e
-
-            if not jnp.all((values == 0) | (values == 1)):
-                raise ValueError("Frequency mask must be an array-like of 0s and 1s.")
-
-            values = values.astype(bool)
-
-            if not values.ndim == self._n_inputs:
-                ndim = self._n_inputs
-                raise ValueError(
-                    f"The frequency mask for a {ndim}-dimensional Fourier basis "
-                    f"must be an {ndim}-dimensional array of 0s and 1s. "
-                    f"The provided mask is an {ndim}-dimensional array instead."
-                )
-
-            if tuple(len(freqs) for freqs in self._frequencies) != values.shape:
-                expected_shape = tuple(len(freqs) for freqs in self._frequencies)
-                raise ValueError(
-                    "Invalid shape for ``frequency_mask``. "
-                    f"Expected shape {expected_shape}, "
-                    f"but got {values.shape} instead. The mask must have one entry (0 or 1) for each "
-                    "frequency along every dimension of the Fourier basis."
-                )
-
-            self._frequency_mask = values
-            self._n_basis_funcs = 2 * int(jnp.sum(self._frequency_mask)) - int(
-                self._frequency_mask[(0,) * values.ndim]
-            )
-
-            idxs = jnp.stack(jnp.where(self._frequency_mask))
-            self._freq_combinations = jnp.stack(
-                [freqs[idxs[d]] for d, freqs in enumerate(self._frequencies)]
-            )
+            self._set_array_frequency_mask(values)
 
         # used to drop or not the zero phase
         self._has_zero_phase = (
@@ -495,6 +643,68 @@ class FourierBasis(AtomicBasisMixin, Basis):
             if self._freq_combinations.size == 0
             else int(jnp.all(self._freq_combinations[:, 0] == 0))
         )
+
+    def _set_array_frequency_mask(self, values: ArrayLike) -> None:
+        """Validate and apply a boolean array mask over the signed frequency box.
+
+        Sets ``self._frequency_mask`` and ``self._freq_combinations``. The mask
+        is checked for 0/1 values, dimensionality, and the signed-box shape, then
+        for coherence across redundant ``{J, -J}`` pairs on the ``J0 = 0`` slice
+        before being intersected with the half-space.
+        """
+        try:
+            values = jnp.asarray(values)
+        except Exception as e:
+            raise ValueError(
+                f"``frequency_mask`` {values} cannot be converted to a jax array of boolean."
+            ) from e
+
+        if not jnp.all((values == 0) | (values == 1)):
+            raise ValueError("Frequency mask must be an array-like of 0s and 1s.")
+
+        values = values.astype(bool)
+
+        if not values.ndim == self._n_inputs:
+            ndim = self._n_inputs
+            raise ValueError(
+                f"The frequency mask for a {ndim}-dimensional Fourier basis "
+                f"must be an {ndim}-dimensional array of 0s and 1s. "
+                f"The provided mask is a {values.ndim}-dimensional array instead."
+            )
+
+        # The mask covers the signed frequency box: the first axis runs over
+        # the non-negative frequencies, every other axis from -max to max.
+        signed_frequencies = _signed_box_axes(self._frequencies)
+        box_shape = tuple(len(freqs) for freqs in signed_frequencies)
+        if box_shape != values.shape:
+            raise ValueError(
+                "Invalid shape for ``frequency_mask``. "
+                f"Expected shape {box_shape}, "
+                f"but got {tuple(values.shape)} instead. The mask covers the "
+                "signed frequency grid: the first axis runs over the "
+                "non-negative frequencies, and every other axis from -max to max."
+            )
+
+        # Redundant (J, -J) pairs live on the J0 = 0 slice, which exists only
+        # when axis 0 includes the DC term. Such pairs map to the same basis
+        # function and must share a mask value.
+        axis0 = self._frequencies[0]
+        if self._n_inputs > 1 and axis0.size and axis0[0] == 0:
+            is_valid, invalid = _check_mask_symmetry(values)
+            if not is_valid:
+                pairs = _format_invalid_pairs(invalid, signed_frequencies)
+                raise ValueError(
+                    "``frequency_mask`` is inconsistent across redundant "
+                    "frequency pairs. A frequency ``J`` and its negation "
+                    "``-J`` map to the same basis function and must share a "
+                    f"mask value. Invalid (inconsistent) pair(s): {pairs}."
+                )
+
+        self._frequency_mask = values
+
+        box = _get_all_frequency_pairs(signed_frequencies)
+        sel = values.reshape(-1) & _half_space_selection(box)
+        self._freq_combinations = _move_dc_first(box[:, sel])
 
     @property
     def frequencies(self) -> List[jnp.ndarray]:
