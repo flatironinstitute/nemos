@@ -2664,12 +2664,16 @@ class FourierEval(EvalBasisMixin, FourierBasis):
           additional intercept in the design matrix redundant.
 
         * Array-like of integers {0, 1} or booleans: Selects frequencies to
-          keep (1/True) or exclude (0/False). Shape must match the number of
-          available frequencies for each dimension.
+          keep (1/True) or exclude (0/False) over the *signed* frequency box.
+          The first axis runs over the non-negative frequencies, every other axis
+          from ``-max`` to ``max`` (since ``(n, m)`` and ``(n, -m)`` are distinct
+          functions). On the leading-zero slice, ``(0, f)`` and ``(0, -f)`` are
+          the same basis function and must be given the same value, otherwise a
+          ``ValueError`` is raised.
 
-        * :class:`~typing.Callable`: A function applied to each frequency index (one index
-          per dimension), returning a single boolean or {0, 1} indicating whether
-          to keep that frequency.
+        * :class:`~typing.Callable`: A function applied to each retained frequency
+          combination (one scalar per dimension, signed), returning a single
+          boolean or {0, 1} indicating whether to keep that frequency.
 
         * :class:`None <NoneType>`: All frequencies are kept.
 

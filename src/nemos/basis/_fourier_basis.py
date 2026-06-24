@@ -591,9 +591,13 @@ class FourierBasis(AtomicBasisMixin, Basis):
               the 0-frequency DC term, or ``"all"`` which keeps all the frequencies -
               equivalent to :class:`None <NoneType>`.
             - **Array / array-like (bool or 0/1)**: Explicit mask over the
-              frequency grid. Must have shape
-              ``(len(frequencies[0]), len(frequencies[1]), ...)`` and contain
-              only booleans or the integers {0, 1}.
+              *signed* frequency box. Its shape has ``len(frequencies[0])`` along
+              the (non-negative) first axis and ``2 * p_d + 1`` along each other
+              axis ``d`` with ``p_d`` positive frequencies including the DC term,
+              i.e. those axes run from ``-max`` to ``max``. Values must be
+              booleans or the integers {0, 1}. On the leading-zero slice, the
+              mirror pair ``(0, f)`` / ``(0, -f)`` is the same basis function and
+              must be given the same value.
             - :class:`callable`: A function with signature
               ``frequency_mask(*freqs) -> bool`` (or 0/1). It is applied to each
               frequency tuple ``(f1, f2, ..., f_n)`` to build the mask. The callable is
