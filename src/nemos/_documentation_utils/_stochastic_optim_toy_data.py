@@ -1,7 +1,6 @@
 import datetime
-
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 import numpy as np
 import pynapple as nap
@@ -20,6 +19,7 @@ RNG = np.random.default_rng(123)
 DEFAULT_NWB_FOLDER = Path(tempfile.gettempdir())
 DEFAULT_NWB_FILENAME = "stochastic_optim_toy_data.nwb"
 DEFAULT_NWB_PATH = DEFAULT_NWB_FOLDER / DEFAULT_NWB_FILENAME
+
 
 def _simulate_batching_data() -> tuple[nap.TsGroup, nap.TsdFrame, nap.TsdFrame]:
     basis = nmo.basis.RaisedCosineLogConv(5, window_size=int(WINDOW_SIZE_S / BIN_SIZE))
@@ -40,7 +40,10 @@ def _simulate_batching_data() -> tuple[nap.TsGroup, nap.TsdFrame, nap.TsdFrame]:
 
 
 def _write_to_nwb(
-    units: nap.TsGroup, spike_trains: nap.TsdFrame, X: nap.TsdFrame, nwb_path: Path | None = None
+    units: nap.TsGroup,
+    spike_trains: nap.TsdFrame,
+    X: nap.TsdFrame,
+    nwb_path: Path | None = None,
 ) -> Path:
     """
     Write the generated data to an NWB file.
@@ -100,7 +103,8 @@ def _write_to_nwb(
             name="X",
             data=X.values,
             unit="a.u.",
-            description=f"Spike trains convolved with a 5D RaisedCosineLogConv basis. {WINDOW_SIZE_S * 1000:.0f} ms window size.",
+            description="Spike trains convolved with a 5D RaisedCosineLogConv basis."
+            f"{WINDOW_SIZE_S * 1000:.0f} ms window size.",
             timestamps=X.t,
         )
     )
@@ -124,4 +128,3 @@ def _simulate_and_write_to_disk(nwb_path: Path | None = None) -> Path:
     Shorthand for calling _simulate_batching_data, then _write_to_nwb.
     """
     return _write_to_nwb(*_simulate_batching_data(), nwb_path=nwb_path)
-

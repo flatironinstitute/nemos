@@ -6,9 +6,9 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.19.1
 kernelspec:
-  name: python3
   display_name: Python 3 (ipykernel)
   language: python
+  name: python3
 ---
 
 ```{code-cell} ipython3
@@ -37,10 +37,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pynapple as nap
 import seaborn as sns
-from nemos._documentation_utils.plotting import plot_loss_history
-from nemos._documentation_utils._stochastic_optim_toy_data import DEFAULT_NWB_PATH, _simulate_and_write_to_disk
 
 import nemos as nmo
+from nemos._documentation_utils._stochastic_optim_toy_data import (
+    DEFAULT_NWB_PATH,
+    _simulate_and_write_to_disk,
+)
+from nemos._documentation_utils.plotting import plot_loss_history
 
 jax.enable_x64()
 nap.nap_config.suppress_conversion_warnings = True
@@ -169,7 +172,7 @@ For the `GradientDescent` solver, set `acceleration=False` and provide an explic
 glm = nmo.glm.PopulationGLM(
     solver_name="GradientDescent",
     regularizer="Ridge",
-    regularizer_strength = 0.01,
+    regularizer_strength=0.01,
     solver_kwargs={"stepsize": 0.01, "acceleration": False},
 )
 ```

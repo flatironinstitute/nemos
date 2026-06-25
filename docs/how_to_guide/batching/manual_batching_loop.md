@@ -6,9 +6,9 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.19.1
 kernelspec:
-  name: python3
   display_name: Python 3 (ipykernel)
   language: python
+  name: python3
 ---
 
 # Manual update loop for more control
@@ -37,9 +37,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pynapple as nap
 import seaborn as sns
-from nemos._documentation_utils._stochastic_optim_toy_data import _simulate_batching_data
 
 import nemos as nmo
+from nemos._documentation_utils._stochastic_optim_toy_data import (
+    _simulate_batching_data,
+)
 
 jax.enable_x64()
 nap.nap_config.suppress_conversion_warnings = True

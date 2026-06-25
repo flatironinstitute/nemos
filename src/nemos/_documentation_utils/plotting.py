@@ -1207,6 +1207,7 @@ def plot_basis_filter(basis, model, current_history_duration_sec=0.2):
     axes[3].set(title="Learned linear filter", xlabel="Time (sec)")
     return fig
 
+
 def plot_loss_history(loss_history: list[tuple], ax=None):
     """
     Plot ``loss_history`` per batch, marking epoch boundaries.
@@ -1229,8 +1230,12 @@ def plot_loss_history(loss_history: list[tuple], ax=None):
     if ax is None:
         fig, ax = plt.subplots()
 
-    batch_end_losses = [(i, t) for i, t in enumerate(loss_history) if t[0] == "batch_end"]
-    train_begin_losses = [(i, t) for i, t in enumerate(loss_history) if t[0] == "train_begin"]
+    batch_end_losses = [
+        (i, t) for i, t in enumerate(loss_history) if t[0] == "batch_end"
+    ]
+    train_begin_losses = [
+        (i, t) for i, t in enumerate(loss_history) if t[0] == "train_begin"
+    ]
 
     epoch_end_losses = []
     for i in range(len(batch_end_losses) - 1):
