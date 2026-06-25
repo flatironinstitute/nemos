@@ -227,11 +227,6 @@ def _get_frequency_pairs_from_callable(
         Shape (D, K): columns are the selected frequency tuples, taken from the
         half-space combinations (DC first when kept).
     """
-    if not callable(frequency_mask):
-        raise TypeError(
-            "`frequency_mask` must be a callable like frequency_mask(*freqs) -> bool."
-        )
-
     combinations = _combinator_builder(frequencies)  # (D, K), DC first
 
     selected = []
