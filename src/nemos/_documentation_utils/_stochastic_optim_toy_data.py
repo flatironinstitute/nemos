@@ -1,5 +1,8 @@
 import datetime
 
+from pathlib import Path
+import tempfile
+
 import numpy as np
 import pynapple as nap
 from pynwb import NWBHDF5IO, NWBFile, TimeSeries
@@ -13,9 +16,10 @@ N_NEURONS = 10
 T = 50  # seconds
 BIN_SIZE = 0.005  # seconds
 WINDOW_SIZE_S = 0.2  # convolution window, seconds
-NWB_FILENAME = "stochastic_optim_toy_data.nwb"
 RNG = np.random.default_rng(123)
-
+DEFAULT_NWB_FOLDER = Path(tempfile.gettempdir())
+DEFAULT_NWB_FILENAME = "stochastic_optim_toy_data.nwb"
+DEFAULT_NWB_PATH = DEFAULT_NWB_FOLDER / DEFAULT_NWB_FILENAME
 
 def _simulate_batching_data() -> tuple[nap.TsGroup, nap.TsdFrame, nap.TsdFrame]:
     basis = nmo.basis.RaisedCosineLogConv(5, window_size=int(WINDOW_SIZE_S / BIN_SIZE))
@@ -36,8 +40,28 @@ def _simulate_batching_data() -> tuple[nap.TsGroup, nap.TsdFrame, nap.TsdFrame]:
 
 
 def _write_to_nwb(
-    units: nap.TsGroup, spike_trains: nap.TsdFrame, X: nap.TsdFrame
-) -> None:
+    units: nap.TsGroup, spike_trains: nap.TsdFrame, X: nap.TsdFrame, nwb_path: Path | None = None
+) -> Path:
+    """
+    Write the generated data to an NWB file.
+
+    Params
+    ------
+    units :
+        Spike times in a pynapple TsGroup.
+    spike_trains :
+        Binned spike counts.
+    X :
+        Computed features.
+    nwb_path :
+        Path where the NWB file should be saved.
+        If None (default), it's saved in a temporary folder.
+
+    Returns
+    -------
+    nwb_path :
+        Path of the saved NWB file.
+    """
     # create an empty NWB file
     nwbfile = NWBFile(
         session_description="Toy data for stochastic optimization documentation.",
@@ -83,11 +107,21 @@ def _write_to_nwb(
 
     # write NWB file to disk
     # note: using as a context manager doesn't seem to close the file
-    io = NWBHDF5IO(NWB_FILENAME, "w")
+    if nwb_path is None:
+        nwb_path = DEFAULT_NWB_PATH
+
+    io = NWBHDF5IO(nwb_path, "w")
     io.write(nwbfile)
     io.close()
 
+    return nwb_path
 
-def _simulate_and_write_to_disk():
-    _write_to_nwb(*_simulate_batching_data())
+
+def _simulate_and_write_to_disk(nwb_path: Path | None = None) -> Path:
+    """
+    Simulate data and write to disk.
+
+    Shorthand for calling _simulate_batching_data, then _write_to_nwb.
+    """
+    return _write_to_nwb(*_simulate_batching_data(), nwb_path=nwb_path)
 

@@ -37,7 +37,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pynapple as nap
 import seaborn as sns
-from _toy_data_generation import _simulate_batching_data
+from nemos._documentation_utils._stochastic_optim_toy_data import _simulate_batching_data
 
 import nemos as nmo
 
@@ -61,6 +61,8 @@ Use gradient descent as the solver with a constant stepsize and acceleration dis
 ```{code-cell} ipython3
 glm = nmo.glm.PopulationGLM(
     solver_name="GradientDescent",
+    regularizer="Ridge",
+    regularizer_strength=0.01,
     solver_kwargs={"stepsize": 0.01, "acceleration": False},
 )
 ```

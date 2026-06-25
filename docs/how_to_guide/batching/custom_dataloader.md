@@ -11,6 +11,20 @@ kernelspec:
   language: python
 ---
 
+```{code-cell} ipython3
+:tags: [hide-input]
+
+%matplotlib inline
+import warnings
+
+# Ignore the specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="plotting functions contained within `_documentation_utils` are intended for nemos's documentation.",
+    category=UserWarning,
+)
+```
+
 # Creating a custom `DataLoader`
 
 In the previous section we loaded the model's input and output data from disk. These were already preprocessed and stored as arrays with matching lengths (`X` and `spike_trains`), making them easy to plug into [`LazyArrayDataLoader`](nemos.batching.LazyArrayDataLoader).
@@ -24,8 +38,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pynapple as nap
 import seaborn as sns
-from _plotting_helpers import plot_loss_history
-from _toy_data_generation import NWB_FILENAME, _simulate_and_write_to_disk
+from nemos._documentation_utils.plotting import plot_loss_history
+from nemos._documentation_utils._stochastic_optim_toy_data import DEFAULT_NWB_PATH, _simulate_and_write_to_disk
 
 jax.enable_x64()
 
@@ -40,7 +54,7 @@ Load the spike times:
 
 ```{code-cell} ipython3
 _simulate_and_write_to_disk()
-data = nap.load_file(NWB_FILENAME)
+data = nap.load_file(DEFAULT_NWB_PATH)
 units = data["units"]  # contains spike times per unit
 ```
 
@@ -167,6 +181,8 @@ Fit for 30 epochs:
 ```{code-cell} ipython3
 glm = nmo.glm.PopulationGLM(
     solver_name="GradientDescent",
+    regularizer="Ridge",
+    regularizer_strength=0.01,
     solver_kwargs={"stepsize": 0.01, "acceleration": False},
 )
 ```

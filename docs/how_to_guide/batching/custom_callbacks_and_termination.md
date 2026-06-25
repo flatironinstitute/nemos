@@ -11,6 +11,20 @@ kernelspec:
   language: python
 ---
 
+```{code-cell} ipython3
+:tags: [hide-input]
+
+%matplotlib inline
+import warnings
+
+# Ignore the specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="plotting functions contained within `_documentation_utils` are intended for nemos's documentation.",
+    category=UserWarning,
+)
+```
+
 # Stopping on convergence and custom callbacks
 
 +++
@@ -26,8 +40,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pynapple as nap
 import seaborn as sns
-from _plotting_helpers import plot_loss_history
-from _toy_data_generation import NWB_FILENAME, _simulate_and_write_to_disk
+from nemos._documentation_utils.plotting import plot_loss_history
+from nemos._documentation_utils._stochastic_optim_toy_data import DEFAULT_NWB_PATH, _simulate_and_write_to_disk
 
 import nemos as nmo
 
@@ -40,7 +54,7 @@ First, quickly set up and run a stochastic fit for 10 epochs:
 
 ```{code-cell} ipython3
 _simulate_and_write_to_disk()
-data = nap.load_file(NWB_FILENAME)
+data = nap.load_file(DEFAULT_NWB_PATH)
 X, spike_trains = data["X"], data["spike_trains"]
 ```
 
@@ -63,6 +77,8 @@ batch_logger = nmo.callbacks.TestLossLogger(
 ```{code-cell} ipython3
 glm = nmo.glm.PopulationGLM(
     solver_name="GradientDescent",
+    regularizer="Ridge",
+    regularizer_strength = 0.01,
     solver_kwargs={"stepsize": 0.01, "acceleration": False},
 )
 ```
@@ -258,7 +274,7 @@ Support for models that require post-hoc estimation of residual degrees of freed
 :::
 
 ```{code-cell} ipython3
-full_model = nmo.glm.PopulationGLM(solver_kwargs={"tol": 1e-3}).fit(X, spike_trains)
+full_model = nmo.glm.PopulationGLM(regularizer="Ridge", regularizer_strength = 0.01).fit(X, spike_trains)
 ```
 
 Now that the full model is fitted, we score the full model and the batch model against the full dataset using pseudo-R2:
