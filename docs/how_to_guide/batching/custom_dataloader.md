@@ -145,9 +145,7 @@ We build those history features using a NeMoS convolutional basis with a window 
 ```{code-cell} ipython3
 batch_size = 1  # seconds
 bin_size = 5 / 1000  # seconds
-```
 
-```{code-cell} ipython3
 basis = nmo.basis.RaisedCosineLogConv(5, window_size=int(0.2 / bin_size))
 ```
 
@@ -197,8 +195,4 @@ glm.stochastic_fit(loader, num_epochs=30, callbacks=batch_logger)
 
 ```{code-cell} ipython3
 plot_loss_history(batch_logger.loss_history)
-```
-
-```{code-cell} ipython3
-
 ```

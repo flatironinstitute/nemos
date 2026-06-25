@@ -52,9 +52,7 @@ This approach doesn't require the use of a NeMoS data loader, you can load batch
 
 ```{code-cell} ipython3
 units, spike_trains, X = _simulate_batching_data()
-```
 
-```{code-cell} ipython3
 loader = nmo.batching.ArrayDataLoader(X, spike_trains, batch_size=100)
 ```
 

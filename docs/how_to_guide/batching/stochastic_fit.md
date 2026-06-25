@@ -226,7 +226,3 @@ We're getting closer, but still need some training.
 :::{tip}
 To learn how to stop iteration based on a convergence criterion and how to write a custom callback, see the [](./custom_callbacks_and_termination.md) section.
 :::
-
-```{code-cell} ipython3
-
-```

@@ -59,34 +59,26 @@ First, quickly set up and run a stochastic fit for 10 epochs:
 _simulate_and_write_to_disk()
 data = nap.load_file(DEFAULT_NWB_PATH)
 X, spike_trains = data["X"], data["spike_trains"]
-```
 
-```{code-cell} ipython3
 loader = nmo.batching.LazyArrayDataLoader(
     X,
     spike_trains,
     batch_size=100,
 )
-```
 
-```{code-cell} ipython3
 batch_logger = nmo.callbacks.TestLossLogger(
     X,
     spike_trains,
     events={"train_begin", "batch_end"},
 )
-```
 
-```{code-cell} ipython3
 glm = nmo.glm.PopulationGLM(
     solver_name="GradientDescent",
     regularizer="Ridge",
     regularizer_strength=0.01,
     solver_kwargs={"stepsize": 0.01, "acceleration": False},
 )
-```
 
-```{code-cell} ipython3
 glm.stochastic_fit(loader, num_epochs=10, callbacks=batch_logger)
 
 plot_loss_history(batch_logger.loss_history)
@@ -334,7 +326,3 @@ fig.tight_layout()
 ```
 
 As we can see, the batch model starts to approximate the full model.
-
-```{code-cell} ipython3
-
-```
