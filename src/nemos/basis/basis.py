@@ -2715,27 +2715,29 @@ class FourierEval(EvalBasisMixin, FourierBasis):
     **2D: unmasked grid of frequency pairs**
 
     >>> fourier_2d = FourierEval(n_freq, ndim=2)
-    >>> # (5*5 frequency pairs) * 2 (cos+sin) - 1 (no sine at DC) = 49
+    >>> # half-space of the 5x5 grid has 41 pairs (incl. DC); DC dropped -> 40; *2
     >>> fourier_2d.n_basis_funcs
-    48
+    80
     >>> x, y = rng.normal(size=(2, 6))
     >>> X = fourier_2d.compute_features(x, y)
     >>> X.shape
-    (6, 48)
+    (6, 80)
 
     **2D: masking with an array (drop 3 pairs)**
 
-    >>> mask = np.ones((5, 5))
-    >>> # drop 3 frequency pairs, including DC term (0,0)
-    >>> mask[[0, 0, 1], [0, 1, 2]] = 0
+    >>> # the mask covers the signed (5, 9) box; axis 1 runs over freqs -4..4,
+    >>> # so columns 4, 5, 6 are frequencies 0, 1, 2
+    >>> mask = np.ones((5, 9))
+    >>> # drop 3 pairs, including the DC term (0, 0)
+    >>> mask[[0, 1, 2], [4, 5, 6]] = 0
     >>> fourier_2d_masked = FourierEval(
     ...     n_freq,
     ...     ndim=2,
     ...     frequency_mask=mask
     ... )
-    >>> # (5*5-3 frequency pairs) * 2 (cos+sin) = 44
+    >>> # (41 half-space pairs - 3 dropped) * 2 (cos+sin); no DC = 76
     >>> fourier_2d_masked.n_basis_funcs
-    44
+    76
 
     **2D: masking with a callable**
 
@@ -2747,7 +2749,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
     ...     frequency_mask=keep_circle
     ... )
     >>> fourier_2d_funcmask.n_basis_funcs
-    25
+    37
 
     **Explicit frequency specifications**
 
@@ -2757,9 +2759,9 @@ class FourierEval(EvalBasisMixin, FourierBasis):
     ...     frequencies=[np.arange(3), (1, 4)],
     ...     ndim=2
     ... )
-    >>> # (3*3 frequency pairs) * 2 (cos+sin) = 18; no DC term (0, 0)
+    >>> # 15 half-space pairs (no DC, since the y-axis omits 0) -> 2*15 = 30
     >>> fourier_mixed.n_basis_funcs
-    18
+    30
 
     """
 
