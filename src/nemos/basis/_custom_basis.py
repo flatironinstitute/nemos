@@ -367,6 +367,17 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         :
             The resulting design matrix, with one row per sample and one column per output feature.
 
+        Notes
+        -----
+        ``CustomBasis`` does not derive any state from the data: the functions in ``self.funcs`` are
+        applied to the raw input, and ``bounds`` only controls which samples are replaced by
+        ``fill_value`` when they fall outside the given interval. The transformation is therefore
+        identical across inputs *as long as your functions are sample-wise*. If a function internalizes
+        a data-dependent quantity (e.g. normalizing by the input mean or std), the transformation will
+        differ from one input to the next, which is unsafe when the basis is used as a transformer (e.g.
+        inside a cross-validation loop): provide functions whose output depends only on each sample, or
+        fix any data-dependent quantity, to obtain an identical transformation across folds.
+
         Examples
         --------
         >>> import nemos as nmo

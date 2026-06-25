@@ -560,6 +560,15 @@ class EvalBasisMixin:
         :
             A matrix with the transformed features.
 
+        Notes
+        -----
+        When ``bounds`` is ``None``, the domain of the basis is taken from the min and max of
+        the input ``xi``. Calling this method on inputs with different ranges therefore yields
+        different transformations, even for the same basis object: you get the same basis
+        *functions*, but the domain is re-fit to each input. Set ``bounds`` explicitly to fix the
+        domain and obtain an identical transformation across inputs (required when the basis is
+        used as a transformer, e.g. inside a cross-validation loop).
+
         """
         out = self.evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
         if (

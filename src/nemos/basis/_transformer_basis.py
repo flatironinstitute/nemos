@@ -4,6 +4,7 @@ import copy
 from functools import wraps
 from typing import TYPE_CHECKING, Generator
 
+import jax.tree
 import numpy as np
 
 from ..typing import FeatureMatrix
@@ -134,6 +135,20 @@ class TransformerBasis:
                 "Please call `set_input_shape` before calling `fit`, `transform`, or "
                 "`fit_transform`."
             )
+        for b in basis._iterate_over_components():
+            # ``is_leaf=lambda x: x is None`` keeps ``None`` as a leaf, so this catches
+            # both ``bounds=None`` and a partially-unset ``(None, high)``.
+            if hasattr(b, "bounds") and any(
+                v is None
+                for v in jax.tree.leaves(b.bounds, is_leaf=lambda x: x is None)
+            ):
+                raise RuntimeError(
+                    f"Cannot apply TransformerBasis: component {b} has unset ``bounds``.\n"
+                    "When a basis is used as a transformer, ``bounds`` must be set explicitly so the "
+                    "domain is identical across folds; otherwise it is derived from the input data and "
+                    "the transformation changes at every fit. Set the ``bounds`` attribute before calling "
+                    "``fit``, ``transform``, or ``fit_transform``."
+                )
 
     def _unpack_inputs(self, X: FeatureMatrix) -> Generator:
         """Unpack inputs.
