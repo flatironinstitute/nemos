@@ -523,7 +523,80 @@ class AtomicBasisMixin(BasisMixin):
 
 
 class EvalBasisMixin:
-    """Mixin class for evaluational basis."""
+    """Mixin providing the evaluation lifecycle shared by all evaluational bases.
+
+    Bounds storage and out-of-bounds fill handling live in :class:`BoundedEvalBasisMixin`.
+    """
+
+    def _compute_features(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor):
+        """Evaluate basis at sample points.
+
+        The basis is evaluated at the locations specified in the inputs. For example,
+        ``compute_features(np.array([0, .5]))`` would return the array:
+
+        .. code-block:: text
+
+           b_1(0) ... b_n(0)
+           b_1(.5) ... b_n(.5)
+
+        where ``b_i`` is the i-th basis.
+
+        Parameters
+        ----------
+        *xi:
+            The input samples over which to apply the basis transformation. The samples can be passed
+            as multiple arguments, each representing a different dimension for multivariate inputs.
+
+        Returns
+        -------
+        :
+            A matrix with the transformed features.
+
+        """
+        out = self.evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
+        return np.reshape(out, (out.shape[0], -1))
+
+    def setup_basis(self, *xi: NDArray) -> Basis:
+        """
+        Set all basis states.
+
+        This method corresponds sklearn transformer ``fit``. As fit, it must receive the input and
+        it must set all basis states, i.e. ``kernel_`` and all the states relative to the input shape.
+        The difference between this method and the transformer ``fit`` is in the expected input structure,
+        where the transformer ``fit`` method requires the inputs to be concatenated in a 2D array, while here
+        each input is provided as a separate time series for each basis element.
+
+        Parameters
+        ----------
+        xi:
+            Input arrays.
+
+        Returns
+        -------
+        :
+            The basis with ready for evaluation.
+        """
+        self.set_input_shape(*xi)
+        return self
+
+    def _set_input_independent_states(self) -> EvalBasisMixin:
+        """
+        Compute all the basis states that do not depend on the input.
+
+        For EvalBasisMixin, this method might not perform any operation but simply return the
+        instance itself, as no kernel preparation is necessary.
+
+        Returns
+        -------
+        self :
+            The instance itself.
+
+        """
+        return self
+
+
+class BoundedEvalBasisMixin(EvalBasisMixin):
+    """Evaluational basis with a bounded domain and out-of-bounds fill handling."""
 
     # Whether to fill out-of-bounds samples with fill_value.
     # Set to False for bases defined over the entire real line (e.g., Fourier).
@@ -597,44 +670,6 @@ class EvalBasisMixin:
         )
         to_fill_broadcast = to_fill.reshape(to_fill.shape[0], *([1] * (out.ndim - 1)))
         return jnp.where(to_fill_broadcast, self.fill_value, out)
-
-    def setup_basis(self, *xi: NDArray) -> Basis:
-        """
-        Set all basis states.
-
-        This method corresponds sklearn transformer ``fit``. As fit, it must receive the input and
-        it must set all basis states, i.e. ``kernel_`` and all the states relative to the input shape.
-        The difference between this method and the transformer ``fit`` is in the expected input structure,
-        where the transformer ``fit`` method requires the inputs to be concatenated in a 2D array, while here
-        each input is provided as a separate time series for each basis element.
-
-        Parameters
-        ----------
-        xi:
-            Input arrays.
-
-        Returns
-        -------
-        :
-            The basis with ready for evaluation.
-        """
-        self.set_input_shape(*xi)
-        return self
-
-    def _set_input_independent_states(self) -> EvalBasisMixin:
-        """
-        Compute all the basis states that do not depend on the input.
-
-        For EvalBasisMixin, this method might not perform any operation but simply return the
-        instance itself, as no kernel preparation is necessary.
-
-        Returns
-        -------
-        self :
-            The instance itself.
-
-        """
-        return self
 
     @property
     def bounds(self) -> List[Tuple[float, float]] | Tuple[float, float] | None:

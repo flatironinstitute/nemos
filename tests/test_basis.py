@@ -39,7 +39,10 @@ from nemos.basis._basis import (
     MultiplicativeBasis,
     add_docstring,
 )
-from nemos.basis._basis_mixin import AtomicBasisMixin, EvalBasisMixin
+from nemos.basis._basis_mixin import (
+    AtomicBasisMixin,
+    BoundedEvalBasisMixin,
+)
 from nemos.basis._composition_utils import generate_basis_label_pair, set_input_shape
 from nemos.basis._decaying_exponential import OrthExponentialBasis
 from nemos.basis._fourier_basis import FourierBasis
@@ -53,14 +56,14 @@ from nemos.basis._zero_basis import ZeroBasis
 from nemos.utils import pynapple_concatenate_numpy
 
 
-class EvalBasis2D(EvalBasisMixin, AtomicBasisMixin, Basis):
+class EvalBasis2D(BoundedEvalBasisMixin, AtomicBasisMixin, Basis):
     """Eval basis 2D for test purposes."""
 
     def __init__(self, ndim, bounds=None, label=None):
         self._n_inputs = ndim
         Basis.__init__(self)
         AtomicBasisMixin.__init__(self, n_basis_funcs=5, label=label)
-        EvalBasisMixin.__init__(self, bounds=bounds)
+        BoundedEvalBasisMixin.__init__(self, bounds=bounds)
 
     def evaluate(self, *x):
         # example implementation

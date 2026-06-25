@@ -136,11 +136,19 @@ class TransformerBasis:
                 "`fit_transform`."
             )
         for b in basis._iterate_over_components():
+            # Only bases whose domain is derived from data when ``bounds`` is unset are unsafe
+            # as transformers; ``_bounds_define_domain`` flags those (see ``Basis``). The
+            # ``hasattr`` check excludes convolutional bases, which inherit the flag from the
+            # shared math base class but carry no ``bounds`` (their ``__getattr__`` raises).
             # ``is_leaf=lambda x: x is None`` keeps ``None`` as a leaf, so this catches
             # both ``bounds=None`` and a partially-unset ``(None, high)``.
-            if hasattr(b, "bounds") and any(
-                v is None
-                for v in jax.tree.leaves(b.bounds, is_leaf=lambda x: x is None)
+            if (
+                getattr(b, "_bounds_define_domain", False)
+                and hasattr(b, "bounds")
+                and any(
+                    v is None
+                    for v in jax.tree.leaves(b.bounds, is_leaf=lambda x: x is None)
+                )
             ):
                 raise RuntimeError(
                     f"Cannot apply TransformerBasis: component {b} has unset ``bounds``.\n"

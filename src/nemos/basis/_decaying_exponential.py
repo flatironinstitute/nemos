@@ -33,6 +33,9 @@ class OrthExponentialBasis(AtomicBasisMixin, Basis, abc.ABC):
         For example: velocity, position, spike_counts.
     """
 
+    # ``bounds=None`` rescales the domain to the data min/max (see ``min_max_rescale_samples``).
+    _bounds_define_domain = True
+
     def __init__(
         self,
         n_basis_funcs: int,
