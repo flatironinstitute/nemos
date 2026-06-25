@@ -134,8 +134,16 @@ VALID_PAIRS = [
     {"scale_init_kwargs", "solver_init_kwargs"},
     {"hmm_initialization_funcs", "model_initialization_funcs"},
     {"random_key_pair", "random_key"},
+    {"tag", "tags"},
+    {"x_flat", "g_flat"},
     {"func", "_func"},
     {"funcs", "_func"},
+    {"fval", "val"},
+    {"params_neu", "param_name"},
+    {"params_i", "params"},
+    {"params_i", "params_dict"},
+    {"params_tree", "parameter_tree"},
+    {"leaf", "x_leaf"},
 ]
 
 

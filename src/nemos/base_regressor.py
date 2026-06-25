@@ -9,14 +9,7 @@ from abc import abstractmethod
 from copy import deepcopy
 from functools import wraps
 from pathlib import Path
-from typing import (
-    Any,
-    Generic,
-    Optional,
-    Tuple,
-    Type,
-    Union,
-)
+from typing import Any, Callable, Generic, Optional, Tuple, Type, Union
 
 import jax
 import jax.numpy as jnp
@@ -29,6 +22,8 @@ from .base_class import Base
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
+from .solvers._hess import HessianTag
+from .solvers._newton import Newton
 from .type_casting import cast_to_jax, is_numpy_array_like
 from .typing import (
     DESIGN_INPUT_TYPE,
@@ -117,6 +112,7 @@ class BaseRegressor(
     """
 
     _validator: ValidatorT
+    _hess_tag: HessianTag | None = None
 
     # overwrite this in subclasses if their objective functions return aux
     _has_aux: bool = False
@@ -260,6 +256,8 @@ class BaseRegressor(
                 stacklevel=2,
             )
             self.solver_name = None
+        else:
+            self._invalidate_solver()
 
     @property
     def regularizer_strength(self) -> Any:
@@ -269,6 +267,7 @@ class BaseRegressor(
     @regularizer_strength.setter
     def regularizer_strength(self, strength: Any):
         self._regularizer_strength = self.regularizer._validate_strength(strength)
+        self._invalidate_solver()
 
     @property
     def solver_name(self) -> str:
@@ -287,13 +286,32 @@ class BaseRegressor(
             spec = solvers.get_solver(solver_name)
             self._regularizer.check_solver(spec.algo_name)
             self._solver_spec = spec
+        self._invalidate_solver()
+
+    def _hess_property_override(self) -> type | None:
+        """Definiteness the model can certify beyond what coverage inference sees.
+
+        Defaults to None (use the combined loss+regularizer tag). A subclass returns a
+        matrix-property type when its loss supplies definiteness on the subtrees the
+        regularizer leaves unpenalized (e.g. a GLM whose loss is positive definite on
+        the unregularized intercept, making a Ridge-penalized Hessian positive definite).
+        """
+        return None
+
+    def _resolve_default_solver(self) -> str:
+        """Name of the default solver when the user has not set one.
+
+        Defaults to the regularizer's own default solver. Subclasses may override to
+        express a model- and regularizer-specific preference (e.g. GLMs default to
+        Newton when the regularizer makes the Hessian positive definite).
+        """
+        return self.regularizer.default_solver
 
     @property
     def solver_spec(self) -> SolverSpec:
         """Getter for the solver specification."""
         if self._solver_spec is None:
-            spec = solvers.get_solver(self.regularizer.default_solver)
-            return spec
+            return solvers.get_solver(self._resolve_default_solver())
         return self._solver_spec
 
     @property
@@ -308,6 +326,7 @@ class BaseRegressor(
             solver_cls = self.solver_spec.implementation
             self._check_solver_kwargs(solver_cls, solver_kwargs)
         self._solver_kwargs = solver_kwargs
+        self._invalidate_solver()
 
     @staticmethod
     def _check_solver_kwargs(solver_class: Type, solver_kwargs: dict[str, Any]) -> None:
@@ -334,6 +353,16 @@ class BaseRegressor(
             raise NameError(
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
             )
+
+    def _get_hess_fn(self, params, autodiff: bool) -> Callable | None:
+        return None
+
+    def _invalidate_solver(self):
+        self._solver = None
+        self._solver_loss_fun = None
+        self._optimizer_init_state = None
+        self._optimizer_update = None
+        self._optimizer_run = None
 
     def _instantiate_solver(
         self,
@@ -406,6 +435,14 @@ class BaseRegressor(
             init_params=init_params,
             **solver_kwargs,
         )
+
+        if isinstance(solver, Newton):
+            solver.setup_hessian(
+                self._get_hess_fn(init_params, autodiff=solver.autodiff),
+                self._hess_tag,
+                self.regularizer.resolve_hess_tag(init_params),
+                self._hess_property_override(),
+            )
 
         # nemos's solvers store a .fun attribute, but it's not necessary for a solver to work.
         # A test relies on having _solver_loss_fun saved, so still check and save it if possible.

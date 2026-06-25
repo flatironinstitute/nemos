@@ -6,6 +6,7 @@ from typing import Any, Callable, Optional
 
 import jax
 import jax.numpy as jnp
+from jax.flatten_util import ravel_pytree
 
 
 def _get_not_inf(array: jnp.ndarray) -> jnp.ndarray:
@@ -165,6 +166,40 @@ def tree_slice(data: Any, idx, is_leaf: Optional[Callable] = None):
     return jax.tree_util.tree_map(lambda x: x[idx], data, is_leaf=is_leaf)
 
 
+def tree_take(data, i, axis=1, is_leaf=None):
+    """
+    Apply ``jnp.take`` to each non-scalar leaf in a pytree.
+
+    Scalar and 0-dimensional leaves are returned unchanged. All other leaves
+    are sliced using ``jnp.take(x, i, axis=axis)``.
+
+    Parameters
+    ----------
+    data :
+        Pytree whose leaves are arrays or array-like objects.
+    i :
+        Indices passed to ``jnp.take``.
+    axis :
+        Axis along which to select values. Passed directly to ``jnp.take``.
+    is_leaf :
+        Optional predicate specifying additional pytree leaves. Forwarded to
+        ``jax.tree_util.tree_map``.
+
+    Returns
+    -------
+    Any
+        A pytree with the same structure as ``data``, where each non-scalar
+        leaf has been indexed using ``jnp.take`` along the specified axis.
+    """
+    from .type_casting import _is_scalar_or_0d
+
+    return jax.tree_util.tree_map(
+        lambda x: x if _is_scalar_or_0d(x) else jnp.take(x, i, axis=axis),
+        data,
+        is_leaf=is_leaf,
+    )
+
+
 # The following functions are adapted from jaxopt.tree_utils
 
 tree_add = partial(jax.tree_util.tree_map, operator.add)
@@ -227,3 +262,29 @@ def drop_nans(*trees):
         jax.tree_util.tree_map(lambda x: x[is_valid], par) if par is not None else None
         for par in trees
     ]
+
+
+def ravel_pytree_nest(pytree):
+    """Batch-last pytree ravel that also supports non-batched pytrees."""
+    leaves = jax.tree.leaves(pytree)
+    batch_dims = [x.shape[-1] for x in leaves if x.ndim > 0]
+    if not batch_dims or not all(b == batch_dims[0] for b in batch_dims):
+        return ravel_pytree(pytree)
+
+    N = batch_dims[0]
+    in_axes = jax.tree.map(lambda x: -1 if x.ndim > 0 else None, pytree)
+    sample0 = jax.tree.map(
+        lambda x: jnp.take(x, 0, axis=-1) if x.ndim > 0 else x, pytree
+    )
+    _, unravel_one = ravel_pytree(sample0)
+
+    flat = jax.vmap(lambda t: ravel_pytree(t)[0], in_axes=(in_axes,))(pytree).reshape(
+        -1
+    )
+
+    out_axes = jax.tree.map(lambda x: -1 if x.ndim > 0 else 0, sample0)
+
+    def unravel(x_flat):
+        return jax.vmap(unravel_one, out_axes=out_axes)(x_flat.reshape(N, -1))
+
+    return flat, unravel
