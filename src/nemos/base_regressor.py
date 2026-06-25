@@ -956,15 +956,30 @@ class BaseRegressor(
             except Exception:
                 pass
 
-            conv_html = ""
+            # Mirror the convergence detection used in ``GLM.fit``: prefer
+            # ``stats.converged``, fall back to a ``converged`` flag exposed
+            # directly by custom solvers, and otherwise mark it as unknown.
+            # A missing solver state (e.g. for a model loaded from disk) is
+            # treated the same as a solver that does not report convergence.
             solver_state = state.get("solver_state_")
-            if solver_state is not None:
-                c_color, c_text = (
-                    ("#28a745", "Yes")
-                    if solver_state.stats.converged.item()
-                    else ("#dc3545", "No")
-                )
-                conv_html = f'<span><strong>Converged:</strong> <span style="color: {c_color};">{c_text}</span></span>'
+            if solver_state is None:
+                converged = None
+            elif hasattr(solver_state, "stats") and hasattr(
+                solver_state.stats, "converged"
+            ):
+                converged = bool(solver_state.stats.converged)
+            elif hasattr(solver_state, "converged"):
+                converged = bool(solver_state.converged)
+            else:
+                converged = None
+
+            if converged is None:
+                c_color, c_text = ("#6c757d", "Unknown")
+            elif converged:
+                c_color, c_text = ("#28a745", "Yes")
+            else:
+                c_color, c_text = ("#dc3545", "No")
+            conv_html = f'<span><strong>Converged:</strong> <span style="color: {c_color};">{c_text}</span></span>'
 
             diagnostics = f"""<span style="margin-right: 15px;"><strong>Neurons:</strong> {n_neurons}</span>
             </div>
