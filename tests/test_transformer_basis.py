@@ -610,7 +610,12 @@ def test_to_transformer_and_set_input(
     basis_cls, inp, set_input, expectation, basis_class_specific_params, ndim
 ):
     bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
+        5,
+        basis_cls,
+        basis_class_specific_params,
+        bounds=(0, 10),
+        window_size=10,
+        ndim=ndim,
     )
     if set_input:
         bas.set_input_shape(*([inp] * bas._n_inputs))
@@ -643,7 +648,12 @@ def test_transformer_fit(
     basis_cls, inp, basis_class_specific_params, expectation, ndim
 ):
     bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
+        5,
+        basis_cls,
+        basis_class_specific_params,
+        bounds=(0, 2),
+        window_size=10,
+        ndim=ndim,
     )
     transformer = bas.set_input_shape(*([inp] * bas._n_inputs)).to_transformer()
     X = np.concatenate([inp.reshape(inp.shape[0], -1)] * bas._n_inputs, axis=1)
@@ -692,7 +702,7 @@ def test_transformer_fit_input_shape_mismatch(
     basis_cls, delta_input, inp, basis_class_specific_params, expectation
 ):
     bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10
+        5, basis_cls, basis_class_specific_params, bounds=(0, 2), window_size=10
     )
     transformer = bas.set_input_shape(*([inp] * bas._n_inputs)).to_transformer()
     X = np.random.randn(10, int(sum(bas._input_shape_product) + delta_input))
@@ -717,7 +727,12 @@ def test_transformer_fit_input_shape_mismatch(
 )
 def test_transformer_transform(basis_cls, inp, basis_class_specific_params, ndim):
     bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
+        5,
+        basis_cls,
+        basis_class_specific_params,
+        bounds=(0, 2),
+        window_size=10,
+        ndim=ndim,
     )
     assert getattr(bas, "ndim", ndim) == ndim
     transformer = bas.set_input_shape(*([inp] * bas._n_inputs)).to_transformer()
@@ -746,7 +761,7 @@ def test_transformer_transform(basis_cls, inp, basis_class_specific_params, ndim
 )
 def test_transformer_fit_transform(basis_cls, inp, basis_class_specific_params):
     bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10
+        5, basis_cls, basis_class_specific_params, bounds=(0, 2), window_size=10
     )
     transformer = bas.set_input_shape(*([inp] * bas._n_inputs)).to_transformer()
     X = np.concatenate([inp.reshape(inp.shape[0], -1)] * bas._n_inputs, axis=1)
@@ -780,7 +795,7 @@ def test_transformer_fit_transform_input_shape_mismatch(
     basis_cls, delta_input, inp, basis_class_specific_params, expectation
 ):
     bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10
+        5, basis_cls, basis_class_specific_params, bounds=(0, 2), window_size=10
     )
     transformer = bas.set_input_shape(*([inp] * bas._n_inputs)).to_transformer()
     X = np.random.randn(10, int(sum(bas._input_shape_product) + delta_input))
@@ -805,7 +820,7 @@ def test_transformer_fit_transform_input_struct(
     basis_cls, inp, basis_class_specific_params, expectation
 ):
     bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10
+        5, basis_cls, basis_class_specific_params, bounds=(0, 2), window_size=10
     )
     transformer = bas.set_input_shape(*([inp] * bas._n_inputs)).to_transformer()
     X = np.concatenate([inp.reshape(inp.shape[0], -1)] * bas._n_inputs, axis=1)
@@ -864,6 +879,7 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
             basis_class_specific_params,
             window_size=5,
             categories=5,
+            bounds=(np.nanmin(inp), np.nanmax(inp)),
         )
     else:
         bas = basis_with_add_kwargs(basis_kwargs={"add": 0})
@@ -947,7 +963,7 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
 )
 def test_initialization(basis_cls, basis_class_specific_params):
     bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10
+        5, basis_cls, basis_class_specific_params, bounds=(0, 2), window_size=10
     )
     expectation = (
         does_not_raise()
@@ -1091,7 +1107,7 @@ def test_dir_transformer(basis_cls, basis_class_specific_params):
 @pytest.mark.parametrize("method", ["fit", "transform", "fit_transform"])
 def test_check_input(inp, expectation, basis_cls, basis_class_specific_params, method):
     bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10
+        5, basis_cls, basis_class_specific_params, bounds=(0, 2), window_size=10
     )
     # set kernels
     if hasattr(bas, "_set_input_independent_states"):
