@@ -211,7 +211,7 @@ class TransformerBasis:
               Such a basis would re-fit its domain to the input on every call, so ``bounds`` must
               be set explicitly before it is used as a transformer.
         ValueError:
-            If the number of columns in X do not ``self.n_basis_input_``.
+            If the number of columns in X does not match ``self.n_basis_input_``.
 
         Examples
         --------
