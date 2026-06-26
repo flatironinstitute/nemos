@@ -1320,3 +1320,25 @@ def test_double_transformer():
     assert (
         id(tbas.basis) != id(tbas2.basis) != id(tbas3)
     ), "The basis was shallow copied!"
+
+
+@pytest.mark.parametrize(
+    "bas, expectation",
+    [
+        (
+            nmo.basis.BSplineEval(5),
+            pytest.raises(RuntimeError, match="BSplineEval.+bounds"),
+        ),
+        (nmo.basis.BSplineEval(5, bounds=(0, 1)), does_not_raise()),
+        (nmo.basis.BSplineConv(5, 10), does_not_raise()),
+        (nmo.basis.IdentityEval(), does_not_raise()),
+        (nmo.basis.Zero(), does_not_raise()),
+        (nmo.basis.CustomBasis(lambda x: x), does_not_raise()),
+    ],
+)
+@pytest.mark.parametrize("method", ["fit", "transform", "fit_transform"])
+def test_bounds_gating(bas, expectation, method):
+    bas = bas.to_transformer()
+    with expectation:
+        meth = getattr(bas, method)
+        meth(np.stack([np.linspace(0, 1)] * bas._n_inputs, axis=1))
