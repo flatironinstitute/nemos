@@ -2248,10 +2248,9 @@ class TestZeroBasis(BasisFuncsTesting):
         with pytest.raises(AttributeError):
             bas.n_basis_funcs = 11
 
-    def test_bounds_not_settable(self):
+    def test_has_no_bounds(self):
         bas = basis.Zero()
-        with pytest.raises(AttributeError):
-            bas.bounds = (0, 1)
+        assert not hasattr(bas, "bounds")
 
 
 class TestIdentityBasis(BasisFuncsTesting):
