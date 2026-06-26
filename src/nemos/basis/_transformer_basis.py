@@ -59,7 +59,7 @@ class TransformerBasis:
     >>> # Generate data
     >>> num_samples, num_features = 10000, 1
     >>> x = np.random.normal(size=(num_samples, ))  # raw time series
-    >>> basis = BSplineEval(10)
+    >>> basis = BSplineEval(10, bounds=(x.min(), x.max()))
     >>> features = basis.compute_features(x)  # basis transformed time series
     >>> weights = np.random.normal(size=basis.n_basis_funcs)  # true weights
     >>> y = np.random.poisson(np.exp(features.dot(weights)))  # spike counts
@@ -222,7 +222,7 @@ class TransformerBasis:
         >>> X = np.random.normal(size=(100, 2))
 
         >>> # Define and fit tranformation basis
-        >>> basis = MSplineEval(10).set_input_shape(2)
+        >>> basis = MSplineEval(10, bounds=(X.min(), X.max())).set_input_shape(2)
         >>> transformer = TransformerBasis(basis)
         >>> transformer_fitted = transformer.fit(X)
         """
@@ -323,7 +323,7 @@ class TransformerBasis:
         >>> X = np.random.normal(size=(100, 1))
 
         >>> # Define tranformation basis
-        >>> basis = MSplineEval(10).set_input_shape(1)
+        >>> basis = MSplineEval(10, bounds=(X.min(), X.max())).set_input_shape(1)
         >>> transformer = TransformerBasis(basis)
 
         >>> # Fit and transform basis
