@@ -45,7 +45,7 @@ from nemos._documentation_utils._stochastic_optim_toy_data import (
 )
 from nemos._documentation_utils.plotting import plot_loss_history
 
-jax.enable_x64()
+jax.config.update("jax_enable_x64", True)
 nap.nap_config.suppress_conversion_warnings = True
 np.random.seed(123)
 ```
