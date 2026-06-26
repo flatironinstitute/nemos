@@ -193,7 +193,6 @@ Different option are possible. With a soft-plus we are assuming an "additive" ef
 
 ```{code-cell} ipython3
 gamma_model = nmo.glm.GLM(
-    solver_kwargs=dict(tol=10**-13),
     regularizer="Ridge",
     regularizer_strength=0.02,
     observation_model="Gamma",
@@ -283,7 +282,6 @@ gaussian_model = nmo.glm.GLM(
     observation_model="Gaussian",
     regularizer="Ridge",
     regularizer_strength=0.02,
-    solver_kwargs=dict(tol=10**-13),
 )
 
 gaussian_model.fit(Xtrain, Ytrain[:, neu])
