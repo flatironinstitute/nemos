@@ -38,6 +38,7 @@ Here, we will show how to write custom callbacks and use them to stop optimizati
 import jax
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import pynapple as nap
 import seaborn as sns
 
@@ -76,7 +77,7 @@ glm = nmo.glm.PopulationGLM(
     solver_name="GradientDescent",
     regularizer="Ridge",
     regularizer_strength=0.01,
-    solver_kwargs={"stepsize": 0.01, "acceleration": False},
+    solver_kwargs={"stepsize": 0.05, "acceleration": False},
 )
 
 glm.stochastic_fit(loader, num_epochs=10, callbacks=batch_logger)
@@ -269,9 +270,7 @@ Support for models that require post-hoc estimation of residual degrees of freed
 :::
 
 ```{code-cell} ipython3
-full_model = nmo.glm.PopulationGLM(regularizer="Ridge", regularizer_strength=0.01).fit(
-    X, spike_trains
-)
+full_model = nmo.glm.PopulationGLM(regularizer="Ridge", regularizer_strength=0.01).fit(X, spike_trains)
 ```
 
 Now that the full model is fitted, we score the full model and the batch model against the full dataset using pseudo-R2:
@@ -289,6 +288,9 @@ batch_scores = glm.score(
     aggregate_sample_scores=lambda x: np.mean(x, axis=0),
     score_type="pseudo-r2-McFadden",
 )
+
+full_scores = np.array(full_scores)
+batch_scores = np.array(batch_scores)
 ```
 
 We can also take a look at the coefficients.
@@ -303,16 +305,18 @@ n_neurons = len(data["units"])
 Wm = np.mean(np.abs(glm.coef_.reshape(n_neurons, -1, n_neurons)), 1)
 Wm2 = np.mean(np.abs(full_model.coef_.reshape(n_neurons, -1, n_neurons)), 1)
 
-fig = plt.figure(figsize=(10, 8))
+score_df = pd.DataFrame(
+    [(i, sc, "Full") for i, sc in enumerate(full_scores)] + [(i, sc, "Batch") for i, sc in enumerate(batch_scores)],
+    columns=("Neuron", "Pseudo R2", "Model"),
+)
+
+fig = plt.figure(figsize=(10, 8), constrained_layout=True)
 gs = fig.add_gridspec(3, 2)
 
 ax_scores = fig.add_subplot(gs[0, :])
-ax_scores.bar(np.arange(n_neurons), full_scores, 0.4, label="Full model")
-ax_scores.bar(np.arange(n_neurons) + 0.5, batch_scores, 0.4, label="Batch model")
-ax_scores.set_ylabel("Pseudo R2")
-ax_scores.set_xlabel("Neuron")
-ax_scores.set_ylim(0, 1)
-ax_scores.legend()
+sns.barplot(x="Neuron", y="Pseudo R2", hue="Model", data=score_df)
+ax_scores.set_ylim(0, 0.5)
+sns.despine(ax=ax_scores)
 
 ax_batch = fig.add_subplot(gs[1:, 0])
 ax_batch.imshow(Wm)
@@ -321,8 +325,6 @@ ax_batch.set(title="Batch model", xlabel="Neuron", ylabel="Neuron")
 ax_full = fig.add_subplot(gs[1:, 1])
 ax_full.imshow(Wm2)
 ax_full.set(title="Full model", xlabel="Neuron")
-
-fig.tight_layout()
 ```
 
 As we can see, the batch model starts to approximate the full model.

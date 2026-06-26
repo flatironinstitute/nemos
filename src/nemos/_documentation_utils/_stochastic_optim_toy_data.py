@@ -2,6 +2,7 @@ import datetime
 import tempfile
 from pathlib import Path
 
+import jax
 import numpy as np
 import pynapple as nap
 from pynwb import NWBHDF5IO, NWBFile, TimeSeries
@@ -21,21 +22,53 @@ DEFAULT_NWB_FILENAME = "stochastic_optim_toy_data.nwb"
 DEFAULT_NWB_PATH = DEFAULT_NWB_FOLDER / DEFAULT_NWB_FILENAME
 
 
+def _build_banded_coupling() -> np.ndarray:
+    """Refractory/inhibitory coupling: strong self, decaying with neuron distance."""
+    self_filter = np.array([-3.0, -2.0, -1.0, -0.4, -0.1])
+    neighbor_filter = np.array([-2.0, -1.3, -0.6, -0.2, 0.0])
+    lam, max_dist = 1.5, 4  # band width / reach in neurons
+    coupling = np.zeros((N_NEURONS, N_NEURONS, 5))
+    for i in range(N_NEURONS):
+        for j in range(N_NEURONS):
+            d = abs(i - j)
+            if d == 0:
+                coupling[i, j] = self_filter
+            elif d <= max_dist:
+                coupling[i, j] = np.exp(-((d / lam) ** 2)) * neighbor_filter
+    return coupling
+
+
 def _simulate_batching_data() -> tuple[nap.TsGroup, nap.TsdFrame, nap.TsdFrame]:
-    basis = nmo.basis.RaisedCosineLogConv(5, window_size=int(WINDOW_SIZE_S / BIN_SIZE))
+    window_size = int(WINDOW_SIZE_S / BIN_SIZE)
+    n_bins = int(T / BIN_SIZE)
+    basis = nmo.basis.RaisedCosineLogConv(5, window_size=window_size)
+    # same kernels the features are built from -> simulation and fit stay consistent
+    coupling_basis = nmo.basis.RaisedCosineLogEval(5).evaluate_on_grid(window_size)[1]
 
-    time_axis = np.linspace(0, T, 5000).reshape(-1, 1)
-    rate = np.exp(
-        np.sin(time_axis + np.linspace(0, np.pi * 2, N_NEURONS).reshape(1, N_NEURONS))
+    spikes, _ = nmo.simulation.simulate_recurrent(
+        coupling_coef=_build_banded_coupling(),
+        feedforward_coef=np.zeros((N_NEURONS, 1)),
+        intercepts=1.5 * np.ones(N_NEURONS),  # sets baseline rate (~30 Hz)
+        random_key=jax.random.key(123),
+        feedforward_input=np.zeros(
+            (n_bins, N_NEURONS, 1)
+        ),  # rate is pure spike history
+        coupling_basis_matrix=coupling_basis,
+        init_y=np.zeros((window_size, N_NEURONS)),
+        inverse_link_function=jax.numpy.exp,  # match the Poisson GLM link
     )
-    spike_t, spike_id = np.where(RNG.poisson(rate))
-    spike_times_s = spike_t / len(time_axis) * T
+    spikes = np.asarray(spikes).astype(int)
 
-    units = nap.Tsd(spike_times_s, spike_id).to_tsgroup()
-    spike_trains = units.count(BIN_SIZE)
+    # expand binned counts into jittered spike times, then round-trip as before
+    t_idx, n_idx = np.nonzero(spikes)
+    reps = spikes[t_idx, n_idx]
+    t_idx, n_idx = np.repeat(t_idx, reps), np.repeat(n_idx, reps)
+    spike_times_s = t_idx * BIN_SIZE
+    sort_idx = np.argsort(spike_times_s)
 
+    units = nap.Tsd(spike_times_s[sort_idx], n_idx[sort_idx]).to_tsgroup()
+    spike_trains = units.count(BIN_SIZE, ep=nap.IntervalSet(0, T))
     X = basis.compute_features(spike_trains)
-
     return units, spike_trains, X
 
 
