@@ -205,7 +205,11 @@ class TransformerBasis:
         Raises
         ------
         RuntimeError
-            If ``self.n_basis_input`` is None. Call ``self.set_input_shape`` before calling ``fit`` to avoid this.
+            - If the basis has no defined input shape (``self.n_basis_input`` is ``None``).
+              Call ``set_input_shape`` before ``fit``, ``transform``, or ``fit_transform``.
+            - If a component basis derives its domain from ``bounds`` but ``bounds`` is unset.
+              Such a basis would re-fit its domain to the input on every call, so ``bounds`` must
+              be set explicitly before it is used as a transformer.
         ValueError:
             If the number of columns in X do not ``self.n_basis_input_``.
 
@@ -244,6 +248,15 @@ class TransformerBasis:
         -------
         :
             The data transformed by the basis functions.
+
+        Raises
+        ------
+        RuntimeError
+            - If the basis has no defined input shape (``self.n_basis_input`` is ``None``).
+              Call ``set_input_shape`` before ``fit``, ``transform``, or ``fit_transform``.
+            - If a component basis derives its domain from ``bounds`` but ``bounds`` is unset.
+              Such a basis would re-fit its domain to the input on every call, so ``bounds`` must
+              be set explicitly before it is used as a transformer.
 
         Examples
         --------
@@ -291,6 +304,15 @@ class TransformerBasis:
         array-like
             The data transformed by the basis functions, after fitting the basis
             functions to the data.
+
+        Raises
+        ------
+        RuntimeError
+            - If the basis has no defined input shape (``self.n_basis_input`` is ``None``).
+              Call ``set_input_shape`` before ``fit``, ``transform``, or ``fit_transform``.
+            - If a component basis derives its domain from ``bounds`` but ``bounds`` is unset.
+              Such a basis would re-fit its domain to the input on every call, so ``bounds`` must
+              be set explicitly before it is used as a transformer.
 
         Examples
         --------
