@@ -192,7 +192,8 @@ pipeline = Pipeline(
     [
         (
             "transformerbasis",
-            nmo.basis.RaisedCosineLinearEval(6).to_transformer(),
+            # bounds must be set to use an Eval basis as a transformer
+            nmo.basis.RaisedCosineLinearEval(6, bounds=(0, 1)).to_transformer(),
         ),
         (
             "glm",
@@ -351,7 +352,7 @@ scores = np.zeros((len(regularizer_strength) * len(n_basis_funcs), n_folds))
 coeffs = {}
 
 # initialize basis and model
-basis = nmo.basis.RaisedCosineLinearEval(6)
+basis = nmo.basis.RaisedCosineLinearEval(6, bounds=(0, 1))
 basis = nmo.basis.TransformerBasis(basis)
 model = nmo.glm.GLM(regularizer="Ridge")
 
@@ -476,12 +477,12 @@ Here we include `transformerbasis__basis` in the parameter grid to try different
 param_grid = dict(
     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
     transformerbasis__basis=(
-        nmo.basis.RaisedCosineLinearEval(5),
-        nmo.basis.RaisedCosineLinearEval(10),
-        nmo.basis.RaisedCosineLogEval(5),
-        nmo.basis.RaisedCosineLogEval(10),
-        nmo.basis.MSplineEval(5),
-        nmo.basis.MSplineEval(10),
+        nmo.basis.RaisedCosineLinearEval(5, bounds=(0, 1)),
+        nmo.basis.RaisedCosineLinearEval(10, bounds=(0, 1)),
+        nmo.basis.RaisedCosineLogEval(5, bounds=(0, 1)),
+        nmo.basis.RaisedCosineLogEval(10, bounds=(0, 1)),
+        nmo.basis.MSplineEval(5, bounds=(0, 1)),
+        nmo.basis.MSplineEval(10, bounds=(0, 1)),
     ),
 )
 ```

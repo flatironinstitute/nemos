@@ -50,8 +50,8 @@ counts = np.random.poisson(size=(100, 5))
 speed = np.random.normal(size=(100))
 
 # create a composite basis
-counts_basis = nmo.basis.RaisedCosineLogConv(5, window_size=10)
-speed_basis = nmo.basis.BSplineEval(5)
+counts_basis = nmo.basis.RaisedCosineLogConv(5, label="counts", window_size=10)
+speed_basis = nmo.basis.BSplineEval(5, label="speed")
 composite_basis = counts_basis + speed_basis
 
 # compute the features
@@ -115,7 +115,7 @@ This mismatch leads to an error when calling fit_transform:
 ```{code-cell} ipython3
 :tags: [raises-exception]
 
-# reinstantiate the basis transformer for illustration porpuses
+# reinstantiate the basis transformer for illustration purposes
 composite_basis = counts_basis + speed_basis
 trans_bas = (composite_basis).to_transformer()
 # concatenate the inputs
@@ -124,6 +124,38 @@ print(inp.shape)
 
 trans_bas.fit_transform(inp)
 
+```
+
+There is a second requirement: any basis that derives its domain from `bounds` must have `bounds` set before it can be used as a transformer. This is a deliberate safety choice. With `bounds` left unset, the domain is inferred from the data, so during cross-validation each fold would re-fit the domain to its own data range. The transformation would then differ from fold to fold, which is rarely what you want when cross-validating.
+
+Let's see this with an example:
+
+```{code-cell} ipython3
+:tags: [raises-exception]
+
+# reinstantiate the basis transformer for illustration purposes
+composite_basis = counts_basis + speed_basis
+trans_bas = (composite_basis).to_transformer()
+# set the input shape but NOT the bounds
+trans_bas.set_input_shape(counts, speed)
+# concatenate the inputs
+inp = np.concatenate([counts, speed[:, np.newaxis]], axis=1)
+print(inp.shape)
+
+trans_bas.fit_transform(inp)
+
+```
+
+### Define the `bounds`
+
+As shown above, any basis whose domain is defined by `bounds` must have it set before the basis is used as a transformer. Only `Eval` bases carry `bounds`; convolutional bases do not.
+
+Let's set the bounds on the `Eval` component (`speed`) of `composite_basis`.
+
+```{code-cell} ipython3
+
+# get the Eval basis using its label and set the bounds
+composite_basis["speed"].bounds = (-2, 2)
 ```
 
 ### Defining the Input Shape
@@ -151,7 +183,7 @@ axis. For example, if the input is a 4D tensor, one needs to provide the last 3 
 x = np.random.randn(10, 3, 2, 1)
 
 # define and setup the basis
-basis = nmo.basis.BSplineEval(5).set_input_shape((3, 2, 1))
+basis = nmo.basis.BSplineEval(5, bounds=(-2, 2)).set_input_shape((3, 2, 1))
 
 X = basis.to_transformer().transform(
     x.reshape(10, -1)  # reshape to 2D
@@ -161,7 +193,6 @@ X = basis.to_transformer().transform(
 
 You can also invert the order of operations and call `to_transform` first and then set the input shapes.
 ```{code-cell} ipython3
-
 trans_bas = composite_basis.to_transformer()
 trans_bas.set_input_shape(5, 1)
 out = trans_bas.fit_transform(inp)
