@@ -270,7 +270,9 @@ Support for models that require post-hoc estimation of residual degrees of freed
 :::
 
 ```{code-cell} ipython3
-full_model = nmo.glm.PopulationGLM(regularizer="Ridge", regularizer_strength=0.01).fit(X, spike_trains)
+full_model = nmo.glm.PopulationGLM(regularizer="Ridge", regularizer_strength=0.01).fit(
+    X, spike_trains
+)
 ```
 
 Now that the full model is fitted, we score the full model and the batch model against the full dataset using pseudo-R2:
@@ -306,7 +308,8 @@ Wm = np.mean(np.abs(glm.coef_.reshape(n_neurons, -1, n_neurons)), 1)
 Wm2 = np.mean(np.abs(full_model.coef_.reshape(n_neurons, -1, n_neurons)), 1)
 
 score_df = pd.DataFrame(
-    [(i, sc, "Full") for i, sc in enumerate(full_scores)] + [(i, sc, "Batch") for i, sc in enumerate(batch_scores)],
+    [(i, sc, "Full") for i, sc in enumerate(full_scores)]
+    + [(i, sc, "Batch") for i, sc in enumerate(batch_scores)],
     columns=("Neuron", "Pseudo R2", "Model"),
 )
 

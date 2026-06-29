@@ -11,6 +11,20 @@ kernelspec:
   name: python3
 ---
 
+```{code-cell} ipython3
+:tags: [hide-input]
+
+%matplotlib inline
+import warnings
+
+# Ignore the specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="plotting functions contained within `_documentation_utils` are intended for nemos's documentation.",
+    category=UserWarning,
+)
+```
+
 # Manual update loop for more control
 
 +++
