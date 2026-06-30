@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -55,6 +56,12 @@ class JaxoptAdapter(SolverAdapter[JaxoptAdapterState]):
         init_params: Params | None = None,
         **solver_init_kwargs,
     ):
+        if solver_init_kwargs.get("stepsize", 0.0) is None:
+            raise ValueError(
+                "stepsize must be a number. Use 0.0 (or negative) for linesearch, "
+                "positive for a fixed step."
+            )
+
         if self._proximal:
             self.fun = unregularized_loss
             solver_init_kwargs["prox"] = regularizer.get_proximal_operator(
@@ -91,6 +98,7 @@ class JaxoptAdapter(SolverAdapter[JaxoptAdapterState]):
             ),
         )
 
+    @partial(jax.jit, static_argnums=(0,))
     def update(
         self, params: Params, state: JaxoptAdapterState, *args: Any
     ) -> JaxoptStepResult:

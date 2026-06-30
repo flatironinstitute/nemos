@@ -210,6 +210,7 @@ api_order = [
     "regularizers.rst",
     "io.rst",
     "solvers.rst",
+    "stochastic_optimization.rst",
     "convolve.rst",
     "simulations.rst",
     "identifiability.rst",

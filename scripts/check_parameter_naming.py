@@ -125,6 +125,9 @@ VALID_PAIRS = [
     {"arg_name", "algo_name"},
     {"arg_name", "attr_name"},
     {"arg_name", "var_name"},
+    {"n_features", "features"},
+    {"n_outputs", "output"},
+    {"callback", "callbacks"},
     {"initial_proba_init", "initial_proba_init_kwargs"},
     {"transition_proba_init", "transition_proba_init_kwargs"},
     {"initial_proba_init_kwargs", "transition_proba_init_kwargs"},
@@ -144,6 +147,8 @@ VALID_PAIRS = [
     {"params_i", "params_dict"},
     {"params_tree", "parameter_tree"},
     {"leaf", "x_leaf"},
+    {"event", "events"},
+    {"X_test", "y_test"},
 ]
 
 
