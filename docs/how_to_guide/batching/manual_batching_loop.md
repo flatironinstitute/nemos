@@ -29,7 +29,7 @@ warnings.filterwarnings(
 
 +++
 
-While `GLM.stochastic_fit` provides a convenient interface for most usecases, in some situations fine-grained manual control during the optimization loop might be required.
+While `GLM.stochastic_fit` provides a convenient interface for most use cases, in some situations fine-grained manual control during the optimization loop might be required.
 
 +++
 

@@ -50,7 +50,7 @@ nap.nap_config.suppress_conversion_warnings = True
 np.random.seed(123)
 ```
 
-Quickly simulate a small example dataset and write it into an NWB file on disk.
+Quickly simulate a small example dataset and write it into an [NWB](https://nwb.org) file on disk.
 
 ```{code-cell} ipython3
 _simulate_and_write_to_disk()
@@ -92,9 +92,9 @@ See also: the [convolutional basis](../../background/basis/plot_01_1D_basis_func
 
 ## Build the data loader
 
-Data loaders are the standard way of loading data for stochastic optimization. NeMoS ships two built-in loaders that cover most usecases:
+Data loaders are the standard way of loading data for stochastic optimization. NeMoS ships two built-in loaders that cover most use cases:
 
-- [`ArrayDataLoader`](nemos.batching.ArrayDataLoader): use with in-memory arrays. Input and output are converted to jax arrays before use. Useful if data fits into memory, but calculations run out of memory, as well as for quick prototyping.
+- [`ArrayDataLoader`](nemos.batching.ArrayDataLoader): use with in-memory arrays. Input and output are converted to JAX arrays before use. Useful if data fits into memory, but calculations run out of memory, as well as for quick prototyping.
 - [`LazyArrayDataLoader`](nemos.batching.LazyArrayDataLoader): use with lazy/out-of-memory arrays, such as dask, zarr, HDF5 (used by NWB).
 
 +++

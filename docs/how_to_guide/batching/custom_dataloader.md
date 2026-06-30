@@ -156,7 +156,7 @@ loader = PynappleDataLoader(units, basis, batch_size, bin_size)
 ```
 
 :::{note}
-The convolution sets the first 200 ms of data at the start of a processed interval to NaNs. Applying this separately to each 1 second batch essentially "throws away" a fifth of the data.
+The convolution sets the first 200 ms of data at the start of a processed interval to NaNs. Applying this separately to each 1-second batch essentially "throws away" a fifth of the data.
 By not storing the results, it also repeats processing the full data each epoch.
 
 It is generally faster to do this processing by iterating through the whole data once and saving the results to disk, then use [`LazyArrayDataLoader`](nemos.batching.LazyArrayDataLoader) as shown in the [basics section](./stochastic_fit.md).
