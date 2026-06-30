@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 
 import nemos as nmo
-from nemos.basis import FourierSEBasis
-from nemos.basis._fourier_basis import _se_quadrature
+from nemos.basis import FourierGP
+from nemos.basis._fourier_basis import _get_nodes_weights
 
 
 def se_kernel(x1, x2, length_scale, variance):
@@ -19,7 +19,7 @@ def se_kernel(x1, x2, length_scale, variance):
 @pytest.mark.parametrize("eps", [1e-6, 1e-4, 1e-2, 1e-1])
 @pytest.mark.parametrize("domain", [(0.0, 1.0)])
 def test_covariance_approximation_accuracy(length_scale, variance, eps, domain):
-    basis = FourierSEBasis(
+    basis = FourierGP(
         lengthscale=length_scale, domain=domain, eps=eps, variance=variance
     )
     x = jnp.linspace(domain[0], domain[1], 20)
@@ -28,8 +28,8 @@ def test_covariance_approximation_accuracy(length_scale, variance, eps, domain):
 
     x1, x2 = jnp.meshgrid(x, x)
     K_true = se_kernel(x1, x2, length_scale, variance)
-    max_err = jnp.max(jnp.abs(K_approx - K_true))
-    assert max_err < eps
+    decimal = int(round(-np.log10(eps)))
+    np.testing.assert_array_almost_equal(K_approx, K_true, decimal=decimal)
 
 
 @pytest.mark.parametrize("length_scale", [1e-2, 1e-1, 1e0])
@@ -37,5 +37,5 @@ def test_covariance_approximation_accuracy(length_scale, variance, eps, domain):
 @pytest.mark.parametrize("eps", [1e-4])
 @pytest.mark.parametrize("L", [1.0])
 def test_real_weights(length_scale, variance, eps, L):
-    _, weights, _, _ = _se_quadrature(length_scale, variance, eps, L)
+    _, weights, _, _ = _get_nodes_weights(length_scale, variance, eps, L)
     assert np.all(np.isreal(weights))
