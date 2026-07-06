@@ -26,7 +26,7 @@ mpl.rcParams['axes.spines.right'] = False
 mpl.rcParams['axes.spines.top'] = False
 
 import nemos as nmo
-from nemos.basis import FourierSEBasis
+from nemos.basis import FourierGP
 ```
 
 ## when do you want to use a GP?
@@ -179,7 +179,7 @@ axes.set_ylabel('probability density of frequency')
 domain = (stimulus_min, stimulus_max)
 eps = 1e-4
 
-basis = FourierSEBasis(
+basis = FourierGP(
     lengthscale=length_scale, domain=domain, eps=eps, variance=output_scale
 )
 
