@@ -1,15 +1,14 @@
 ---
 jupytext:
-  formats: ipynb,md:myst
   text_representation:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.19.4
+    jupytext_version: 1.16.4
 kernelspec:
-  display_name: nsl-data
+  display_name: Python 3 (ipykernel)
   language: python
-  name: nsl-data
+  name: python3
 ---
 
 # Fast GP Regression in Nemos!
