@@ -177,11 +177,11 @@ def initialize_intercept_matching_mean_rate(
 
 def initialize_constant_coef_matching_mean_rate(
     inverse_link_function: Callable,
-    X: Union[dict, jnp.ndarray],
+    X: Union[Pytree, jnp.ndarray],
     y: jnp.ndarray,
     empty_coef: Union[Pytree, jnp.ndarray],
     eps: Optional[float] = None,
-) -> Union[dict, jnp.ndarray]:
+) -> Union[Pytree, jnp.ndarray]:
     r"""
     Initialize coefficients as a constant matching the mean rate, with no intercept.
 
@@ -255,4 +255,6 @@ def initialize_constant_coef_matching_mean_rate(
     scale = (jnp.sum(row_sum) + eps) / (jnp.sum(row_sum**2) + eps)
     const = eta_target * scale  # (n_out,)
 
-    return jax.tree_util.tree_map(lambda leaf: jnp.ones(leaf.shape) * const, empty_coef)
+    return jax.tree_util.tree_map(
+        lambda leaf: (jnp.ones_like(leaf) * const).astype(leaf.dtype), empty_coef
+    )
