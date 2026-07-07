@@ -355,13 +355,13 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
         )
-        self.fit_intercept = fit_intercept
         self.observation_model = observation_model
         self.inverse_link_function = inverse_link_function
 
         self._validator = self._validator_class(
             extra_params=self._get_validator_extra_params()
         )
+        self.fit_intercept = fit_intercept
 
         # initialize to None fit output
         self.intercept_ = None
@@ -381,6 +381,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
     def fit_intercept(self, value):
         """Setter for ``fit_intercept`` property."""
         self._fit_intercept = bool(value)
+        self._active_params = self._validator.to_model_params(
+            (True, self._fit_intercept)
+        )
 
     @property
     def solver(self):
@@ -865,6 +868,31 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         )
         return init_params
 
+    def _normalize_user_params(
+        self, init_params: GLMUserParams, X: DESIGN_INPUT_TYPE, y: jnp.ndarray
+    ) -> GLMUserParams:
+        """Fill the intercept when it is held fixed (``fit_intercept=False``).
+
+        When the intercept is not estimated the user may omit it (pass ``None`` as the
+        last element); it is replaced with zeros so downstream validation and
+        partitioning see a complete parameter set. A warning is emitted if the user
+        supplied an intercept, since it would be ignored. See
+        :meth:`nemos.base_regressor.BaseRegressor._normalize_user_params` for how this
+        fits the parameter-processing pipeline.
+        """
+        if not self._fit_intercept:
+            self._validator.check_user_params_structure(init_params)
+            if init_params[-1] is not None:
+                warnings.warn(
+                    "`fit_intercept=False`: the provided intercept is ignored and the "
+                    "intercept is held at zero. Set `fit_intercept=True` to estimate it.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+            zeros = jnp.zeros_like(self._validator.get_empty_params(X, y).intercept)
+            init_params = tuple([*init_params[:-1], zeros])
+        return init_params
+
     @cast_to_jax
     def fit(
         self,
@@ -931,6 +959,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         if init_params is None:
             init_params = self._model_specific_initialization(X, y)
         else:
+            init_params = self._normalize_user_params(init_params, X, y)
             init_params = self._validator.validate_and_cast_params(init_params)
             self._validator.validate_consistency(init_params, X=X, y=y)
 
@@ -938,9 +967,11 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             getattr(self, "_feature_mask", None), init_params
         )
 
-        self._initialize_optimizer_and_state(init_params, data, y)
-
-        params, state, aux = self._optimizer_run(init_params, data, y)
+        # initialize the solver on the active parameters and run, holding the frozen
+        # parameters fixed (see BaseRegressor._run_optimizer).
+        params, state, aux = self._run_optimizer(
+            init_params, data, y, lambda active: self._optimizer_run(active, data, y)
+        )
 
         if tree_utils.pytree_map_and_reduce(
             lambda x: jnp.any(jnp.isnan(x)), any, params
@@ -976,7 +1007,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
                 "For the available options see the ``self.solver.__init__`` docstrings.",
                 RuntimeWarning,
             )
-
         self._set_model_params(params)
 
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X)
@@ -1101,6 +1131,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         if init_params is None:
             init_params = self._model_specific_initialization(sample_X, sample_y)
         else:
+            init_params = self._normalize_user_params(init_params, sample_X, sample_y)
             init_params = self._validator.validate_and_cast_params(init_params)
             self._validator.validate_consistency(init_params, X=sample_X, y=sample_y)
 
@@ -1112,18 +1143,26 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         preprocessed_loader = _PreprocessedDataLoader(loader, self._preprocess_inputs)
 
         # TODO: Add a streaming version setting the right step- and batch size for SVRG that uses the full data
-        # Initialize solver (using preprocessed sample batch)
-        self._initialize_optimizer_and_state(init_params, sample_X, sample_y)
-        self._warn_about_estimated_svrg_settings()
+        # Run stochastic optimization on the active parameters, holding the frozen
+        # parameters fixed (see BaseRegressor._run_optimizer). The context is created
+        # here so it is available after the run (for the summary); ``frozen`` is set
+        # inside the closure so ``ctx.params`` exposes the complete parameters to
+        # callbacks. ``stochastic_run`` sets ``ctx.solver`` itself.
+        ctx = TrainingContext(model=self)
 
-        # Run stochastic optimization
-        ctx = TrainingContext(model=self, solver=self._solver)
-        params, state, aux = self._solver.stochastic_run(
-            init_params,
-            preprocessed_loader,
-            n_passes=n_passes,
-            callback=_normalize_callbacks(callbacks),
-            ctx=ctx,
+        def _stochastic_run(active):
+            ctx.frozen = self._frozen_params
+            self._warn_about_estimated_svrg_settings()
+            return self._solver.stochastic_run(
+                active,
+                preprocessed_loader,
+                n_passes=n_passes,
+                callback=_normalize_callbacks(callbacks),
+                ctx=ctx,
+            )
+
+        params, state, aux = self._run_optimizer(
+            init_params, sample_X, sample_y, _stochastic_run
         )
 
         if tree_utils.pytree_map_and_reduce(
@@ -1377,7 +1416,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         init_params: GLMParams,
         X: dict[str, jnp.ndarray] | jnp.ndarray,
         y: jnp.ndarray,
-    ) -> SolverState:
+        frozen_params: GLMParams = None,
+    ) -> Tuple[SolverState, GLMParams, GLMParams]:
         """Initialize the solver by instantiating its init_state, update and, run methods.
 
         This method also prepares the solver's state by using the initialized model parameters and data.
@@ -1412,7 +1452,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         opt_solver_kwargs = self._optimize_solver_params(X, y)
         #  set up the solver init/run/update attrs
         self._solver = self._instantiate_solver(
-            self._compute_loss, init_params=init_params, solver_kwargs=opt_solver_kwargs
+            self._compute_loss,
+            init_params=init_params,
+            solver_kwargs=opt_solver_kwargs,
+            frozen_params=frozen_params,
         )
         self._optimizer_init_state = self._solver.init_state
         self._optimizer_update = self._solver.update
@@ -1500,10 +1543,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         # should be fine
         params = self._validator.to_model_params(params)
 
+        active, _ = self._partition_active(params)
+
         # perform a one-step update
         updated_params, updated_state, aux = self._optimizer_update(
-            params, opt_state, data, y, *args, **kwargs
+            active, opt_state, data, y, *args, **kwargs
         )
+
+        updated_params = eqx.combine(updated_params, self._frozen_params)
 
         # store params and state
         self._set_model_params(updated_params)
