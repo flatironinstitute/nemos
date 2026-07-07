@@ -176,11 +176,11 @@ axes.set_ylabel('probability density of frequency')
 ### Kernel Approximation
 
 ```{code-cell}
-domain = (stimulus_min, stimulus_max)
+bounds = (stimulus_min, stimulus_max)
 eps = 1e-4
 
 basis = FourierGP(
-    lengthscale=length_scale, domain=domain, eps=eps, variance=output_scale
+    lengthscale=length_scale, bounds=bounds, eps=eps, variance=output_scale
 )
 
 Phi = basis.evaluate(test_stimuli_diffs)
@@ -270,7 +270,7 @@ axes.legend(frameon = False)
 # (D T D + sigma^2 I) beta = D Phi* y
 # with conjugate gradient, applying T in O(m log m) via the FFT -- no matrix is ever formed.
 m, h = basis.xis.shape[0] - 1, float(basis.xis[1])
-xcen = 0.5 * (basis.domain[0] + basis.domain[1])
+xcen = 0.5 * (basis.bounds[0] + basis.bounds[1])
 w = basis.weights[:m + 1].at[1:].divide(jnp.sqrt(2.0))      # per-mode weights w_0, ..., w_m
 ws = jnp.concatenate([w[1:][::-1], w]).astype(complex)      # weights for the modes j = -m, ..., m
 js = jnp.arange(-m, m + 1)

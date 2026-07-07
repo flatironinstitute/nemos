@@ -873,8 +873,8 @@ class FourierGP(EvalBasisMixin, FourierBasis):
     Parameters
     ----------
     lengthscale :
-        SE kernel lengthscale, in the same units as ``domain``.
-    domain :
+        SE kernel lengthscale, in the same units as ``bounds``.
+    bounds :
         Pair ``(t0, t1)`` with ``t0 < t1`` defining the construction domain.
     eps :
         kernel approximation error tolerance.
@@ -900,7 +900,7 @@ class FourierGP(EvalBasisMixin, FourierBasis):
     def __init__(
         self,
         lengthscale: float,
-        domain: Tuple[float, float],
+        bounds: Tuple[float, float],
         eps: float,
         variance: float = 1.0,
         label: Optional[str] = "FourierGP",
@@ -914,20 +914,19 @@ class FourierGP(EvalBasisMixin, FourierBasis):
             raise ValueError(f"``variance`` must be positive, got {variance}.")
         if eps <= 0:
             raise ValueError(f"``eps`` must be positive, got {eps}.")
-        if not (isinstance(domain, (tuple, list)) and len(domain) == 2):
+        if not (isinstance(bounds, (tuple, list)) and len(bounds) == 2):
             raise TypeError(
-                "``domain`` must be a 2-element tuple ``(t0, t1)``; " f"got {domain!r}."
+                "``bounds`` must be a 2-element tuple ``(t0, t1)``; " f"got {bounds!r}."
             )
-        t0, t1 = float(domain[0]), float(domain[1])
+        t0, t1 = float(bounds[0]), float(bounds[1])
         if not t0 < t1:
-            raise ValueError(f"``domain`` must satisfy ``t0 < t1``; got ({t0}, {t1}).")
+            raise ValueError(f"``bounds`` must satisfy ``t0 < t1``; got ({t0}, {t1}).")
 
         xis, weights, _, m = _get_nodes_weights(lengthscale, variance, eps, t1 - t0)
 
         self._lengthscale = lengthscale
         self._variance = variance
         self._eps = eps
-        self._domain = (t0, t1)
         self._xis = xis
 
         # Build on integer harmonics ``j = 0, ..., m`` (``frequency_mask="all"``
@@ -960,24 +959,25 @@ class FourierGP(EvalBasisMixin, FourierBasis):
         return self._eps
 
     @property
-    def domain(self) -> Tuple[float, float]:
-        """Construction domain ``(t0, t1)``."""
-        return self._domain
-
-    @property
     def xis(self) -> jnp.ndarray:
         """Non-negative frequencies ``j * h`` for ``j = 0, ..., m``."""
         return self._xis
 
     @property
-    def h(self) -> float:
+    def frequency_spacing(self) -> float:
         """Frequency spacing, recovered from :attr:`xis`."""
         return _grid_params_from_nodes(self._xis)[0]
 
     @property
-    def m(self) -> int:
-        """Number of positive frequencies, recovered from :attr:`xis`."""
-        return _grid_params_from_nodes(self._xis)[1]
+    def n_frequencies(self) -> int:
+        """Number of positive frequencies ``m``.
+
+        The underlying grid :attr:`xis` holds ``m + 1`` non-negative
+        frequencies ``j * h`` for ``j = 0, ..., m``; this excludes the
+        ``j = 0`` (DC) term, so ``n_frequencies == len(frequencies[0]) - 1``.
+        The basis has ``2 * n_frequencies + 1`` functions.
+        """
+        return len(self.frequencies[0]) - 1
 
     def _shift_angles(self, sample_pts: ArrayLike) -> ArrayLike:
         """Rescale ``[0, 1]`` samples so frequency ``j`` evaluates at ``j * h``.
@@ -987,10 +987,10 @@ class FourierGP(EvalBasisMixin, FourierBasis):
         ``j``. Scaling by ``h * L`` therefore makes the effective
         frequency ``j * h``, matching the squared-exponential quadrature grid.
         """
-        t0, t1 = self._domain
-        return sample_pts * (self.h * (t1 - t0))
+        t0, t1 = self.bounds
+        return sample_pts * (self.frequency_spacing * (t1 - t0))
 
     def _get_samples(self, *n_samples: int) -> Generator[NDArray, None, None]:
         """Produce equispaced samples over the construction domain."""
-        t0, t1 = self._domain
+        t0, t1 = self.bounds
         return (np.linspace(t0, t1, n_samples[0]),)

@@ -17,12 +17,12 @@ def se_kernel(x1, x2, length_scale, variance):
 @pytest.mark.parametrize("length_scale", [1e-2, 1e-1, 1e0])
 @pytest.mark.parametrize("variance", [1e-1, 1e0, 1e1])
 @pytest.mark.parametrize("eps", [1e-6, 1e-4, 1e-2, 1e-1])
-@pytest.mark.parametrize("domain", [(0.0, 1.0)])
-def test_covariance_approximation_accuracy(length_scale, variance, eps, domain):
+@pytest.mark.parametrize("bounds", [(0.0, 1.0)])
+def test_covariance_approximation_accuracy(length_scale, variance, eps, bounds):
     basis = FourierGP(
-        lengthscale=length_scale, domain=domain, eps=eps, variance=variance
+        lengthscale=length_scale, bounds=bounds, eps=eps, variance=variance
     )
-    x = jnp.linspace(domain[0], domain[1], 20)
+    x = jnp.linspace(bounds[0], bounds[1], 20)
     Phi = basis.evaluate(x)
     K_approx = Phi @ Phi.T
 
