@@ -189,8 +189,8 @@ def _make_optimizer_run_patch(monkeypatch, model_cls):
     real_init = model_cls._initialize_optimizer_and_state
     noop = _NOOP_OPTIMIZER_RUN.get(model_cls, _DEFAULT_NOOP_OPTIMIZER_RUN)
 
-    def _patched(self, init_params, data, y):
-        result = real_init(self, init_params, data, y)
+    def _patched(self, init_params, data, y, *args, **kwargs):
+        result = real_init(self, init_params, data, y, *args, **kwargs)
         self._optimizer_run = noop
         return result
 
@@ -240,8 +240,8 @@ def _make_optimizer_update_patch(monkeypatch, model_cls):
     real_init = model_cls._initialize_optimizer_and_state
     noop = _NOOP_OPTIMIZER_UPDATE.get(model_cls, _DEFAULT_NOOP_OPTIMIZER_UPDATE)
 
-    def _patched(self, init_params, data, y):
-        result = real_init(self, init_params, data, y)
+    def _patched(self, init_params, data, y, *args, **kwargs):
+        result = real_init(self, init_params, data, y, *args, **kwargs)
         self._optimizer_update = noop
         return result
 
