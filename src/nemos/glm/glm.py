@@ -196,6 +196,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         a warning will be raised and the strength will default to 1.0.
         For finer control, the user can pass a pytree that matches the
         parameter structure to regularize parameters differentially.
+    fit_intercept :
+        When True (default), an intercept term is fit. When False, only the coefficients are fit.
     solver_name :
         Solver to use for model optimization. Defines the optimization scheme and related parameters.
         The solver must be an appropriate match for the chosen regularizer.
@@ -340,6 +342,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Any = None,
+        fit_intercept: bool = True,
         solver_name: str = None,
         solver_kwargs: dict = None,
     ):
@@ -349,7 +352,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
         )
-
+        self.fit_intercept = fit_intercept
         self.observation_model = observation_model
         self.inverse_link_function = inverse_link_function
 
@@ -365,6 +368,16 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         self.dof_resid_ = None
         self.aux_ = None
         self._solver = None
+
+    @property
+    def fit_intercept(self) -> bool:
+        """Getter for ``fit_intercept`` property."""
+        return self._fit_intercept
+
+    @fit_intercept.setter
+    def fit_intercept(self, value):
+        """Setter for ``fit_intercept`` property."""
+        self._fit_intercept = bool(value)
 
     @property
     def solver(self):
@@ -1692,6 +1705,8 @@ class PopulationGLM(GLM):
         a warning will be raised and the strength will default to 1.0.
         For finer control, the user can pass a pytree that matches the
         parameter structure to regularize parameters differentially.
+    fit_intercept :
+        When True (default), an intercept term is fit. When False, only the coefficients are fit.
     solver_name :
         Solver to use for model optimization. Defines the optimization scheme and related parameters.
         The solver must be an appropriate match for the chosen regularizer.
@@ -1820,6 +1835,7 @@ class PopulationGLM(GLM):
         inverse_link_function: Optional[Callable] = None,
         regularizer: Union[str, Regularizer] = "UnRegularized",
         regularizer_strength: Any = None,
+        fit_intercept: bool = True,
         solver_name: str = None,
         solver_kwargs: dict = None,
         feature_mask: Optional[jnp.ndarray] = None,
@@ -1830,6 +1846,7 @@ class PopulationGLM(GLM):
             inverse_link_function=inverse_link_function,
             regularizer_strength=regularizer_strength,
             regularizer=regularizer,
+            fit_intercept=fit_intercept,
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
             **kwargs,
