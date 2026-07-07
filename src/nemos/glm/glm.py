@@ -315,14 +315,21 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
     # semidefinite; a strictly positive-definite regularizer (e.g. Ridge) promotes
     # it to positive definite via ``combine_hessian_tags``.
     _hess_tag: HessianTag = HessianTag(structure=Full, property=PositiveSemiDefinite)
+    # default until the instance sets it; read during ``__init__`` before assignment
+    # (e.g. when solver-kwargs validation resolves the default solver).
+    _fit_intercept: bool = True
 
     def _resolve_default_solver(self) -> str:
         # Newton is the default for Ridge: the ridge penalty makes the penalized
         # Hessian positive definite, so the Cholesky-based Newton step is stable.
         # For other regularizers (e.g. UnRegularized, whose Hessian can be only
         # positive semidefinite) defer to the regularizer's own default.
-        if isinstance(self.regularizer, Ridge) and (
-            "Newton" in self.regularizer.allowed_solvers
+        # Newton's Hessian is not partition-aware, so a frozen intercept
+        # (``fit_intercept=False``) also defers to the regularizer default.
+        if (
+            self._fit_intercept
+            and isinstance(self.regularizer, Ridge)
+            and ("Newton" in self.regularizer.allowed_solvers)
         ):
             return "Newton"
         return super()._resolve_default_solver()
@@ -380,10 +387,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
     @fit_intercept.setter
     def fit_intercept(self, value):
         """Setter for ``fit_intercept`` property."""
-        self._fit_intercept = bool(value)
-        self._active_params = self._validator.to_model_params(
-            (True, self._fit_intercept)
-        )
+        value = bool(value)
+        flipped = value != self._fit_intercept
+        self._fit_intercept = value
+        self._active_params = self._validator.to_model_params((True, value))
+        # only when the frozen set actually changes: the captured partition and the
+        # solver closed over the previous frozen values are then stale.
+        if flipped:
+            self._invalidate_solver()
 
     @property
     def solver(self):
@@ -1392,6 +1403,11 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
                 )
 
         params = self._get_model_params()
+        # count dof only over the parameters the solver estimates: frozen leaves
+        # (e.g. the intercept when ``fit_intercept=False``) are None in the active
+        # tree and consume no degrees of freedom.
+        active, _ = self._partition_active(params)
+        intercept_dof = 0 if active.intercept is None else 1
         # if the regularizer is lasso use the non-zero
         # coeff as an estimate of the dof
         # see https://arxiv.org/abs/0712.0881
@@ -1399,17 +1415,23 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             resid_dof = tree_utils.pytree_map_and_reduce(
                 lambda x: ~jnp.isclose(x, jnp.zeros_like(x)),
                 lambda x: sum([jnp.sum(i, axis=0) for i in x]),
-                params.coef,
+                active.coef,
             )
-            return n_samples - resid_dof - 1
+            return n_samples - resid_dof - intercept_dof
 
         elif isinstance(self.regularizer, Ridge):
-            # for Ridge, use the tot parameters (X.shape[1] + intercept)
-            return (n_samples - X.shape[1] - 1) * jnp.ones_like(params.intercept)
+            # for Ridge, use the total number of estimated parameters
+            # (active coefficients + intercept when it is fit)
+            n_coef = sum(
+                leaf.shape[0] for leaf in jax.tree_util.tree_leaves(active.coef)
+            )
+            return (n_samples - n_coef - intercept_dof) * jnp.ones_like(
+                params.intercept
+            )
         else:
             # for UnRegularized, use the rank
             rank = jnp.linalg.matrix_rank(X)
-            return (n_samples - rank - 1) * jnp.ones_like(params.intercept)
+            return (n_samples - rank - intercept_dof) * jnp.ones_like(params.intercept)
 
     def _initialize_optimizer_and_state(
         self,
@@ -1417,7 +1439,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         X: dict[str, jnp.ndarray] | jnp.ndarray,
         y: jnp.ndarray,
         frozen_params: GLMParams = None,
-    ) -> Tuple[SolverState, GLMParams, GLMParams]:
+    ) -> SolverState:
         """Initialize the solver by instantiating its init_state, update and, run methods.
 
         This method also prepares the solver's state by using the initialized model parameters and data.

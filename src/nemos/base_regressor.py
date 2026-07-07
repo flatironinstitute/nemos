@@ -364,6 +364,8 @@ class BaseRegressor(
         self._optimizer_init_state = None
         self._optimizer_update = None
         self._optimizer_run = None
+        # the frozen partition was captured against the now-stale solver
+        self._frozen_params = None
 
     def _partition_active(
         self, params: ModelParamsT
