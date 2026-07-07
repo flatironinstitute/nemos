@@ -35,7 +35,10 @@ from ..solvers._hess import (
 from ..type_casting import cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, SolverState, StepResult
 from ..utils import _elementwise_derivative, format_repr
-from .initialize_parameters import initialize_intercept_matching_mean_rate
+from .initialize_parameters import (
+    initialize_constant_coef_matching_mean_rate,
+    initialize_intercept_matching_mean_rate,
+)
 from .params import GLMParams, GLMUserParams
 from .validation import (
     GLMValidator,
@@ -798,7 +801,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         """Initialize the parameters based on the structure and dimensions X and y.
 
         This method initializes the coefficients (spike basis coefficients) and intercepts (bias terms)
-        required for the GLM. The coefficients are initialized to zeros with dimensions based on the input X.
+        required for the GLM.
+
+        If ``fit_intercept==True``:
+            - The coefficients are initialized to zeros with dimensions based on the input X.
+        If ``fit_intercept==False``:
+            - The coefficients are initialized to a constant that minimizes the min squared error
+            between ``X @ coef`` and the linked mean firing rate (``log(mean(y))`` for a GLM with
+            exponential non-linearity).
         If X is a pytree of arrays, the coefficients retain the pytree structure with
         arrays of zeros shaped according to the features in X.
         If X is a simple ndarray, the coefficients are initialized as a 2D array. The intercepts are initialized
@@ -828,13 +838,21 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             data = X
 
         empty_params = self._validator.get_empty_params(data, y)
-
-        initial_intercept = initialize_intercept_matching_mean_rate(
-            self._inverse_link_function, y
-        )
-        initial_coef = jax.tree_util.tree_map(
-            lambda x: jnp.zeros(x.shape), empty_params.coef
-        )
+        if self._fit_intercept:
+            initial_intercept = initialize_intercept_matching_mean_rate(
+                self._inverse_link_function, y
+            )
+            initial_coef = jax.tree_util.tree_map(
+                lambda x: jnp.zeros(x.shape), empty_params.coef
+            )
+        else:
+            initial_intercept = jnp.zeros_like(empty_params.intercept)
+            initial_coef = initialize_constant_coef_matching_mean_rate(
+                self._inverse_link_function,
+                data,
+                y,
+                empty_params.coef,
+            )
 
         init_params = eqx.tree_at(
             lambda p: (p.coef, p.intercept),
