@@ -191,14 +191,20 @@ def test_constant_coef_satisfies_normal_equation(design, as_dict, n_neurons):
     coef = initialize_constant_coef_matching_mean_rate(nmo_exp, X, y, empty_coef)
 
     # structure and shapes preserved
-    assert jax.tree_util.tree_structure(coef) == jax.tree_util.tree_structure(empty_coef)
-    for c, e in zip(jax.tree_util.tree_leaves(coef), jax.tree_util.tree_leaves(empty_coef)):
+    assert jax.tree_util.tree_structure(coef) == jax.tree_util.tree_structure(
+        empty_coef
+    )
+    for c, e in zip(
+        jax.tree_util.tree_leaves(coef), jax.tree_util.tree_leaves(empty_coef)
+    ):
         assert c.shape == e.shape
         assert jnp.all(jnp.isfinite(c))
 
     # every leaf is a single constant per output
-    const_leaves = [jnp.reshape(c, (-1,) if n_neurons is None else (-1, n_neurons))
-                    for c in jax.tree_util.tree_leaves(coef)]
+    const_leaves = [
+        jnp.reshape(c, (-1,) if n_neurons is None else (-1, n_neurons))
+        for c in jax.tree_util.tree_leaves(coef)
+    ]
     const = const_leaves[0][0]  # shape () or (n_neurons,)
     for c in jax.tree_util.tree_leaves(coef):
         assert jnp.allclose(c, jnp.broadcast_to(const, c.shape), rtol=1e-5)
@@ -217,7 +223,9 @@ def test_constant_coef_all_zero_design_equals_target(design):
     """With an all-zero design no constant can inject an offset; the eps
     stabilization returns c = η* and stays finite (no NaN)."""
     y = _make_y()
-    coef = initialize_constant_coef_matching_mean_rate(nmo_exp, design, y, jnp.empty((3,)))
+    coef = initialize_constant_coef_matching_mean_rate(
+        nmo_exp, design, y, jnp.empty((3,))
+    )
     eta = initialize_intercept_matching_mean_rate(nmo_exp, y)
     assert jnp.all(jnp.isfinite(coef))
     assert jnp.allclose(coef, eta)
@@ -228,7 +236,9 @@ def test_constant_coef_centered_columns_degrades_to_zero(design):
     """On a zero-mean design the projection scale ~0, so the constant ~0 and the
     heuristic degrades gracefully (finite) rather than blowing up."""
     y = _make_y()
-    coef = initialize_constant_coef_matching_mean_rate(nmo_exp, design, y, jnp.empty((3,)))
+    coef = initialize_constant_coef_matching_mean_rate(
+        nmo_exp, design, y, jnp.empty((3,))
+    )
     assert jnp.all(jnp.isfinite(coef))
     assert jnp.all(jnp.abs(coef) < 1e-2)
 
