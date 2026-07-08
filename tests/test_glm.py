@@ -2,6 +2,7 @@ import inspect
 from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
 from typing import Callable
+from unittest.mock import MagicMock
 
 import equinox as eqx
 import jax
@@ -1680,6 +1681,57 @@ class TestNormalizeUserParams:
         bad_params = (true_params.coef,) * n_elements
         with pytest.raises(ValueError, match="length two"):
             model._normalize_user_params(bad_params, X, y)
+
+
+@pytest.mark.parametrize(
+    "glm_class",
+    [
+        nmo.glm.GLM,
+        nmo.glm.PopulationGLM,
+        nmo.glm.ClassifierGLM,
+        nmo.glm.ClassifierPopulationGLM,
+    ],
+)
+class TestFitInterceptProperty:
+    """Tests for the ``GLM.fit_intercept`` property: getter, bool coercion, the
+    active-parameter partition it drives, and the solver-invalidation-on-flip
+    contract."""
+
+    @pytest.mark.parametrize(
+        "value, expected",
+        [(True, True), (False, False), (1, True), (0, False), ("x", True), ("", False)],
+    )
+    def test_value_is_coerced_to_bool(self, glm_class, value, expected):
+        model = glm_class()
+        model.fit_intercept = value
+        assert model.fit_intercept is expected
+
+    @pytest.mark.parametrize("value", [True, False])
+    def test_active_params_track_fit_intercept(self, glm_class, value):
+        """coef is always active; the intercept is active iff ``fit_intercept``."""
+        model = glm_class()
+        model.fit_intercept = value
+        assert model._active_params.coef == True  # noqa: E712
+        assert model._active_params.intercept == value
+
+    def test_invalidates_solver_only_on_flip(self, glm_class, monkeypatch):
+        """``_invalidate_solver`` runs only when the flag actually changes value,
+        not when it is re-assigned the same value."""
+        model = glm_class()  # constructed with the default fit_intercept=True
+        spy = MagicMock(wraps=model._invalidate_solver)
+        monkeypatch.setattr(model, "_invalidate_solver", spy)
+
+        model.fit_intercept = True  # no change
+        spy.assert_not_called()
+
+        model.fit_intercept = False  # flip
+        assert spy.call_count == 1
+
+        model.fit_intercept = False  # no change
+        assert spy.call_count == 1
+
+        model.fit_intercept = True  # flip back
+        assert spy.call_count == 2
 
 
 @pytest.mark.parametrize("glm_type", ["", "population_"])
