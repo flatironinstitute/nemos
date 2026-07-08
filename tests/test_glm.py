@@ -1776,6 +1776,46 @@ class TestPartitionActive:
         assert frozen.intercept is None
 
 
+@pytest.mark.parametrize(
+    "model_fixture",
+    ["poissonGLM_model_instantiation", "population_poissonGLM_model_instantiation"],
+)
+class TestFitInterceptIterative:
+    """``initialize_optimizer_and_state`` + ``update`` with a frozen intercept."""
+
+    @pytest.mark.parametrize("n_updates", [1, 5])
+    def test_update_keeps_intercept_zero(self, model_fixture, request, n_updates):
+        """With ``fit_intercept=False`` the intercept stays exactly zero across one
+        or more update steps, while the coefficients are updated."""
+        X, y, model, true_params, _ = request.getfixturevalue(model_fixture)
+        model.fit_intercept = False
+        coef0, _ = model.initialize_params(X, y)
+        # omit the frozen intercept on setup (the sanctioned input); no warning
+        state = model.initialize_optimizer_and_state((coef0, None), X, y)
+
+        params = (coef0, None)
+        for _ in range(n_updates):
+            params, state = model.update(params, state, X, y)
+
+        np.testing.assert_array_equal(
+            model.intercept_, jnp.zeros_like(true_params.intercept)
+        )
+        assert not np.allclose(model.coef_, coef0)
+
+    def test_flip_after_initialize_then_update_raises(self, model_fixture, request):
+        """Flipping ``fit_intercept`` after initializing the optimizer invalidates the
+        solver, so a subsequent update raises instead of using the stale solver."""
+        X, y, model, true_params, _ = request.getfixturevalue(model_fixture)
+        model.fit_intercept = False
+        coef0, _ = model.initialize_params(X, y)
+        state = model.initialize_optimizer_and_state((coef0, None), X, y)
+
+        model.fit_intercept = True  # flip -> invalidates the solver
+
+        with pytest.raises(RuntimeError, match="invalid state"):
+            model.update((coef0, None), state, X, y)
+
+
 @pytest.mark.parametrize("glm_type", ["", "population_"])
 @pytest.mark.parametrize(
     "model_instantiation",

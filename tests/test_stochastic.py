@@ -321,6 +321,24 @@ class TestGLMStochasticFit:
         assert model.coef_.shape == (5,)
 
     @pytest.mark.parametrize("solver", _stochastic_solver_names)
+    def test_stochastic_fit_frozen_intercept(self, simple_data, solver):
+        """With ``fit_intercept=False`` stochastic_fit holds the intercept at zero
+        while still estimating the coefficients."""
+        X, y = simple_data
+        loader = ArrayDataLoader(X, y, batch_size=32, shuffle="full")
+
+        model = nmo.glm.GLM(
+            fit_intercept=False,
+            solver_name=solver,
+            solver_kwargs=self._default_solver_kwargs(solver),
+        )
+        model.stochastic_fit(loader, num_epochs=5)
+
+        np.testing.assert_array_equal(model.intercept_, jnp.zeros(1))
+        assert model.coef_.shape == (5,)
+        assert np.all(np.isfinite(model.coef_))
+
+    @pytest.mark.parametrize("solver", _stochastic_solver_names)
     def test_stochastic_fit_with_init_params(self, simple_data, solver):
         """Test stochastic_fit with provided initial parameters."""
         X, y = simple_data
@@ -873,6 +891,27 @@ class TestPopulationGLMStochasticFit:
         assert model.intercept_ is not None
         assert model.coef_.shape == (5, 3)
         assert model.intercept_.shape == (3,)
+
+    @pytest.mark.parametrize("solver", _stochastic_solver_names)
+    def test_population_stochastic_fit_frozen_intercept(self, population_data, solver):
+        """With ``fit_intercept=False`` the per-neuron intercept stays at zero while
+        the coefficients are estimated for every neuron."""
+        X, y = population_data
+        loader = ArrayDataLoader(X, y, batch_size=32, shuffle="full")
+
+        solver_kwargs = {"stepsize": 0.001, "maxiter": 100}
+        solver_class = solvers.get_solver(solver).implementation
+        if "acceleration" in solver_class.get_accepted_arguments():
+            solver_kwargs["acceleration"] = False
+
+        model = nmo.glm.PopulationGLM(
+            fit_intercept=False, solver_name=solver, solver_kwargs=solver_kwargs
+        )
+        model.stochastic_fit(loader, num_epochs=5)
+
+        np.testing.assert_array_equal(model.intercept_, jnp.zeros(3))
+        assert model.coef_.shape == (5, 3)
+        assert np.all(np.isfinite(model.coef_))
 
 
 class TestSolverStochasticRun:
