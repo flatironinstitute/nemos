@@ -1631,6 +1631,57 @@ _PYTREE_X_FACTORIES = [
 ]
 
 
+class TestNormalizeUserParams:
+    """Unit tests for ``GLM._normalize_user_params`` (the ``fit_intercept=False`` seam)."""
+
+    @pytest.mark.filterwarnings("error::UserWarning")
+    def test_fit_intercept_true_is_passthrough(self, poissonGLM_model_instantiation):
+        """With ``fit_intercept=True`` the user params are returned unchanged."""
+        X, y, model, true_params, _ = poissonGLM_model_instantiation
+        model.fit_intercept = True
+        init_params = (true_params.coef, true_params.intercept)
+        assert model._normalize_user_params(init_params, X, y) is init_params
+
+    @pytest.mark.filterwarnings("error::UserWarning")
+    @pytest.mark.parametrize(
+        "supply_intercept, expectation",
+        [
+            (False, does_not_raise()),
+            (True, pytest.warns(UserWarning, match="fit_intercept=False")),
+        ],
+    )
+    def test_fit_intercept_false_fills_intercept_with_zeros(
+        self, poissonGLM_model_instantiation, supply_intercept, expectation
+    ):
+        """With ``fit_intercept=False`` the intercept is filled with zeros and the
+        coefficients are left untouched. Omitting the intercept (``None``) is accepted
+        quietly; supplying one raises a ``UserWarning`` and the value is ignored."""
+        X, y, model, true_params, _ = poissonGLM_model_instantiation
+        model.fit_intercept = False
+        intercept = true_params.intercept + 5.0 if supply_intercept else None
+
+        with expectation:
+            coef, out_intercept = model._normalize_user_params(
+                (true_params.coef, intercept), X, y
+            )
+
+        np.testing.assert_array_equal(coef, true_params.coef)
+        np.testing.assert_array_equal(
+            out_intercept, jnp.zeros_like(true_params.intercept)
+        )
+
+    @pytest.mark.parametrize("n_elements", [1, 3])
+    def test_malformed_structure_raises(
+        self, poissonGLM_model_instantiation, n_elements
+    ):
+        """A user-params tuple whose length is not two is rejected."""
+        X, y, model, true_params, _ = poissonGLM_model_instantiation
+        model.fit_intercept = False
+        bad_params = (true_params.coef,) * n_elements
+        with pytest.raises(ValueError, match="length two"):
+            model._normalize_user_params(bad_params, X, y)
+
+
 @pytest.mark.parametrize("glm_type", ["", "population_"])
 @pytest.mark.parametrize(
     "model_instantiation",
@@ -3097,14 +3148,18 @@ def _set_sparse_state(model, glm_type, model_instantiation):
     ],
 )
 @pytest.mark.parametrize("n_samples", [1, 20])
+@pytest.mark.parametrize("fit_intercept", [True, False])
 @pytest.mark.requires_x64
-def test_estimate_dof_resid(n_samples, reg, request, glm_type, model_instantiation):
+def test_estimate_dof_resid(
+    n_samples, fit_intercept, reg, request, glm_type, model_instantiation
+):
     """_estimate_resid_degrees_of_freedom returns the correct residual DOF.
 
-    Uses a fixed sparse coef_ so no solver run is needed.
+    Uses a fixed sparse coef_ so no solver run is needed. A frozen intercept
+    (``fit_intercept=False``) consumes no degrees of freedom.
     """
     _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
-    model.set_params(regularizer=reg)
+    model.set_params(regularizer=reg, fit_intercept=fit_intercept)
 
     X, n_nonzero = _set_sparse_state(model, glm_type, model_instantiation)
 
@@ -3119,7 +3174,9 @@ def test_estimate_dof_resid(n_samples, reg, request, glm_type, model_instantiati
         rank = int(jnp.linalg.matrix_rank(X))
         dof = rank * n_m1_classes if is_cls else rank
 
-    expected = n_samples - dof - n_m1_classes
+    # the intercept consumes n_m1_classes dof when estimated, none when frozen
+    intercept_dof = n_m1_classes if fit_intercept else 0
+    expected = n_samples - dof - intercept_dof
     num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
     assert np.allclose(num, expected)
 
