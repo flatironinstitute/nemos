@@ -1723,20 +1723,23 @@ class TestGLMObservationModel:
             raise ValueError("Unknown model instantiation")
         return ll
 
-    @pytest.fixture
-    def sklearn_model(self, model_instantiation):
-        """
-        Fixture for test_glm_fit_matches_sklearn
+    @staticmethod
+    def _make_sklearn_model(model_instantiation, fit_intercept):
+        """Build the matching unregularized sklearn estimator.
+
+        ``fit_intercept`` toggles whether sklearn estimates the bias, mirroring
+        nemos ``GLM(fit_intercept=...)``. Returns ``None`` when no sklearn
+        counterpart exists (negative-binomial).
         """
         if "poisson" in model_instantiation:
-            return PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
+            return PoissonRegressor(fit_intercept=fit_intercept, tol=10**-12, alpha=0.0)
 
         elif "gamma" in model_instantiation:
-            return GammaRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
+            return GammaRegressor(fit_intercept=fit_intercept, tol=10**-12, alpha=0.0)
 
         elif "bernoulli" in model_instantiation:
             return LogisticRegression(
-                fit_intercept=True,
+                fit_intercept=fit_intercept,
                 tol=10**-12,
                 C=np.inf,
             )
@@ -1745,13 +1748,13 @@ class TestGLMObservationModel:
             return None
 
         elif "gaussian" in model_instantiation:
-            return LinearRegression(fit_intercept=True)
+            return LinearRegression(fit_intercept=fit_intercept)
 
         elif "classifier" in model_instantiation:
             # In sklearn 1.5+, multinomial is the default with lbfgs solver
             # Use C=1.0 (Ridge with strength=1.0) for identifiable parameters
             return LogisticRegression(
-                fit_intercept=True,
+                fit_intercept=fit_intercept,
                 tol=10**-12,
                 C=1.0,
                 solver="lbfgs",
@@ -1760,6 +1763,20 @@ class TestGLMObservationModel:
 
         else:
             raise ValueError("Unknown model instantiation")
+
+    @pytest.fixture
+    def sklearn_model(self, model_instantiation):
+        """
+        Fixture for test_glm_fit_matches_sklearn
+        """
+        return self._make_sklearn_model(model_instantiation, fit_intercept=True)
+
+    @pytest.fixture
+    def sklearn_model_no_intercept(self, model_instantiation):
+        """
+        Fixture for test_fit_intercept_false_matches_sklearn
+        """
+        return self._make_sklearn_model(model_instantiation, fit_intercept=False)
 
     @pytest.fixture
     def obs_has_defaults(self, model_instantiation):
@@ -1838,6 +1855,7 @@ class TestGLMObservationModel:
             f"{second_line}"
             f"    inverse_link_function={inverse_link_function},\n"
             "    regularizer=UnRegularized(),\n"
+            "    fit_intercept=True,\n"
             f"    solver_name='{solver_name}'\n"
             ")"
         )
@@ -2086,6 +2104,12 @@ class TestGLMObservationModel:
             intercept = sklearn_model.intercept_
         else:
             coef, intercept = sklearn_model.coef_, sklearn_model.intercept_
+
+        if isinstance(
+            nemos_model.observation_model, nmo.observation_models.BernoulliObservations
+        ):
+            # Logistic regression of sklearn always returns a 2d array
+            coef = np.squeeze(coef)
         return coef, intercept
 
     @staticmethod
@@ -2093,28 +2117,49 @@ class TestGLMObservationModel:
         sklearn_coef, sklearn_intercept, nemos_coef, nemos_intercept, atol=1e-6
     ):
         """Assert that sklearn and nemos parameters match within tolerance."""
-        match_weights = jnp.allclose(sklearn_coef, nemos_coef, atol=atol, rtol=0.0)
-        match_intercepts = jnp.allclose(
+        np.testing.assert_allclose(sklearn_coef, nemos_coef, atol=atol, rtol=0.0)
+        np.testing.assert_allclose(
             sklearn_intercept, nemos_intercept, atol=atol, rtol=0.0
         )
-        if not (match_weights and match_intercepts):
-            raise ValueError("GLM.fit estimate does not match sklearn!")
 
-    @pytest.mark.parametrize("solver_name", ["LBFGS"])
-    @pytest.mark.solver_related
-    @pytest.mark.requires_x64
-    @pytest.mark.filterwarnings("ignore:Setting penalty=None will ignore:UserWarning")
-    def test_glm_fit_matches_sklearn(
-        self, solver_name, request, glm_type, model_instantiation, sklearn_model
+    def _fit_and_compare_to_sklearn(self, model, sklearn_model, X, y, atol=1e-6):
+        """Fit ``model`` and ``sklearn_model`` on the same data and assert their
+        coefficients and intercepts match within ``atol``.
+
+        Population models are compared neuron-by-neuron, since sklearn fits each
+        output independently. When the nemos model has ``fit_intercept=False`` the
+        sklearn counterpart is built with ``fit_intercept=False`` too, so both
+        intercepts are zero and the comparison still holds.
+        """
+        model.fit(X, y)
+        if is_population_model(model):
+            for n in range(y.shape[1]):
+                sklearn_model.fit(X, y[:, n])
+                sk_coef, sk_intercept = self._format_sklearn_params(
+                    sklearn_model, model
+                )
+                self._assert_params_match(
+                    sk_coef, sk_intercept, model.coef_[:, n], model.intercept_[n], atol
+                )
+        else:
+            sklearn_model.fit(X, y)
+            sk_coef, sk_intercept = self._format_sklearn_params(sklearn_model, model)
+            self._assert_params_match(
+                sk_coef, sk_intercept, model.coef_, model.intercept_, atol
+            )
+
+    @staticmethod
+    def _build_matched_model(
+        model_obs, model_instantiation, X, solver_name, fit_intercept=True
     ):
-        """Test that nemos GLM produces the same estimates as sklearn."""
-        if sklearn_model is None:
-            pytest.skip(f"sklearn model is not available for {model_instantiation}")
+        """Reconstruct a nemos model configured to match its sklearn counterpart.
 
-        X, y, model_obs, true_params, firing_rate = request.getfixturevalue(
-            glm_type + model_instantiation
-        )
-
+        Uses the ``_get_param_names`` filter so the same call works for GLM,
+        PopulationGLM and their classifier variants (which take ``n_classes``
+        rather than ``observation_model``). Classifier models get the Ridge
+        strength that matches sklearn's ``C=1.0``; other models are unregularized.
+        ``fit_intercept`` is forwarded to toggle intercept estimation.
+        """
         n_samples = (
             X.shape[0] if not isinstance(X, dict) else list(X.values())[0].shape[0]
         )
@@ -2134,6 +2179,7 @@ class TestGLMObservationModel:
             regularizer=regularizer,
             regularizer_strength=regularizer_strength,
             observation_model=model_obs.observation_model,
+            fit_intercept=fit_intercept,
             solver_name=solver_name,
             solver_kwargs={"tol": 10**-12},
         )
@@ -2147,34 +2193,80 @@ class TestGLMObservationModel:
         if "gamma" in model_instantiation:
             model.inverse_link_function = jnp.exp
 
+        return model
+
+    @pytest.mark.parametrize("solver_name", ["BFGS"])
+    @pytest.mark.solver_related
+    @pytest.mark.requires_x64
+    @pytest.mark.filterwarnings("ignore:Setting penalty=None will ignore:UserWarning")
+    def test_glm_fit_matches_sklearn(
+        self, solver_name, request, glm_type, model_instantiation, sklearn_model
+    ):
+        """Test that nemos GLM produces the same estimates as sklearn."""
+        if sklearn_model is None:
+            pytest.skip(f"sklearn model is not available for {model_instantiation}")
+
+        X, y, model_obs, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+
+        model = self._build_matched_model(
+            model_obs, model_instantiation, X, solver_name
+        )
+        self._fit_and_compare_to_sklearn(model, sklearn_model, X, y, atol=1e-6)
+
+    @pytest.mark.parametrize("solver_name", ["LBFGS"])
+    @pytest.mark.solver_related
+    @pytest.mark.requires_x64
+    @pytest.mark.filterwarnings("ignore:Setting penalty=None will ignore:UserWarning")
+    def test_fit_intercept_false_matches_sklearn(
+        self,
+        solver_name,
+        request,
+        glm_type,
+        model_instantiation,
+        sklearn_model_no_intercept,
+    ):
+        """With ``fit_intercept=False`` the estimated coefficients match an
+        sklearn fit that also drops the intercept, and the frozen nemos intercept
+        stays exactly zero."""
+        if sklearn_model_no_intercept is None:
+            pytest.skip(f"sklearn model is not available for {model_instantiation}")
+
+        X, y, model_obs, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+
+        model = self._build_matched_model(
+            model_obs, model_instantiation, X, solver_name, fit_intercept=False
+        )
+        self._fit_and_compare_to_sklearn(
+            model, sklearn_model_no_intercept, X, y, atol=1e-6
+        )
+        assert jnp.all(model.intercept_ == 0.0)
+
+    @pytest.mark.parametrize("solver_name", ["GradientDescent", "LBFGS"])
+    @pytest.mark.solver_related
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
+    def test_fit_intercept_false_leaves_intercept_zero(
+        self, solver_name, request, glm_type, model_instantiation
+    ):
+        """Fitting with ``fit_intercept=False`` holds the intercept exactly at
+        zero while the coefficients are still estimated (finite and moved off the
+        zero-valued leaves)."""
+        X, y, model_obs, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+
+        model = self._build_matched_model(
+            model_obs, model_instantiation, X, solver_name, fit_intercept=False
+        )
         model.fit(X, y)
 
-        is_population = is_population_model(model)
-
-        if is_population:
-            # Population GLM: fit each neuron separately in sklearn and compare
-            for n in range(y.shape[1]):
-                sklearn_model.fit(X, y[:, n])
-                sk_coef, sk_intercept = self._format_sklearn_params(
-                    sklearn_model, model
-                )
-                self._assert_params_match(
-                    sk_coef,
-                    sk_intercept,
-                    model.coef_[:, n],
-                    model.intercept_[n],
-                    atol=1e-6,
-                )
-        else:
-            sklearn_model.fit(X, y)
-            sk_coef, sk_intercept = self._format_sklearn_params(sklearn_model, model)
-            self._assert_params_match(
-                sk_coef,
-                sk_intercept,
-                model.coef_,
-                model.intercept_,
-                atol=1e-6,
-            )
+        coef_leaves = jax.tree_util.tree_leaves(model.coef_)
+        assert jnp.all(model.intercept_ == 0.0)
+        assert all(jnp.all(jnp.isfinite(leaf)) for leaf in coef_leaves)
+        assert any(jnp.any(leaf != 0.0) for leaf in coef_leaves)
 
     @staticmethod
     def _get_expected_par_shape(X, y, model):
