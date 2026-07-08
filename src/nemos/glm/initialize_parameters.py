@@ -255,6 +255,4 @@ def initialize_constant_coef_matching_mean_rate(
     scale = (jnp.sum(row_sum) + eps) / (jnp.sum(row_sum**2) + eps)
     const = eta_target * scale  # (n_out,)
 
-    return jax.tree_util.tree_map(
-        lambda leaf: (jnp.ones_like(leaf) * const).astype(leaf.dtype), empty_coef
-    )
+    return jax.tree_util.tree_map(lambda leaf: jnp.full_like(leaf, const), empty_coef)
