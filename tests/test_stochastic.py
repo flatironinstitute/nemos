@@ -184,6 +184,36 @@ class TestCallbackSystem:
         np.testing.assert_array_equal(ctx.params[0], jnp.array([3.0, 4.0]))
         np.testing.assert_array_equal(ctx.params[1], jnp.array([7.0]))
 
+    def test_repr_single_line(self):
+        """A short context renders on one line; None fields are omitted."""
+        ctx = TrainingContext(epoch_idx=1, batch_idx=3, num_epochs=5)
+        assert repr(ctx) == "TrainingContext(epoch_idx=1, batch_idx=3, num_epochs=5)"
+
+    def test_repr_empty(self):
+        """Only ``num_epochs`` (default 0, not None) shows for a bare context."""
+        assert repr(TrainingContext()) == "TrainingContext(num_epochs=0)"
+
+    def test_repr_multiline_over_threshold(self):
+        """Past ``N_CHAR_MAX`` the repr breaks to one field per line."""
+        ctx = TrainingContext(epoch_idx=1, batch_idx=3, num_epochs=5)
+        assert ctx.__repr__(N_CHAR_MAX=10) == (
+            "TrainingContext(\n"
+            "    epoch_idx=1,\n"
+            "    batch_idx=3,\n"
+            "    num_epochs=5,\n"
+            ")"
+        )
+
+    def test_repr_shows_recombined_params(self):
+        """``params`` renders through the property: the complete (recombined)
+        parameters, not the partial active-only subtree."""
+        ctx = TrainingContext(
+            params=(jnp.array([1.0]), None), frozen=(None, jnp.array([7.0]))
+        )
+        text = repr(ctx)
+        assert f"params={ctx.params}" in text
+        assert f"params={ctx._params}" not in text
+
     def test_callback_hooks_are_noop(self):
         """Base Callback hooks don't raise."""
         cb = Callback()
