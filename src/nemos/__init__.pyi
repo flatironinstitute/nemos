@@ -2,6 +2,8 @@
 
 from . import (
     basis,
+    batching,
+    callbacks,
     convolve,
     exceptions,
     fetch,
@@ -22,6 +24,8 @@ from .io.io import inspect_npz, load_model
 
 __all__ = [
     "basis",
+    "batching",
+    "callbacks",
     "convolve",
     "exceptions",
     "fetch",

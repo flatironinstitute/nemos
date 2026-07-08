@@ -71,6 +71,9 @@ instance/
 # Sphinx documentation
 docs/_build/
 
+# Generated toy data for the batching how-to guide
+docs/how_to_guide/batching/*.nwb
+
 # PyBuilder
 target/
 

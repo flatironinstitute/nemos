@@ -108,7 +108,7 @@ def mock_glm_fit(monkeypatch):
 
     Use in tests that only care about sklearn routing (cloning, parameter
     setting, pipeline plumbing) and do not need any fit validation logic.
-    For tests that need validation but not solver iterations, use mock_optimizer_run.
+    For tests that need validation but not solver iterations, use mock_glm_optimizer_run.
     """
 
     def _fit(self, X, y, init_params=None, **kwargs):

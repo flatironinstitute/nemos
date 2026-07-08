@@ -1,6 +1,5 @@
 """Abstract class for regression models."""
 
-# required to get ArrayLike to render correctly
 from __future__ import annotations
 
 import abc
@@ -494,6 +493,26 @@ class BaseRegressor(
         """Unpack and store params pytree to coef_ and intercept_."""
         pass
 
+    def get_model_params(self) -> UserProvidedParamsT:
+        """
+        Return the fitted model parameters in user-facing form.
+
+        The exact structure depends on the concrete subclass (e.g.
+        ``(coef, intercept)`` for a GLM), matching what
+        :meth:`initialize_params` returns.
+
+        Returns
+        -------
+        :
+            The fitted parameters in user-facing form.
+        """
+        params = self._validator.from_model_params(self._get_model_params())
+        # Make a kind of copy by rebuilding the pytree structure so callers
+        # cannot mutate container-like model params (for example dict coefficients)
+        # by changing the return value. This is fine for the current JAX-array leaves,
+        # but it would need revisiting if future subclasses store mutable objects at the leaves.
+        return jax.tree_util.tree_map(lambda x: x, params)
+
     @abc.abstractmethod
     def _compute_loss(
         self,
@@ -903,3 +922,130 @@ class BaseRegressor(
         Provide instance specific validator configuration if needed.
         """
         return {}
+
+    @staticmethod
+    def _convergence_badge_html(solver_state) -> str:
+        """Build the convergence diagnostic HTML for the model repr.
+
+        Mirror the convergence detection used in ``GLM.fit``: prefer
+        ``stats.converged``, fall back to a ``converged`` flag exposed directly
+        by custom solvers, and otherwise report it as unknown. A missing solver
+        state (e.g. for a model loaded from disk) is treated the same as a
+        solver that does not report convergence.
+
+        Parameters
+        ----------
+        solver_state :
+            The model's ``solver_state_`` attribute, or ``None``.
+
+        Returns
+        -------
+        str
+            An HTML snippet displaying the convergence status.
+        """
+        if solver_state is None:
+            converged = None
+        elif hasattr(solver_state, "stats") and hasattr(
+            solver_state.stats, "converged"
+        ):
+            converged = bool(solver_state.stats.converged)
+        elif hasattr(solver_state, "converged"):
+            converged = bool(solver_state.converged)
+        else:
+            converged = None
+
+        if converged is None:
+            c_color, c_text = ("#6c757d", "Unknown")
+        elif converged:
+            c_color, c_text = ("#28a745", "Yes")
+        else:
+            c_color, c_text = ("#dc3545", "No")
+        return f'<span><strong>Converged:</strong> <span style="color: {c_color};">{c_text}</span></span>'
+
+    def _repr_mimebundle_(self, **kwargs):
+        """Mimebundle representation of the model.
+
+        Wraps the default scikit-learn diagram with a small nemos diagnostics bar.
+
+        Parameters
+        ----------
+        **kwargs : dict
+            Keyword arguments passed to the default scikit-learn mimebundle generator.
+
+        Returns
+        -------
+        dict
+            A dictionary mapping mime types to representation data.
+        """
+        bundle_func = getattr(super(), "_repr_mimebundle_", None)
+        bundle = bundle_func(**kwargs) if bundle_func else {}
+
+        if "text/html" not in bundle:
+            html_func = getattr(super(), "_repr_html_", None)
+            bundle["text/html"] = html_func() if html_func else repr(self)
+
+        state = self._get_fit_state()
+        coef = state.get("coef_")
+        is_fitted = coef is not None
+
+        state_color, state_text = (
+            ("#28a745", "Fitted") if is_fitted else ("#dc3545", "Unfitted")
+        )
+        diagnostics = "</div>"
+
+        if is_fitted:
+            intercept_shape = getattr(state.get("intercept_"), "shape", ())
+            n_neurons = (
+                1
+                if intercept_shape in ((), (1,))
+                else getattr(intercept_shape, "__getitem__", lambda x: "N/A")(0)
+            )
+
+            def get_features(x):
+                return getattr(x, "shape", (1,))[0] if getattr(x, "ndim", 0) > 0 else 1
+
+            n_features = "Unknown"
+            try:
+                n_features = sum(
+                    jax.tree_util.tree_flatten(
+                        jax.tree_util.tree_map(get_features, coef)
+                    )[0]
+                )
+            except Exception:
+                pass
+
+            conv_html = self._convergence_badge_html(state.get("solver_state_"))
+
+            diagnostics = f"""<span style="margin-right: 15px;"><strong>Neurons:</strong> {n_neurons}</span>
+            </div>
+            <div style="margin-top: 8px;">
+                <span style="margin-right: 15px;"><strong>Features:</strong> {n_features}</span>
+                {conv_html}
+            </div>"""
+
+        nemos_html = f"""
+        <div style="
+            font-family: sans-serif;
+            margin-bottom: 10px;
+            padding: 10px 14px;
+            border-left: 4px solid {state_color};
+            background-color: #f8f9fa;
+            color: #333;
+            border-radius: 4px;
+            display: inline-block;
+            font-size: 13px;
+        ">
+            <div>
+                <span style="font-weight: bold; margin-right: 15px;">
+                    Model State: <span style="color: {state_color};">{state_text}</span>
+                </span>
+                {diagnostics}
+        </div>
+        """
+
+        bundle["text/html"] = nemos_html + bundle.get("text/html", "")
+        return bundle
+
+    def _repr_html_(self) -> str:
+        """HTML representation of the model."""
+        return self._repr_mimebundle_().get("text/html", repr(self))

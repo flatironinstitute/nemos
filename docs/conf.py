@@ -164,8 +164,11 @@ html_js_files = [
 ]
 
 # Copybutton settings (to hide prompt)
-copybutton_prompt_text = r">>> |\$ "
-copybutton_prompt_is_regexp = True
+# Exclude prompts/output via Pygments CSS classes rather than a text regex.
+# `.gp` covers both `>>>` and `...` continuation prompts (and shell `$`),
+# `.go` covers console output. This avoids dropping `...` continuation lines.
+# https://sphinx-copybutton.readthedocs.io/en/latest/use.html#automatic-exclusion-of-prompts-from-the-copies
+copybutton_exclude = ".linenos, .gp, .go"
 
 sphinxemoji_style = 'twemoji'
 
@@ -207,6 +210,7 @@ api_order = [
     "regularizers.rst",
     "io.rst",
     "solvers.rst",
+    "stochastic_optimization.rst",
     "convolve.rst",
     "simulations.rst",
     "identifiability.rst",
