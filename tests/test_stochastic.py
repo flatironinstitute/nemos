@@ -159,6 +159,31 @@ class TestCallbackSystem:
         assert ctx.should_stop
         assert ctx.stop_reason == "test reason"
 
+    def test_training_context_params_passthrough_when_no_frozen(self):
+        """With ``frozen=None`` the params getter returns exactly what was set."""
+        params = SimpleNamespace(coef="COEF", intercept="INT")
+        ctx = TrainingContext(params=params)
+        assert ctx.params is params
+
+    def test_training_context_params_recombines_frozen(self):
+        """With a frozen subtree set, reading ``params`` recombines it with the
+        active subtree, while the setter stores only the active subtree (so
+        callbacks always see the complete parameters)."""
+        frozen = (None, jnp.array([7.0]))
+        ctx = TrainingContext(params=(jnp.array([0.0, 0.0]), None), frozen=frozen)
+
+        # the constructor-provided active subtree recombines with frozen on read
+        np.testing.assert_array_equal(ctx.params[0], jnp.array([0.0, 0.0]))
+        np.testing.assert_array_equal(ctx.params[1], jnp.array([7.0]))
+
+        # the training loop assigns a new active subtree ...
+        ctx.params = (jnp.array([3.0, 4.0]), None)
+        # ... stored active-only (the frozen slot stays empty) ...
+        assert ctx._params[1] is None
+        # ... and recombined with frozen on the next read
+        np.testing.assert_array_equal(ctx.params[0], jnp.array([3.0, 4.0]))
+        np.testing.assert_array_equal(ctx.params[1], jnp.array([7.0]))
+
     def test_callback_hooks_are_noop(self):
         """Base Callback hooks don't raise."""
         cb = Callback()

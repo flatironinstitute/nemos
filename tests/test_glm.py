@@ -1734,6 +1734,48 @@ class TestFitInterceptProperty:
         assert spy.call_count == 2
 
 
+class TestPartitionActive:
+    """Tests for ``BaseRegressor._partition_active`` as driven by the GLM."""
+
+    @pytest.fixture
+    def params(self):
+        return nmo.glm.params.GLMParams(
+            coef=jnp.array([1.0, 2.0, 3.0]), intercept=jnp.array([5.0])
+        )
+
+    def test_all_active_when_fit_intercept_true(self, params):
+        """fit_intercept=True keeps every leaf active; the frozen tree is all-None."""
+        model = nmo.glm.GLM()
+        model.fit_intercept = True
+        active, frozen = model._partition_active(params)
+        np.testing.assert_array_equal(active.coef, params.coef)
+        np.testing.assert_array_equal(active.intercept, params.intercept)
+        assert frozen.coef is None
+        assert frozen.intercept is None
+
+    def test_intercept_frozen_when_fit_intercept_false(self, params):
+        """fit_intercept=False moves the intercept into the frozen tree and leaves
+        the coefficients active."""
+        model = nmo.glm.GLM()
+        model.fit_intercept = False
+        active, frozen = model._partition_active(params)
+        np.testing.assert_array_equal(active.coef, params.coef)
+        assert active.intercept is None
+        assert frozen.coef is None
+        np.testing.assert_array_equal(frozen.intercept, params.intercept)
+
+    def test_none_active_params_returns_full_and_empty(self, params):
+        """When ``_active_params`` is None (the base default, e.g. a model that never
+        sets it) the params are returned unchanged and the frozen tree is all-None."""
+        model = nmo.glm.GLM()
+        model._active_params = None
+        active, frozen = model._partition_active(params)
+        assert active is params
+        assert jax.tree_util.tree_leaves(frozen) == []
+        assert frozen.coef is None
+        assert frozen.intercept is None
+
+
 @pytest.mark.parametrize("glm_type", ["", "population_"])
 @pytest.mark.parametrize(
     "model_instantiation",
