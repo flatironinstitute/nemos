@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass
 from functools import partial
 from typing import Any, Iterable, Union
@@ -147,6 +148,26 @@ class TrainingContext:
             should_stop=self.should_stop,
             stop_reason=self.stop_reason,
         )
+
+    def __repr__(self, N_CHAR_MAX: int = 700) -> str:
+        """Represent this context as a string.
+
+        Simple string representation, similar to that of a dataclass.
+        """
+        cls = self.__class__.__name__
+        parts = []
+        for name in inspect.signature(self.__init__).parameters:
+            value = getattr(self, name)
+            if value is None:
+                continue
+            parts.append(f"{name}={value}")
+        if not parts:
+            return f"{cls}()"
+        single_line = f"{cls}({', '.join(parts)})"
+        if len(single_line) <= N_CHAR_MAX:
+            return single_line
+        body = "".join(f"    {part},\n" for part in parts)
+        return f"{cls}(\n{body})"
 
 
 class Callback:
