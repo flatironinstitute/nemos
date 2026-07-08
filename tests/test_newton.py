@@ -214,6 +214,38 @@ def test_newton_glm_instantiate_solver(regularizer_name, glm_class):
 
 @pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
 @pytest.mark.parametrize(
+    "model_fixture",
+    ["poissonGLM_model_instantiation", "population_poissonGLM_model_instantiation"],
+)
+def test_newton_rejects_frozen_intercept(regularizer_name, model_fixture, request):
+    """Newton's Hessian is built over the full parameter set and is not
+    partition-aware, so requesting it with a frozen intercept
+    (``fit_intercept=False``) raises rather than silently ignoring the freeze."""
+    X, y, model, *_ = request.getfixturevalue(model_fixture)
+
+    frozen_model = type(model)(
+        regularizer=regularizer_name, fit_intercept=False, solver_name="Newton"
+    )
+    with pytest.raises(
+        ValueError, match="Newton solver does not support frozen parameters"
+    ):
+        frozen_model.fit(X, y)
+
+
+@pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
+def test_ridge_default_solver_skips_newton_when_intercept_frozen(glm_class):
+    """Ridge defaults to Newton because its penalized Hessian is positive definite,
+    but only when the intercept is estimated; freezing the intercept defers to the
+    regularizer's own default solver, since Newton is not partition-aware."""
+    assert glm_class(regularizer="Ridge", fit_intercept=True).solver_name == "Newton"
+
+    frozen = glm_class(regularizer="Ridge", fit_intercept=False)
+    assert frozen.solver_name != "Newton"
+    assert frozen.solver_name == Ridge().default_solver
+
+
+@pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
+@pytest.mark.parametrize(
     "glm_class",
     [
         nmo.glm.GLM,
