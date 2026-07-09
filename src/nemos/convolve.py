@@ -47,14 +47,11 @@ _FFT_WINDOW_LOG_FACTOR = 3.0
 def _array_on_cpu(array: Any) -> bool:
     """Return whether ``array`` lives on a CPU device.
 
-    Host/NumPy arrays count as CPU. Abstract values (e.g. tracers under ``jit``) have
-    no concrete device, so we return ``False`` to keep them on the direct path.
+    Under ``jit`` the array is a tracer with no concrete device and ``.devices()`` raises;
+    in that case we return ``False`` so the caller falls back to the direct path.
     """
-    devices = getattr(array, "devices", None)
-    if devices is None:
-        return True
     try:
-        return all(d.platform == "cpu" for d in devices())
+        return all(d.platform == "cpu" for d in array.devices())
     except Exception:
         return False
 
@@ -69,11 +66,15 @@ def _resolve_use_fft(
 
     ``use_fft=True``/``False`` forces the choice. When ``None``, the heuristic engages
     only on CPU (comparing kernel length against ``log2`` of the block size); on other
-    backends it returns ``False``, deferring device convolution to XLA.
+    devices it returns ``False``, deferring the algorithm choice to XLA.
 
     The comparison uses ``batch_size_samples`` -- the length each FFT actually operates
     on -- rather than the full sample-axis length, since with sample batching the FFT is
     applied per block. The two coincide only when there is no sample batching.
+
+    Note: under ``jit`` the array is a tracer with no concrete device, so it is treated as
+    non-CPU and the direct path is used. To use FFT while tracing, pass an explicit
+    ``use_fft=True``.
     """
     if use_fft is not None:
         return use_fft
@@ -658,13 +659,12 @@ def create_convolutional_predictor(
         of kernels. Default vectorizes over all basis kernels.
     use_fft :
         Whether to compute the convolution in the frequency domain via
-        :func:`jax.scipy.signal.fftconvolve`. If ``True``/``False`` the choice is forced;
-        if ``None`` (default) it is resolved per input array by a heuristic that selects
-        FFT for long kernels on CPU and otherwise defers to the direct convolution. The
-        FFT result matches the direct one up to floating-point round-off. ``batch_size_samples``
-        still applies under FFT: if set below the sample-axis length, the convolution is
-        batched over samples via overlap-save; otherwise the full sample axis is
-        transformed at once.
+        :func:`jax.scipy.signal.fftconvolve`. ``True`` or ``False`` forces the choice,
+        while ``None`` (the default) resolves it per input array with a heuristic that
+        selects FFT for long kernels on CPU and otherwise falls back to the direct
+        convolution. At jit-compilation time the device is unavailable, so the default
+        direct (``jnp.convolve``) path is dispatched; set ``use_fft=True`` to force the
+        FFT convolution under jit.
 
     Returns
     -------
@@ -690,6 +690,13 @@ def create_convolutional_predictor(
         Raised if any explicitly provided batch sizes—``batch_size_samples``,
         ``batch_size_channels``, or ``batch_size_basis``—are not positive integers.
         A value of ``None`` is allowed and treated as unspecified.
+
+    Notes
+    -----
+    Under ``jax.jit`` the inputs are tracers with no concrete device, so the automatic
+    backend selection (``use_fft=None``) cannot inspect device placement and falls back
+    to the direct convolution. If you need the FFT path while tracing, do not rely on the
+    auto-detection: pass ``use_fft=True`` explicitly.
 
     """
     # apply checks
