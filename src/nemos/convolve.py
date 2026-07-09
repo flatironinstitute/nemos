@@ -318,12 +318,13 @@ def _fft_convolve(
     batch_size_channels: int,
     batch_size_basis: int,
 ):
-    """FFT-based counterpart of :func:`_tensor_convolve`.
+    """FFT-based counterpart of :func:`_tensor_convolve`, without sample batching.
 
     Produces the same ``"valid"`` convolution and output shape as ``_tensor_convolve``,
     but replaces the direct correlation primitive with an FFT one. The full sample axis
-    is transformed at once, so ``batch_size_samples`` does not apply here; memory is
-    still batched over channels and basis filters.
+    is transformed at once (a single FFT), so this variant does not batch over samples;
+    memory is still batched over channels and basis filters. Use
+    :func:`_fft_overlap_save_convolve` when the sample axis must be batched.
     """
     n_samples, *feat_shape = array.shape
 
@@ -333,6 +334,69 @@ def _fft_convolve(
     conv_output = _batch_convolve_over_channels(
         array, eval_basis, batch_size_channels, batch_size_basis, corr_vec=_CORR_VEC_FFT
     )
+    return conv_output.reshape(n_samples - window_size + 1, *feat_shape, n_basis)
+
+
+def _fft_overlap_save_convolve(
+    array: NDArray,
+    eval_basis: NDArray,
+    batch_size_samples: int,
+    batch_size_channels: int,
+    batch_size_basis: int,
+):
+    """Overlap-save FFT convolution over a batched sample axis.
+
+    Long inputs are convolved in blocks of ``batch_size_samples`` rather than with a
+    single full-length FFT. Consecutive blocks overlap by ``window_size - 1`` samples,
+    and each block's ``"valid"`` FFT convolution contributes
+    ``batch_size_samples - window_size + 1`` outputs that tile the result contiguously
+    (the overlap-save method). The blocking (pad/step/scan) mirrors
+    :func:`_tensor_convolve` exactly, so the output is identical to the direct path up to
+    floating-point round-off; only the per-block primitive differs (FFT vs. direct).
+
+    This function is used only when the sample axis is actually batched
+    (``batch_size_samples < n_samples``); the non-batched case goes through
+    :func:`_fft_convolve` (a single FFT).
+    """
+    n_samples, *feat_shape = array.shape
+
+    array = array.reshape(n_samples, -1)
+    window_size, n_basis = eval_basis.shape
+    n_features = array.shape[1]
+
+    step = batch_size_samples - window_size + 1
+    n_samples_padded = (
+        ((n_samples - window_size + 1 + step - 1) // step) * step + window_size - 1
+    )
+    n_batches = (n_samples_padded - window_size + 1) // step
+
+    pad_len = n_samples_padded - n_samples
+    array = jnp.pad(array, ((0, pad_len), (0, 0)), constant_values=0.0)
+
+    def conv_batch(concat_conv, batch_idx):
+        start_chunk = batch_idx * step
+        chunk = jax.lax.dynamic_slice(
+            array, (start_chunk, 0), (batch_size_samples, n_features)
+        )
+        concat_conv = jax.lax.dynamic_update_slice(
+            concat_conv,
+            _batch_convolve_over_channels(
+                chunk,
+                eval_basis,
+                batch_size_channels,
+                batch_size_basis,
+                corr_vec=_CORR_VEC_FFT,
+            ),
+            (start_chunk, 0, 0),
+        )
+        return concat_conv, None
+
+    # initialize output of valid convolution
+    conv_output = jnp.full(
+        (n_samples_padded - window_size + 1, n_features, n_basis), jnp.nan
+    )
+    conv_output, _ = jax.lax.scan(conv_batch, conv_output, jnp.arange(n_batches))
+    conv_output = conv_output[: n_samples - window_size + 1]
     return conv_output.reshape(n_samples - window_size + 1, *feat_shape, n_basis)
 
 
@@ -369,7 +433,9 @@ def _shift_time_axis_and_convolve(
         Size of the batches in number of basis filters.
     use_fft :
         Whether to convolve via FFT. If ``None``, the choice is resolved per array by
-        :func:`_resolve_use_fft`. When FFT is used, ``batch_size_samples`` is ignored.
+        :func:`_resolve_use_fft`. When FFT is used and ``batch_size_samples`` is smaller
+        than the sample-axis length, the convolution is batched over samples via
+        overlap-save (:func:`_fft_overlap_save_convolve`); otherwise a single FFT is used.
 
     Returns
     -------
@@ -388,7 +454,20 @@ def _shift_time_axis_and_convolve(
 
     # convolve
     if _resolve_use_fft(use_fft, array, eval_basis):
-        conv = _fft_convolve(array, eval_basis, batch_size_channels, batch_size_basis)
+        if batch_size_samples < array.shape[0]:
+            # sample axis is batched: overlap-save FFT over blocks of batch_size_samples
+            conv = _fft_overlap_save_convolve(
+                array,
+                eval_basis,
+                batch_size_samples,
+                batch_size_channels,
+                batch_size_basis,
+            )
+        else:
+            # whole sample axis at once: a single FFT
+            conv = _fft_convolve(
+                array, eval_basis, batch_size_channels, batch_size_basis
+            )
     else:
         conv = _tensor_convolve(
             array, eval_basis, batch_size_samples, batch_size_channels, batch_size_basis
@@ -573,9 +652,10 @@ def create_convolutional_predictor(
         :func:`jax.scipy.signal.fftconvolve`. If ``True``/``False`` the choice is forced;
         if ``None`` (default) it is resolved per input array by a heuristic that selects
         FFT for long kernels on CPU and otherwise defers to the direct convolution. The
-        FFT result matches the direct one up to floating-point round-off. When FFT is
-        used, ``batch_size_samples`` does not apply (the full sample axis is transformed
-        at once).
+        FFT result matches the direct one up to floating-point round-off. ``batch_size_samples``
+        still applies under FFT: if set below the sample-axis length, the convolution is
+        batched over samples via overlap-save; otherwise the full sample axis is
+        transformed at once.
 
     Returns
     -------
