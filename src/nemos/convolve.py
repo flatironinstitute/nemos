@@ -6,11 +6,12 @@ from __future__ import annotations
 import re
 import warnings
 from functools import partial
-from math import prod
+from math import log2, prod
 from typing import Any, Callable, List, Literal, Optional
 
 import jax
 import jax.numpy as jnp
+from jax.scipy.signal import fftconvolve
 from numpy.typing import ArrayLike, NDArray
 
 from . import type_casting, utils, validation
@@ -26,6 +27,52 @@ _CORR_VEC_BASIS = jax.vmap(partial(jnp.convolve, mode="valid"), (None, 1), 1)
 
 _CORR_VEC = jax.vmap(partial(jnp.convolve, mode="valid"), (1, None), 1)
 _CORR_VEC = jax.vmap(_CORR_VEC, (None, 1), 2)
+
+
+# FFT counterpart of `_CORR_VEC`, using `jax.scipy.signal.fftconvolve` as the primitive.
+# The vmap reduces each call to 1D operands (a single basis column and a single input
+# channel), so `fftconvolve` performs a strictly 1D convolution over the sample axis --
+# matching `jnp.convolve(basis_col, signal, mode="valid")` -- rather than convolving over
+# all axes as it would on n-d inputs. The input/output axis layout mirrors `_CORR_VEC`
+# exactly, so the batching helpers route to either primitive transparently.
+_CORR_VEC_FFT = jax.vmap(partial(fftconvolve, mode="valid"), (1, None), 1)
+_CORR_VEC_FFT = jax.vmap(_CORR_VEC_FFT, (None, 1), 2)
+
+# FFT-based convolution is asymptotically cheaper once the kernel length grows large
+# relative to log2(num_samples). This factor sets that crossover for the CPU heuristic;
+# it is deliberately conservative and tunable.
+_FFT_WINDOW_LOG_FACTOR = 3.0
+
+
+def _array_on_cpu(array: Any) -> bool:
+    """Return whether ``array`` lives on a CPU device.
+
+    Host/NumPy arrays count as CPU. Abstract values (e.g. tracers under ``jit``) have
+    no concrete device, so we return ``False`` to keep them on the direct path.
+    """
+    devices = getattr(array, "devices", None)
+    if devices is None:
+        return True
+    try:
+        return all(d.platform == "cpu" for d in devices())
+    except Exception:
+        return False
+
+
+def _resolve_use_fft(use_fft: Optional[bool], array: Any, eval_basis: NDArray) -> bool:
+    """Decide whether to run FFT-based convolution for a single input array.
+
+    ``use_fft=True``/``False`` forces the choice. When ``None``, the heuristic engages
+    only on CPU (comparing kernel length against ``log2(num_samples)``); on other
+    backends it returns ``False``, deferring device convolution to XLA.
+    """
+    if use_fft is not None:
+        return use_fft
+    if not _array_on_cpu(array):
+        return False
+    n_samples = array.shape[0]
+    window_size = eval_basis.shape[0]
+    return window_size > _FFT_WINDOW_LOG_FACTOR * max(1.0, log2(max(n_samples, 2)))
 
 
 def _reorganize_scan_out(out, axis):
@@ -231,10 +278,16 @@ def _tensor_convolve(
 
 
 def _batch_convolve_over_channels(
-    array: NDArray, eval_basis: NDArray, batch_size_channels: int, batch_size_basis: int
+    array: NDArray,
+    eval_basis: NDArray,
+    batch_size_channels: int,
+    batch_size_basis: int,
+    corr_vec: Callable = _CORR_VEC,
 ):
     def conv_over_basis(array_chunk, basis_matrix):
-        return _batch_over_basis_convolve(array_chunk, basis_matrix, batch_size_basis)
+        return _batch_over_basis_convolve(
+            array_chunk, basis_matrix, batch_size_basis, corr_vec
+        )
 
     return _batch_binary_func(
         array, eval_basis, conv_over_basis, batch_size_channels, axis=1
@@ -242,18 +295,45 @@ def _batch_convolve_over_channels(
 
 
 def _batch_over_basis_convolve(
-    array: NDArray, eval_basis: NDArray, batch_size_basis: int
+    array: NDArray,
+    eval_basis: NDArray,
+    batch_size_basis: int,
+    corr_vec: Callable = _CORR_VEC,
 ):
     out = _batch_binary_func(
         eval_basis,
         array,
-        _CORR_VEC,
+        corr_vec,
         batch_size_basis,
         axis=1,
         out_axis=1,
     )
     # move basis axis.
     return out.transpose(0, 2, 1)
+
+
+def _fft_convolve(
+    array: NDArray,
+    eval_basis: NDArray,
+    batch_size_channels: int,
+    batch_size_basis: int,
+):
+    """FFT-based counterpart of :func:`_tensor_convolve`.
+
+    Produces the same ``"valid"`` convolution and output shape as ``_tensor_convolve``,
+    but replaces the direct correlation primitive with an FFT one. The full sample axis
+    is transformed at once, so ``batch_size_samples`` does not apply here; memory is
+    still batched over channels and basis filters.
+    """
+    n_samples, *feat_shape = array.shape
+
+    array = array.reshape(n_samples, -1)
+    window_size, n_basis = eval_basis.shape
+
+    conv_output = _batch_convolve_over_channels(
+        array, eval_basis, batch_size_channels, batch_size_basis, corr_vec=_CORR_VEC_FFT
+    )
+    return conv_output.reshape(n_samples - window_size + 1, *feat_shape, n_basis)
 
 
 def _shift_time_axis_and_convolve(
@@ -263,6 +343,7 @@ def _shift_time_axis_and_convolve(
     batch_size_samples: int,
     batch_size_channels: int,
     batch_size_basis: int,
+    use_fft: Optional[bool] = None,
 ) -> jnp.ndarray:
     """
     Shifts the specified axis to the first position, applies convolution, and then reverses the shift.
@@ -286,6 +367,9 @@ def _shift_time_axis_and_convolve(
         Size of the batches in number of input channels.
     batch_size_basis :
         Size of the batches in number of basis filters.
+    use_fft :
+        Whether to convolve via FFT. If ``None``, the choice is resolved per array by
+        :func:`_resolve_use_fft`. When FFT is used, ``batch_size_samples`` is ignored.
 
     Returns
     -------
@@ -303,9 +387,12 @@ def _shift_time_axis_and_convolve(
     array = jnp.swapaxes(array, 0, axis)
 
     # convolve
-    conv = _tensor_convolve(
-        array, eval_basis, batch_size_samples, batch_size_channels, batch_size_basis
-    )
+    if _resolve_use_fft(use_fft, array, eval_basis):
+        conv = _fft_convolve(array, eval_basis, batch_size_channels, batch_size_basis)
+    else:
+        conv = _tensor_convolve(
+            array, eval_basis, batch_size_samples, batch_size_channels, batch_size_basis
+        )
 
     # reverse transposition
     conv = jnp.swapaxes(conv, axis, 0)
@@ -344,6 +431,7 @@ def _convolve_pad_and_shift(
     predictor_causality: Literal["causal", "acausal", "anti-causal"] = "causal",
     axis: int = 0,
     shift: Optional[bool] = None,
+    use_fft: Optional[bool] = None,
 ) -> jnp.ndarray:
     """
     Create predictor by convolving basis_matrix with time_series.
@@ -381,6 +469,9 @@ def _convolve_pad_and_shift(
         Whether to shift predictor based on causality (only valid if
         `predictor_causality != 'acausal'`). Default is True for `causal` and
         `anti-causal`, False for `acausal`.
+    use_fft :
+        Whether to convolve via FFT. If ``None``, the choice is resolved per array
+        by :func:`_resolve_use_fft`.
 
     Returns
     -------
@@ -395,6 +486,7 @@ def _convolve_pad_and_shift(
         batch_size_samples=batch_size_samples,
         batch_size_channels=batch_size_channels,
         batch_size_basis=batch_size_basis,
+        use_fft=use_fft,
     )
 
     with warnings.catch_warnings(record=True) as warns:
@@ -428,6 +520,7 @@ def create_convolutional_predictor(
     batch_size_samples: Optional[int] = None,
     batch_size_channels: Optional[int] = None,
     batch_size_basis: Optional[int] = None,
+    use_fft: Optional[bool] = None,
 ):
     """
     Create a convolutional predictor by convolving a basis matrix with a time series.
@@ -475,6 +568,14 @@ def create_convolutional_predictor(
         Batch size for the convolution in terms of number of basis kernels.
         If this parameter is set, the convolution will be vectorized over batches
         of kernels. Default vectorizes over all basis kernels.
+    use_fft :
+        Whether to compute the convolution in the frequency domain via
+        :func:`jax.scipy.signal.fftconvolve`. If ``True``/``False`` the choice is forced;
+        if ``None`` (default) it is resolved per input array by a heuristic that selects
+        FFT for long kernels on CPU and otherwise defers to the direct convolution. The
+        FFT result matches the direct one up to floating-point round-off. When FFT is
+        used, ``batch_size_samples`` does not apply (the full sample axis is transformed
+        at once).
 
     Returns
     -------
@@ -570,6 +671,7 @@ def create_convolutional_predictor(
                 predictor_causality=predictor_causality,
                 axis=axis,
                 shift=shift,
+                use_fft=use_fft,
             )
 
         flat_stack = jax.tree_util.tree_map(
@@ -586,6 +688,7 @@ def create_convolutional_predictor(
             batch_size_channels,
             batch_size_samples,
             batch_size_basis,
+            use_fft=use_fft,
         )
     return jax.tree_util.tree_unflatten(struct, flat_stack)
 
@@ -600,6 +703,7 @@ def _convolve_pynapple(
     batch_size_channels: List[int],
     batch_size_samples: List[int],
     batch_size_basis: int,
+    use_fft: Optional[bool] = None,
 ):
     """
     Convolve a PyTree containing pynapple time series.
@@ -685,6 +789,7 @@ def _convolve_pynapple(
                 predictor_causality=predictor_causality,
                 axis=axis,
                 shift=shift,
+                use_fft=use_fft,
             )
 
     conv = jax.tree_util.tree_map(
