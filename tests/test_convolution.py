@@ -817,7 +817,7 @@ def _shaped_noop(array, eval_basis, *args, **kwargs):
         (True, 4, 128, None, "full_fft"),
         (True, 4, 128, 128, "full_fft"),
         (True, 4, 128, 50, "overlap_save"),
-        # use_fft=None: CPU heuristic routes on window vs log2(n_samples), then the batch
+        # use_fft=None: CPU heuristic routes on window vs log2(block size), then the batch
         # size selects full FFT vs overlap-save
         (None, 4, 1024, None, "direct"),  # short kernel -> direct
         (None, 64, 128, None, "full_fft"),  # long kernel, unbatched -> full FFT
