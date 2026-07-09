@@ -910,6 +910,43 @@ def test_fft_path_uses_batching(monkeypatch, batch_channels, batch_basis):
     assert fake_corr in binary_funcs
 
 
+def test_use_fft_none_is_jit_safe():
+    """``use_fft=None`` is safe to trace under ``jit``.
+
+    While tracing, the array is a tracer whose ``.devices()`` raises; ``_array_on_cpu``
+    catches it and returns ``False``, so the heuristic falls back to the direct path.
+    The end result is that ``create_convolutional_predictor`` compiles and its output
+    matches the eager direct convolution.
+    """
+    # the guard is exercised under a trace: the tracer's .devices() raises and is caught
+    on_cpu_under_jit = {}
+
+    @jax.jit
+    def probe(x):
+        on_cpu_under_jit["value"] = convolve._array_on_cpu(x)
+        return x
+
+    probe(jnp.zeros((5,)))
+    assert on_cpu_under_jit["value"] is False
+
+    # end-to-end: use_fft=None compiles and equals the direct path
+    rng = np.random.default_rng(0)
+    kernel = rng.standard_normal((6, 4))
+    time_series = rng.standard_normal((60, 3))
+    jitted = jax.jit(
+        lambda k, x: convolve.create_convolutional_predictor(k, x, use_fft=None)
+    )
+    np.testing.assert_allclose(
+        np.asarray(jitted(kernel, time_series)),
+        np.asarray(
+            convolve.create_convolutional_predictor(kernel, time_series, use_fft=False)
+        ),
+        rtol=1e-5,
+        atol=1e-5,
+        equal_nan=True,
+    )
+
+
 @pytest.mark.parametrize(
     "tsd, nan_placement",
     [
