@@ -890,7 +890,9 @@ def test_fft_path_uses_batching(monkeypatch, batch_channels, batch_basis):
     )
 
     # `None` means "one batch spanning the whole axis"; otherwise it is capped at the size.
-    expected_channels = n_channels if batch_channels is None else min(batch_channels, n_channels)
+    expected_channels = (
+        n_channels if batch_channels is None else min(batch_channels, n_channels)
+    )
     expected_basis = n_basis if batch_basis is None else min(batch_basis, n_basis)
 
     # the FFT path is taken, the direct path is not
