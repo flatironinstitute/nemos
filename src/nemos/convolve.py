@@ -39,8 +39,8 @@ _CORR_VEC_FFT = jax.vmap(partial(fftconvolve, mode="valid"), (1, None), 1)
 _CORR_VEC_FFT = jax.vmap(_CORR_VEC_FFT, (None, 1), 2)
 
 # FFT-based convolution is asymptotically cheaper once the kernel length grows large
-# relative to log2(num_samples). This factor sets that crossover for the CPU heuristic;
-# it is deliberately conservative and tunable.
+# relative to log2 of the convolution block size. This factor sets that crossover for the
+# CPU heuristic; it is deliberately conservative and tunable.
 _FFT_WINDOW_LOG_FACTOR = 3.0
 
 
@@ -59,20 +59,29 @@ def _array_on_cpu(array: Any) -> bool:
         return False
 
 
-def _resolve_use_fft(use_fft: Optional[bool], array: Any, eval_basis: NDArray) -> bool:
+def _resolve_use_fft(
+    use_fft: Optional[bool],
+    array: Any,
+    eval_basis: NDArray,
+    batch_size_samples: int,
+) -> bool:
     """Decide whether to run FFT-based convolution for a single input array.
 
     ``use_fft=True``/``False`` forces the choice. When ``None``, the heuristic engages
-    only on CPU (comparing kernel length against ``log2(num_samples)``); on other
+    only on CPU (comparing kernel length against ``log2`` of the block size); on other
     backends it returns ``False``, deferring device convolution to XLA.
+
+    The comparison uses ``batch_size_samples`` -- the length each FFT actually operates
+    on -- rather than the full sample-axis length, since with sample batching the FFT is
+    applied per block. The two coincide only when there is no sample batching.
     """
     if use_fft is not None:
         return use_fft
     if not _array_on_cpu(array):
         return False
-    n_samples = array.shape[0]
+    block_size = min(batch_size_samples, array.shape[0])
     window_size = eval_basis.shape[0]
-    return window_size > _FFT_WINDOW_LOG_FACTOR * max(1.0, log2(max(n_samples, 2)))
+    return window_size > _FFT_WINDOW_LOG_FACTOR * max(1.0, log2(max(block_size, 2)))
 
 
 def _reorganize_scan_out(out, axis):
@@ -453,7 +462,7 @@ def _shift_time_axis_and_convolve(
     array = jnp.swapaxes(array, 0, axis)
 
     # convolve
-    if _resolve_use_fft(use_fft, array, eval_basis):
+    if _resolve_use_fft(use_fft, array, eval_basis, batch_size_samples):
         if batch_size_samples < array.shape[0]:
             # sample axis is batched: overlap-save FFT over blocks of batch_size_samples
             conv = _fft_overlap_save_convolve(
