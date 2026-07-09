@@ -214,6 +214,7 @@ api_order = [
     "convolve.rst",
     "simulations.rst",
     "identifiability.rst",
+    "model_selection.rst",
 ]
 api_dir = Path("api")
 # API index page (api/index.rst) is auto-generated. It starts with a hidden toctree
