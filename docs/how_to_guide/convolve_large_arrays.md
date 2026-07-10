@@ -73,6 +73,11 @@ out2 = basis.compute_features(
 
 Besides memory, the other lever on large arrays is compute time. A direct convolution costs time proportional to the window size for every output sample, so long kernels make it expensive; an FFT convolution computes the same result in the frequency domain at a cost nearly independent of the window size. The `use_fft` convolution keyword controls which backend runs: `True` or `False` forces the choice, while the default `None` resolves it per input array — on CPU, FFT is selected when the window is long relative to the logarithm of the convolution block, and on other devices (or while tracing under `jax.jit`, where the device cannot be inspected) the direct backend is used.
 
+:::{note} Why the automatic selection only runs on CPU
+
+On the GPU, `use_fft=None` always dispatches the direct path. There, XLA lowers the convolution to its own GPU kernels and selects the algorithm itself, so a Python-side FFT-vs-direct rule would only second-guess the compiler. An explicit `use_fft=True` is still honored on the GPU.
+:::
+
 ```{code-cell} ipython3
 n_samples, window_size, n_basis = 500_000, 256, 8
 x = np.random.randn(n_samples)
