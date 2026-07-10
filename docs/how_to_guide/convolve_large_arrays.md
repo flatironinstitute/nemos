@@ -68,3 +68,67 @@ out2 = basis.compute_features(
     np.random.randn(n_samples, n_channels, 2)
 )
 ```
+
+## Speeding up convolution on long recordings with `use_fft`
+
+Besides memory, the other lever on large arrays is compute time. By default NeMoS convolves directly (`use_fft=False`), which is the fastest option across the array sizes typical of neural data. For **long kernels applied to long recordings**, computing the convolution in the frequency domain can be much faster. Enable it through the `use_fft` convolution keyword — the only change to the usual syntax:
+
+```{code-cell} ipython3
+import numpy as np
+import nemos as nmo
+
+n_samples, window_size, n_basis = 500_000, 256, 8
+x = np.random.randn(n_samples)
+
+# direct convolution (the default)
+basis = nmo.basis.RaisedCosineLogConv(n_basis, window_size)
+X_direct = basis.compute_features(x)
+
+# FFT convolution: pass use_fft in conv_kwargs
+basis_fft = nmo.basis.RaisedCosineLogConv(
+    n_basis, window_size, conv_kwargs={"use_fft": True}
+)
+X_fft = basis_fft.compute_features(x)
+
+# same design matrix, up to float32 round-off
+np.allclose(X_direct, X_fft, atol=1e-4, equal_nan=True)
+```
+
+Whether FFT is worth it depends on the kernel length and the number of samples. The plot below times both backends (on CPU) as the recording length grows, for a fixed `window_size=256`. To show the FFT at its best, the sample counts are chosen so the internal transform length (`n_samples + window_size - 1`) is a power of two — the length at which the FFT is fastest.
+
+```{code-cell} ipython3
+import time
+import matplotlib.pyplot as plt
+
+def median_time(basis, x, repeats=3):
+    basis.compute_features(x).block_until_ready()  # warmup / compile
+    times = []
+    for _ in range(repeats):
+        t0 = time.perf_counter()
+        basis.compute_features(x).block_until_ready()
+        times.append(time.perf_counter() - t0)
+    return min(times)
+
+window_size, n_basis = 256, 8
+direct = nmo.basis.RaisedCosineLogConv(n_basis, window_size)
+fft = nmo.basis.RaisedCosineLogConv(
+    n_basis, window_size, conv_kwargs={"use_fft": True}
+)
+
+# sample counts giving a power-of-two transform length
+samples = [2**k - window_size + 1 for k in range(14, 21)]
+t_direct = [median_time(direct, np.random.randn(n)) for n in samples]
+t_fft = [median_time(fft, np.random.randn(n)) for n in samples]
+
+fig, ax = plt.subplots()
+ax.loglog(samples, t_direct, "-o", label="direct (use_fft=False)")
+ax.loglog(samples, t_fft, "-o", label="FFT (use_fft=True)")
+ax.set_xlabel("number of samples")
+ax.set_ylabel("compute_features time (s)")
+ax.set_title(f"direct vs FFT convolution (window_size={window_size})")
+ax.legend()
+fig.tight_layout()
+```
+
+Below roughly $10^5$ samples the direct convolution is faster; beyond that the FFT wins, and by $10^6$ samples it is several times faster. For the short kernels common in GLM analyses (tens of samples) the direct convolution is faster at every size, which is why `use_fft=False` is the default — reach for `use_fft=True` only when you have both a long kernel and a long recording.
+```

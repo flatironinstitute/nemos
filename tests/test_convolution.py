@@ -809,26 +809,21 @@ def _shaped_noop(array, eval_basis, *args, **kwargs):
 @pytest.mark.parametrize(
     "use_fft, window_size, n_samples, batch_samples, expected",
     [
-        # forced direct, with or without sample batching
+        # direct, with or without sample batching
         (False, 64, 128, None, "direct"),
         (False, 64, 128, 100, "direct"),
-        # forced FFT: full FFT when unbatched / batch spans the axis, overlap-save when
-        # the block is smaller than the sample axis
+        # FFT: full FFT when unbatched / batch spans the axis, overlap-save when the
+        # block is smaller than the sample axis
         (True, 4, 128, None, "full_fft"),
         (True, 4, 128, 128, "full_fft"),
         (True, 4, 128, 50, "overlap_save"),
-        # use_fft=None: CPU heuristic routes on window vs log2(block size), then the batch
-        # size selects full FFT vs overlap-save
-        (None, 4, 1024, None, "direct"),  # short kernel -> direct
-        (None, 64, 128, None, "full_fft"),  # long kernel, unbatched -> full FFT
-        (None, 64, 128, 100, "overlap_save"),  # long kernel, batched -> overlap-save
     ],
 )
 def test_use_fft_routing(
     monkeypatch, use_fft, window_size, n_samples, batch_samples, expected
 ):
-    """``use_fft`` (incl. the ``None`` heuristic) and ``batch_size_samples`` together
-    dispatch to the right implementation: direct, single FFT, or overlap-save FFT.
+    """``use_fft`` and ``batch_size_samples`` together dispatch to the right
+    implementation: direct, single FFT, or overlap-save FFT.
 
     All three backends are replaced with shaped noops so the test asserts only on which
     one is invoked, not on numerical output.
@@ -910,36 +905,25 @@ def test_fft_path_uses_batching(monkeypatch, batch_channels, batch_basis):
     assert fake_corr in binary_funcs
 
 
-def test_use_fft_none_is_jit_safe():
-    """``use_fft=None`` is safe to trace under ``jit``.
+@pytest.mark.parametrize("use_fft", [False, True])
+def test_create_convolutional_predictor_jit_compatible(use_fft):
+    """Both backends are traceable under ``jit`` and match the eager result.
 
-    While tracing, the array is a tracer whose ``.devices()`` raises; ``_array_on_cpu``
-    catches it and returns ``False``, so the heuristic falls back to the direct path.
-    The end result is that ``create_convolutional_predictor`` compiles and its output
-    matches the eager direct convolution.
+    ``use_fft`` is a static boolean (no device inspection), so forcing either backend
+    compiles cleanly; the FFT path is available under ``jit`` when explicitly opted in.
     """
-    # the guard is exercised under a trace: the tracer's .devices() raises and is caught
-    on_cpu_under_jit = {}
-
-    @jax.jit
-    def probe(x):
-        on_cpu_under_jit["value"] = convolve._array_on_cpu(x)
-        return x
-
-    probe(jnp.zeros((5,)))
-    assert on_cpu_under_jit["value"] is False
-
-    # end-to-end: use_fft=None compiles and equals the direct path
     rng = np.random.default_rng(0)
     kernel = rng.standard_normal((6, 4))
     time_series = rng.standard_normal((60, 3))
     jitted = jax.jit(
-        lambda k, x: convolve.create_convolutional_predictor(k, x, use_fft=None)
+        lambda k, x: convolve.create_convolutional_predictor(k, x, use_fft=use_fft)
     )
     np.testing.assert_allclose(
         np.asarray(jitted(kernel, time_series)),
         np.asarray(
-            convolve.create_convolutional_predictor(kernel, time_series, use_fft=False)
+            convolve.create_convolutional_predictor(
+                kernel, time_series, use_fft=use_fft
+            )
         ),
         rtol=1e-5,
         atol=1e-5,
