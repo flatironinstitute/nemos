@@ -1102,9 +1102,10 @@ class _CompileLogCounter(logging.Handler):
             self.count += 1
 
 
+# Note: use_ftt=True with batching is not jitted.
 @pytest.mark.parametrize(
     "conv_kwargs",
-    [{}, {"batch_size_samples": 10, "use_fft": True}],
+    [{}, {"use_fft": True}, {"batch_size_samples": 10, "use_fft": False}],
 )
 def test_repeat_call_triggers_no_compilation_globally(conv_kwargs):
     """A repeated identical call compiles nothing, in any layer.
