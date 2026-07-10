@@ -58,6 +58,37 @@ _CORR_VEC_FFT = jax.vmap(_fft_valid_conv, (1, None), 1)
 _CORR_VEC_FFT = jax.vmap(_CORR_VEC_FFT, (None, 1), 2)
 
 
+@partial(jax.jit, static_argnums=(2,))
+def _unbatched_convolve(
+    array: NDArray, eval_basis: NDArray, corr_vec: Callable
+) -> jnp.ndarray:
+    """Convolve the full array in ``"valid"`` mode, without the batching machinery.
+
+    Fast path for the default case where no ``batch_size_*`` is requested: the
+    vectorized primitive is applied to the whole array in one call. A single-batch
+    scan produces the same result at the same runtime cost, but tracing and compiling
+    the batching machinery roughly doubles the compilation time per input shape,
+    which adds up when many shapes are convolved (e.g. pynapple epochs of different
+    lengths).
+
+    Parameters
+    ----------
+    array :
+        Input array, shape ``(n_samples, ...)``; trailing axes are flattened to
+        channels and restored on the output.
+    eval_basis :
+        Basis matrix, shape ``(window_size, n_basis_funcs)``.
+    corr_vec :
+        The vectorized 1D convolution primitive (``_CORR_VEC`` or ``_CORR_VEC_FFT``).
+    """
+    n_samples, *feat_shape = array.shape
+    window_size, n_basis = eval_basis.shape
+    conv = corr_vec(eval_basis, array.reshape(n_samples, -1))
+    # (valid_len, n_basis, n_channels) -> (valid_len, n_channels, n_basis)
+    conv = conv.transpose(0, 2, 1)
+    return conv.reshape(n_samples - window_size + 1, *feat_shape, n_basis)
+
+
 def _reorganize_scan_out(out, axis):
     out = jnp.transpose(
         out, [i + 1 for i in range(axis)] + [0] + [i for i in range(axis + 1, out.ndim)]
@@ -260,6 +291,7 @@ def _tensor_convolve(
     return conv_output.reshape(n_samples - window_size + 1, *feat_shape, n_basis)
 
 
+@partial(jax.jit, static_argnums=(2, 3, 4))
 def _batch_convolve_over_channels(
     array: NDArray,
     eval_basis: NDArray,
@@ -267,6 +299,10 @@ def _batch_convolve_over_channels(
     batch_size_basis: int,
     corr_vec: Callable = _CORR_VEC,
 ):
+    # The jit boundary also guarantees `conv_over_basis` is created once per trace:
+    # `binary_func` is a static argument of the jitted `_batch_binary_func`, so a
+    # fresh closure on every eager call would change its cache key and force a
+    # retrace + recompile each time.
     def conv_over_basis(array_chunk, basis_matrix):
         return _batch_over_basis_convolve(
             array_chunk, basis_matrix, batch_size_basis, corr_vec
@@ -295,6 +331,7 @@ def _batch_over_basis_convolve(
     return out.transpose(0, 2, 1)
 
 
+@partial(jax.jit, static_argnums=(2, 3))
 def _fft_convolve(
     array: NDArray,
     eval_basis: NDArray,
@@ -320,6 +357,9 @@ def _fft_convolve(
     return conv_output.reshape(n_samples - window_size + 1, *feat_shape, n_basis)
 
 
+# NOT jitted on purpose: wrapping this function in jax.jit produced rare
+# nondeterministic float32 output corruption on XLA:CPU (jax<=0.9.0); eager execution
+# has shown no such failures.
 def _fft_overlap_save_convolve(
     array: NDArray,
     eval_basis: NDArray,
@@ -429,6 +469,9 @@ def _shift_time_axis_and_convolve(
     Notes
     -----
     This function supports arrays of any dimensionality greater or equal than 1.
+    When no effective memory batching is requested (all batch sizes cover their full
+    axis), the batching machinery is skipped entirely and the whole array is convolved
+    in a single vectorized call (:func:`_unbatched_convolve`).
     """
     # convert axis
     axis = axis if axis >= 0 else array.ndim + axis
@@ -436,7 +479,16 @@ def _shift_time_axis_and_convolve(
     array = jnp.swapaxes(array, 0, axis)
 
     # convolve
-    if use_fft:
+    if (
+        batch_size_samples >= array.shape[0]
+        and batch_size_channels >= prod(array.shape[1:])
+        and batch_size_basis >= eval_basis.shape[1]
+    ):
+        # no memory batching: convolve the full array in one vectorized call
+        conv = _unbatched_convolve(
+            array, eval_basis, _CORR_VEC_FFT if use_fft else _CORR_VEC
+        )
+    elif use_fft:
         if batch_size_samples < array.shape[0]:
             # sample axis is batched: overlap-save FFT over blocks of batch_size_samples
             conv = _fft_overlap_save_convolve(
@@ -630,8 +682,8 @@ def create_convolutional_predictor(
         If this parameter is set, the convolution will be vectorized over batches
         of kernels. Default vectorizes over all basis kernels.
     use_fft :
-        If ``True``, compute the convolution in the frequency domain via
-        :func:`jax.scipy.signal.fftconvolve`. Defaults to ``False`` (direct convolution
+        If ``True``, compute the convolution in the frequency domain (real FFTs padded
+        to a 5-smooth length). Defaults to ``False`` (direct convolution
         via ``jnp.convolve``), which is faster across the sizes typical of neural data;
         FFT only pays off for very long kernels on very long recordings (see the
         ``convolve_large_arrays`` how-to guide). When FFT is used and
