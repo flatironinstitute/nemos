@@ -6,7 +6,7 @@ from __future__ import annotations
 import re
 import warnings
 from functools import partial
-from math import prod
+from math import log2, prod
 from typing import Any, Callable, List, Literal, Optional
 
 import jax
@@ -56,6 +56,53 @@ def _fft_valid_conv(basis_col: NDArray, signal: NDArray) -> jnp.ndarray:
 # transparently.
 _CORR_VEC_FFT = jax.vmap(_fft_valid_conv, (1, None), 1)
 _CORR_VEC_FFT = jax.vmap(_CORR_VEC_FFT, (None, 1), 2)
+
+# FFT-based convolution is asymptotically cheaper once the kernel length grows large
+# relative to log2 of the convolution block size. This factor sets that crossover for the
+# CPU heuristic; it is calibrated on the measured direct-vs-FFT crossover of the full
+# pipeline (window ~ 64-128 on CPU, nearly independent of the number of samples).
+_FFT_WINDOW_LOG_FACTOR = 5.0
+
+
+def _array_on_cpu(array: Any) -> bool:
+    """Return whether ``array`` lives on a CPU device.
+
+    Under ``jit`` the array is a tracer with no concrete device and ``.devices()`` raises;
+    in that case we return ``False`` so the caller falls back to the direct path.
+    """
+    try:
+        return all(d.platform == "cpu" for d in array.devices())
+    except Exception:
+        return False
+
+
+def _resolve_use_fft(
+    use_fft: Optional[bool],
+    array: Any,
+    eval_basis: NDArray,
+    batch_size_samples: int,
+) -> bool:
+    """Decide whether to run FFT-based convolution for a single input array.
+
+    ``use_fft=True``/``False`` forces the choice. When ``None``, the heuristic engages
+    only on CPU (comparing kernel length against ``log2`` of the block size); on other
+    devices it returns ``False``, deferring the algorithm choice to XLA.
+
+    The comparison uses ``batch_size_samples`` -- the length each FFT actually operates
+    on -- rather than the full sample-axis length, since with sample batching the FFT is
+    applied per block. The two coincide only when there is no sample batching.
+
+    Note: under ``jit`` the array is a tracer with no concrete device, so it is treated as
+    non-CPU and the direct path is used. To use FFT while tracing, pass an explicit
+    ``use_fft=True``.
+    """
+    if use_fft is not None:
+        return use_fft
+    if not _array_on_cpu(array):
+        return False
+    block_size = min(batch_size_samples, array.shape[0])
+    window_size = eval_basis.shape[0]
+    return window_size > _FFT_WINDOW_LOG_FACTOR * max(1.0, log2(max(block_size, 2)))
 
 
 @partial(jax.jit, static_argnums=(2,))
@@ -430,7 +477,7 @@ def _shift_time_axis_and_convolve(
     batch_size_samples: int,
     batch_size_channels: int,
     batch_size_basis: int,
-    use_fft: bool = False,
+    use_fft: Optional[bool] = None,
 ) -> jnp.ndarray:
     """
     Shifts the specified axis to the first position, applies convolution, and then reverses the shift.
@@ -455,10 +502,10 @@ def _shift_time_axis_and_convolve(
     batch_size_basis :
         Size of the batches in number of basis filters.
     use_fft :
-        If ``True``, convolve via FFT; otherwise use the direct convolution. When FFT is
-        used and ``batch_size_samples`` is smaller than the sample-axis length, the
-        convolution is batched over samples via overlap-save
-        (:func:`_fft_overlap_save_convolve`); otherwise a single FFT is used.
+        Whether to convolve via FFT. If ``None``, the choice is resolved per array by
+        :func:`_resolve_use_fft`. When FFT is used and ``batch_size_samples`` is smaller
+        than the sample-axis length, the convolution is batched over samples via
+        overlap-save (:func:`_fft_overlap_save_convolve`); otherwise a single FFT is used.
 
     Returns
     -------
@@ -477,6 +524,8 @@ def _shift_time_axis_and_convolve(
     axis = axis if axis >= 0 else array.ndim + axis
     # move time axis to first
     array = jnp.swapaxes(array, 0, axis)
+
+    use_fft = _resolve_use_fft(use_fft, array, eval_basis, batch_size_samples)
 
     # convolve
     if (
@@ -545,7 +594,7 @@ def _convolve_pad_and_shift(
     predictor_causality: Literal["causal", "acausal", "anti-causal"] = "causal",
     axis: int = 0,
     shift: Optional[bool] = None,
-    use_fft: bool = False,
+    use_fft: Optional[bool] = None,
 ) -> jnp.ndarray:
     """
     Create predictor by convolving basis_matrix with time_series.
@@ -584,7 +633,8 @@ def _convolve_pad_and_shift(
         `predictor_causality != 'acausal'`). Default is True for `causal` and
         `anti-causal`, False for `acausal`.
     use_fft :
-        If ``True``, convolve via FFT; otherwise use the direct convolution.
+        Whether to convolve via FFT. If ``None``, the choice is resolved per array
+        by :func:`_resolve_use_fft`.
 
     Returns
     -------
@@ -633,7 +683,7 @@ def create_convolutional_predictor(
     batch_size_samples: Optional[int] = None,
     batch_size_channels: Optional[int] = None,
     batch_size_basis: Optional[int] = None,
-    use_fft: bool = False,
+    use_fft: Optional[bool] = None,
 ):
     """
     Create a convolutional predictor by convolving a basis matrix with a time series.
@@ -682,14 +732,15 @@ def create_convolutional_predictor(
         If this parameter is set, the convolution will be vectorized over batches
         of kernels. Default vectorizes over all basis kernels.
     use_fft :
-        If ``True``, compute the convolution in the frequency domain (real FFTs padded
-        to a 5-smooth length). Defaults to ``False`` (direct convolution
-        via ``jnp.convolve``), which is faster across the sizes typical of neural data;
-        FFT only pays off for very long kernels on very long recordings (see the
-        ``convolve_large_arrays`` how-to guide). When FFT is used and
-        ``batch_size_samples`` is smaller than the sample-axis length, the convolution is
-        batched over samples via overlap-save; otherwise the full axis is transformed at
-        once.
+        Whether to compute the convolution in the frequency domain (real FFTs padded to
+        a 5-smooth length). ``True`` or ``False`` forces the choice, while ``None`` (the
+        default) resolves it per input array with a heuristic that selects FFT for long
+        kernels on CPU and otherwise falls back to the direct convolution
+        (``jnp.convolve``). At jit-compilation time the device is unavailable, so the
+        default direct path is dispatched; set ``use_fft=True`` to force the FFT
+        convolution under jit. When FFT is used and ``batch_size_samples`` is smaller
+        than the sample-axis length, the convolution is batched over samples via
+        overlap-save; otherwise the full axis is transformed at once.
 
     Returns
     -------
@@ -715,6 +766,13 @@ def create_convolutional_predictor(
         Raised if any explicitly provided batch sizes—``batch_size_samples``,
         ``batch_size_channels``, or ``batch_size_basis``—are not positive integers.
         A value of ``None`` is allowed and treated as unspecified.
+
+    Notes
+    -----
+    Under ``jax.jit`` the inputs are tracers with no concrete device, so the automatic
+    backend selection (``use_fft=None``) cannot inspect device placement and falls back
+    to the direct convolution. If you need the FFT path while tracing, do not rely on the
+    auto-detection: pass ``use_fft=True`` explicitly.
 
     """
     # apply checks
@@ -817,7 +875,7 @@ def _convolve_pynapple(
     batch_size_channels: List[int],
     batch_size_samples: List[int],
     batch_size_basis: int,
-    use_fft: bool = False,
+    use_fft: Optional[bool] = None,
 ):
     """
     Convolve a PyTree containing pynapple time series.

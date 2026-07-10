@@ -69,66 +69,83 @@ out2 = basis.compute_features(
 )
 ```
 
-## Speeding up convolution on long recordings with `use_fft`
+## Choosing between direct and FFT convolution with `use_fft`
 
-Besides memory, the other lever on large arrays is compute time. By default NeMoS convolves directly (`use_fft=False`), which is the fastest option across the array sizes typical of neural data. For **long kernels applied to long recordings**, computing the convolution in the frequency domain can be much faster. Enable it through the `use_fft` convolution keyword — the only change to the usual syntax:
+Besides memory, the other lever on large arrays is compute time. A direct convolution costs time proportional to the window size for every output sample, so long kernels make it expensive; an FFT convolution computes the same result in the frequency domain at a cost nearly independent of the window size. The `use_fft` convolution keyword controls which backend runs: `True` or `False` forces the choice, while the default `None` resolves it per input array — on CPU, FFT is selected when the window is long relative to the logarithm of the convolution block, and on other devices (or while tracing under `jax.jit`, where the device cannot be inspected) the direct backend is used.
 
 ```{code-cell} ipython3
-import numpy as np
-import nemos as nmo
-
 n_samples, window_size, n_basis = 500_000, 256, 8
 x = np.random.randn(n_samples)
 
-# direct convolution (the default)
+# default: pick the backend automatically per input array
 basis = nmo.basis.RaisedCosineLogConv(n_basis, window_size)
-X_direct = basis.compute_features(x)
+X_auto = basis.compute_features(x)
 
-# FFT convolution: pass use_fft in conv_kwargs
+# force the FFT backend through conv_kwargs (use_fft=False forces direct)
 basis_fft = nmo.basis.RaisedCosineLogConv(
     n_basis, window_size, conv_kwargs={"use_fft": True}
 )
 X_fft = basis_fft.compute_features(x)
-
-# same design matrix, up to float32 round-off
-np.allclose(X_direct, X_fft, atol=1e-4, equal_nan=True)
 ```
 
-Whether FFT is worth it depends on the kernel length and the number of samples. The plot below times both backends (on CPU) as the recording length grows, for a fixed `window_size=256`. To show the FFT at its best, the sample counts are chosen so the internal transform length (`n_samples + window_size - 1`) is a power of two — the length at which the FFT is fastest.
+The two backends produce the same design matrix up to floating-point round-off; only the speed differs. The heatmap below times both on the CPU across window sizes and recording lengths (white marks where they are equally fast), and overlays the boundary where the automatic selection switches to FFT.
+
+```{code-cell} ipython3
+:tags: [hide-cell]
+
+import jax
+
+jax.config.update("jax_enable_x64", True)
+```
 
 ```{code-cell} ipython3
 import time
+
 import matplotlib.pyplot as plt
 
-def median_time(basis, x, repeats=3):
+from nemos.convolve import _FFT_WINDOW_LOG_FACTOR
+
+
+def best_time(basis, x, repeats=3):
     basis.compute_features(x).block_until_ready()  # warmup / compile
     times = []
     for _ in range(repeats):
-        t0 = time.perf_counter()
+        start = time.perf_counter()
         basis.compute_features(x).block_until_ready()
-        times.append(time.perf_counter() - t0)
+        times.append(time.perf_counter() - start)
     return min(times)
 
-window_size, n_basis = 256, 8
-direct = nmo.basis.RaisedCosineLogConv(n_basis, window_size)
-fft = nmo.basis.RaisedCosineLogConv(
-    n_basis, window_size, conv_kwargs={"use_fft": True}
+
+windows = [8, 16, 32, 64, 128, 256, 512, 1024, 2048]
+samples = [2**k for k in range(13, 20)]
+
+direct = nmo.basis.RaisedCosineLogConv(2, windows[0], conv_kwargs={"use_fft": False})
+fft = nmo.basis.RaisedCosineLogConv(2, windows[0], conv_kwargs={"use_fft": True})
+
+frac = np.full((len(samples), len(windows)), np.nan)
+for i, n in enumerate(samples):
+    x = np.random.randn(n)
+    for j, w in enumerate(windows):
+        direct.window_size = w
+        fft.window_size = w
+        t_direct, t_fft = best_time(direct, x), best_time(fft, x)
+        frac[i, j] = t_fft / (t_direct + t_fft)
+
+fig, ax = plt.subplots(figsize=(7, 5), layout="constrained")
+pc = ax.pcolormesh(
+    windows, samples, frac, cmap="RdBu_r", vmin=0, vmax=1, shading="nearest"
 )
-
-# sample counts giving a power-of-two transform length
-samples = [2**k - window_size + 1 for k in range(14, 21)]
-t_direct = [median_time(direct, np.random.randn(n)) for n in samples]
-t_fft = [median_time(fft, np.random.randn(n)) for n in samples]
-
-fig, ax = plt.subplots()
-ax.loglog(samples, t_direct, "-o", label="direct (use_fft=False)")
-ax.loglog(samples, t_fft, "-o", label="FFT (use_fft=True)")
-ax.set_xlabel("number of samples")
-ax.set_ylabel("compute_features time (s)")
-ax.set_title(f"direct vs FFT convolution (window_size={window_size})")
-ax.legend()
-fig.tight_layout()
+# the default use_fft=None selects FFT to the right of this line
+boundary = _FFT_WINDOW_LOG_FACTOR * np.log2(samples)
+ax.plot(boundary, samples, "k--", lw=2, label="use_fft=None switches to FFT")
+ax.set_xscale("log", base=2)
+ax.set_yscale("log", base=2)
+ax.set_xlabel("window size (kernel length)")
+ax.set_ylabel("number of samples")
+ax.set_title("Which convolution is faster: direct vs FFT (float64, CPU)")
+ax.legend(loc="upper left")
+cbar = fig.colorbar(pc, ax=ax, ticks=[0, 0.5, 1])
+cbar.ax.set_yticklabels(["FFT faster", "equal", "direct faster"])
 ```
 
-Below roughly $10^5$ samples the direct convolution is faster; beyond that the FFT wins, and by $10^6$ samples it is several times faster. For the short kernels common in GLM analyses (tens of samples) the direct convolution is faster at every size, which is why `use_fft=False` is the default — reach for `use_fft=True` only when you have both a long kernel and a long recording.
-```
+The boundary between the two regimes is nearly vertical: the window size decides the winner at almost any recording length. Direct convolution is faster for windows up to roughly 64 samples, the two are comparable between 64 and 128, and from a few hundred samples on the FFT wins at every recording length we tested, reaching a several-fold advantage for windows in the thousands. The dashed line is the rule the default `use_fft=None` applies, and it tracks the white band, so in most cases you can leave `use_fft` unset; pass an explicit value to force a backend, for example `use_fft=True` when convolving long windows inside a `jax.jit`-compiled function, where the automatic selection falls back to direct.
