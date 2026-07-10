@@ -1,4 +1,5 @@
 import itertools
+import logging
 from contextlib import nullcontext as does_not_raise
 from unittest.mock import Mock
 
@@ -1033,6 +1034,113 @@ def test_one_compilation_per_new_shape(use_fft, conv_kwargs, expected_compiled):
     growth = {k: v - before[k] for k, v in _jit_cache_sizes().items() if v != before[k]}
     expected = {expected_compiled: 1} if expected_compiled else {}
     assert growth == expected
+
+
+@pytest.mark.parametrize(
+    "time_series, n_pieces",
+    [
+        # minimal pytree case: two leaves of the same shape and dtype
+        ([np.random.randn(50, 2), np.random.randn(50, 2)], 2),
+        # pynapple series with four epochs of equal length (25 samples each)
+        (
+            nap.Tsd(
+                t=np.arange(100.0),
+                d=np.random.randn(100),
+                time_support=nap.IntervalSet([0, 25, 50, 75], [24.5, 49.5, 74.5, 99.5]),
+            ),
+            4,
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "conv_kwargs, backend",
+    [
+        # no batching: fast path, trailing arg is the corr_vec primitive
+        ({}, "_unbatched_convolve"),
+        # batched paths: trailing args are the resolved static batch sizes, which are
+        # resolved per leaf/epoch and must come out identical for equal-shape pieces
+        ({"batch_size_basis": 2}, "_tensor_convolve"),
+        ({"batch_size_samples": 10}, "_tensor_convolve"),
+        ({"batch_size_basis": 2, "use_fft": True}, "_fft_convolve"),
+        ({"batch_size_samples": 10, "use_fft": True}, "_fft_overlap_save_convolve"),
+    ],
+)
+def test_equal_shape_pieces_share_one_compilation(
+    monkeypatch, time_series, n_pieces, conv_kwargs, backend
+):
+    """Equal-shape pytree leaves / pynapple epochs all hit one compile signature.
+
+    The input is convolved piece by piece (per leaf, per epoch); every piece must reach
+    the same backend with identical array shapes/dtypes and identical trailing static
+    arguments (batch sizes or the corr_vec primitive), so jax compiles once and reuses
+    the executable for the remaining pieces — on every dispatch path.
+    """
+    spy = Mock(side_effect=_shaped_noop)
+    monkeypatch.setattr(convolve, backend, spy)
+
+    convolve.create_convolutional_predictor(
+        np.random.randn(5, 3), time_series, **conv_kwargs
+    )
+
+    assert spy.call_count == n_pieces
+    compile_keys = {
+        tuple((arg.shape, arg.dtype) for arg in call.args[:2]) + tuple(call.args[2:])
+        for call in spy.call_args_list
+    }
+    assert len(compile_keys) == 1
+
+
+class _CompileLogCounter(logging.Handler):
+    """Count XLA 'Compiling ...' records emitted while ``jax_log_compiles`` is on."""
+
+    def __init__(self):
+        super().__init__(level=logging.DEBUG)
+        self.count = 0
+
+    def emit(self, record):
+        if "Compiling" in record.getMessage():
+            self.count += 1
+
+
+@pytest.mark.parametrize(
+    "conv_kwargs",
+    [{}, {"batch_size_samples": 10, "use_fft": True}],
+)
+def test_repeat_call_triggers_no_compilation_globally(conv_kwargs):
+    """A repeated identical call compiles nothing, in any layer.
+
+    The cache-size checks only see the jitted functions of ``nemos.convolve``; layers in
+    between run eagerly and compile through jax's global op caches. With
+    ``jax_log_compiles`` every XLA compilation emits a log record, so counting records
+    gives the global guarantee: the first call on fresh shapes must compile something
+    (self-check that the probe works), and a second identical call must compile nothing
+    anywhere in the pipeline.
+    """
+    n = next(_fresh_n_samples)
+    starts = [float(i * n) for i in range(4)]
+    ends = [float(i * n + n) - 0.5 for i in range(4)]
+    tsd = nap.Tsd(
+        t=np.arange(4.0 * n),
+        d=np.random.randn(4 * n),
+        time_support=nap.IntervalSet(starts, ends),
+    )
+    basis_matrix = np.random.randn(5, 3)
+
+    counter = _CompileLogCounter()
+    logger = logging.getLogger("jax")
+    logger.addHandler(counter)
+    try:
+        with jax.log_compiles(True):
+            convolve.create_convolutional_predictor(basis_matrix, tsd, **conv_kwargs)
+            first = counter.count
+            counter.count = 0
+            convolve.create_convolutional_predictor(basis_matrix, tsd, **conv_kwargs)
+            second = counter.count
+    finally:
+        logger.removeHandler(counter)
+
+    assert first > 0
+    assert second == 0
 
 
 def test_use_fft_none_is_jit_safe():
