@@ -99,8 +99,8 @@ Xs, ys = X[:n_small], y[:n_small]
 
 approx = nmo.glm.GLM().fit(Xs, ys).approximate_loo(Xs, ys)
 
-# exact LOO: cross_val_predict still performs n refits under the hood -- it is the
-# expensive reference, not a shortcut. The speed-up comes from approximate_loo.
+# exact LOO: sklearn's cross_val_predict still performs n refits under the hood,
+# which is substantially slower.
 exact_mean = cross_val_predict(nmo.glm.GLM(), Xs, ys, cv=LeaveOneOut())
 
 approx_mean = np.asarray(approx.predicted_mean)
@@ -142,7 +142,7 @@ flag those observations.
 
 ## Limitations
 
-- **High leverage.** As shown above, the accuracy degrades for high-leverage
+- **High leverage.** As shown above, the accuracy can degrade for high-leverage
   points. For a definitive estimate at those points, fall back to an exact refit.
 - **Regularization.** Ridge penalties are supported (folded into the curvature
   $A$). Non-smooth penalties — {class}`~nemos.regularizer.Lasso`,
