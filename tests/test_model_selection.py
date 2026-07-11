@@ -94,6 +94,27 @@ def test_approximate_loo_gaussian_is_exact():
     assert np.allclose(np.asarray(loo.predicted_mean), exact, atol=1e-5, rtol=1e-4)
 
 
+def test_approximate_loo_matches_exact_poisson_noncanonical_link():
+    """Poisson with a non-canonical (softplus) inverse link. The observed-information
+    formulation stays accurate here (the Fisher-weight variant would be less so)."""
+    from nemos.inverse_link_function_utils import softplus
+
+    rng = np.random.default_rng(1)
+    n, p = 60, 3
+    X = rng.normal(size=(n, p))
+    coef = rng.normal(size=p) * 0.4
+    mu_true = np.asarray(softplus(jnp.asarray(X @ coef - 0.5)))
+    y = rng.poisson(mu_true).astype(float)
+
+    model = _fit(GLM, X, y, inverse_link_function=softplus)
+    loo = approximate_loo(model, X, y)
+    exact = _exact_loo_mean(GLM, X, y, inverse_link_function=softplus)
+
+    rel_err = np.abs(np.asarray(loo.predicted_mean) - exact) / np.maximum(exact, 1e-8)
+    assert rel_err.mean() < 5e-3
+    assert rel_err.max() < 5e-2
+
+
 # --------------------------------------------------------------------------- #
 # PopulationGLM                                                                #
 # --------------------------------------------------------------------------- #
@@ -203,11 +224,11 @@ def test_approximate_loo_raises_for_nonsmooth_regularizer(regularizer, solver_na
         approximate_loo(model, X, y)
 
 
-def test_approximate_loo_raises_for_missing_variance_function():
-    """NegativeBinomial has no variance function registered -> NotImplementedError."""
+def test_approximate_loo_raises_for_unsupported_observation_model():
+    """NegativeBinomial is outside the supported observation models -> NotImplementedError."""
     X, y = _poisson_data(n=40, p=3, seed=0)
     model = _fit(GLM, X, y, observation_model="NegativeBinomial")
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(NotImplementedError, match="observation model"):
         approximate_loo(model, X, y)
 
 

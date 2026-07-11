@@ -34,18 +34,22 @@ predictions from a *single* full-data fit plus a cheap $O(p^2)$ correction per
 observation (where $p$ is the number of features).
 
 The approximation is the *infinitesimal jackknife* / *one-step Newton* estimator
-(Pregibon, 1981; Rad & Maleki, 2020). At the fitted solution $\hat\beta$, with
-Fisher working weights $w_i = g'(\eta_i)^2 / V(\mu_i)$ (for the canonical-link
-Poisson model $w_i = \mu_i$), curvature $A = X^\top W X + \text{penalty}$, and
-hat-matrix diagonal $h_{ii}$, the held-out linear predictor is approximated as
+(Pregibon, 1981; Rad & Maleki, 2020). At the fitted solution $\hat\beta$, write the
+per-observation loss as a function of the linear predictor $\eta_i = x_i^\top\hat\beta$,
+$\ell(y_i,\eta_i) = -\log p(y_i\mid\mu_i)$ with $\mu_i = g(\eta_i)$, and denote its
+first and second derivatives by $\dot\ell_i$ and $\ddot\ell_i$. With
+$D = \operatorname{diag}(\ddot\ell_i)$, curvature $A = X^\top D X + \text{penalty}$,
+and leverage $H_{ii} = \ddot\ell_i\, x_i^\top A^{-1} x_i$, the held-out linear
+predictor is approximated as
 
 $$
-\eta_i^{(-i)} \approx \eta_i + \frac{s_i\, x_i^\top A^{-1} x_i}{1 - h_{ii}},
-\qquad \mu_i^{(-i)} = g^{-1}\!\left(\eta_i^{(-i)}\right),
+\eta_i^{(-i)} \approx \eta_i + \frac{\dot\ell_i\, x_i^\top A^{-1} x_i}{1 - H_{ii}},
+\qquad \mu_i^{(-i)} = g\!\left(\eta_i^{(-i)}\right).
 $$
 
-where $s_i = \partial_{\eta_i}[-\log p(y_i\mid\mu_i)]$ is the score contribution
-of observation $i$ (for Poisson, $s_i = \mu_i - y_i$).
+Here $\ddot\ell_i$ is the **observed** information (the loss's own second derivative);
+for a canonical link it equals the Fisher/IRLS weight $g'(\eta_i)^2/V(\mu_i)$, and for
+the canonical-link Poisson model $\dot\ell_i = \mu_i - y_i$, $\ddot\ell_i = \mu_i$.
 
 ## Fitting a model and running approximate LOO
 
@@ -137,7 +141,7 @@ fig.tight_layout()
 The approximate LOO predictions closely track the exact refit-based values. The
 right panel shows the characteristic behavior of the infinitesimal jackknife:
 the approximation is a first-order expansion, so its error grows for
-**high-leverage** points ($h_{ii} \to 1$). The returned `leverage` array lets you
+**high-leverage** points ($H_{ii} \to 1$). The returned `leverage` array lets you
 flag those observations.
 
 ## Limitations
@@ -149,8 +153,9 @@ flag those observations.
   {class}`~nemos.regularizer.ElasticNet`, {class}`~nemos.regularizer.GroupLasso` —
   raise a `NotImplementedError`, because the infinitesimal-jackknife formula
   assumes a twice-differentiable objective (Rad & Maleki, 2020).
-- **Observation models.** Supported where a variance function is defined
-  (Poisson, Gamma, Gaussian, Bernoulli).
+- **Observation models.** Supported for Poisson, Gamma, Gaussian, and Bernoulli
+  (canonical *and* non-canonical links; the observed-information form keeps
+  non-canonical links such as a softplus-Poisson accurate).
 
 ## References
 

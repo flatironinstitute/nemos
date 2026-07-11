@@ -23,11 +23,24 @@ from typing import NamedTuple
 import jax
 import jax.numpy as jnp
 
-from .glm.glm import _var_func_of_mu
+from .observation_models import (
+    BernoulliObservations,
+    GammaObservations,
+    GaussianObservations,
+    PoissonObservations,
+)
 from .regularizer import ElasticNet, GroupLasso, Lasso
-from .utils import _elementwise_derivative
 
 __all__ = ["approximate_loo", "ApproximateLOO"]
+
+# Observation models with a twice-differentiable log-likelihood that we validate
+# `approximate_loo` against. Others (e.g. NegativeBinomial, Categorical) raise.
+_SUPPORTED_OBSERVATION_MODELS = (
+    PoissonObservations,
+    GammaObservations,
+    GaussianObservations,
+    BernoulliObservations,
+)
 
 
 class ApproximateLOO(NamedTuple):
@@ -52,8 +65,9 @@ class ApproximateLOO(NamedTuple):
     deviance :
         Per-observation held-out deviance evaluated at ``predicted_mean``.
     leverage :
-        Diagnostic hat-matrix diagonal :math:`h_{ii} \in [0, 1)`. Values close to 1
-        flag high-leverage points, where the approximation is least accurate.
+        Diagnostic leverage :math:`H_{ii} = \ddot\ell_i\, x_i^\top A^{-1} x_i`. Values
+        close to 1 flag high-leverage points, where the approximation is least accurate
+        (for a canonical link :math:`H_{ii} \in [0, 1)`).
     """
 
     predicted_mean: jnp.ndarray
@@ -63,7 +77,7 @@ class ApproximateLOO(NamedTuple):
     leverage: jnp.ndarray
 
 
-def _alo_linear_predictor(X_aug, eta, w, s, hessian):
+def _alo_linear_predictor(X_aug, eta, score, curvature, hessian):
     r"""Core one-step-Newton LOO update on the linear-predictor scale (one GLM).
 
     Parameters
@@ -73,27 +87,32 @@ def _alo_linear_predictor(X_aug, eta, w, s, hessian):
         column of ones corresponds to the intercept).
     eta :
         Full-data linear predictor, shape ``(n_samples,)``.
-    w :
-        Fisher working weights :math:`w_i = g'(\eta_i)^2 / V(\mu_i)`, shape
+    score :
+        Per-observation loss gradient w.r.t. the linear predictor,
+        :math:`\dot\ell_i = \partial_{\eta_i}\,[-\log p(y_i\mid\mu_i)]`, shape
         ``(n_samples,)``.
-    s :
-        Per-observation score :math:`s_i = \partial_{\eta_i}\,[-\log p(y_i\mid\mu_i)]`,
+    curvature :
+        Per-observation loss curvature w.r.t. the linear predictor (observed
+        information), :math:`\ddot\ell_i = \partial^2_{\eta_i}\,[-\log p(y_i\mid\mu_i)]`,
         shape ``(n_samples,)``.
     hessian :
-        Curvature ``A = X_aug^T W X_aug + penalty`` in the *summed*-loss convention,
-        shape ``(p + 1, p + 1)``.
+        Curvature ``A = X_aug^T diag(curvature) X_aug + penalty`` in the *summed*-loss
+        convention, shape ``(p + 1, p + 1)``.
 
     Returns
     -------
     eta_loo :
         Approximate LOO linear predictor, shape ``(n_samples,)``.
     leverage :
-        Hat-matrix diagonal :math:`h_{ii}`, shape ``(n_samples,)``.
+        Leverage :math:`H_{ii} = \ddot\ell_i\, x_i^\top A^{-1} x_i`, shape
+        ``(n_samples,)``.
     """
-    # generalized leverage g_i = x_i^T A^{-1} x_i (no working weight), then h_ii = w_i g_i
-    g = jnp.sum(X_aug.T * jnp.linalg.solve(hessian, X_aug.T), axis=0)
-    leverage = w * g
-    delta_eta = s * g / (1.0 - leverage)
+    # A is symmetric; solve against X_aug^T rather than forming A^{-1} explicitly
+    # (fewer flops, better backward stability on ill-conditioned A).
+    a_inv_xt = jnp.linalg.solve(hessian, X_aug.T)  # A^{-1} X_aug^T, shape (p + 1, n)
+    g = jnp.sum(X_aug.T * a_inv_xt, axis=0)  # x_i^T A^{-1} x_i
+    leverage = curvature * g  # H_ii = ell''_i * x_i^T A^{-1} x_i
+    delta_eta = score * g / (1.0 - leverage)
     return eta + delta_eta, leverage
 
 
@@ -111,31 +130,41 @@ def approximate_loo(
     ([1]_, [2]_). It requires one full-data fit and an ``O(p^2)`` correction per
     observation (``p`` = number of features), rather than ``n`` refits.
 
-    At the converged IRLS/Newton solution :math:`\hat\beta` with Fisher working
-    weights :math:`w_i = g'(\eta_i)^2 / V(\mu_i)` (for the canonical-link Poisson model
-    :math:`w_i = \mu_i`), let :math:`x_i` be the ``i``-th augmented design row
-    :math:`[X_i, 1]`, let
+    Let :math:`\eta_i = x_i^\top \hat\beta` be the fitted linear predictor for the
+    ``i``-th augmented design row :math:`x_i = [X_i, 1]`, and write the per-observation
+    loss (negative log-likelihood) as a function of the linear predictor,
+    :math:`\ell(y_i, \eta_i) = -\log p(y_i \mid \mu_i)` with :math:`\mu_i = g(\eta_i)`
+    for the inverse link :math:`g`. Denote its first and second derivatives w.r.t.
+    :math:`\eta_i` by
 
     .. math::
-        A = X^T W X + \text{penalty}, \qquad
-        H = W^{1/2} X A^{-1} X^T W^{1/2},
+        \dot\ell_i = \partial_{\eta_i}\,\ell(y_i, \eta_i), \qquad
+        \ddot\ell_i = \partial^2_{\eta_i}\,\ell(y_i, \eta_i).
 
-    and let :math:`h_{ii}` be the ``i``-th diagonal of the hat matrix :math:`H`. The
-    approximate leave-one-out parameter estimate for observation ``i`` is
+    With :math:`D = \operatorname{diag}(\ddot\ell_i)`, the penalized Hessian and the
+    leverage are
 
     .. math::
-        \hat\beta^{(-i)} \approx \hat\beta + A^{-1} x_i \, s_i / (1 - h_{ii}),
+        A = X^\top D X + \text{penalty}, \qquad
+        H_{ii} = \ddot\ell_i \, x_i^\top A^{-1} x_i,
 
-    where :math:`s_i = \partial_{\eta_i}\,[-\log p(y_i \mid \mu_i)]` is the working
-    score contribution of observation ``i`` (for Poisson, :math:`s_i = \mu_i - y_i`).
+    and the one-step (Newton) approximate leave-one-out estimate for observation ``i``
+    is (Rad & Maleki, 2020, [2]_)
+
+    .. math::
+        \hat\beta^{(-i)} \approx \hat\beta + A^{-1} x_i \, \dot\ell_i / (1 - H_{ii}).
+
     This yields the approximate LOO linear predictor and mean without refitting:
 
     .. math::
-        \eta_i^{(-i)} \approx \eta_i + \frac{s_i \, x_i^T A^{-1} x_i}{1 - h_{ii}},
-        \qquad \mu_i^{(-i)} = g^{-1}\!\left(\eta_i^{(-i)}\right).
+        \eta_i^{(-i)} \approx \eta_i + \frac{\dot\ell_i \, x_i^\top A^{-1} x_i}{1 - H_{ii}}
+        = \eta_i + \frac{H_{ii}}{1 - H_{ii}}\,\frac{\dot\ell_i}{\ddot\ell_i},
+        \qquad \mu_i^{(-i)} = g\!\left(\eta_i^{(-i)}\right).
 
-    The approximation is exact to first order and degrades for high-leverage points
-    (:math:`h_{ii}\to 1`); the returned :attr:`ApproximateLOO.leverage` flags them.
+    For the canonical-link Poisson model :math:`\dot\ell_i = \mu_i - y_i` and
+    :math:`\ddot\ell_i = \mu_i`. The approximation is exact to first order and degrades
+    for high-leverage points (:math:`H_{ii}\to 1`); the returned
+    :attr:`ApproximateLOO.leverage` flags them.
 
     Parameters
     ----------
@@ -162,20 +191,26 @@ def approximate_loo(
         If ``model`` uses a non-smooth regularizer (:class:`~nemos.regularizer.Lasso`,
         :class:`~nemos.regularizer.ElasticNet`, or :class:`~nemos.regularizer.GroupLasso`),
         for which the infinitesimal-jackknife formula is not valid (the objective is not
-        twice differentiable at the solution; see [2]_), if the observation model has no
-        defined variance function (e.g. ``NegativeBinomial``), or if ``model`` is a
+        twice differentiable at the solution; see [2]_), if the observation model is not
+        one of Poisson, Gamma, Gaussian, or Bernoulli, or if ``model`` is a
         :class:`~nemos.glm.PopulationGLM` with a ``feature_mask``.
 
     Notes
     -----
-    Regularization is respected through the curvature ``A``: a :class:`~nemos.regularizer.Ridge`
-    penalty contributes ``n * regularizer_strength`` to the diagonal of ``A`` (matching
-    nemos's mean-loss + un-normalized-penalty objective), while the intercept is left
-    unpenalized. Only smooth penalties are supported; non-smooth penalties raise.
+    This uses the **observed** information: the curvature :math:`\ddot\ell_i` is the
+    loss's own second derivative w.r.t. the linear predictor, matching Rad & Maleki
+    (2020, [2]_). The hat-matrix / case-deletion viewpoint follows the classical GLM
+    diagnostics of Pregibon (1981, [1]_). For a **canonical** link the observed and
+    expected (Fisher) information coincide, so :math:`\ddot\ell_i = g'(\eta_i)^2/V(\mu_i)`
+    and :math:`H` is the usual GLM hat matrix; they differ only for non-canonical links
+    (e.g. a ``softplus`` inverse link for Poisson), where the observed information is the
+    more accurate choice.
 
-    The curvature ``A`` reuses the model's own analytic Fisher-information Hessian
-    (:meth:`~nemos.glm.GLM._get_hess_fn`), so results are consistent with the model's
-    Newton solver.
+    The curvature ``A`` reuses the model's own autodiff (observed) Hessian
+    (:meth:`~nemos.glm.GLM._get_hess_fn`). Regularization is respected through ``A``: a
+    :class:`~nemos.regularizer.Ridge` penalty contributes ``n * regularizer_strength`` to
+    the diagonal of ``A`` (matching nemos's mean-loss + un-normalized-penalty objective),
+    while the intercept is left unpenalized. Only smooth penalties are supported.
 
     Examples
     --------
@@ -209,6 +244,12 @@ def approximate_loo(
             "`UnRegularized` or `Ridge` model, or run exact refit-based LOO-CV."
         )
 
+    if not isinstance(model.observation_model, _SUPPORTED_OBSERVATION_MODELS):
+        raise NotImplementedError(
+            "`approximate_loo` supports the Poisson, Gamma, Gaussian, and Bernoulli "
+            f"observation models, not {type(model.observation_model).__name__}."
+        )
+
     if getattr(model, "_feature_mask", None) is not None:
         raise NotImplementedError(
             "`approximate_loo` does not yet support `PopulationGLM` with a `feature_mask`."
@@ -221,10 +262,6 @@ def approximate_loo(
     model._validator.validate_consistency(params, X, y)
 
     inv_link = model._inverse_link_function
-    var_of_mu = _var_func_of_mu(
-        model
-    )  # raises for observation models w/o a variance fn
-    gprime = _elementwise_derivative(inv_link)
 
     # --- flat augmented design [X, 1], ordered [coef features..., intercept] to match
     # the parameter ordering used by `_glm_hessian_block` / `_get_hess_fn`.
@@ -248,36 +285,37 @@ def approximate_loo(
     is_population = jnp.ndim(y) == 2
     if not is_population:
         eta = eta[:, 0]
-    mu = inv_link(eta)
 
-    # --- Fisher working weights w_i = g'(eta_i)^2 / V(mu_i)
-    w = gprime(eta) ** 2 / var_of_mu(mu)
-
-    # --- exact per-observation score s_i = d/d eta_i [ -log p(y_i | mu_i) ].
-    # The NLL is separable across observations, so grad of the summed NLL yields the
-    # per-observation eta-derivatives directly (for Poisson this equals mu_i - y_i).
+    # --- per-observation loss derivatives w.r.t. the linear predictor.
+    # The NLL is separable across observations, so the gradient of the summed NLL gives
+    # the per-observation scores, and the gradient of the summed score gives the
+    # per-observation curvatures (the diagonal of the observed Hessian in eta-space).
     def _summed_nll(linear_predictor):
         return model._observation_model._negative_log_likelihood(
             y, inv_link(linear_predictor), aggregate_sample_scores=jnp.sum
         )
 
-    score = jax.grad(_summed_nll)(eta)
+    score = jax.grad(_summed_nll)(eta)  # ell'_i (for Poisson canonical: mu_i - y_i)
+    curvature = jax.grad(lambda e: jnp.sum(jax.grad(_summed_nll)(e)))(
+        eta
+    )  # ell''_i (observed information; for Poisson canonical: mu_i)
 
-    # --- curvature A = X^T W X + penalty in the summed-loss convention.
-    # `_get_hess_fn` returns the mean-loss Fisher Hessian ((1/n) X^T W X + penalty);
-    # multiply by n to move to the summed convention used by the ALO formula above.
-    hess = model._get_hess_fn(params, autodiff=False)(params, X)
+    # --- observed penalized Hessian A = X^T diag(ell'') X + penalty (summed convention).
+    # `_get_hess_fn(autodiff=True)` returns the observed Hessian of the mean-loss
+    # objective ((1/n) X^T diag(ell'') X + penalty); multiply by n for the summed
+    # convention used by the ALO formula above.
+    hess = model._get_hess_fn(params, autodiff=True)(params, X, y)
     A = n_samples * hess
 
     if is_population:
         # independent per-neuron blocks: A has shape (n_neurons, p + 1, p + 1)
         eta_loo, leverage = jax.vmap(
-            lambda e, ww, ss, a: _alo_linear_predictor(X_aug, e, ww, ss, a),
+            lambda e, sc, cv, a: _alo_linear_predictor(X_aug, e, sc, cv, a),
             in_axes=(1, 1, 1, 0),
             out_axes=1,
-        )(eta, w, score, A)
+        )(eta, score, curvature, A)
     else:
-        eta_loo, leverage = _alo_linear_predictor(X_aug, eta, w, score, A)
+        eta_loo, leverage = _alo_linear_predictor(X_aug, eta, score, curvature, A)
 
     mu_loo = inv_link(eta_loo)
 
