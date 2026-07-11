@@ -90,13 +90,8 @@ def _alo_linear_predictor(X_aug, eta, w, s, hessian):
     leverage :
         Hat-matrix diagonal :math:`h_{ii}`, shape ``(n_samples,)``.
     """
-    # A is symmetric positive (semi-)definite; solve against X_aug^T rather than
-    # forming A^{-1} explicitly (fewer flops, better backward stability, and it
-    # degrades more gracefully than an explicit inverse on ill-conditioned A, e.g.
-    # an unregularized fit with near-collinear features).
-    a_inv_xt = jnp.linalg.solve(hessian, X_aug.T)  # A^{-1} X_aug^T, shape (p + 1, n)
     # generalized leverage g_i = x_i^T A^{-1} x_i (no working weight), then h_ii = w_i g_i
-    g = jnp.sum(X_aug.T * a_inv_xt, axis=0)
+    g = jnp.sum(X_aug.T * jnp.linalg.solve(hessian, X_aug.T), axis=0)
     leverage = w * g
     delta_eta = s * g / (1.0 - leverage)
     return eta + delta_eta, leverage
