@@ -80,6 +80,10 @@ class ApproximateLOO(NamedTuple):
 def _alo_linear_predictor(X_aug, eta, score, curvature, hessian):
     r"""Core one-step-Newton LOO update on the linear-predictor scale (one GLM).
 
+    This is Step 3 of Algorithm 1 in Rad & Maleki (2020), specialized to the GLM
+    linear-predictor scale; see the note below on why the code has no explicit
+    ``ell''_i`` in the numerator.
+
     Parameters
     ----------
     X_aug :
@@ -107,12 +111,25 @@ def _alo_linear_predictor(X_aug, eta, score, curvature, hessian):
         Leverage :math:`H_{ii} = \ddot\ell_i\, x_i^\top A^{-1} x_i`, shape
         ``(n_samples,)``.
     """
-    # A is symmetric; solve against X_aug^T rather than forming A^{-1} explicitly
-    # (fewer flops, better backward stability on ill-conditioned A).
-    a_inv_xt = jnp.linalg.solve(hessian, X_aug.T)  # A^{-1} X_aug^T, shape (p + 1, n)
-    g = jnp.sum(X_aug.T * a_inv_xt, axis=0)  # x_i^T A^{-1} x_i
-    leverage = curvature * g  # H_ii = ell''_i * x_i^T A^{-1} x_i
-    delta_eta = score * g / (1.0 - leverage)
+    # Reviewer note -- mapping to Rad & Maleki (2020), Algorithm 1:
+    #
+    #   * Their Step 2 builds the n x n hat matrix
+    #         H = X A^{-1} X^T diag(ell''),   A = X^T diag(ell'') X + penalty,
+    #     whose diagonal is  H_ii = ell''_i * (x_i^T A^{-1} x_i).
+    #   * Their Step 3 corrects the linear predictor by
+    #         (ell'_i / ell''_i) * H_ii / (1 - H_ii).
+    #
+    # Substituting H_ii = ell''_i * g_i with g_i = x_i^T A^{-1} x_i, the ell''_i
+    # cancels:  (ell'_i / ell''_i) * (ell''_i * g_i) / (1 - H_ii) = ell'_i * g_i / (1 - H_ii).
+    # So there is *no missing leverage factor* in the numerator below: Rad & Maleki's
+    # numerator H_ii / ell''_i is exactly g_i, which we form directly. Working with g_i
+    # also avoids dividing by a possibly-tiny ell''_i. Only the diagonal of H is ever
+    # needed, so we compute g_i = diag(X A^{-1} X^T) from a single solve instead of
+    # materializing the full n x n matrix.
+    a_inv_xt = jnp.linalg.solve(hessian, X_aug.T)  # columns are A^{-1} x_i
+    g = jnp.sum(X_aug.T * a_inv_xt, axis=0)  # g_i = x_i^T A^{-1} x_i  (= H_ii / ell'')
+    leverage = curvature * g  # H_ii (diagonal of the Step-2 hat matrix)
+    delta_eta = score * g / (1.0 - leverage)  # Step-3 correction
     return eta + delta_eta, leverage
 
 
@@ -317,16 +334,16 @@ def approximate_loo(
     else:
         eta_loo, leverage = _alo_linear_predictor(X_aug, eta, score, curvature, A)
 
-    mu_loo = inv_link(eta_loo)
+    predicted_mean = inv_link(eta_loo)
 
     scale = model.scale_ if model.scale_ is not None else 1.0
     log_likelihood = model._observation_model.log_likelihood(
-        y, mu_loo, scale, aggregate_sample_scores=lambda x: x
+        y, predicted_mean, scale, aggregate_sample_scores=lambda x: x
     )
-    deviance = model._observation_model.deviance(y, mu_loo, scale)
+    deviance = model._observation_model.deviance(y, predicted_mean, scale)
 
     return ApproximateLOO(
-        predicted_mean=mu_loo,
+        predicted_mean=predicted_mean,
         linear_predictor=eta_loo,
         log_likelihood=log_likelihood,
         deviance=deviance,
