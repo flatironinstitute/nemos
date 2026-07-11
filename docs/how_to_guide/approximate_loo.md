@@ -34,7 +34,7 @@ predictions from a *single* full-data fit plus a cheap $O(p^2)$ correction per
 observation (where $p$ is the number of features).
 
 The approximation is the *infinitesimal jackknife* / *one-step Newton* estimator
-(Pregibon, 1981; Rad & Maleki, 2020). At the fitted solution $\hat\beta$, write the
+(Algorithm 1 in Rad & Maleki, 2020; see also Pregibon, 1981). At the fitted solution $\hat\beta$, write the
 per-observation loss as a function of the linear predictor $\eta_i = x_i^\top\hat\beta$,
 $\ell(y_i,\eta_i) = -\log p(y_i\mid\mu_i)$ with $\mu_i = g(\eta_i)$, and denote its
 first and second derivatives by $\dot\ell_i$ and $\ddot\ell_i$. With
@@ -152,7 +152,8 @@ flag those observations.
   $A$). Non-smooth penalties — {class}`~nemos.regularizer.Lasso`,
   {class}`~nemos.regularizer.ElasticNet`, {class}`~nemos.regularizer.GroupLasso` —
   raise a `NotImplementedError`, because the infinitesimal-jackknife formula
-  assumes a twice-differentiable objective (Rad & Maleki, 2020).
+  assumes a twice-differentiable objective. In the future, we may implement 
+  Algorithm 2 in Rad & Maleki (2020) to address this case.
 - **Observation models.** Supported for Poisson, Gamma, Gaussian, and Bernoulli
   (canonical *and* non-canonical links; the observed-information form keeps
   non-canonical links such as a softplus-Poisson accurate).
