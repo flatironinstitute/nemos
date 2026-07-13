@@ -404,9 +404,16 @@ def _fft_convolve(
     return conv_output.reshape(n_samples - window_size + 1, *feat_shape, n_basis)
 
 
-# NOT jitted on purpose: wrapping this function in jax.jit produced rare
-# nondeterministic float32 output corruption on XLA:CPU (jax<=0.9.0); eager execution
-# has shown no such failures.
+# WORKAROUND (https://github.com/jax-ml/jax/issues/39120): jitting this function is
+# safe only together with the pad-row re-zeroing inside ``conv_batch`` below. XLA:CPU
+# (float32, jax<=0.9.0) miscompiles the pad -> nested-scan -> dynamic_slice
+# composition, reading the zero-pad rows back as uninitialized memory instead of
+# zeros. When the upstream fix ships, delete the marked block in ``conv_batch``;
+# the jit stays.
+@partial(
+    jax.jit,
+    static_argnames=("batch_size_samples", "batch_size_channels", "batch_size_basis"),
+)
 def _fft_overlap_save_convolve(
     array: NDArray,
     eval_basis: NDArray,
@@ -448,6 +455,14 @@ def _fft_overlap_save_convolve(
         chunk = jax.lax.dynamic_slice(
             array, (start_chunk, 0), (batch_size_samples, n_features)
         )
+        # WORKAROUND (https://github.com/jax-ml/jax/issues/39120): under jit the
+        # zero-pad rows of the final block can be read back as garbage (including
+        # NaN); re-zero the statically-known pad rows. ``jnp.where`` is a select,
+        # so NaN garbage is discarded (a multiplicative mask would propagate it).
+        # Delete this block once the upstream fix ships.
+        rows = start_chunk + jnp.arange(batch_size_samples)
+        chunk = jnp.where((rows < n_samples)[:, None], chunk, 0.0)
+        # END WORKAROUND
         concat_conv = jax.lax.dynamic_update_slice(
             concat_conv,
             _batch_convolve_over_channels(

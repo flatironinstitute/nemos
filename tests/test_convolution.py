@@ -794,7 +794,6 @@ def test_fft_overlap_save_convolve(
         array, eval_basis, batch_samples, batch_channels, batch_basis
     )
     expected = numpy_tensor_convolve(np.array(array), np.array(eval_basis))
-
     np.testing.assert_allclose(np.array(result), expected, rtol=1e-5, atol=1e-5)
 
 
@@ -1012,9 +1011,9 @@ _fresh_n_samples = itertools.count(211, 7)
         # FFT, channel/basis batching only: single full-length FFT executable
         (True, {"batch_size_channels": 2}, "_fft_convolve"),
         (True, {"batch_size_basis": 2}, "_fft_convolve"),
-        # FFT with sample batching: overlap-save is deliberately not jitted (jitting it
-        # produced flaky float32 corruption on CPU), so no module-level cache may grow
-        (True, {"batch_size_samples": 30}, None),
+        # FFT with sample batching: the overlap-save executable (jitted; safe against
+        # the XLA:CPU pad corruption via the pad-row re-zeroing, jax-ml/jax#39120)
+        (True, {"batch_size_samples": 30}, "_fft_overlap_save_convolve"),
     ],
 )
 def test_one_compilation_per_new_shape(use_fft, conv_kwargs, expected_compiled):
@@ -1102,10 +1101,14 @@ class _CompileLogCounter(logging.Handler):
             self.count += 1
 
 
-# Note: use_ftt=True with batching is not jitted.
 @pytest.mark.parametrize(
     "conv_kwargs",
-    [{}, {"use_fft": True}, {"batch_size_samples": 10, "use_fft": False}],
+    [
+        {},
+        {"use_fft": True},
+        {"batch_size_samples": 10, "use_fft": False},
+        {"batch_size_samples": 10, "use_fft": True},
+    ],
 )
 def test_repeat_call_triggers_no_compilation_globally(conv_kwargs):
     """A repeated identical call compiles nothing, in any layer.
