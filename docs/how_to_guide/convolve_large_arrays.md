@@ -11,7 +11,9 @@ kernelspec:
   name: python3
 ---
 
-# Convolve Large Arrays on the GPU
+# Convolve Large Arrays
+
+## Batching Convolutions
 
 Operations that can be vectorized—such as convolving multiple arrays—can benefit significantly from GPU acceleration. However, when the input arrays are large, full vectorization may cause excessive memory allocation on the GPU, potentially leading to runtime errors or causing the operation to fall back to CPU execution, see this [related issue](https://github.com/flatironinstitute/nemos/issues/345) for more details.
 
@@ -38,7 +40,7 @@ On the CPU, the vectorization process does not result in excessive memory alloca
 On the GPU, however, specifying smaller batch sizes **significantly reduces** the memory allocated during computation by limiting the size of intermediate tensors.
 :::
 
-## Example
+### Example
 
 ```{code-cell} ipython3
 import numpy as np
