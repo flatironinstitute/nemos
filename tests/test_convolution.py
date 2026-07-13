@@ -1,3 +1,5 @@
+import itertools
+import logging
 from contextlib import nullcontext as does_not_raise
 from unittest.mock import Mock
 
@@ -792,7 +794,6 @@ def test_fft_overlap_save_convolve(
         array, eval_basis, batch_samples, batch_channels, batch_basis
     )
     expected = numpy_tensor_convolve(np.array(array), np.array(eval_basis))
-
     np.testing.assert_allclose(np.array(result), expected, rtol=1e-5, atol=1e-5)
 
 
@@ -807,37 +808,51 @@ def _shaped_noop(array, eval_basis, *args, **kwargs):
 
 
 @pytest.mark.parametrize(
-    "use_fft, window_size, n_samples, batch_samples, expected",
+    "use_fft, window_size, n_samples, batch_samples, batch_channels, expected",
     [
-        # forced direct, with or without sample batching
-        (False, 64, 128, None, "direct"),
-        (False, 64, 128, 100, "direct"),
-        # forced FFT: full FFT when unbatched / batch spans the axis, overlap-save when
-        # the block is smaller than the sample axis
-        (True, 4, 128, None, "full_fft"),
-        (True, 4, 128, 128, "full_fft"),
-        (True, 4, 128, 50, "overlap_save"),
-        # use_fft=None: CPU heuristic routes on window vs log2(block size), then the batch
-        # size selects full FFT vs overlap-save
-        (None, 4, 1024, None, "direct"),  # short kernel -> direct
-        (None, 64, 128, None, "full_fft"),  # long kernel, unbatched -> full FFT
-        (None, 64, 128, 100, "overlap_save"),  # long kernel, batched -> overlap-save
+        # no effective batching (unset, or the batch spans the whole axis): the
+        # unbatched fast path with the primitive of the chosen backend
+        (False, 64, 128, None, None, "unbatched_direct"),
+        (True, 4, 128, None, None, "unbatched_fft"),
+        (True, 4, 128, 128, None, "unbatched_fft"),
+        # forced direct with any effective batching
+        (False, 64, 128, 100, None, "direct"),
+        (False, 64, 128, None, 1, "direct"),
+        # forced FFT: full FFT when only channels/basis are batched, overlap-save when
+        # the sample block is smaller than the sample axis
+        (True, 4, 128, None, 1, "full_fft"),
+        (True, 4, 128, 50, None, "overlap_save"),
+        # use_fft=None: CPU heuristic routes on window vs log2(block size), then the
+        # batching selects the backend
+        (None, 4, 1024, None, None, "unbatched_direct"),  # short kernel -> direct
+        (None, 64, 128, None, None, "unbatched_fft"),  # long kernel -> FFT
+        (None, 64, 128, 100, None, "overlap_save"),  # long kernel, sample-batched
+        (None, 4, 1024, 100, None, "direct"),  # short kernel, sample-batched
     ],
 )
 def test_use_fft_routing(
-    monkeypatch, use_fft, window_size, n_samples, batch_samples, expected
+    monkeypatch,
+    use_fft,
+    window_size,
+    n_samples,
+    batch_samples,
+    batch_channels,
+    expected,
 ):
-    """``use_fft`` (incl. the ``None`` heuristic) and ``batch_size_samples`` together
-    dispatch to the right implementation: direct, single FFT, or overlap-save FFT.
+    """``use_fft`` (incl. the ``None`` heuristic) and the batch sizes together dispatch
+    to the right implementation: unbatched fast path (with the direct or FFT primitive),
+    direct, single FFT, or overlap-save FFT.
 
-    All three backends are replaced with shaped noops so the test asserts only on which
+    All four backends are replaced with shaped noops so the test asserts only on which
     one is invoked, not on numerical output.
     """
     mocks = {
+        "unbatched": Mock(side_effect=_shaped_noop),
         "direct": Mock(side_effect=_shaped_noop),
         "full_fft": Mock(side_effect=_shaped_noop),
         "overlap_save": Mock(side_effect=_shaped_noop),
     }
+    monkeypatch.setattr(convolve, "_unbatched_convolve", mocks["unbatched"])
     monkeypatch.setattr(convolve, "_tensor_convolve", mocks["direct"])
     monkeypatch.setattr(convolve, "_fft_convolve", mocks["full_fft"])
     monkeypatch.setattr(convolve, "_fft_overlap_save_convolve", mocks["overlap_save"])
@@ -845,10 +860,23 @@ def test_use_fft_routing(
     time_series = np.zeros((n_samples, 2))
     basis_matrix = np.zeros((window_size, 3))
     convolve.create_convolutional_predictor(
-        basis_matrix, time_series, use_fft=use_fft, batch_size_samples=batch_samples
+        basis_matrix,
+        time_series,
+        use_fft=use_fft,
+        batch_size_samples=batch_samples,
+        batch_size_channels=batch_channels,
     )
 
-    mocks.pop(expected).assert_called()
+    if expected.startswith("unbatched"):
+        mock = mocks.pop("unbatched")
+        mock.assert_called()
+        # the backend choice surfaces as the primitive handed to the fast path
+        want = (
+            convolve._CORR_VEC_FFT if expected.endswith("fft") else convolve._CORR_VEC
+        )
+        assert all(call.args[2] is want for call in mock.call_args_list)
+    else:
+        mocks.pop(expected).assert_called()
     for name, mock in mocks.items():
         mock.assert_not_called()
 
@@ -861,7 +889,9 @@ def test_fft_path_uses_batching(monkeypatch, batch_channels, batch_basis):
     The FFT correlation op is swapped for a jittable noop, and ``_batch_binary_func`` is
     spied on (delegating to the real implementation) to verify that the user-provided
     channel/basis batch sizes are threaded through and that the FFT primitive is the
-    innermost callable, across every combination of the two batch sizes.
+    innermost callable, across every combination of the two batch sizes. When neither
+    batch size is set, the unbatched fast path must be taken instead and the batching
+    machinery must stay untouched.
     """
 
     def fake_corr(eval_basis, array):
@@ -874,9 +904,11 @@ def test_fft_path_uses_batching(monkeypatch, batch_channels, batch_basis):
     spy_binary = Mock(wraps=convolve._batch_binary_func)
     spy_fft = Mock(wraps=convolve._fft_convolve)
     spy_direct = Mock(wraps=convolve._tensor_convolve)
+    spy_unbatched = Mock(wraps=convolve._unbatched_convolve)
     monkeypatch.setattr(convolve, "_batch_binary_func", spy_binary)
     monkeypatch.setattr(convolve, "_fft_convolve", spy_fft)
     monkeypatch.setattr(convolve, "_tensor_convolve", spy_direct)
+    monkeypatch.setattr(convolve, "_unbatched_convolve", spy_unbatched)
 
     n_channels, n_basis = 4, 3
     time_series = np.random.randn(60, n_channels)
@@ -889,15 +921,25 @@ def test_fft_path_uses_batching(monkeypatch, batch_channels, batch_basis):
         batch_size_basis=batch_basis,
     )
 
+    if batch_channels is None and batch_basis is None:
+        # no batching requested: fast path with the FFT primitive, no scan machinery
+        spy_unbatched.assert_called_once()
+        assert spy_unbatched.call_args.args[2] is fake_corr
+        spy_binary.assert_not_called()
+        spy_fft.assert_not_called()
+        spy_direct.assert_not_called()
+        return
+
     # `None` means "one batch spanning the whole axis"; otherwise it is capped at the size.
     expected_channels = (
         n_channels if batch_channels is None else min(batch_channels, n_channels)
     )
     expected_basis = n_basis if batch_basis is None else min(batch_basis, n_basis)
 
-    # the FFT path is taken, the direct path is not
+    # the FFT path is taken, the direct and unbatched paths are not
     spy_fft.assert_called_once()
     spy_direct.assert_not_called()
+    spy_unbatched.assert_not_called()
 
     # batching machinery is exercised, and the resolved batch sizes are threaded through
     # (`batch_size` is the 4th positional arg of `_batch_binary_func`)
@@ -908,6 +950,201 @@ def test_fft_path_uses_batching(monkeypatch, batch_channels, batch_basis):
     # (`binary_func` is the 3rd positional arg)
     binary_funcs = [call.args[2] for call in spy_binary.call_args_list]
     assert fake_corr in binary_funcs
+
+
+def _jit_cache_sizes():
+    """Snapshot the jit-cache size of every jitted function in ``nemos.convolve``."""
+    return {
+        name: attr._cache_size()
+        for name, attr in vars(convolve).items()
+        if hasattr(attr, "_cache_size")
+    }
+
+
+@pytest.mark.parametrize("use_fft", [False, True])
+@pytest.mark.parametrize(
+    "conv_kwargs",
+    [
+        {},  # no batching: unbatched fast path
+        {"batch_size_channels": 2},
+        {"batch_size_basis": 2},
+        {"batch_size_samples": 30},
+        {"batch_size_samples": 30, "batch_size_channels": 2, "batch_size_basis": 2},
+    ],
+)
+def test_create_convolutional_predictor_compiles_once(use_fft, conv_kwargs):
+    """Repeated calls with identical shapes and batch sizes never re-trace.
+
+    Regression test for a closure passed as a static jit argument: a fresh function
+    object per call changes the cache key and forces a retrace + recompile on every
+    call. After one warm-up call, further identical calls must leave the jit cache of
+    every jitted function in ``nemos.convolve`` untouched, on every dispatch path.
+    """
+    time_series = np.random.randn(60, 4)
+    basis_matrix = np.random.randn(5, 3)
+
+    def run():
+        convolve.create_convolutional_predictor(
+            basis_matrix, time_series, use_fft=use_fft, **conv_kwargs
+        )
+
+    run()  # warm-up: populate the caches
+    sizes = _jit_cache_sizes()
+    for _ in range(3):
+        run()
+    assert _jit_cache_sizes() == sizes
+
+
+_fresh_n_samples = itertools.count(211, 7)
+
+
+@pytest.mark.parametrize(
+    "use_fft, conv_kwargs, expected_compiled",
+    [
+        # no batching: the fast path compiles alone
+        (False, {}, "_unbatched_convolve"),
+        (True, {}, "_unbatched_convolve"),
+        # direct with any batching: only the tensor-convolve executable
+        (False, {"batch_size_channels": 2}, "_tensor_convolve"),
+        (False, {"batch_size_basis": 2}, "_tensor_convolve"),
+        (False, {"batch_size_samples": 30}, "_tensor_convolve"),
+        # FFT, channel/basis batching only: single full-length FFT executable
+        (True, {"batch_size_channels": 2}, "_fft_convolve"),
+        (True, {"batch_size_basis": 2}, "_fft_convolve"),
+        # FFT with sample batching: the overlap-save executable (jitted; safe against
+        # the XLA:CPU pad corruption via the pad-row re-zeroing, jax-ml/jax#39120)
+        (True, {"batch_size_samples": 30}, "_fft_overlap_save_convolve"),
+    ],
+)
+def test_one_compilation_per_new_shape(use_fft, conv_kwargs, expected_compiled):
+    """A fresh input shape compiles exactly one executable, in the dispatched backend.
+
+    Nested jitted helpers must be absorbed into the outer trace (zero cache entries of
+    their own), and no path may compile machinery it does not use — e.g. the unbatched
+    fast path must leave every batching function untouched.
+    """
+    time_series = np.random.randn(next(_fresh_n_samples), 4)
+    basis_matrix = np.random.randn(5, 3)
+
+    before = _jit_cache_sizes()
+    convolve.create_convolutional_predictor(
+        basis_matrix, time_series, use_fft=use_fft, **conv_kwargs
+    )
+    growth = {k: v - before[k] for k, v in _jit_cache_sizes().items() if v != before[k]}
+    expected = {expected_compiled: 1} if expected_compiled else {}
+    assert growth == expected
+
+
+@pytest.mark.parametrize(
+    "time_series, n_pieces",
+    [
+        # minimal pytree case: two leaves of the same shape and dtype
+        ([np.random.randn(50, 2), np.random.randn(50, 2)], 2),
+        # pynapple series with four epochs of equal length (25 samples each)
+        (
+            nap.Tsd(
+                t=np.arange(100.0),
+                d=np.random.randn(100),
+                time_support=nap.IntervalSet([0, 25, 50, 75], [24.5, 49.5, 74.5, 99.5]),
+            ),
+            4,
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "conv_kwargs, backend",
+    [
+        # no batching: fast path, trailing arg is the corr_vec primitive
+        ({}, "_unbatched_convolve"),
+        # batched paths: trailing args are the resolved static batch sizes, which are
+        # resolved per leaf/epoch and must come out identical for equal-shape pieces
+        ({"batch_size_basis": 2}, "_tensor_convolve"),
+        ({"batch_size_samples": 10}, "_tensor_convolve"),
+        ({"batch_size_basis": 2, "use_fft": True}, "_fft_convolve"),
+        ({"batch_size_samples": 10, "use_fft": True}, "_fft_overlap_save_convolve"),
+    ],
+)
+def test_equal_shape_pieces_share_one_compilation(
+    monkeypatch, time_series, n_pieces, conv_kwargs, backend
+):
+    """Equal-shape pytree leaves / pynapple epochs all hit one compile signature.
+
+    The input is convolved piece by piece (per leaf, per epoch); every piece must reach
+    the same backend with identical array shapes/dtypes and identical trailing static
+    arguments (batch sizes or the corr_vec primitive), so jax compiles once and reuses
+    the executable for the remaining pieces — on every dispatch path.
+    """
+    spy = Mock(side_effect=_shaped_noop)
+    monkeypatch.setattr(convolve, backend, spy)
+
+    convolve.create_convolutional_predictor(
+        np.random.randn(5, 3), time_series, **conv_kwargs
+    )
+
+    assert spy.call_count == n_pieces
+    compile_keys = {
+        tuple((arg.shape, arg.dtype) for arg in call.args[:2]) + tuple(call.args[2:])
+        for call in spy.call_args_list
+    }
+    assert len(compile_keys) == 1
+
+
+class _CompileLogCounter(logging.Handler):
+    """Count XLA 'Compiling ...' records emitted while ``jax_log_compiles`` is on."""
+
+    def __init__(self):
+        super().__init__(level=logging.DEBUG)
+        self.count = 0
+
+    def emit(self, record):
+        if "Compiling" in record.getMessage():
+            self.count += 1
+
+
+@pytest.mark.parametrize(
+    "conv_kwargs",
+    [
+        {},
+        {"use_fft": True},
+        {"batch_size_samples": 10, "use_fft": False},
+        {"batch_size_samples": 10, "use_fft": True},
+    ],
+)
+def test_repeat_call_triggers_no_compilation_globally(conv_kwargs):
+    """A repeated identical call compiles nothing, in any layer.
+
+    The cache-size checks only see the jitted functions of ``nemos.convolve``; layers in
+    between run eagerly and compile through jax's global op caches. With
+    ``jax_log_compiles`` every XLA compilation emits a log record, so counting records
+    gives the global guarantee: the first call on fresh shapes must compile something
+    (self-check that the probe works), and a second identical call must compile nothing
+    anywhere in the pipeline.
+    """
+    n = next(_fresh_n_samples)
+    starts = [float(i * n) for i in range(4)]
+    ends = [float(i * n + n) - 0.5 for i in range(4)]
+    tsd = nap.Tsd(
+        t=np.arange(4.0 * n),
+        d=np.random.randn(4 * n),
+        time_support=nap.IntervalSet(starts, ends),
+    )
+    basis_matrix = np.random.randn(5, 3)
+
+    counter = _CompileLogCounter()
+    logger = logging.getLogger("jax")
+    logger.addHandler(counter)
+    try:
+        with jax.log_compiles(True):
+            convolve.create_convolutional_predictor(basis_matrix, tsd, **conv_kwargs)
+            first = counter.count
+            counter.count = 0
+            convolve.create_convolutional_predictor(basis_matrix, tsd, **conv_kwargs)
+            second = counter.count
+    finally:
+        logger.removeHandler(counter)
+
+    assert first > 0
+    assert second == 0
 
 
 def test_use_fft_none_is_jit_safe():
@@ -940,6 +1177,32 @@ def test_use_fft_none_is_jit_safe():
         np.asarray(jitted(kernel, time_series)),
         np.asarray(
             convolve.create_convolutional_predictor(kernel, time_series, use_fft=False)
+        ),
+        rtol=1e-5,
+        atol=1e-5,
+        equal_nan=True,
+    )
+
+
+@pytest.mark.parametrize("use_fft", [False, True])
+def test_create_convolutional_predictor_jit_compatible(use_fft):
+    """Both backends are traceable under ``jit`` and match the eager result.
+
+    ``use_fft`` is a static boolean (no device inspection), so forcing either backend
+    compiles cleanly; the FFT path is available under ``jit`` when explicitly opted in.
+    """
+    rng = np.random.default_rng(0)
+    kernel = rng.standard_normal((6, 4))
+    time_series = rng.standard_normal((60, 3))
+    jitted = jax.jit(
+        lambda k, x: convolve.create_convolutional_predictor(k, x, use_fft=use_fft)
+    )
+    np.testing.assert_allclose(
+        np.asarray(jitted(kernel, time_series)),
+        np.asarray(
+            convolve.create_convolutional_predictor(
+                kernel, time_series, use_fft=use_fft
+            )
         ),
         rtol=1e-5,
         atol=1e-5,
