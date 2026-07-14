@@ -9,7 +9,7 @@ from sklearn.pipeline import Pipeline
 from nemos import basis
 from nemos.basis._transformer_basis import TransformerBasis
 
-# mock_glm_fit, mock_optimizer_run, mock_optimizer_update are defined in conftest.py
+# mock_glm_fit, mock_glm_optimizer_run, mock_optimizer_update are defined in conftest.py
 
 
 @pytest.mark.parametrize(

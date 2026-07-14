@@ -144,10 +144,12 @@ define_a_custom_basis.md
 ```{toctree}
 :maxdepth: 2
 
-categorical_predictors.md
+categorical_predictors/README.md
 ```
 
 :::
+
+
 
 :::{grid-item-card}
 
@@ -257,13 +259,13 @@ convolve_large_arrays.md
 :::{grid-item-card}
 
 <figure>
-<img src="../_static/thumbnails/how_to_guide/plot_04_batch_glm.svg" style="height: 100px", alt="Batched GLM."/>
+<img src="../_static/thumbnails/how_to_guide/batch_glm_loss_curve.svg" style="height: 100px", alt="Batched GLM."/>
 </figure>
 
 ```{toctree}
 :maxdepth: 2
 
-plot_04_batch_glm.md
+batching/README.md
 ```
 :::
 

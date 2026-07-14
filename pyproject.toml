@@ -63,6 +63,8 @@ dev = [
     "myst-nb",                      # Test myst_nb utils for glue
     "hmmlearn",                     # Test algorithmic implementations of HMM
     "tox-uv",                       # Run tox with uv for faster installs
+    "zarr",                         # For testing lazy array loading from zarr files
+    "h5py",                         # For testing lazy array loading from HDF5 files
     "fsspec",
     "tqdm",
 ]
@@ -94,6 +96,7 @@ docs = [
     "ipykernel",
     "patsy",
     "tqdm",
+    "formulaic",                    # Design matrix constuction package, used in a doc note
 ]
 examples = [
     "scikit-learn",
@@ -111,7 +114,7 @@ jaxopt = [
 
 
 [tool.black]
-target-version = ['py310', 'py311', 'py312']
+target-version = ['py312', 'py313', 'py314']
 skip-string-normalization = false
 exclude = '''
 (

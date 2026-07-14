@@ -10,6 +10,7 @@ from typing import Any, Callable, Literal, Optional, Tuple, Union
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+from jax.flatten_util import ravel_pytree
 from numpy.typing import ArrayLike
 from sklearn.utils import InputTags, TargetTags
 
@@ -17,14 +18,24 @@ from .. import observation_models as obs
 from .. import tree_utils, validation
 from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor, strip_metadata
+from ..batching import DataLoader, _PreprocessedDataLoader, is_data_loader
+from ..callbacks import Callback, TrainingContext, _normalize_callbacks
 from ..exceptions import NotFittedError
-from ..inverse_link_function_utils import resolve_inverse_link_function
+from ..inverse_link_function_utils import resolve_inverse_link_function, softplus
 from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
+from ..solvers import WrappedProxSVRG, WrappedSVRG, list_stochastic_solvers
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
+from ..solvers._hess import (
+    BlockDiagonal,
+    Full,
+    HessianTag,
+    PositiveDefinite,
+    PositiveSemiDefinite,
+)
 from ..type_casting import cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, SolverState, StepResult
-from ..utils import format_repr
+from ..utils import _elementwise_derivative, format_repr
 from .initialize_parameters import initialize_intercept_matching_mean_rate
 from .params import GLMParams, GLMUserParams
 from .validation import (
@@ -48,6 +59,47 @@ REGRESSION_GLM_TYPES = Union[
         "Gaussian",
     ],
 ]
+
+
+def _glm_hessian_block(
+    X,
+    eta,
+    inverse_link_function,
+    var_of_mu,
+    lam: Any = None,
+):
+    _X = jnp.concatenate(jax.tree_util.tree_leaves(X), axis=1)
+    n_samples, n_features = _X.shape
+
+    gprime = _elementwise_derivative(inverse_link_function)
+
+    mu = inverse_link_function(eta)
+
+    w = gprime(eta) ** 2 / var_of_mu(mu) / n_samples
+
+    X_aug = jnp.concatenate(
+        [_X, jnp.ones((n_samples, 1))],
+        axis=1,
+    )
+
+    H = X_aug.T @ (w[:, None] * X_aug)
+    if lam is not None:
+
+        def expand_lam(x_leaf, lam_leaf):
+            ncols = x_leaf.shape[1]
+            lam_leaf = jnp.asarray(lam_leaf)
+
+            if lam_leaf.ndim == 0:
+                return jnp.full(ncols, lam_leaf)
+
+            return jnp.ravel(lam_leaf)
+
+        lam = jnp.concatenate(
+            jax.tree_util.tree_leaves(jax.tree_util.tree_map(expand_lam, X, lam.coef))
+        )
+        H = H.at[:-1, :-1].add(jnp.diag(lam))
+
+    return H
 
 
 class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
@@ -77,17 +129,25 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
     Below is a table listing the default and available solvers for each regularizer.
 
-    +---------------+------------------+-------------------------------------------------------------+
-    | Regularizer   | Default Solver   | Available Solvers                                           |
-    +===============+==================+=============================================================+
-    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
-    +---------------+------------------+-------------------------------------------------------------+
-    | Ridge         | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
-    +---------------+------------------+-------------------------------------------------------------+
-    | Lasso         | ProximalGradient | ProximalGradient                                            |
-    +---------------+------------------+-------------------------------------------------------------+
-    | GroupLasso    | ProximalGradient | ProximalGradient                                            |
-    +---------------+------------------+-------------------------------------------------------------+
+    +---------------+------------------+---------------------------------------------------------------------+
+    | Regularizer   | Default Solver   | Available Solvers                                                   |
+    +===============+==================+=====================================================================+
+    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
+    +---------------+------------------+---------------------------------------------------------------------+
+    | Ridge         | Newton           | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
+    +---------------+------------------+---------------------------------------------------------------------+
+    | Lasso         | ProximalGradient | ProximalGradient                                                    |
+    +---------------+------------------+---------------------------------------------------------------------+
+    | GroupLasso    | ProximalGradient | ProximalGradient                                                    |
+    +---------------+------------------+---------------------------------------------------------------------+
+
+    The default solver for ``Ridge`` is ``Newton``: the ridge penalty makes the Hessian positive
+    definite, so each step is a stable Cholesky solve that converges in a handful of iterations at the
+    feature counts typical of neural GLMs. ``Newton`` is also available for ``UnRegularized`` problems
+    but is not the default there, since the unpenalized Hessian can be singular. A Newton step solves a
+    Hessian system, costing ``O(d**2)`` memory and ``O(d**3)`` compute in the number of features ``d``,
+    so for models with many features ``LBFGS`` is preferable: it is memory-light and more robust on
+    noisy objective landscapes. Switch solver by passing ``solver_name=...`` at initialization.
 
     **Fitting Large Models**
 
@@ -156,6 +216,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         Basis coefficients for the model.
     solver_state_ :
         State of the solver after fitting. May include details like optimization error.
+    stochastic_fit_summary_ :
+        Summary of the most recent stochastic training run, including the
+        final epoch and batch indices and any callback stop reason.
     scale_:
         Scale parameter for the model. The scale parameter is the constant :math:`\Phi`, for which
         :math:`\text{Var} \left( y \right) = \Phi V(\mu)`. This parameter, together with the estimate
@@ -244,6 +307,30 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
     _invalid_observation_types = (obs.CategoricalObservations,)
     _validator_class = GLMValidator
+    # The unregularized GLM loss Hessian (Fisher information) is positive
+    # semidefinite; a strictly positive-definite regularizer (e.g. Ridge) promotes
+    # it to positive definite via ``combine_hessian_tags``.
+    _hess_tag: HessianTag = HessianTag(structure=Full, property=PositiveSemiDefinite)
+
+    def _resolve_default_solver(self) -> str:
+        # Newton is the default for Ridge: the ridge penalty makes the penalized
+        # Hessian positive definite, so the Cholesky-based Newton step is stable.
+        # For other regularizers (e.g. UnRegularized, whose Hessian can be only
+        # positive semidefinite) defer to the regularizer's own default.
+        if isinstance(self.regularizer, Ridge) and (
+            "Newton" in self.regularizer.allowed_solvers
+        ):
+            return "Newton"
+        return super()._resolve_default_solver()
+
+    def _hess_property_override(self) -> type | None:
+        # The GLM loss is positive definite on the intercept (its all-ones column is
+        # independent of X), the one subtree Ridge leaves unpenalized. So a Ridge-
+        # penalized GLM Hessian is positive definite even though coverage inference,
+        # seeing only the regularizer, certifies no more than General.
+        if isinstance(self.regularizer, Ridge):
+            return PositiveDefinite
+        return None
 
     def __init__(
         self,
@@ -397,12 +484,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         if isinstance(observation, str):
             self._observation_model = instantiate_observation_model(observation)
             self._validate_observation_class(self.observation_model)
+            self._invalidate_solver()
             return
         # check that the model has the required attributes
         # and that the attribute can be called
         obs.check_observation_model(observation)
         self._observation_model = observation
         self._validate_observation_class(self.observation_model)
+        self._invalidate_solver()
 
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
@@ -646,6 +735,16 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
         """
         self._check_is_fit()
+        if (
+            score_type in {"log-likelihood", "pseudo-r2-McFadden"}
+            and self.scale_ is None
+            and not self._has_constant_scale()
+        ):
+            raise ValueError(
+                "`score()` requires `scale_`, which is not set. This happens after `stochastic_fit()`"
+                " with an observation model whose scale depends on the data (e.g., Gamma, Gaussian)."
+                " Workaround: use `compute_loss(X, y)` for model comparison as it does not depend on `scale_`."
+            )
         params = self._get_model_params()
 
         self._validator.validate_inputs(X, y)
@@ -862,6 +961,232 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         self.aux_ = aux
         return self
 
+    def stochastic_fit(
+        self,
+        data: DataLoader,
+        *,
+        init_params: Optional[GLMUserParams] = None,
+        num_epochs: int = 1,
+        callbacks: "Callback | list[Callback] | None" = None,
+    ):
+        """
+        Fit GLM using stochastic optimization with mini-batches.
+
+        This method provides an out-of-memory training interface for large datasets
+        that cannot fit in memory. Data is provided via a DataLoader that yields
+        mini-batches.
+
+        Parameters
+        ----------
+        data :
+            Data loader yielding (X_batch, y_batch) tuples.
+            Must be re-iterable for ``num_epochs > 1``.
+
+            Note that NaNs are dropped per batch. The optimizer's update method
+            will be re-compiled for each unique batch size, slowing down computation.
+            If your data contains NaNs, it's best to drop them before or in the
+            dataloader, so that batches have mostly the same size after dropping NaNs.
+        init_params :
+            Initial parameters (coefficients, intercept).
+            If None, initialized from ``sample_batch()``.
+            To continue fitting, pass the current parameters (``model.get_model_params()``)
+        num_epochs :
+            Maximum number of passes over the data. Must be >= 1.
+            Optimization may stop earlier if a callback requests a stop.
+
+            There is no convergence-based stopping by default. To stop
+            automatically when the solver's convergence criterion is met,
+            pass ``callbacks=SolverConvergenceCallback()``. Otherwise the
+            fit will run for the full ``num_epochs``.
+        callbacks :
+            Training callbacks. Accepts a single ``Callback``, a list of
+            ``Callback`` objects, or ``None`` (default, no callbacks).
+
+            To stop optimization when the solver's built-in convergence
+            criterion is met pass ``nmo.callbacks.SolverConvergenceCallback()``.
+            This is the recommended way to avoid running for the full
+            ``num_epochs`` when the model has already converged.
+
+        Returns
+        -------
+        self
+            The fitted model. After fitting, ``self.stochastic_fit_summary_``
+            stores a :class:`nemos.callbacks.StochasticFitSummary`
+            describing the run.
+
+        Raises
+        ------
+        ValueError
+            If the solver doesn't support stochastic optimization.
+        TypeError
+            If data is not a DataLoader.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> import nemos as nmo
+        >>> from nemos.batching import ArrayDataLoader
+        >>> from nemos.callbacks import SolverConvergenceCallback
+        >>> X = jnp.ones((100, 5))
+        >>> y = jnp.ones((100,))
+        >>> loader = ArrayDataLoader(X, y, batch_size=32, shuffle="full")
+        >>> model = nmo.glm.GLM(solver_name="GradientDescent", solver_kwargs={"stepsize": 0.01, "acceleration" : False})
+        >>> # Stop early when the solver's convergence criterion is met.
+        >>> model = model.stochastic_fit(
+        ...     loader, num_epochs=10, callbacks=SolverConvergenceCallback()
+        ... )
+        """
+        # Validate solver supports stochastic
+        if not getattr(self.solver_spec.implementation, "_supports_stochastic", False):
+            raise ValueError(
+                f"Solver '{self.solver_spec.full_name}' does not support stochastic optimization. "
+                f"Use one of {[s.full_name for s in list_stochastic_solvers()]}."
+            )
+
+        if not is_data_loader(data):
+            raise TypeError(
+                "stochastic_fit requires a DataLoader (re-iterable) providing "
+                "(X_batch, y_batch) tuples."
+            )
+        loader = data
+
+        # Get raw sample batch for initialization
+        raw_sample_X, raw_sample_y = loader.sample_batch()
+        self._validator.validate_inputs(raw_sample_X, raw_sample_y)
+
+        # Preprocess sample batch (cast to jax, drop nans, etc.)
+        sample_X, sample_y = self._preprocess_inputs(raw_sample_X, raw_sample_y)
+
+        if not self._has_constant_scale():
+            warnings.warn(
+                "`stochastic_fit()` will not populate `scale_` for observation models whose scale"
+                " depends on the data (e.g., Gamma, Gaussian), and `score()` will raise after this fit."
+                " Tip: for evaluation and model comparison use `compute_loss(X, y)` instead.",
+                UserWarning,
+            )
+
+        # Initialize params if not provided (using preprocessed batch)
+        if init_params is None:
+            init_params = self._model_specific_initialization(sample_X, sample_y)
+        else:
+            init_params = self._validator.validate_and_cast_params(init_params)
+            self._validator.validate_consistency(init_params, X=sample_X, y=sample_y)
+
+        self._validator.feature_mask_consistency(
+            getattr(self, "_feature_mask", None), init_params
+        )
+
+        # Wrap data loader to preprocess each batch from now on
+        preprocessed_loader = _PreprocessedDataLoader(loader, self._preprocess_inputs)
+
+        # TODO: Add a streaming version setting the right step- and batch size for SVRG that uses the full data
+        # Initialize solver (using preprocessed sample batch)
+        self._initialize_optimizer_and_state(init_params, sample_X, sample_y)
+        self._warn_about_estimated_svrg_settings()
+
+        # Run stochastic optimization
+        ctx = TrainingContext(model=self, solver=self._solver)
+        params, state, aux = self._solver.stochastic_run(
+            init_params,
+            preprocessed_loader,
+            num_epochs=num_epochs,
+            callback=_normalize_callbacks(callbacks),
+            ctx=ctx,
+        )
+
+        if tree_utils.pytree_map_and_reduce(
+            lambda x: jnp.any(jnp.isnan(x)), any, params
+        ):
+            raise ValueError(
+                "Solver returned at least one NaN parameter, so solution is invalid!"
+                " Try tuning optimization hyperparameters, specifically try decreasing the `stepsize`."
+            )
+
+        # not warning about non-convergence
+
+        # Store results
+        self._set_model_params(params)
+        self.solver_state_ = state
+        self.aux_ = aux
+        self.stochastic_fit_summary_ = ctx.to_summary()
+
+        # instead of keeping it as None, for some observation models we can set the scale_ easily
+        if self._has_constant_scale():
+            # for these families `estimate_scale` ignores `y`, `predicted_rate`, and `dof_resid`
+            # the sample batch and `dof_resid=1.0` are placeholders just to satisfy the shared signature
+            self.scale_ = self.observation_model.estimate_scale(
+                sample_y,
+                self._predict(params, sample_X),
+                dof_resid=1.0,
+            )
+        else:
+            # TODO: estimate residual dof and data-dependent scale after stochastic_fit
+            self.scale_ = None
+        self.dof_resid_ = None
+
+        return self
+
+    def _warn_about_estimated_svrg_settings(self):
+        """Warn if SVRG settings are estimated on sample data instead of the full dataset."""
+
+        if not isinstance(self._solver, (WrappedSVRG, WrappedProxSVRG)):
+            return
+
+        batch_size_estimated_for_svrg = False
+        if (
+            self.inverse_link_function in (jax.nn.softplus, softplus)
+            and isinstance(self.observation_model, obs.PoissonObservations)
+            and self.solver_kwargs.get("stepsize", None) is None
+        ):
+            parameters_set = "stepsize"
+            if (
+                isinstance(self.regularizer, Ridge)
+                and self.solver_kwargs.get("batch_size", None) is None
+            ):
+                parameters_set += " and batch size"
+                batch_size_estimated_for_svrg = True
+
+            warnings.warn(
+                f"Attempted to set the optimal {parameters_set} for {self.solver_name} using the loader's"
+                " sample batch instead of the full data, which may be inaccurate."
+                " A way to calculate the optimal SVRG parameters on a full out-of-memory dataset"
+                " will be provided in the future."
+                " As a workaround, calling `model._optimize_solver_params` on the largest possible"
+                " chunk of data might provide better estimates."
+            )
+
+        batch_size_given_for_svrg = (
+            self.solver_kwargs.get("batch_size", None) is not None
+        )
+
+        if batch_size_given_for_svrg or batch_size_estimated_for_svrg:
+            batch_size_source = "given" if batch_size_given_for_svrg else "estimated"
+            warnings.warn(
+                f'{self.solver_name} does not use the {batch_size_source} "batch_size"'
+                " solver argument for stochastic optimization."
+                " Effective batch size is determined by the data loader."
+            )
+
+    def _has_constant_scale(self) -> bool:
+        """
+        Whether the observation model's scale is independent of the data.
+
+        When True, ``stochastic_fit`` can populate ``scale_`` without a
+        finalization pass over the data. When False (Gamma, Gaussian),
+        ``scale_`` is left unset.
+
+        Quick fix until a streaming residual d.o.f. and scale estimation is added.
+        """
+        return isinstance(
+            self.observation_model,
+            (
+                obs.PoissonObservations,
+                obs.BernoulliObservations,
+                obs.CategoricalObservations,
+                obs.NegativeBinomialObservations,
+            ),
+        )
+
     def _get_model_params(self):
         """Pack coef_ and intercept_  into a params pytree.
 
@@ -1015,6 +1340,89 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             rank = jnp.linalg.matrix_rank(X)
             return (n_samples - rank - 1) * jnp.ones_like(params.intercept)
 
+    def _get_hess_fn(self, params, autodiff: bool = False) -> Callable | None:
+        """
+        Construct a function to compute the Hessian of the penalized log-likelihood.
+
+        This function returns a callable that computes the Hessian of the GLM's
+        penalized mean log-likelihood with respect to the model parameters. It
+        supports two modes:
+
+        1. Automatic differentiation (`autodiff=True`):
+           Computes the Hessian via JAX's `jax.hessian`, flattening any PyTree
+           parameters to a vector. The resulting Hessian is a 2D square array of
+           shape `(d, d)`, where `d` is the total number of parameters (including
+           the intercept).
+
+        2. Analytic Fisher-scoring (`autodiff=False`):
+           Computes the Hessian using the Fisher information matrix approximation
+           for GLMs. Regularization is applied if `self.regularizer_strength` is set.
+
+        Parameters
+        ----------
+        params : PyTree
+            Model parameters. Can be a tree of arrays, typically including `coef`
+            and `intercept`.
+        solver : object
+            An optimizer object that provides `solver.fun(params, *args)` to compute
+            the loss or mean log-likelihood.
+        autodiff : bool, default=True
+            If True, use automatic differentiation to compute the Hessian. If False,
+            use the analytic Fisher-scoring approximation.
+
+        Returns
+        -------
+        Callable[[PyTree, array, ...], jnp.ndarray]
+            A function that takes `(params, X, *args)` and returns a Hessian matrix
+            in flattened parameter space:
+            - If `autodiff=True`, the Hessian is computed via `jax.hessian`.
+            - If `autodiff=False`, the Hessian uses the Fisher-scoring approximation
+              and includes the effect of regularization if applicable.
+            The returned Hessian is a square 2D array of shape `(d, d)`.
+
+        Notes
+        -----
+        - The Hessian returned in analytic mode corresponds to the Fisher information
+          matrix scaled by the number of samples, consistent with a mean loss formulation.
+        - The function currently assumes that `X` is the first argument in `*args`
+          when calling the Hessian function.
+        """
+        if autodiff:
+            loss = self.regularizer.penalized_loss(
+                self._compute_loss, params, self.regularizer_strength
+            )
+
+            def autodiff_hess(params_tree, *args):
+                params, unravel_fn = ravel_pytree(params_tree)
+                return jax.hessian(lambda x: loss(unravel_fn(x), *args))(params)
+
+            return autodiff_hess
+
+        var_of_mu = _var_func_of_mu(self)
+        regularizer_strength = self.regularizer_strength
+        if regularizer_strength is not None:
+            regularizer_strength = self.regularizer._validate_strength_structure(
+                params, regularizer_strength
+            )
+
+        def hess(params, *args):
+            X = args[0]
+
+            eta = (
+                jax.tree.reduce(jnp.add, jax.tree.map(jnp.dot, X, params.coef))
+                + params.intercept
+            )
+
+            return _glm_hessian_block(
+                X,
+                eta,
+                self.inverse_link_function,
+                var_of_mu,
+                regularizer_strength,
+            )
+
+        return hess
+
     def _initialize_optimizer_and_state(
         self,
         init_params: GLMParams,
@@ -1129,6 +1537,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         >>> new_params, new_opt_state = glm_instance.update(params, opt_state, X, y)
 
         """
+        if self._solver is None:
+            raise RuntimeError("Attempt at update when solver was in invalid state.")
+
         # find non-nans
         X, y = tree_utils.drop_nans(X, y)
 
@@ -1247,9 +1658,40 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         # initialize saving dictionary
         fit_attrs = self._get_fit_state()
         fit_attrs.pop("solver_state_")
+        fit_attrs.pop("stochastic_fit_summary_", None)
         string_attrs = ["inverse_link_function"]
 
         self._save_params(filename, fit_attrs, string_attrs)
+
+
+def _var_func_of_mu(model) -> Callable:
+    """Return the variance function V(mu) for a GLM observation model.
+
+    Parameters
+    ----------
+    model :
+        A GLM instance with an ``observation_model`` attribute.
+
+    Returns
+    -------
+    Callable
+        A function mapping the mean ``mu`` to the variance ``V(mu)``.
+
+    Raises
+    ------
+    NotImplementedError
+        If the observation model is not recognized.
+    """
+    obs_name = model.observation_model.__class__.__name__
+    var_funcs = {
+        "PoissonObservations": lambda mu: mu,
+        "GammaObservations": lambda mu: mu**2,
+        "GaussianObservations": lambda mu: jnp.full_like(mu, 0.5),
+        "BernoulliObservations": lambda mu: mu * (1.0 - mu),
+    }
+    if obs_name not in var_funcs:
+        raise NotImplementedError(f"No variance function defined for {obs_name!r}")
+    return var_funcs[obs_name]
 
 
 class PopulationGLM(GLM):
@@ -1264,17 +1706,25 @@ class PopulationGLM(GLM):
     stored in tabular format, shape (n_timebins, num_features) or as a pytree of arrays of the same shape.
     Below is a table listing the default and available solvers for each regularizer.
 
-    +---------------+------------------+-------------------------------------------------------------+
-    | Regularizer   | Default Solver   | Available Solvers                                           |
-    +===============+==================+=============================================================+
-    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
-    +---------------+------------------+-------------------------------------------------------------+
-    | Ridge         | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
-    +---------------+------------------+-------------------------------------------------------------+
-    | Lasso         | ProximalGradient | ProximalGradient                                            |
-    +---------------+------------------+-------------------------------------------------------------+
-    | GroupLasso    | ProximalGradient | ProximalGradient                                            |
-    +---------------+------------------+-------------------------------------------------------------+
+    +---------------+------------------+---------------------------------------------------------------------+
+    | Regularizer   | Default Solver   | Available Solvers                                                   |
+    +===============+==================+=====================================================================+
+    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
+    +---------------+------------------+---------------------------------------------------------------------+
+    | Ridge         | Newton           | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
+    +---------------+------------------+---------------------------------------------------------------------+
+    | Lasso         | ProximalGradient | ProximalGradient                                                    |
+    +---------------+------------------+---------------------------------------------------------------------+
+    | GroupLasso    | ProximalGradient | ProximalGradient                                                    |
+    +---------------+------------------+---------------------------------------------------------------------+
+
+    The default solver for ``Ridge`` is ``Newton``: the ridge penalty makes the Hessian positive
+    definite, so each step is a stable Cholesky solve that converges in a handful of iterations at the
+    feature counts typical of neural GLMs. ``Newton`` is also available for ``UnRegularized`` problems
+    but is not the default there, since the unpenalized Hessian can be singular. A Newton step solves a
+    Hessian system, costing ``O(d**2)`` memory and ``O(d**3)`` compute in the number of features ``d``,
+    so for models with many features ``LBFGS`` is preferable: it is memory-light and more robust on
+    noisy objective landscapes. Switch solver by passing ``solver_name=...`` at initialization.
 
     **Fitting Large Models**
 
@@ -1347,6 +1797,9 @@ class PopulationGLM(GLM):
         Basis coefficients for the model.
     solver_state_ :
         State of the solver after fitting. May include details like optimization error.
+    stochastic_fit_summary_ :
+        Summary of the most recent stochastic training run, including the
+        final epoch and batch indices and any callback stop reason.
 
     Raises
     ------
@@ -1432,6 +1885,9 @@ class PopulationGLM(GLM):
     """
 
     _validator_class = PopulationGLMValidator
+    _hess_tag: HessianTag = HessianTag(
+        structure=BlockDiagonal, property=PositiveSemiDefinite
+    )
 
     def __init__(
         self,
@@ -1622,6 +2078,72 @@ class PopulationGLM(GLM):
             )
             + params.intercept
         )
+
+    def _get_subproblem(self, params, strength, i):
+        mask_i = tree_utils.tree_take(self._feature_mask, i)
+        coef_i = tree_utils.tree_take(params.coef, i)
+        if mask_i is not None:
+            coef_i = jax.tree_util.tree_map(lambda c, m: c * m, coef_i, mask_i)
+        intercept_i = jnp.take(params.intercept, i, axis=0)
+        params_i = self._validator.to_model_params([coef_i, intercept_i])
+        strength_i = tree_utils.tree_take(strength, i)
+        return params_i, strength_i
+
+    def _get_hess_fn(self, params, autodiff: bool = False):
+
+        strength = self.regularizer_strength
+        if self.regularizer_strength is not None:
+            strength = self.regularizer._validate_strength_structure(
+                params, self.regularizer_strength
+            )
+
+        if autodiff:
+            # AUTODIFF PATH
+
+            def hess_fn(params, X, y, *args):
+                n_neurons = params.intercept.shape[0]
+
+                def _loss_i(params_i, X, y_i):
+                    """Simplified loss function that doesn't apply mask."""
+                    rate = GLM._predict(self, params_i, X)
+                    return self._observation_model._negative_log_likelihood(y_i, rate)
+
+                def _hess_fn_i(i, y_i):
+                    """Hessian function for a single subproblem."""
+                    params_i, strength_i = self._get_subproblem(params, strength, i)
+                    if strength_i is not None:
+                        strength_i = strength_i.coef
+                    loss = self.regularizer.penalized_loss(
+                        _loss_i, params_i, strength_i
+                    )
+                    flat_params, unravel = ravel_pytree(params_i)
+                    return jax.hessian(lambda p: loss(unravel(p), X, y_i))(flat_params)
+
+                # vmap autodiff hessian function across neurons
+                return jax.vmap(_hess_fn_i, in_axes=(0, 1))(jnp.arange(n_neurons), y)
+
+            return hess_fn
+
+        # ANALYTIC PATH
+        var_of_mu = _var_func_of_mu(self)
+
+        def hess_fn(params, X, *args):
+            n_neurons = params.intercept.shape[0]
+
+            def _hess_fn_i(i):
+                params_i, strength_i = self._get_subproblem(params, strength, i)
+                eta = (
+                    jax.tree.reduce(jnp.add, jax.tree.map(jnp.dot, X, params_i.coef))
+                    + params_i.intercept
+                )
+                return _glm_hessian_block(
+                    X, eta, self.inverse_link_function, var_of_mu, strength_i
+                )
+
+            # vmap analytic hessian function across neurons
+            return jax.vmap(_hess_fn_i)(jnp.arange(n_neurons))
+
+        return hess_fn
 
     def __sklearn_clone__(self) -> PopulationGLM:
         """Clone the PopulationGLM, dropping feature_mask."""

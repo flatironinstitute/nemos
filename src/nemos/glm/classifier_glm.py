@@ -14,6 +14,7 @@ from .. import observation_models as obs
 from .. import tree_utils
 from ..label_encoder import LabelEncoder
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
+from ..solvers._hess import BlockDiagonal, Full, HessianTag, PositiveSemiDefinite
 from ..type_casting import is_numpy_array_like, support_pynapple
 from ..typing import (
     DESIGN_INPUT_TYPE,
@@ -36,6 +37,12 @@ class ClassifierMixin:
 
     # observation model inferred
     _invalid_observation_types = ()
+
+    def _hess_property_override(self) -> type | None:
+        # The softmax loss is singular along the (unregularized) uniform intercept
+        # shift, so Ridge does not make the penalized Hessian positive definite. Unlike
+        # a plain GLM, this loss certifies nothing extra -- no override.
+        return None
 
     def set_classes(self, y: ArrayLike) -> ClassifierMixin:
         """
@@ -729,6 +736,7 @@ class ClassifierGLM(ClassifierGLMMixin, GLM):
     """
 
     _validator_class = ClassifierGLMValidator
+    _hess_tag: HessianTag = HessianTag(structure=Full, property=PositiveSemiDefinite)
 
     def __init__(
         self,
@@ -847,6 +855,9 @@ class ClassifierGLM(ClassifierGLMMixin, GLM):
         self._label_encoder.check_classes_is_set("score")
         y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
+
+    def _get_hess_fn(self, params, autodiff: bool = False) -> Callable | None:
+        return None
 
 
 class ClassifierPopulationGLM(ClassifierGLMMixin, PopulationGLM):
@@ -1007,6 +1018,9 @@ class ClassifierPopulationGLM(ClassifierGLMMixin, PopulationGLM):
     """
 
     _validator_class = PopulationClassifierGLMValidator
+    _hess_tag: HessianTag = HessianTag(
+        structure=BlockDiagonal, property=PositiveSemiDefinite
+    )
 
     def __init__(
         self,
@@ -1158,3 +1172,6 @@ class ClassifierPopulationGLM(ClassifierGLMMixin, PopulationGLM):
         self._label_encoder.check_classes_is_set("score")
         y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
+
+    def _get_hess_fn(self, params, autodiff: bool = False):
+        return super()._get_hess_fn(params, autodiff=True)
