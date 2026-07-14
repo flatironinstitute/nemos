@@ -318,6 +318,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
     # default until the instance sets it; read during ``__init__`` before assignment
     # (e.g. when solver-kwargs validation resolves the default solver).
     _fit_intercept: bool = True
+    # full-structure all-None default so the partition helpers never see a bare None
+    _fix_params: GLMParams[None | jnp.ndarray] = GLMParams(None, None)
 
     def _resolve_default_solver(self) -> str:
         # Newton is the default for Ridge: the ridge penalty makes the penalized
@@ -394,6 +396,24 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         # solver closed over the previous frozen values are then stale.
         if flipped:
             self._invalidate_solver()
+
+    def _active_filter_spec(self) -> GLMParams[bool]:
+        active = super()._active_filter_spec()
+        # ``fit_intercept=False`` freezes the intercept at the value
+        # ``_normalize_user_params`` fills into the init params (zeros by default).
+        if not self._fit_intercept:
+            active = GLMParams(active.coef, False)
+        return active
+
+    def _frozen_values(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> GLMParams:
+        frozen = super()._frozen_values(X, y)
+        # ``fit_intercept=False`` pins the intercept at zero; this is the single
+        # source of the pinned value (``_normalize_user_params`` fills it into
+        # omitted user input, ``update`` recombines it into the returned params).
+        if not self._fit_intercept:
+            zeros = jnp.zeros_like(self._validator.get_empty_params(X, y).intercept)
+            frozen = GLMParams(frozen.coef, zeros)
+        return frozen
 
     @property
     def solver(self):
@@ -899,7 +919,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
                     UserWarning,
                     stacklevel=2,
                 )
-            zeros = jnp.zeros_like(self._validator.get_empty_params(X, y).intercept)
+            zeros = self._frozen_values(X, y).intercept
             init_params = tuple([*init_params[:-1], zeros])
         return init_params
 
@@ -977,11 +997,12 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             getattr(self, "_feature_mask", None), init_params
         )
 
-        # initialize the solver on the active parameters and run, holding the frozen
-        # parameters fixed (see BaseRegressor._run_optimizer).
-        params, state, aux = self._run_optimizer(
-            init_params, data, y, lambda active: self._optimizer_run(active, data, y)
-        )
+        # optimize the active parameters with the loss closed over the frozen ones,
+        # then recombine
+        active, frozen = self._partition_active(init_params)
+        self._initialize_optimizer_and_state(active, data, y, frozen_params=frozen)
+        params, state, aux = self._optimizer_run(active, data, y)
+        params = eqx.combine(params, frozen)
 
         if tree_utils.pytree_map_and_reduce(
             lambda x: jnp.any(jnp.isnan(x)), any, params
@@ -1153,27 +1174,27 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         preprocessed_loader = _PreprocessedDataLoader(loader, self._preprocess_inputs)
 
         # TODO: Add a streaming version setting the right step- and batch size for SVRG that uses the full data
-        # Run stochastic optimization on the active parameters, holding the frozen
-        # parameters fixed (see BaseRegressor._run_optimizer). The context is created
-        # here so it is available after the run (for the summary); ``frozen`` is set
-        # inside the closure so ``ctx.params`` exposes the complete parameters to
-        # callbacks. ``stochastic_run`` sets ``ctx.solver`` itself.
+        # Run stochastic optimization on the active parameters with the loss closed
+        # over the frozen ones, then recombine. The context is created here so it is
+        # available after the run (for the summary); ``ctx.frozen`` lets ``ctx.params``
+        # expose the complete parameters to callbacks. ``stochastic_run`` sets
+        # ``ctx.solver`` itself.
         ctx = TrainingContext(model=self)
 
-        def _stochastic_run(active):
-            ctx.frozen = self._fix_params
-            self._warn_about_estimated_svrg_settings()
-            return self._solver.stochastic_run(
-                active,
-                preprocessed_loader,
-                n_passes=n_passes,
-                callback=_normalize_callbacks(callbacks),
-                ctx=ctx,
-            )
-
-        params, state, aux = self._run_optimizer(
-            init_params, sample_X, sample_y, _stochastic_run
+        active, frozen = self._partition_active(init_params)
+        self._initialize_optimizer_and_state(
+            active, sample_X, sample_y, frozen_params=frozen
         )
+        ctx.frozen = frozen
+        self._warn_about_estimated_svrg_settings()
+        params, state, aux = self._solver.stochastic_run(
+            active,
+            preprocessed_loader,
+            n_passes=n_passes,
+            callback=_normalize_callbacks(callbacks),
+            ctx=ctx,
+        )
+        params = eqx.combine(params, frozen)
 
         if tree_utils.pytree_map_and_reduce(
             lambda x: jnp.any(jnp.isnan(x)), any, params
@@ -1571,7 +1592,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             active, opt_state, data, y, *args, **kwargs
         )
 
-        updated_params = eqx.combine(updated_params, self._fix_params)
+        # the frozen leaves are pinned by the model settings — the same values the
+        # loss closure was built with — not by the params the caller passes in, so
+        # a frozen leaf may be omitted (None) in ``params``.
+        updated_params = eqx.combine(updated_params, self._frozen_values(X, y))
 
         # store params and state
         self._set_model_params(updated_params)

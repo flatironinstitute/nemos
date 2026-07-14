@@ -117,7 +117,7 @@ class BaseRegressor(
     # overwrite this in subclasses if their objective functions return aux
     _has_aux: bool = False
 
-    # set of fixed parameters.
+    # user setting: fixed-parameter spec (array leaf = fixed value, None leaf = learn).
     _fix_params: Optional[ModelParamsT] = None
 
     def __init__(
@@ -363,8 +363,6 @@ class BaseRegressor(
         self._optimizer_init_state = None
         self._optimizer_update = None
         self._optimizer_run = None
-        # the frozen partition was captured against the now-stale solver
-        self._fix_params = None
 
     def _partition_active(
         self, params: ModelParamsT
@@ -383,58 +381,33 @@ class BaseRegressor(
             A tuple containing the active and frozen parameter trees.
 
         """
-        active = jax.tree_util.tree_map(
+        return eqx.partition(params, self._active_filter_spec())
+
+    def _active_filter_spec(self) -> Any:
+        """Boolean filter spec (tree-prefix) marking the actively optimized leaves.
+
+        Derived from ``_fix_params`` alone: a leaf is active iff the spec holds
+        ``None`` there. Subclasses fold model-specific settings in (e.g. the GLM
+        freezes the intercept when ``fit_intercept=False``).
+        """
+        return jax.tree_util.tree_map(
             lambda x: x is None, self._fix_params, is_leaf=lambda x: x is None
         )
-        return eqx.partition(params, active)
 
-    def _run_optimizer(
-        self,
-        init_params: ModelParamsT,
-        X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
-        run: Callable[[ModelParamsT], Tuple[ModelParamsT, Any, Any]],
-    ) -> Tuple[ModelParamsT, Any, Any]:
-        """Optimize the active parameters and recombine the frozen ones.
+    def _frozen_values(
+        self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray
+    ) -> Optional[ModelParamsT]:
+        """Values the frozen leaves are pinned to, implied by the model settings.
 
-        Shared spine for the run-to-completion entry points (``fit`` and
-        ``stochastic_fit``). It splits ``init_params`` into the active subtree the
-        solver optimizes and the frozen subtree held fixed (see
-        :meth:`_partition_active`), initializes the solver on the active subtree with a
-        loss closed over the frozen values, runs the optimization, and recombines the
-        frozen values into the returned parameters.
-
-        Keeping this in one place guarantees that both entry points partition, run, and
-        recombine identically; the only difference between them is the optimization loop
-        itself, which is supplied as ``run``. This is what makes freezing (e.g.
-        ``fit_intercept=False``) behave the same for full-batch and stochastic fits.
-
-        Parameters
-        ----------
-        init_params :
-            The complete (active + frozen) initial parameters.
-        X :
-            Input predictors, forwarded to solver initialization.
-        y :
-            Target data, forwarded to solver initialization.
-        run :
-            Callable invoked with the active parameters, returning
-            ``(params, state, aux)``. Wraps ``self._optimizer_run`` for full-batch fits
-            or the solver's stochastic loop for ``stochastic_fit``. It is called after
-            the solver has been initialized, so ``self._solver`` is available inside it.
-
-        Returns
-        -------
-        :
-            ``(params, state, aux)`` with the frozen parameters recombined into
-            ``params``.
+        Complement of :meth:`_active_filter_spec`: the spec marks *which* leaves are
+        actively optimized, this returns *what* the remaining leaves are held at
+        (tree-prefix with ``None`` on active leaves; ``None`` when nothing is frozen).
+        Derived from ``_fix_params`` alone here — its array leaves are the fixed
+        values. Subclasses fold model-specific settings in (e.g. the GLM pins the
+        intercept at zero when ``fit_intercept=False``); ``X`` and ``y`` let them
+        infer the shape of a pinned leaf.
         """
-        active, self._fix_params = self._partition_active(init_params)
-        self._initialize_optimizer_and_state(
-            active, X, y, frozen_params=self._fix_params
-        )
-        params, state, aux = run(active)
-        return eqx.combine(params, self._fix_params), state, aux
+        return self._fix_params
 
     def _normalize_user_params(
         self,
@@ -926,10 +899,8 @@ class BaseRegressor(
         init_params = self._validator.validate_and_cast_params(init_params)
         self._validator.validate_consistency(init_params, X=X, y=y)
         X, y = self._preprocess_inputs(X, y, drop_nans=True)
-        active, self._fix_params = self._partition_active(init_params)
-        state = self._initialize_optimizer_and_state(
-            active, X, y, frozen_params=self._fix_params
-        )
+        active, frozen = self._partition_active(init_params)
+        state = self._initialize_optimizer_and_state(active, X, y, frozen_params=frozen)
         return state
 
     def _optimize_solver_params(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> dict:

@@ -1707,12 +1707,22 @@ class TestFitInterceptProperty:
         assert model.fit_intercept is expected
 
     @pytest.mark.parametrize("value", [True, False])
-    def test_active_params_track_fit_intercept(self, glm_class, value):
+    def test_partition_tracks_fit_intercept(self, glm_class, value):
         """coef is always active; the intercept is active iff ``fit_intercept``."""
         model = glm_class()
         model.fit_intercept = value
-        assert model._active_params.coef == True  # noqa: E712
-        assert model._active_params.intercept == value
+        params = nmo.glm.params.GLMParams(
+            coef=jnp.array([1.0, 2.0, 3.0]), intercept=jnp.array([5.0])
+        )
+        active, frozen = model._partition_active(params)
+        np.testing.assert_array_equal(active.coef, params.coef)
+        assert frozen.coef is None
+        if value:
+            np.testing.assert_array_equal(active.intercept, params.intercept)
+            assert frozen.intercept is None
+        else:
+            assert active.intercept is None
+            np.testing.assert_array_equal(frozen.intercept, params.intercept)
 
     def test_invalidates_solver_only_on_flip(self, glm_class, monkeypatch):
         """``_invalidate_solver`` runs only when the flag actually changes value,
@@ -1764,13 +1774,13 @@ class TestPartitionActive:
         assert frozen.coef is None
         np.testing.assert_array_equal(frozen.intercept, params.intercept)
 
-    def test_none_active_params_returns_full_and_empty(self, params):
-        """When ``_active_params`` is None (the base default, e.g. a model that never
-        sets it) the params are returned unchanged and the frozen tree is all-None."""
+    def test_default_settings_return_full_and_empty(self, params):
+        """With the defaults (``_fix_params=None``, ``fit_intercept=True``, neither
+        ever assigned) every value stays active and the frozen tree is all-None."""
         model = nmo.glm.GLM()
-        model._active_params = None
         active, frozen = model._partition_active(params)
-        assert active is params
+        np.testing.assert_array_equal(active.coef, params.coef)
+        np.testing.assert_array_equal(active.intercept, params.intercept)
         assert jax.tree_util.tree_leaves(frozen) == []
         assert frozen.coef is None
         assert frozen.intercept is None
