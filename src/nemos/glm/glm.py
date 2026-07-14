@@ -318,7 +318,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
     # default until the instance sets it; read during ``__init__`` before assignment
     # (e.g. when solver-kwargs validation resolves the default solver).
     _fit_intercept: bool = True
-    _active_params: GLMParams = GLMParams(True, True)
 
     def _resolve_default_solver(self) -> str:
         # Newton is the default for Ridge: the ridge penalty makes the penalized
@@ -391,9 +390,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         value = bool(value)
         flipped = value != self._fit_intercept
         self._fit_intercept = value
-        self._active_params = self._validator.to_model_params(
-            (self._active_params.coef, value)
-        )
         # only when the frozen set actually changes: the captured partition and the
         # solver closed over the previous frozen values are then stale.
         if flipped:
@@ -1165,7 +1161,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         ctx = TrainingContext(model=self)
 
         def _stochastic_run(active):
-            ctx.frozen = self._frozen_params
+            ctx.frozen = self._fix_params
             self._warn_about_estimated_svrg_settings()
             return self._solver.stochastic_run(
                 active,
@@ -1575,7 +1571,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             active, opt_state, data, y, *args, **kwargs
         )
 
-        updated_params = eqx.combine(updated_params, self._frozen_params)
+        updated_params = eqx.combine(updated_params, self._fix_params)
 
         # store params and state
         self._set_model_params(updated_params)

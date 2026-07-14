@@ -117,9 +117,8 @@ class BaseRegressor(
     # overwrite this in subclasses if their objective functions return aux
     _has_aux: bool = False
 
-    # set of active parameters.
-    _active_params: Optional[ModelParamsT] = None
-    _frozen_params: Optional[ModelParamsT] = None
+    # set of fixed parameters.
+    _fix_params: Optional[ModelParamsT] = None
 
     def __init__(
         self,
@@ -365,7 +364,7 @@ class BaseRegressor(
         self._optimizer_update = None
         self._optimizer_run = None
         # the frozen partition was captured against the now-stale solver
-        self._frozen_params = None
+        self._fix_params = None
 
     def _partition_active(
         self, params: ModelParamsT
@@ -384,12 +383,10 @@ class BaseRegressor(
             A tuple containing the active and frozen parameter trees.
 
         """
-        if self._active_params is None:
-            struct = jax.tree_util.tree_structure(params)
-            return params, jax.tree_util.tree_unflatten(
-                struct, [None] * struct.num_leaves
-            )
-        return eqx.partition(params, self._active_params)
+        active = jax.tree_util.tree_map(
+            lambda x: x is None, self._fix_params, is_leaf=lambda x: x is None
+        )
+        return eqx.partition(params, active)
 
     def _run_optimizer(
         self,
@@ -432,12 +429,12 @@ class BaseRegressor(
             ``(params, state, aux)`` with the frozen parameters recombined into
             ``params``.
         """
-        active, self._frozen_params = self._partition_active(init_params)
+        active, self._fix_params = self._partition_active(init_params)
         self._initialize_optimizer_and_state(
-            active, X, y, frozen_params=self._frozen_params
+            active, X, y, frozen_params=self._fix_params
         )
         params, state, aux = run(active)
-        return eqx.combine(params, self._frozen_params), state, aux
+        return eqx.combine(params, self._fix_params), state, aux
 
     def _normalize_user_params(
         self,
@@ -929,9 +926,9 @@ class BaseRegressor(
         init_params = self._validator.validate_and_cast_params(init_params)
         self._validator.validate_consistency(init_params, X=X, y=y)
         X, y = self._preprocess_inputs(X, y, drop_nans=True)
-        active, self._frozen_params = self._partition_active(init_params)
+        active, self._fix_params = self._partition_active(init_params)
         state = self._initialize_optimizer_and_state(
-            active, X, y, frozen_params=self._frozen_params
+            active, X, y, frozen_params=self._fix_params
         )
         return state
 
