@@ -21,7 +21,7 @@ def to_glm_hmm_params(user_params: GLMHMMUserParams) -> GLMHMMParams:
     to internal model parameters (log_scale and log probabilities).
     """
     return GLMHMMParams(
-        model_params=GLMHMMModelParams(*user_params[:3]),
+        model_params=GLMHMMModelParams(*user_params[:2], jnp.log(user_params[2])),
         hmm_params=to_hmm_params(user_params[3:]),
     )
 

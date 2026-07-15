@@ -1776,12 +1776,12 @@ class CategoricalObservations(Observations):
 
     @property
     def default_inverse_link_function(self):
-        return log_softmax
-        # return _make_wrapper(
-        #     partial(jax.nn.log_softmax, axis=self.class_axis),
-        #     log_softmax.__name__,
-        #     log_softmax.__doc__,
-        # )
+        # return log_softmax
+        return _make_wrapper(
+            partial(jax.nn.log_softmax, axis=self.class_axis),
+            log_softmax.__name__,
+            log_softmax.__doc__,
+        )
 
     def _negative_log_likelihood(
         self,

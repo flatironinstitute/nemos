@@ -379,7 +379,7 @@ class GLMHMM(
 
         Use cached values to avoid unnecessary computations.
         """
-        is_population_glm = y.ndim > 2 if self._is_categorical_glm else y.ndim > 1
+        is_population_glm = (y.ndim > 2) if self._is_categorical_glm else (y.ndim > 1)
         cache_key = (
             is_population_glm,
             self._observation_model,

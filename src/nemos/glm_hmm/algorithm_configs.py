@@ -208,7 +208,8 @@ def prepare_estep_log_likelihood(
         Signature: (y, rate, scale) -> log_likelihood per state
     """
     # Vectorize over the states axis
-    # state_axes = 2 if is_population_glm else 1
+    # state_axes = 2 if is_population_glm or is_categorical_glm,
+    # state_axes = 3 if is_population_glm and is_categorical_glm, else 1
     state_axes = 1 + is_population_glm + is_categorical_glm
 
     def log_likelihood_per_sample(x, z, s):
