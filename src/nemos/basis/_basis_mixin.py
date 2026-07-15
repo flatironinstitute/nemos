@@ -602,6 +602,11 @@ class BoundedEvalBasisMixin(EvalBasisMixin):
     # Set to False for bases defined over the entire real line (e.g., Fourier).
     _apply_bounds_fill = True
 
+    # Whether ``bounds=None`` makes the basis derive its domain from the input data
+    # (e.g. via ``min_max_rescale_samples``). Set to True on the rescaling base classes;
+    # the transformer safety gate requires explicit ``bounds`` for these.
+    _bounds_define_domain = True
+
     def __init__(
         self, bounds: Optional[Tuple[float, float]] = None, fill_value: float = jnp.nan
     ):
@@ -673,7 +678,13 @@ class BoundedEvalBasisMixin(EvalBasisMixin):
 
     @property
     def bounds(self) -> List[Tuple[float, float]] | Tuple[float, float] | None:
-        """Returns bounds, as provided."""
+        """Returns bounds, as provided.
+
+        Notes
+        -----
+        Bounds may define the domain of the basis. When a basis is used as a transformer,
+        bounds must be specified, otherwise the basis domain may change
+        """
         return self._bounds
 
     def _get_bounds_per_dim(self) -> List[Tuple[float, float]]:

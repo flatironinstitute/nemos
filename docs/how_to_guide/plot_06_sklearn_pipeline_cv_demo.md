@@ -187,12 +187,18 @@ We might want to combine first transforming the input data with our basis functi
 
 This is exactly what `Pipeline` is for!
 
+:::{admonition} Setting `bounds` for cross-validation
+:class: note
+
+An `Eval` basis used as a transformer must have its `bounds` set explicitly, so that the domain stays fixed across cross-validation folds instead of being re-inferred from each fold's data. See [here for more info about bounds](transformer-basis-bounds).
+:::
+
 ```{code-cell} ipython3
 pipeline = Pipeline(
     [
         (
             "transformerbasis",
-            # bounds must be set to use an Eval basis as a transformer
+            # define bounds explicitly so the domain is consistent across folds
             nmo.basis.RaisedCosineLinearEval(6, bounds=(0, 1)).to_transformer(),
         ),
         (

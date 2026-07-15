@@ -2166,6 +2166,10 @@ class IdentityEval(BoundedEvalBasisMixin, IdentityBasis):
     # not apply ``fill_value`` a second time in ``_compute_features``.
     _apply_bounds_fill = False
 
+    # For this basis, bounds are not using to rescale, therefore they do not define the
+    # basis domain.
+    _bounds_define_domain = False
+
     def __init__(
         self,
         bounds: Optional[Tuple[float, float]] = None,

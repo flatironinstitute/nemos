@@ -197,11 +197,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         If ``axis`` different from 0 is provided as a keyword argument (samples must always be in the first axis).
     """
 
-    # Whether ``bounds=None`` makes the basis derive its domain from the input data
-    # (e.g. via ``min_max_rescale_samples``). Set to True on the rescaling base classes;
-    # the transformer safety gate requires explicit ``bounds`` for these.
-    _bounds_define_domain = False
-
     def __init__(
         self,
     ) -> None:

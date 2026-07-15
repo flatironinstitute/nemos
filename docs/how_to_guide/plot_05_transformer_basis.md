@@ -200,6 +200,7 @@ out2 = trans_bas.fit_transform(inp2)
 ```
 
 
+(transformer-basis-bounds)=
 ### Setting up the `bounds`
 
 #### The Problem

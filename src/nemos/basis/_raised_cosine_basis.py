@@ -50,9 +50,6 @@ class RaisedCosineBasisLinear(AtomicBasisMixin, Basis, abc.ABC):
         - Oscillatory behavior when summing the basis elements (2*width not integer).
     """
 
-    # ``bounds=None`` rescales the domain to the data min/max (see ``min_max_rescale_samples``).
-    _bounds_define_domain = True
-
     def __init__(
         self,
         n_basis_funcs: int,

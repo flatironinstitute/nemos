@@ -142,13 +142,12 @@ class TransformerBasis:
             # shared math base class but carry no ``bounds`` (their ``__getattr__`` raises).
             # ``is_leaf=lambda x: x is None`` keeps ``None`` as a leaf, so this catches
             # both ``bounds=None`` and a partially-unset ``(None, high)``.
-            if (
-                getattr(b, "_bounds_define_domain", False)
-                and hasattr(b, "bounds")
-                and any(
-                    v is None
-                    for v in jax.tree.leaves(b.bounds, is_leaf=lambda x: x is None)
-                )
+            if getattr(b, "_bounds_define_domain", False) and any(
+                v is None
+                # MultiplicativeBasis returns a list of bounds that may contain None.
+                # `jax.tree.leaves` default behavior is to excludes the empty leaves (None leaves).
+                # In this check, we need to include them.
+                for v in jax.tree.leaves(b.bounds, is_leaf=lambda x: x is None)
             ):
                 raise RuntimeError(
                     f"Cannot apply TransformerBasis: component {b} has unset ``bounds``.\n"
