@@ -410,9 +410,16 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         # ``fit_intercept=False`` pins the intercept at zero; this is the single
         # source of the pinned value (``_normalize_user_params`` fills it into
         # omitted user input, ``update`` recombines it into the returned params).
-        if not self._fit_intercept:
+        if not self._fit_intercept and frozen.intercept is None:
             zeros = jnp.zeros_like(self._validator.get_empty_params(X, y).intercept)
             frozen = GLMParams(frozen.coef, zeros)
+        if frozen.coef is None:
+            frozen = eqx.tree_at(
+                lambda p: p.coef,
+                frozen,
+                jax.tree_util.tree_map(lambda _: None, X, is_leaf=lambda x: x is None),
+                is_leaf=lambda x: x is None,
+            )
         return frozen
 
     @property
