@@ -682,8 +682,13 @@ class BoundedEvalBasisMixin(EvalBasisMixin):
 
         Notes
         -----
-        Bounds may define the domain of the basis. When a basis is used as a transformer,
-        bounds must be specified, otherwise the basis domain may change
+        For some bases, ``bounds`` defines the domain over which the basis is constructed. When it is
+        left unset, that domain is inferred from the range of the input instead, so it can change from
+        one call to the next.
+
+        A basis of this kind can be used as a transformer only if ``bounds`` is set explicitly. Fixing
+        the bounds keeps the domain constant across calls, for instance across cross-validation folds.
+
         """
         return self._bounds
 
