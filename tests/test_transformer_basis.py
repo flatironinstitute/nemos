@@ -1322,23 +1322,70 @@ def test_double_transformer():
     ), "The basis was shallow copied!"
 
 
-@pytest.mark.parametrize(
-    "bas, expectation",
-    [
-        (
-            nmo.basis.BSplineEval(5),
-            pytest.raises(RuntimeError, match="BSplineEval.+bounds"),
-        ),
-        (nmo.basis.BSplineEval(5, bounds=(0, 1)), does_not_raise()),
-        (nmo.basis.BSplineConv(5, 10), does_not_raise()),
-        (nmo.basis.IdentityEval(), does_not_raise()),
-        (nmo.basis.Zero(), does_not_raise()),
-        (nmo.basis.CustomBasis(lambda x: x), does_not_raise()),
-    ],
-)
+# Behavior buckets for the transformer bounds gate. Hardcoded rather than derived from
+# ``_bounds_define_domain`` so the behavior test does not grade the src flag against itself;
+# ``test_bounds_gating_covers_all_bases`` fails if a new basis is added without being labeled here.
+BOUNDS_GATED_EVAL = [
+    basis.BSplineEval,
+    basis.CyclicBSplineEval,
+    basis.FourierEval,
+    basis.MSplineEval,
+    basis.OrthExponentialEval,
+    basis.RaisedCosineLinearEval,
+    basis.RaisedCosineLogEval,
+]
+
+# Never gated: Conv bases carry no ``bounds``; ``IdentityEval`` does not derive its domain from
+# ``bounds``; ``Category`` is discrete; ``Zero`` and ``CustomBasis`` have no bounds-defined domain.
+BOUNDS_UNGATED_ATOMIC = [
+    basis.BSplineConv,
+    basis.CyclicBSplineConv,
+    basis.HistoryConv,
+    basis.MSplineConv,
+    basis.OrthExponentialConv,
+    basis.RaisedCosineLinearConv,
+    basis.RaisedCosineLogConv,
+    basis.IdentityEval,
+    basis.Category,
+    basis.Zero,
+    basis.CustomBasis,
+]
+
+# Composite bases inherit the gate from their components. ``instantiate_basis`` builds them from an
+# MSplineEval (gated) and a Conv, so unbounded they raise and bounded they pass.
+BOUNDS_COMPOSITE = [basis.AdditiveBasis, basis.MultiplicativeBasis]
+
+
+def test_bounds_gating_covers_all_bases():
+    """Guard the hardcoded behavior lists against drift as bases are added."""
+    labeled = BOUNDS_GATED_EVAL + BOUNDS_UNGATED_ATOMIC + BOUNDS_COMPOSITE
+    assert len(labeled) == len(set(labeled)), "A basis is labeled in more than one bucket."
+    implemented = set(list_all_basis_classes())
+    assert not implemented - set(labeled), f"Unlabeled basis classes: {implemented - set(labeled)}"
+    assert not set(labeled) - implemented, f"Labeled non-bases: {set(labeled) - implemented}"
+
+
+def _run_bounds_gating(basis_cls, params, bounds, method):
+    bas = CombinedBasis().instantiate_basis(
+        5, basis_cls, params, window_size=10, bounds=bounds
+    )
+    tbas = bas.to_transformer()
+    getattr(tbas, method)(np.stack([np.linspace(0, 1)] * bas._n_inputs, axis=1))
+
+
 @pytest.mark.parametrize("method", ["fit", "transform", "fit_transform"])
-def test_bounds_gating(bas, expectation, method):
-    bas = bas.to_transformer()
-    with expectation:
-        meth = getattr(bas, method)
-        meth(np.stack([np.linspace(0, 1)] * bas._n_inputs, axis=1))
+class TestBoundsGating:
+    @pytest.mark.parametrize("basis_cls", BOUNDS_GATED_EVAL + BOUNDS_COMPOSITE)
+    def test_unset_bounds_raises(self, basis_cls, method, basis_class_specific_params):
+        with pytest.raises(RuntimeError, match="bounds"):
+            _run_bounds_gating(basis_cls, basis_class_specific_params, None, method)
+
+    @pytest.mark.parametrize("basis_cls", BOUNDS_GATED_EVAL + BOUNDS_COMPOSITE)
+    def test_set_bounds_passes(self, basis_cls, method, basis_class_specific_params):
+        with does_not_raise():
+            _run_bounds_gating(basis_cls, basis_class_specific_params, (0, 1), method)
+
+    @pytest.mark.parametrize("basis_cls", BOUNDS_UNGATED_ATOMIC)
+    def test_ungated_never_raises(self, basis_cls, method, basis_class_specific_params):
+        with does_not_raise():
+            _run_bounds_gating(basis_cls, basis_class_specific_params, None, method)
