@@ -215,6 +215,23 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
     >>> X = add.compute_features(samples, samples)
     >>> X.shape
     (50, 20)
+
+    **Use CustomBasis as Transformer**
+
+    Whether a ``CustomBasis`` is safe as a transformer depends on the functions you pass. A
+    sample-wise function transforms a given row the same way regardless of the other rows:
+
+    >>> x = np.array([1.0, 2.0, 3.0])
+    >>> safe = nmo.basis.CustomBasis([lambda x: x ** 2])
+    >>> np.array_equal(safe.compute_features(x)[0], safe.compute_features(x[:1])[0])
+    True
+
+    A data-dependent function (here, centering by the input mean) transforms the same row
+    differently depending on the rest of the input, so it is unsafe across cross-validation folds:
+
+    >>> unsafe = nmo.basis.CustomBasis([lambda x: x - x.mean()])
+    >>> np.array_equal(unsafe.compute_features(x)[0], unsafe.compute_features(x[:1])[0])
+    False
     """
 
     _allow_inputs_of_different_shape = False
