@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ._basis import Basis
-from ._basis_mixin import AtomicBasisMixin, BoundedEvalBasisMixin
+from ._basis_mixin import AtomicBasisMixin, EvalBasisMixin
 from ._composition_utils import add_docstring
 
 
@@ -31,7 +31,7 @@ def one_hot_encoding(
     return jax.nn.one_hot(x, n_classes)
 
 
-class Category(BoundedEvalBasisMixin, AtomicBasisMixin, Basis):
+class Category(EvalBasisMixin, AtomicBasisMixin, Basis):
     """
     Categorical one-hot encoding basis.
 
@@ -142,7 +142,7 @@ class Category(BoundedEvalBasisMixin, AtomicBasisMixin, Basis):
             n_basis_funcs=self.n_basis_funcs,
             label=label,
         )
-        BoundedEvalBasisMixin.__init__(self, bounds=None)
+        EvalBasisMixin.__init__(self)
 
     @property
     def out_of_category(self) -> int | str | float | None:
@@ -288,7 +288,7 @@ class Category(BoundedEvalBasisMixin, AtomicBasisMixin, Basis):
             encoded = self._set_out_of_category(xi, encoded)
         return one_hot_encoding(encoded, self._label_encoder.n_classes)
 
-    @add_docstring("_compute_features", BoundedEvalBasisMixin)
+    @add_docstring("_compute_features", EvalBasisMixin)
     def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
         """
         Examples

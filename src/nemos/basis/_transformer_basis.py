@@ -41,6 +41,12 @@ class TransformerBasis:
     model selection, enabling the cross-validation of the basis type and parameters,
     for example ``n_basis_funcs``. See the example section below.
 
+    .. attention::
+
+        Any ``Eval`` basis composing the transformer must have its ``bounds`` set, so its domain is
+        fixed rather than re-inferred from each fold's data during cross-validation. The example sets
+        ``bounds=(x.min(), x.max())`` for this reason.
+
     Parameters
     ----------
     basis :
@@ -136,17 +142,13 @@ class TransformerBasis:
                 "`fit_transform`."
             )
         for b in basis._iterate_over_components():
-            # Only bases whose domain is derived from data when ``bounds`` is unset are unsafe
-            # as transformers; ``_bounds_define_domain`` flags those (see ``Basis``). The
-            # ``hasattr`` check excludes convolutional bases, which inherit the flag from the
-            # shared math base class but carry no ``bounds`` (their ``__getattr__`` raises).
-            # ``is_leaf=lambda x: x is None`` keeps ``None`` as a leaf, so this catches
-            # both ``bounds=None`` and a partially-unset ``(None, high)``.
+            # ``_bounds_define_domain`` (True only on the bounded Eval mixin) flags bases whose
+            # domain is data-inferred when ``bounds`` is unset; those are the unsafe ones. It's
+            # False elsewhere, and True implies a ``bounds`` attribute, so no existence check needed.
+            # Some bases have n-d bounds (FourierEval): a list of tuples or Nones. We must reject any
+            # None. ``jax.tree.leaves`` skips empty (None) leaves by default, so ``is_leaf`` keeps them.
             if getattr(b, "_bounds_define_domain", False) and any(
                 v is None
-                # MultiplicativeBasis returns a list of bounds that may contain None.
-                # `jax.tree.leaves` default behavior is to excludes the empty leaves (None leaves).
-                # In this check, we need to include them.
                 for v in jax.tree.leaves(b.bounds, is_leaf=lambda x: x is None)
             ):
                 raise RuntimeError(

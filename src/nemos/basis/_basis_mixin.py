@@ -950,6 +950,12 @@ class BasisTransformerMixin:
         """
         Turn the Basis into a TransformerBasis for use with scikit-learn.
 
+        .. attention::
+
+            Any ``Eval`` basis composing the transformer must have its ``bounds`` set, so its domain is
+            fixed rather than re-inferred on each cross-validation fold. Otherwise
+            ``fit``/``transform``/``fit_transform`` raise a ``RuntimeError``.
+
         Examples
         --------
         Jointly cross-validating basis and GLM parameters with scikit-learn.

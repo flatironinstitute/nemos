@@ -163,6 +163,29 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         restriction exists because after multiplication, ``basis.compute_features``
         does not distinguish between real and imaginary components, which would lead
         to incorrect outputs.
+    bounds :
+        Interval ``(low, high)`` outside which samples are replaced by ``fill_value``; ``None`` (default)
+        applies no filling. Unlike the ``Eval`` bases, ``bounds`` here does not define or rescale the
+        domain, it only masks out-of-range samples.
+    fill_value :
+        Value assigned to samples falling outside ``bounds``. Defaults to ``jnp.nan``.
+
+    Notes
+    -----
+    ``CustomBasis`` does not derive any state from the data: each function in ``self.funcs`` is applied
+    to the raw input, and ``bounds`` only controls which samples are replaced by ``fill_value`` when they
+    fall outside the given interval. The transformation is therefore identical across inputs whenever each
+    output row depends only on the corresponding input row.
+
+    .. warning::
+
+        Functions that normalize by a quantity computed from the input are unsafe here, because that
+        quantity — and so the transformation — changes from one input to the next, whereas across
+        cross-validation folds it must stay identical. The fix is to precompute any such quantity once
+        (e.g. on the training set) and pass it in as a constant, so the output depends only on each sample.
+        For the z-scoring example, this means precomputing the centering and scaling instead of recomputing
+        them from each input: replace ``lambda x: (x - x.mean()) / x.std()`` with
+        ``lambda x: (x - mean) / std``, where ``mean`` and ``std`` are fixed.
 
     Examples
     --------
@@ -369,14 +392,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
 
         Notes
         -----
-        ``CustomBasis`` does not derive any state from the data: the functions in ``self.funcs`` are
-        applied to the raw input, and ``bounds`` only controls which samples are replaced by
-        ``fill_value`` when they fall outside the given interval. The transformation is therefore
-        identical across inputs *as long as your functions are sample-wise*. If a function internalizes
-        a data-dependent quantity (e.g. normalizing by the input mean or std), the transformation will
-        differ from one input to the next, which is unsafe when the basis is used as a transformer (e.g.
-        inside a cross-validation loop): provide functions whose output depends only on each sample, or
-        fix any data-dependent quantity, to obtain an identical transformation across folds.
+        See the class docstring for when the transformation is safe to use as a transformer.
 
         Examples
         --------
