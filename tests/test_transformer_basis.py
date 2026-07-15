@@ -1359,10 +1359,16 @@ BOUNDS_COMPOSITE = [basis.AdditiveBasis, basis.MultiplicativeBasis]
 def test_bounds_gating_covers_all_bases():
     """Guard the hardcoded behavior lists against drift as bases are added."""
     labeled = BOUNDS_GATED_EVAL + BOUNDS_UNGATED_ATOMIC + BOUNDS_COMPOSITE
-    assert len(labeled) == len(set(labeled)), "A basis is labeled in more than one bucket."
+    assert len(labeled) == len(
+        set(labeled)
+    ), "A basis is labeled in more than one bucket."
     implemented = set(list_all_basis_classes())
-    assert not implemented - set(labeled), f"Unlabeled basis classes: {implemented - set(labeled)}"
-    assert not set(labeled) - implemented, f"Labeled non-bases: {set(labeled) - implemented}"
+    assert not implemented - set(
+        labeled
+    ), f"Unlabeled basis classes: {implemented - set(labeled)}"
+    assert (
+        not set(labeled) - implemented
+    ), f"Labeled non-bases: {set(labeled) - implemented}"
 
 
 def _run_bounds_gating(basis_cls, params, bounds, method):
