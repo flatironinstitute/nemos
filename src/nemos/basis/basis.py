@@ -2664,10 +2664,10 @@ class FourierEval(EvalBasisMixin, FourierBasis):
           additional intercept in the design matrix redundant.
 
         * Array-like of integers {0, 1} or booleans: A 1D mask with one entry
-          per column of ``freq_combinations``, keeping (1/True) or dropping
+          per column of ``masked_frequencies``, keeping (1/True) or dropping
           (0/False) that frequency combination. At construction it filters the
           combinations left by the default ``"no-intercept"`` selection; print
-          ``freq_combinations`` to see the combinations in column order.
+          ``masked_frequencies`` to see the combinations in column order.
 
         * :class:`~typing.Callable`: A function applied to each retained frequency
           combination (one scalar per dimension, signed), returning a single
@@ -2725,7 +2725,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
 
     >>> # one mask entry per retained pair: the default "no-intercept"
     >>> # selection drops the DC and leaves 40 pairs
-    >>> fourier_2d.freq_combinations.shape
+    >>> fourier_2d.masked_frequencies.shape
     (2, 40)
     >>> mask = np.ones(40)
     >>> mask[:3] = 0  # drop the first 3 pairs

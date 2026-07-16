@@ -410,10 +410,10 @@ class FourierBasis(AtomicBasisMixin, Basis):
             * ``"all"``: Keep all frequencies
             * **None** : Keep all frequencies.
             * **array_like** of {0, 1} or booleans : a 1D mask with one entry per
-              column of ``freq_combinations``; 1/True keeps that frequency
+              column of ``masked_frequencies``; 1/True keeps that frequency
               combination, 0/False drops it. At construction the mask filters the
               combinations left by the default ``"no-intercept"`` selection.
-              Print ``freq_combinations`` to see the combinations in column order.
+              Print ``masked_frequencies`` to see the combinations in column order.
             * **callable** : A function applied to each tuple of frequency
               coordinates, returning a single boolean or {0, 1}. For example:
               ``lambda f1, f2, ...: condition``.
@@ -481,7 +481,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
         The frequency mask can be either:
 
-        - a 1D boolean array with one entry per column of the ``freq_combinations``
+        - a 1D boolean array with one entry per column of the ``masked_frequencies``
           it was applied to, or
         - a callable with signature ``frequency_mask(*freqs) -> bool`` (or 0/1) applied
           to each frequency tuple, or
@@ -518,8 +518,8 @@ class FourierBasis(AtomicBasisMixin, Basis):
               the 0-frequency DC term, or ``"all"`` which keeps all the frequencies -
               equivalent to :class:`None <NoneType>`.
             - **Array / array-like (bool or 0/1)**: a 1D mask with one entry per
-              column of the current ``freq_combinations``; the retained columns
-              become the new ``freq_combinations``.
+              column of the current ``masked_frequencies``; the retained columns
+              become the new ``masked_frequencies``.
             - :class:`callable`: A function with signature
               ``frequency_mask(*freqs) -> bool`` (or 0/1). It is applied to each
               frequency tuple ``(f1, f2, ..., f_n)`` to build the mask. The callable is
@@ -538,8 +538,8 @@ class FourierBasis(AtomicBasisMixin, Basis):
         Notes
         -----
         - Setting this property updates ``frequency_mask`` and
-          ``freq_combinations`` (and, through the latter, ``n_basis_funcs``).
-        - An array mask filters the *current* ``freq_combinations``: assigning a
+          ``masked_frequencies`` (and, through the latter, ``n_basis_funcs``).
+        - An array mask filters the *current* ``masked_frequencies``: assigning a
           second array mask filters the already-filtered combinations. Assign
           ``"all"`` or ``"no-intercept"`` to start from the full half-space again.
         """
@@ -575,7 +575,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
         """Validate a boolean array mask and filter the frequency combinations.
 
         The mask is checked for 0/1 values and for shape ``(K,)``, with ``K``
-        the current number of columns of ``freq_combinations``. The columns
+        the current number of columns of ``masked_frequencies``. The columns
         where the mask is ``True`` become the new ``_freq_combinations``, and
         the boolean mask is stored as ``_frequency_mask``.
         """
@@ -590,28 +590,18 @@ class FourierBasis(AtomicBasisMixin, Basis):
             raise ValueError("Frequency mask must be an array-like of 0s and 1s.")
 
         values = values.astype(bool)
-        expected_len = self.freq_combinations.shape[1]
+        expected_len = self.masked_frequencies.shape[1]
         if not values.shape == (expected_len,):
             raise ValueError(
                 f"Mis-shaped ``frequency_mask``. An array mask must have shape "
                 f"``({expected_len},)``, one entry per frequency combination: "
                 f"entry ``i`` keeps (1/True) or drops (0/False) the combination "
-                f"``freq_combinations[:, i]``. Print the ``freq_combinations`` "
+                f"``masked_frequencies[:, i]``. Print the ``masked_frequencies`` "
                 "attribute to see the combinations currently included."
             )
 
         self._frequency_mask = values
         self._freq_combinations = self._freq_combinations[:, values]
-
-    @property
-    def freq_combinations(self) -> jnp.ndarray:
-        """The retained frequency combinations, shape ``(ndim, n_combinations)``.
-
-        Column ``i`` is the frequency multi-index of the i-th combination; each
-        column contributes a cosine and a sine feature (cosine only for the DC
-        term). Read-only: assign ``frequency_mask`` to change it.
-        """
-        return self._freq_combinations
 
     @property
     def frequencies(self) -> List[jnp.ndarray]:
@@ -690,13 +680,16 @@ class FourierBasis(AtomicBasisMixin, Basis):
     @property
     def masked_frequencies(self) -> jnp.ndarray:
         """
-        The frequencies after the masking is applied.
+        The retained frequency combinations.
 
         Returns
         -------
-            The masked frequencies, shape ``(ndim, n_frequency_combinations)``.
-            ``masked_frequencies[:, i]`` is the frequency combination for the
-            i-th basis function.
+        :
+            The retained frequency combinations, shape
+            ``(ndim, n_frequency_combinations)``. Column ``i`` is the frequency
+            multi-index of the i-th combination; each column contributes a
+            cosine and a sine feature (cosine only for the DC term). Read-only:
+            assign ``frequency_mask`` to change it.
 
         """
         return self._freq_combinations
