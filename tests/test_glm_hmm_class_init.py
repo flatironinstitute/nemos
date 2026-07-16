@@ -424,9 +424,7 @@ def _init_funcs_attr(func_name):
 
 
 def _use_kmeans_attr(func_name):
-    return (
-        "_model_use_kmeans" if func_name in _GLM_FUNC_NAMES else "_hmm_use_kmeans"
-    )
+    return "_model_use_kmeans" if func_name in _GLM_FUNC_NAMES else "_hmm_use_kmeans"
 
 
 def _filter_attributes(obj, exclude_keys):
