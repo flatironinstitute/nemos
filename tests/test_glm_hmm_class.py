@@ -111,6 +111,27 @@ def test_get_fit_attrs(instantiate_base_regressor_subclass, mock_glm_hmm_optimiz
 class TestGLMHMM:
     """Unit tests for GLMHMM.fit that are observation-model-agnostic."""
 
+    @pytest.mark.requires_x64
+    def test_fit_accepts_bool_y(self, instantiate_base_regressor_subclass):
+        """Test that bool array are valid inputs.
+
+        Notes
+        -----
+        The test requires x64 to generate a corner case. The initialization function
+        for the intercept calls a``jnp.nanmean``, which for bool arrays returns x32
+        regardless of the jax configuration.
+        If we do not cast y to float (inheriting the dtype from the configurations)
+        the dtype change will raise at compilation time. This bug emerges only if the
+        jax configuration is enabling x64, otherwise everything would remain x32 and
+        the compilation would not raise.
+        """
+        fixture = instantiate_base_regressor_subclass
+        n = 10
+        X = fixture.X[:n]
+        y = fixture.y[:n]
+        y = y.astype(bool)
+        fixture.model.fit(X, y)
+
     def test_fit_pynapple_tsd(self, instantiate_base_regressor_subclass):
         """Pynapple TSD/TsdFrame accepted; session boundaries affect the fit."""
         fixture = instantiate_base_regressor_subclass
