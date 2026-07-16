@@ -28,6 +28,7 @@ from .initialize_parameters import (
     DEFAULT_INIT_FUNCTIONS,
     HMM_INITIALIZATION_FN_DICT,
     KMeansInitializer,
+    _resolution_was_noop,
     _resolve_dirichlet_priors,
     _validate_init_funcs_keys,
     generate_hmm_initial_params,
@@ -378,6 +379,10 @@ class BaseHMM(
             value, DEFAULT_INIT_FUNCTIONS
         )
         self._hmm_setup()
+        if value is not None and _resolution_was_noop(
+            value, self._hmm_initialization_funcs
+        ):
+            self._hmm_initialization_funcs = value
 
     @property
     def model_initialization_funcs(self) -> MODEL_INITIALIZATION_FN_DICT_T | None:
@@ -398,6 +403,10 @@ class BaseHMM(
             value, self._model_default_init_dict
         )
         self._model_setup()
+        if value is not None and _resolution_was_noop(
+            value, self._model_initialization_funcs
+        ):
+            self._model_initialization_funcs = value
 
     def _hmm_params_initialization(
         self,
