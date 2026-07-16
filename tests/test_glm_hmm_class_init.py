@@ -5,7 +5,9 @@ from unittest.mock import MagicMock, create_autospec, patch
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
+from sklearn.base import clone
 
 from nemos._inspect_utils import extract_literal_options
 from nemos.glm_hmm.glm_hmm import GLMHMM
@@ -400,3 +402,123 @@ class TestGLMHMMCheckModelIsFit:
         model = GLMHMM(n_states=2)
         with pytest.raises(ValueError):
             model._check_model_is_fit()
+
+
+# =============================================================================
+# TestGLMHMMSklearnClone — identity round-trip of the init-func dicts
+# =============================================================================
+
+
+def _get_custom_func(func_name):
+    # plain functions, not autospec mocks: sklearn clone deepcopies params, and
+    # deepcopy preserves identity for functions but returns a new object for mocks
+    return _glm_mock_template if func_name in _GLM_FUNC_NAMES else _hmm_mock_template
+
+
+def _init_funcs_attr(func_name):
+    return (
+        "model_initialization_funcs"
+        if func_name in _GLM_FUNC_NAMES
+        else "hmm_initialization_funcs"
+    )
+
+
+def _use_kmeans_attr(func_name):
+    return (
+        "_model_use_kmeans" if func_name in _GLM_FUNC_NAMES else "_hmm_use_kmeans"
+    )
+
+
+def _filter_attributes(obj, exclude_keys):
+    return {k: v for k, v in obj.__dict__.items() if k not in exclude_keys}
+
+
+# Attributes needing bespoke comparison in compare_hmm_models; everything else
+# in __dict__ must compare equal under plain == (catch-all below).
+_ARRAY_STATE_ATTRS = (
+    "_seed",
+    "_dirichlet_initial_proba",
+    "_dirichlet_transition_proba",
+)
+_INSTANCE_STATE_ATTRS = ("_regularizer", "_observation_model")
+_LAZY_STATE_ATTRS = ("_solver_spec",)
+
+
+def compare_hmm_models(m1, m2):
+    """Stringent whole-state comparison between two distinct HMM-based models.
+
+    Default-deny: any ``__dict__`` attribute not explicitly handled below must
+    compare equal under plain ``==`` (callables compare by identity), so newly
+    added state is covered automatically and fails loudly if it needs bespoke
+    handling.
+    """
+    assert m1 is not m2
+    assert type(m1) is type(m2)
+    # arrays (or None): == inside the catch-all dict comparison would raise
+    for attr in _ARRAY_STATE_ATTRS:
+        np.testing.assert_array_equal(m1.__dict__[attr], m2.__dict__[attr])
+    # instances without __eq__: compare class and full state
+    for attr in _INSTANCE_STATE_ATTRS:
+        v1, v2 = m1.__dict__[attr], m2.__dict__[attr]
+        assert type(v1) is type(v2)
+        assert v1.__dict__ == v2.__dict__
+    # _solver_spec is resolved lazily by the solver_name property, so one side
+    # may hold None and the other a resolved SolverSpec; compare the resolved
+    # name instead of the stored value
+    assert m1.solver_name == m2.solver_name
+    exclude = _ARRAY_STATE_ATTRS + _INSTANCE_STATE_ATTRS + _LAZY_STATE_ATTRS
+    assert _filter_attributes(m1, exclude) == _filter_attributes(m2, exclude)
+
+
+class TestGLMHMMSklearnClone:
+    """``sklearn.base.clone`` rebuilds the model from ``get_params`` and requires
+    each param of the rebuilt model to be the same object it passed to ``__init__``;
+    the ``*_initialization_funcs`` setters must therefore round-trip an already
+    resolved dict container by identity."""
+
+    def test_clone_default(self):
+        model = GLMHMM(n_states=2)
+        compare_hmm_models(model, clone(model))
+
+    @pytest.mark.parametrize("func_name", FUNC_NAMES)
+    @pytest.mark.parametrize(
+        "value_kind, kwargs",
+        [
+            ("string", None),
+            ("string", {}),
+            ("kmeans", None),
+            ("custom", None),
+            ("custom", {}),
+            ("custom", MOCK_VALID_KWARGS),
+        ],
+    )
+    def test_clone_single_func(self, func_name, value_kind, kwargs):
+        if value_kind == "kmeans":
+            value = "kmeans"
+        elif value_kind == "string":
+            value = VALID_STRINGS[func_name]
+        else:
+            value = _get_custom_func(func_name)
+        config = {func_name: value}
+        if kwargs is not None:
+            config[f"{func_name}_kwargs"] = kwargs
+        model = GLMHMM(n_states=2, **{_init_funcs_attr(func_name): config})
+        cloned = clone(model)
+        compare_hmm_models(model, cloned)
+        if value_kind == "kmeans":
+            # the use-kmeans flag must survive the get_params -> __init__ round
+            # trip, not just the callable itself
+            assert getattr(cloned, _use_kmeans_attr(func_name))[func_name]
+
+    def test_clone_all_funcs_custom(self):
+        hmm_config, model_config = {}, {}
+        for func_name in FUNC_NAMES:
+            config = model_config if func_name in _GLM_FUNC_NAMES else hmm_config
+            config[func_name] = _get_custom_func(func_name)
+            config[f"{func_name}_kwargs"] = dict(MOCK_VALID_KWARGS)
+        model = GLMHMM(
+            n_states=2,
+            hmm_initialization_funcs=hmm_config,
+            model_initialization_funcs=model_config,
+        )
+        compare_hmm_models(model, clone(model))
