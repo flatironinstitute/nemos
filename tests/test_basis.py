@@ -149,15 +149,15 @@ def compare_basis(b1, b2):
     else:
         decay_rates_b1 = b1.__dict__.get("_decay_rates", -1)
         decay_rates_b2 = b2.__dict__.get("_decay_rates", -1)
-        assert np.array_equal(decay_rates_b1, decay_rates_b2)
+        np.testing.assert_array_equal(decay_rates_b1, decay_rates_b2)
         freqs1 = b1.__dict__.get("_frequencies", [-1])
         freqs2 = b2.__dict__.get("_frequencies", [-1])
         assert all(np.all(fi == fj) for fi, fj in zip(freqs1, freqs2))
         freqs1 = b1.__dict__.get("_freq_combinations", -1)
         freqs2 = b2.__dict__.get("_freq_combinations", -1)
-        assert np.all(freqs1 == freqs2)
-        f1, f2 = b1.__dict__.pop("_funcs", [True]), b2.__dict__.pop("_funcs", [True])
-        assert all(fi == fj for fi, fj in zip(f1, f2))
+        np.testing.assert_array_equal(freqs1, freqs2)
+        f1, f2 = b1.__dict__.get("_funcs", [True]), b2.__dict__.get("_funcs", [True])
+        assert all(fi == fj for fi, fj in zip(f1, f2, strict=True))
         d1 = filter_attributes(
             b1,
             exclude_keys=[
@@ -165,6 +165,7 @@ def compare_basis(b1, b2):
                 "_parent",
                 "_frequencies",
                 "_freq_combinations",
+                "_funcs",
             ],
         )
         d2 = filter_attributes(
@@ -174,6 +175,7 @@ def compare_basis(b1, b2):
                 "_parent",
                 "_frequencies",
                 "_freq_combinations",
+                "_funcs",
             ],
         )
         assert d1 == d2

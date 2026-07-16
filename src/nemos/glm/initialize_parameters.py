@@ -140,6 +140,7 @@ def initialize_intercept_matching_mean_rate(
         The initial intercept term, shape (n_neurons,).
 
     """
+    y = jnp.asarray(y, float)
     # return inverse if analytical solution is available
     analytical_inv = get_inverse_function(inverse_link_function)
 
