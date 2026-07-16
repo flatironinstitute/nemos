@@ -80,7 +80,7 @@ The `compute_features` method of the basis returns a **real** design matrix that
 
 Let the selected frequencies be the sorted set $\mathcal F=\{n_1<\cdots<n_K\}$.
 
-Each frequency contributes a cosine and a sine, so with $K$ frequencies you’d expect $2K$ columns. This is the case when the 0 frequency - DC term - is not included. If the DC term is included, we have that the corresponding sine column is null, since $\sin(0)=0$. For this reason, the column is omitted — giving $2K-1$. In our example $K=5$ and the DC term is included, we therefore we obtain $2*5-1=9$ columns. Summarizing,
+Each frequency contributes a cosine and a sine, so with $K$ frequencies you’d expect $2K$ columns. This is the case when the 0 frequency - DC term - is not included. If the DC term is included, we have that the corresponding sine column is null, since $\sin(0)=0$. For this reason, the column is omitted — giving $2K-1$. In our example $K=5$ and the DC term is included, therefore we obtain $2*5-1=9$ columns. Summarizing,
 
 - $n_1=0$ (with DC):
 
@@ -367,7 +367,7 @@ All the frequency pairs are stored in the `masked_frequencies` array of shape `(
 
 :::{note}
 
-`masked_frequencies` lists the frequency pairs that are currently active in the basis. If you later restrict the grid of frequencies, this array will update to include only the kept pairs. Details follow in the [frequency selection section](select-fourier-freqs-ndim).
+`masked_frequencies` lists the frequency pairs that are currently active in the basis. If you later mask out some pairs, this array will update to include only the kept ones. Details follow in the [frequency selection section](select-fourier-freqs-ndim).
 :::
 
 ```{code-cell} ipython3
@@ -395,64 +395,43 @@ print(fourier_2d.masked_frequencies)
 
 Here you pass $n \in \{1,2,3\}$ and $m \in \{4,5\}$. The $y$-axis is mirrored to $m \in \{-5,-4,4,5\}$. Because every $n \ge 1$ is already positive, the leading coordinate fixes the half-space and **all** sign combinations of $m$ are kept — $3 \times 4 = 12$ pairs $(n,m)$, including the negative $y$-frequencies printed above.
 
-You can subselect specific pairs by **masking** the frequency grid. The mask can be:
+You can subselect specific pairs by **masking**. The mask can be:
 
-1. A boolean array over the **signed** grid. Here that grid is $(|N|, |M_\pm|) = (3, 4)$: rows $n \in \{1,2,3\}$, columns $m \in \{-5,-4,4,5\}$.
+1. A 1-D boolean array with one entry per retained pair, i.e. per column of `masked_frequencies`.
 2. A function `f(n, m) -> True/False`.
 
 #### Mask With a Boolean Array
 
-**Pairs grid** (columns are the signed $y$-frequencies)
-
-|     | m=-5   | m=-4   | m=4   | m=5   |
-|-----|--------|--------|-------|-------|
-| n=1 | (1,-5) | (1,-4) | (1,4) | (1,5) |
-| n=2 | (2,-5) | (2,-4) | (2,4) | (2,5) |
-| n=3 | (3,-5) | (3,-4) | (3,4) | (3,5) |
-
-**Example mask selecting $(1,4), (2,4), (2,5)$**
-
-|     | m=-5 | m=-4 | m=4 | m=5 |
-|-----|------|------|-----|-----|
-| n=1 | 0    | 0    | 1   | 0   |
-| n=2 | 0    | 0    | 1   | 1   |
-| n=3 | 0    | 0    | 0   | 0   |
-
+Entry $i$ of the mask keeps (`True`/1) or drops (`False`/0) the pair `masked_frequencies[:, i]`. The workflow is to inspect `masked_frequencies` and build the mask from its columns, by hand or with vectorized comparisons. For example, let's keep the pairs $(1,4), (2,4), (2,5)$:
 
 ```{code-cell} ipython3
 
-frequency_mask = np.zeros((3, 4))  # signed grid: columns m = -5, -4, 4, 5
-frequency_mask[0, 2] = 1  # (n=1, m=4)
-frequency_mask[1, 2:] = 1  # (n=2, m=4), (n=2, m=5)
+pairs = fourier_2d.masked_frequencies
+frequency_mask = ((pairs[0] == 1) & (pairs[1] == 4)) | ((pairs[0] == 2) & (pairs[1] > 0))
 print("frequency mask")
-print(frequency_mask)
-
+print(frequency_mask.astype(int))
 
 fourier_2d.frequency_mask = frequency_mask
 print("\nmasked frequencies")
 print(fourier_2d.masked_frequencies)
 ```
 
-This grid has no $n=0$ row, so any selection is valid. When the leading axis **does** include frequency 0, the $n=0$ slice carries redundant pairs $(0, m)$ and $(0, -m)$ (the same basis function), and the mask must give them the same value — otherwise a ``ValueError`` is raised. For example, with `frequencies=[3, 2]` the signed grid is $(3, 3)$ with columns $m \in \{-1, 0, 1\}$; dropping the pair $(0, 1)$/$(0, -1)$ **symmetrically** is fine:
+An array mask always filters the **current** `masked_frequencies`: assigning a second array mask filters the already-filtered pairs, and it must have one entry per remaining pair. To start over from the full half-space, reset the mask to `"all"` (or `"no-intercept"`):
 
 ```{code-cell} ipython3
 
-bas = FourierEval(frequencies=[3, 2], ndim=2, frequency_mask=None)
-mask = np.ones((3, 3))
-mask[0, 0] = 0  # (0, -1)
-mask[0, 2] = 0  # (0, 1)
-bas.frequency_mask = mask
-print(bas.masked_frequencies)
+fourier_2d.frequency_mask = "all"
+print(fourier_2d.masked_frequencies)
 ```
 
-but dropping only one of the mirror pair is inconsistent and raises:
+The mask can address the DC pair whenever it is among the current pairs: for example, construct with `frequency_mask="all"` and frequencies that include 0 (as an integer specification like `frequencies=5` does), then assign the array mask.
+
+A mask whose length does not match the number of retained pairs raises an error pointing you back to `masked_frequencies`:
 
 ```{code-cell} ipython3
 :tags: [raises-exception]
 
-mask = np.ones((3, 3))
-mask[0, 0] = 0  # drops (0, -1) but keeps (0, 1)
-FourierEval(frequencies=[3, 2], ndim=2, frequency_mask=mask)
+fourier_2d.frequency_mask = np.ones(5)
 ```
 
 #### Mask With a Callable
@@ -470,8 +449,8 @@ print(fourier_2d.masked_frequencies)
 :::{admonition} More on Masking with Callables
 
 - Write the function as `f(n, m)` for 2D. The first argument maps to `masked_frequencies[0]` (x-axis, $n$), the second to `masked_frequencies[1]` (y-axis, $m$). In $D$ dimensions use `f(n1, ..., nD)` in the same row order as `masked_frequencies`.
-- NeMoS evaluates the function once per retained half-space combination, passing the frequencies as **scalars** (the signed $\mathbf{n}$, so $m$ may be negative). It must return a single boolean or 0/1 — `True` keeps that $(n,m)$, `False` drops it.
-- Because the function only sees half-space combinations, it cannot reintroduce a $\{\mathbf{n}, -\mathbf{n}\}$ redundancy, so no symmetry constraint applies to callables.
+- NeMoS evaluates the function once per half-space combination, passing the frequencies as **scalars** (the signed $\mathbf{n}$, so $m$ may be negative). It must return a single boolean or 0/1 — `True` keeps that $(n,m)$, `False` drops it.
+- Unlike an array mask, a callable is always applied to the **full** half-space (including the DC pair), regardless of the mask currently in place.
 :::
 
 ### Setting the Periodicities
