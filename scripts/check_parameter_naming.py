@@ -149,6 +149,7 @@ VALID_PAIRS = [
     {"leaf", "x_leaf"},
     {"event", "events"},
     {"X_test", "y_test"},
+    {"basis_coeff", "basis_col"},
 ]
 
 

@@ -28,9 +28,12 @@ from .initialize_parameters import (
     DEFAULT_INIT_FUNCTIONS,
     HMM_INITIALIZATION_FN_DICT,
     KMeansInitializer,
+    _resolution_was_noop,
     _resolve_dirichlet_priors,
     _validate_init_funcs_keys,
     generate_hmm_initial_params,
+    kmeans_initial_proba_init,
+    kmeans_transition_proba_init,
     setup_hmm_initialization,
 )
 from .params import HMMModelParamsT, HMMUserParams, HMMUserProvidedParamsT
@@ -191,11 +194,6 @@ class BaseHMM(
         transition_proba_init_kwargs :
             A dictionary of keyword arguments to pass to the transition probability initialization function.
         """
-        # flag for initializing kmeans model at parameter initialization
-        self._hmm_use_kmeans = {
-            "initial_proba_init": initial_proba_init == "kmeans",
-            "transition_proba_init": transition_proba_init == "kmeans",
-        }
         self._hmm_initialization_funcs = setup_hmm_initialization(
             initial_proba_init=initial_proba_init,
             initial_proba_init_kwargs=initial_proba_init_kwargs,
@@ -203,6 +201,20 @@ class BaseHMM(
             transition_proba_init_kwargs=transition_proba_init_kwargs,
             init_funcs=self._hmm_initialization_funcs,
         )
+        # flag for initializing kmeans model at parameter initialization; derived
+        # from the identity of the stored callables so the flag stays accurate when
+        # the dict is set via the hmm_initialization_funcs property (e.g. sklearn
+        # clone) and not only when the string "kmeans" is passed to setup
+        self._hmm_use_kmeans = {
+            "initial_proba_init": (
+                self._hmm_initialization_funcs["initial_proba_init"]
+                is kmeans_initial_proba_init
+            ),
+            "transition_proba_init": (
+                self._hmm_initialization_funcs["transition_proba_init"]
+                is kmeans_transition_proba_init
+            ),
+        }
 
     @abc.abstractmethod
     def _model_setup(self, **kwargs):
@@ -378,6 +390,10 @@ class BaseHMM(
             value, DEFAULT_INIT_FUNCTIONS
         )
         self._hmm_setup()
+        if value is not None and _resolution_was_noop(
+            value, self._hmm_initialization_funcs
+        ):
+            self._hmm_initialization_funcs = value
 
     @property
     def model_initialization_funcs(self) -> MODEL_INITIALIZATION_FN_DICT_T | None:
@@ -398,6 +414,10 @@ class BaseHMM(
             value, self._model_default_init_dict
         )
         self._model_setup()
+        if value is not None and _resolution_was_noop(
+            value, self._model_initialization_funcs
+        ):
+            self._model_initialization_funcs = value
 
     def _hmm_params_initialization(
         self,
