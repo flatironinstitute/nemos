@@ -2663,13 +2663,11 @@ class FourierEval(EvalBasisMixin, FourierBasis):
           for NeMoS GLMs, which already include an intercept term by default, making an
           additional intercept in the design matrix redundant.
 
-        * Array-like of integers {0, 1} or booleans: Selects frequencies to
-          keep (1/True) or exclude (0/False) over the *signed* frequency box.
-          The first axis runs over the non-negative frequencies, every other axis
-          from ``-max`` to ``max`` (since ``(n, m)`` and ``(n, -m)`` are distinct
-          functions). On the leading-zero slice, ``(0, f)`` and ``(0, -f)`` are
-          the same basis function and must be given the same value, otherwise a
-          ``ValueError`` is raised.
+        * Array-like of integers {0, 1} or booleans: A 1D mask with one entry
+          per column of ``freq_combinations``, keeping (1/True) or dropping
+          (0/False) that frequency combination. At construction it filters the
+          combinations left by the default ``"no-intercept"`` selection; print
+          ``freq_combinations`` to see the combinations in column order.
 
         * :class:`~typing.Callable`: A function applied to each retained frequency
           combination (one scalar per dimension, signed), returning a single
@@ -2725,19 +2723,20 @@ class FourierEval(EvalBasisMixin, FourierBasis):
 
     **2D: masking with an array (drop 3 pairs)**
 
-    >>> # the mask covers the signed (5, 9) box; axis 1 runs over freqs -4..4,
-    >>> # so columns 4, 5, 6 are frequencies 0, 1, 2
-    >>> mask = np.ones((5, 9))
-    >>> # drop 3 pairs, including the DC term (0, 0)
-    >>> mask[[0, 1, 2], [4, 5, 6]] = 0
+    >>> # one mask entry per retained pair: the default "no-intercept"
+    >>> # selection drops the DC and leaves 40 pairs
+    >>> fourier_2d.freq_combinations.shape
+    (2, 40)
+    >>> mask = np.ones(40)
+    >>> mask[:3] = 0  # drop the first 3 pairs
     >>> fourier_2d_masked = FourierEval(
     ...     n_freq,
     ...     ndim=2,
     ...     frequency_mask=mask
     ... )
-    >>> # (41 half-space pairs - 3 dropped) * 2 (cos+sin); no DC = 76
+    >>> # (40 pairs - 3 dropped) * 2 (cos+sin) = 74
     >>> fourier_2d_masked.n_basis_funcs
-    76
+    74
 
     **2D: masking with a callable**
 
