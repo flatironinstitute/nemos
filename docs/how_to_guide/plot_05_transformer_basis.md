@@ -101,7 +101,7 @@ As with any `sckit-learn` transformer, the `TransformerBasis` implements `fit`, 
 
 At this point, we have an object equipped with the necessary methods. So, all we need to do is concatenate the inputs into a single array and call fit_transform, right? **Not quite.**
 
-The `TransformerBasis` has two additional requirements: input shape and bounds.
+The `TransformerBasis` has two additional requirements: input shape (all basis objects) and bounds (`Eval` only).
 
 ### Setting the `input_shape`
 
