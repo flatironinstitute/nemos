@@ -117,7 +117,7 @@ However, our actual input has shape `(n_samples, 6)`:
 
 When concatenated, this results in a **6-column input**, and our `TransformerBasis` doesn't know how to split those 6 columns.
 
-This mismatch leads to an error when calling fit_transform (the cell also sets `bounds`, the second requirement, so that the failure below is about the input shape only; bounds are covered [in the next section](#setting-up-the-bounds)):
+This mismatch leads to an error when calling fit_transform:
 
 
 ```{code-cell} ipython3
