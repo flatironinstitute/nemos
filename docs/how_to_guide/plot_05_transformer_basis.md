@@ -205,7 +205,7 @@ out2 = trans_bas.fit_transform(inp2)
 
 #### The Problem
 
-Any basis that derives its domain from `bounds` must have `bounds` set before it can be used as a transformer. This is a deliberate safety choice. With `bounds` left unset, the domain is inferred from the data, so during cross-validation each fold would re-fit the domain to its own data range. The transformation would then differ from fold to fold, which is rarely what you want when cross-validating.
+Any basis that derives its domain from `bounds` must have `bounds` set explicitly before it can be used as a transformer. This is a deliberate safety choice. With `bounds` left unset, the domain is inferred from the data, so during cross-validation each fold would re-fit the domain to its own data range. The transformation would then differ from fold to fold, which is rarely what you want when cross-validating.
 
 Calling `fit`, `transform`, or `fit_transform` on a `TransformerBasis` whose domain-defining `bounds` are unset raises a `RuntimeError`.
 
