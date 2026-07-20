@@ -114,11 +114,11 @@ class Newton:
                 self._hessian = jax.hessian(self.fun)
 
     def init_state(self, init_params, *args):
-        self._build_cache()
-        ls_state = self._line_search.init(init_params)
-
         if self._hess_tag is None:
             self._hess_tag = HessianTag(structure=Full, property=General)
+
+        self._build_cache()
+        ls_state = self._line_search.init(init_params)
 
         # Resolve the linear solver once: Cholesky for positive-definite Hessians,
         # otherwise a robust least-squares solve that tolerates rank deficiency.
@@ -128,6 +128,8 @@ class Newton:
         else:
             self._linear_solver = lx.AutoLinearSolver(well_posed=False)
             self._operator_tags = ()
+
+        self._out_struct = jax.eval_shape(lambda: init_params)
 
         return NewtonState(
             grad_norm=jnp.inf,
@@ -141,11 +143,9 @@ class Newton:
         )
 
     def _solve(self, hess, grad):
-        out_struct = jax.eval_shape(lambda: grad)
-
         operator = lx.PyTreeLinearOperator(
             hess,
-            out_struct,
+            self._out_struct,
             tags=self._operator_tags,
         )
 
@@ -155,12 +155,12 @@ class Newton:
             self._linear_solver,
         ).value
 
-    def _newton_direction(self, grad, H, tag: HessianTag):
-        if tag.structure is BlockDiagonal:
+    def _newton_direction(self, grad, H):
+        if self._hess_tag.structure is BlockDiagonal:
             return jax.vmap(
                 self._solve,
-                in_axes=(0, tag.batch_axes),
-                out_axes=tag.batch_axes,
+                in_axes=(0, self._hess_tag.batch_axes),
+                out_axes=self._hess_tag.batch_axes,
             )(H, grad)
         else:
             return self._solve(H, grad)
@@ -228,12 +228,7 @@ class Newton:
 
         def step(_):
             H = self._hessian(params, *args)
-
-            step = self._newton_direction(
-                grad,
-                H,
-                self._hess_tag,
-            )
+            step = self._newton_direction(grad, H)
 
             new_params, new_ls_state = self._apply_or_reject(
                 params,
