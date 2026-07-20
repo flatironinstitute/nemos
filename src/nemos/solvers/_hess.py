@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Any
 
 # --- Properties ---
 
@@ -112,6 +113,7 @@ def combine_structure(s1, s2) -> type:
 class HessianTag:
     structure: type
     property: type
+    batch_axes: Any = None
 
 
 def combine_hessian_tags(
@@ -128,4 +130,5 @@ def combine_hessian_tags(
     return HessianTag(
         structure=combine_structure(t1.structure, t2.structure),
         property=prop,
+        batch_axes=t1.batch_axes,
     )

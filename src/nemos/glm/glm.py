@@ -10,7 +10,6 @@ from typing import Any, Callable, Literal, Optional, Tuple, Union
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from jax.flatten_util import ravel_pytree
 from numpy.typing import ArrayLike
 from sklearn.utils import InputTags, TargetTags
 
@@ -1340,89 +1339,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             rank = jnp.linalg.matrix_rank(X)
             return (n_samples - rank - 1) * jnp.ones_like(params.intercept)
 
-    def _get_hess_fn(self, params, autodiff: bool = False) -> Callable | None:
-        """
-        Construct a function to compute the Hessian of the penalized log-likelihood.
-
-        This function returns a callable that computes the Hessian of the GLM's
-        penalized mean log-likelihood with respect to the model parameters. It
-        supports two modes:
-
-        1. Automatic differentiation (`autodiff=True`):
-           Computes the Hessian via JAX's `jax.hessian`, flattening any PyTree
-           parameters to a vector. The resulting Hessian is a 2D square array of
-           shape `(d, d)`, where `d` is the total number of parameters (including
-           the intercept).
-
-        2. Analytic Fisher-scoring (`autodiff=False`):
-           Computes the Hessian using the Fisher information matrix approximation
-           for GLMs. Regularization is applied if `self.regularizer_strength` is set.
-
-        Parameters
-        ----------
-        params : PyTree
-            Model parameters. Can be a tree of arrays, typically including `coef`
-            and `intercept`.
-        solver : object
-            An optimizer object that provides `solver.fun(params, *args)` to compute
-            the loss or mean log-likelihood.
-        autodiff : bool, default=True
-            If True, use automatic differentiation to compute the Hessian. If False,
-            use the analytic Fisher-scoring approximation.
-
-        Returns
-        -------
-        Callable[[PyTree, array, ...], jnp.ndarray]
-            A function that takes `(params, X, *args)` and returns a Hessian matrix
-            in flattened parameter space:
-            - If `autodiff=True`, the Hessian is computed via `jax.hessian`.
-            - If `autodiff=False`, the Hessian uses the Fisher-scoring approximation
-              and includes the effect of regularization if applicable.
-            The returned Hessian is a square 2D array of shape `(d, d)`.
-
-        Notes
-        -----
-        - The Hessian returned in analytic mode corresponds to the Fisher information
-          matrix scaled by the number of samples, consistent with a mean loss formulation.
-        - The function currently assumes that `X` is the first argument in `*args`
-          when calling the Hessian function.
-        """
-        if autodiff:
-            loss = self.regularizer.penalized_loss(
-                self._compute_loss, params, self.regularizer_strength
-            )
-
-            def autodiff_hess(params_tree, *args):
-                params, unravel_fn = ravel_pytree(params_tree)
-                return jax.hessian(lambda x: loss(unravel_fn(x), *args))(params)
-
-            return autodiff_hess
-
-        var_of_mu = _var_func_of_mu(self)
-        regularizer_strength = self.regularizer_strength
-        if regularizer_strength is not None:
-            regularizer_strength = self.regularizer._validate_strength_structure(
-                params, regularizer_strength
-            )
-
-        def hess(params, *args):
-            X = args[0]
-
-            eta = (
-                jax.tree.reduce(jnp.add, jax.tree.map(jnp.dot, X, params.coef))
-                + params.intercept
-            )
-
-            return _glm_hessian_block(
-                X,
-                eta,
-                self.inverse_link_function,
-                var_of_mu,
-                regularizer_strength,
-            )
-
-        return hess
-
     def _initialize_optimizer_and_state(
         self,
         init_params: GLMParams,
@@ -1886,7 +1802,9 @@ class PopulationGLM(GLM):
 
     _validator_class = PopulationGLMValidator
     _hess_tag: HessianTag = HessianTag(
-        structure=BlockDiagonal, property=PositiveSemiDefinite
+        structure=BlockDiagonal,
+        property=PositiveDefinite,
+        batch_axes=GLMParams(1, 0),
     )
 
     def __init__(
@@ -2089,59 +2007,42 @@ class PopulationGLM(GLM):
         strength_i = tree_utils.tree_take(strength, i)
         return params_i, strength_i
 
-    def _get_hess_fn(self, params, autodiff: bool = False):
-
+    def _get_hess_fn(self, params):
         strength = self.regularizer_strength
-        if self.regularizer_strength is not None:
+        if strength is not None:
             strength = self.regularizer._validate_strength_structure(
-                params, self.regularizer_strength
+                params,
+                strength,
             )
 
-        if autodiff:
-            # AUTODIFF PATH
-
-            def hess_fn(params, X, y, *args):
-                n_neurons = params.intercept.shape[0]
-
-                def _loss_i(params_i, X, y_i):
-                    """Simplified loss function that doesn't apply mask."""
-                    rate = GLM._predict(self, params_i, X)
-                    return self._observation_model._negative_log_likelihood(y_i, rate)
-
-                def _hess_fn_i(i, y_i):
-                    """Hessian function for a single subproblem."""
-                    params_i, strength_i = self._get_subproblem(params, strength, i)
-                    if strength_i is not None:
-                        strength_i = strength_i.coef
-                    loss = self.regularizer.penalized_loss(
-                        _loss_i, params_i, strength_i
-                    )
-                    flat_params, unravel = ravel_pytree(params_i)
-                    return jax.hessian(lambda p: loss(unravel(p), X, y_i))(flat_params)
-
-                # vmap autodiff hessian function across neurons
-                return jax.vmap(_hess_fn_i, in_axes=(0, 1))(jnp.arange(n_neurons), y)
-
-            return hess_fn
-
-        # ANALYTIC PATH
-        var_of_mu = _var_func_of_mu(self)
-
-        def hess_fn(params, X, *args):
+        def hess_fn(params, X, y, *args):
             n_neurons = params.intercept.shape[0]
 
-            def _hess_fn_i(i):
+            def hess_one(i, y_i):
                 params_i, strength_i = self._get_subproblem(params, strength, i)
-                eta = (
-                    jax.tree.reduce(jnp.add, jax.tree.map(jnp.dot, X, params_i.coef))
-                    + params_i.intercept
-                )
-                return _glm_hessian_block(
-                    X, eta, self.inverse_link_function, var_of_mu, strength_i
+
+                if strength_i is not None:
+                    strength_i = strength_i.coef
+
+                def loss(p):
+                    rate = GLM._predict(self, p, X)
+                    return self._observation_model._negative_log_likelihood(
+                        y_i,
+                        rate,
+                    )
+
+                penalized_loss = self.regularizer.penalized_loss(
+                    loss,
+                    params_i,
+                    strength_i,
                 )
 
-            # vmap analytic hessian function across neurons
-            return jax.vmap(_hess_fn_i)(jnp.arange(n_neurons))
+                return jax.hessian(penalized_loss)(params_i)
+
+            return jax.vmap(
+                hess_one,
+                in_axes=(0, 1),
+            )(jnp.arange(n_neurons), y)
 
         return hess_fn
 

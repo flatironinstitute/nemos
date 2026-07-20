@@ -8,7 +8,6 @@ import jax.numpy as jnp
 import lineax as lx
 import optax
 
-from ..tree_utils import ravel_pytree_nest
 from ..typing import Params
 from ._abstract_solver import OptimizationInfo
 from ._hess import (
@@ -42,7 +41,6 @@ class Newton:
         has_aux: bool,
         init_params: Params | None = None,
         jit: bool = True,
-        autodiff: bool = False,
         maxiter: int = DEFAULT_MAX_STEPS,
         tol: float = DEFAULT_ATOL,
     ):
@@ -54,7 +52,6 @@ class Newton:
 
         self.has_aux = has_aux
         self.jit = jit
-        self.autodiff = autodiff
         self.maxiter = maxiter
         self.tol = tol
 
@@ -79,12 +76,9 @@ class Newton:
             max_backtracking_steps=30
         )
 
-        # Cached closures and transforms, populated on first init_state
-        self._unravel: Optional[Callable] = None
-        self._fun_flat: Optional[Callable] = None
-        self._fun_flat_with_aux: Optional[Callable] = None
-        self._vag_flat_with_aux: Optional[Callable] = None
-        self._hessian_flat: Optional[Callable] = None
+        # Cache
+        self._gradient: Callable | None = None
+        self._hessian: Callable | None = None
 
         # Linear solver + operator tags, resolved once from the Hessian tag in init_state
         self._linear_solver = lx.AutoLinearSolver(well_posed=False)
@@ -102,27 +96,28 @@ class Newton:
         # certify more than coverage alone (e.g. GLM + Ridge is positive definite).
         tag = hess_tag if reg_tag is None else combine_hessian_tags(hess_tag, reg_tag)
         if property_override is not None and tag is not None:
-            tag = HessianTag(tag.structure, property_override)
+            tag = HessianTag(
+                tag.structure, property_override, batch_axes=tag.batch_axes
+            )
         self._hess_fn = hess_fn
         self._hess_tag = tag
 
-    def _build_cache(self, init_params):
-        """Build and cache flattened functions and autodiff transforms."""
-        _, self._unravel = ravel_pytree_nest(init_params)
-        self._fun_flat = lambda x, *a: self.fun(self._unravel(x), *a)
-        self._fun_flat_with_aux = lambda x, *a: self.fun_with_aux(self._unravel(x), *a)
-        self._vag_flat_with_aux = jax.value_and_grad(
-            self._fun_flat_with_aux, has_aux=True
-        )
-        self._hessian_flat = jax.hessian(self._fun_flat)
+    def _build_cache(self):
+        if self._gradient is None:
+            self._gradient = jax.value_and_grad(
+                self.fun_with_aux,
+                has_aux=True,
+            )
+
+        if self._hessian is None:
+            if self._hess_fn is not None:
+                self._hessian = self._hess_fn
+            else:
+                self._hessian = jax.hessian(self.fun)
 
     def init_state(self, init_params, *args):
-        if self._unravel is None:
-            self._build_cache(init_params)
-
-        params_flat, _ = ravel_pytree_nest(init_params)
-
-        ls_state = self._line_search.init(params_flat)
+        self._build_cache()
+        ls_state = self._line_search.init(init_params)
 
         if self._hess_tag is None:
             self._hess_tag = HessianTag(structure=Full, property=General)
@@ -147,46 +142,59 @@ class Newton:
             ls_state=ls_state,
         )
 
-    def _newton_direction(self, g_flat, H, tag: HessianTag):
-        """Compute Newton step direction from gradient and Hessian."""
-        if tag.structure is BlockDiagonal and H.ndim == 3:
+    def _solve(self, hess, grad):
+        out_struct = jax.eval_shape(lambda: grad)
 
-            def solve(Hb, gb):
-                return self._newton_direction(
-                    gb,
-                    Hb,
-                    HessianTag(Full, tag.property),
-                )
+        operator = lx.PyTreeLinearOperator(
+            hess,
+            out_struct,
+            tags=self._operator_tags,
+        )
 
-            return jax.vmap(solve)(H, g_flat.reshape(H.shape[0], -1))
+        return lx.linear_solve(
+            operator,
+            jax.tree.map(lambda x: -x, grad),
+            self._linear_solver,
+        ).value
 
-        # Solver and operator tags were resolved once from the Hessian tag in
-        # init_state; reuse them rather than re-inferring per iteration.
-        operator = lx.MatrixLinearOperator(H, self._operator_tags)
-        return lx.linear_solve(operator, -g_flat, self._linear_solver).value
+    def _newton_direction(self, grad, H, tag: HessianTag):
+        if tag.structure is BlockDiagonal:
+            return jax.vmap(
+                self._solve,
+                in_axes=(0, tag.batch_axes),
+                out_axes=tag.batch_axes,
+            )(H, grad)
+        else:
+            return self._solve(H, grad)
 
     def _apply_or_reject(
         self,
         params,
-        step_tree,
-        grad_tree,
+        step,
+        grad,
         state: NewtonState,
         fval,
         *args,
     ):
         """Accept or reject step based on descent condition and line search."""
-        params_flat, _ = ravel_pytree_nest(params)
-        grad_flat, _ = ravel_pytree_nest(grad_tree)
-        step_flat, _ = ravel_pytree_nest(step_tree)
-        descent = jnp.vdot(grad_flat, step_flat) < 0.0
+        descent = (
+            sum(
+                jnp.vdot(g, s)
+                for g, s in zip(
+                    jax.tree.leaves(grad),
+                    jax.tree.leaves(step),
+                )
+            )
+            < 0
+        )
 
         def accept(_):
             updates, new_ls_state = self._line_search.update(
-                step_tree,
+                step,
                 state.ls_state,
                 params,
                 value=fval,
-                grad=grad_tree,
+                grad=grad,
                 value_fn=lambda p: self.fun(p, *args),
             )
 
@@ -211,28 +219,28 @@ class Newton:
         *args,
     ) -> NewtonStepResult:
 
-        params_flat, _ = ravel_pytree_nest(params)
-
-        (fval, aux), g_flat = self._vag_flat_with_aux(params_flat, *args)
-
-        gnorm = jnp.linalg.norm(g_flat)
+        (fval, aux), grad = self._gradient(params, *args)
+        gnorm = jnp.sqrt(
+            jax.tree_util.tree_reduce(
+                lambda a, b: a + b,
+                jax.tree.map(lambda x: jnp.vdot(x, x), grad),
+            )
+        )
         converged = gnorm <= self.tol
 
         def step(_):
-            H = (
-                self._hess_fn(params, *args)
-                if self._hess_fn is not None
-                else self._hessian_flat(params_flat, *args)
-            )
+            H = self._hessian(params, *args)
 
-            step_flat = self._newton_direction(g_flat, H, self._hess_tag)
-            step_tree = self._unravel(step_flat)
-            grad_tree = self._unravel(g_flat)
+            step = self._newton_direction(
+                grad,
+                H,
+                self._hess_tag,
+            )
 
             new_params, new_ls_state = self._apply_or_reject(
                 params,
-                step_tree,
-                grad_tree,
+                step,
+                grad,
                 state,
                 fval,
                 *args,
