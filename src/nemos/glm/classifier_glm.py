@@ -851,9 +851,6 @@ class ClassifierGLM(ClassifierMixin, GLM):
         y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
 
-    def _get_hess_fn(self, params, autodiff: bool = False) -> Callable | None:
-        return None
-
 
 class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     """
@@ -1167,6 +1164,3 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         self._label_encoder.check_classes_is_set("score")
         y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
-
-    def _get_hess_fn(self, params, autodiff: bool = False):
-        return super()._get_hess_fn(params, autodiff=True)

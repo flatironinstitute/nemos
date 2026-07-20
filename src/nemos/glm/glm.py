@@ -1997,55 +1997,6 @@ class PopulationGLM(GLM):
             + params.intercept
         )
 
-    def _get_subproblem(self, params, strength, i):
-        mask_i = tree_utils.tree_take(self._feature_mask, i)
-        coef_i = tree_utils.tree_take(params.coef, i)
-        if mask_i is not None:
-            coef_i = jax.tree_util.tree_map(lambda c, m: c * m, coef_i, mask_i)
-        intercept_i = jnp.take(params.intercept, i, axis=0)
-        params_i = self._validator.to_model_params([coef_i, intercept_i])
-        strength_i = tree_utils.tree_take(strength, i)
-        return params_i, strength_i
-
-    def _get_hess_fn(self, params):
-        strength = self.regularizer_strength
-        if strength is not None:
-            strength = self.regularizer._validate_strength_structure(
-                params,
-                strength,
-            )
-
-        def hess_fn(params, X, y, *args):
-            n_neurons = params.intercept.shape[0]
-
-            def hess_one(i, y_i):
-                params_i, strength_i = self._get_subproblem(params, strength, i)
-
-                if strength_i is not None:
-                    strength_i = strength_i.coef
-
-                def loss(p):
-                    rate = GLM._predict(self, p, X)
-                    return self._observation_model._negative_log_likelihood(
-                        y_i,
-                        rate,
-                    )
-
-                penalized_loss = self.regularizer.penalized_loss(
-                    loss,
-                    params_i,
-                    strength_i,
-                )
-
-                return jax.hessian(penalized_loss)(params_i)
-
-            return jax.vmap(
-                hess_one,
-                in_axes=(0, 1),
-            )(jnp.arange(n_neurons), y)
-
-        return hess_fn
-
     def __sklearn_clone__(self) -> PopulationGLM:
         """Clone the PopulationGLM, dropping feature_mask."""
         params = self.get_params(deep=False)

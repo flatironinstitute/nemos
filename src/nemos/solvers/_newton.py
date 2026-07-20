@@ -70,7 +70,6 @@ class Newton:
             self.fun_with_aux = lambda p, *a: (loss_fn(p, *a), None)
 
         self._hess_tag: HessianTag | None = None
-        self._hess_fn: Callable | None = None
 
         self._line_search = optax.scale_by_backtracking_linesearch(
             max_backtracking_steps=30
@@ -86,20 +85,15 @@ class Newton:
 
     def setup_hessian(
         self,
-        hess_fn: Optional[Callable] = None,
         hess_tag: HessianTag | None = None,
         reg_tag: HessianTag | None = None,
         property_override: Optional[type] = None,
     ):
-        # ``reg_tag`` is the regularizer's coverage-resolved tag; combine it with the
-        # model's loss tag, then let the model override the definiteness when it can
-        # certify more than coverage alone (e.g. GLM + Ridge is positive definite).
         tag = hess_tag if reg_tag is None else combine_hessian_tags(hess_tag, reg_tag)
         if property_override is not None and tag is not None:
             tag = HessianTag(
                 tag.structure, property_override, batch_axes=tag.batch_axes
             )
-        self._hess_fn = hess_fn
         self._hess_tag = tag
 
     def _build_cache(self):
@@ -110,8 +104,12 @@ class Newton:
             )
 
         if self._hessian is None:
-            if self._hess_fn is not None:
-                self._hessian = self._hess_fn
+            if self._hess_tag is not None and self._hess_tag.structure is BlockDiagonal:
+                self._hessian = jax.vmap(
+                    jax.hessian(self.fun),
+                    in_axes=(self._hess_tag.batch_axes, None, 1),
+                    out_axes=0,
+                )
             else:
                 self._hessian = jax.hessian(self.fun)
 
