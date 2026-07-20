@@ -73,7 +73,11 @@ units.time_support
 
 Each batch is one contiguous chunk of a single recording interval. We build the batches by splitting each interval into equal-duration chunks -- a chunk never spans a gap -- and visit them in a fresh random order every epoch. Reshuffling the chunk order each epoch decorrelates successive gradient steps and covers every chunk exactly once per pass, while keeping each chunk's samples in their original temporal order, which the convolution depends on.
 
-Convolving a chunk in isolation would leave its first `window_size` bins without preceding history, so [`compute_features`](nemos.basis.RaisedCosineLogConv.compute_features) fills them with NaNs. Rather than discarding that fraction of every batch, we prepend one convolution window of preceding data before convolving -- `window_size` bins, converted to seconds as `window_size * bin_size` and clipped at the interval start so the context never reaches back across a gap. After convolution the only remaining NaN rows sit at the true interval starts, where no history exists. We leave them in the batch: [`stochastic_fit`](nemos.glm.PopulationGLM.stochastic_fit) drops NaN rows in `_preprocess_inputs`, so a batch spanning `[start, end]` arrives at the solver as exactly its valid rows, each with correct history.
+Convolving a chunk in isolation would leave its first `window_size` bins without preceding history. To avoid discarding that fraction of every batch, we prepend one convolution window of preceding data before convolving -- `window_size` bins, converted to seconds as `window_size * bin_size` and clipped at the interval start so the context never reaches back across a gap. Only the true interval starts, where no prior history exists, keep an unavoidable gap of `window_size` bins.
+
+:::{note}
+[`compute_features`](nemos.basis.RaisedCosineLogConv.compute_features) marks bins without a full history window as NaN: the prepended context bins, plus the first `window_size` bins of each recording interval. We leave those rows in each batch and let [`stochastic_fit`](nemos.glm.PopulationGLM.stochastic_fit) drop them in `_preprocess_inputs`, so a batch spanning `[start, end]` reaches the solver as exactly its valid rows, each with correct history.
+:::
 
 A [`DataLoader`](nemos.batching.DataLoader) needs three methods:
 - `__iter__`: yields `(X_batch, y_batch)` tuples. It is called once at the start of every epoch and must return a fresh iterator each time (using `yield` here makes the method a generator, which does this automatically).
