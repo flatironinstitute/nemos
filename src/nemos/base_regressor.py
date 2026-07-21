@@ -8,7 +8,7 @@ from abc import abstractmethod
 from copy import deepcopy
 from functools import wraps
 from pathlib import Path
-from typing import Any, Generic, Optional, Tuple, Type, Union
+from typing import Any, Callable, Generic, Optional, Tuple, Type, Union
 
 import jax
 import jax.numpy as jnp
@@ -434,6 +434,7 @@ class BaseRegressor(
 
         if isinstance(solver, Newton):
             solver.setup_hessian(
+                self._get_hess_fn(),
                 self._hess_tag,
                 self.regularizer.resolve_hess_tag(init_params),
                 self._hess_property_override(),
@@ -448,6 +449,9 @@ class BaseRegressor(
             self._solver_loss_fun = solver.fun
 
         return solver
+
+    def _get_hess_fn(self) -> Callable:
+        return None
 
     @abc.abstractmethod
     def fit(

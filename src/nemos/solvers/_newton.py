@@ -85,6 +85,7 @@ class Newton:
 
     def setup_hessian(
         self,
+        hess_fn: Callable | None = None,
         hess_tag: HessianTag | None = None,
         reg_tag: HessianTag | None = None,
         property_override: Optional[type] = None,
@@ -95,6 +96,7 @@ class Newton:
                 tag.structure, property_override, batch_axes=tag.batch_axes
             )
         self._hess_tag = tag
+        self._hessian = hess_fn
 
     def _build_cache(self):
         if self._gradient is None:
@@ -104,14 +106,7 @@ class Newton:
             )
 
         if self._hessian is None:
-            if self._hess_tag is not None and self._hess_tag.structure is BlockDiagonal:
-                self._hessian = jax.vmap(
-                    jax.hessian(self.fun),
-                    in_axes=(self._hess_tag.batch_axes, None, 1),
-                    out_axes=0,
-                )
-            else:
-                self._hessian = jax.hessian(self.fun)
+            self._hessian = jax.hessian(self.fun)
 
     def init_state(self, init_params, *args):
         if self._hess_tag is None:
@@ -286,9 +281,7 @@ class Newton:
                 p,
                 s,
                 *args,
-            )[
-                :2
-            ]  # Discard aux; convergence only needs params and state
+            )[:2]  # Discard aux; convergence only needs params and state
 
         if self.jit:
             final_params, final_state = eqx.internal.while_loop(

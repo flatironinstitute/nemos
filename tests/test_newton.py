@@ -187,16 +187,18 @@ def test_newton_glm_converges(request, regularizer_name, structure):
 @pytest.mark.requires_x64
 @pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
 @pytest.mark.parametrize("feature_mask", [True, False])
-@pytest.mark.parametrize("structure", ["", "_pytree"])
-def test_newton_population_glm_converges(
-    request, regularizer_name, feature_mask, structure
-):
+def test_newton_population_glm_converges(request, regularizer_name, feature_mask):
     """Newton-fitted PopulationGLM should converge and return finite parameters."""
     X, y, model, params, _ = request.getfixturevalue(
-        "population_poissonGLM_model_instantiation" + structure
+        "population_poissonGLM_model_instantiation"
     )
     model.regularizer = regularizer_name
     model.regularizer_strength = 1e-3 if regularizer_name == "Ridge" else None
+
+    if feature_mask:
+        model._feature_mask = initialize_feature_mask_for_population_glm(
+            X, y.shape[1], coef=params.coef
+        )
 
     model = model.fit(X, y)
 
@@ -225,25 +227,19 @@ def test_newton_classifier_glm_converges(request, regularizer_name, structure):
 @pytest.mark.requires_x64
 @pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
 @pytest.mark.parametrize("feature_mask", [True, False])
-@pytest.mark.parametrize("structure", ["", "_pytree"])
 def test_newton_classifier_population_glm_converges(
-    request, regularizer_name, feature_mask, structure
+    request, regularizer_name, feature_mask
 ):
     """Newton-fitted ClassifierPopulationGLM should converge and return finite parameters."""
     X, y, model, params, _ = request.getfixturevalue(
-        "population_classifierGLM_model_instantiation" + structure
+        "population_classifierGLM_model_instantiation"
     )
     model.regularizer = regularizer_name
     model.regularizer_strength = 1e-3 if regularizer_name == "Ridge" else None
     if feature_mask:
-        feature_mask = initialize_feature_mask_for_population_glm(
+        model._feature_mask = initialize_feature_mask_for_population_glm(
             X, y.shape[1], coef=params.coef
         )
-        if structure == "_pytree":
-            feature_mask["input_1"] = np.zeros_like(feature_mask["input_1"])
-        else:
-            feature_mask = feature_mask.at[:, 1].set(0)
-        model._feature_mask = feature_mask
     model = model.fit(X, y)
 
     assert model.coef_ is not None

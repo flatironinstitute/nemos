@@ -1958,7 +1958,9 @@ class PopulationGLM(GLM):
         """
         return super().fit(X, y, init_params)
 
-    def _predict(self, params: GLMParams, X: jnp.ndarray) -> jnp.ndarray:
+    def _predict(
+        self, params: GLMParams, X: jnp.ndarray, feature_mask: Any = None
+    ) -> jnp.ndarray:
         """
         Predicts firing rates based on given parameters and design matrix.
 
@@ -1981,7 +1983,9 @@ class PopulationGLM(GLM):
         :
             The predicted rates. Shape (n_timebins, n_neurons).
         """
-        if self._feature_mask is None:
+        if feature_mask is None:
+            feature_mask = self._feature_mask
+        if feature_mask is None:
             return super()._predict(params, X)
         return self.inverse_link_function(
             # First, multiply each feature by its corresponding coefficient,
@@ -1992,10 +1996,28 @@ class PopulationGLM(GLM):
                 sum,
                 X,
                 params.coef,
-                self._feature_mask,
+                feature_mask,
             )
             + params.intercept
         )
+
+    def _get_hess_fn(self):
+        def per_neuron(params, X, y, mask):
+            def loss(params):
+                rate = self._predict(params, X, feature_mask=mask)
+                return self._observation_model._negative_log_likelihood(y, rate)
+
+            return jax.hessian(loss)(params)
+
+        return lambda params, X, y: jax.vmap(
+            per_neuron,
+            in_axes=(
+                self._hess_tag.batch_axes,
+                None,
+                1,
+                1,
+            ),
+        )(params, X, y, self._feature_mask)
 
     def __sklearn_clone__(self) -> PopulationGLM:
         """Clone the PopulationGLM, dropping feature_mask."""
