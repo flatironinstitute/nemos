@@ -64,21 +64,145 @@ A [`DataLoader`](nemos.batching.DataLoader) is any object that streams `(X_batch
 - `n_samples`: the total number of samples in the dataset.
 - `sample_batch`: a cheap, deterministic batch used once to initialize the solver state.
 
-Anything that provides these three works. The rest of this page builds one for a specific problem: batching correctly a recording that is split into disjoint temporal intervals.
+Anything that provides these three works.
 
-## Custom `DataLoader` for discontinuous recordings
+## A Simple Example: `PynappleDataLoader`
 
-### Simulating the dataset
+As a minimal example, let's define a simple `DataLoader` that builds the design matrix for a fully coupled GLM directly from the spike times, using `pynapple` and a `NeMoS` basis to:
 
-We simulate one continuous recording, write it to disk as an NWB file, and load the spike times back with `pynapple`.
+1. sample a random 1 s interval and bin the spikes into counts;
+2. pass the counts through a convolutional basis to build the design matrix.
+
+Let's simulate the spike trains first.
 
 ```{code-cell} ipython3
 _simulate_and_write_to_disk()
 data = nap.load_file(DEFAULT_NWB_PATH)
 units = data["units"]  # contains spike times per unit
+units
 ```
 
-The simulation is a single uninterrupted stretch. To reproduce a realistic recording, we define three disjoint intervals -- standing in for the valid recording periods, or the experimental condition of interest -- and restrict the spike times to them. Restricting sets the `TsGroup`'s `time_support` to these intervals.
+Now we are ready to set up the data loader.
+
+```{code-cell} ipython3
+class PynappleDataLoader(nmo.batching.DataLoader):
+    def __init__(self, spike_times, basis, batch_size, bin_size):
+        self.spike_times = spike_times
+        self.basis = basis
+        self.batch_size = batch_size
+        self.bin_size = bin_size
+        self.n_batches_per_epoch = int(
+            spike_times.time_support.tot_length() // self.batch_size
+        )
+        self.rng = np.random.default_rng(seed=123)
+
+        self._sample_batch = None
+
+    def __iter__(self):
+        """
+        Yield one batch per step for a full epoch.
+
+        Defining this is what lets `stochastic_fit` loop over the loader
+        (`for X_batch, y_batch in loader`) one batch at a time.
+        It is called once at the start of every epoch, so it has to begin a
+        fresh pass over the data each time. Using `yield` here (which turns
+        the method into a generator) takes care of that automatically.
+        """
+        for i in range(self.n_batches_per_epoch):
+            yield self._random_batch()
+
+    @property
+    def n_samples(self):
+        """Number of samples in the full dataset"""
+        return int(np.round(self.spike_times.time_support.tot_length() / self.bin_size))
+
+    def sample_batch(self):
+        """Generate a sample batch at the start of the time support."""
+        if self._sample_batch is None:
+            self._sample_batch = self._batch_at_t(self.spike_times.time_support[0, 0])
+
+        return self._sample_batch
+
+    def _batch_at_t(self, t: float):
+        """Generate a batch starting at time t."""
+        ep = nap.IntervalSet(t, t + self.batch_size)
+        counts = self.spike_times.restrict(ep).count(self.bin_size)
+        X = self.basis.compute_features(counts)
+
+        return X, counts
+
+    def _random_batch(self):
+        """Generate a batch at a random time within the time support."""
+        t = self.rng.uniform(
+            self.spike_times.time_support[0, 0],
+            self.spike_times.time_support[0, 1] - self.batch_size,
+        )
+        return self._batch_at_t(t)
+```
+
+:::{note}
+For best performance (i.e. to avoid unnecessary function recompilations), generate batches that all have the same or at least a limited number of distinct sizes.
+:::
+
+Let's instantiate it and get a batch.
+
+```{code-cell} ipython3
+
+batch_size = 1  # seconds
+bin_size = 0.005  # seconds
+window_size = int(0.2 / bin_size) # bins
+
+# define a convolutional basis
+basis = nmo.basis.RaisedCosineLogConv(5, window_size=window_size)
+loader = PynappleDataLoader(units, basis, batch_size, bin_size)
+
+X_batch, y_batch = loader.sample_batch()
+print(X_batch)
+```
+
+:::{admonition} NaN padding
+:class: note
+
+The first `window_size` rows of the design matrix are NaNs. This is NeMoS default convolution behavior: the convolution is run in mode `"valid"` to avoid border artifact and then NaN padded to preserve the original time axis length. NeMoS `GLM.stochastic_fit` will filter out the NaNs, so the effective batch size will be `160 = 200 - window_size`.
+:::
+
+
+### Set up logging and run the optimization
+
+We again use the preprocessed full dataset as the test set, but in practice this would be a smaller held-out dataset.
+
+```{code-cell} ipython3
+batch_logger = nmo.callbacks.TestLossLogger(
+    data["X"],
+    data["spike_trains"],
+    events={"train_begin", "batch_end"},
+)
+```
+
+Fit for 30 passes:
+
+```{code-cell} ipython3
+glm = nmo.glm.PopulationGLM(
+    solver_name="GradientDescent",
+    regularizer="Ridge",
+    regularizer_strength=0.01,
+    solver_kwargs={"stepsize": 0.05, "acceleration": False},
+)
+```
+
+```{code-cell} ipython3
+glm.stochastic_fit(loader, n_passes=30, callbacks=batch_logger)
+```
+
+```{code-cell} ipython3
+plot_loss_history(batch_logger.loss_history)
+```
+
+## Handling Disjoint Recording Intervals
+
+Next we build a `DataLoader` for a common real-world case: sampling batches from a discontinuous recording. Often only parts of a recording are of interest -- valid trials, periods when the subject is engaged in the task, and so on.
+
+Let's simulate this scenario by chunking generated spike trains in three epochs. In `pynapple` terms, this is equivalent of restricting the time series to a multi-epoch `IntervalSet`.
 
 ```{code-cell} ipython3
 recording = nap.IntervalSet(start=[0.0, 25.0, 42.0], end=[20.0, 40.0, 50.0])
@@ -88,11 +212,11 @@ units.time_support
 
 ### Batching a fully coupled GLM
 
-The model we want to fit is a fully coupled GLM: each neuron's firing rate is predicted from the recent spike history of the entire population (the [head-direction tutorial](../../tutorials/plot_02_head_direction.md) works through such a model in full). Forming that predictor means convolving the spike counts with a basis to build the design matrix, and it is this convolution that makes batching a discontinuous recording non-trivial: a batch must not convolve across the gap between two intervals, and the batches should be uniform in size.
+The design matrix comes from convolving the spike counts with a basis, and it is this convolution that makes batching a discontinuous recording non-trivial: a batch must not convolve across the gap between two intervals, and the batches should have a small number of distinct sizes (each new size recompiles the update step).
 
 The simplest way to keep batches from crossing a gap is to build them as contiguous chunks. We split each recording interval into equal-duration chunks -- so a chunk never spans a gap -- and visit them in a random order on every pass over the dataset. Reshuffling the chunk order each pass decorrelates successive gradient steps and covers every chunk exactly once.
 
-Each feature is a convolution that looks back over the previous `window_size` bins, so the first `window_size` bins of a chunk have no history to convolve when the chunk is processed on its own. To give them that history, before convolving we extend the chunk backward by `window_size` bins -- a *context* window of `window_size * bin_size` seconds -- clipped at the recording interval start so it never reaches back across a gap. These context bins exist only to supply history to the chunk's first real bins; they are not training samples themselves. Only the true interval starts, where no earlier data exists, keep an unavoidable gap of `window_size` bins.
+As we have seen before, the first `window_size` of each batch is filled with NaNs that will be dropped at fit time. We will enforce an effective batch (batch size after dropping the NaNs) by extending the chunk of data of an extra *context* of `window_size` bin length. These context bins exist only to supply history to the chunk's first real bins; they are not training samples themselves.
 
 The construction is sketched below (bin counts are illustrative, not to scale):
 
@@ -102,14 +226,10 @@ The construction is sketched below (bin counts are illustrative, not to scale):
 plot_batching_schematic();
 ```
 
-:::{note}
-[`compute_features`](nemos.basis.RaisedCosineLogConv.compute_features) marks bins without a full history window as NaN: the prepended context bins, plus the first `window_size` bins of each recording interval. We leave those rows in each batch and let [`stochastic_fit`](nemos.glm.PopulationGLM.stochastic_fit) drop them internally.
-:::
-
 Putting the pieces together:
 
 ```{code-cell} ipython3
-class PynappleDataLoader(nmo.batching.DataLoader):
+class MultiEpochPynappleDataLoader(nmo.batching.DataLoader):
     def __init__(self, spike_times, basis, interval_size, bin_size, shuffle=True, seed=123):
         self.spike_times = spike_times
         self.basis = basis
@@ -153,24 +273,29 @@ class PynappleDataLoader(nmo.batching.DataLoader):
             yield self._batch(start, end, interval_start)
 ```
 
-## Create the loader
+### Defining the Loader & Running The Optimization
 
-Spikes are binned in 5 ms bins, and each neuron's firing rate is predicted from the recent spike history of the whole population, built with a NeMoS convolutional basis over a 200 ms window. We use 5 s chunks as batches.
+The loader can be defined as before.
 
 ```{code-cell} ipython3
-bin_size = 5 / 1000  # seconds
-interval_size = 5.0  # seconds
 
-basis = nmo.basis.RaisedCosineLogConv(5, window_size=int(0.2 / bin_size))
+batch_size = 5  # seconds
+window_size_sec = window_size * bin_size
 
-loader = PynappleDataLoader(units, basis, interval_size, bin_size)
+# interval_size = batch_size + window_size_sec
+interval_size = batch_size + window_size_sec  # seconds
+
+loader = MultiEpochPynappleDataLoader(units, basis, interval_size, bin_size)
+
+X_batch, y_batch = loader.sample_batch()
+
+# Check the effective batch size after dropping nans
+print(f"Effective batch size: {X_batch.dropna().shape[0] * bin_size} secs")
 ```
 
 :::{note}
 This loader re-bins and re-convolves the data on every pass. If the design matrix is larger than RAM but fits on disk, it is faster to compute it once and store it in a memory-mappable format that `pynapple` [loads lazily](https://pynapple.org/user_guide/02_input_output.html) -- Zarr, HDF5, NWB, or similar -- then stream it with [`LazyArrayDataLoader`](nemos.batching.LazyArrayDataLoader), as in the [basics section](./stochastic_fit.md).
 :::
-
-## Set up logging and run the optimization
 
 We again use the preprocessed full dataset as the test set, but in practice this would be a smaller held-out dataset.
 
@@ -182,7 +307,7 @@ batch_logger = nmo.callbacks.TestLossLogger(
 )
 ```
 
-Fit for 30 epochs:
+Fit for 30 passes:
 
 ```{code-cell} ipython3
 glm = nmo.glm.PopulationGLM(
@@ -194,7 +319,7 @@ glm = nmo.glm.PopulationGLM(
 ```
 
 ```{code-cell} ipython3
-glm.stochastic_fit(loader, num_epochs=30, callbacks=batch_logger)
+glm.stochastic_fit(loader, n_passes=30, callbacks=batch_logger)
 ```
 
 ```{code-cell} ipython3
