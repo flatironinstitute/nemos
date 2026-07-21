@@ -165,12 +165,12 @@ glm = nmo.glm.PopulationGLM(
     solver_name="GradientDescent",
     regularizer="Ridge",
     regularizer_strength=0.01,
-    solver_kwargs={"stepsize": 0.05, "acceleration": False},
+    solver_kwargs={"stepsize": 0.1, "acceleration": False},
 )
 ```
 
 ```{code-cell} ipython3
-glm.stochastic_fit(loader, num_epochs=30, callbacks=batch_logger)
+glm.stochastic_fit(loader, num_epochs=100, callbacks=batch_logger)
 ```
 
 ```{code-cell} ipython3
