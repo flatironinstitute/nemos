@@ -29,7 +29,7 @@ warnings.filterwarnings(
 
 In the previous section we loaded preprocessed arrays (`X` and `spike_trains`) straight into a [`LazyArrayDataLoader`](nemos.batching.LazyArrayDataLoader). Here we start one step earlier, from raw spike times on disk, and build the counts and design matrix on the fly inside the loader.
 
-Two features of the data shape the loader. The recording is split into several disjoint intervals -- experiments rarely produce one uninterrupted stretch -- and the design matrix is built by convolution. A batch must therefore be a contiguous span of time that stays within a single recording interval: convolving across the gap between two intervals would mix spike history that is seconds or minutes apart.
+The spikes are loaded and preprocessed with `pynapple`, which supports lazy, out-of-core loading. The example uses a small simulated dataset, but the same loader scales to large recordings without holding them in memory.
 
 ```{code-cell} ipython3
 import jax
@@ -53,7 +53,20 @@ nap.nap_config.suppress_conversion_warnings = True
 np.random.seed(123)
 ```
 
-Load the spike times:
+## The `DataLoader` interface
+
+A [`DataLoader`](nemos.batching.DataLoader) is any object that streams `(X_batch, y_batch)` pairs to [`stochastic_fit`](nemos.glm.PopulationGLM.stochastic_fit). It has to provide three methods:
+- `__iter__`: yields `(X_batch, y_batch)` tuples. It is called once at the start of every epoch and must return a fresh iterator each time (using `yield` here makes the method a generator, which does this automatically).
+- `n_samples`: the total number of samples in the dataset.
+- `sample_batch`: a cheap, deterministic batch used once to initialize the solver state.
+
+Anything that provides these three works. The rest of this page builds one for a specific problem: batching correctly a recording that is split into disjoint temporal intervals.
+
+## Batching discontinuous recordings
+
+### Simulating the dataset
+
+We simulate one continuous recording, write it to disk as an NWB file, and load the spike times back with `pynapple`.
 
 ```{code-cell} ipython3
 _simulate_and_write_to_disk()
@@ -61,7 +74,7 @@ data = nap.load_file(DEFAULT_NWB_PATH)
 units = data["units"]  # contains spike times per unit
 ```
 
-The toy recording is one continuous stretch, so we carve it into three valid intervals with gaps between them to mimic pauses in the recording. Restricting the `TsGroup` sets its `time_support` to these intervals, and the loader will keep every batch inside one of them.
+The simulation is a single uninterrupted stretch. To reproduce a realistic recording, we define three disjoint intervals -- standing in for the valid recording periods, or the experimental condition of interest -- and restrict the spike times to them. Restricting sets the `TsGroup`'s `time_support` to these intervals.
 
 ```{code-cell} ipython3
 recording = nap.IntervalSet(start=[0.0, 25.0, 42.0], end=[20.0, 40.0, 50.0])
@@ -69,20 +82,19 @@ units = units.restrict(recording)
 units.time_support
 ```
 
-## Define `PynappleDataLoader`
+### Batching a fully coupled GLM
 
-Each batch is one contiguous chunk of a single recording interval. We build the batches by splitting each interval into equal-duration chunks -- a chunk never spans a gap -- and visit them in a fresh random order every epoch. Reshuffling the chunk order each epoch decorrelates successive gradient steps and covers every chunk exactly once per pass, while keeping each chunk's samples in their original temporal order, which the convolution depends on.
+The model we want to fit is a fully coupled GLM: each neuron's firing rate is predicted from the recent spike history of the entire population (the [head-direction tutorial](../../tutorials/plot_02_head_direction.md) works through such a model in full). Forming that predictor means convolving the spike counts with a basis to build the design matrix, and it is this convolution that makes batching a discontinuous recording non-trivial: a batch must not convolve across the gap between two intervals, and the batches should be uniform in size.
 
-Convolving a chunk in isolation would leave its first `window_size` bins without preceding history. To avoid discarding that fraction of every batch, we prepend one convolution window of preceding data before convolving -- `window_size` bins, converted to seconds as `window_size * bin_size` and clipped at the interval start so the context never reaches back across a gap. Only the true interval starts, where no prior history exists, keep an unavoidable gap of `window_size` bins.
+The simplest way to keep batches from crossing a gap is to build them as contiguous chunks. We split each recording interval into equal-duration chunks -- so a chunk never spans a gap -- and visit them in a random order on every pass over the dataset. Reshuffling the chunk order each pass decorrelates successive gradient steps and covers every chunk exactly once.
+
+Each feature is a convolution that looks back over the previous `window_size` bins, so the first `window_size` bins of a chunk have no history to convolve when the chunk is processed on its own. To give them that history, before convolving we extend the chunk backward by `window_size` bins -- a *context* window of `window_size * bin_size` seconds -- clipped at the recording interval start so it never reaches back across a gap. These context bins exist only to supply history to the chunk's first real bins; they are not training samples themselves. Only the true interval starts, where no earlier data exists, keep an unavoidable gap of `window_size` bins.
 
 :::{note}
-[`compute_features`](nemos.basis.RaisedCosineLogConv.compute_features) marks bins without a full history window as NaN: the prepended context bins, plus the first `window_size` bins of each recording interval. We leave those rows in each batch and let [`stochastic_fit`](nemos.glm.PopulationGLM.stochastic_fit) drop them in `_preprocess_inputs`, so a batch spanning `[start, end]` reaches the solver as exactly its valid rows, each with correct history.
+[`compute_features`](nemos.basis.RaisedCosineLogConv.compute_features) marks bins without a full history window as NaN: the prepended context bins, plus the first `window_size` bins of each recording interval. We leave those rows in each batch and let [`stochastic_fit`](nemos.glm.PopulationGLM.stochastic_fit) drop them internally.
 :::
 
-A [`DataLoader`](nemos.batching.DataLoader) needs three methods:
-- `__iter__`: yields `(X_batch, y_batch)` tuples. It is called once at the start of every epoch and must return a fresh iterator each time (using `yield` here makes the method a generator, which does this automatically).
-- `n_samples`: the total number of samples in the dataset.
-- `sample_batch`: a cheap, deterministic batch used once to initialize the solver state.
+Putting the pieces together:
 
 ```{code-cell} ipython3
 class PynappleDataLoader(nmo.batching.DataLoader):
@@ -143,7 +155,7 @@ loader = PynappleDataLoader(units, basis, interval_size, bin_size)
 ```
 
 :::{note}
-Prepending the history window means this loses samples only at the start of each recording interval (`window_size` bins each), not at every batch boundary. The loader still re-bins and re-convolves the data on every epoch, so when it fits on disk it is generally faster to preprocess the design matrix once and use [`LazyArrayDataLoader`](nemos.batching.LazyArrayDataLoader), as in the [basics section](./stochastic_fit.md).
+Prepending the history window means the loader loses samples only at the start of each recording interval (`window_size` bins each), not at every batch boundary. It does re-bin and re-convolve the data on every pass, though. If the design matrix is larger than RAM but fits on disk, it is faster to compute it once and store it in a memory-mappable format that `pynapple` [loads lazily](https://pynapple.org/user_guide/02_input_output.html) -- Zarr, HDF5, NWB, or similar -- then stream it with [`LazyArrayDataLoader`](nemos.batching.LazyArrayDataLoader), as in the [basics section](./stochastic_fit.md).
 :::
 
 ## Set up logging and run the optimization
@@ -165,12 +177,12 @@ glm = nmo.glm.PopulationGLM(
     solver_name="GradientDescent",
     regularizer="Ridge",
     regularizer_strength=0.01,
-    solver_kwargs={"stepsize": 0.1, "acceleration": False},
+    solver_kwargs={"stepsize": 0.05, "acceleration": False},
 )
 ```
 
 ```{code-cell} ipython3
-glm.stochastic_fit(loader, num_epochs=100, callbacks=batch_logger)
+glm.stochastic_fit(loader, num_epochs=30, callbacks=batch_logger)
 ```
 
 ```{code-cell} ipython3
