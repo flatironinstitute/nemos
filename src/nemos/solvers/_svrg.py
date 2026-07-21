@@ -884,13 +884,13 @@ class _WrappedSVRGBase(JaxoptStochasticSolverMixin, JaxoptAdapter):
     def linesearch_turned_on(self) -> bool:
         return False
 
-    def _epoch_prep(
+    def _pass_prep(
         self,
         params: Params,
         state: JaxoptAdapterState,
         data_loader: DataLoader,
     ) -> tuple[Params, JaxoptAdapterState]:
-        """Set the full gradient at the reference point in the state before each epoch."""
+        """Set the full gradient at the reference point in the state before each pass."""
         # compute full gradient by streaming through all batches
         full_grad = self._solver._compute_full_gradient_streaming(
             params, data_loader.__iter__

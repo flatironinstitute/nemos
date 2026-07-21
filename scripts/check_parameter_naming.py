@@ -150,6 +150,7 @@ VALID_PAIRS = [
     {"event", "events"},
     {"X_test", "y_test"},
     {"basis_coeff", "basis_col"},
+    {"n_classes", "n_passes"},
 ]
 
 

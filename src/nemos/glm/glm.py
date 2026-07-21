@@ -218,7 +218,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         State of the solver after fitting. May include details like optimization error.
     stochastic_fit_summary_ :
         Summary of the most recent stochastic training run, including the
-        final epoch and batch indices and any callback stop reason.
+        final pass and batch indices and any callback stop reason.
     scale_:
         Scale parameter for the model. The scale parameter is the constant :math:`\Phi`, for which
         :math:`\text{Var} \left( y \right) = \Phi V(\mu)`. This parameter, together with the estimate
@@ -966,7 +966,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         data: DataLoader,
         *,
         init_params: Optional[GLMUserParams] = None,
-        num_epochs: int = 1,
+        n_passes: int = 1,
         callbacks: "Callback | list[Callback] | None" = None,
     ):
         """
@@ -980,7 +980,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         ----------
         data :
             Data loader yielding (X_batch, y_batch) tuples.
-            Must be re-iterable for ``num_epochs > 1``.
+            Must be re-iterable for ``n_passes > 1``.
 
             Note that NaNs are dropped per batch. The optimizer's update method
             will be re-compiled for each unique batch size, slowing down computation.
@@ -990,14 +990,16 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             Initial parameters (coefficients, intercept).
             If None, initialized from ``sample_batch()``.
             To continue fitting, pass the current parameters (``model.get_model_params()``)
-        num_epochs :
+        n_passes :
             Maximum number of passes over the data. Must be >= 1.
             Optimization may stop earlier if a callback requests a stop.
+            This parameter is commonly referred to as the number of (training) epochs
+            in the machine-learning literature.
 
             There is no convergence-based stopping by default. To stop
             automatically when the solver's convergence criterion is met,
             pass ``callbacks=SolverConvergenceCallback()``. Otherwise the
-            fit will run for the full ``num_epochs``.
+            fit will run for the full ``n_passes``.
         callbacks :
             Training callbacks. Accepts a single ``Callback``, a list of
             ``Callback`` objects, or ``None`` (default, no callbacks).
@@ -1005,7 +1007,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             To stop optimization when the solver's built-in convergence
             criterion is met pass ``nmo.callbacks.SolverConvergenceCallback()``.
             This is the recommended way to avoid running for the full
-            ``num_epochs`` when the model has already converged.
+            ``n_passes`` when the model has already converged.
 
         Returns
         -------
@@ -1033,7 +1035,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         >>> model = nmo.glm.GLM(solver_name="GradientDescent", solver_kwargs={"stepsize": 0.01, "acceleration" : False})
         >>> # Stop early when the solver's convergence criterion is met.
         >>> model = model.stochastic_fit(
-        ...     loader, num_epochs=10, callbacks=SolverConvergenceCallback()
+        ...     loader, n_passes=10, callbacks=SolverConvergenceCallback()
         ... )
         """
         # Validate solver supports stochastic
@@ -1089,7 +1091,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         params, state, aux = self._solver.stochastic_run(
             init_params,
             preprocessed_loader,
-            num_epochs=num_epochs,
+            n_passes=n_passes,
             callback=_normalize_callbacks(callbacks),
             ctx=ctx,
         )
@@ -1799,7 +1801,7 @@ class PopulationGLM(GLM):
         State of the solver after fitting. May include details like optimization error.
     stochastic_fit_summary_ :
         Summary of the most recent stochastic training run, including the
-        final epoch and batch indices and any callback stop reason.
+        final pass and batch indices and any callback stop reason.
 
     Raises
     ------

@@ -187,12 +187,12 @@ Other solvers that can be used for stochastic optimization can be listed with [`
 
 We are ready to start the optimization using the GLM's `stochastic_fit` method.
 
-`stochastic_fit` uses `num_epochs` to control the training duration and does not stop on convergence by default. Unless a callback requests a stop, it will run for the full number of epochs.
+`stochastic_fit` uses `n_passes` to control the training duration and does not stop on convergence by default. Unless a callback requests a stop, it will run for the full number of passes.
 \
 Note that the `max_steps` solver kwarg used in `GLM.fit` is also ignored.
 
 ```{code-cell} ipython3
-glm.stochastic_fit(loader, num_epochs=5, callbacks=batch_logger)
+glm.stochastic_fit(loader, n_passes=5, callbacks=batch_logger)
 ```
 
 ```{code-cell} ipython3
@@ -210,7 +210,7 @@ To continue from where we left off, pass the current parameters as `init_params`
 ```{code-cell} ipython3
 glm.stochastic_fit(
     loader,
-    num_epochs=10,
+    n_passes=10,
     init_params=glm.get_model_params(),
     # using the same callback so the new loss values are appended to the existing history
     callbacks=batch_logger,
