@@ -7,16 +7,17 @@ import optax
 import pytest
 
 import nemos as nmo
+from conftest import initialize_feature_mask_for_population_glm
 from nemos.glm import GLM, PopulationGLM
 from nemos.glm.classifier_glm import ClassifierGLM, ClassifierPopulationGLM
-from nemos.regularizer import Ridge, UnRegularized
-from nemos.solvers._abstract_solver import OptimizationInfo
 from nemos.solvers._hess import (
     BlockDiagonal,
     Full,
     PositiveDefinite,
     PositiveSemiDefinite,
 )
+from nemos.regularizer import Ridge, UnRegularized
+from nemos.solvers._abstract_solver import OptimizationInfo
 from nemos.solvers._newton import Newton, NewtonState
 from nemos.tree_utils import pytree_map_and_reduce
 
@@ -185,14 +186,18 @@ def test_newton_glm_converges(request, regularizer_name, structure):
 
 @pytest.mark.requires_x64
 @pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
+@pytest.mark.parametrize("feature_mask", [True, False])
 @pytest.mark.parametrize("structure", ["", "_pytree"])
-def test_newton_population_glm_converges(request, regularizer_name, structure):
+def test_newton_population_glm_converges(
+    request, regularizer_name, feature_mask, structure
+):
     """Newton-fitted PopulationGLM should converge and return finite parameters."""
     X, y, model, params, _ = request.getfixturevalue(
         "population_poissonGLM_model_instantiation" + structure
     )
     model.regularizer = regularizer_name
     model.regularizer_strength = 1e-3 if regularizer_name == "Ridge" else None
+
     model = model.fit(X, y)
 
     assert model.coef_ is not None
@@ -219,16 +224,26 @@ def test_newton_classifier_glm_converges(request, regularizer_name, structure):
 
 @pytest.mark.requires_x64
 @pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
+@pytest.mark.parametrize("feature_mask", [True, False])
 @pytest.mark.parametrize("structure", ["", "_pytree"])
 def test_newton_classifier_population_glm_converges(
-    request, regularizer_name, structure
+    request, regularizer_name, feature_mask, structure
 ):
     """Newton-fitted ClassifierPopulationGLM should converge and return finite parameters."""
-    X, y, model, _, _ = request.getfixturevalue(
+    X, y, model, params, _ = request.getfixturevalue(
         "population_classifierGLM_model_instantiation" + structure
     )
     model.regularizer = regularizer_name
     model.regularizer_strength = 1e-3 if regularizer_name == "Ridge" else None
+    if feature_mask:
+        feature_mask = initialize_feature_mask_for_population_glm(
+            X, y.shape[1], coef=params.coef
+        )
+        if structure == "_pytree":
+            feature_mask["input_1"] = np.zeros_like(feature_mask["input_1"])
+        else:
+            feature_mask = feature_mask.at[:, 1].set(0)
+        model._feature_mask = feature_mask
     model = model.fit(X, y)
 
     assert model.coef_ is not None
@@ -281,9 +296,9 @@ def test_solver_invalidated_after_strength_change(request, model_instantiation_t
     assert model._solver is not None
 
     model.regularizer_strength = 0.5
-    assert (
-        model._solver is None
-    ), "_solver must be None after regularizer_strength change."
+    assert model._solver is None, (
+        "_solver must be None after regularizer_strength change."
+    )
 
 
 @pytest.mark.parametrize(
