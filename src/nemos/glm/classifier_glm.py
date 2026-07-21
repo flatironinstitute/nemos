@@ -23,7 +23,7 @@ from ..typing import (
     UserProvidedParamsT,
 )
 from .glm import GLM, PopulationGLM
-from .params import GLMUserParams
+from .params import GLMParams, GLMUserParams
 from .validation import (
     ClassifierGLMValidator,
     PopulationClassifierGLMValidator,
@@ -1011,7 +1011,9 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
     _validator_class = PopulationClassifierGLMValidator
     _hess_tag: HessianTag = HessianTag(
-        structure=BlockDiagonal, property=PositiveSemiDefinite
+        structure=BlockDiagonal,
+        property=PositiveSemiDefinite,
+        batch_axes=GLMParams(1, 0),
     )
 
     def __init__(

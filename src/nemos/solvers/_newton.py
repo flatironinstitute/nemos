@@ -129,8 +129,6 @@ class Newton:
             self._linear_solver = lx.AutoLinearSolver(well_posed=False)
             self._operator_tags = ()
 
-        self._out_struct = jax.eval_shape(lambda: init_params)
-
         return NewtonState(
             grad_norm=jnp.inf,
             stats=OptimizationInfo(
@@ -145,7 +143,7 @@ class Newton:
     def _solve(self, hess, grad):
         operator = lx.PyTreeLinearOperator(
             hess,
-            self._out_struct,
+            jax.eval_shape(lambda: grad),
             tags=self._operator_tags,
         )
 
