@@ -15,6 +15,7 @@ kernelspec:
 :tags: [hide-input]
 
 %matplotlib inline
+%config InlineBackend.figure_format = "svg"
 import warnings
 
 # Ignore the specific warning
@@ -42,7 +43,10 @@ from nemos._documentation_utils._stochastic_optim_toy_data import (
     DEFAULT_NWB_PATH,
     _simulate_and_write_to_disk,
 )
-from nemos._documentation_utils.plotting import plot_loss_history
+from nemos._documentation_utils.plotting import (
+    plot_batching_schematic,
+    plot_loss_history,
+)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -89,6 +93,14 @@ The model we want to fit is a fully coupled GLM: each neuron's firing rate is pr
 The simplest way to keep batches from crossing a gap is to build them as contiguous chunks. We split each recording interval into equal-duration chunks -- so a chunk never spans a gap -- and visit them in a random order on every pass over the dataset. Reshuffling the chunk order each pass decorrelates successive gradient steps and covers every chunk exactly once.
 
 Each feature is a convolution that looks back over the previous `window_size` bins, so the first `window_size` bins of a chunk have no history to convolve when the chunk is processed on its own. To give them that history, before convolving we extend the chunk backward by `window_size` bins -- a *context* window of `window_size * bin_size` seconds -- clipped at the recording interval start so it never reaches back across a gap. These context bins exist only to supply history to the chunk's first real bins; they are not training samples themselves. Only the true interval starts, where no earlier data exists, keep an unavoidable gap of `window_size` bins.
+
+The construction is sketched below (bin counts are illustrative, not to scale):
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+plot_batching_schematic();
+```
 
 :::{note}
 [`compute_features`](nemos.basis.RaisedCosineLogConv.compute_features) marks bins without a full history window as NaN: the prepended context bins, plus the first `window_size` bins of each recording interval. We leave those rows in each batch and let [`stochastic_fit`](nemos.glm.PopulationGLM.stochastic_fit) drop them internally.

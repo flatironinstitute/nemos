@@ -1274,3 +1274,109 @@ def plot_loss_history(loss_history: list[tuple], ax=None):
     sns.despine(ax=ax)
 
     return ax
+
+
+def plot_batching_schematic():
+    """
+    Sketch how a batch is built from a chunk plus a left context window.
+
+    Illustrative and not to scale: shows one recording interval split into equal
+    chunks, and the batch for the second chunk formed by prepending a context
+    window that supplies the convolution history and is then dropped.
+
+    Used for the custom data loader notebook.
+
+    Returns
+    -------
+    fig :
+        The schematic figure.
+    """
+    n_bins, chunk, window = 30, 10, 3
+    h = 0.8
+    c_bin, c_ctx, c_batch = "#eef2f7", "#f4c98a", "#9db8ee"
+
+    fig, ax = plt.subplots(figsize=(9, 3.6))
+
+    # top: one recording interval split into equal chunks (the second is highlighted)
+    y = 3.6
+    for i in range(n_bins):
+        ax.add_patch(
+            Rectangle((i, y), 1, h, facecolor=c_bin, edgecolor="white", lw=0.6)
+        )
+    for c in range(0, n_bins + 1, chunk):
+        ax.plot([c, c], [y - 0.05, y + h + 0.05], color="#475569", lw=1.6)
+    for k in range(n_bins // chunk):
+        ax.text(
+            k * chunk + chunk / 2,
+            y + h + 0.14,
+            f"chunk {k + 1}",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+    ax.add_patch(
+        Rectangle((chunk, y), chunk, h, facecolor="none", edgecolor="#1d4ed8", lw=2.2)
+    )
+    ax.text(
+        n_bins / 2,
+        y - 0.34,
+        "one recording interval, split into equal chunks",
+        ha="center",
+        va="top",
+        fontsize=10,
+        color="#334155",
+    )
+
+    # bottom: the batch for chunk 2, drawn beneath it (context spills into the previous chunk)
+    yb = 0.55
+    start, end = chunk, 2 * chunk
+    ctx0 = start - window
+    for i in range(ctx0, start):
+        ax.add_patch(
+            Rectangle(
+                (i, yb), 1, h, facecolor=c_ctx, edgecolor="white", lw=0.6, hatch="///"
+            )
+        )
+    for i in range(start, end):
+        ax.add_patch(
+            Rectangle((i, yb), 1, h, facecolor=c_batch, edgecolor="white", lw=0.6)
+        )
+    ax.text(
+        (ctx0 + start) / 2,
+        yb - 0.32,
+        "context\n(window_size bins,\ndropped)",
+        ha="center",
+        va="top",
+        fontsize=8.5,
+        color="#8a5a12",
+    )
+    ax.text(
+        (start + end) / 2,
+        yb - 0.32,
+        "batch = chunk 2\n(valid history)",
+        ha="center",
+        va="top",
+        fontsize=9,
+        color="#1d4ed8",
+    )
+    ax.annotate(
+        "",
+        xy=(start + 1, yb + h + 0.35),
+        xytext=(ctx0, yb + h + 0.35),
+        arrowprops=dict(arrowstyle="<->", color="#475569", lw=1.4),
+    )
+    ax.text(
+        (ctx0 + start + 1) / 2,
+        yb + h + 0.46,
+        "convolution window for the first batch bin",
+        ha="center",
+        va="bottom",
+        fontsize=8,
+        color="#334155",
+    )
+
+    ax.set_xlim(-1.5, n_bins + 1.5)
+    ax.set_ylim(-1.1, y + h + 0.9)
+    ax.axis("off")
+
+    return fig
