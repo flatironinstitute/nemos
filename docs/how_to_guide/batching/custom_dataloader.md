@@ -155,7 +155,7 @@ loader = PynappleDataLoader(units, basis, interval_size, bin_size)
 ```
 
 :::{note}
-Prepending the history window means the loader loses samples only at the start of each recording interval (`window_size` bins each), not at every batch boundary. It does re-bin and re-convolve the data on every pass, though. If the design matrix is larger than RAM but fits on disk, it is faster to compute it once and store it in a memory-mappable format that `pynapple` [loads lazily](https://pynapple.org/user_guide/02_input_output.html) -- Zarr, HDF5, NWB, or similar -- then stream it with [`LazyArrayDataLoader`](nemos.batching.LazyArrayDataLoader), as in the [basics section](./stochastic_fit.md).
+This loader re-bins and re-convolves the data on every pass. If the design matrix is larger than RAM but fits on disk, it is faster to compute it once and store it in a memory-mappable format that `pynapple` [loads lazily](https://pynapple.org/user_guide/02_input_output.html) -- Zarr, HDF5, NWB, or similar -- then stream it with [`LazyArrayDataLoader`](nemos.batching.LazyArrayDataLoader), as in the [basics section](./stochastic_fit.md).
 :::
 
 ## Set up logging and run the optimization
