@@ -62,7 +62,7 @@ A [`DataLoader`](nemos.batching.DataLoader) is any object that streams `(X_batch
 
 Anything that provides these three works. The rest of this page builds one for a specific problem: batching correctly a recording that is split into disjoint temporal intervals.
 
-## Batching discontinuous recordings
+## Custom `DataLoader` for discontinuous recordings
 
 ### Simulating the dataset
 
