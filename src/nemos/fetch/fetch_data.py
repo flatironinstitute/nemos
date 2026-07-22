@@ -207,12 +207,12 @@ def download_dandi_data(
 
     Examples
     --------
-    >>> import nemos as nmo
-    >>> import pynapple as nap
-    >>> io = nmo.fetch.download_dandi_data("000582",
+    >>> import nemos as nmo  # doctest: +SKIP
+    >>> import pynapple as nap  # doctest: +SKIP
+    >>> io = nmo.fetch.download_dandi_data("000582",  # doctest: +SKIP
     ...                                    "sub-11265/sub-11265_ses-07020602_behavior+ecephys.nwb")
-    >>> nwb = nap.NWBFile(io.read(), lazy_loading=False)
-    >>> print(nwb)
+    >>> nwb = nap.NWBFile(io.read(), lazy_loading=False)  # doctest: +SKIP
+    >>> print(nwb)  # doctest: +SKIP
     07020602
     ┍━━━━━━━━━━━━━━━━━━━━━┯━━━━━━━━━━┑
     │ Keys                │ Type     │

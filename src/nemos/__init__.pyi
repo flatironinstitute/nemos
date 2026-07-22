@@ -2,10 +2,13 @@
 
 from . import (
     basis,
+    batching,
+    callbacks,
     convolve,
     exceptions,
     fetch,
     glm,
+    glm_hmm,
     identifiability_constraints,
     observation_models,
     pytrees,
@@ -21,10 +24,13 @@ from .io.io import inspect_npz, load_model
 
 __all__ = [
     "basis",
+    "batching",
+    "callbacks",
     "convolve",
     "exceptions",
     "fetch",
     "glm",
+    "glm_hmm",
     "identifiability_constraints",
     "observation_models",
     "pytrees",

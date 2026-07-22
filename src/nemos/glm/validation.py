@@ -59,7 +59,7 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
             "check_array_dimensions",
             dict(
                 err_message_format="Invalid parameter dimensionality. coef must be an array "
-                "or nemos.pytree.FeaturePytree with array leafs of shape "
+                "or pytree with array leaves of shape "
                 "(n_features, ). intercept must be of shape (1,)."
                 "\nThe provided coef and intercept have shape ``{}`` and ``{}`` "
                 "instead."
@@ -187,8 +187,8 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
             else:
                 data = X
                 msg += (
-                    f" X was provided as an array, and coef should be an array too. "
-                    f"The provided coef is of type ``{type(params.coef)}`` instead."
+                    f" X has pytree structure ``{jax.tree_util.tree_structure(X)}``, "
+                    f"but coef has structure ``{jax.tree_util.tree_structure(params.coef)}``."
                 )
 
             validation.check_tree_structure(
@@ -216,8 +216,8 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         Validate and cast a feature mask to JAX arrays.
 
         Validates that the feature mask contains only 0s and 1s, then converts
-        it to JAX arrays with the specified data type. Handles FeaturePytree
-        inputs by extracting the underlying data. Subclasses can extend
+        it to JAX arrays with the specified data type. Handles pytree inputs
+        by extracting the underlying data. Subclasses can extend
         this to add parameter-specific validation (e.g., checking that mask
         shape matches parameter dimensions).
 
@@ -225,7 +225,7 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         ----------
         feature_mask :
             Feature mask indicating which features are used. Must contain only 0s and 1s.
-            If a FeaturePytree, the underlying data dict is extracted.
+            If a pytree, the underlying data dict is extracted.
         data_type :
             Target data type for the mask arrays. Defaults to float.
 
@@ -242,7 +242,7 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         if feature_mask is None:
             return None
 
-        # Extract data from FeaturePytree
+        # Extract data if needed
         if isinstance(feature_mask, FeaturePytree):
             feature_mask = feature_mask.data
 
@@ -338,8 +338,8 @@ class PopulationGLMValidator(GLMValidator):
             "check_array_dimensions",
             dict(
                 err_message_format="Invalid parameter dimensionality. "
-                "coef must be an array or nemos.pytree.FeaturePytree "
-                "with array leafs of shape (n_features, n_neurons). "
+                "coef must be an array or pytree "
+                "with array leaves of shape (n_features, n_neurons). "
                 "intercept must be of shape (n_neurons,)."
                 "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
             ),
@@ -406,8 +406,8 @@ class ClassifierGLMValidator(GLMValidator):
             "check_array_dimensions",
             dict(
                 err_message_format="Invalid parameter dimensionality. "
-                "coef must be an array or nemos.pytree.FeaturePytree "
-                "with array leafs of shape (n_features, n_classes). "
+                "coef must be an array or pytree "
+                "with array leaves of shape (n_features, n_classes). "
                 "intercept must be of shape (n_classes,)."
                 "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
             ),
@@ -489,8 +489,8 @@ class ClassifierGLMValidator(GLMValidator):
             else:
                 data = X
                 msg += (
-                    f" X was provided as an array, and coef should be an array too. "
-                    f"The coef are of type ``{type(params.coef)}`` instead."
+                    f" X has pytree structure ``{jax.tree_util.tree_structure(X)}``, "
+                    f"but coef has structure ``{jax.tree_util.tree_structure(params.coef)}``."
                 )
 
             validation.check_tree_structure(
@@ -597,8 +597,8 @@ class PopulationClassifierGLMValidator(ClassifierGLMValidator):
             "check_array_dimensions",
             dict(
                 err_message_format="Invalid parameter dimensionality. "
-                "coef must be an array or nemos.pytree.FeaturePytree "
-                "with array leafs of shape (n_features, n_neurons, n_classes). "
+                "coef must be an array or pytree "
+                "with array leaves of shape (n_features, n_neurons, n_classes). "
                 "intercept must be of shape (n_neurons, n_classes)."
                 "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
             ),

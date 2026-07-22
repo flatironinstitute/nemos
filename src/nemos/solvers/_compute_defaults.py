@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Callable, Optional, Tuple, Union
 
 import jax
 
+from ..inverse_link_function_utils import softplus
 from ..observation_models import PoissonObservations
 from ..regularizer import Ridge
 from ._svrg_defaults import (
@@ -58,11 +59,11 @@ def glm_compute_optimal_stepsize_configs(
     )
 
     # look-up table for selecting the optimal step and batch
-    if model.algo_name in ("SVRG", "ProxSVRG"):
+    if model.solver_name in ("SVRG", "ProxSVRG"):
         compute_optimal_params = svrg_optimal_batch_and_stepsize
 
     # get the smoothness parameter compute function
-    if model.inverse_link_function is jax.nn.softplus and isinstance(
+    if model.inverse_link_function in (jax.nn.softplus, softplus) and isinstance(
         model.observation_model, PoissonObservations
     ):
         compute_smoothness = glm_softplus_poisson_l_max_and_l

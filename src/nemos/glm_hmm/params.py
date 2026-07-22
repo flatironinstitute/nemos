@@ -2,42 +2,25 @@
 
 from typing import Callable, Tuple, Union
 
-import equinox as eqx
 import jax.numpy as jnp
 from numpy.typing import ArrayLike
 
 from ..glm.params import GLMParams
+from ..hmm.params import HMMParams
+from ..params import ModelParams
 from ..typing import DESIGN_INPUT_TYPE
 
 
-class HMMParams(eqx.Module):
-    """Parameter container for HMM models."""
+class GLMHMMModelParams(GLMParams):
+    """Add scale to GLMParams, which is specific for the GLM-HMM."""
 
-    log_initial_prob: jnp.ndarray
-    log_transition_prob: jnp.ndarray
-
-    @staticmethod
-    def regularizable_subtrees() -> list[Callable[["HMMParams"], jnp.ndarray | dict]]:
-        """Filter regularizable subtrees."""
-        return []
+    log_scale: jnp.ndarray | None = None
 
 
-class GLMScale(eqx.Module):
-    """Scale parameter container."""
-
-    log_scale: jnp.ndarray
-
-    @staticmethod
-    def regularizable_subtrees() -> list[Callable[["HMMParams"], jnp.ndarray | dict]]:
-        """Filter regularizable subtrees."""
-        return []
-
-
-class GLMHMMParams(eqx.Module):
+class GLMHMMParams(ModelParams):
     """Parameter container for GLM-HMM models."""
 
-    glm_params: GLMParams
-    glm_scale: GLMScale
+    model_params: GLMHMMModelParams
     hmm_params: HMMParams
 
     @staticmethod
@@ -45,12 +28,21 @@ class GLMHMMParams(eqx.Module):
         list[Callable[["GLMHMMParams"], jnp.ndarray | dict]]
     ):
         """Filter regularizable subtrees."""
-        return [lambda p: p.glm_params.coef]
+        return [lambda p: p.model_params.coef]
+
+    @staticmethod
+    def solver_param_subtree() -> Callable[["GLMHMMParams"], GLMHMMModelParams]:
+        """Accessor for the sub-pytree the numerical solver and regularizer operate on.
+
+        GLM-HMM is a composite model: its EM M-step optimizes only the GLM-level
+        params (coef, intercept, scale). The regularizer and its GroupLasso mask are
+        interpreted at this level. Flat models have no such method — consumers must
+        treat its absence as the identity accessor.
+        """
+        return lambda p: p.model_params
 
 
 # Tuple[coef, intercept, scale, init_proba, transition_proba]
 GLMHMMUserParams = Tuple[
     Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike, ArrayLike, ArrayLike, ArrayLike
 ]
-# Tuple[init_proba, transition_proba]
-HMMUserParams = Tuple[ArrayLike, ArrayLike]

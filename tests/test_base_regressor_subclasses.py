@@ -1,8 +1,8 @@
 import inspect
-import itertools
 import warnings
 from contextlib import nullcontext as does_not_raise
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -10,27 +10,29 @@ import pytest
 import scipy as sp
 import scipy.stats as sts
 import statsmodels.api as sm
-
-# Import helpers from conftest
-from conftest import is_population_model
 from numba import njit
 
 import nemos as nmo
-from nemos import inverse_link_function_utils
+
+# Import helpers from conftest
+from conftest import MockRegressor, is_population_model
 from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
-from nemos.glm.params import GLMParams
 from nemos.glm.validation import (
     ClassifierGLMValidator,
     GLMValidator,
     PopulationClassifierGLMValidator,
     PopulationGLMValidator,
 )
+from nemos.glm_hmm.validation import GLMHMMValidator
 from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
+from nemos.solvers._fista import OptimistixNAG
+from nemos.solvers._optax_optimistix_solvers import OptimistixOptaxGradientDescent
 
 MODEL_REGISTRY = {
     "GLM": nmo.glm.GLM,
     "ClassifierGLM": nmo.glm.ClassifierGLM,
     "PopulationGLM": nmo.glm.PopulationGLM,
+    "GLMHMM": nmo.glm_hmm.GLMHMM,
 }
 
 VALIDATOR_REGISTRY = {
@@ -40,6 +42,7 @@ VALIDATOR_REGISTRY = {
         extra_params={"n_classes": 4}
     ),
     "PopulationGLM": PopulationGLMValidator(),
+    "GLMHMM": GLMHMMValidator(n_states=3),  # n_states=3 matches the fixture default
 }
 
 INIT_PARAM_LENGTH = {
@@ -47,6 +50,7 @@ INIT_PARAM_LENGTH = {
     "ClassifierGLM": 2,
     "ClassifierPopulationGLM": 2,
     "PopulationGLM": 2,
+    "GLMHMM": 5,
 }
 
 DEFAULT_OBS_SHAPE = {
@@ -54,6 +58,7 @@ DEFAULT_OBS_SHAPE = {
     "ClassifierGLM": (500,),
     "ClassifierPopulationGLM": (500, 3),
     "PopulationGLM": (500, 3),
+    "GLMHMM": (500,),
 }
 
 HARD_CODED_GET_PARAMS_KEYS = {
@@ -90,6 +95,22 @@ HARD_CODED_GET_PARAMS_KEYS = {
         "solver_name",
         "feature_mask",
     },
+    "GLMHMM": {
+        "dirichlet_initial_proba",
+        "dirichlet_transition_proba",
+        "hmm_initialization_funcs",
+        "inverse_link_function",
+        "maxiter",
+        "model_initialization_funcs",
+        "n_states",
+        "observation_model",
+        "regularizer",
+        "regularizer_strength",
+        "seed",
+        "solver_kwargs",
+        "solver_name",
+        "tol",
+    },
 }
 
 OBSERVATION_PER_MODEL = {
@@ -97,15 +118,15 @@ OBSERVATION_PER_MODEL = {
     "ClassifierGLM": ["Categorical"],
     "ClassifierPopulationGLM": ["Categorical"],
     "PopulationGLM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
+    "GLMHMM": ["Bernoulli"],
 }
 
-
-# as of now, all models are glm type... in the future this may change.
 MODEL_WITH_LINK_FUNCTION_REGISTRY = {
     "GLM": nmo.glm.GLM,
     "ClassifierGLM": nmo.glm.ClassifierGLM,
     "ClassifierPopulationGLM": nmo.glm.ClassifierPopulationGLM,
     "PopulationGLM": nmo.glm.PopulationGLM,
+    "GLMHMM": nmo.glm_hmm.GLMHMM,
 }
 
 DEFAULTS = {
@@ -113,6 +134,15 @@ DEFAULTS = {
     "PopulationGLM": dict(),
     "ClassifierGLM": dict(),
     "ClassifierPopulationGLM": dict(),
+    "GLMHMM": {"n_states": 3},
+}
+
+# Maps model name to a function that extracts the params seen by the GLM solver
+# (i.e. what the regularizer/proximal operator operates on).
+# Default (no entry) = identity: the full model_params IS the solver-level params.
+# Add an entry only for models whose solver receives a nested sub-structure.
+SOLVER_PARAMS_REGISTRY = {
+    "GLMHMM": lambda p: p.model_params,
 }
 
 
@@ -148,11 +178,172 @@ def _add_zeros(y):
     return y
 
 
-def _zero_init_params(X, y):
-    return (
-        jax.tree_util.tree_map(lambda x: jnp.zeros((*x[0].shape, *y.shape[1:])), X),
-        jnp.zeros(jnp.nanmean(y, axis=0).shape),
+class _TwoLeafModule(eqx.Module):
+    a: jnp.ndarray
+    b: jnp.ndarray
+
+
+# Pytree factories keyed by id; each takes n_samples and returns a pytree of arrays.
+_PYTREE_X_FACTORIES = {
+    "dict": lambda n: {"a": jnp.ones((n, 1)), "b": jnp.ones((n, 1))},
+    "eqx_module": lambda n: _TwoLeafModule(a=jnp.ones((n, 1)), b=jnp.ones((n, 1))),
+    "dict_list": lambda n: {"a": [jnp.ones((n, 1))], "b": jnp.ones((n, 1))},
+}
+
+# One entry per (model, obs_model) pair; all pytree types are tested for each.
+_MODEL_CONFIGS = [
+    ("GLM", "Poisson"),
+    ("PopulationGLM", "Poisson"),
+    ("ClassifierGLM", "Categorical"),
+    ("ClassifierPopulationGLM", "Categorical"),
+    ("GLMHMM", "Bernoulli"),
+]
+
+_MODEL_PYTREE_X_CASES = [
+    pytest.param(
+        {"model": model, "obs_model": obs_model, "simulate": True},
+        factory(DEFAULT_OBS_SHAPE[model][0]),
+        id=f"{model}-{pytree_id}",
     )
+    for model, obs_model in _MODEL_CONFIGS
+    for pytree_id, factory in _PYTREE_X_FACTORIES.items()
+]
+
+
+def _valid_init_params(fixture):
+    """Return the canonical user-facing init_params tuple for any model fixture.
+
+    Uses VALIDATOR_REGISTRY so the returned tuple has the right length and
+    structure for the model (e.g. 2-tuple for GLM, 5-tuple for GLMHMM).
+    """
+    model_name = fixture.model.__class__.__name__
+    return VALIDATOR_REGISTRY[model_name].from_model_params(fixture.params)
+
+
+def _solver_params(model_params, model_name):
+    """Return the params at the level seen by the GLM solver / regularizer.
+
+    For flat models (GLM, PopulationGLM) this is model_params itself.
+    For nested models (GLMHMM) the EM params wrap a GLM-level sub-pytree;
+    SOLVER_PARAMS_REGISTRY provides the extractor for those cases.
+    """
+    return SOLVER_PARAMS_REGISTRY.get(model_name, lambda p: p)(model_params)
+
+
+class TestModelVsPytree:
+    """Test that public model API accepts arbitrary pytree X inputs."""
+
+    @pytest.fixture(autouse=True)
+    def _patch_optimizer(
+        self,
+        patch_optimizer_run,
+        patch_optimizer_update,
+        instantiate_base_regressor_subclass,
+    ):
+        model_cls = instantiate_base_regressor_subclass.model.__class__
+        patch_optimizer_run(model_cls)
+        patch_optimizer_update(model_cls)
+
+    @pytest.mark.parametrize(
+        "instantiate_base_regressor_subclass, pytree_x",
+        _MODEL_PYTREE_X_CASES,
+        indirect=["instantiate_base_regressor_subclass"],
+    )
+    @pytest.mark.solver_related
+    def test_initialize_params_pytree_x(
+        self, instantiate_base_regressor_subclass, pytree_x
+    ):
+        """initialize_params runs without error when X is an arbitrary pytree."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        model.initialize_params(pytree_x, fixture.y)
+
+    @pytest.mark.parametrize(
+        "instantiate_base_regressor_subclass, pytree_x",
+        _MODEL_PYTREE_X_CASES,
+        indirect=["instantiate_base_regressor_subclass"],
+    )
+    @pytest.mark.solver_related
+    def test_initialize_optimizer_and_state_pytree_x(
+        self, instantiate_base_regressor_subclass, pytree_x
+    ):
+        """initialize_optimizer_and_state runs without error when X is an arbitrary pytree."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        params = model.initialize_params(pytree_x, fixture.y)
+        model.initialize_optimizer_and_state(params, pytree_x, fixture.y)
+
+    @pytest.mark.parametrize(
+        "instantiate_base_regressor_subclass, pytree_x",
+        _MODEL_PYTREE_X_CASES,
+        indirect=["instantiate_base_regressor_subclass"],
+    )
+    @pytest.mark.solver_related
+    def test_update_pytree_x(self, instantiate_base_regressor_subclass, pytree_x):
+        """update runs without error when X is an arbitrary pytree."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        params = model.initialize_params(pytree_x, fixture.y)
+        opt_state = model.initialize_optimizer_and_state(params, pytree_x, fixture.y)
+        model.update(params, opt_state, pytree_x, fixture.y)
+
+    @pytest.mark.parametrize(
+        "instantiate_base_regressor_subclass, pytree_x",
+        _MODEL_PYTREE_X_CASES,
+        indirect=["instantiate_base_regressor_subclass"],
+    )
+    @pytest.mark.solver_related
+    def test_fit_pytree_x(self, instantiate_base_regressor_subclass, pytree_x):
+        """fit runs without error when X is an arbitrary pytree."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        model.fit(pytree_x, fixture.y)
+
+    @pytest.mark.parametrize(
+        "instantiate_base_regressor_subclass, pytree_x",
+        _MODEL_PYTREE_X_CASES,
+        indirect=["instantiate_base_regressor_subclass"],
+    )
+    @pytest.mark.solver_related
+    def test_predict_pytree_x(self, instantiate_base_regressor_subclass, pytree_x):
+        """predict output shape matches y after fitting with pytree X."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        if not hasattr(model, "predict"):
+            pytest.skip(f"{type(model).__name__} does not implement predict")
+        model.fit(pytree_x, fixture.y)
+        assert model.predict(pytree_x).shape == fixture.y.shape
+
+    @pytest.mark.parametrize(
+        "instantiate_base_regressor_subclass, pytree_x",
+        _MODEL_PYTREE_X_CASES,
+        indirect=["instantiate_base_regressor_subclass"],
+    )
+    @pytest.mark.solver_related
+    def test_score_pytree_x(self, instantiate_base_regressor_subclass, pytree_x):
+        """score returns a scalar after fitting with pytree X."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        model.fit(pytree_x, fixture.y)
+        assert model.score(pytree_x, fixture.y).ndim == 0
+
+    @pytest.mark.parametrize(
+        "instantiate_base_regressor_subclass, pytree_x",
+        _MODEL_PYTREE_X_CASES,
+        indirect=["instantiate_base_regressor_subclass"],
+    )
+    @pytest.mark.solver_related
+    def test_simulate_pytree_x(self, instantiate_base_regressor_subclass, pytree_x):
+        """simulate runs without error and the simulated activity has the correct
+        n_samples when X is an arbitrary pytree."""
+        fixture = instantiate_base_regressor_subclass
+        model = fixture.model
+        model.fit(pytree_x, fixture.y)
+        n_samples = jax.tree_util.tree_leaves(pytree_x)[0].shape[0]
+        # simulate returns (counts, rates) for GLMs and (activity, rates, states)
+        # for GLM-HMM; the first element is the simulated activity either way.
+        activity, *_ = model.simulate(jax.random.key(123), pytree_x)
+        assert activity.shape[0] == n_samples
 
 
 def test_all_defaults_assigned():
@@ -192,9 +383,8 @@ def test_validate_lower_dimensional_data_X(instantiate_base_regressor_subclass):
     y = jnp.array([0, 1, 1])
     if is_population_model(model):
         y = y[None]
-    err_msg = "X must be 2-dimensional"
-    with pytest.raises(ValueError, match=err_msg):
-        model._validate(X, y, _zero_init_params(X, y))
+    with pytest.raises(ValueError, match="X must be 2-dimensional"):
+        model._validator.validate_inputs(X, y)
 
 
 @pytest.mark.parametrize(
@@ -213,7 +403,7 @@ def test_preprocess_fit_higher_dimensional_data_y(instantiate_base_regressor_sub
     else:
         err_msg = "y must be 1-dimensional"
     with pytest.raises(ValueError, match=err_msg):
-        model._validate(X, y, _zero_init_params(X, y))
+        model._validator.validate_inputs(X, y)
 
 
 @pytest.mark.parametrize(
@@ -230,7 +420,24 @@ def test_validate_higher_dimensional_data_X(instantiate_base_regressor_subclass)
     if is_population_model(model):
         y = y[None]
     with pytest.raises(ValueError, match="X must be 2-dimensional"):
-        model._validate(X, y, _zero_init_params(X, y))
+        model._validator.validate_inputs(X, y)
+
+
+@pytest.mark.parametrize(
+    "solver_name, expected_class",
+    [
+        ("GradientDescent[optimistix]", OptimistixNAG),
+        ("GradientDescent[optax+optimistix]", OptimistixOptaxGradientDescent),
+    ],
+)
+def test_instantiate_solver_backend_selection(solver_name, expected_class):
+    """Specifying a non-default backend via the full name should instantiate the correct solver class."""
+    mock = MockRegressor()
+    mock.solver_name = solver_name
+    solver = mock._instantiate_solver(
+        lambda params, X, y: jnp.sum(params), init_params=None
+    )
+    assert isinstance(solver, expected_class)
 
 
 @pytest.mark.parametrize(
@@ -314,6 +521,20 @@ class TestModelCommons:
                     regularizer_strength=1,
                 )
 
+    def test_mismatched_solver_regularizer_raises(
+        self, instantiate_base_regressor_subclass
+    ):
+        """Lasso regularizer with LBFGS solver raises ValueError at init."""
+        fixture = instantiate_base_regressor_subclass
+        model_cls = fixture.model.__class__
+        with pytest.raises(ValueError):
+            model_cls(
+                **DEFAULTS[model_cls.__name__],
+                regularizer="Lasso",
+                solver_name="LBFGS",
+                regularizer_strength=1.0,
+            )
+
     def test_get_params(self, instantiate_base_regressor_subclass):
         """
         Test that get_params() contains expected values.
@@ -366,10 +587,10 @@ class TestModelCommons:
         assert all(np.all(actual_values[k] == v) for k, v in expected_values.items())
 
     @pytest.mark.solver_related
-    def test_initialize_solver_mask_grouplasso(
+    def test_initialize_optimizer_mask_grouplasso(
         self, instantiate_base_regressor_subclass
     ):
-        """Test that the group lasso initialize_solver_and_state goes through"""
+        """Test that the group lasso initialize_optimizer_and_state goes through"""
         fixture = instantiate_base_regressor_subclass
         X, model, params = fixture.X, fixture.model, fixture.params
         # TODO: remove in next PR when GLM is compatible with categorical
@@ -382,20 +603,28 @@ class TestModelCommons:
         y = _add_zeros(y)
         n_groups = 2
         n_features = X.shape[1]
+        model_name = model.__class__.__name__
 
-        # Create mask with proper shape for GLM (2D) or PopulationGLM (3D)
-        if is_population_model(model):
-            n_neurons = y.shape[1]
-            mask_array = np.ones((n_groups, n_features, n_neurons), dtype=float)
-            mask_array[0, : n_features // 2, :] = 0
-            mask_array[1, n_features // 2 :, :] = 0
-        else:
-            mask_array = np.ones((n_groups, n_features), dtype=float)
-            mask_array[0, : n_features // 2] = 0
-            mask_array[1, n_features // 2 :] = 0
-
-        # Wrap mask in GLMParams structure
-        mask = GLMParams(jnp.asarray(mask_array, dtype=jnp.float32), None)
+        # Build mask at the level the GLM solver / regularizer operates on.
+        # For flat models this is the full model_params; for nested models (GLMHMM)
+        # the solver only sees the GLM sub-params. SOLVER_PARAMS_REGISTRY encodes
+        # that difference so no model-specific branching is needed here.
+        full_params = VALIDATOR_REGISTRY[model_name].to_model_params(
+            _valid_init_params(fixture)
+        )
+        sp = _solver_params(full_params, model_name)
+        struct = jax.tree_util.tree_structure(sp)
+        mask = jax.tree_util.tree_unflatten(struct, [None] * struct.num_leaves)
+        for where in sp.regularizable_subtrees():
+            leaf = jnp.asarray(where(sp))
+            mask_arr = (
+                jnp.ones((n_groups, *leaf.shape), dtype=jnp.float32)
+                .at[0, : n_features // 2]
+                .set(0)
+                .at[1, n_features // 2 :]
+                .set(0)
+            )
+            mask = eqx.tree_at(where, mask, mask_arr, is_leaf=lambda m: m is None)
 
         model.set_params(
             regularizer=nmo.regularizer.GroupLasso(mask=mask),
@@ -403,7 +632,7 @@ class TestModelCommons:
             regularizer_strength=1.0,
         )
         params = model.initialize_params(X, y)
-        init_state = model.initialize_solver_and_state(X, y, params)
+        init_state = model.initialize_optimizer_and_state(params, X, y)
         # optimistix solvers do not have a velocity attr
         assert getattr(
             init_state, "velocity", model._validator.to_model_params(params)
@@ -428,11 +657,11 @@ class TestModelCommons:
         ],
     )
     @pytest.mark.solver_related
-    def test_initialize_solver_all_invalid_X(
+    def test_initialize_optimizer_all_invalid_X(
         self, fill_val, expectation, instantiate_base_regressor_subclass
     ):
         fixture = instantiate_base_regressor_subclass
-        X, model, true_params = fixture.X, fixture.model, fixture.params
+        X, model = fixture.X, fixture.model
         # TODO: remove in next PR when GLM is compatible with categorical
         if isinstance(
             model.observation_model, nmo.observation_models.CategoricalObservations
@@ -444,7 +673,7 @@ class TestModelCommons:
         X.fill(fill_val)
         with expectation:
             params = model.initialize_params(X, y)
-            init_state = model.initialize_solver_and_state(X, y, params)
+            init_state = model.initialize_optimizer_and_state(params, X, y)
             # optimistix solvers do not have a velocity attr
             assert getattr(
                 init_state, "velocity", model._validator.to_model_params(params)
@@ -585,14 +814,14 @@ class TestModelCommons:
         assert model.regularizer_strength == (1.0, 0.5)
 
     ##########################################
-    # Test model.initialize_solver_and_state #
+    # Test model.initialize_optimizer_and_state #
     ##########################################
     @pytest.mark.solver_related
-    def test_initializer_solver_set_solver_callable(
+    def test_initialize_optimizer_set_solver_callable(
         self, instantiate_base_regressor_subclass
     ):
         fixture = instantiate_base_regressor_subclass
-        X, model, true_params = fixture.X, fixture.model, fixture.params
+        X, model = fixture.X, fixture.model
 
         # TODO: remove in next PR when GLM is compatible with categorical
         if isinstance(
@@ -603,14 +832,14 @@ class TestModelCommons:
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         y = _add_zeros(y)
 
-        assert model.solver_init_state is None
-        assert model.solver_update is None
-        assert model.solver_run is None
+        assert model.optimizer_init_state is None
+        assert model.optimizer_update is None
+        assert model.optimizer_run is None
         init_params = model.initialize_params(X, y)
-        model.initialize_solver_and_state(X, y, init_params)
-        assert callable(model.solver_init_state)
-        assert callable(model.solver_update)
-        assert callable(model.solver_run)
+        model.initialize_optimizer_and_state(init_params, X, y)
+        assert callable(model.optimizer_init_state)
+        assert callable(model.optimizer_update)
+        assert callable(model.optimizer_run)
 
 
 @pytest.mark.parametrize(
@@ -866,6 +1095,30 @@ class TestObservationModel:
 
 @pytest.mark.parametrize(
     "instantiate_base_regressor_subclass",
+    INSTANTIATE_MODEL_ONLY,
+    indirect=True,
+)
+def test_simulate_requires_fit(instantiate_base_regressor_subclass):
+    """simulate() raises before fit is called.
+
+    The exact exception is subclass-specific:
+      * GLM / PopulationGLM / GLMHMM raise ValueError ``not fitted``;
+      * ClassifierGLM raises RuntimeError ``Classes are not set`` (label encoder
+        is populated inside fit()).
+    """
+    fixture = instantiate_base_regressor_subclass
+    model_cls = fixture.model.__class__
+    fresh_model = model_cls(**DEFAULTS[model_cls.__name__])
+    if not hasattr(fresh_model, "simulate"):
+        pytest.skip(f"{model_cls.__name__} does not implement simulate")
+    with pytest.raises(
+        (ValueError, RuntimeError), match="not fitted|Classes are not set"
+    ):
+        fresh_model.simulate(jax.random.key(0), fixture.X)
+
+
+@pytest.mark.parametrize(
+    "instantiate_base_regressor_subclass",
     [
         {"model": m, "obs_model": "Poisson", "simulate": True}
         for m in MODEL_REGISTRY.keys()
@@ -873,9 +1126,15 @@ class TestObservationModel:
     indirect=True,
 )
 class TestModelSimulation:
+    @pytest.fixture(autouse=True)
+    def _patch_optimizer(
+        self, patch_optimizer_run, instantiate_base_regressor_subclass
+    ):
+        patch_optimizer_run(instantiate_base_regressor_subclass.model.__class__)
+
     @pytest.mark.parametrize(
         "n_params",
-        [0, 1, 2, 3, 4],
+        list(range(max(INIT_PARAM_LENGTH.values()) + 2)),
     )
     @pytest.mark.solver_related
     def test_fit_param_length(self, n_params, instantiate_base_regressor_subclass):
@@ -884,25 +1143,22 @@ class TestModelSimulation:
         Check for correct number of parameters.
         """
         fixture = instantiate_base_regressor_subclass
-        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        X, y, model = fixture.X, fixture.y, fixture.model
         model_name = model.__class__.__name__
         expectation = (
             pytest.raises(
                 ValueError,
-                match="Params must have length.|GLM-HMM requires three parameters",
+                match="Params must have length.",
             )
             if n_params != INIT_PARAM_LENGTH[model_name]
             else does_not_raise()
         )
 
+        full_params = _valid_init_params(fixture)
         if n_params < INIT_PARAM_LENGTH[model_name]:
-            # Convert GLMParams to tuple for slicing
-            params_tuple = (true_params.coef, true_params.intercept)
-            init_params = params_tuple[:n_params]
+            init_params = full_params[:n_params]
         else:
-            # Convert GLMParams to tuple for concatenation
-            params_tuple = (true_params.coef, true_params.intercept)
-            init_params = params_tuple + (true_params.coef,) * (
+            init_params = full_params + (full_params[0],) * (
                 n_params - INIT_PARAM_LENGTH[model_name]
             )
         with expectation:
@@ -924,13 +1180,13 @@ class TestModelSimulation:
         Test the `fit` method with X input data of different dimensionalities. Ensure correct dimensionality for X.
         """
         fixture = instantiate_base_regressor_subclass
-        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        X, y, model = fixture.X, fixture.y, fixture.model
         if delta_dim == -1:
             X = np.zeros((X.shape[0],))
         elif delta_dim == 1:
             X = np.zeros((X.shape[0], 1, X.shape[1]))
         with expectation:
-            model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
+            model.fit(X, y, init_params=_valid_init_params(fixture))
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
@@ -954,7 +1210,7 @@ class TestModelSimulation:
         Test the `fit` method with y target data of different dimensionalities. Ensure correct dimensionality for y.
         """
         fixture = instantiate_base_regressor_subclass
-        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        X, y, model = fixture.X, fixture.y, fixture.model
         if is_population_model(model):
             if delta_dim == -1:
                 y = y[:, 0]
@@ -970,7 +1226,7 @@ class TestModelSimulation:
                 for i in range(getattr(model, "n_classes", 0)):
                     y[i] = i
         with expectation:
-            model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
+            model.fit(X, y, init_params=_valid_init_params(fixture))
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -992,13 +1248,13 @@ class TestModelSimulation:
         Ensure the number of features in X aligns.
         """
         fixture = instantiate_base_regressor_subclass
-        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        X, y, model = fixture.X, fixture.y, fixture.model
         if delta_n_features == 1:
             X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
         elif delta_n_features == -1:
             X = X[..., :-1]
         with expectation:
-            model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
+            model.fit(X, y, init_params=_valid_init_params(fixture))
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -1026,10 +1282,10 @@ class TestModelSimulation:
         Test the `fit` method for inconsistencies in time-points in data X. Ensure the correct number of time-points.
         """
         fixture = instantiate_base_regressor_subclass
-        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        X, y, model = fixture.X, fixture.y, fixture.model
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
         with expectation:
-            model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
+            model.fit(X, y, init_params=_valid_init_params(fixture))
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -1058,12 +1314,12 @@ class TestModelSimulation:
         Test the `fit` method for inconsistencies in time-points in y. Ensure the correct number of time-points.
         """
         fixture = instantiate_base_regressor_subclass
-        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        X, y, model = fixture.X, fixture.y, fixture.model
         n_samples = y.shape[0] + delta_tp
         y_samp = min(n_samples, y.shape[0])
         y = jnp.zeros((n_samples,) + y.shape[1:]).at[:y_samp].set(y[:y_samp])
         with expectation:
-            model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
+            model.fit(X, y, init_params=_valid_init_params(fixture))
 
     @pytest.mark.parametrize(
         "fill_val, expectation",
@@ -1088,7 +1344,7 @@ class TestModelSimulation:
         self, fill_val, expectation, instantiate_base_regressor_subclass
     ):
         fixture = instantiate_base_regressor_subclass
-        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        X, y, model = fixture.X, fixture.y, fixture.model
         X.fill(fill_val)
         with expectation:
             model.fit(X, y)
@@ -1102,16 +1358,16 @@ class TestModelSimulation:
 class TestModelValidator:
     @pytest.mark.parametrize(
         "n_params",
-        [0, 1, 2, 3, 4],
+        list(range(max(INIT_PARAM_LENGTH.values()) + 2)),
     )
     @pytest.mark.solver_related
     def test_validate_param_length(self, n_params, instantiate_base_regressor_subclass):
         """
-        Test the `_initialize_solver_and_state` method with different numbers of initial parameters.
+        Test the `_initialize_optimizer_and_state` method with different numbers of initial parameters.
         Check for correct number of parameters.
         """
         fixture = instantiate_base_regressor_subclass
-        X, model, true_params = fixture.X, fixture.model, fixture.params
+        X, model = fixture.X, fixture.model
 
         # TODO: remove in next PR when GLM is compatible with categorical
         if isinstance(
@@ -1130,14 +1386,11 @@ class TestModelValidator:
             else does_not_raise()
         )
 
+        full_params = _valid_init_params(fixture)
         if n_params < INIT_PARAM_LENGTH[model_name]:
-            # Convert GLMParams to tuple for slicing
-            params_tuple = (true_params.coef, true_params.intercept)
-            init_params = params_tuple[:n_params]
+            init_params = full_params[:n_params]
         else:
-            # Convert GLMParams to tuple for concatenation
-            params_tuple = (true_params.coef, true_params.intercept)
-            init_params = params_tuple + (true_params.coef,) * (
+            init_params = full_params + (full_params[0],) * (
                 n_params - INIT_PARAM_LENGTH[model_name]
             )
         validator = VALIDATOR_REGISTRY[model_name]
@@ -1145,7 +1398,7 @@ class TestModelValidator:
             params = validator.validate_and_cast_params(init_params)
             user_params = validator.from_model_params(params)
             # check that params are set
-            init_state = model.initialize_solver_and_state(X, y, user_params)
+            init_state = model.initialize_optimizer_and_state(user_params, X, y)
             # optimistix solvers do not have a velocity attr
             assert getattr(init_state, "velocity", params) == params
 
@@ -1167,7 +1420,7 @@ class TestModelValidator:
         Ensure correct dimensionality for X.
         """
         fixture = instantiate_base_regressor_subclass
-        X, model, true_params = fixture.X, fixture.model, fixture.params
+        X, model = fixture.X, fixture.model
         y = np.zeros(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         if delta_dim == -1:
             X = np.zeros((X.shape[0],))
@@ -1195,7 +1448,7 @@ class TestModelValidator:
         Ensure correct dimensionality for y.
         """
         fixture = instantiate_base_regressor_subclass
-        X, model, true_params = fixture.X, fixture.model, fixture.params
+        X, model = fixture.X, fixture.model
         y = np.zeros(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         if is_population_model(model):
             if delta_dim == -1:
@@ -1207,7 +1460,7 @@ class TestModelValidator:
                 y = np.zeros([])
             elif delta_dim == 1:
                 y = np.zeros((y.shape[0], 1))
-        validator = VALIDATOR_REGISTRY[model.__class__.__name__]
+        _ = VALIDATOR_REGISTRY[model.__class__.__name__]
         with expectation:
             model._validator.validate_inputs(X, y)
 
@@ -1228,7 +1481,7 @@ class TestModelValidator:
         Ensure the number of features in X aligns.
         """
         fixture = instantiate_base_regressor_subclass
-        X, model, true_params = fixture.X, fixture.model, fixture.params
+        X, model = fixture.X, fixture.model
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         y = _add_zeros(y)
         for i in range(getattr(model, "n_classes", 0)):
@@ -1272,7 +1525,7 @@ class TestModelValidator:
         Ensure the correct number of time-points.
         """
         fixture = instantiate_base_regressor_subclass
-        X, model, true_params = fixture.X, fixture.model, fixture.params
+        X, model = fixture.X, fixture.model
         y = np.zeros(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
         validator = VALIDATOR_REGISTRY[model.__class__.__name__]
@@ -1307,7 +1560,7 @@ class TestModelValidator:
         Ensure the correct number of time-points.
         """
         fixture = instantiate_base_regressor_subclass
-        X, y, model, true_params = fixture.X, fixture.y, fixture.model, fixture.params
+        X, y, model = fixture.X, fixture.y, fixture.model
         shape = DEFAULT_OBS_SHAPE[model.__class__.__name__]
         y = jnp.zeros((shape[0] + delta_tp,) + shape[1:])
         validator = VALIDATOR_REGISTRY[model.__class__.__name__]
@@ -1337,7 +1590,7 @@ class TestModelValidator:
         self, fill_val, expectation, instantiate_base_regressor_subclass
     ):
         fixture = instantiate_base_regressor_subclass
-        X, model, true_params = fixture.X, fixture.model, fixture.params
+        X, model = fixture.X, fixture.model
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         X.fill(fill_val)
         validator = VALIDATOR_REGISTRY[model.__class__.__name__]
@@ -1367,7 +1620,7 @@ class TestModelValidator:
         self, fill_val, expectation, instantiate_base_regressor_subclass
     ):
         fixture = instantiate_base_regressor_subclass
-        X, model, true_params = fixture.X, fixture.model, fixture.params
+        X, model = fixture.X, fixture.model
         y = np.ones(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         y.fill(fill_val)
         validator = VALIDATOR_REGISTRY[model.__class__.__name__]

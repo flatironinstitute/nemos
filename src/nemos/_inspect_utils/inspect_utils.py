@@ -1,7 +1,16 @@
 import abc
 import functools
 import inspect
-from typing import Any, Callable, List, Tuple
+from typing import (
+    Any,
+    Callable,
+    List,
+    Literal,
+    Tuple,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 
 import numpy as np
 
@@ -344,6 +353,55 @@ def get_params(
         params = params[:first_n_params]
 
     return params
+
+
+def extract_literal_options(func: Callable, param_name: str) -> set[Any]:
+    """
+    Extract the ``Literal[...]`` options from a parameter's type annotation.
+
+    Walks union members recursively, so annotations such as
+    ``Optional[Literal["a", "b"] | Callable]`` are supported.
+
+    Parameters
+    ----------
+    func :
+        The function whose annotation should be inspected.
+    param_name :
+        The name of the parameter on ``func``.
+
+    Returns
+    -------
+    :
+        Set of the values declared in the ``Literal[...]`` block of the
+        annotation.
+
+    Raises
+    ------
+    KeyError
+        If ``func`` has no annotation for ``param_name``.
+    ValueError
+        If no ``Literal[...]`` is present in the annotation tree.
+    """
+    hints = get_type_hints(func)
+    if param_name not in hints:
+        raise KeyError(f"{func.__qualname__} has no annotation for {param_name!r}.")
+
+    def walk(annotation):
+        if get_origin(annotation) is Literal:
+            return set(get_args(annotation))
+        for member in get_args(annotation):
+            found = walk(member)
+            if found is not None:
+                return found
+        return None
+
+    options = walk(hints[param_name])
+    if options is None:
+        raise ValueError(
+            f"No Literal[...] found in annotation of {param_name!r} on "
+            f"{func.__qualname__}: {hints[param_name]!r}"
+        )
+    return options
 
 
 def implements_methods(solver_class: type, method_names: list[str]) -> None:

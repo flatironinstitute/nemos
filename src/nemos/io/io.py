@@ -19,6 +19,7 @@ from .._observation_model_builder import (
 )
 from .._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from ..glm import GLM, ClassifierGLM, ClassifierPopulationGLM, PopulationGLM
+from ..glm_hmm import GLMHMM
 from ..utils import _get_name, _unflatten_dict, get_env_metadata
 from ..validation import _suggest_keys
 
@@ -27,6 +28,7 @@ MODEL_REGISTRY = {
     "nemos.glm.glm.PopulationGLM": PopulationGLM,
     "nemos.glm.classifier_glm.ClassifierGLM": ClassifierGLM,
     "nemos.glm.classifier_glm.ClassifierPopulationGLM": ClassifierPopulationGLM,
+    "nemos.glm_hmm.glm_hmm.GLMHMM": GLMHMM,
 }
 
 ERROR_MSG_OVERRIDE_NOT_ALLOWED = (
@@ -77,20 +79,20 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     regularizer: Ridge()
     regularizer_strength: 0.1...
     solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
-    solver_name: BFGS[...]
+    solver_name: BFGS
     >>> # Save the model parameters to a file
     >>> model.save_params("model_params.npz")
     >>> # Load the model from the saved file
     >>> model = nmo.load_model("model_params.npz")
     >>> # Model has the same parameters before and after load
-    >>> for key, value in model.get_params().items():
+    >>> for key, value in model.get_params().items():  # doctest: +ELLIPSIS
     ...     print(f"{key}: {value}")
     inverse_link_function: <function one_over_x at ...>
     observation_model: GammaObservations()
     regularizer: Ridge()
-    regularizer_strength: 0.1...
-    solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
-    solver_name: BFGS[...]
+    regularizer_strength: 0.1
+    solver_kwargs: {'maxiter': 1000, 'stepsize': 0.1, 'tol': 1e-06}
+    solver_name: BFGS
 
     >>> # Loading a custom inverse link function
     >>> model = nmo.glm.GLM(inverse_link_function=lambda x: x**2)
@@ -108,7 +110,7 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     regularizer: UnRegularized()
     regularizer_strength: None
     solver_kwargs: {}
-    solver_name: GradientDescent[...]
+    solver_name: LBFGS
     """
     # load the model from a .npz file
     filename = Path(filename)
@@ -188,12 +190,12 @@ def _is_param(par):
 
 
 def _safe_instantiate(
-    parameter_name: str, class_name: str, **kwargs
+    param_name: str, class_name: str, **kwargs
 ) -> "Regularizer | Observations":
     if not isinstance(class_name, str):
         # this should not be hit, if it does the saved params had been modified.
         raise ValueError(
-            f"Parameter ``{parameter_name}`` cannot be initialized. "
+            f"Parameter ``{param_name}`` cannot be initialized. "
             "When a parameter specifies a class, the class name must be a string. "
             f"Class name for the loaded parameter is {class_name}."
         )
@@ -204,14 +206,14 @@ def _safe_instantiate(
         return instantiate_observation_model(class_name, **kwargs)
     else:
         # Hit when loading a custom class without mapping
-        if parameter_name == "observation_model":
+        if param_name == "observation_model":
             class_type = "observation"
         else:
             class_type = "regularization"
         raise ValueError(
             f"The class '{class_basename}' is not a native NeMoS class.\n"
             f"To load a custom {class_type} class, please provide the following mapping:\n\n"
-            f" - nemos.load_model(save_path, mapping_dict={{'{parameter_name}': {class_basename}}})"
+            f" - nemos.load_model(save_path, mapping_dict={{'{param_name}': {class_basename}}})"
         )
 
 
@@ -285,8 +287,19 @@ def _apply_custom_map(
         # handle classes and params separately
         if _is_param(val):
             if isinstance(val, dict):
-                # dict cannot be mapped, so store original params
-                updated_params[key] = val
+                # Plain dict (e.g. *_initialization_funcs): recurse so per-slot
+                # overrides flow through the same logic as top-level params.
+                # The downstream setter fills missing slots and validates.
+                mapped_val = mapping_dict.get(key, {})
+                if isinstance(mapped_val, dict) and mapped_val:
+                    sub_keys: List = []
+                    new_val, sub_keys = _apply_custom_map(
+                        val, mapped_val, updated_keys=sub_keys
+                    )
+                    updated_params[key] = new_val
+                    updated_keys.extend(f"{key}__{k}" for k in sub_keys)
+                else:
+                    updated_params[key] = val
             else:
                 mapped_val = mapping_dict.get(key, None)
                 is_mapped = mapped_val is not None
@@ -569,6 +582,11 @@ def _get_invalid_mappings(mapping_dict: dict | None) -> List:
         # Handle dict with "params" key (but no "class" or already processed)
         elif isinstance(v, dict) and "params" in v:
             invalid_sub = _get_invalid_mappings(v["params"])
+            invalid.extend(f"{key}__{k}" for k in invalid_sub)
+        # Plain dict of per-slot overrides (e.g. model_initialization_funcs).
+        # Each leaf must be callable/class; nested dicts are validated recursively.
+        elif isinstance(v, dict):
+            invalid_sub = _get_invalid_mappings(v)
             invalid.extend(f"{key}__{k}" for k in invalid_sub)
         # Handle non-dict values
         elif not inspect.isclass(v) and not callable(v):

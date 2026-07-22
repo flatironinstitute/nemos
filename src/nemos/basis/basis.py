@@ -2663,13 +2663,15 @@ class FourierEval(EvalBasisMixin, FourierBasis):
           for NeMoS GLMs, which already include an intercept term by default, making an
           additional intercept in the design matrix redundant.
 
-        * Array-like of integers {0, 1} or booleans: Selects frequencies to
-          keep (1/True) or exclude (0/False). Shape must match the number of
-          available frequencies for each dimension.
+        * Array-like of integers {0, 1} or booleans: A 1D mask with one entry
+          per column of ``masked_frequencies``, keeping (1/True) or dropping
+          (0/False) that frequency combination. At construction it filters the
+          combinations left by the default ``"no-intercept"`` selection; print
+          ``masked_frequencies`` to see the combinations in column order.
 
-        * :class:`~typing.Callable`: A function applied to each frequency index (one index
-          per dimension), returning a single boolean or {0, 1} indicating whether
-          to keep that frequency.
+        * :class:`~typing.Callable`: A function applied to each retained frequency
+          combination (one scalar per dimension, signed), returning a single
+          boolean or {0, 1} indicating whether to keep that frequency.
 
         * :class:`None <NoneType>`: All frequencies are kept.
 
@@ -2717,27 +2719,30 @@ class FourierEval(EvalBasisMixin, FourierBasis):
     **2D: unmasked grid of frequency pairs**
 
     >>> fourier_2d = FourierEval(n_freq, ndim=2)
-    >>> # (5*5 frequency pairs) * 2 (cos+sin) - 1 (no sine at DC) = 49
+    >>> # half-space of the 5x5 grid has 41 pairs (incl. DC); DC dropped -> 40; *2
     >>> fourier_2d.n_basis_funcs
-    48
+    80
     >>> x, y = rng.normal(size=(2, 6))
     >>> X = fourier_2d.compute_features(x, y)
     >>> X.shape
-    (6, 48)
+    (6, 80)
 
     **2D: masking with an array (drop 3 pairs)**
 
-    >>> mask = np.ones((5, 5))
-    >>> # drop 3 frequency pairs, including DC term (0,0)
-    >>> mask[[0, 0, 1], [0, 1, 2]] = 0
+    >>> # one mask entry per retained pair: the default "no-intercept"
+    >>> # selection drops the DC and leaves 40 pairs
+    >>> fourier_2d.masked_frequencies.shape
+    (2, 40)
+    >>> mask = np.ones(40)
+    >>> mask[:3] = 0  # drop the first 3 pairs
     >>> fourier_2d_masked = FourierEval(
     ...     n_freq,
     ...     ndim=2,
     ...     frequency_mask=mask
     ... )
-    >>> # (5*5-3 frequency pairs) * 2 (cos+sin) = 44
+    >>> # (40 pairs - 3 dropped) * 2 (cos+sin) = 74
     >>> fourier_2d_masked.n_basis_funcs
-    44
+    74
 
     **2D: masking with a callable**
 
@@ -2749,7 +2754,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
     ...     frequency_mask=keep_circle
     ... )
     >>> fourier_2d_funcmask.n_basis_funcs
-    25
+    37
 
     **Explicit frequency specifications**
 
@@ -2759,9 +2764,9 @@ class FourierEval(EvalBasisMixin, FourierBasis):
     ...     frequencies=[np.arange(3), (1, 4)],
     ...     ndim=2
     ... )
-    >>> # (3*3 frequency pairs) * 2 (cos+sin) = 18; no DC term (0, 0)
+    >>> # 15 half-space pairs (no DC, since the y-axis omits 0) -> 2*15 = 30
     >>> fourier_mixed.n_basis_funcs
-    18
+    30
 
     """
 

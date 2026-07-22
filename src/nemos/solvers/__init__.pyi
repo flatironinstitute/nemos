@@ -4,6 +4,7 @@ from ._abstract_solver import (
     AbstractSolver,
     OptimizationInfo,
     Params,
+    SolverAdapterState,
     SolverProtocol,
     SolverState,
     StepResult,
@@ -17,6 +18,7 @@ from ._jaxopt_solvers import (
     JaxoptNonlinearCG,
     JaxoptProximalGradient,
 )
+from ._newton import Newton
 from ._optax_optimistix_solvers import (
     OptimistixOptaxGradientDescent,
     OptimistixOptaxLBFGS,
@@ -29,8 +31,10 @@ from ._solver_registry import (
     list_algo_backends,
     list_available_algorithms,
     list_available_solvers,
+    list_stochastic_solvers,
     register,
     set_default_backend,
+    supports_stochastic,
 )
 from ._svrg import SVRG, ProxSVRG, WrappedProxSVRG, WrappedSVRG
 from ._svrg_defaults import (
@@ -45,6 +49,7 @@ __all__ = [
     "Params",
     "SolverProtocol",
     "SolverState",
+    "SolverAdapterState",
     "StepResult",
     "OptimistixFISTA",
     "OptimistixNAG",
@@ -64,8 +69,10 @@ __all__ = [
     "list_algo_backends",
     "list_available_algorithms",
     "list_available_solvers",
+    "list_stochastic_solvers",
     "register",
     "set_default_backend",
+    "supports_stochastic",
     "SVRG",
     "ProxSVRG",
     "WrappedProxSVRG",
