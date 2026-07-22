@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from copy import deepcopy
 
 import jax
@@ -16,10 +17,10 @@ from nemos.solvers._abstract_solver import OptimizationInfo
 from nemos.solvers._hess import (
     BlockDiagonal,
     Full,
+    HessianTag,
     PositiveDefinite,
     PositiveSemiDefinite,
 )
-from nemos.solvers._hess import HessianTag
 from nemos.solvers._newton import Newton, NewtonState
 from nemos.tree_utils import pytree_map_and_reduce
 
@@ -340,9 +341,9 @@ def test_solver_invalidated_after_strength_change(request, model_instantiation_t
     assert model._solver is not None
 
     model.regularizer_strength = 0.5
-    assert model._solver is None, (
-        "_solver must be None after regularizer_strength change."
-    )
+    assert (
+        model._solver is None
+    ), "_solver must be None after regularizer_strength change."
 
 
 @pytest.mark.parametrize(
