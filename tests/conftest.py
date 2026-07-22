@@ -30,7 +30,14 @@ import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
 from nemos.base_regressor import BaseRegressor
 from nemos.base_validator import RegressorValidator
-from nemos.basis import AdditiveBasis, Category, CustomBasis, MultiplicativeBasis, Zero
+from nemos.basis import (
+    AdditiveBasis,
+    Category,
+    CustomBasis,
+    FourierGP,
+    MultiplicativeBasis,
+    Zero,
+)
 from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import BasisMixin
 from nemos.basis._transformer_basis import TransformerBasis
@@ -454,7 +461,7 @@ class CombinedBasis(BasisFuncsTesting):
 
 def is_eval_basis(basis_cls) -> bool:
     is_eval = "Eval" in basis_cls.__name__ or issubclass(
-        basis_cls, (basis.Zero, Category)
+        basis_cls, (basis.Zero, Category, FourierGP)
     )
     return is_eval
 
@@ -481,7 +488,7 @@ def list_all_basis_classes(filter_basis="all") -> list[BasisMixin]:
             for _, bas in inspect_utils.get_non_abstract_classes(nmo.basis._basis)
             if bas != TransformerBasis
         ]
-        + [CustomBasis, Category]
+        + [CustomBasis, Category, FourierGP]
     )
     if filter_basis != "all":
         cond_fn = is_eval_basis if filter_basis == "Eval" else is_conv_basis
