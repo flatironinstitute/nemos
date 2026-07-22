@@ -227,7 +227,7 @@ trans_bas.fit_transform(inp)
 
 #### The Solution
 
-Noting that only `Eval` bases carry `bounds` while convolutional bases do not, we can fully set up the `TransformerBasis` by fixing the bounds for the `Eval` component (`speed`) of `composite_basis`.
+We can finish setting up the `TransformerBasis` by setting the bounds for the `speed` component (`speed`) of `composite_basis`. We do not need to do this for the `position` component because it is `Conv` basis object, and only `Eval` basis objects have `bounds`. 
 
 
 ```{code-cell} ipython3
