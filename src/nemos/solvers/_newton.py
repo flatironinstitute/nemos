@@ -267,7 +267,9 @@ class Newton:
                 p,
                 s,
                 *args,
-            )[:2]  # Discard aux; convergence only needs params and state
+            )[
+                :2
+            ]  # Discard aux; convergence only needs params and state
 
         if self.jit:
             final_params, final_state = eqx.internal.while_loop(
