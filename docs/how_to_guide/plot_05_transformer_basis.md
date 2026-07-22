@@ -105,6 +105,10 @@ The `TransformerBasis` has two additional requirements: input shape (all basis o
 
 ### Setting the `input_shape`
 
+:::{note}
+If each basis accepts a single column of the input, as in [this example](sklearn-how-to), then the default behavior works fine, and `set_input_shape` does not need to be called.
+:::
+
 #### The Problem
 
 By default, `TransformerBasis` assumes that `inp` has one column per input in the composition. So in this example, with two one-dimensional basis functions, `TransformerBasis` expects an input of shape `(n_samples, 2)`.
@@ -138,9 +142,6 @@ trans_bas.fit_transform(inp)
 
 #### The Solution: Defining the Input Shape
 
-:::{note}
-If each basis accepts a single column of the input, as in [this example](sklearn-how-to), then the default behavior works fine, and `set_input_shape` does not need to be called.
-:::
 
 To resolve this, we need to explicitly specify the input structure using the `set_input_shape` method. This method tells `TransformerBasis` how to interpret the input columns by storing the number of columns assigned to each basis function.
 
@@ -227,7 +228,7 @@ trans_bas.fit_transform(inp)
 
 #### The Solution
 
-We can finish setting up the `TransformerBasis` by setting the bounds for the `speed` component (`speed`) of `composite_basis`. We do not need to do this for the `position` component because it is `Conv` basis object, and only `Eval` basis objects have `bounds`. 
+We can finish setting up the `TransformerBasis` by setting the bounds for the `speed` component (`speed`) of `composite_basis`. We do not need to do this for the `position` component because it is `Conv` basis object, and only `Eval` basis objects have `bounds`.
 
 
 ```{code-cell} ipython3

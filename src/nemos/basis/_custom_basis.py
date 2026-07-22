@@ -181,10 +181,10 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
 
         Functions that normalize by a quantity computed from the input are unsafe here, because that
         quantity — and so the transformation — changes from one input to the next, whereas across
-        cross-validation folds it must stay identical. 
-        
+        cross-validation folds it must stay identical.
+
         Thus, you should precompute any such quantity once (e.g. on the training set) and pass it in
-        as a constant, so the output depends only on each sample. When z-scoring, for example, this 
+        as a constant, so the output depends only on each sample. When z-scoring, for example, this
         means precomputing the centering and scaling instead of recomputing them from each input:
         replace ``lambda x: (x - x.mean()) / x.std()`` with ``lambda x: (x - mean) / std``, where ``mean``
         and ``std`` are fixed. See Examples below for an example of this.
