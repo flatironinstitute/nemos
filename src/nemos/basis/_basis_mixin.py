@@ -7,7 +7,6 @@ import copy
 import inspect
 import re
 from collections import OrderedDict
-from contextlib import contextmanager
 from functools import wraps
 from itertools import chain
 from typing import (
@@ -36,8 +35,10 @@ from ._composition_utils import (
     get_input_shape,
     infer_input_dimensionality,
     is_basis_like,
+    is_shallow_construction,
     label_setter,
     set_input_shape,
+    shallow_construction,
 )
 from ._transformer_basis import TransformerBasis
 
@@ -923,8 +924,6 @@ class CompositeBasisMixin(BasisMixin):
     (AdditiveBasis and MultiplicativeBasis).
     """
 
-    _shallow_copy: bool = False
-
     def __init__(
         self, basis1: BasisMixin, basis2: BasisMixin, label: Optional[str] = None
     ):
@@ -944,7 +943,7 @@ class CompositeBasisMixin(BasisMixin):
         # deep copy to avoid changes directly to the 1d basis to be reflected
         # in the composite basis.
 
-        if not self.__class__._shallow_copy:
+        if not is_shallow_construction():
             basis1 = copy.deepcopy(basis1)
             basis2 = copy.deepcopy(basis2)
 
@@ -1154,16 +1153,6 @@ class CompositeBasisMixin(BasisMixin):
         if hasattr(self.basis2, "_set_input_independent_states"):
             self.basis2._set_input_independent_states()
 
-    @contextmanager
-    def _set_shallow_copy(self, value):
-        """Context manager for setting the shallow copy flag in a thread safe way."""
-        old_value = self.__class__._shallow_copy
-        self.__class__._shallow_copy = value
-        try:
-            yield
-        finally:
-            self.__class__._shallow_copy = old_value
-
     @set_input_shape_state(states=("_input_shape_product", "_label"))
     def __sklearn_clone__(self) -> Basis:
         """Clone the basis while preserving attributes related to input shapes.
@@ -1176,10 +1165,11 @@ class CompositeBasisMixin(BasisMixin):
 
         Notes
         -----
-        The ``_shallow_copy`` attribute is set to True in the context, forcing a shallow copy, at
-        before the klass definition, and reset to False after cloning.
+        The construction runs inside a :func:`shallow_construction` context, so the
+        freshly cloned components are stored by reference instead of being deep-copied
+        again.
         """
-        with self._set_shallow_copy(True):
+        with shallow_construction():
             # clone recursively
             basis1 = self.basis1.__sklearn_clone__()
             basis2 = self.basis2.__sklearn_clone__()

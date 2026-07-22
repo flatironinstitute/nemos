@@ -37,6 +37,7 @@ from ._composition_utils import (
     promote_to_transformer,
     raise_basis_to_power,
     set_input_shape,
+    shallow_construction,
 )
 
 
@@ -1016,7 +1017,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
                 "Resetting input shape to default (None).",
             )
 
-        with self._set_shallow_copy(not have_unique_shapes):
+        with shallow_construction(not have_unique_shapes):
             CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
         Basis.__init__(self)
 
