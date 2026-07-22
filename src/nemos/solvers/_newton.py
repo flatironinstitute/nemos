@@ -152,7 +152,7 @@ class Newton:
         if self._hess_tag.structure is BlockDiagonal:
             return jax.vmap(
                 self._solve,
-                in_axes=(0, self._hess_tag.batch_axes),
+                in_axes=(self._hess_tag.batch_axes, 0),
                 out_axes=self._hess_tag.batch_axes,
             )(grad, H)
         else:

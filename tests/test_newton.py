@@ -1,4 +1,5 @@
 from __future__ import annotations
+from copy import deepcopy
 
 import jax
 import jax.numpy as jnp
@@ -18,6 +19,7 @@ from nemos.solvers._hess import (
     PositiveDefinite,
     PositiveSemiDefinite,
 )
+from nemos.solvers._hess import HessianTag
 from nemos.solvers._newton import Newton, NewtonState
 from nemos.tree_utils import pytree_map_and_reduce
 
@@ -208,6 +210,29 @@ def test_newton_population_glm_converges(request, regularizer_name, feature_mask
 
 
 @pytest.mark.requires_x64
+@pytest.mark.parametrize("feature_mask", [True, False])
+def test_newton_population_glm_matches_full_autodiff(request, feature_mask):
+    """Newton-fitted PopulationGLM should match a full autodiff model that does not vmap over subproblems."""
+    X, y, model, params, _ = request.getfixturevalue(
+        "population_poissonGLM_model_instantiation"
+    )
+    model.regularizer = "Ridge"
+    model.regularizer_strength = 0.1
+    if feature_mask:
+        model._feature_mask = initialize_feature_mask_for_population_glm(
+            X, y.shape[1], coef=params.coef
+        )
+
+    full_model = deepcopy(model)
+    full_model._get_hess_fn = lambda: None
+    full_model._hess_tag = HessianTag(structure=Full, property=PositiveSemiDefinite)
+
+    full_model.fit(X, y)
+    model.fit(X, y)
+    np.testing.assert_allclose(full_model.coef_, model.coef_, atol=1e-3)
+
+
+@pytest.mark.requires_x64
 @pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
 @pytest.mark.parametrize("structure", ["", "_pytree"])
 def test_newton_classifier_glm_converges(request, regularizer_name, structure):
@@ -245,6 +270,29 @@ def test_newton_classifier_population_glm_converges(
     assert model.coef_ is not None
     assert model.intercept_ is not None
     assert bool(model.solver_state_.stats.converged), "Solver did not converge."
+
+
+@pytest.mark.requires_x64
+@pytest.mark.parametrize("feature_mask", [True, False])
+def test_newton_population_classifier_glm_matches_full_autodiff(request, feature_mask):
+    """Newton-fitted ClassifierPopulationGLM should match a full autodiff model that does not vmap over subproblems."""
+    X, y, model, params, _ = request.getfixturevalue(
+        "population_classifierGLM_model_instantiation"
+    )
+    model.regularizer = "Ridge"
+    model.regularizer_strength = 0.1
+    if feature_mask:
+        model._feature_mask = initialize_feature_mask_for_population_glm(
+            X, y.shape[1], coef=params.coef
+        )
+
+    full_model = deepcopy(model)
+    full_model._get_hess_fn = lambda: None
+    full_model._hess_tag = HessianTag(structure=Full, property=PositiveSemiDefinite)
+
+    full_model.fit(X, y)
+    model.fit(X, y)
+    np.testing.assert_allclose(full_model.coef_, model.coef_, atol=1e-3)
 
 
 @pytest.mark.parametrize(
@@ -292,9 +340,9 @@ def test_solver_invalidated_after_strength_change(request, model_instantiation_t
     assert model._solver is not None
 
     model.regularizer_strength = 0.5
-    assert (
-        model._solver is None
-    ), "_solver must be None after regularizer_strength change."
+    assert model._solver is None, (
+        "_solver must be None after regularizer_strength change."
+    )
 
 
 @pytest.mark.parametrize(
