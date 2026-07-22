@@ -123,6 +123,8 @@ def combine_hessian_tags(
 
     Valid when the total objective is a sum of two functions (e.g. loss + regularizer),
     since the Hessian of a sum is the sum of the Hessians.
+
+    The batch_axes are taken from t1, which will typically be the model tag.
     """
     if t1 is None or t2 is None:
         return None

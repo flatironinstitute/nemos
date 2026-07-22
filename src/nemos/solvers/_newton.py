@@ -135,9 +135,9 @@ class Newton:
             ls_state=ls_state,
         )
 
-    def _solve(self, hess, grad):
+    def _solve(self, grad, H):
         operator = lx.PyTreeLinearOperator(
-            hess,
+            H,
             jax.eval_shape(lambda: grad),
             tags=self._operator_tags,
         )
@@ -154,9 +154,9 @@ class Newton:
                 self._solve,
                 in_axes=(0, self._hess_tag.batch_axes),
                 out_axes=self._hess_tag.batch_axes,
-            )(H, grad)
+            )(grad, H)
         else:
-            return self._solve(H, grad)
+            return self._solve(grad, H)
 
     def _apply_or_reject(
         self,
@@ -168,16 +168,7 @@ class Newton:
         *args,
     ):
         """Accept or reject step based on descent condition and line search."""
-        descent = (
-            sum(
-                jnp.vdot(g, s)
-                for g, s in zip(
-                    jax.tree.leaves(grad),
-                    jax.tree.leaves(step),
-                )
-            )
-            < 0
-        )
+        descent = lx.internal.tree_dot(grad, step)
 
         def accept(_):
             updates, new_ls_state = self._line_search.update(
@@ -211,12 +202,7 @@ class Newton:
     ) -> NewtonStepResult:
 
         (fval, aux), grad = self._gradient(params, *args)
-        gnorm = jnp.sqrt(
-            jax.tree_util.tree_reduce(
-                lambda a, b: a + b,
-                jax.tree.map(lambda x: jnp.vdot(x, x), grad),
-            )
-        )
+        gnorm = jnp.sqrt(lx.internal.tree_dot(grad, grad))
         converged = gnorm <= self.tol
 
         def step(_):
@@ -281,9 +267,7 @@ class Newton:
                 p,
                 s,
                 *args,
-            )[
-                :2
-            ]  # Discard aux; convergence only needs params and state
+            )[:2]  # Discard aux; convergence only needs params and state
 
         if self.jit:
             final_params, final_state = eqx.internal.while_loop(
