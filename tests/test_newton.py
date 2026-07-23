@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -294,6 +295,143 @@ def test_newton_population_classifier_glm_matches_full_autodiff(request, feature
     full_model.fit(X, y)
     model.fit(X, y)
     np.testing.assert_allclose(full_model.coef_, model.coef_, atol=1e-3)
+
+
+@pytest.mark.requires_x64
+@pytest.mark.parametrize("feature_mask", [True, False])
+def test_newton_population_classifier_glm_matches_full_autodiff_update(
+    request, feature_mask
+):
+    """Newton-fitted ClassifierPopulationGLM should match a full autodiff model that does not vmap over subproblems."""
+    X, y, model, params, _ = request.getfixturevalue(
+        "population_classifierGLM_model_instantiation"
+    )
+    model.regularizer = "Ridge"
+    model.regularizer_strength = 0.1
+    if feature_mask:
+        model._feature_mask = initialize_feature_mask_for_population_glm(
+            X, y.shape[1], coef=params.coef
+        )
+
+    full_model = deepcopy(model)
+    full_model._get_hess_fn = lambda: None
+    full_model._hess_tag = HessianTag(structure=Full, property=PositiveSemiDefinite)
+
+    p0 = model.initialize_params(X, y)
+    state0 = model.initialize_optimizer_and_state(p0, X, y)
+    state0_full = full_model.initialize_optimizer_and_state(p0, X, y)
+
+    p_full, state_full = full_model.update(p0, state0_full, X, y)
+    p, state = model.update(p0, state0, X, y)
+    params_match = eqx.tree_equal(p_full, p)
+    state_match = eqx.tree_equal(state_full, state)
+    if not params_match:
+        max_diff = jax.tree.reduce(
+            jnp.maximum, jax.tree.map(lambda x, y: jnp.max(jnp.abs(x - y)), p, p_full)
+        )
+        raise ValueError(f"Parameters do not match. Max diff: {max_diff}")
+    if not state_match:
+        max_diff = jax.tree.reduce(
+            jnp.maximum,
+            jax.tree.map(lambda x, y: jnp.max(jnp.abs(x - y)), state, state_full),
+        )
+        raise ValueError(f"States do not match. Max diff: {max_diff}")
+    # check that update happened
+    assert not eqx.tree_equal(p0, p), "Did not update."
+
+
+@pytest.mark.requires_x64
+@pytest.mark.parametrize("feature_mask", [True, False])
+def test_newton_population_classifier_glm_block_hessian_matches_full(
+    request, feature_mask
+):
+    """The vmapped per-neuron Hessian should equal the diagonal neuron-blocks of the
+    full autodiff Hessian, and the full Hessian should be block-diagonal across neurons.
+
+    Both Hessians are rendered as dense matrices (per neuron) via a flatten/unflatten of
+    the parameter pytree, so the comparison is on the actual matrices the Newton solve
+    consumes.
+    """
+    import lineax as lx
+
+    from nemos.glm.params import GLMParams
+
+    X, y, model, params, _ = request.getfixturevalue(
+        "population_classifierGLM_model_instantiation"
+    )
+    model.regularizer = "Ridge"
+    model.regularizer_strength = 0.1
+    if feature_mask:
+        model._feature_mask = initialize_feature_mask_for_population_glm(
+            X, y.shape[1], coef=params.coef
+        )
+
+    full_model = deepcopy(model)
+    full_model._get_hess_fn = lambda: None
+    full_model._hess_tag = HessianTag(structure=Full, property=PositiveSemiDefinite)
+
+    p0 = model.initialize_params(X, y)
+    model.initialize_optimizer_and_state(p0, X, y)
+    full_model.initialize_optimizer_and_state(p0, X, y)
+
+    # encode the labels exactly as ``update`` does before handing off to the solver
+    y_enc = jax.nn.one_hot(model._label_encoder.encode(y, safe=False), model.n_classes)
+    p = GLMParams(*p0)
+
+    # full: nested GLMParams coupling every (neuron, class); block: leading axis batches neurons
+    H_full = full_model._solver._hessian(p, X, y_enc)
+    H_block = model._solver._hessian(p, X, y_enc)
+
+    n_neurons = p.intercept.shape[0]
+    # single-neuron parameter structure used to flatten each block to a dense matrix
+    struct_neuron = jax.eval_shape(
+        lambda: GLMParams(coef=p.coef[:, 0], intercept=p.intercept[0])
+    )
+    to_matrix = lambda block: lx.PyTreeLinearOperator(block, struct_neuron).as_matrix()
+
+    for n in range(n_neurons):
+        full_block = GLMParams(
+            coef=GLMParams(
+                coef=H_full.coef.coef[:, n, :, :, n, :],
+                intercept=H_full.coef.intercept[:, n, :, n, :],
+            ),
+            intercept=GLMParams(
+                coef=H_full.intercept.coef[n, :, :, n, :],
+                intercept=H_full.intercept.intercept[n, :, n, :],
+            ),
+        )
+        block = GLMParams(
+            coef=GLMParams(
+                coef=H_block.coef.coef[n], intercept=H_block.coef.intercept[n]
+            ),
+            intercept=GLMParams(
+                coef=H_block.intercept.coef[n], intercept=H_block.intercept.intercept[n]
+            ),
+        )
+        np.testing.assert_allclose(
+            to_matrix(block),
+            to_matrix(full_block),
+            atol=1e-8,
+            err_msg=f"Block Hessian for neuron {n} does not match the full diagonal block.",
+        )
+
+    # the block solve is only exact if the full Hessian has no cross-neuron coupling
+    for i in range(n_neurons):
+        for j in range(n_neurons):
+            if i == j:
+                continue
+            np.testing.assert_allclose(
+                H_full.coef.coef[:, i, :, :, j, :],
+                0.0,
+                atol=1e-8,
+                err_msg=f"Off-diagonal coef block ({i}, {j}) is nonzero.",
+            )
+            np.testing.assert_allclose(
+                H_full.intercept.intercept[i, :, j, :],
+                0.0,
+                atol=1e-8,
+                err_msg=f"Off-diagonal intercept block ({i}, {j}) is nonzero.",
+            )
 
 
 @pytest.mark.parametrize(
