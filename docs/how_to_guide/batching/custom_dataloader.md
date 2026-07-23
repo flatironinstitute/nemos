@@ -91,6 +91,19 @@ Now we are ready to set up the data loader.
 ```{code-cell} ipython3
 class PynappleDataLoader(nmo.batching.DataLoader):
     def __init__(self, spike_times, basis, batch_size, bin_size):
+        """Build design-matrix batches on the fly from spike times.
+
+        Parameters
+        ----------
+        spike_times : pynapple.TsGroup
+            Spike times, one entry per unit.
+        basis : nemos.basis.Basis
+            Convolutional basis used to build the design matrix from binned counts.
+        batch_size : float
+            Batch duration, in seconds.
+        bin_size : float
+            Bin width for counting spikes, in seconds.
+        """
         self.spike_times = spike_times
         self.basis = basis
         self.batch_size = batch_size
@@ -235,6 +248,23 @@ Putting the pieces together:
 ```{code-cell} ipython3
 class MultiEpochPynappleDataLoader(nmo.batching.DataLoader):
     def __init__(self, spike_times, basis, interval_size, bin_size, shuffle=True, seed=123):
+        """Build gap-safe design-matrix batches from a discontinuous recording.
+
+        Parameters
+        ----------
+        spike_times : pynapple.TsGroup
+            Spike times, one entry per unit; its ``time_support`` may hold multiple intervals.
+        basis : nemos.basis.Basis
+            Convolutional basis used to build the design matrix from binned counts.
+        interval_size : float
+            Chunk duration, in seconds.
+        bin_size : float
+            Bin width for counting spikes, in seconds.
+        shuffle : bool, default True
+            Whether to reshuffle the chunk order on every pass.
+        seed : int, default 123
+            Seed for the chunk-shuffling RNG.
+        """
         self.spike_times = spike_times
         self.basis = basis
         self.bin_size = bin_size
