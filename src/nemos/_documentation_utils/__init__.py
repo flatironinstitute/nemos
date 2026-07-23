@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
 
 from ._myst_nb_glue import FormattedString, glue_two_step_convolve
+from .glm_hmm import (
+    plot_accuracy_and_occupancy,
+    plot_design_matrix,
+    plot_glm_weights,
+    plot_posteriors,
+    plot_proba_left,
+    plot_transition_matrix,
+    relabel,
+    select_sessions,
+)
 from .plotting import (
     PlotSlidingWindow,
     current_injection_plot,
