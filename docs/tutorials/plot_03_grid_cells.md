@@ -16,6 +16,9 @@ kernelspec:
 
 %matplotlib inline
 import warnings
+import jax
+
+jax.config.update("jax_enable_x64", True)
 
 # Ignore the first specific warning
 warnings.filterwarnings(
@@ -212,9 +215,6 @@ Here we will focus on the last neuron (neuron 7) who has a nice grid pattern
 model = nmo.glm.GLM(
     regularizer="Ridge",
     regularizer_strength=0.0001,
-    # lowering the tolerance means that the solution will be closer to the optimum
-    # (at the cost of increasing execution time)
-    solver_kwargs=dict(tol=10**-12),
 )
 ```
 

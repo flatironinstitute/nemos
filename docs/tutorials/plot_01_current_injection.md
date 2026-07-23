@@ -16,6 +16,9 @@ kernelspec:
 
 %matplotlib inline
 import warnings
+import jax
+
+jax.config.update("jax_enable_x64", True)
 
 warnings.filterwarnings(
     "ignore",
