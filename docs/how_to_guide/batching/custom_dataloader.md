@@ -218,29 +218,7 @@ units.time_support
 
 The design matrix comes from convolving the spike counts with a basis, and it is this convolution that makes batching a discontinuous recording non-trivial: a batch must not convolve across the gap between two intervals, and the batches should have a small number of distinct sizes (each new size recompiles the update step).
 
-The simplest way to keep batches from crossing a gap is to build them as contiguous chunks. We split each recording interval into equal-duration chunks -- so a chunk never spans a gap -- and visit them in a random order on every pass over the dataset. Reshuffling the chunk order each pass decorrelates successive gradient steps and covers every chunk exactly once.
-
-:::{admonition} Chunking with `IntervalSet.split`
-:class: warning
-
-The loader uses `IntervalSet.split`, which chunks each interval into `interval_size` pieces in a single call. Note that it *skips epochs shorter than `interval_size`*: the sub-`interval_size` tail of every interval -- and any recording interval shorter than `interval_size` -- is dropped. `split` also returns only `(start, end)`, so we recover each chunk's parent-interval start with `searchsorted` to clip the left context at the gaps.
-
-If you need every sample, split manually with `numpy` instead. This keeps the short final tail and the parent-interval start in one pass; drop it in place of the `split` call in the constructor:
-
-```python
-def split_intervals(time_support, interval_size):
-    """Split each interval into `interval_size` chunks, keeping the short final tail.
-
-    Each row is ``(chunk_start, chunk_end, interval_start)``; ``interval_start`` lets the
-    loader clip the left context without reaching back into the previous interval.
-    """
-    return np.array([
-        (start_chunk, min(start_chunk + interval_size, end), start)
-        for start, end in time_support.values
-        for start_chunk in np.arange(start, end, interval_size)
-    ])
-```
-:::
+The simplest way to keep batches from crossing a gap is to build them as contiguous chunks. We use pynapple's `IntervalSet.split` to cut each recording interval into equal-duration chunks -- so a chunk never spans a gap -- and visit them in a random order on every pass over the dataset. Reshuffling the chunk order each pass decorrelates successive gradient steps and covers every chunk exactly once. Because `split` emits only full `interval_size` pieces, it drops the leftover tail whenever `interval_size` does not divide an interval's duration, along with any interval shorter than `interval_size`; the *Use all samples* note after the loader shows how to keep them.
 
 As we have seen before, the first `window_size` of each batch is filled with NaNs that will be dropped at fit time. We will enforce an effective batch (batch size after dropping the NaNs) by extending the chunk of data of an extra *context* of `window_size` bin length. These context bins exist only to supply history to the chunk's first real bins; they are not training samples themselves.
 
@@ -298,6 +276,28 @@ class MultiEpochPynappleDataLoader(nmo.batching.DataLoader):
         for start, end, interval_start in chunks:
             yield self._batch(start, end, interval_start)
 ```
+
+:::{dropdown} Use all samples
+:color: info
+
+As mentioned in the main text, `split` may drop some time points. To train on the whole sample axis, replace the `split`/`searchsorted` lines in the constructor with a manual `numpy` split that keeps the short final tail and each chunk's parent-interval start:
+
+```python
+def split_intervals(time_support, interval_size):
+    """Split each interval into `interval_size` chunks, keeping the short final tail.
+
+    Each row is ``(chunk_start, chunk_end, interval_start)``; ``interval_start`` lets the
+    loader clip the left context without reaching back into the previous interval.
+    """
+    return np.array([
+        (start_chunk, min(start_chunk + interval_size, end), start)
+        for start, end in time_support.values
+        for start_chunk in np.arange(start, end, interval_size)
+    ])
+```
+
+It returns the same `(chunk_start, chunk_end, interval_start)` rows the loader expects, so `self._chunks = split_intervals(spike_times.time_support, interval_size)` is a drop-in replacement for those three lines.
+:::
 
 ### Defining the Loader & Running The Optimization
 
