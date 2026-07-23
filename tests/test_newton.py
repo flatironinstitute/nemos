@@ -10,10 +10,10 @@ import optax
 import pytest
 
 import nemos as nmo
-from conftest import initialize_feature_mask_for_population_glm
+from conftest import all_subclasses, initialize_feature_mask_for_population_glm
 from nemos.glm import GLM, PopulationGLM
 from nemos.glm.classifier_glm import ClassifierGLM, ClassifierPopulationGLM
-from nemos.regularizer import Ridge, UnRegularized
+from nemos.regularizer import Regularizer, Ridge, UnRegularized
 from nemos.solvers._abstract_solver import OptimizationInfo
 from nemos.solvers._hess import (
     BlockDiagonal,
@@ -27,6 +27,27 @@ from nemos.tree_utils import pytree_map_and_reduce
 
 # Register every test here as solver-related
 pytestmark = pytest.mark.solver_related
+
+
+def _newton_regularizers():
+    """Auto-discover every regularizer that advertises Newton as an allowed solver.
+
+    The block-diagonal Hessian equals the full Hessian's diagonal blocks only if the
+    penalty is additive (so the Hessian factorizes into loss + penalty terms). Additivity
+    is currently baked into ``Regularizer.penalized_loss``; parametrizing over the
+    discovered set means a future Newton-eligible regularizer that breaks additivity is
+    caught here instead of silently mis-regularizing the Newton step.
+    """
+
+    return sorted(
+        (
+            cls
+            for cls in all_subclasses(Regularizer)
+            if cls.__module__.startswith("nemos")
+            and "Newton" in getattr(cls, "_allowed_solvers", ())
+        ),
+        key=lambda cls: cls.__name__,
+    )
 
 
 @pytest.mark.parametrize(
@@ -341,16 +362,18 @@ def test_newton_population_classifier_glm_matches_full_autodiff_update(
 
 
 @pytest.mark.requires_x64
+@pytest.mark.parametrize("regularizer_cls", _newton_regularizers())
 @pytest.mark.parametrize("feature_mask", [True, False])
 def test_newton_population_classifier_glm_block_hessian_matches_full(
-    request, feature_mask
+    request, feature_mask, regularizer_cls
 ):
     """The vmapped per-neuron Hessian should equal the diagonal neuron-blocks of the
     full autodiff Hessian, and the full Hessian should be block-diagonal across neurons.
 
     Both Hessians are rendered as dense matrices (per neuron) via a flatten/unflatten of
     the parameter pytree, so the comparison is on the actual matrices the Newton solve
-    consumes.
+    consumes. Parametrized over every Newton-eligible regularizer: the block/full match
+    holds only for additive penalties, so a non-additive one would fail here.
     """
     import lineax as lx
 
@@ -359,8 +382,9 @@ def test_newton_population_classifier_glm_block_hessian_matches_full(
     X, y, model, params, _ = request.getfixturevalue(
         "population_classifierGLM_model_instantiation"
     )
-    model.regularizer = "Ridge"
-    model.regularizer_strength = 0.1
+    model.regularizer = regularizer_cls()
+    model.regularizer_strength = None if regularizer_cls is UnRegularized else 0.1
+    model.solver_name = "Newton"
     if feature_mask:
         model._feature_mask = initialize_feature_mask_for_population_glm(
             X, y.shape[1], coef=params.coef
