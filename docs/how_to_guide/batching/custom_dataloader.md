@@ -60,11 +60,15 @@ np.random.seed(123)
 ## The `DataLoader` interface
 
 A [`DataLoader`](nemos.batching.DataLoader) is any object that streams `(X_batch, y_batch)` pairs to [`stochastic_fit`](nemos.glm.PopulationGLM.stochastic_fit). It has to provide three methods:
-- `__iter__`: yields `(X_batch, y_batch)` tuples. It is called once at the start of every epoch and must return a fresh iterator each time (using `yield` here makes the method a generator, which does this automatically).
-- `n_samples`: the total number of samples in the dataset.
+- `__iter__`: yields `(X_batch, y_batch)` tuples. It is called once at the start of every pass and must return a fresh iterator each time (using `yield` here makes the method a generator, which does this automatically).
 - `sample_batch`: a cheap, deterministic batch used once to initialize the solver state.
+- `n_samples`: the total number of samples in the dataset.
 
 Anything that provides these three works.
+
+:::{note}
+The optimization itself is driven only by `__iter__` and `sample_batch`: `stochastic_fit` iterates the loader for each pass and draws a single `sample_batch` to initialize the solver state. `n_samples` is used *after* fitting, to estimate the residual degrees of freedom and, from those, the scale parameter that the log-likelihood and pseudo-$R^2$ scores depend on. This total count cannot be recovered from a single batch, nor -- for a loader that never materializes the full design matrix -- read off any array's `shape`, so the loader has to report it directly. For observation models with a fixed scale (e.g. Poisson, Bernoulli) the scale is a known constant and this count is never used.
+:::
 
 ## A Simple Example: `PynappleDataLoader`
 
@@ -100,11 +104,11 @@ class PynappleDataLoader(nmo.batching.DataLoader):
 
     def __iter__(self):
         """
-        Yield one batch per step for a full epoch.
+        Yield one batch per step for a full pass.
 
         Defining this is what lets `stochastic_fit` loop over the loader
         (`for X_batch, y_batch in loader`) one batch at a time.
-        It is called once at the start of every epoch, so it has to begin a
+        It is called once at the start of every pass, so it has to begin a
         fresh pass over the data each time. Using `yield` here (which turns
         the method into a generator) takes care of that automatically.
         """
@@ -216,6 +220,28 @@ The design matrix comes from convolving the spike counts with a basis, and it is
 
 The simplest way to keep batches from crossing a gap is to build them as contiguous chunks. We split each recording interval into equal-duration chunks -- so a chunk never spans a gap -- and visit them in a random order on every pass over the dataset. Reshuffling the chunk order each pass decorrelates successive gradient steps and covers every chunk exactly once.
 
+:::{admonition} Chunking with `IntervalSet.split`
+:class: warning
+
+The loader uses `IntervalSet.split`, which chunks each interval into `interval_size` pieces in a single call. Note that it *skips epochs shorter than `interval_size`*: the sub-`interval_size` tail of every interval -- and any recording interval shorter than `interval_size` -- is dropped. `split` also returns only `(start, end)`, so we recover each chunk's parent-interval start with `searchsorted` to clip the left context at the gaps.
+
+If you need every sample, split manually with `numpy` instead. This keeps the short final tail and the parent-interval start in one pass; drop it in place of the `split` call in the constructor:
+
+```python
+def split_intervals(time_support, interval_size):
+    """Split each interval into `interval_size` chunks, keeping the short final tail.
+
+    Each row is ``(chunk_start, chunk_end, interval_start)``; ``interval_start`` lets the
+    loader clip the left context without reaching back into the previous interval.
+    """
+    return np.array([
+        (start_chunk, min(start_chunk + interval_size, end), start)
+        for start, end in time_support.values
+        for start_chunk in np.arange(start, end, interval_size)
+    ])
+```
+:::
+
 As we have seen before, the first `window_size` of each batch is filled with NaNs that will be dropped at fit time. We will enforce an effective batch (batch size after dropping the NaNs) by extending the chunk of data of an extra *context* of `window_size` bin length. These context bins exist only to supply history to the chunk's first real bins; they are not training samples themselves.
 
 The construction is sketched below (bin counts are illustrative, not to scale):
@@ -234,20 +260,20 @@ class MultiEpochPynappleDataLoader(nmo.batching.DataLoader):
         self.spike_times = spike_times
         self.basis = basis
         self.bin_size = bin_size
-        # window length is in bins; the left context to prepend is that many bins, in seconds
+        # the context_duration is the length of the context in seconds
         self.context_duration = basis.window_size * bin_size
         self.shuffle = shuffle
         self.rng = np.random.default_rng(seed)
 
-        # Equal-duration chunks built within each recording interval, so none crosses a gap; the
-        # sub-interval_size tail of an interval is kept as a final short chunk. Each row is
-        # (chunk_start, chunk_end, interval_start): the interval start lets us clip the left
-        # context without reaching back into the previous interval.
-        self._chunks = np.array([
-            (start_chunk, min(start_chunk + interval_size, end), start)
-            for start, end in spike_times.time_support.values
-            for start_chunk in np.arange(start, end, interval_size)
-        ])
+        # Split each recording interval into interval_size chunks with pynapple, so none crosses a
+        # gap. `split` drops the sub-interval_size tail of every interval (and any interval shorter
+        # than interval_size); see the note above for a numpy alternative that keeps them. It returns
+        # only (start, end), so we re-attach each chunk's parent-interval start via searchsorted, used
+        # to clip the left context without reaching back across a gap.
+        chunks = spike_times.time_support.split(interval_size)
+        starts = spike_times.time_support.start
+        interval_start = starts[np.searchsorted(starts, chunks.start, side="right") - 1]
+        self._chunks = np.column_stack([chunks.start, chunks.end, interval_start])
 
     @property
     def n_samples(self):

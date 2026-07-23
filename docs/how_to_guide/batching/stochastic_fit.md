@@ -187,7 +187,7 @@ Other solvers that can be used for stochastic optimization can be listed with [`
 
 We are ready to start the optimization using the GLM's `stochastic_fit` method.
 
-`stochastic_fit` uses `n_passes` to control the training duration and does not stop on convergence by default. Unless a callback requests a stop, it will run for the full number of passes.
+`stochastic_fit` uses `n_passes` to control the number of passes over the full dataset and does not stop on convergence by default. Unless a callback requests a stop, it will run for the full number of passes.
 \
 Note that the `max_steps` solver kwarg used in `GLM.fit` is also ignored.
 

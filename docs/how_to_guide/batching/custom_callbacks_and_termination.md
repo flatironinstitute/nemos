@@ -129,7 +129,7 @@ class EarlyStoppingCallback(nmo.callbacks.Callback):
     y_test :
         Test target data.
     patience :
-        Number of training epochs (passes through the data) with no improvement before stopping.
+        Number of passes with no improvement before stopping.
     min_delta :
         Minimum decrease in loss to count as an improvement.
     """
