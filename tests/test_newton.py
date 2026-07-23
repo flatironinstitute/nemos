@@ -24,6 +24,9 @@ from nemos.solvers._hess import (
 )
 from nemos.solvers._newton import Newton, NewtonState
 from nemos.tree_utils import pytree_map_and_reduce
+import lineax as lx
+
+from nemos.glm.params import GLMParams
 
 # Register every test here as solver-related
 pytestmark = pytest.mark.solver_related
@@ -374,11 +377,16 @@ def test_newton_population_classifier_glm_block_hessian_matches_full(
     the parameter pytree, so the comparison is on the actual matrices the Newton solve
     consumes. Parametrized over every Newton-eligible regularizer: the block/full match
     holds only for additive penalties, so a non-additive one would fail here.
+
+    Notes
+    -----
+    A relevant failure mode is if a **non-additive** regularizer is introduced, Newton
+    is allowed for it, and the hessian is block-diagonal tagged.
+    Newton assumes the additivity of the penalty when creating the hessian with a tree-add.
+    The eventual bugfixes will be two:
+    1. Disallow Newton for the regularizer,
+    2. Do not assume a block diagonal hessian. The full path just uses plain jax.hess(loss).
     """
-    import lineax as lx
-
-    from nemos.glm.params import GLMParams
-
     X, y, model, params, _ = request.getfixturevalue(
         "population_classifierGLM_model_instantiation"
     )
