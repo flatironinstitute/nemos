@@ -462,6 +462,7 @@ class BaseRegressor(
                                 in_axes=(self._hess_tag.batch_axes, strength_axis),
                             )(p, strength),
                         )
+
                 else:
                     hess_fn = model_nll_block
             else:
