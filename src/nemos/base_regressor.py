@@ -451,13 +451,17 @@ class BaseRegressor(
                 )
 
                 if has_penalty_hess:
-                    hess_fn = lambda p, *a: tree_utils.tree_add(
-                        model_nll_block(p, *a),
-                        jax.vmap(
-                            lambda p, s: self.regularizer.penalty_hessian(p, s.coef),
-                            in_axes=(self._hess_tag.batch_axes, strength_axis),
-                        )(p, strength),
-                    )
+
+                    def hess_fn(p, *a):
+                        return tree_utils.tree_add(
+                            model_nll_block(p, *a),
+                            jax.vmap(
+                                lambda p, s: self.regularizer.penalty_hessian(
+                                    p, s.coef
+                                ),
+                                in_axes=(self._hess_tag.batch_axes, strength_axis),
+                            )(p, strength),
+                        )
                 else:
                     hess_fn = model_nll_block
             else:
