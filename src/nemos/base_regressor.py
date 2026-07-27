@@ -433,8 +433,37 @@ class BaseRegressor(
         )
 
         if isinstance(solver, Newton):
+            model_nll_block = self._get_hess_fn()
+            if model_nll_block is not None:
+                coef_axis = self._hess_tag.batch_axes.coef
+                strength = self.regularizer._validate_strength_structure(
+                    init_params,
+                    self.regularizer._validate_strength(regularizer_strength),
+                )
+                strength_axis = jax.tree.map(
+                    lambda s: None if jnp.ndim(s) == 0 else coef_axis, strength
+                )
+                has_penalty_hess = (
+                    self.regularizer.penalty_hessian(
+                        init_params, self.regularizer_strength
+                    )
+                    is not None
+                )
+
+                if has_penalty_hess:
+                    hess_fn = lambda p, *a: tree_utils.tree_add(
+                        model_nll_block(p, *a),
+                        jax.vmap(
+                            lambda p, s: self.regularizer.penalty_hessian(p, s.coef),
+                            in_axes=(self._hess_tag.batch_axes, strength_axis),
+                        )(p, strength),
+                    )
+                else:
+                    hess_fn = model_nll_block
+            else:
+                hess_fn = None
             solver.setup_hessian(
-                self._get_hess_fn(),
+                hess_fn,
                 self._hess_tag,
                 self.regularizer.resolve_hess_tag(init_params),
                 self._hess_property_override(),

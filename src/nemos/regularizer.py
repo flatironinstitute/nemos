@@ -464,6 +464,10 @@ class Regularizer(Base, abc.ABC):
         strength = self._validate_strength_structure(params, strength)
         return {"strength": strength}
 
+    def penalty_hessian(self, params, strength):
+        """Return a parameter hessian for the penalty only."""
+        return None
+
 
 class UnRegularized(Regularizer):
     """
@@ -545,6 +549,11 @@ class Ridge(Regularizer):
             subtree,
             strength,
         )
+
+    def penalty_hessian(self, params, strength):
+        """Return a parameter hessian for the penalty only."""
+        filter_kwargs = self._get_filter_kwargs(strength=strength, params=params)
+        return jax.hessian(lambda p: self._penalization(p, filter_kwargs))(params)
 
 
 class Lasso(Regularizer):
