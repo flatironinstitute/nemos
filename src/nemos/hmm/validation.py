@@ -255,7 +255,7 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
             # Merge default kwargs with any user-provided kwargs
             merged_kwargs = {**method_kwargs, **validation_kwargs}
             out = getattr(self, method_name)(
-                X, y, session_starts=session_starts, **merged_kwargs
+                X=X, y=y, session_starts=session_starts, **merged_kwargs
             )
             if out is not None:
                 session_starts = out
