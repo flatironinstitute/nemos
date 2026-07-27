@@ -5,6 +5,7 @@ from copy import deepcopy
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+import lineax as lx
 import numpy as np
 import optax
 import pytest
@@ -13,6 +14,7 @@ import nemos as nmo
 from conftest import all_subclasses, initialize_feature_mask_for_population_glm
 from nemos.glm import GLM, PopulationGLM
 from nemos.glm.classifier_glm import ClassifierGLM, ClassifierPopulationGLM
+from nemos.glm.params import GLMParams
 from nemos.regularizer import Regularizer, Ridge, UnRegularized
 from nemos.solvers._abstract_solver import OptimizationInfo
 from nemos.solvers._hess import (
@@ -24,9 +26,6 @@ from nemos.solvers._hess import (
 )
 from nemos.solvers._newton import Newton, NewtonState
 from nemos.tree_utils import pytree_map_and_reduce
-import lineax as lx
-
-from nemos.glm.params import GLMParams
 
 # Register every test here as solver-related
 pytestmark = pytest.mark.solver_related
@@ -636,9 +635,9 @@ def test_solver_invalidated_after_strength_change(request, model_instantiation_t
     assert model._solver is not None
 
     model.regularizer_strength = 0.5
-    assert model._solver is None, (
-        "_solver must be None after regularizer_strength change."
-    )
+    assert (
+        model._solver is None
+    ), "_solver must be None after regularizer_strength change."
 
 
 @pytest.mark.parametrize(
