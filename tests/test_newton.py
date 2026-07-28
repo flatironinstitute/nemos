@@ -194,15 +194,15 @@ def test_newton_glm_initialize_state(glm_class, regularizer_name, linear_regress
 
 
 @pytest.mark.requires_x64
-@pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
+@pytest.mark.parametrize("regularizer_cls", _newton_regularizers())
 @pytest.mark.parametrize("structure", ["", "_pytree"])
-def test_newton_glm_converges(request, regularizer_name, structure):
+def test_newton_glm_converges(request, regularizer_cls, structure):
     """Newton-fitted GLM should converge and return finite parameters."""
     X, y, model, _, _ = request.getfixturevalue(
         "poissonGLM_model_instantiation" + structure
     )
-    model.regularizer = regularizer_name
-    model.regularizer_strength = 1e-3 if regularizer_name == "Ridge" else None
+    model.regularizer = regularizer_cls()
+    model.regularizer_strength = 1e-3
     model = model.fit(X, y)
 
     assert model.coef_ is not None
@@ -211,15 +211,15 @@ def test_newton_glm_converges(request, regularizer_name, structure):
 
 
 @pytest.mark.requires_x64
-@pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
+@pytest.mark.parametrize("regularizer_cls", _newton_regularizers())
 @pytest.mark.parametrize("feature_mask", [True, False])
-def test_newton_population_glm_converges(request, regularizer_name, feature_mask):
+def test_newton_population_glm_converges(request, regularizer_cls, feature_mask):
     """Newton-fitted PopulationGLM should converge and return finite parameters."""
     X, y, model, params, _ = request.getfixturevalue(
         "population_poissonGLM_model_instantiation"
     )
-    model.regularizer = regularizer_name
-    model.regularizer_strength = 1e-3 if regularizer_name == "Ridge" else None
+    model.regularizer = regularizer_cls()
+    model.regularizer_strength = 1e-3
 
     if feature_mask:
         model._feature_mask = initialize_feature_mask_for_population_glm(
@@ -386,15 +386,15 @@ def test_newton_population_glm_block_hessian_matches_full(
 
 
 @pytest.mark.requires_x64
-@pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
+@pytest.mark.parametrize("regularizer_cls", _newton_regularizers())
 @pytest.mark.parametrize("structure", ["", "_pytree"])
-def test_newton_classifier_glm_converges(request, regularizer_name, structure):
+def test_newton_classifier_glm_converges(request, regularizer_cls, structure):
     """Newton-fitted ClassifierGLM should converge and return finite parameters."""
     X, y, model, _, _ = request.getfixturevalue(
         "classifierGLM_model_instantiation" + structure
     )
-    model.regularizer = regularizer_name
-    model.regularizer_strength = 1e-3 if regularizer_name == "Ridge" else None
+    model.regularizer = regularizer_cls()
+    model.regularizer_strength = 1e-3
     model = model.fit(X, y)
 
     assert model.coef_ is not None
@@ -403,17 +403,17 @@ def test_newton_classifier_glm_converges(request, regularizer_name, structure):
 
 
 @pytest.mark.requires_x64
-@pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
+@pytest.mark.parametrize("regularizer_cls", _newton_regularizers())
 @pytest.mark.parametrize("feature_mask", [True, False])
 def test_newton_classifier_population_glm_converges(
-    request, regularizer_name, feature_mask
+    request, regularizer_cls, feature_mask
 ):
     """Newton-fitted ClassifierPopulationGLM should converge and return finite parameters."""
     X, y, model, params, _ = request.getfixturevalue(
         "population_classifierGLM_model_instantiation"
     )
-    model.regularizer = regularizer_name
-    model.regularizer_strength = 1e-3 if regularizer_name == "Ridge" else None
+    model.regularizer = regularizer_cls()
+    model.regularizer_strength = 1e-3
     if feature_mask:
         model._feature_mask = initialize_feature_mask_for_population_glm(
             X, y.shape[1], coef=params.coef
@@ -634,9 +634,9 @@ def test_solver_invalidated_after_strength_change(request, model_instantiation_t
     assert model._solver is not None
 
     model.regularizer_strength = 0.5
-    assert (
-        model._solver is None
-    ), "_solver must be None after regularizer_strength change."
+    assert model._solver is None, (
+        "_solver must be None after regularizer_strength change."
+    )
 
 
 @pytest.mark.parametrize(
