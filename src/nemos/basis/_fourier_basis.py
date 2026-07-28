@@ -891,6 +891,35 @@ class FourierGP(EvalBasisMixin, FourierBasis):
     .. [2] Barnett, A. H., Greengard, P., & Rachh, M. (2024). Uniform
         approximation of common Gaussian process kernels using equispaced Fourier
         grids. Applied and Computational Harmonic Analysis, 71, 101640.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from nemos.basis import FourierGP
+    >>> basis = FourierGP(
+    ...     lengthscale=0.2, bounds=(0.0, 1.0), eps=1e-4, variance=2.0
+    ... )
+    >>> basis.n_frequencies
+    8
+    >>> basis.n_basis_funcs
+    17
+    >>> x = np.linspace(0, 1, 100)
+    >>> X = basis.compute_features(x)
+    >>> X.shape  # (n_samples, n_basis_funcs)
+    (100, 17)
+
+    **Error in SE kernel approximation**
+
+    >>> # the Gram matrix, component-wise approximates the SE kernel to within ``eps``
+    >>> t = np.linspace(0, 1, 201)
+    >>> Phi = basis.evaluate(t)
+    >>> k_approx = Phi @ Phi.T
+    >>> r = t[:, None] - t[None]
+    >>> k_true = basis.variance * np.exp(-r**2 / (2 * basis.lengthscale**2))
+    >>> bool(np.max(np.abs(k_approx - k_true)) < basis.eps)
+    True
+    >>> float(np.round(np.diag(k_approx).mean(), 3))
+    2.0
     """
 
     # Fourier basis is defined over the entire real line; out-of-bounds
