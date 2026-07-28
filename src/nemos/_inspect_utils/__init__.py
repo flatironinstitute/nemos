@@ -13,6 +13,7 @@ inspect_utils : module
 
 from .inspect_utils import (
     check_all_abstract_methods_compliance,
+    extract_literal_options,
     get_abstract_classes,
     get_non_abstract_classes,
     get_params,
@@ -37,4 +38,5 @@ __all__ = [
     "trim_kwargs",
     "get_params",
     "implements_methods",
+    "extract_literal_options",
 ]

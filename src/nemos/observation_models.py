@@ -48,6 +48,7 @@ class Observations(Base, abc.ABC):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.scale = 1.0
+        self._separable_scale = None
 
     def __repr__(self):
         return utils.format_repr(self)
@@ -423,6 +424,7 @@ class PoissonObservations(Observations):
     def __init__(self):
         super().__init__()
         self.scale = 1.0
+        self._separable_scale = True
 
     @property
     def default_inverse_link_function(self):
@@ -649,6 +651,7 @@ class GammaObservations(Observations):
     ):
         super().__init__()
         self.scale = 1.0
+        self._separable_scale = True
 
     @property
     def default_inverse_link_function(self):
@@ -850,6 +853,7 @@ class BernoulliObservations(Observations):
     def __init__(self):
         super().__init__()
         self.scale = 1.0
+        self._separable_scale = True
 
     @property
     def default_inverse_link_function(self):
@@ -1152,6 +1156,7 @@ class NegativeBinomialObservations(Observations):
     ):
         super().__init__()
         self.scale = scale
+        self._separable_scale = False
 
     @property
     def default_inverse_link_function(self):
@@ -1401,6 +1406,7 @@ class GaussianObservations(Observations):
     ):
         super().__init__()
         self.scale = 1.0
+        self._separable_scale = True
 
     @property
     def default_inverse_link_function(self):
@@ -1758,6 +1764,7 @@ class CategoricalObservations(Observations):
     def __init__(self):
         super().__init__()
         self.scale = 1.0
+        self._separable_scale = True
 
     @property
     def default_inverse_link_function(self):

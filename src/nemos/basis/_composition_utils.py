@@ -7,7 +7,9 @@ with no to minimal re
 
 from __future__ import annotations
 
+import contextvars
 import re
+from contextlib import contextmanager
 from copy import deepcopy
 from functools import wraps
 from typing import TYPE_CHECKING, Any, List, Tuple
@@ -20,6 +22,51 @@ from .._inspect_utils.inspect_utils import count_positional_and_var_args
 if TYPE_CHECKING:
     from ._basis_mixin import AtomicBasisMixin, BasisMixin
     from ._custom_basis import CustomBasis
+
+# Internal, context-local flag asserting that the component bases handed to a
+# composite constructor are ALREADY owned copies that no external reference
+# aliases, so the constructor can skip the defensive ``deepcopy`` of its
+# components. When set, ``CompositeBasisMixin.__init__`` stores the components
+# by reference instead of copying them.
+#
+# This is an internal invariant contract, NOT a user-facing option: enabling it
+# where the invariant does not hold lets mutations on the composite leak back
+# into the operands. It must only ever wrap a construction whose components are
+# freshly cloned/deep-copied (see ``shallow_construction``).
+_shallow_copy = contextvars.ContextVar("_shallow_copy", default=False)
+
+
+def is_shallow_construction() -> bool:
+    """Return True when inside a :func:`shallow_construction` context."""
+    return _shallow_copy.get()
+
+
+@contextmanager
+def shallow_construction(enabled: bool = True):
+    """Assert that composite constructor inputs are already owned copies.
+
+    Assert that composite constructor inputs are already owned copies so the
+    constructor stores them by reference instead of deep-copying.
+
+    Token-based set/reset makes it exception-safe, correctly nested, and isolated
+    per thread / async context. Wrap only the single construction call, never a
+    whole method body, so incidental constructions are not accidentally trusted.
+
+    Parameters
+    ----------
+    enabled :
+        When False, this is a no-op (deep copy runs as usual). Lets a call site
+        assert ownership conditionally.
+    """
+    if not enabled:
+        yield
+        return
+    token = _shallow_copy.set(True)
+    try:
+        yield
+    finally:
+        _shallow_copy.reset(token)
+
 
 __PUBLIC_BASES__ = [
     "IdentityEval",
@@ -41,6 +88,7 @@ __PUBLIC_BASES__ = [
     "AdditiveBasis",
     "MultiplicativeBasis",
     "CustomBasis",
+    "Category",
 ]
 
 
@@ -550,7 +598,7 @@ def multiply_basis_by_integer(bas: BasisMixin, mul: int) -> BasisMixin:
 
     # parent is set to None at init for add and updated for self.
     add = bas + bas
-    with add._set_shallow_copy(True):
+    with shallow_construction():
         for _ in range(2, mul):
             add += deepcopy(bas)
     _recompute_all_default_labels(add)
@@ -586,7 +634,7 @@ def raise_basis_to_power(bas: BasisMixin, exponent: int) -> BasisMixin:
         return bas
 
     mul = bas * bas
-    with mul._set_shallow_copy(True):
+    with shallow_construction():
         for _ in range(2, exponent):
             mul *= deepcopy(bas)
     _recompute_all_default_labels(mul)

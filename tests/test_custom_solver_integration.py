@@ -113,7 +113,7 @@ class OptaxAdam(AbstractSolver[OptaxAdamState]):
     def get_accepted_arguments(cls) -> set[str]:
         return {"learning_rate", "tol", "maxiter"}
 
-    def get_optim_info(self, state: OptaxAdamState) -> OptimizationInfo:
+    def _get_optim_info(self, state: OptaxAdamState) -> OptimizationInfo:
         num_steps = state.iter_num.item()
         return OptimizationInfo(
             function_val=state.value.item(),
@@ -144,7 +144,8 @@ def test_custom_solver_integration(poissonGLM_model_instantiation):
 
         model.solver_name = "Adam[custom]"
         model.solver_kwargs = {"learning_rate": 5e-3, "tol": 1e-10, "maxiter": 2000}
-        model.fit(X, y)
+        with pytest.warns(UserWarning, match="does not have a ``.converged``"):
+            model.fit(X, y)
 
         assert isinstance(model._solver, OptaxAdam)
 

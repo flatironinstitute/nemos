@@ -6,7 +6,7 @@ import copy
 import math
 import warnings
 from copy import deepcopy
-from functools import wraps
+from functools import partial, wraps
 from typing import TYPE_CHECKING, Callable, Generator, List, Optional, Tuple, Union
 
 import jax.numpy as jnp
@@ -37,32 +37,46 @@ from ._composition_utils import (
     promote_to_transformer,
     raise_basis_to_power,
     set_input_shape,
+    shallow_construction,
 )
 
 
-def check_transform_input(func: Callable) -> Callable:
+def check_transform_input(func: Callable | None = None, flat_output=False) -> Callable:
     """Check input before calling basis.
 
     This decorator allows to raise an exception that is more readable
     when the wrong number of input is provided to evaluate.
+
+    Parameters
+    ----------
+    func :
+        The callable being decorated. ``None`` when the decorator is used
+        with arguments (e.g. ``@check_transform_input(flat_output=True)``),
+        in which case a partial is returned and applied to the function in a
+        second call.
+    flat_output :
+        Controls the shape of the zeros returned when the input is empty.
+        Set to ``True`` for ``compute_features``, which flattens all input
+        dimensions into a 2-D matrix ``(n_samples, n_output_features)``.
+        Set to ``False`` (default) for ``evaluate``, which preserves the full
+        input shape and appends the basis dimension, yielding
+        ``(*input_shape, n_basis_funcs)``.
     """
+    if func is None:
+        return partial(check_transform_input, flat_output=flat_output)
 
     @wraps(func)
-    def wrapper(self: Basis, *xi: ArrayLike, **kwargs) -> NDArray:
+    def wrapper(self: Basis, *xi: ArrayLike, **kwargs) -> NDArray | jnp.ndarray:
         xi = self._check_transform_input(*xi)
+        if xi[0].size == 0:
+            # do not evaluate if empty
+            self.setup_basis(*xi)
+            if flat_output:
+                return jnp.zeros((xi[0].shape[0], self.n_output_features))
+            else:
+                shape = xi[0].shape
+                return jnp.zeros((*shape, self.n_basis_funcs))
         return func(self, *xi, **kwargs)  # Call the basis
-
-    return wrapper
-
-
-def check_one_dimensional(func: Callable) -> Callable:
-    """Check if the input is one-dimensional."""
-
-    @wraps(func)
-    def wrapper(self: Basis, *xi: NDArray, **kwargs):
-        if any(x.ndim != 1 for x in xi):
-            raise ValueError("Input sample must be one dimensional!")
-        return func(self, *xi, **kwargs)
 
     return wrapper
 
@@ -207,7 +221,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             self._n_basis_funcs = orig_n_basis
             raise e
 
-    @check_transform_input
+    @check_transform_input(flat_output=True)
     def compute_features(
         self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor
     ) -> FeatureMatrix:
@@ -598,7 +612,6 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    @check_one_dimensional
     def evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
         Evaluate the basis at the sample points.
@@ -636,11 +649,18 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         >>> out = additive_basis.evaluate(x, y)
 
         """
-        X = np.hstack(
+        have_same_shape, shapes, _ = _have_unique_shapes(xi)
+        if not have_same_shape:
+            raise ValueError(
+                f"``AdditiveBasis.evaluate`` requires all inputs to have the same shape. "
+                f"Got shapes: {shapes}."
+            )
+        X = np.concatenate(
             (
                 self.basis1.evaluate(*xi[: self.basis1._n_inputs]),
                 self.basis2.evaluate(*xi[self.basis1._n_inputs :]),
-            )
+            ),
+            axis=-1,
         )
         return X
 
@@ -997,7 +1017,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
                 "Resetting input shape to default (None).",
             )
 
-        with self._set_shallow_copy(not have_unique_shapes):
+        with shallow_construction(not have_unique_shapes):
             CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
         Basis.__init__(self)
 

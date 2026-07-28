@@ -4,10 +4,10 @@ warnings.filterwarnings(
     "ignore", message=".*plotting functions.*", category=UserWarning
 )
 
-import pytest
-from myst_nb import glue
+import pytest  # noqa: E402
+from myst_nb import glue  # noqa: E402
 
-import nemos._documentation_utils._myst_nb_glue as myst_utils
+import nemos._documentation_utils._myst_nb_glue as myst_utils  # noqa: E402
 
 
 @pytest.fixture

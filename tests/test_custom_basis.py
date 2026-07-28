@@ -5,6 +5,8 @@ from unittest.mock import patch
 import numpy as np
 import pynapple as nap
 import pytest
+from numpy.typing import NDArray
+
 from conftest import (
     SizeTerminal,
     basis_collapse_all_non_vec_axis,
@@ -12,8 +14,6 @@ from conftest import (
     custom_basis,
     custom_basis_2d,
 )
-from numpy.typing import NDArray
-
 from nemos.basis._custom_basis import CustomBasis, apply_f_vectorized
 
 
