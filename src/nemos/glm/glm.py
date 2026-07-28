@@ -1700,8 +1700,9 @@ class PopulationGLM(GLM):
         E.g. stepsize, tol, acceleration, etc.
          For details on each solver's kwargs, see `get_accepted_arguments` and `get_solver_documentation`.
     feature_mask :
-        Either a matrix of shape (num_features, num_neurons) or a PyTree of 0s and 1s, with
-        leaves of shape (num_neurons, ).
+        A mask of 0s and 1s matching the shape of the coefficients: a matrix of shape
+        (num_features, num_neurons), or a PyTree mirroring the structure of ``X`` whose
+        leaves have shape (num_features_in_leaf, num_neurons).
         The mask will be used to select which features are used as predictors for which neuron.
 
     Attributes
@@ -1755,7 +1756,8 @@ class PopulationGLM(GLM):
     **Use a Dict of Arrays as Input**
 
     Features can be passed as a dict (or any JAX pytree). The feature mask
-    should mirror the same structure, with one 1-D entry per leaf:
+    should mirror the same structure, each leaf shaped like its coefficients,
+    ``(num_features_in_leaf, num_neurons)``:
 
     >>> feature_1 = np.random.normal(size=(num_samples, 2))
     >>> feature_2 = np.random.normal(size=(num_samples, 1))
@@ -1770,8 +1772,8 @@ class PopulationGLM(GLM):
     ... )
     >>> y = np.random.poisson(rate)
     >>> feature_mask = {
-    ...     "feature_1": jnp.array([0, 1], dtype=jnp.int32),
-    ...     "feature_2": jnp.array([1, 0], dtype=jnp.int32)
+    ...     "feature_1": jnp.array([[0, 1], [0, 1]], dtype=jnp.int32),
+    ...     "feature_2": jnp.array([[1, 0]], dtype=jnp.int32)
     ... }
     >>> model = nmo.glm.PopulationGLM(feature_mask=feature_mask).fit(X_dict, y)
     >>> model.coef_
@@ -1847,14 +1849,15 @@ class PopulationGLM(GLM):
         """
         Mask indicating which features are used for each neuron.
 
-        The feature mask has a tree structure matching the coefficients (``coef_``):
+        The feature mask matches the coefficients (``coef_``) leaf by leaf, in both tree
+        structure and shape:
 
         - **Array input**: Shape ``(n_features, n_neurons)``. Each entry ``[i, j]``
           indicates whether feature ``i`` is used for neuron ``j`` (1 = used, 0 = masked).
 
-        - **Pytree**: A pytree with structure matching that of ``coef_``.
-          Each leaf array has shape ``(n_neurons,)``, indicating whether that feature
-          group is used for each neuron.
+        - **Pytree**: A pytree with structure matching that of ``coef_``, each leaf shaped
+          like its coefficients, ``(n_features_in_leaf, n_neurons)``. Entry ``[i, j]`` of a
+          leaf indicates whether feature ``i`` of that group is used for neuron ``j``.
 
         Returns
         -------
@@ -2009,27 +2012,16 @@ class PopulationGLM(GLM):
 
             return jax.hessian(loss)(params)
 
-        def hess_fn(params, X, y):
-            mask = self._feature_mask
-            # a mask either mirrors coef, or collapses its feature axis into a single flag
-            # per input group (the pytree case), so the neuron axis sits that many
-            # dimensions earlier
-            mask_axes = (
-                None
-                if mask is None
-                else jax.tree.map(lambda m, c: m.ndim - c.ndim + 1, mask, params.coef)
-            )
-            return jax.vmap(
-                per_neuron,
-                in_axes=(
-                    self._hess_tag.batch_axes,
-                    None,
-                    1,
-                    mask_axes,
-                ),
-            )(params, X, y, mask)
-
-        return hess_fn
+        # the mask mirrors coef, so its neuron axis is coef's
+        return lambda params, X, y: jax.vmap(
+            per_neuron,
+            in_axes=(
+                self._hess_tag.batch_axes,
+                None,
+                1,
+                1,
+            ),
+        )(params, X, y, self._feature_mask)
 
     def __sklearn_clone__(self) -> PopulationGLM:
         """Clone the PopulationGLM, dropping feature_mask."""
