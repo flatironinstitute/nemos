@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib
+import pkgutil
 from copy import deepcopy
 
 import jax
@@ -11,6 +13,8 @@ import pytest
 
 import nemos as nmo
 from conftest import all_subclasses, initialize_feature_mask_for_population_glm
+from nemos._inspect_utils import is_abstract
+from nemos.base_regressor import BaseRegressor
 from nemos.glm import GLM, PopulationGLM
 from nemos.glm.classifier_glm import ClassifierGLM, ClassifierPopulationGLM
 from nemos.glm.params import GLMParams
@@ -25,6 +29,11 @@ from nemos.solvers._hess import (
 )
 from nemos.solvers._newton import Newton, NewtonState
 from nemos.tree_utils import pytree_map_and_reduce
+
+# Import every submodule so all BaseRegressor subclasses are registered before the
+# parametrizations below are collected (same idiom as test_model_params).
+for _, _modname, _ in pkgutil.walk_packages(nmo.__path__, prefix="nemos."):
+    importlib.import_module(_modname)
 
 # Register every test here as solver-related
 pytestmark = pytest.mark.solver_related
@@ -51,6 +60,51 @@ def _newton_regularizers():
     )
 
 
+def _block_diagonal_models():
+    """Model classes that declare a block-diagonal Hessian.
+
+    Discovered rather than listed. The block path assembles the penalty Hessian by vmapping
+    the regularizer over neurons, pairing the model's ``batch_axes`` against the strength,
+    so a new block-diagonal model joins the check below on arrival rather than when someone
+    remembers to add it.
+    """
+    return sorted(
+        (
+            cls
+            for cls in all_subclasses(BaseRegressor)
+            if cls.__module__.startswith("nemos")
+            and not is_abstract(cls)
+            and getattr(cls, "_hess_tag", None) is not None
+            and cls._hess_tag.structure is BlockDiagonal
+        ),
+        key=lambda cls: cls.__name__,
+    )
+
+
+# Data for each block-diagonal model, in both ``coef`` layouts. Only the pytree layout
+# distinguishes a prefix-spelled ``batch_axes`` (``GLMParams(1, 0)``, what every in-tree
+# model uses) from a per-leaf one, and the two are not interchangeable.
+_BLOCK_MODEL_FIXTURES = {
+    PopulationGLM: (
+        "population_poissonGLM_model_instantiation",
+        "population_poissonGLM_model_instantiation_pytree",
+    ),
+    ClassifierPopulationGLM: (
+        "population_classifierGLM_model_instantiation",
+        "population_classifierGLM_model_instantiation_pytree",
+    ),
+}
+
+_BLOCK_MODEL_CASES = [
+    pytest.param(
+        fixture_name,
+        id=f"{cls.__name__}-{'pytree' if fixture_name.endswith('_pytree') else 'array'}",
+    )
+    for cls in _block_diagonal_models()
+    for fixture_name in _BLOCK_MODEL_FIXTURES.get(cls, ())
+]
+
+
 def _per_neuron_strength(coef):
     """Ridge strength shaped like ``coef`` and varying along the neuron axis (axis 1).
 
@@ -59,10 +113,14 @@ def _per_neuron_strength(coef):
     Hessian (``Regularizer._filter_kwargs_batch_axes``). Varying it across neurons makes
     the block and the full Hessian disagree if the axes are mismatched.
     """
-    per_neuron = 0.1 * (1 + jnp.arange(coef.shape[1]))
-    return jnp.broadcast_to(
-        per_neuron.reshape((1, coef.shape[1]) + (1,) * (coef.ndim - 2)), coef.shape
-    )
+
+    def per_leaf(leaf):
+        per_neuron = 0.1 * (1 + jnp.arange(leaf.shape[1]))
+        return jnp.broadcast_to(
+            per_neuron.reshape((1, leaf.shape[1]) + (1,) * (leaf.ndim - 2)), leaf.shape
+        )
+
+    return jax.tree.map(per_leaf, coef)
 
 
 # scalar vs. parameter-shaped strength: the second exercises the strength expansion and
@@ -279,21 +337,43 @@ def test_newton_population_glm_matches_full_autodiff(request, feature_mask):
     np.testing.assert_allclose(full_model.coef_, model.coef_, atol=1e-3)
 
 
+def test_every_block_diagonal_model_has_fixtures():
+    """A new block-diagonal model must bring data for the block-vs-full update check."""
+    missing = [
+        cls.__name__
+        for cls in _block_diagonal_models()
+        if cls not in _BLOCK_MODEL_FIXTURES
+    ]
+    assert not missing, (
+        f"{missing} declare a block-diagonal Hessian but have no entry in "
+        "_BLOCK_MODEL_FIXTURES, so test_newton_block_diagonal_matches_full_autodiff_update "
+        "silently skips them. Add fixtures for both coef layouts."
+    )
+
+
 @pytest.mark.requires_x64
 @_STRENGTHS
 @pytest.mark.parametrize("feature_mask", [True, False])
-def test_newton_population_glm_matches_full_autodiff_update(
-    request, feature_mask, make_strength
+@pytest.mark.parametrize("fixture_name", _BLOCK_MODEL_CASES)
+def test_newton_block_diagonal_matches_full_autodiff_update(
+    request, fixture_name, feature_mask, make_strength
 ):
-    """Newton-fitted PopulationGLM single update() should match a full autodiff model."""
-    X, y, model, params, _ = request.getfixturevalue(
-        "population_poissonGLM_model_instantiation"
-    )
+    """One Newton update() on the block Hessian must match a full autodiff model.
+
+    Runs for every model declaring a block-diagonal Hessian, in both ``coef`` layouts and
+    under a scalar and a per-neuron strength. The block path vmaps the regularizer's penalty
+    Hessian over neurons, so a mismatch between the model's ``batch_axes`` and the strength
+    surfaces here and nowhere else: the scalar strength carries no neuron axis to get wrong.
+    """
+    X, y, model, params, _ = request.getfixturevalue(fixture_name)
     model.regularizer = "Ridge"
+    model.solver_name = "Newton"
     model.regularizer_strength = make_strength(params.coef)
     if feature_mask:
+        # built from X rather than from coef: a dict-valued coef masks whole input groups,
+        # so its mask is one flag per neuron per group, not one per coefficient
         model._feature_mask = initialize_feature_mask_for_population_glm(
-            X, y.shape[1], coef=params.coef
+            X, y.shape[1], n_classes=getattr(model, "n_classes", 0)
         )
 
     full_model = deepcopy(model)
@@ -475,46 +555,6 @@ def test_newton_population_classifier_glm_matches_full_autodiff(request, feature
 
 
 @pytest.mark.requires_x64
-@_STRENGTHS
-@pytest.mark.parametrize("feature_mask", [True, False])
-def test_newton_population_classifier_glm_matches_full_autodiff_update(
-    request, feature_mask, make_strength
-):
-    """Newton-fitted ClassifierPopulationGLM should match a full autodiff model that does not vmap over subproblems."""
-    X, y, model, params, _ = request.getfixturevalue(
-        "population_classifierGLM_model_instantiation"
-    )
-    model.regularizer = "Ridge"
-    model.regularizer_strength = make_strength(params.coef)
-    if feature_mask:
-        model._feature_mask = initialize_feature_mask_for_population_glm(
-            X, y.shape[1], coef=params.coef
-        )
-
-    full_model = deepcopy(model)
-    full_model._get_hess_fn = lambda: None
-    full_model._hess_tag = HessianTag(structure=Full, property=PositiveSemiDefinite)
-
-    p0 = model.initialize_params(X, y)
-    state0 = model.initialize_optimizer_and_state(p0, X, y)
-    state0_full = full_model.initialize_optimizer_and_state(p0, X, y)
-
-    p_full, state_full = full_model.update(p0, state0_full, X, y)
-    p, state = model.update(p0, state0, X, y)
-
-    jax.tree.map(
-        lambda a, b: np.testing.assert_allclose(a, b, atol=1e-5),
-        p,
-        p_full,
-    )
-
-    # check that update actually changed the parameters
-    assert any(
-        not np.allclose(a, b) for a, b in zip(jax.tree.leaves(p0), jax.tree.leaves(p))
-    ), "Did not update."
-
-
-@pytest.mark.requires_x64
 @pytest.mark.parametrize("regularizer_cls", _newton_regularizers())
 @pytest.mark.parametrize("feature_mask", [True, False])
 def test_newton_population_classifier_glm_block_hessian_matches_full(
@@ -614,6 +654,48 @@ def test_newton_population_classifier_glm_block_hessian_matches_full(
                 atol=1e-8,
                 err_msg=f"Off-diagonal intercept block ({i}, {j}) is nonzero.",
             )
+
+
+class _FullHessianGLM(GLM):
+    """GLM supplying its own unpenalized Hessian while keeping the inherited ``Full`` tag.
+
+    Every in-tree model that overrides ``_get_hess_fn`` is tagged ``BlockDiagonal``
+    (``PopulationGLM`` and its classifier subclass), so this is the only way to reach the
+    unbatched branches: ``batch_axes=None`` in ``BaseRegressor._instantiate_solver`` and the
+    early return it triggers in ``Regularizer._get_hess_fn``.
+    """
+
+    def _get_hess_fn(self):
+        def loss(params, X, y):
+            rate = self._predict(params, X)
+            return self._observation_model._negative_log_likelihood(y, rate)
+
+        return jax.hessian(loss)
+
+
+@pytest.mark.requires_x64
+@pytest.mark.parametrize("regularizer_cls", _newton_regularizers())
+def test_newton_unbatched_model_hessian_includes_penalty(request, regularizer_cls):
+    """A model-supplied Hessian that is not block-diagonal must still get the penalty added."""
+    X, y, model, _, _ = request.getfixturevalue("poissonGLM_model_instantiation")
+    model = _FullHessianGLM(
+        observation_model=model.observation_model,
+        regularizer=regularizer_cls(),
+        regularizer_strength=0.1,
+        solver_name="Newton",
+    )
+
+    p0 = model.initialize_params(X, y)
+    model.initialize_optimizer_and_state(p0, X, y)
+    p = GLMParams(*p0)
+
+    # the model contributes the likelihood term only, so the Hessian the solve consumes must
+    # equal the autodiff Hessian of the penalized loss the solver actually minimizes
+    jax.tree.map(
+        lambda a, b: np.testing.assert_allclose(a, b, atol=1e-8),
+        model._solver._hessian(p, X, y),
+        jax.hessian(model._solver.fun)(p, X, y),
+    )
 
 
 @pytest.mark.parametrize(
