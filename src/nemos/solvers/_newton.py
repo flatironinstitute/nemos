@@ -8,6 +8,7 @@ import jax.numpy as jnp
 import lineax as lx
 import optax
 
+from .. import tree_utils
 from ..typing import Params
 from ._abstract_solver import OptimizationInfo
 from ._hess import (
@@ -55,6 +56,11 @@ class Newton:
         self.maxiter = maxiter
         self.tol = tol
 
+        # kept so setup_hessian can ask the regularizer for its penalty Hessian
+        self._regularizer = regularizer
+        self._regularizer_strength = regularizer_strength
+        self._init_params = init_params
+
         loss_fn = regularizer.penalized_loss(
             unregularized_loss,
             params=init_params,
@@ -96,7 +102,40 @@ class Newton:
                 tag.structure, property_override, batch_axes=tag.batch_axes
             )
         self._hess_tag = tag
-        self._hessian = hess_fn
+        self._hessian = self._penalize_hessian(hess_fn, hess_tag)
+
+    def _penalize_hessian(self, hess_fn, model_tag):
+        """Add the regularizer's penalty Hessian to the model's likelihood Hessian.
+
+        Models supply the second derivative of the likelihood alone. Adding the penalty's
+        is valid because ``Regularizer.penalized_loss`` returns ``loss + penalty``, and the
+        second derivative of a sum is the sum of the second derivatives.
+
+        ``None`` passes through: without a model-supplied Hessian, ``_build_cache``
+        autodiffs ``self.fun``, which is the penalized loss and already carries the penalty.
+
+        The batching comes from ``model_tag`` rather than the combined tag, because whether
+        the Hessian is assembled one block per neuron is a property of the model.
+        """
+        if hess_fn is None:
+            return None
+
+        batch_axes = (
+            model_tag.batch_axes
+            if model_tag is not None and model_tag.structure is BlockDiagonal
+            else None
+        )
+        penalty_hess_fn = self._regularizer._get_hess_fn(
+            self._init_params, self._regularizer_strength, batch_axes=batch_axes
+        )
+        if penalty_hess_fn is None:
+            # the regularizer declares no curvature, so the likelihood term is the whole
+            return hess_fn
+
+        def penalized_hessian(params, *args):
+            return tree_utils.tree_add(hess_fn(params, *args), penalty_hess_fn(params))
+
+        return penalized_hessian
 
     def _build_cache(self):
         if self._gradient is None:

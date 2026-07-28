@@ -21,7 +21,7 @@ from .base_class import Base
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
-from .solvers._hess import BlockDiagonal, HessianTag
+from .solvers._hess import HessianTag
 from .solvers._newton import Newton
 from .type_casting import cast_to_jax, is_numpy_array_like
 from .typing import (
@@ -433,36 +433,10 @@ class BaseRegressor(
         )
 
         if isinstance(solver, Newton):
-            model_hess_fn = self._get_hess_fn()
-            if model_hess_fn is None:
-                # rely entirely on autodiff
-                hess_fn = None
-            else:
-                # use blocks of autodiff
-                batch_axes = (
-                    self._hess_tag.batch_axes
-                    if self._hess_tag is not None
-                    and self._hess_tag.structure is BlockDiagonal
-                    else None
-                )
-                regularizer_hess_fn = regularizer._get_hess_fn(
-                    init_params, regularizer_strength, batch_axes=batch_axes
-                )
-                if regularizer_hess_fn is None:
-                    # no regularizer part
-                    hess_fn = model_hess_fn
-                else:
-                    # add regularizer hessian
-
-                    def hess_fn(params, *args):
-                        return tree_utils.tree_add(
-                            model_hess_fn(params, *args), regularizer_hess_fn(params)
-                        )
-
             solver.setup_hessian(
-                hess_fn,
+                self._get_hess_fn(),
                 self._hess_tag,
-                self.regularizer.resolve_hess_tag(init_params),
+                regularizer.resolve_hess_tag(init_params),
                 self._hess_property_override(),
             )
 

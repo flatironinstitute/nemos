@@ -81,27 +81,45 @@ def _block_diagonal_models():
     )
 
 
-# Data for each block-diagonal model, in both ``coef`` layouts. Only the pytree layout
-# distinguishes a prefix-spelled ``batch_axes`` (``GLMParams(1, 0)``, what every in-tree
-# model uses) from a per-leaf one, and the two are not interchangeable.
+def _group_mask(X, y, params):
+    """Mask built from ``X``: for a pytree design this is one flag per neuron per group."""
+    return initialize_feature_mask_for_population_glm(X, y.shape[1])
+
+
+def _coef_shaped_mask(X, y, params):
+    """Mask shaped exactly like ``coef``, class axis included."""
+    return initialize_feature_mask_for_population_glm(X, y.shape[1], coef=params.coef)
+
+
+# Per model: data in both ``coef`` layouts, plus how to build a valid feature mask. Only the
+# pytree layout distinguishes a prefix-spelled ``batch_axes`` (``GLMParams(1, 0)``, what
+# every in-tree model uses) from a per-leaf one, and the two are not interchangeable. The
+# mask builder differs per model because the two classes validate pytree masks differently.
 _BLOCK_MODEL_FIXTURES = {
     PopulationGLM: (
-        "population_poissonGLM_model_instantiation",
-        "population_poissonGLM_model_instantiation_pytree",
+        (
+            "population_poissonGLM_model_instantiation",
+            "population_poissonGLM_model_instantiation_pytree",
+        ),
+        _group_mask,
     ),
     ClassifierPopulationGLM: (
-        "population_classifierGLM_model_instantiation",
-        "population_classifierGLM_model_instantiation_pytree",
+        (
+            "population_classifierGLM_model_instantiation",
+            "population_classifierGLM_model_instantiation_pytree",
+        ),
+        _coef_shaped_mask,
     ),
 }
 
 _BLOCK_MODEL_CASES = [
     pytest.param(
         fixture_name,
+        make_mask,
         id=f"{cls.__name__}-{'pytree' if fixture_name.endswith('_pytree') else 'array'}",
     )
-    for cls in _block_diagonal_models()
-    for fixture_name in _BLOCK_MODEL_FIXTURES.get(cls, ())
+    for cls, (fixture_names, make_mask) in _BLOCK_MODEL_FIXTURES.items()
+    for fixture_name in fixture_names
 ]
 
 
@@ -338,25 +356,27 @@ def test_newton_population_glm_matches_full_autodiff(request, feature_mask):
 
 
 def test_every_block_diagonal_model_has_fixtures():
-    """A new block-diagonal model must bring data for the block-vs-full update check."""
-    missing = [
-        cls.__name__
-        for cls in _block_diagonal_models()
-        if cls not in _BLOCK_MODEL_FIXTURES
-    ]
-    assert not missing, (
-        f"{missing} declare a block-diagonal Hessian but have no entry in "
-        "_BLOCK_MODEL_FIXTURES, so test_newton_block_diagonal_matches_full_autodiff_update "
-        "silently skips them. Add fixtures for both coef layouts."
+    """Registry and discovery must agree, so no block-diagonal model goes unchecked.
+
+    ``test_newton_block_diagonal_matches_full_autodiff_update`` is parametrized from
+    ``_BLOCK_MODEL_FIXTURES``, so a model missing from it would be skipped rather than fail.
+    This test is what turns that silence into a failure.
+    """
+    discovered = {cls.__name__ for cls in _block_diagonal_models()}
+    registered = {cls.__name__ for cls in _BLOCK_MODEL_FIXTURES}
+    assert discovered == registered, (
+        f"declare a block-diagonal Hessian but are absent from _BLOCK_MODEL_FIXTURES, so "
+        f"they are never checked against the full Hessian: {sorted(discovered - registered)}. "
+        f"Registered but no longer block-diagonal: {sorted(registered - discovered)}."
     )
 
 
 @pytest.mark.requires_x64
 @_STRENGTHS
 @pytest.mark.parametrize("feature_mask", [True, False])
-@pytest.mark.parametrize("fixture_name", _BLOCK_MODEL_CASES)
+@pytest.mark.parametrize("fixture_name, make_mask", _BLOCK_MODEL_CASES)
 def test_newton_block_diagonal_matches_full_autodiff_update(
-    request, fixture_name, feature_mask, make_strength
+    request, fixture_name, make_mask, feature_mask, make_strength
 ):
     """One Newton update() on the block Hessian must match a full autodiff model.
 
@@ -370,11 +390,7 @@ def test_newton_block_diagonal_matches_full_autodiff_update(
     model.solver_name = "Newton"
     model.regularizer_strength = make_strength(params.coef)
     if feature_mask:
-        # built from X rather than from coef: a dict-valued coef masks whole input groups,
-        # so its mask is one flag per neuron per group, not one per coefficient
-        model._feature_mask = initialize_feature_mask_for_population_glm(
-            X, y.shape[1], n_classes=getattr(model, "n_classes", 0)
-        )
+        model._feature_mask = make_mask(X, y, params)
 
     full_model = deepcopy(model)
     full_model._get_hess_fn = lambda: None

@@ -2009,15 +2009,27 @@ class PopulationGLM(GLM):
 
             return jax.hessian(loss)(params)
 
-        return lambda params, X, y: jax.vmap(
-            per_neuron,
-            in_axes=(
-                self._hess_tag.batch_axes,
-                None,
-                1,
-                1,
-            ),
-        )(params, X, y, self._feature_mask)
+        def hess_fn(params, X, y):
+            mask = self._feature_mask
+            # a mask either mirrors coef, or collapses its feature axis into a single flag
+            # per input group (the pytree case), so the neuron axis sits that many
+            # dimensions earlier
+            mask_axes = (
+                None
+                if mask is None
+                else jax.tree.map(lambda m, c: m.ndim - c.ndim + 1, mask, params.coef)
+            )
+            return jax.vmap(
+                per_neuron,
+                in_axes=(
+                    self._hess_tag.batch_axes,
+                    None,
+                    1,
+                    mask_axes,
+                ),
+            )(params, X, y, mask)
+
+        return hess_fn
 
     def __sklearn_clone__(self) -> PopulationGLM:
         """Clone the PopulationGLM, dropping feature_mask."""
