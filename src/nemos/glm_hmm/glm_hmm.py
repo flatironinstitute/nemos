@@ -785,16 +785,19 @@ class GLMHMM(
         setup : Configure the initializers used when ``init_params is None``.
         update : Run a single EM iteration (advanced, manual loop).
         """
-        self._validator.validate_inputs(X=X, y=y)
-        # validate and cast session boundaries, shifting markers off NaN samples
-        session_starts = self._validator.validate_and_cast_session_starts(
+        # validate inputs, cast the session boundaries shifting markers off NaN samples,
+        # then check continuity within each session
+        session_starts = self._validator.validate_and_cast_inputs(
             X, y, session_starts=session_starts
         )
 
         # filter for non-nans, grab data if needed
         data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
 
-        # validate the inputs & initialize solver
+        # filter for non-nans, grab data if needed
+        data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
+
+        # initialize solver
         # initialize params if no params are provided
         if init_params is None:
             init_params = self._model_specific_initialization(data, y, session_starts)
@@ -1561,8 +1564,7 @@ class GLMHMM(
         >>> new_params, new_state = model.update(init_params, opt_state, X, y)
         """
         # validate inputs and session boundaries
-        self._validator.validate_inputs(X=X, y=y)
-        session_starts = self._validator.validate_and_cast_session_starts(
+        session_starts = self._validator.validate_and_cast_inputs(
             X, y, session_starts=session_starts
         )
 

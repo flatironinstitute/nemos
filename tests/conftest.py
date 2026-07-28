@@ -2008,11 +2008,14 @@ def instantiate_base_regressor_subclass(request):
     obs_model: str | nmo.observation_models.Observations = request.param["obs_model"]
     simulate: bool = request.param["simulate"]
 
-    # Create cache key (class-scoped)
+    # Create cache key (class-scoped). Include the x64 flag: data simulated under
+    # one precision must not be served to tests running under the other (the
+    # requires_x64 marker partitions the configs per test, not the cache).
     cache_key = (
         model_name,
         str(obs_model),
         simulate,
+        jax.config.jax_enable_x64,
         id(request.cls) if request.cls else id(request.module),
     )
 
