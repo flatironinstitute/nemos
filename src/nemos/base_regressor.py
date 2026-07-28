@@ -21,7 +21,7 @@ from .base_class import Base
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
-from .solvers._hess import HessianTag
+from .solvers._hess import BlockDiagonal, HessianTag
 from .solvers._newton import Newton
 from .type_casting import cast_to_jax, is_numpy_array_like
 from .typing import (
@@ -433,40 +433,32 @@ class BaseRegressor(
         )
 
         if isinstance(solver, Newton):
-            model_nll_block = self._get_hess_fn()
-            if model_nll_block is not None:
-                coef_axis = self._hess_tag.batch_axes.coef
-                strength = self.regularizer._validate_strength_structure(
-                    init_params,
-                    self.regularizer._validate_strength(regularizer_strength),
+            model_hess_fn = self._get_hess_fn()
+            if model_hess_fn is None:
+                # rely entirely on autodiff
+                hess_fn = None
+            else:
+                # use blocks of autodiff
+                batch_axes = (
+                    self._hess_tag.batch_axes
+                    if self._hess_tag is not None
+                    and self._hess_tag.structure is BlockDiagonal
+                    else None
                 )
-                strength_axis = jax.tree.map(
-                    lambda s: None if jnp.ndim(s) == 0 else coef_axis, strength
+                regularizer_hess_fn = self._regularizer.get_penalty_hessian(
+                    init_params, self._regularizer_strength, batch_axes=batch_axes
                 )
-                has_penalty_hess = (
-                    self.regularizer.penalty_hessian(
-                        init_params, self.regularizer_strength
-                    )
-                    is not None
-                )
+                if regularizer_hess_fn is None:
+                    # no regularizer part
+                    hess_fn = model_hess_fn
+                else:
+                    # add regularizer hessian
 
-                if has_penalty_hess:
-
-                    def hess_fn(p, *a):
+                    def hess_fn(params, *args):
                         return tree_utils.tree_add(
-                            model_nll_block(p, *a),
-                            jax.vmap(
-                                lambda p, s: self.regularizer.penalty_hessian(
-                                    p, s.coef
-                                ),
-                                in_axes=(self._hess_tag.batch_axes, strength_axis),
-                            )(p, strength),
+                            model_hess_fn(params, *args), regularizer_hess_fn(params)
                         )
 
-                else:
-                    hess_fn = model_nll_block
-            else:
-                hess_fn = None
             solver.setup_hessian(
                 hess_fn,
                 self._hess_tag,
