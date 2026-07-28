@@ -330,9 +330,9 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
             mirrors the pytree structure (with a trailing state axis). A pynapple
             ``TsdFrame`` is accepted.
         y :
-            Observations, shape ``(n_time_bins,)`` for single neuron or
-            ``(n_time_bins, n_neurons)`` for population models. A pynapple
-            ``Tsd``/``TsdFrame`` is accepted.
+            Target class labels of shape ``(n_samples,)``. Labels can be any hashable
+            type (integers, strings, etc.). Float arrays with integer values are
+            accepted and converted automatically.
         init_params :
             Optional explicit initial parameters as a 5-tuple
             ``(coef, intercept, scale, initial_prob, transition_prob)``. When
@@ -374,28 +374,33 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
             criterion (``solver_state_.iterations == maxiter``). Consider
             enabling float64, raising ``maxiter``, or loosening ``tol``.
 
+        Notes
+        -----
+        ``fit`` calls :meth:`set_classes` internally, so ``classes_`` is always
+        consistent with the labels in ``y``.
+
+        See Also
+        --------
+        setup : Configure the initializers used when ``init_params is None``.
+        update : Run a single EM iteration (advanced, manual loop).
+
         Examples
         --------
-        Basic fit with default Bernoulli observations:
+        Basic fit with two classes and two hidden states:
 
         >>> import numpy as np
         >>> import nemos as nmo
         >>> np.random.seed(0)
         >>> X = np.random.normal(size=(200, 4))
         >>> y = np.random.binomial(n=1, p=0.5, size=200)
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(X, y)
+        >>> model = nmo.glm_hmm.ClassifierGLMHMM(n_states=2, n_classes=2).fit(X, y)
         >>> model.coef_.shape, model.transition_prob_.shape
-        ((4, 2), (2, 2))
+        ((4, 2, 2), (2, 2))
 
         Multiple sessions via explicit ``session_starts``:
 
         >>> session_starts = np.array([0, 100])
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(X, y, session_starts=session_starts)
-
-        See Also
-        --------
-        setup : Configure the initializers used when ``init_params is None``.
-        update : Run a single EM iteration (advanced, manual loop).
+        >>> model = nmo.glm_hmm.ClassifierGLMHMM(n_states=2).fit(X, y, session_starts=session_starts)
         """
         self.set_classes(y)
         y = self._label_encoder.encode(y)
@@ -438,10 +443,9 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
             Predictors, shape ``(n_time_bins, n_features)``. A pytree of 2-D
             arrays sharing the leading time axis is also accepted.
         y :
-            Observations, shape ``(n_time_bins,)`` for a single neuron or
-            ``(n_time_bins, n_neurons)`` for a population model. A pynapple
-            ``Tsd``/``TsdFrame`` is accepted; session boundaries are then
-            inferred from ``time_support``.
+            Target class labels of shape ``(n_samples,)``. Labels can be any hashable
+            type (integers, strings, etc.). Float arrays with integer values are
+            accepted and converted automatically.
         session_starts :
             Optional session boundaries. Accepts:
 
@@ -504,8 +508,8 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
         >>> import nemos as nmo
         >>> np.random.seed(123)
         >>> X = np.random.randn(100, 5)
-        >>> y = np.random.poisson(2, size=100)
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson").fit(X, y)
+        >>> y = np.random.binomial(n=1, p=0.5, size=100)
+        >>> model = nmo.glm_hmm.ClassifierGLMHMM(n_states=3).fit(X, y)
         >>> states = model.decode_state(X, y, state_format="index")
         >>> states.shape
         (100,)
@@ -544,10 +548,9 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
             Predictors, shape ``(n_time_bins, n_features)``. A pytree of 2-D
             arrays sharing the leading time axis is also accepted.
         y :
-            Observations, shape ``(n_time_bins,)`` for a single neuron or
-            ``(n_time_bins, n_neurons)`` for a population model. A pynapple
-            ``Tsd``/``TsdFrame`` is accepted; session boundaries are then
-            inferred from ``time_support``.
+            Target class labels of shape ``(n_samples,)``. Labels can be any hashable
+            type (integers, strings, etc.). Float arrays with integer values are
+            accepted and converted automatically.
         session_starts :
             Optional session boundaries. Accepts:
 
@@ -593,14 +596,14 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
 
         Examples
         --------
-        Fit a GLM-HMM and compute smoothing posteriors:
+        Fit a Classifier GLM-HMM and compute smoothing posteriors:
 
         >>> import numpy as np
         >>> import nemos as nmo
         >>> np.random.seed(123)
         >>> X = np.random.randn(100, 5)
-        >>> y = np.random.poisson(2, size=100)
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson").fit(X, y)
+        >>> y = np.random.binomial(n=1, p=0.5, size=100)
+        >>> model = nmo.glm_hmm.ClassifierGLMHMM(n_states=3).fit(X, y)
         >>> posteriors = model.smooth_proba(X, y)
         >>> posteriors.shape
         (100, 3)
@@ -642,10 +645,9 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
             Predictors, shape ``(n_time_bins, n_features)``. A pytree of 2-D
             arrays sharing the leading time axis is also accepted.
         y :
-            Observations, shape ``(n_time_bins,)`` for a single neuron or
-            ``(n_time_bins, n_neurons)`` for a population model. A pynapple
-            ``Tsd``/``TsdFrame`` is accepted; session boundaries are then
-            inferred from ``time_support``.
+            Target class labels of shape ``(n_samples,)``. Labels can be any hashable
+            type (integers, strings, etc.). Float arrays with integer values are
+            accepted and converted automatically.
         session_starts :
             Optional session boundaries. Accepts:
 
@@ -692,14 +694,14 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
 
         Examples
         --------
-        Fit a GLM-HMM and compute filtering posteriors (causal/online):
+        Fit a Classifier GLM-HMM and compute filtering posteriors (causal/online):
 
         >>> import numpy as np
         >>> import nemos as nmo
         >>> np.random.seed(123)
         >>> X = np.random.randn(100, 5)
-        >>> y = np.random.poisson(2, size=100)
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson").fit(X, y)
+        >>> y = np.random.binomial(n=1, p=0.5, size=100)
+        >>> model = nmo.glm_hmm.ClassifierGLMHMM(n_states=3).fit(X, y)
         >>> filt = model.filter_proba(X, y)
         >>> filt.shape
         (100, 3)
@@ -761,12 +763,11 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
 
         Returns
         -------
-        simulated_activity :
-            Simulated observations from the emission model. Shape ``(n_time_bins,)``
-            for single neuron or ``(n_time_bins, n_neurons)`` for population models.
-        firing_rates :
-            Predicted firing rates conditioned on the simulated states.
-            Shape ``(n_time_bins,)`` or ``(n_time_bins, n_neurons)``.
+        y :
+            Simulated class labels. Shape ``(n_time_bins,)``
+        y_proba :
+            Simulated class probability conditioned on the simulated states.
+            Shape ``(n_time_bins,)``.
         simulated_states :
             Simulated hidden state trajectory. Shape depends on ``state_format``.
 
@@ -783,12 +784,12 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
         >>> np.random.seed(123)
         >>> X = np.random.randn(100, 3)
         >>> y = np.random.binomial(1, 0.5, 100)
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=2, observation_model="Bernoulli")
+        >>> model = nmo.glm_hmm.ClassifierGLMHMM(n_states=2)
         >>> model = model.fit(X, y)
         >>> key = jax.random.key(0)
         >>> X_new = np.random.randn(50, 3)
-        >>> activity, rates, states = model.simulate(key, X_new)
-        >>> activity.shape
+        >>> y_sim, y_proba, states = model.simulate(key, X_new)
+        >>> y_sim.shape
         (50,)
         >>> states.shape
         (50,)
@@ -817,7 +818,7 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
         n_samples: Optional[int] = None,
         **kwargs,
     ) -> StepResult:
-        """Run a single EM iteration on the GLM-HMM.
+        """Run a single EM iteration on the Classifier GLM-HMM.
 
         Performs one E-step / M-step pair starting from the supplied parameters and
         EM state, updates the model's fitted attributes (``coef_``, ``intercept_``,
@@ -877,7 +878,7 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
         >>> np.random.seed(0)
         >>> X = np.random.normal(size=(80, 3))
         >>> y = np.random.binomial(n=1, p=0.5, size=80)
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=2)
+        >>> model = nmo.glm_hmm.ClassifierGLMHMM(n_states=2)
         >>> init_params = model.initialize_params(X, y)
         >>> opt_state = model.initialize_optimizer_and_state(init_params, X, y)
         >>> new_params, new_state = model.update(init_params, opt_state, X, y)

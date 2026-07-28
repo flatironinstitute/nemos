@@ -204,6 +204,162 @@ class ClassifierMixin:
             y = jax.nn.one_hot(y, self._label_encoder.n_classes)
         return (X, y, *args)
 
+    def initialize_optimizer_and_state(
+        self,
+        init_params: UserProvidedParamsT,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+    ) -> SolverState:
+        """Initialize the solver and its state for running fit and update.
+
+        This method must be called before using :meth:`update` for iterative optimization.
+        It sets up the solver with the provided initial parameters and data.
+
+        Parameters
+        ----------
+        init_params
+            Initial parameter tuple of (coefficients, intercept).
+        X
+            Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
+        y
+            Target labels, array of shape ``(n_time_bins,)`` for single neuron/subject models or
+            ``(n_time_bins, n_neurons)`` for population models.
+
+        Returns
+        -------
+        state
+            Initial solver state.
+
+        Raises
+        ------
+        ValueError
+            If inputs or parameters have incompatible shapes or invalid values.
+        """
+        self._label_encoder.check_classes_is_set("initialize_optimizer_and_state")
+        y = self._label_encoder.encode(y)
+        return super().initialize_optimizer_and_state(init_params, X, y)
+
+    def initialize_params(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+    ) -> UserProvidedParamsT:
+        """
+        Initialize model parameters for classifier models.
+
+        Initialize coefficients with zeros and intercept by matching the mean class
+        proportions. Class labels are automatically converted to one-hot encoding.
+
+        Parameters
+        ----------
+        X :
+            Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
+        y :
+            Class labels, array of shape ``(n_time_bins,)`` for single neuron
+            models or ``(n_time_bins, n_neurons)`` for population models. Labels
+            must be a subset of ``classes_``.
+
+        Returns
+        -------
+        :
+            Initial parameter tuple of (coefficients, intercept).
+
+        Notes
+        -----
+        All labels in ``y`` must be present in ``classes_``. Passing labels not
+        in ``classes_`` will raise an error.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> import nemos as nmo
+        >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
+        >>> y = jnp.array([0, 0, 1, 1])
+        >>> model = nmo.glm.ClassifierGLM(n_classes=2)
+        >>> model.set_classes(y)
+        ClassifierGLM(...)
+        >>> coef, intercept = model.initialize_params(X, y)
+        >>> coef.shape
+        (2, 2)
+        """
+        self._label_encoder.check_classes_is_set("initialize_params")
+        y = self._label_encoder.encode(y)
+        y = self._validator.check_and_cast_y_to_integer(y)
+        y = jax.nn.one_hot(y, self.n_classes)
+        return super().initialize_params(X, y)
+
+    def update(
+        self,
+        params: GLMUserParams,
+        opt_state: SolverState,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        n_samples: Optional[int] = None,
+        **kwargs,
+    ) -> StepResult:
+        """
+        Update the model parameters and solver state.
+
+        Performs a single optimization step using the model's solver. Class labels
+        are automatically encoded to internal indices and converted to one-hot
+        encoding before the update.
+
+        **Important**: Labels of any dtype (integers, floats, strings, etc.) are
+        supported and will be encoded using the ``classes_`` attribute set via
+        :meth:`set_classes`. For best performance, use integer labels ``[0, n_classes - 1]``.
+
+        Parameters
+        ----------
+        params :
+            The current model parameters, typically a tuple of coefficients and intercepts.
+        opt_state :
+            The current state of the optimizer, encapsulating information necessary for the
+            optimization algorithm to continue from the current state.
+        X :
+            The predictors used in the model fitting process. Shape ``(n_time_bins, n_features)``
+            or a pytree of arrays of the same shape.
+        y :
+            Class labels, array of shape ``(n_time_bins,)`` for single neuron
+            models or ``(n_time_bins, n_neurons)`` for population models. Labels must
+            match those defined in ``classes_``.
+        *args :
+            Additional positional arguments to be passed to the solver's update method.
+        n_samples :
+            The total number of samples. Usually larger than the samples of an individual batch,
+            used to estimate the scale parameter of the GLM.
+        **kwargs :
+            Additional keyword arguments to be passed to the solver's update method.
+
+        Returns
+        -------
+        params :
+            Updated model parameters (coefficients, intercepts).
+        state :
+            Updated optimizer state.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> import nemos as nmo
+        >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
+        >>> y = jnp.array([0, 0, 1, 1])
+        >>> model = nmo.glm.ClassifierGLM(n_classes=2)
+        >>> model.set_classes(y)
+        ClassifierGLM(...)
+        >>> params = model.initialize_params(X, y)
+        >>> opt_state = model.initialize_optimizer_and_state(params, X, y)
+        >>> new_params, new_state = model.update(params, opt_state, X, y)
+        """
+        self._label_encoder.check_classes_is_set("update")
+        # note: do not check and cast here. Risky but the performance of
+        # the update has priority.
+        y = self._label_encoder.encode(y, safe=False)
+        y = jax.nn.one_hot(y, self.n_classes)
+        return super().update(
+            params, opt_state, X, y, *args, n_samples=n_samples, **kwargs
+        )
+
 
 class ClassifierGLMMixin(ClassifierMixin):
     """GLM methods for Classifier models"""
@@ -423,41 +579,6 @@ class ClassifierGLMMixin(ClassifierMixin):
         argmax = support_pynapple(conv_type="jax")(lambda x: jnp.argmax(x, axis=-1))
         y = self._label_encoder.decode(argmax(y))
         return y, log_prob
-
-    def initialize_optimizer_and_state(
-        self,
-        init_params: UserProvidedParamsT,
-        X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
-    ) -> SolverState:
-        """Initialize the solver and its state for running fit and update.
-
-        This method must be called before using :meth:`update` for iterative optimization.
-        It sets up the solver with the provided initial parameters and data.
-
-        Parameters
-        ----------
-        init_params
-            Initial parameter tuple of (coefficients, intercept).
-        X
-            Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
-        y
-            Target labels, array of shape ``(n_time_bins,)`` for single neuron/subject models or
-            ``(n_time_bins, n_neurons)`` for population models.
-
-        Returns
-        -------
-        state
-            Initial solver state.
-
-        Raises
-        ------
-        ValueError
-            If inputs or parameters have incompatible shapes or invalid values.
-        """
-        self._label_encoder.check_classes_is_set("initialize_optimizer_and_state")
-        y = self._label_encoder.encode(y)
-        return super().initialize_optimizer_and_state(init_params, X, y)
 
     def initialize_params(
         self,
