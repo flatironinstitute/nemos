@@ -232,8 +232,8 @@ if path.exists():
 
 ## Pytrees
 [`PopulationGLM`](nemos.glm.PopulationGLM) is compatible with JAX [`pytrees`](https://docs.jax.dev/en/latest/pytrees.html), which are general, potentially nested, container-like structures. Pytrees include lists, dictionaries, tuples or any combination thereof. If you structure your predictors
-in a pytree, the `feature_mask` must be a pytree of the same structure, containing arrays
-of shape `(n_neurons, )`.
+in a pytree, the `feature_mask` must be a pytree of the same structure, each leaf shaped like
+the coefficients it masks, `(n_features_in_leaf, n_neurons)`.
 For example, if we use a Python `dict`, the example above can be reformulated as follows,
 
 ```{code-cell} ipython3
@@ -244,11 +244,12 @@ pytree_features = dict(
     neu_1=input_features[:, 2:]
 )
 
-# Define a mask as a dictionary
+# Define a mask as a dictionary. Each group holds a single feature here, so each leaf has
+# shape (1, n_neurons).
 pytree_mask = dict(
-    shared=np.array([1, 1]),
-    neu_0=np.array([1, 0]),
-    neu_1=np.array([0, 1])
+    shared=np.array([[1, 1]]),
+    neu_0=np.array([[1, 0]]),
+    neu_1=np.array([[0, 1]])
 )
 
 # fit a model
