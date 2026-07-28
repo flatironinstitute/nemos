@@ -413,7 +413,7 @@ class ClassifierGLMMixin(ClassifierMixin):
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
         >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y)
-        >>> key = jax.random.key(0)
+        >>> key = jax.random.key(0) 
         >>> simulated_y, log_prob = model.simulate(key, X)
         >>> simulated_y.shape
         (4,)

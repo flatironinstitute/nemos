@@ -165,3 +165,4 @@ docs/api/generated/*
 # Benchmarking results copied from ceph
 benchmarking_results/
 src/nemos/glm_hmm/classifier_glm_hmm_plan.md
+/docs/generated
