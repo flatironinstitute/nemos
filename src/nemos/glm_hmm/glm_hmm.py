@@ -794,9 +794,6 @@ class GLMHMM(
         # filter for non-nans, grab data if needed
         data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
 
-        # filter for non-nans, grab data if needed
-        data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
-
         # initialize solver
         # initialize params if no params are provided
         if init_params is None:
