@@ -51,6 +51,29 @@ def _newton_regularizers():
     )
 
 
+def _per_neuron_strength(coef):
+    """Ridge strength shaped like ``coef`` and varying along the neuron axis (axis 1).
+
+    A strength that is constant across neurons is numerically indistinguishable from a
+    scalar one, so it would not detect a wrong neuron axis in the vmapped penalty
+    Hessian (``Regularizer._filter_kwargs_batch_axes``). Varying it across neurons makes
+    the block and the full Hessian disagree if the axes are mismatched.
+    """
+    per_neuron = 0.1 * (1 + jnp.arange(coef.shape[1]))
+    return jnp.broadcast_to(
+        per_neuron.reshape((1, coef.shape[1]) + (1,) * (coef.ndim - 2)), coef.shape
+    )
+
+
+# scalar vs. parameter-shaped strength: the second exercises the strength expansion and
+# the per-ingredient batch axes inside the regularizer's penalty Hessian.
+_STRENGTHS = pytest.mark.parametrize(
+    "make_strength",
+    [lambda coef: 0.1, _per_neuron_strength],
+    ids=["scalar_strength", "per_neuron_strength"],
+)
+
+
 @pytest.mark.parametrize(
     "regr_setup",
     [
@@ -257,14 +280,17 @@ def test_newton_population_glm_matches_full_autodiff(request, feature_mask):
 
 
 @pytest.mark.requires_x64
+@_STRENGTHS
 @pytest.mark.parametrize("feature_mask", [True, False])
-def test_newton_population_glm_matches_full_autodiff_update(request, feature_mask):
+def test_newton_population_glm_matches_full_autodiff_update(
+    request, feature_mask, make_strength
+):
     """Newton-fitted PopulationGLM single update() should match a full autodiff model."""
     X, y, model, params, _ = request.getfixturevalue(
         "population_poissonGLM_model_instantiation"
     )
     model.regularizer = "Ridge"
-    model.regularizer_strength = 0.1
+    model.regularizer_strength = make_strength(params.coef)
     if feature_mask:
         model._feature_mask = initialize_feature_mask_for_population_glm(
             X, y.shape[1], coef=params.coef
@@ -449,16 +475,17 @@ def test_newton_population_classifier_glm_matches_full_autodiff(request, feature
 
 
 @pytest.mark.requires_x64
+@_STRENGTHS
 @pytest.mark.parametrize("feature_mask", [True, False])
 def test_newton_population_classifier_glm_matches_full_autodiff_update(
-    request, feature_mask
+    request, feature_mask, make_strength
 ):
     """Newton-fitted ClassifierPopulationGLM should match a full autodiff model that does not vmap over subproblems."""
     X, y, model, params, _ = request.getfixturevalue(
         "population_classifierGLM_model_instantiation"
     )
     model.regularizer = "Ridge"
-    model.regularizer_strength = 0.1
+    model.regularizer_strength = make_strength(params.coef)
     if feature_mask:
         model._feature_mask = initialize_feature_mask_for_population_glm(
             X, y.shape[1], coef=params.coef

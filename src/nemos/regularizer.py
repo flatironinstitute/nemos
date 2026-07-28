@@ -8,7 +8,7 @@ with various optimization methods, and they can be applied depending on the mode
 
 import abc
 import math
-from typing import Any, Callable, Tuple, Union
+from typing import Any, Callable, Optional, Tuple, Union
 
 import equinox as eqx
 import jax
@@ -464,7 +464,9 @@ class Regularizer(Base, abc.ABC):
         strength = self._validate_strength_structure(params, strength)
         return {"strength": strength}
 
-    def _filter_kwargs_batch_axes(self, params, filter_kwargs, batch_axes) -> dict:
+    def _filter_kwargs_batch_axes(
+        self, params: Any, filter_kwargs: dict, batch_axes: Any
+    ) -> dict:
         """Which axis carries the batch, for each ingredient of the penalty."""
         strength = filter_kwargs["strength"]
         wheres = getattr(params, "regularizable_subtrees", lambda: [lambda x: x])()
@@ -482,7 +484,9 @@ class Regularizer(Base, abc.ABC):
             )
         return {"strength": axes}
 
-    def get_hess_fn(self, params, strength, batch_axes=None) -> Callable | None:
+    def _get_hess_fn(
+        self, params: Any, strength: Any, batch_axes: Optional[Any] = None
+    ) -> Callable | None:
         """Return a function computing the second derivative of the regularizer penalty.
 
         ``None`` when the regularizer declares no curvature (``_hess_tag is None``):
@@ -597,11 +601,6 @@ class Ridge(Regularizer):
             subtree,
             strength,
         )
-
-    def penalty_hessian(self, params, strength):
-        """Return a parameter hessian for the penalty only."""
-        filter_kwargs = self._get_filter_kwargs(strength=strength, params=params)
-        return jax.hessian(lambda p: self._penalization(p, filter_kwargs))(params)
 
 
 class Lasso(Regularizer):

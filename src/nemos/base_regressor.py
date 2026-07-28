@@ -445,8 +445,8 @@ class BaseRegressor(
                     and self._hess_tag.structure is BlockDiagonal
                     else None
                 )
-                regularizer_hess_fn = self._regularizer.get_hess_fn(
-                    init_params, self._regularizer_strength, batch_axes=batch_axes
+                regularizer_hess_fn = regularizer._get_hess_fn(
+                    init_params, regularizer_strength, batch_axes=batch_axes
                 )
                 if regularizer_hess_fn is None:
                     # no regularizer part
