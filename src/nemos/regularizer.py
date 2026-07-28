@@ -482,8 +482,8 @@ class Regularizer(Base, abc.ABC):
             )
         return {"strength": axes}
 
-    def get_penalty_hessian(self, params, strength, batch_axes=None) -> Callable | None:
-        """Return a function computing the second derivative of the penalty alone.
+    def get_hess_fn(self, params, strength, batch_axes=None) -> Callable | None:
+        """Return a function computing the second derivative of the regularizer penalty.
 
         ``None`` when the regularizer declares no curvature (``_hess_tag is None``):
         its penalty is either identically zero or has no second derivative.
