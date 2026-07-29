@@ -297,9 +297,9 @@ def plot_design_matrix(X, choices, n_trials=20):
     matplotlib.figure.Figure
         The figure with the two heatmaps.
     """
+    import matplotlib.image as mpimg
     from matplotlib.colors import BoundaryNorm, ListedColormap
     from matplotlib.patches import FancyArrowPatch
-    import matplotlib.image as mpimg
 
     # width ratio 3:1 so the 3-column design matrix and 1-column choices end
     # up with the same (square) cell size, hence the same height and alignment.
