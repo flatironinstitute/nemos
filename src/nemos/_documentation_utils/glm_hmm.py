@@ -600,7 +600,7 @@ def plot_param_recovery(
     )  # (n_features+1, n_states)
     rec_vals = np.vstack([rec_coef, rec_intercept[None, :]])
     n_params = true_vals.shape[0]
-    param_labels = [f"stim w{ i+1}" for i in range(true_coef.shape[0])] + ["bias"]
+    param_labels = [f"stim w{i+1}" for i in range(true_coef.shape[0])] + ["bias"]
 
     fig, axes = plt.subplots(1, 3, figsize=(13, 4))
 
