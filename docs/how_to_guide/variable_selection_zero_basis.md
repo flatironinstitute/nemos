@@ -96,8 +96,14 @@ from sklearn.pipeline import Pipeline
 import numpy as np
 
 # Define complete basis configurations
-position_basis = nmo.basis.BSplineEval(n_basis_funcs=10)
-theta_basis = nmo.basis.CyclicBSplineEval(n_basis_funcs=8)
+position_basis = nmo.basis.BSplineEval(
+    n_basis_funcs=10,
+    bounds=(position.min(), position.max()),
+)
+theta_basis = nmo.basis.CyclicBSplineEval(
+    n_basis_funcs=8,
+    bounds=(-np.pi, np.pi),
+)
 
 # Use Zero as placeholder for excluded inputs
 basis_both = position_basis + theta_basis

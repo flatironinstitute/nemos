@@ -8,10 +8,10 @@ from typing import Any, Optional, Tuple
 import jax
 import jax.numpy as jnp
 import lazy_loader as lazy
+import numpy as np
 
 from .. import validation
 from ..base_validator import RegressorValidator
-from ..tree_utils import pytree_map_and_reduce
 from ..type_casting import is_pynapple_tsd
 from ..typing import DESIGN_INPUT_TYPE, ArrayLike
 from .params import HMMModelParamsT, HMMParams, HMMUserParams, HMMUserProvidedParamsT
@@ -23,26 +23,80 @@ from .utils import (
 nap = lazy.load("pynapple")
 
 
-def has_nans_only_at_border(arr):
-    """Check if NaNs appear only at the start and end along axis=0."""
-    # Check which rows have any NaN values
-    is_nan = jnp.any(jnp.isnan(arr.reshape(arr.shape[0], -1)), axis=1)
+def nan_sample_mask(X: DESIGN_INPUT_TYPE, y: Optional[ArrayLike] = None) -> jnp.ndarray:
+    """Flag the samples containing NaNs in any leaf of ``X`` or in ``y``.
 
-    # If no NaNs, it's valid
-    if not jnp.any(is_nan):
-        return True
+    Parameters
+    ----------
+    X :
+        Input data/design matrix, shape ``(n_samples, n_features)``, or a pytree of
+        such arrays. Pynapple time series are accepted.
+    y :
+        Output data/observations, shape ``(n_samples, ...)``. If None (e.g. during
+        simulation), only ``X`` is inspected.
 
-    # If all NaNs, it's valid
-    if jnp.all(is_nan):
-        return True
+    Returns
+    -------
+    :
+        Boolean array of shape ``(n_samples,)``, True where any feature or
+        observation of that sample is NaN.
+    """
 
-    # Find first and last non-NaN positions
-    non_nan_indices = jnp.where(~is_nan)[0]
-    first_valid = non_nan_indices[0]
-    last_valid = non_nan_indices[-1]
+    def _is_nan(x):
+        x = jnp.asarray(x)
+        return jnp.any(jnp.isnan(x.reshape(x.shape[0], -1)), axis=1)
 
-    # Check if there are any NaNs between first and last valid values
-    return not jnp.any(is_nan[first_valid : last_valid + 1])
+    is_nan = jax.tree_util.tree_reduce(jnp.logical_or, jax.tree.map(_is_nan, X))
+    if y is not None:
+        is_nan = is_nan | _is_nan(y)
+    return is_nan
+
+
+def has_interior_nans(is_nan: ArrayLike, session_starts: ArrayLike) -> bool:
+    """Check if any session holds a NaN sample between two valid samples.
+
+    A session is acceptable when its valid samples form a single contiguous run:
+    dropping NaNs at its head or tail shortens the session without reordering it, while
+    dropping an interior NaN would splice together bins that are not adjacent in time.
+
+    Counting the runs over the whole recording answers this without a per-session scan.
+    A session holding valid samples contributes one run when they are contiguous and at
+    least two when a NaN splits them; an all-NaN session contributes none. The total
+    number of runs therefore exceeds the number of sessions holding a valid sample if
+    and only if some session is split.
+
+    The two counts run on the host: they reduce one boolean per sample, which costs less
+    than the ``jax`` dispatch needed to place them on a device.
+
+    Parameters
+    ----------
+    is_nan :
+        Boolean array flagging the NaN samples, shape ``(n_samples,)``, as returned by
+        :func:`nan_sample_mask`.
+    session_starts :
+        Boolean array of session-start indicators, shape ``(n_samples,)``. The first
+        element must be True.
+
+    Returns
+    -------
+    :
+        True if at least one session holds a NaN between two valid samples. Sessions
+        that are entirely NaN, and sessions holding a single valid sample, hold none.
+    """
+    is_nan = np.asarray(is_nan)
+    session_starts = np.asarray(session_starts)
+    is_valid = ~is_nan
+
+    # a run opens at a valid sample with no valid predecessor inside its session, that
+    # is one preceded by a NaN or one starting a session. The slices pair sample i with
+    # its predecessor i - 1, which leaves out sample 0: it opens a run when it is valid.
+    opens_run = is_valid[1:] & (is_nan[:-1] | session_starts[1:])
+    n_runs = np.count_nonzero(opens_run) + is_valid[0]
+
+    # reduceat sums is_valid between consecutive session starts, giving one valid-sample
+    # count per session, so its non-zero entries are the sessions holding valid samples
+    n_valid_per_session = np.add.reduceat(is_valid, np.flatnonzero(session_starts))
+    return n_runs > np.count_nonzero(n_valid_per_session)
 
 
 def to_hmm_params(user_params: HMMUserParams) -> HMMParams:
@@ -81,6 +135,14 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
     params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
         ("check_init_and_transition_prob_shape", None),
         ("check_init_and_transition_prob_sum_to_1", None),
+    )
+    # tuples [(meth, kwargs), ...]; see validate_and_cast_inputs for the step contract
+    inputs_validation_sequence: Tuple[
+        Tuple[str, None] | Tuple[str, dict[str, Any]], ...
+    ] = (
+        ("validate_inputs", None),
+        ("validate_and_cast_session_starts", None),
+        ("check_is_continuous", None),
     )
 
     def check_user_params_structure(
@@ -155,52 +217,93 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
             )
         return params
 
-    def validate_inputs(
+    def validate_and_cast_inputs(
         self,
-        X: Optional[DESIGN_INPUT_TYPE] = None,
-        y: Optional[jnp.ndarray | nap.Tsd | nap.TsdFrame] = None,
-    ):
-        """Validate inputs for HMM model."""
-        super().validate_inputs(X, y)
+        X: DESIGN_INPUT_TYPE,
+        y: Optional[ArrayLike] = None,
+        session_starts: Optional[ArrayLike | nap.IntervalSet] = None,
+        **validation_kwargs,
+    ) -> jnp.ndarray:
+        """Run ``inputs_validation_sequence`` in order, returning the cast boundaries.
 
-        # Additional checks due to the time-series structure.
-        # (the forward-backward implementation assumes no nans in the inputs)
-        # Skip NaN border check if y is None (e.g., during simulation)
-        if y is None:
-            if X is not None and not pytree_map_and_reduce(
-                has_nans_only_at_border, all, X
-            ):
-                raise ValueError(
-                    "HMM requires continuous time-series data. NaN values must only "
-                    "appear at the beginning or end of the data, not in the middle."
-                )
+        Every step is called with the inputs and the session boundaries known so far. A
+        step returning a value replaces the boundaries for the steps that follow, which
+        is how :meth:`validate_and_cast_session_starts` hands the cast indicators to
+        :meth:`check_is_continuous`; a step returning None leaves them untouched.
+
+        Parameters
+        ----------
+        X :
+            Input data/design matrix, shape ``(n_samples, n_features)``, or a pytree
+            of such arrays.
+        y :
+            Output data/observations, shape ``(n_samples, ...)``. If None (e.g. during
+            simulation), the checks that need it are skipped.
+        session_starts :
+            User-provided session boundaries, see
+            :func:`~nemos.hmm.utils.initialize_session_starts`.
+        **validation_kwargs
+            Extra keyword arguments forwarded to every step of the sequence.
+
+        Returns
+        -------
+        :
+            Boolean array of session-start indicators, shape ``(n_samples,)``.
+        """
+        for method_name, method_kwargs in self.inputs_validation_sequence:
+            method_kwargs = {} if method_kwargs is None else method_kwargs
+            # Merge default kwargs with any user-provided kwargs
+            merged_kwargs = {**method_kwargs, **validation_kwargs}
+            out = getattr(self, method_name)(
+                X=X, y=y, session_starts=session_starts, **merged_kwargs
+            )
+            if out is not None:
+                session_starts = out
+
+        return session_starts
+
+    def check_is_continuous(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: Optional[ArrayLike],
+        session_starts: jnp.ndarray,
+    ) -> None:
+        """Check that each session is a contiguous stretch of valid samples.
+
+        The forward-backward recursions run over the samples of a session in order, so
+        a NaN in the middle of a session would break the message passing. NaNs at the
+        borders of a session are dropped before inference without altering the
+        ordering, and are therefore allowed.
+
+        Sessions are delimited by ``session_starts``, not by the epochs of a pynapple
+        input: the boundaries that inference will use are the ones that matter, and the
+        two differ whenever the caller passes explicit boundaries alongside a pynapple
+        time series.
+
+        Parameters
+        ----------
+        X :
+            Input data/design matrix, shape ``(n_samples, n_features)``, or a pytree
+            of such arrays.
+        y :
+            Output data/observations, shape ``(n_samples, ...)``. If None (e.g. during
+            simulation), only ``X`` is checked.
+        session_starts :
+            Boolean array of session-start indicators, shape ``(n_samples,)``, as
+            returned by :meth:`validate_and_cast_session_starts`.
+
+        Raises
+        ------
+        ValueError
+            If any session holds a NaN sample between two valid samples.
+        """
+        is_nan = np.asarray(nan_sample_mask(X, y))
+
+        # nothing to check when the data holds no NaN
+        if not is_nan.any():
             return
 
-        if is_pynapple_tsd(X):
-            # loop over epochs and check that nans are all at the border
-            epoch_slices = [
-                X.get_slice(ep.start[0], ep.end[0]) for ep in X.time_support
-            ]
-            y_array = jnp.asarray(y)
-            is_continuous = all(
-                has_nans_only_at_border(X.d[s]) and has_nans_only_at_border(y_array[s])
-                for s in epoch_slices
-            )
-        elif is_pynapple_tsd(y):
-            # loop over epochs and check that nans are all at the border
-            epoch_slices = [
-                y.get_slice(ep.start[0], ep.end[0]) for ep in y.time_support
-            ]
-            is_continuous = all(
-                has_nans_only_at_border(X[s]) and has_nans_only_at_border(y.d[s])
-                for s in epoch_slices
-            )
-        else:
-            # check nans at the border
-            is_continuous = pytree_map_and_reduce(
-                has_nans_only_at_border, all, X
-            ) and has_nans_only_at_border(y)
-        if not is_continuous:
+        if has_interior_nans(is_nan, session_starts):
             raise ValueError(
                 f"{self.model_class} requires continuous time-series data. NaN values must only "
                 "appear at the beginning or end of the data, not in the middle. "
@@ -212,7 +315,28 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
     def validate_and_cast_session_starts(
         self, X, y, session_starts: Optional[ArrayLike | nap.IntervalSet] = None
     ) -> jnp.ndarray:
-        """Validate and cast session_starts to a binary array of shape (n_samples,)."""
+        """Validate and cast session_starts to a binary array of shape (n_samples,).
+
+        Parameters
+        ----------
+        X :
+            Input data/design matrix, shape ``(n_samples, n_features)``, or a pytree
+            of such arrays.
+        y :
+            Output data/observations, shape ``(n_samples, ...)``. If None (e.g. during
+            simulation), the sample count is read off ``X``.
+        session_starts :
+            User-provided session boundaries, see
+            :func:`~nemos.hmm.utils.initialize_session_starts`. If None, the pynapple
+            time support of ``y`` or ``X`` is used when available, otherwise the data
+            is treated as a single session.
+
+        Returns
+        -------
+        :
+            Boolean array of session-start indicators, shape ``(n_samples,)``, with the
+            markers falling on NaN samples shifted to the next valid sample.
+        """
         if session_starts is None:
             if is_pynapple_tsd(y):
                 session_starts = y.time_support
@@ -222,17 +346,7 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
         session_starts = initialize_session_starts(X, y, session_starts)
 
         # shift any True values that fall on NaN samples to the next valid sample
-        def _is_nan(x):
-            return jnp.any(jnp.isnan(jnp.asarray(x)).reshape(x.shape[0], -1), axis=1)
-
-        nan_x = jax.tree_util.tree_reduce(jnp.logical_or, jax.tree.map(_is_nan, X))
-
-        if y is not None:
-            nan_y = jnp.any(jnp.isnan(jnp.asarray(y)).reshape(y.shape[0], -1), axis=1)
-            combined_nans = nan_x | nan_y
-        else:
-            combined_nans = nan_x
-        return shift_nan_session_starts(session_starts, combined_nans)
+        return shift_nan_session_starts(session_starts, nan_sample_mask(X, y))
 
     def get_empty_params(self, X, y) -> HMMModelParamsT:
         """Return the param shape given the input data."""

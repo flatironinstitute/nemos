@@ -647,12 +647,11 @@ class BaseHMM(
         self._check_is_fit()
         params = self._get_model_params()
 
-        # validate inputs
-        self._validator.validate_inputs(X=X, y=y)
-        self._validator.validate_consistency(params, X=X, y=y)
-        session_starts = self._validator.validate_and_cast_session_starts(
+        # validate inputs and session boundaries
+        session_starts = self._validator.validate_and_cast_inputs(
             X=X, y=y, session_starts=session_starts
         )
+        self._validator.validate_consistency(params, X=X, y=y)
         return params, X, y, session_starts
 
     @abc.abstractmethod
