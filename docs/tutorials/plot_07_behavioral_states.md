@@ -7,7 +7,7 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.19.3
 kernelspec:
-  display_name: nemos (3.13.3.final.0)
+  display_name: nemos (3.13.3)
   language: python
   name: python3
 ---
@@ -444,6 +444,13 @@ Comparing `session[1:]` (every trial but the first) with `session[:-1]` (every t
 # The first trial is always a session start, and this also
 # corrects the one-position shift from the comparison above
 session_starts = np.concatenate(([True], session_changes))
+```
+
+We also want to restart our design matrix predictors win stay lose shift and previous choice at every session start, because there really is not a strategy considering a previous choice at the very beginning of each session.
+
+```{code-cell} ipython3
+X[session_starts, 1:3] = np.nan
+X[session_starts][:5]
 ```
 
 ```{admonition} How would this be different if we were using pynapple objects?
