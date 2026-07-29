@@ -13,6 +13,7 @@ import pynapple as nap
 from numpy.typing import ArrayLike, NDArray
 
 from .. import observation_models as obs
+from .. import tree_utils
 from .._observation_model_builder import instantiate_observation_model
 from ..hmm.expectation_maximization import EMState, em_hmm, em_step
 from ..hmm.hmm import BaseHMM
@@ -20,6 +21,7 @@ from ..hmm.initialize_parameters import HMM_INITIALIZATION_FN_DICT, InitFunction
 from ..hmm.utils import _check_state_format
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
+from ..pytrees import FeaturePytree
 from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
 from ..tree_utils import pytree_map_and_reduce
 from ..typing import (
@@ -1480,8 +1482,8 @@ class GLMHMM(
         opt_state: NamedTuple,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
+        session_starts: jnp.ndarray,
         *args,
-        session_starts: Optional[jnp.ndarray] = None,
         n_samples: Optional[int] = None,
         **kwargs,
     ) -> StepResult:
@@ -1498,6 +1500,10 @@ class GLMHMM(
         :meth:`initialize_optimizer_and_state` must be called first so that the EM
         step function and initial ``opt_state`` are available.
 
+        **Important**: Unlike :meth:`fit`, this method requires the user to provide
+        ``session_starts`` explicitly as a boolean array. You can validate this variable
+        by passing it as a keyword argument to `initialize_optimizer_and_state`.
+
         Parameters
         ----------
         params :
@@ -1513,15 +1519,8 @@ class GLMHMM(
         y :
             Observations, shape ``(n_time_bins,)`` or ``(n_time_bins, n_neurons)``.
         session_starts :
-            Optional session boundaries. Accepts:
-
-            - a boolean array of shape ``(n_time_bins,)`` with ``True`` at each
-              session start,
-            - an integer array of session-start indices,
-            - a pynapple ``IntervalSet`` (requires ``X`` or ``y`` to be a
-              pynapple object to supply timestamps).
-
-            If ``None``, the entire input is treated as a single session.
+            A boolean array of shape ``(n_time_bins,)`` with ``True`` at each
+            session start.
         n_samples :
             Total sample count to use when estimating the residual degrees of
             freedom. Defaults to ``X.shape[0]``.
@@ -1545,18 +1544,18 @@ class GLMHMM(
         >>> np.random.seed(0)
         >>> X = np.random.normal(size=(80, 3))
         >>> y = np.random.binomial(n=1, p=0.5, size=80)
+        >>> session_starts = np.zeros(80, dtype=bool)
+        >>> session_starts[0] = True
         >>> model = nmo.glm_hmm.GLMHMM(n_states=2)
         >>> init_params = model.initialize_params(X, y)
-        >>> opt_state = model.initialize_optimizer_and_state(init_params, X, y)
-        >>> new_params, new_state = model.update(init_params, opt_state, X, y)
+        >>> opt_state = model.initialize_optimizer_and_state(init_params, X, y, session_starts=session_starts)
+        >>> new_params, new_state = model.update(init_params, opt_state, X, y, session_starts)
         """
-        # validate inputs and session boundaries
-        session_starts = self._validator.validate_and_cast_inputs(
-            X, y, session_starts=session_starts
-        )
+        # find non-nans
+        X, y, session_starts = tree_utils.drop_nans(X, y, session_starts)
 
-        # drop nans and pull pytree data
-        data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
+        # grab the data
+        data = X.data if isinstance(X, FeaturePytree) else X
 
         # wrap into model params (assumes init was done via
         # `initialize_optimizer_and_state` so the EM step function is in place)

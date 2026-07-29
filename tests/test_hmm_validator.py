@@ -3,6 +3,7 @@ from contextlib import nullcontext as does_not_raise
 import numpy as np
 import pynapple as nap
 import pytest
+import jax.numpy as jnp
 
 from conftest import MockHMM, all_subclasses
 from nemos.hmm.validation import HMMValidator, has_interior_nans
@@ -102,6 +103,31 @@ class TestHMMValidator:
         model = MockHMM(n_states=3)
         with expectation:
             model._validator.validate_inputs(X, y)
+
+    @pytest.mark.parametrize(
+        "session_starts, expectation",
+        [
+            (
+                jnp.zeros(10, dtype=bool).at[0].set(True),
+                does_not_raise(),
+            ),
+            (
+                jnp.zeros(9, dtype=bool).at[0].set(True),
+                pytest.raises(ValueError, match="session_starts must have"),
+            ),
+            (
+                np.full((10,), np.nan),
+                pytest.raises(ValueError, match="At least a NaN"),
+            ),
+        ],
+    )
+    def test_validate_inputs_session_starts(self, session_starts, expectation):
+        """Test that validate_inputs correctly validates X and y."""
+        X = np.random.rand(10, 2)
+        y = np.random.rand(10)
+        model = MockHMM(n_states=3)
+        with expectation:
+            model._validator.validate_inputs(X, y, session_starts=session_starts)
 
     @pytest.mark.parametrize(
         "X, y, expectation",
