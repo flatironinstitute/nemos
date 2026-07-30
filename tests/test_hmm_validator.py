@@ -1,9 +1,9 @@
 from contextlib import nullcontext as does_not_raise
 
+import jax.numpy as jnp
 import numpy as np
 import pynapple as nap
 import pytest
-import jax.numpy as jnp
 
 from conftest import MockHMM, all_subclasses
 from nemos.hmm.validation import HMMValidator, has_interior_nans

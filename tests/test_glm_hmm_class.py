@@ -232,6 +232,7 @@ def glm_hmm_data():
     n, k, s = 100, 2, 3
     X = np.ones((n, k))
     y = np.zeros(n)
+    session_starts = jnp.zeros(n, dtype=bool).at[0].set(True)
     y[rng.choice(n, n // 3, replace=False)] = 1.0
     coef = jnp.zeros((k, s))
     intercept = jnp.zeros((s,))
@@ -241,6 +242,7 @@ def glm_hmm_data():
     return dict(
         X=X,
         y=y,
+        session_starts=session_starts,
         init_params=(coef, intercept, scale, init_prob, trans_prob),
         n_states=s,
     )
@@ -628,6 +630,7 @@ class TestSolverConfiguration:
         rng = np.random.default_rng(0)
         X = {"p1": rng.standard_normal((n, 2)), "p2": rng.standard_normal((n, 3))}
         y = y_factory(n)
+        session_starts = jnp.zeros(y.shape[0], dtype=bool).at[0].set(True)
 
         captured = {}
         real_initialize_mask = nmo.regularizer.GroupLasso.initialize_mask
@@ -652,7 +655,7 @@ class TestSolverConfiguration:
         opt_state = model.initialize_optimizer_and_state(init_params, X, y)
         params = init_params
         for _ in range(3):
-            params, opt_state = model.update(params, opt_state, X, y)
+            params, opt_state = model.update(params, opt_state, X, y, session_starts)
 
         assert model.coef_ is not None
         assert "mask" in captured
@@ -925,19 +928,23 @@ class TestValidationSequence:
 
     def test_update(self, glm_hmm_data, patch_optimizer_update, monkeypatch):
         patch_optimizer_update(GLMHMM)
-        X, y, init_params = (
+        X, y, session_starts, init_params = (
             glm_hmm_data["X"],
             glm_hmm_data["y"],
+            glm_hmm_data["session_starts"],
             glm_hmm_data["init_params"],
         )
         model = GLMHMM(n_states=glm_hmm_data["n_states"])
-        opt_state = model.initialize_optimizer_and_state(init_params, X, y)
 
-        # spy after the setup calls, so that only update() is recorded
+        # spy before initialize_optimizer_and_state, where validate_inputs is called
         order = _spy_call_order(monkeypatch, GLMHMMValidator, *VALIDATION_SEQUENCE)
-        model.update(init_params, opt_state, X, y)
+        opt_state = model.initialize_optimizer_and_state(init_params, X, y)
+        assert order == ["validate_inputs"]
 
-        assert order == VALIDATION_SEQUENCE
+        # spy again after the setup calls, where no validation is expected
+        order = _spy_call_order(monkeypatch, GLMHMMValidator, *VALIDATION_SEQUENCE)
+        model.update(init_params, opt_state, X, y, session_starts)
+        assert order == []
 
     @pytest.mark.parametrize(
         "method_name", ["score", "smooth_proba", "filter_proba", "decode_state"]
@@ -1027,13 +1034,12 @@ class TestSimulate:
         model = GLMHMM(n_states=glm_hmm_data["n_states"])
         model.fit(X, glm_hmm_data["y"], init_params=glm_hmm_data["init_params"])
 
-        session_starts = jnp.zeros(n, dtype=bool).at[0].set(True)
         mock_vapi = MagicMock(
             return_value=(
                 model._get_model_params(),
                 jnp.asarray(X),
                 None,
-                session_starts,
+                glm_hmm_data["session_starts"],
             )
         )
         monkeypatch.setattr(GLMHMM, "_validate_and_prepare_inputs", mock_vapi)
@@ -1537,6 +1543,7 @@ class TestUpdateFitEquivalence:
         n, k, s = 80, 3, 2
         X = rng.standard_normal((n, k))
         y = rng.binomial(1, 0.4, size=n)
+        session_starts = jnp.zeros(n, dtype=bool).at[0].set(True)
 
         # shared init params so both paths start from exactly the same point
         seed = jax.random.PRNGKey(7)
@@ -1564,7 +1571,9 @@ class TestUpdateFitEquivalence:
         opt_state = model_update.initialize_optimizer_and_state(init_params, X, y)
         params = init_params
         for _ in range(n_steps):
-            params, opt_state = model_update.update(params, opt_state, X, y)
+            params, opt_state = model_update.update(
+                params, opt_state, X, y, session_starts
+            )
 
         np.testing.assert_allclose(model_fit.coef_, model_update.coef_)
         np.testing.assert_allclose(model_fit.intercept_, model_update.intercept_)
@@ -1599,24 +1608,23 @@ class TestUpdate:
         model = GLMHMM(n_states=d["n_states"], solver_kwargs={"maxiter": 1})
         init_params, opt_state = self._prepare(model, d["X"], d["y"])
 
-        params, _ = model.update(init_params, opt_state, d["X"], d["y"])
+        params, _ = model.update(
+            init_params, opt_state, d["X"], d["y"], d["session_starts"]
+        )
 
         assert len(params) == 5
         assert all(v is not None for v in model._get_fit_state().values())
 
     def test_update_calls_validate_inputs(self, glm_hmm_data, monkeypatch):
-        """update() forwards X and y to GLMHMMValidator.validate_inputs exactly once."""
+        """update() forwards X and y to GLMHMMValidator.validate_inputs exactly zero times."""
         d = glm_hmm_data
         model = GLMHMM(n_states=d["n_states"], solver_kwargs={"maxiter": 1})
         init_params, opt_state = self._prepare(model, d["X"], d["y"])
 
         calls = _spy_calls(monkeypatch, GLMHMMValidator, "validate_inputs")
-        model.update(init_params, opt_state, d["X"], d["y"])
+        model.update(init_params, opt_state, d["X"], d["y"], d["session_starts"])
 
-        assert len(calls) == 1
-        _, kwargs = calls[0]
-        assert kwargs["X"] is d["X"]
-        assert kwargs["y"] is d["y"]
+        assert len(calls) == 0
 
     def test_update_forces_first_bin_new_session(self, glm_hmm_data, monkeypatch):
         """update() marks the first sample as a session start before the EM step,

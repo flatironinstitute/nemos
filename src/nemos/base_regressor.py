@@ -746,7 +746,7 @@ class BaseRegressor(
         init_params: UserProvidedParamsT,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        *kwargs,
+        **kwargs,
     ) -> SolverState:
         """Initialize the optimization routine and its state for running fit and update.
 

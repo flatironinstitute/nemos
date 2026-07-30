@@ -140,8 +140,8 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
     inputs_validation_sequence: Tuple[
         Tuple[str, None] | Tuple[str, dict[str, Any]], ...
     ] = (
+        ("validate_inputs", {"validate_session_starts": False}),
         ("validate_and_cast_session_starts", None),
-        ("validate_inputs", None),
         ("check_is_continuous", None),
     )
 
@@ -222,6 +222,7 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
         X: Optional[DESIGN_INPUT_TYPE] = None,
         y: Optional[ArrayLike] = None,
         session_starts: Optional[jnp.ndarray] = None,
+        validate_session_starts: bool = True,
     ):
         """
         Validate input data dimensions and sample consistency.
@@ -256,8 +257,12 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
         """
         super().validate_inputs(X=X, y=y)
         # redundant check for session_starts shape for public initialize_optimizer_and_state
-        if session_starts is not None:
-            n_samples = y.shape[0] if y is not None else jax.tree_util.tree_leaves(X)[0].shape[0]
+        if validate_session_starts and (session_starts is not None):
+            n_samples = (
+                y.shape[0]
+                if y is not None
+                else jax.tree_util.tree_leaves(X)[0].shape[0]
+            )
             if session_starts.shape[0] != n_samples:
                 raise ValueError(
                     "session_starts must have the same number of samples as input. "

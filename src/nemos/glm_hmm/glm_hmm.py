@@ -1553,6 +1553,8 @@ class GLMHMM(
         """
         # find non-nans
         X, y, session_starts = tree_utils.drop_nans(X, y, session_starts)
+        # ensure boolean and first sample is a session start
+        session_starts = jnp.array(session_starts, dtype=bool).at[0].set(True)
 
         # grab the data
         data = X.data if isinstance(X, FeaturePytree) else X
