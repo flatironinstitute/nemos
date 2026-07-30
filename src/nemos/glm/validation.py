@@ -263,7 +263,7 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         feature_mask: Union[dict[str, jnp.ndarray], jnp.ndarray] | None,
         params: GLMParams,
     ):
-        """Check consistency of feature_mask and params."""
+        """Check that feature_mask mirrors the structure and the shape of ``params.coef``."""
         if feature_mask is None:
             return
         validation.check_tree_structure(
@@ -274,34 +274,20 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
             f"{jax.tree_util.tree_structure(params.coef)} structure instead!",
         )
 
-        if isinstance(params.coef, dict):
-            # Note: in this case, the tree structure matching already takes care of the feature matching.
-            # aka, same dict keys implies same feature masked. All we need to check is the match of
-            # n_neurons.
-            neural_axis = 0
-            n_neurons = (
-                1
-                if self.y_dimensionality == 1
-                else next(iter(params.coef.values())).shape[1]
+        shape_match = pytree_map_and_reduce(
+            lambda fm, coef: fm.shape == coef.shape,
+            all,
+            feature_mask,
+            params.coef,
+        )
+        if not shape_match:
+            raise ValueError(
+                "The ``feature_mask`` must match the shape of the ``coef``, leaf by leaf. "
+                f"Expected {jax.tree_util.tree_map(lambda c: c.shape, params.coef)}, "
+                f"got {jax.tree_util.tree_map(lambda m: m.shape, feature_mask)} instead. "
+                "A pytree mask holding one entry per neuron is no longer accepted; broadcast "
+                "it to the shape of the coefficients."
             )
-            shape_match = pytree_map_and_reduce(
-                lambda fm: fm.shape == (n_neurons,), all, feature_mask
-            )
-            if not shape_match:
-                raise ValueError(
-                    "Inconsistent number of neurons. "
-                    f"feature_mask has {jax.tree_util.tree_map(lambda m: m.shape[neural_axis], feature_mask)} neurons, "
-                    f"model coefficients have {jax.tree_util.tree_map(lambda x: x.shape[1], params.coef)}  instead!",
-                )
-        else:
-            shape_match = feature_mask.shape == params.coef.shape
-            if not shape_match:
-                raise ValueError(
-                    "The shape of the ``feature_mask`` array must match that of the ``coef``. "
-                    f"The shape of the ``coef`` is ``{params.coef.shape}``, "
-                    f"that of the ``feature_mask`` is ``{feature_mask.shape}`` instead!"
-                )
-        return
 
     def get_empty_params(self, X, y) -> GLMParams:
         """Return the param shape given the input data."""
@@ -527,43 +513,6 @@ class ClassifierGLMValidator(GLMValidator):
         else:
             y_int = y
         return y_int
-
-    def feature_mask_consistency(
-        self,
-        feature_mask: Union[dict[str, jnp.ndarray], jnp.ndarray] | None,
-        params: GLMParams,
-    ):
-        """Check consistency of feature_mask and params for classifier GLM."""
-        if feature_mask is None:
-            return
-        validation.check_tree_structure(
-            params.coef,
-            feature_mask,
-            err_message=f"feature_mask and coef must have the same structure, but feature_mask has structure "
-            f"{jax.tree_util.tree_structure(feature_mask)}, coef is of "
-            f"{jax.tree_util.tree_structure(params.coef)} structure instead!",
-        )
-
-        shape_match = pytree_map_and_reduce(
-            lambda fm, coef: fm.shape == coef.shape,
-            all,
-            feature_mask,
-            params.coef,
-        )
-
-        if not shape_match:
-            if isinstance(params.coef, jnp.ndarray):
-                raise ValueError(
-                    "The shape of the ``feature_mask`` array must match coef shape. "
-                    f"Expected shape ``{params.coef.shape}``, "
-                    f"got ``{feature_mask.shape}`` instead!"
-                )
-            else:
-                raise ValueError(
-                    "Inconsistent feature mask shape. "
-                    f"feature_mask has shapes {jax.tree_util.tree_map(lambda m: m.shape, feature_mask)}, "
-                    f"expected shapes {jax.tree_util.tree_map(lambda c: c.shape, params.coef)}!"
-                )
 
     def get_empty_params(self, X, y) -> GLMParams:
         """Return the param shape given the input data."""

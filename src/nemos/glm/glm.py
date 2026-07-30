@@ -10,7 +10,6 @@ from typing import Any, Callable, Literal, Optional, Tuple, Union
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from jax.flatten_util import ravel_pytree
 from numpy.typing import ArrayLike
 from sklearn.utils import InputTags, TargetTags
 
@@ -1340,89 +1339,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             rank = jnp.linalg.matrix_rank(X)
             return (n_samples - rank - 1) * jnp.ones_like(params.intercept)
 
-    def _get_hess_fn(self, params, autodiff: bool = False) -> Callable | None:
-        """
-        Construct a function to compute the Hessian of the penalized log-likelihood.
-
-        This function returns a callable that computes the Hessian of the GLM's
-        penalized mean log-likelihood with respect to the model parameters. It
-        supports two modes:
-
-        1. Automatic differentiation (`autodiff=True`):
-           Computes the Hessian via JAX's `jax.hessian`, flattening any PyTree
-           parameters to a vector. The resulting Hessian is a 2D square array of
-           shape `(d, d)`, where `d` is the total number of parameters (including
-           the intercept).
-
-        2. Analytic Fisher-scoring (`autodiff=False`):
-           Computes the Hessian using the Fisher information matrix approximation
-           for GLMs. Regularization is applied if `self.regularizer_strength` is set.
-
-        Parameters
-        ----------
-        params : PyTree
-            Model parameters. Can be a tree of arrays, typically including `coef`
-            and `intercept`.
-        solver : object
-            An optimizer object that provides `solver.fun(params, *args)` to compute
-            the loss or mean log-likelihood.
-        autodiff : bool, default=True
-            If True, use automatic differentiation to compute the Hessian. If False,
-            use the analytic Fisher-scoring approximation.
-
-        Returns
-        -------
-        Callable[[PyTree, array, ...], jnp.ndarray]
-            A function that takes `(params, X, *args)` and returns a Hessian matrix
-            in flattened parameter space:
-            - If `autodiff=True`, the Hessian is computed via `jax.hessian`.
-            - If `autodiff=False`, the Hessian uses the Fisher-scoring approximation
-              and includes the effect of regularization if applicable.
-            The returned Hessian is a square 2D array of shape `(d, d)`.
-
-        Notes
-        -----
-        - The Hessian returned in analytic mode corresponds to the Fisher information
-          matrix scaled by the number of samples, consistent with a mean loss formulation.
-        - The function currently assumes that `X` is the first argument in `*args`
-          when calling the Hessian function.
-        """
-        if autodiff:
-            loss = self.regularizer.penalized_loss(
-                self._compute_loss, params, self.regularizer_strength
-            )
-
-            def autodiff_hess(params_tree, *args):
-                params, unravel_fn = ravel_pytree(params_tree)
-                return jax.hessian(lambda x: loss(unravel_fn(x), *args))(params)
-
-            return autodiff_hess
-
-        var_of_mu = _var_func_of_mu(self)
-        regularizer_strength = self.regularizer_strength
-        if regularizer_strength is not None:
-            regularizer_strength = self.regularizer._validate_strength_structure(
-                params, regularizer_strength
-            )
-
-        def hess(params, *args):
-            X = args[0]
-
-            eta = (
-                jax.tree.reduce(jnp.add, jax.tree.map(jnp.dot, X, params.coef))
-                + params.intercept
-            )
-
-            return _glm_hessian_block(
-                X,
-                eta,
-                self.inverse_link_function,
-                var_of_mu,
-                regularizer_strength,
-            )
-
-        return hess
-
     def _initialize_optimizer_and_state(
         self,
         init_params: GLMParams,
@@ -1784,8 +1700,9 @@ class PopulationGLM(GLM):
         E.g. stepsize, tol, acceleration, etc.
          For details on each solver's kwargs, see `get_accepted_arguments` and `get_solver_documentation`.
     feature_mask :
-        Either a matrix of shape (num_features, num_neurons) or a PyTree of 0s and 1s, with
-        leaves of shape (num_neurons, ).
+        A mask of 0s and 1s matching the shape of the coefficients: a matrix of shape
+        (num_features, num_neurons), or a PyTree mirroring the structure of ``X`` whose
+        leaves have shape (num_features_in_leaf, num_neurons).
         The mask will be used to select which features are used as predictors for which neuron.
 
     Attributes
@@ -1839,7 +1756,8 @@ class PopulationGLM(GLM):
     **Use a Dict of Arrays as Input**
 
     Features can be passed as a dict (or any JAX pytree). The feature mask
-    should mirror the same structure, with one 1-D entry per leaf:
+    should mirror the same structure, each leaf shaped like its coefficients,
+    ``(num_features_in_leaf, num_neurons)``:
 
     >>> feature_1 = np.random.normal(size=(num_samples, 2))
     >>> feature_2 = np.random.normal(size=(num_samples, 1))
@@ -1854,8 +1772,8 @@ class PopulationGLM(GLM):
     ... )
     >>> y = np.random.poisson(rate)
     >>> feature_mask = {
-    ...     "feature_1": jnp.array([0, 1], dtype=jnp.int32),
-    ...     "feature_2": jnp.array([1, 0], dtype=jnp.int32)
+    ...     "feature_1": jnp.array([[0, 1], [0, 1]], dtype=jnp.int32),
+    ...     "feature_2": jnp.array([[1, 0]], dtype=jnp.int32)
     ... }
     >>> model = nmo.glm.PopulationGLM(feature_mask=feature_mask).fit(X_dict, y)
     >>> model.coef_
@@ -1886,7 +1804,9 @@ class PopulationGLM(GLM):
 
     _validator_class = PopulationGLMValidator
     _hess_tag: HessianTag = HessianTag(
-        structure=BlockDiagonal, property=PositiveSemiDefinite
+        structure=BlockDiagonal,
+        property=PositiveDefinite,
+        batch_axes=GLMParams(1, 0),
     )
 
     def __init__(
@@ -1929,14 +1849,15 @@ class PopulationGLM(GLM):
         """
         Mask indicating which features are used for each neuron.
 
-        The feature mask has a tree structure matching the coefficients (``coef_``):
+        The feature mask matches the coefficients (``coef_``) leaf by leaf, in both tree
+        structure and shape:
 
         - **Array input**: Shape ``(n_features, n_neurons)``. Each entry ``[i, j]``
           indicates whether feature ``i`` is used for neuron ``j`` (1 = used, 0 = masked).
 
-        - **Pytree**: A pytree with structure matching that of ``coef_``.
-          Each leaf array has shape ``(n_neurons,)``, indicating whether that feature
-          group is used for each neuron.
+        - **Pytree**: A pytree with structure matching that of ``coef_``, each leaf shaped
+          like its coefficients, ``(n_features_in_leaf, n_neurons)``. Entry ``[i, j]`` of a
+          leaf indicates whether feature ``i`` of that group is used for neuron ``j``.
 
         Returns
         -------
@@ -2040,7 +1961,9 @@ class PopulationGLM(GLM):
         """
         return super().fit(X, y, init_params)
 
-    def _predict(self, params: GLMParams, X: jnp.ndarray) -> jnp.ndarray:
+    def _predict(
+        self, params: GLMParams, X: jnp.ndarray, feature_mask: Any = None
+    ) -> jnp.ndarray:
         """
         Predicts firing rates based on given parameters and design matrix.
 
@@ -2063,7 +1986,9 @@ class PopulationGLM(GLM):
         :
             The predicted rates. Shape (n_timebins, n_neurons).
         """
-        if self._feature_mask is None:
+        if feature_mask is None:
+            feature_mask = self._feature_mask
+        if feature_mask is None:
             return super()._predict(params, X)
         return self.inverse_link_function(
             # First, multiply each feature by its corresponding coefficient,
@@ -2074,76 +1999,29 @@ class PopulationGLM(GLM):
                 sum,
                 X,
                 params.coef,
-                self._feature_mask,
+                feature_mask,
             )
             + params.intercept
         )
 
-    def _get_subproblem(self, params, strength, i):
-        mask_i = tree_utils.tree_take(self._feature_mask, i)
-        coef_i = tree_utils.tree_take(params.coef, i)
-        if mask_i is not None:
-            coef_i = jax.tree_util.tree_map(lambda c, m: c * m, coef_i, mask_i)
-        intercept_i = jnp.take(params.intercept, i, axis=0)
-        params_i = self._validator.to_model_params([coef_i, intercept_i])
-        strength_i = tree_utils.tree_take(strength, i)
-        return params_i, strength_i
+    def _get_hess_fn(self):
+        def per_neuron(params, X, y, mask):
+            def loss(params):
+                rate = self._predict(params, X, feature_mask=mask)
+                return self._observation_model._negative_log_likelihood(y, rate)
 
-    def _get_hess_fn(self, params, autodiff: bool = False):
+            return jax.hessian(loss)(params)
 
-        strength = self.regularizer_strength
-        if self.regularizer_strength is not None:
-            strength = self.regularizer._validate_strength_structure(
-                params, self.regularizer_strength
-            )
-
-        if autodiff:
-            # AUTODIFF PATH
-
-            def hess_fn(params, X, y, *args):
-                n_neurons = params.intercept.shape[0]
-
-                def _loss_i(params_i, X, y_i):
-                    """Simplified loss function that doesn't apply mask."""
-                    rate = GLM._predict(self, params_i, X)
-                    return self._observation_model._negative_log_likelihood(y_i, rate)
-
-                def _hess_fn_i(i, y_i):
-                    """Hessian function for a single subproblem."""
-                    params_i, strength_i = self._get_subproblem(params, strength, i)
-                    if strength_i is not None:
-                        strength_i = strength_i.coef
-                    loss = self.regularizer.penalized_loss(
-                        _loss_i, params_i, strength_i
-                    )
-                    flat_params, unravel = ravel_pytree(params_i)
-                    return jax.hessian(lambda p: loss(unravel(p), X, y_i))(flat_params)
-
-                # vmap autodiff hessian function across neurons
-                return jax.vmap(_hess_fn_i, in_axes=(0, 1))(jnp.arange(n_neurons), y)
-
-            return hess_fn
-
-        # ANALYTIC PATH
-        var_of_mu = _var_func_of_mu(self)
-
-        def hess_fn(params, X, *args):
-            n_neurons = params.intercept.shape[0]
-
-            def _hess_fn_i(i):
-                params_i, strength_i = self._get_subproblem(params, strength, i)
-                eta = (
-                    jax.tree.reduce(jnp.add, jax.tree.map(jnp.dot, X, params_i.coef))
-                    + params_i.intercept
-                )
-                return _glm_hessian_block(
-                    X, eta, self.inverse_link_function, var_of_mu, strength_i
-                )
-
-            # vmap analytic hessian function across neurons
-            return jax.vmap(_hess_fn_i)(jnp.arange(n_neurons))
-
-        return hess_fn
+        # the mask mirrors coef, so its neuron axis is coef's
+        return lambda params, X, y: jax.vmap(
+            per_neuron,
+            in_axes=(
+                self._hess_tag.batch_axes,
+                None,
+                1,
+                1,
+            ),
+        )(params, X, y, self._feature_mask)
 
     def __sklearn_clone__(self) -> PopulationGLM:
         """Clone the PopulationGLM, dropping feature_mask."""
