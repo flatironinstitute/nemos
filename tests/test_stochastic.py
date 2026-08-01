@@ -319,9 +319,9 @@ class TestGLMStochasticFit:
     @pytest.mark.requires_x64
     @pytest.mark.parametrize("solver", _stochastic_solver_names)
     def test_solver_convergence_callback_stops_early(self, simple_data, solver):
-        """``SolverConvergenceCallback`` enables convergence-based stopping; default (None) runs all epochs."""
+        """``SolverConvergenceCallback`` enables convergence-based stopping; default (None) runs all passes."""
         X, y = simple_data
-        n_epochs = 100
+        n_passes = 100
         batch_size = 100
         loader = ArrayDataLoader(X, y, batch_size=batch_size, shuffle="full")
 
@@ -336,24 +336,24 @@ class TestGLMStochasticFit:
         model_stopping = nmo.glm.GLM(solver_name=solver, solver_kwargs=solver_kwargs)
         model_stopping.stochastic_fit(
             loader,
-            n_passes=n_epochs,
+            n_passes=n_passes,
             init_params=final_params,
             callbacks=SolverConvergenceCallback(),
         )
 
-        # Default (no callbacks): runs for all epochs
+        # Default (no callbacks): runs for all passes
         model_no_stopping = nmo.glm.GLM(solver_name=solver, solver_kwargs=solver_kwargs)
         model_no_stopping.stochastic_fit(
             loader,
-            n_passes=n_epochs,
+            n_passes=n_passes,
             init_params=final_params,
         )
 
         n_steps_taken_stopping = model_stopping.solver_state_.stats.num_steps
         n_steps_taken_no_stopping = model_no_stopping.solver_state_.stats.num_steps
 
-        batches_per_epoch = int(np.ceil(X.shape[0] / batch_size))
-        assert n_steps_taken_no_stopping == batches_per_epoch * n_epochs
+        batches_per_pass = int(np.ceil(X.shape[0] / batch_size))
+        assert n_steps_taken_no_stopping == batches_per_pass * n_passes
         assert n_steps_taken_stopping < n_steps_taken_no_stopping
 
     @pytest.mark.skipif(not solvers.JAXOPT_AVAILABLE, reason="JAXopt is not installed.")
@@ -388,8 +388,8 @@ class TestGLMStochasticFit:
         assert np.all(np.isfinite(model.intercept_))
 
     @pytest.mark.parametrize("solver", _stochastic_solver_names)
-    def test_custom_epoch_callback_stops_early(self, simple_data, solver):
-        """Test that a custom epoch callback stops optimization early."""
+    def test_custom_pass_callback_stops_early(self, simple_data, solver):
+        """Test that a custom pass callback stops optimization early."""
         X, y = simple_data
         n_passes = 5
         loader = ArrayDataLoader(X, y, batch_size=32, shuffle="full")
@@ -400,19 +400,19 @@ class TestGLMStochasticFit:
         model_baseline = nmo.glm.GLM(solver_name=solver, solver_kwargs=solver_kwargs)
         model_baseline.stochastic_fit(loader, n_passes=n_passes, callbacks=None)
 
-        # Early stop: callback requests stop after first epoch
-        class StopAfterFirstEpoch(Callback):
+        # Early stop: callback requests stop after first pass
+        class StopAfterFirstPass(Callback):
             def on_pass_end(self, ctx):
                 if ctx.pass_idx >= 0:
                     ctx.request_stop("test stop")
 
         model_early = nmo.glm.GLM(solver_name=solver, solver_kwargs=solver_kwargs)
         model_early.stochastic_fit(
-            loader, n_passes=n_passes, callbacks=StopAfterFirstEpoch()
+            loader, n_passes=n_passes, callbacks=StopAfterFirstPass()
         )
 
-        batches_per_epoch = int(np.ceil(loader.n_samples / loader.batch_size))
-        assert model_early.solver_state_.stats.num_steps == batches_per_epoch
+        batches_per_pass = int(np.ceil(loader.n_samples / loader.batch_size))
+        assert model_early.solver_state_.stats.num_steps == batches_per_pass
         assert (
             model_early.solver_state_.stats.num_steps
             < model_baseline.solver_state_.stats.num_steps
@@ -420,7 +420,7 @@ class TestGLMStochasticFit:
 
     @pytest.mark.parametrize("solver", _stochastic_solver_names)
     def test_loss_logger_callback_during_fit(self, simple_data, solver):
-        """loss_history accumulates one finite entry per epoch over a real fit."""
+        """loss_history accumulates one finite entry per pass over a real fit."""
         X, y = simple_data
         n_passes = 3
         loader = ArrayDataLoader(X, y, batch_size=32, shuffle="full")
@@ -895,23 +895,23 @@ class TestSolverStochasticRun:
         np.testing.assert_array_almost_equal(params, [1.0, 2.0, 3.0], decimal=0)
 
     @pytest.mark.parametrize("solver_class", _stochastic_solver_classes)
-    def test_epoch_callback_stops_early(self, simple_loss_and_data, solver_class):
-        """Test that an epoch callback requesting stop halts optimization."""
+    def test_pass_callback_stops_early(self, simple_loss_and_data, solver_class):
+        """Test that a pass callback requesting stop halts optimization."""
         loss, loader = simple_loss_and_data
 
-        class StopAfterEpoch(Callback):
+        class StopAfterPass(Callback):
             def on_pass_end(self, ctx):
                 ctx.request_stop("test")
 
         solver = solver_class(loss, **self._default_solver_kwargs(solver_class))
         init_params = jnp.zeros(3)
         _, state, _ = solver.stochastic_run(
-            init_params, loader, n_passes=5, callback=StopAfterEpoch()
+            init_params, loader, n_passes=5, callback=StopAfterPass()
         )
 
-        # Should have stopped after 1 epoch
-        batches_per_epoch = int(np.ceil(loader.n_samples / loader.batch_size))
-        assert state.stats.num_steps == batches_per_epoch
+        # Should have stopped after 1 pass
+        batches_per_pass = int(np.ceil(loader.n_samples / loader.batch_size))
+        assert state.stats.num_steps == batches_per_pass
 
     @pytest.mark.parametrize("solver_class", _stochastic_solver_classes)
     def test_batch_callback_stops_early(self, simple_loss_and_data, solver_class):
@@ -945,7 +945,7 @@ class TestSolverStochasticRun:
             solver.stochastic_run(init_params, loader, n_passes=1)
 
     @pytest.mark.parametrize("solver_class", _stochastic_solver_classes)
-    def test_invalid_n_passes_raises(self, simple_loss_and_data, solver_class):
+    def test_invalid_n_passesraises(self, simple_loss_and_data, solver_class):
         """Test that n_passes < 1 raises ValueError."""
         loss, loader = simple_loss_and_data
 
@@ -969,8 +969,8 @@ class TestSolverStochasticRun:
         _, state, _ = solver.stochastic_run(init_params, loader, n_passes=n_passes)
 
         n_steps = state.stats.num_steps
-        batches_per_epoch = int(np.ceil(loader.n_samples / loader.batch_size))
-        expected_steps = batches_per_epoch * n_passes
+        batches_per_pass = int(np.ceil(loader.n_samples / loader.batch_size))
+        expected_steps = batches_per_pass * n_passes
         assert n_steps == expected_steps
 
     @pytest.mark.parametrize("solver_class", _stochastic_solver_classes)
@@ -1016,10 +1016,10 @@ class TestSolverStochasticRun:
         class CounterCallback(Callback):
             def __init__(self, multiplier: float):
                 self.multiplier = multiplier
-                self.epoch_counts = []
+                self.pass_counts = []
 
             def on_pass_end(self, ctx):
-                self.epoch_counts.append(self.multiplier * ctx.pass_idx)
+                self.pass_counts.append(self.multiplier * ctx.pass_idx)
 
         solver = solver_class(loss, **self._default_solver_kwargs(solver_class))
         init_params = jnp.zeros(3)
@@ -1032,12 +1032,12 @@ class TestSolverStochasticRun:
             n_passes=n_passes,
             callback=CallbackList([cb1, cb2]),
         )
-        assert cb1.epoch_counts == [0, 1, 2]
-        assert cb2.epoch_counts == [0, 2, 4]
+        assert cb1.pass_counts == [0, 1, 2]
+        assert cb2.pass_counts == [0, 2, 4]
 
     @pytest.mark.parametrize("solver_class", _stochastic_solver_classes)
-    def test_no_callback_runs_all_epochs(self, simple_loss_and_data, solver_class):
-        """Test that default no-op callback runs all epochs without any monitoring."""
+    def test_no_callback_runs_all_passes(self, simple_loss_and_data, solver_class):
+        """Test that default no-op callback runs all passes without any monitoring."""
         loss, loader = simple_loss_and_data
 
         solver = solver_class(loss, **self._default_solver_kwargs(solver_class))
@@ -1047,8 +1047,8 @@ class TestSolverStochasticRun:
         _, state, _ = solver.stochastic_run(init_params, loader, n_passes=n_passes)
 
         n_steps = state.stats.num_steps
-        batches_per_epoch = int(np.ceil(loader.n_samples / loader.batch_size))
-        expected_steps = batches_per_epoch * n_passes
+        batches_per_pass = int(np.ceil(loader.n_samples / loader.batch_size))
+        expected_steps = batches_per_pass * n_passes
         assert n_steps == expected_steps
 
 

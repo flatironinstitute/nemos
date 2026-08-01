@@ -137,7 +137,7 @@ class Callback:
 
     def on_pass_begin(self, ctx: TrainingContext) -> None:
         """
-        Run at the start of an pass.
+        Run at the start of a pass.
 
         This hook is called after the training loop advances ``ctx.pass_idx`` and
         before the first batch of that pass is processed. It marks the start

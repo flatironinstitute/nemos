@@ -142,7 +142,7 @@ In a [later section](./custom_dataloader.md) we show how to build a custom datal
 
 To monitor training progress and the optimization's state during the fitting run, NeMoS has a callback system, allowing to execute custom code on the following events:
 - beginning and end of training
-- before and after each epoch
+- before and after each pass over the data
 - before and after each batch
 
 +++
@@ -151,7 +151,7 @@ One of the callbacks included is [`TestLossLogger`](nemos.callbacks.TestLossLogg
 
 Since the dataset is small, we will use all of it for loss logging and evaluate at the beginning of training, then after every batch.
 \
-In practice this would be expensive to do, and you would typically evaluate on a held-out test set every N-th batch or at the end of each epoch.
+In practice this would be expensive to do, and you would typically evaluate on a held-out test set every N-th batch or at the end of each pass.
 
 ```{code-cell} ipython3
 batch_logger = nmo.callbacks.TestLossLogger(

@@ -299,7 +299,7 @@ class MultiEpochPynappleDataLoader(nmo.batching.DataLoader):
         return self._batch(*self._chunks[0])
 
     def __iter__(self):
-        """Yield one batch per chunk, reshuffling the chunk order each epoch."""
+        """Yield one batch per chunk, reshuffling the chunk order at each pass over the data."""
         chunks = self._chunks
         if self.shuffle:
             chunks = chunks[self.rng.permutation(len(chunks))]

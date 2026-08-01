@@ -40,7 +40,7 @@ class SVRGState(NamedTuple):
     Attributes
     ----------
     iter_num :
-        Current epoch or iteration number.
+        Current pass or iteration number.
     key :
         Random key to use when sampling data points or mini-batches.
     error :
@@ -102,14 +102,14 @@ class ProxSVRG:
         It should be of the form ``prox(params, hyperparams_prox, scale=1.0)``.
         See ``nemos.proximal_operator`` for examples.
     maxiter : int
-        Maximum number of epochs to run the optimization for.
+        Maximum number of passes over the data to run the optimization for.
     key : jax.random.PRNGkey
         jax PRNGKey to start with. Used for sampling random data points.
     stepsize : float
         Constant step size to use.
     tol : float
         Tolerance level for the error when comparing parameters
-        at the end of consecutive epochs to check for convergence.
+        at the end of consecutive passes to check for convergence.
     batch_size : int
         Number of data points to sample per inner loop iteration.
 
@@ -348,7 +348,7 @@ class ProxSVRG:
         *args: Any,
     ) -> OptStep:
         """
-        Update parameters given a mini-batch of data and increment iteration/epoch number in state.
+        Update parameters given a mini-batch of data and increment iteration/pass number in state.
 
         Note that this method doesn't update `state.reference_point`, `state.full_grad_at_reference_point`,
         that has to be done outside.
@@ -406,7 +406,7 @@ class ProxSVRG:
         *args: Any,
     ) -> OptStep:
         """
-        Run a whole optimization until convergence or until `maxiter` epochs are reached.
+        Run a whole optimization until convergence or until `maxiter` passes are reached.
 
         Called by `BaseRegressor._optimizer_run` (e.g. as called by `GLM.fit`) and assumes
         that X and y are the full data set.
@@ -454,7 +454,7 @@ class ProxSVRG:
         *args: Any,
     ) -> OptStep:
         """
-        Run a whole optimization until convergence or until `maxiter` epochs are reached.
+        Run a whole optimization until convergence or until `maxiter` passes are reached.
 
         Called by `BaseRegressor._optimizer_run` (e.g. as called by `GLM.fit`) and assumes that
         X and y are the full data set.
@@ -521,7 +521,7 @@ class ProxSVRG:
 
             return OptStep(params=reference_point, state=state)
 
-        # at the end of each epoch, check for convergence or reaching the max number of epochs
+        # at the end of each pass, check for convergence or reaching the max number of passes
         def cond_fun(step):
             _, state = step
             return (state.iter_num <= self.maxiter) & (state.error >= self.tol)
@@ -591,7 +591,7 @@ class ProxSVRG:
         """
         Perform the inner loop of Prox-SVRG.
 
-        Performs the inner loop of Prox-SVRG sweeping through approximately one full epoch,
+        Performs the inner loop of Prox-SVRG sweeping through approximately one full pass,
         updating the parameters after sampling a mini-batch on each iteration.
 
         Parameters
@@ -702,14 +702,14 @@ class SVRG(ProxSVRG):
         Note that this loss function has to be an average of losses across data points,
         i.e. f(x) = 1/N * sum(f(x_i)).
     maxiter : int
-        Maximum number of epochs to run the optimization for.
+        Maximum number of passes over the data to run the optimization for.
     key : jax.random.PRNGkey
         jax PRNGKey to start with. Used for sampling random data points.
     stepsize : float
         Constant step size to use.
     tol : float
         Tolerance level for the error when comparing parameters
-        at the end of consecutive epochs to check for convergence.
+        at the end of consecutive passes to check for convergence.
     batch_size : int
         Number of data points to sample per inner loop iteration.
 
@@ -834,7 +834,7 @@ class SVRG(ProxSVRG):
         *args: Any,
     ) -> OptStep:
         """
-        Run a whole optimization until convergence or until `maxiter` epochs are reached.
+        Run a whole optimization until convergence or until `maxiter` passes are reached.
 
         Called by `BaseRegressor._optimizer_run` (e.g. as called by `GLM.fit`) and assumes that
         X and y are the full data set.
