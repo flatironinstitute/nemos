@@ -40,14 +40,14 @@ class StochasticSolverMixin(abc.ABC):
     Mixin providing standard stochastic optimization loop.
 
     This mixin provides a default implementation of ``_stochastic_run_impl``
-    that iterates over the data loader for the specified number of epochs,
+    that iterates over the data loader for the specified number of passes,
     calling ``update`` on each batch.
 
-    Solver-specific epoch preparation can be implemented through
-    ``_epoch_prep(...)``. This is mainly intended for algorithms with
-    epoch-level outer-loop work, such as SVRG-like methods.
+    Solver-specific per-pass preparation can be implemented through
+    ``_pass_prep(...)``. This is mainly intended for algorithms with
+    pass-level outer-loop work, such as SVRG-like methods.
 
-    Supports optional callbacks for per-epoch and per-batch hooks.
+    Supports optional callbacks for per-pass and per-batch hooks.
 
     Classes using this mixin must implement ``init_state`` and ``update`` methods.
     """
@@ -74,22 +74,22 @@ class StochasticSolverMixin(abc.ABC):
                 "Turn off linesearch and set explicit stepsizes for stochastic optimization."
             )
 
-    def _epoch_prep(
+    def _pass_prep(
         self,
         params: Params,
         state: SolverAdapterState,
         data_loader: DataLoader,
     ) -> tuple[Params, SolverAdapterState]:
         """
-        Perform solver-specific preparation for the upcoming epoch.
+        Perform solver-specific preparation for the upcoming pass.
 
-        This hook is called once per epoch after the epoch counter is advanced
-        and before the first batch update of that epoch. It is intended for
-        algorithms that require epoch-level setup, such as SVRG.
+        This hook is called once per pass after the pass counter is advanced
+        and before the first batch update of that pass. It is intended for
+        algorithms that require per-pass setup, such as SVRG.
 
         Implementations may return updated ``params`` and ``state``. The returned
         values define the initial optimization state used for the batch updates
-        of the current epoch.
+        of the current pass.
 
         This hook is internal to the solver loop. It is not a callback hook and
         should be used for algorithmic preparation rather than user-facing logging
@@ -101,7 +101,7 @@ class StochasticSolverMixin(abc.ABC):
         self,
         init_params: Params,
         data_loader: DataLoader,
-        num_epochs: int,
+        n_passes: int,
         callback: Callback,
         ctx: TrainingContext,
     ) -> StepResult:
@@ -114,7 +114,7 @@ class StochasticSolverMixin(abc.ABC):
             Initial parameter values.
         data_loader :
             Data loader providing batches and metadata.
-        num_epochs :
+        n_passes :
             Number of passes over the data (maximum if convergence monitoring
             is enabled).
         callback :
@@ -138,13 +138,13 @@ class StochasticSolverMixin(abc.ABC):
 
         callback.on_train_begin(ctx)
 
-        for epoch in range(num_epochs):
-            ctx.epoch_idx = epoch
+        for pass_idx in range(n_passes):
+            ctx.pass_idx = pass_idx
 
-            callback.on_epoch_begin(ctx)
+            callback.on_pass_begin(ctx)
 
             # SVRG has to run through the data to update the full gradient at the anchor point
-            params, state = self._epoch_prep(params, state, data_loader)
+            params, state = self._pass_prep(params, state, data_loader)
             ctx.params, ctx.state = params, state
 
             for batch_idx, batch_data in enumerate(data_loader):
@@ -159,7 +159,7 @@ class StochasticSolverMixin(abc.ABC):
                     callback.on_train_end(ctx)
                     return (params, state, aux)
 
-            callback.on_epoch_end(ctx)
+            callback.on_pass_end(ctx)
             if ctx.should_stop:
                 callback.on_train_end(ctx)
                 return (params, state, aux)
@@ -173,7 +173,7 @@ class OptimistixStochasticSolverMixin(StochasticSolverMixin):
     """
     Mixin for Optimistix solvers that updates stats after optimization.
 
-    Defines per-epoch convergence criterion as the Cauchy criterion
+    Defines per-pass convergence criterion as the Cauchy criterion
     on the parameters only (i.e. ignoring function value).
     """
 
@@ -184,10 +184,10 @@ class OptimistixStochasticSolverMixin(StochasticSolverMixin):
         state: SolverState,
         prev_state: SolverState,
         aux: Any,
-        epoch: int,
+        pass_idx: int,
     ):
         """Cauchy criterion on parameters using the solver's atol and rtol."""
-        del state, prev_state, aux, epoch
+        del state, prev_state, aux, pass_idx
         # solver needs to have tol and rtol
         # function evaluation on the whole data might be too expensive
         return _params_only_cauchy_criterion(params, prev_params, self.tol, self.rtol)
@@ -215,9 +215,9 @@ def _stepsize_normalized_convergence(
     Parameters
     ----------
     params :
-        Parameter values at end of current epoch.
+        Parameter values at end of current pass.
     prev_params :
-        Parameter values at end of previous epoch.
+        Parameter values at end of previous pass.
     stepsize :
         Step size used for the gradient updates.
     tol :
@@ -248,10 +248,10 @@ class JaxoptStochasticSolverMixin(StochasticSolverMixin):
         state: SolverState,
         prev_state: SolverState,
         aux: Any,
-        epoch: int,
+        pass_idx: int,
     ):
         """Step-size-normalized parameter change: ||params - prev_params|| / stepsize <= tol."""
-        del prev_state, aux, epoch
+        del prev_state, aux, pass_idx
         return _stepsize_normalized_convergence(
             params, prev_params, state.solver_state.stepsize, self.tol
         )
