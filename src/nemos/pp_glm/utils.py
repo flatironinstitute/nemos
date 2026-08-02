@@ -7,7 +7,7 @@ import numpy as np
 import pynapple as nap
 from numpy.typing import ArrayLike
 
-from .data import X_ppglm, y_ppglm, mc_sample_ppglm
+from .data import PredictorsPPGLM, SpikesPPGLM, MCSamplePPGLM
 
 
 ### SCAN UTILS
@@ -63,7 +63,7 @@ def reshape_coef_for_scan(weights: jnp.ndarray, n_basis_funcs: int):
 
 
 @partial(jax.jit, static_argnums=1)
-def reshape_input_for_scan(data: y_ppglm | mc_sample_ppglm, scan_size: int):
+def reshape_input_for_scan(data: SpikesPPGLM | MCSamplePPGLM, scan_size: int):
     """
     Reshape time series into scan inputs of equal size. Pad the last input with copies of
     the last time point if needed.
@@ -223,11 +223,11 @@ def compute_max_window_size(
 
 @partial(jax.jit, static_argnums=(1, 2))
 def adjust_indices_and_spike_times(
-    X: X_ppglm,
+    X: PredictorsPPGLM,
     history_window: float,
     max_window: int,
-    y: Optional[y_ppglm] = None,
-) -> tuple[X_ppglm, Optional[y_ppglm]]:
+    y: Optional[SpikesPPGLM] = None,
+) -> tuple[PredictorsPPGLM, Optional[SpikesPPGLM]]:
     """
     Add padding to the events array so that history window selection near
     the start of the recording never goes out of bounds.
@@ -253,12 +253,12 @@ def adjust_indices_and_spike_times(
     shifted_y : y_ppglm, optional
         Spike train with idx shifted by max_window. Only returned if y is not None.
     """
-    shifted_X = X_ppglm(
+    shifted_X = PredictorsPPGLM(
         times=jnp.concatenate([jnp.full(max_window, -history_window - 1), X.times]),
         ids=jnp.concatenate([jnp.zeros(max_window, dtype=jnp.int32), X.ids]),
     )
     if y is not None:
-        shifted_y = y_ppglm(
+        shifted_y = SpikesPPGLM(
             times=y.times,
             ids=y.ids,
             idx=y.idx + max_window,
