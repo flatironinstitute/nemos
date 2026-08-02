@@ -1,15 +1,13 @@
 from functools import partial
 from typing import Callable, Dict, Union
 
-import equinox as eqx
 import jax
 import jax.numpy as jnp
-from jaxtyping import Array, Float, Int
 from pynapple import IntervalSet
 
 from . import utils
 from .params import GLMParams, PPGLMParamsWithKey
-from .data import X_ppglm, y_ppglm, mc_sample_ppglm
+from .data import PredictorsPPGLM, SpikesPPGLM, MCSamplePPGLM
 
 jax.config.update("jax_enable_x64", True)
 
@@ -49,12 +47,12 @@ def _compute_lam_tilde(
 
 
 def _draw_mc_sample(
-    X: X_ppglm,
+    X: PredictorsPPGLM,
     random_key: jnp.ndarray,
     M_samples: int,
     recording_time: IntervalSet,
     M_grid,
-) -> mc_sample_ppglm:
+) -> MCSamplePPGLM:
     """
     Draw stratified sample time points for Monte Carlo estimate
     of the conditional intensity function.
@@ -82,15 +80,15 @@ def _draw_mc_sample(
     )
     tau_m = M_grid + epsilon_m
     tau_m_idx = jnp.searchsorted(X.times, tau_m)
-    mc_sample_pts = mc_sample_ppglm(times=tau_m, idx=tau_m_idx)
+    mc_sample_pts = MCSamplePPGLM(times=tau_m, idx=tau_m_idx)
 
     return mc_sample_pts
 
 
 def _scan_fn_log_lam_y(
     lam_sum: jnp.ndarray,
-    i: y_ppglm,
-    X: X_ppglm,
+    i: SpikesPPGLM,
+    X: PredictorsPPGLM,
     weights: jnp.ndarray,
     bias: jnp.ndarray,
     eval_function: Callable,
@@ -152,8 +150,8 @@ def _scan_fn_log_lam_y(
 
 def _scan_fn_mc_est(
     lam_sum: jnp.ndarray,
-    i: mc_sample_ppglm,
-    X: X_ppglm,
+    i: MCSamplePPGLM,
+    X: PredictorsPPGLM,
     weights: jnp.ndarray,
     bias: jnp.ndarray,
     eval_function: Callable,
@@ -213,8 +211,8 @@ def _scan_fn_mc_est(
 
 
 def _log_likelihood_scan(
-    X: X_ppglm,
-    eval_pts: y_ppglm | mc_sample_ppglm,
+    X: PredictorsPPGLM,
+    eval_pts: SpikesPPGLM | MCSamplePPGLM,
     params: GLMParams,
     scan_function: Callable,
     inverse_link_function,
@@ -281,8 +279,8 @@ def _log_likelihood_scan(
 
 def _negative_log_likelihood(
     params: GLMParams,
-    X: X_ppglm,
-    y: y_ppglm,
+    X: PredictorsPPGLM,
+    y: SpikesPPGLM,
     random_key: jnp.ndarray,
     inverse_link_function: Callable,
     M_samples: int,
@@ -380,8 +378,8 @@ def _negative_log_likelihood(
 
 def _compute_loss(
     params_with_key: PPGLMParamsWithKey,
-    X: X_ppglm,
-    y: y_ppglm,
+    X: PredictorsPPGLM,
+    y: SpikesPPGLM,
     *args,
     **kwargs,
 ) -> jnp.ndarray:
