@@ -7,20 +7,20 @@ from jaxtyping import Array, Float, Int
 class PredictorsPPGLM(eqx.Module):
     """Preprocessed predictors for PP-GLM."""
 
-    times: Float[Array, "n_events"]
-    predictor_ids: Int[Array, "n_events"]
+    times: Float[Array, "n_events"]  # noqa: F821
+    predictor_ids: Int[Array, "n_events"]  # noqa: F821
 
 
 class SpikesPPGLM(eqx.Module):
     """Preprocessed spikes for PP-GLM."""
 
-    times: Float[Array, "n_spikes"]
-    neuron_ids: Int[Array, "n_spikes"]
-    timestamp_idx: Int[Array, "n_spikes"]
+    times: Float[Array, "n_spikes"]  # noqa: F821
+    neuron_ids: Int[Array, "n_spikes"]  # noqa: F821
+    timestamp_idx: Int[Array, "n_spikes"]  # noqa: F821
 
 
 class MCSamplePPGLM(eqx.Module):
     """Preprocessed Monte Carlo sample points for PP-GLM."""
 
-    times: Float[Array, "n_samples"]
-    timestamp_idx: Int[Array, "n_samples"]
+    times: Float[Array, "n_samples"]  # noqa: F821
+    timestamp_idx: Int[Array, "n_samples"]  # noqa: F821

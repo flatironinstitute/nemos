@@ -194,13 +194,13 @@ def processed_X_y(eval_fn, recording_time, valid_X_y):
 
     X = PredictorsPPGLM(
         times=event_times,
-        ids=jnp.asarray(X.d, dtype=int),
+        predictor_ids=jnp.asarray(X.d, dtype=int),
     )
 
     y = SpikesPPGLM(
         times=spike_times,
-        ids=jnp.asarray(y.d, dtype=int),
-        idx=y_idx,
+        neuron_ids=jnp.asarray(y.d, dtype=int),
+        timestamp_idx=y_idx,
     )
 
     return X, y
@@ -278,7 +278,7 @@ class TestPPGLMValidator:
         # valid inputs, no error
         X, y = processed_X_y
         # n_features is 10
-        n_features = int(jnp.unique(X.ids).size * 5)
+        n_features = int(jnp.unique(X.predictor_ids).size * 5)
         params = validator.to_model_params((jnp.zeros(n_features), jnp.zeros(1)))
         validator.validate_consistency(params, X=X)
 
@@ -290,7 +290,7 @@ class TestPPGLMValidator:
         # test that no neuron ids are skipped
         X_skipped = PredictorsPPGLM(
             times=jnp.array([1.0, 2.0, 3.0]),
-            ids=jnp.array([0, 2, 2]),  # skips id 1
+            predictor_ids=jnp.array([0, 2, 2]),  # skips id 1
         )
         params = validator.to_model_params((jnp.zeros(10), jnp.zeros(1)))
         with pytest.raises(ValueError, match="consecutive"):
@@ -348,6 +348,147 @@ class TestPPGLMValidator:
         with expectation:
             validator.validate_random_key(key, dtype=dtype)
 
+    @pytest.mark.parametrize(
+        "time_series, expectation",
+        [
+            # --- TsGroup ---
+            (
+                nap.TsGroup(
+                    {
+                        0: nap.Ts(np.array([1.0, 2.0, 3.0])),
+                        1: nap.Ts(np.array([1.5, 2.5])),
+                    }
+                ),
+                does_not_raise(),
+            ),
+            (
+                nap.TsGroup(
+                    {
+                        0: nap.Ts(np.array([1.0, 2.0])),
+                        1: nap.Ts(np.array([])),
+                    }
+                ),
+                pytest.raises(ValueError, match=r"index\(es\) \[1\]"),
+            ),
+            # --- single Ts ---
+            (
+                nap.Ts(np.array([1.0, 2.0, 3.0])),
+                does_not_raise(),
+            ),
+            (
+                nap.Ts(np.array([])),
+                pytest.raises(ValueError, match="is empty"),
+            ),
+            # --- dict ---
+            (
+                {0: np.array([1.0, 2.0]), 1: np.array([3.0])},
+                does_not_raise(),
+            ),
+            (
+                {0: np.array([1.0, 2.0]), 1: np.array([])},
+                pytest.raises(ValueError, match=r"key\(s\) \[1\]"),
+            ),
+            # --- np array ---
+            (
+                np.array([1.0, 2.0, 3.0]),
+                does_not_raise(),
+            ),
+            (
+                np.array([]),
+                pytest.raises(ValueError, match="is empty"),
+            ),
+            # --- list ---
+            (
+                [1.0, 2.0, 3.0],
+                does_not_raise(),
+            ),
+            # --- list of arrays ---
+            (
+                [np.array([1.0, 2.0]), np.array([3.0])],
+                does_not_raise(),
+            ),
+            (
+                [np.array([1.0, 2.0]), np.array([])],
+                pytest.raises(ValueError, match=r"index\(es\) \[1\]"),
+            ),
+            # --- jnp array ---
+            (
+                jnp.array([1.0, 2.0, 3.0]),
+                does_not_raise(),
+            ),
+            (
+                jnp.array([]),
+                pytest.raises(ValueError, match="is empty"),
+            ),
+            # --- unsupported type ---
+            (
+                "not_a_valid_input",
+                pytest.raises(TypeError, match="Unsupported type"),
+            ),
+            (
+                2.16,
+                pytest.raises(TypeError, match="Unsupported type"),
+            ),
+        ],
+    )
+    def test_validate_time_series(self, validator, time_series, expectation):
+        with expectation:
+            validator._validate_time_series(time_series, name="X")
+
+    def test_validate_inputs_valid(self, validator, valid_X_y):
+        """Valid X and y (as TsGroups) should not raise."""
+        X, y = valid_X_y
+        validator.validate_inputs(X=X, y=y)
+
+    def test_validate_inputs_only_X(self, validator, valid_X_y):
+        X, _ = valid_X_y
+        validator.validate_inputs(X=X, y=None)
+
+    def test_validate_inputs_only_y(self, validator, valid_X_y):
+        _, y = valid_X_y
+        validator.validate_inputs(X=None, y=y)
+
+    def test_validate_inputs_invalid_X(self, validator, valid_X_y):
+        """An invalid X should raise with 'X' in the message, even if y is valid."""
+        _, y = valid_X_y
+        with pytest.raises(ValueError, match="X is empty"):
+            validator.validate_inputs(X=np.array([]), y=y)
+
+    def test_validate_inputs_invalid_y(self, validator, valid_X_y):
+        """An invalid y should raise with 'y' in the message, even if X is valid."""
+        X, _ = valid_X_y
+        with pytest.raises(ValueError, match="y is empty"):
+            validator.validate_inputs(X=X, y=np.array([]))
+
+    @pytest.mark.parametrize(
+        "n_series, expectation",
+        [
+            (1, does_not_raise()),
+            (5, pytest.raises(ValueError, match="must contain exactly 1")),
+        ],
+    )
+    def test_validate_y_dimensionality(self, validator, n_series, expectation):
+        with expectation:
+            validator._validate_y_dimensionality(n_series)
+
+    def test_validate_y_dimensionality_single(self, validator, valid_X_y):
+        """PPGLMValidator requires y to have exactly 1 time series."""
+        X, _ = valid_X_y
+
+        # valid y
+        y_single = nap.Ts(np.sort(np.random.uniform(0, 10, 20)))
+        validator.validate_inputs(X=X, y=y_single)
+
+        # invalid y
+        y_pop = nap.TsGroup(
+            {
+                0: nap.Ts(np.sort(np.random.uniform(0, 10, 20))),
+                1: nap.Ts(np.sort(np.random.uniform(0, 10, 15))),
+            }
+        )
+        with pytest.raises(ValueError, match="must contain exactly 1"):
+            validator.validate_inputs(X=X, y=y_pop)
+
 
 class TestPopulationPPGLMValidator:
     """Test suite for input validation logic in PopulationPPGLMValidator. Only needed to test consistency for y"""
@@ -355,7 +496,7 @@ class TestPopulationPPGLMValidator:
     def test_validate_consistency(self, population_validator, processed_X_y):
         # valid inputs, no error
         X, y = processed_X_y
-        n_predictors = int(jnp.unique(X.ids).size)
+        n_predictors = int(jnp.unique(X.predictor_ids).size)
         # n_neurons is 1
         params = population_validator.to_model_params(
             (jnp.zeros((n_predictors * 5, 1)), jnp.zeros(1))
@@ -373,10 +514,10 @@ class TestPopulationPPGLMValidator:
         X, _ = processed_X_y
         y_skipped = SpikesPPGLM(
             times=jnp.array([1.0, 2.0, 3.0]),
-            ids=jnp.array([0, 2, 2]),  # skips id 1
-            idx=jnp.array([0, 1, 2]),
+            neuron_ids=jnp.array([0, 2, 2]),  # skips id 1
+            timestamp_idx=jnp.array([0, 1, 2]),
         )
-        n_predictors = int(jnp.unique(X.ids).size)
+        n_predictors = int(jnp.unique(X.predictor_ids).size)
         params = population_validator.to_model_params(
             (jnp.zeros((n_predictors * 5, 2)), jnp.zeros(2))
         )
@@ -388,3 +529,36 @@ class TestPopulationPPGLMValidator:
             (jnp.zeros((n_predictors * 5, 1)), jnp.zeros(1))
         )
         population_validator.validate_consistency(params, X=X, y=None)
+
+    @pytest.mark.parametrize(
+        "n_series, expectation",
+        [
+            (5, does_not_raise()),
+            (1, pytest.raises(ValueError, match="must contain more than 1")),
+        ],
+    )
+    def test_validate_y_dimensionality(
+        self, population_validator, n_series, expectation
+    ):
+        with expectation:
+            population_validator._validate_y_dimensionality(n_series)
+
+    def test_validate_y_dimensionality_population(
+        self, population_validator, valid_X_y
+    ):
+        """PopulationPPGLMValidator requires y to have more than 1 time series."""
+        X, _ = valid_X_y
+
+        # valid y
+        y_pop = nap.TsGroup(
+            {
+                0: nap.Ts(np.sort(np.random.uniform(0, 10, 20))),
+                1: nap.Ts(np.sort(np.random.uniform(0, 10, 15))),
+            }
+        )
+        population_validator.validate_inputs(X=X, y=y_pop)
+
+        # invalid y
+        y_single = nap.Ts(np.sort(np.random.uniform(0, 10, 20)))
+        with pytest.raises(ValueError, match="must contain more than 1"):
+            population_validator.validate_inputs(X=X, y=y_single)

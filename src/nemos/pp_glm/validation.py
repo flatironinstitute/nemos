@@ -1,11 +1,12 @@
 """Validation classes for PPGLM and PopulationPPGLM models."""
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple, TypeAlias, Union
 
 import jax
 import jax.numpy as jnp
-from pynapple import IntervalSet, Tsd
+import numpy as np
+from pynapple import IntervalSet, Ts, Tsd, TsGroup
 
 from ..base_validator import RegressorValidator
 from ..glm.params import GLMParams, GLMUserParams
@@ -13,12 +14,15 @@ from ..glm.validation import GLMValidator, from_glm_params, to_glm_params
 from .data import PredictorsPPGLM, SpikesPPGLM
 from .params import PPGLMParamsWithKey
 
+TimeSeriesInput: TypeAlias = "Union[np.ndarray, jnp.ndarray, list, dict, Ts, TsGroup]"
+
 
 def to_pp_glm_params_with_key(params: GLMParams, random_key: jnp.array):
     """Map from PPGLMParams to PPGLMParamsWithKey.
 
      Map from PPGLMParams to PPGLMParamsWithKey by appending a jax random key.
-    The key is converted from uint32 to float to avoid solver initialization error"""
+    The key is converted from uint32 to float to avoid solver initialization error
+    """
     return PPGLMParamsWithKey(params, random_key.astype(params.coef.dtype))
 
 
@@ -98,7 +102,7 @@ class PPGLMValidator(GLMValidator):
         if X is not None:
             n_features = jax.tree_util.tree_map(lambda p: p.shape[0], params.coef)
             n_predictors_params = int(n_features / self.n_basis_funcs)
-            predictors_X = jnp.unique(X.ids)
+            predictors_X = jnp.unique(X.predictor_ids)
 
             if n_predictors_params != predictors_X.size:
                 raise ValueError(
@@ -139,6 +143,135 @@ class PPGLMValidator(GLMValidator):
                     f"{name} time support. Uncovered duration: {uncovered.tot_length():.3f}s. "
                     f"recording_time span should match the time support of your data."
                 )
+
+    def _validate_time_series(self, time_series, name: str) -> int:  # noqa: C901
+        """Validate a single time-series input's type and non-emptiness.
+
+        Parameters
+        ----------
+        time_series : array-like or pynapple.Ts or pynapple.TsGroup or dict
+            Event or spike timestamps to validate.
+        name : str
+            Name of the input (e.g. "X" or "y"), used in error messages.
+
+        Returns
+        -------
+        int
+        Number of individual time series contained in the input (e.g.
+        number of neurons/predictors).
+
+        Raises
+        ------
+        ValueError
+            If any component time series is empty.
+        TypeError
+            If time_series is not one of the supported types.
+        """
+
+        # convert jax to numpy
+        if isinstance(time_series, jax.Array):
+            time_series = np.asarray(time_series)
+
+        # --- TsGroup ---
+        if isinstance(time_series, TsGroup):
+            empty_ids = [i for i, ts in time_series.items() if len(ts) == 0]
+            if empty_ids:
+                raise ValueError(
+                    f"Empty time series found in {name} at index(es) {empty_ids}. "
+                    "All time series must be non-empty."
+                )
+            return len(time_series)
+
+        # --- single Ts ---
+        if isinstance(time_series, Ts):
+            if len(time_series) == 0:
+                raise ValueError(f"{name} is empty. All time series must be non-empty.")
+            return 1
+
+        # --- dict ---
+        if isinstance(time_series, dict):
+            empty_keys = [k for k, arr in time_series.items() if len(arr) == 0]
+            if empty_keys:
+                raise ValueError(
+                    f"Empty time series found in {name} at key(s) {empty_keys}. "
+                    "All time series must be non-empty."
+                )
+            return len(time_series)
+
+        # --- np.ndarray or list ---
+        if isinstance(time_series, (np.ndarray, list)):
+            if len(time_series) == 0:
+                raise ValueError(f"{name} is empty. All time series must be non-empty.")
+            if len(time_series) > 0 and np.isscalar(time_series[0]):
+                times = np.asarray(time_series, dtype=float).ravel()
+                if len(times) == 0:
+                    raise ValueError(
+                        f"{name} is empty. All time series must be non-empty."
+                    )
+                return 1
+            else:
+                empty_idx = [i for i, s in enumerate(time_series) if len(s) == 0]
+                if empty_idx:
+                    raise ValueError(
+                        f"Empty time series found in {name} at index(es) {empty_idx}. "
+                        "All time series must be non-empty."
+                    )
+                return len(time_series)
+
+        raise TypeError(
+            f"Unsupported type for {name}: {type(time_series)}. "
+            "Expected np.ndarray, list, dict, pynapple.Ts, or pynapple.TsGroup."
+        )
+
+    def _validate_y_dimensionality(self, n_series: int) -> None:
+        """Check that y contains exactly one time series (single-neuron PP-GLM).
+
+        Parameters
+        ----------
+        n_series : int
+            Number of time series found in y.
+
+        Raises
+        ------
+        ValueError
+            If y does not contain exactly one time series.
+        """
+        if n_series != 1:
+            raise ValueError(
+                f"y must contain exactly 1 time series for {type(self).__name__}, "
+                f"got {n_series}."
+            )
+
+    def validate_inputs(
+        self,
+        X: Optional[TimeSeriesInput] = None,
+        y: Optional[TimeSeriesInput] = None,
+    ) -> None:
+        """Validate predictor and spike timestamp inputs for the PP-GLM.
+
+        Checks that X and y are one of the accepted types (np.ndarray, jnp.ndarray,
+        list, dict, pynapple.Ts, or pynapple.TsGroup) and that all contained time
+        series are non-empty.
+
+        Parameters
+        ----------
+        X : array-like or pynapple.Ts or pynapple.TsGroup or dict, optional
+            Event timestamps for the model predictors.
+        y : array-like or pynapple.Ts or pynapple.TsGroup or dict, optional
+            Spike timestamps for the postsynaptic neuron(s).
+
+        Raises
+        ------
+        ValueError
+            If X or y contain empty time series.
+        TypeError
+            If X or y are not one of the supported types.
+        """
+        if X is not None:
+            self._validate_time_series(X, name="X")
+        if y is not None:
+            n_series_y = self._validate_time_series(y, name="y")
+            self._validate_y_dimensionality(n_series_y)
 
 
 @dataclass(frozen=True, repr=False)
@@ -183,6 +316,12 @@ class PopulationPPGLMValidator(PPGLMValidator):
         X: Optional[PredictorsPPGLM] = None,
         y: Optional[SpikesPPGLM] = None,
     ):
+        """
+        Validate consistency between parameters and inputs for PP-GLM.
+
+        For population PP-GLM, validates both feature consistency with X and
+        neuron count consistency with y.
+        """
 
         # First validate X consistency (features) using parent implementation
         super().validate_consistency(params, X=X, y=None)
@@ -190,7 +329,7 @@ class PopulationPPGLMValidator(PPGLMValidator):
         # Then validate y consistency (neurons) - specific to population GLM
         if y is not None:
             n_neurons_coef = jax.tree_util.tree_map(lambda p: p.shape[1], params.coef)
-            y_neurons = jnp.unique(y.ids)
+            y_neurons = jnp.unique(y.neuron_ids)
             if n_neurons_coef != y_neurons.size:
                 raise ValueError(
                     "Inconsistent number of neurons. "
@@ -204,6 +343,25 @@ class PopulationPPGLMValidator(PPGLMValidator):
                     "Inconsistent neuron IDs. "
                     f"Neuron IDs must be consecutive integers from 0 to {y_neurons.size - 1}."
                 )
+
+    def _validate_y_dimensionality(self, n_series: int) -> None:
+        """Check that y contains more than one time series (population PP-GLM).
+
+        Parameters
+        ----------
+        n_series : int
+            Number of time series found in y.
+
+        Raises
+        ------
+        ValueError
+            If y does not contain strictly more than one time series.
+        """
+        if n_series <= 1:
+            raise ValueError(
+                f"y must contain more than 1 time series for {type(self).__name__}, "
+                f"got {n_series}."
+            )
 
     def get_empty_params(self, X, y) -> GLMParams:
         """Return the param shape given the input data."""

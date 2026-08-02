@@ -18,4 +18,5 @@ class PPGLMParamsWithKey(ModelParams):
     def regularizable_subtrees() -> (
         list[Callable[["PPGLMParamsWithKey"], jnp.ndarray | dict]]
     ):
+        """Filter regularizable subtrees."""
         return [lambda p: p.params.coef]
