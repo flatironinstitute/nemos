@@ -89,18 +89,18 @@ class TrainingContext:
         params: Any = None,
         state: Any = None,
         aux: Any = None,
-        epoch_idx: int | None = None,
+        pass_idx: int | None = None,
         batch_idx: int | None = None,
-        num_epochs: int = 0,
+        n_passes: int = 0,
         frozen: Any = None,
     ):
         self.model = model
         self.solver = solver
         self.state = state
         self.aux = aux
-        self.epoch_idx = epoch_idx
+        self.pass_idx = pass_idx
         self.batch_idx = batch_idx
-        self.num_epochs = num_epochs
+        self.n_passes = n_passes
         self.frozen = frozen
         self._stop_requested = False
         self._stop_reason = ""

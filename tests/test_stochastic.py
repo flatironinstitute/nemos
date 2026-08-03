@@ -186,21 +186,21 @@ class TestCallbackSystem:
 
     def test_repr_single_line(self):
         """A short context renders on one line; None fields are omitted."""
-        ctx = TrainingContext(epoch_idx=1, batch_idx=3, num_epochs=5)
-        assert repr(ctx) == "TrainingContext(epoch_idx=1, batch_idx=3, num_epochs=5)"
+        ctx = TrainingContext(pass_idx=1, batch_idx=3, n_passes=5)
+        assert repr(ctx) == "TrainingContext(pass_idx=1, batch_idx=3, n_passes=5)"
 
     def test_repr_empty(self):
-        """Only ``num_epochs`` (default 0, not None) shows for a bare context."""
-        assert repr(TrainingContext()) == "TrainingContext(num_epochs=0)"
+        """Only ``n_passes`` (default 0, not None) shows for a bare context."""
+        assert repr(TrainingContext()) == "TrainingContext(n_passes=0)"
 
     def test_repr_multiline_over_threshold(self):
         """Past ``N_CHAR_MAX`` the repr breaks to one field per line."""
-        ctx = TrainingContext(epoch_idx=1, batch_idx=3, num_epochs=5)
+        ctx = TrainingContext(pass_idx=1, batch_idx=3, n_passes=5)
         assert ctx.__repr__(N_CHAR_MAX=10) == (
             "TrainingContext(\n"
-            "    epoch_idx=1,\n"
+            "    pass_idx=1,\n"
             "    batch_idx=3,\n"
-            "    num_epochs=5,\n"
+            "    n_passes=5,\n"
             ")"
         )
 
@@ -362,7 +362,7 @@ class TestGLMStochasticFit:
             solver_name=solver,
             solver_kwargs=self._default_solver_kwargs(solver),
         )
-        model.stochastic_fit(loader, num_epochs=5)
+        model.stochastic_fit(loader, n_passes=5)
 
         np.testing.assert_array_equal(model.intercept_, jnp.zeros(1))
         assert model.coef_.shape == (5,)
@@ -937,7 +937,7 @@ class TestPopulationGLMStochasticFit:
         model = nmo.glm.PopulationGLM(
             fit_intercept=False, solver_name=solver, solver_kwargs=solver_kwargs
         )
-        model.stochastic_fit(loader, num_epochs=5)
+        model.stochastic_fit(loader, n_passes=5)
 
         np.testing.assert_array_equal(model.intercept_, jnp.zeros(3))
         assert model.coef_.shape == (5, 3)
