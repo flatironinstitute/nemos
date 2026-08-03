@@ -72,21 +72,23 @@ sns.set_theme(style="ticks", palette="colorblind", font_scale=1.5, rc=custom_par
 
 We will analyze the IBL decision-making task (IBL et al., 2021) <span id="cite2a"></span><a href="#ref2a">[2a]</a>, which is a variation of the two-alternative forced-choice perceptual detection task (Burgess et al., 2017) <span id="cite3"></span><a href="#ref3">[3]</a>. During this task, a sinusoidal grating with varying contrast [0\%-100\%] appeared either at the right or left side of the screen. The goal for the mice was to indicate this side by turning a little wheel so that this turn would accordingly move the stimuli to the center of the screen (Burgess et al., 2017) <span id="cite3"></span><a href="#ref3">[3]</a>. If the mice chose the side correctly, they would receive a water reward; if not, they would get a noise burst and a 1-second timeout. For the first 90 trials of each session, the stimulus appeared on the left or right side with equal probability; after that, the stimulus appeared on one side with fixed probability 0.8 and alternated randomly every 20-100 trials.
 
-```{figure} ../assets/IBL_edited.svg
-:scale: 50%
+```{figure} ../assets/ibl_task.svg
+:width: 640px
 :alt: Task illustration
 :align: center
-Task illustration. Modified from IBL et al. (2021) <span id="cite2b"></span><a href="#ref2b">[2b]</a>.
+Task illustration. Redrawn after IBL et al. (2021) <span id="cite2b"></span><a href="#ref2b">[2b]</a>.
 ```
 
 ### The GLM-HMM
 
 A GLM-HMM combines two components. The HMM component governs the distribution over the latent states $z$, which here correspond to hidden behavioral strategies. The GLM component is really a collection of state-specific GLMs — as many GLMs as there are states — each specifying how the system behaves in that state. For a given latent state, the state's weights are combined with the inputs in the design matrix, passed through a nonlinearity, and used as the parameter of the observation model, which generates the observed output. In our case the output is a binary choice (left or right), so we use a Bernoulli observation model, giving us a Bernoulli GLM-HMM.
 
-```{figure} ../assets/graphical_model_glm_hmm_actions.png
+```{figure} ../assets/glm_hmm_graphical_model.svg
 :alt: GLM-HMM graphical model
 :align: center
-"Graphical model" of a GLM-HMM with mouse actions.
+"Graphical model" of a GLM-HMM with mouse actions. The latent state $z_t$ selects
+the weight vector $w_{z_t}$ used by that trial's GLM; trials in the same state share
+one weight vector (highlighted for $z = 1$).
 ```
 
 These characteristics allow us to fully describe the HMM by three elements:
@@ -101,10 +103,10 @@ With different uses of these three components we can gather a lot of information
 
 We will replicate the main findings of Ashwood et al. (2022) <span id="cite1b"></span><a href="#ref1b">[1b]</a>. In particular, we aim to reproduce the following figures from that work:
 
-```{figure} ../assets/ashwood_paper_figs.svg
-:alt: Ashwood et al. (2022) figures to replicate
+```{figure} ../assets/ashwood_targets.svg
+:alt: Ashwood et al. (2022) results to replicate
 :align: center
-Figures from Ashwood et al. (2022) <span id="cite1c"></span><a href="#ref1c">[1c]</a> that we will replicate in this tutorial.
+Results reported in Ashwood et al. (2022) <span id="cite1c"></span><a href="#ref1c">[1c]</a> that we will replicate in this tutorial: (**2d**) the state transition matrix, (**2e**) the GLM weights per state, (**2f**) accuracy overall and per state, and (**3d**) fractional occupancy of each state. Panel labels are those of the original publication.
 ```
 
 ### Tutorial sections
@@ -249,10 +251,9 @@ We will build the design matrix using the NeMoS basis module `nmo.basis`, which 
 
 ### Predictor 1: previous choice
 
-```{figure} ../assets/previous_choice_table.svg
-:alt: Previous choice predictor
-:align: center
-```
+| Input | Definition | Interpretation |
+|---|---|---|
+| Previous choice <br> <img src="../assets/previous_choice.svg" alt="two trial frames: the previous trial holds the mouse's wheel turn, the current trial is empty" width="110"> | $\text{Previous choice}_t = c_{t-1}$ <br> with $c_t \in \{-1, +1\}$ | Direct lagged choice predictor, capturing serial dependence in decisions. |
 
 Previous choice is a lagged version of current choice, and it reflects serial dependence on decisions. For every time point, the predictor is the immediate previous choice taken. To create it, we can use the `HistoryConv` basis.
 
@@ -274,10 +275,18 @@ We get a lagged list. Notice that the first element is a `NaN`: a history featur
 
 ### Predictor 2: WSLS
 
-```{figure} ../assets/wsls_table.svg
-:alt: Win-stay lose-shift predictor
-:align: center
-```
+| Input | Definition | Interpretation |
+|---|---|---|
+| Win-stay lose-shift <br> <img src="../assets/win_stay_lose_shift.svg" alt="after a reward the mouse repeats its wheel turn; after no reward it makes the opposite turn" width="180"> | $\text{WSLS}_t = c_{t-1} \cdot r_{t-1}$ <br> with $c_t, r_t \in \{-1, +1\}$ | Interaction of past choice and outcome: repeat a rewarded choice, switch away from an unrewarded one. |
+
+The four combinations of previous choice and previous outcome give:
+
+| $c_{t-1}$ | $r_{t-1}$ | $\text{WSLS}_t$ | Behavior |
+|---|---|---|---|
+| $-1$ (right) | $+1$ (win) | $(-1)(+1) = -1$ | stay right |
+| $-1$ (right) | $-1$ (lose) | $(-1)(-1) = +1$ | shift to left |
+| $+1$ (left) | $+1$ (win) | $(+1)(+1) = +1$ | stay left |
+| $+1$ (left) | $-1$ (lose) | $(+1)(-1) = -1$ | shift to right |
 
 Win-stay lose-shift reflects the interaction between past choice and outcome: $WSLS_t = c_{t-1} \cdot r_{t-1}$. If a choice was rewarded on the previous trial, the predictor signals to "stay" (repeat that choice); if it was not rewarded, it signals to "switch" to the other alternative.
 
@@ -307,10 +316,9 @@ The result is an element-wise multiplication, shifted by one. The first element 
 
 ### Predictor 3: stimulus contrast
 
-```{figure} ../assets/signed_contrast_table.svg
-:alt: Signed contrast predictor
-:align: center
-```
+| Input | Definition | Interpretation |
+|---|---|---|
+| Signed contrast <br> <img src="../assets/screen_grating.svg" alt="stimulus grating" width="80"> | $\text{signed contrast} = \text{contrast}_\text{left} - \text{contrast}_\text{right}$ <br> with $\text{contrast}_\text{left}, \text{contrast}_\text{right} \in S$ <br> where $S = \{0, 0.0625, 0.125, 0.25, 1\}$ | Encodes sensory evidence in 1D; magnitude reflects strength, sign encodes direction. <br> $> 0$: left-favoring evidence <br> $< 0$: right-favoring evidence <br> $= 0$: no directional evidence |
 
 The signed contrast encodes sensory evidence in 1D. Its magnitude reflects the strength of evidence and its sign encodes direction. To build it, we replace `NaN` contrast values with `0` (a stimulus not being shown on one side is equivalent to a `0`-contrast stimulus on that side) and compute the difference between the left and right contrasts.
 
@@ -358,13 +366,13 @@ Even though we need just a few lines of code, there is a lot going on. Here's a 
 ```{code-cell} ipython3
 # Compute features
 X_unnormalized = basis_object.compute_features(
-    # input 1 : processed with stimuli_basis
+    # input of stimuli_basis
     signed_contrast,
-    # input 2 : wsls input 1: choice
+    # 1st input of wsls_basis
     choices,
-    # input 3 : wsls input 2: reward
+    # 2nd input of wsls_basis
     rewards,
-    # input 4 : processed with prev_choice
+    # input of prev_choice_basis
     choices,
 )
 
@@ -419,7 +427,7 @@ We are going to fit a Bernoulli GLM-HMM to model binary choices. For a Bernoulli
 
 ```{code-cell} ipython3
 choices[choices == -1] = 0
-print(choices)
+choices
 ```
 
 ### Creating session boundaries
@@ -456,11 +464,27 @@ X[session_starts][:5]
 ```{admonition} How would this be different if we were using pynapple objects?
 :class: note dropdown
 
-With pynapple `Tsd`/`TsdFrame` inputs, the session boundaries are inherited from the objects and no session indicator is needed. With NumPy inputs, like the design matrix and choice vector we build here, you pass the indicator explicitly, as either:
-- a boolean (or 0/1 integer) array of shape ``(n_samples,)`` marking session starts — the form we build here
-- an integer array of shape ``(n_sessions,)`` giving the indices where sessions start
+What `session_starts` accepts depends on the type of `X` and `y`.
 
-A `pynapple.IntervalSet` of session epochs is also accepted, but only when `X` or `y` is a pynapple `Tsd`/`TsdFrame`: mapping the epoch start times onto sample positions requires the pynapple timestamps, so an `IntervalSet` cannot be used with purely NumPy inputs.
+**NumPy inputs** (what we use here). There is no time axis to map onto, so boundaries
+are given as sample positions:
+- a boolean (or 0/1 integer) array of shape ``(n_samples,)`` marking session starts —
+  the form we build here, or
+- an integer array of shape ``(n_sessions,)`` giving the indices where sessions start.
+
+With `session_starts=None`, the whole input is treated as a single session.
+
+**Pynapple inputs.** If `X` or `y` is a `Tsd`/`TsdFrame`, you can leave
+`session_starts=None` and the epochs of the object's `time_support` become the sessions
+— one epoch, one session. (A time series built without an explicit `time_support` has a
+single epoch, hence a single session; multiple epochs come from e.g. `restrict`.) You
+can also pass an `IntervalSet`, which takes precedence over the object's own
+`time_support`. Only its start times are used: it marks where sessions begin, it does
+not drop samples. Restrict the data beforehand if you want samples excluded.
+
+The array forms also take precedence over `time_support`. An `IntervalSet`, on the other
+hand, requires a pynapple `X` or `y` — mapping epoch start times to sample positions
+needs the timestamps — and raises a `TypeError` with NumPy inputs.
 ```
 
 ### Initialize and fit the GLM-HMM
@@ -498,7 +522,7 @@ model = nmo.glm_hmm.GLMHMM(
     seed=seed,
 )
 
-print(model)
+model
 ```
 
 Once we created our object, we can fit our model. The fit function takes three mandatory arguments: the design matrix `X`, the `choices`, and  `session_starts`, the session indicator we built above.
@@ -642,13 +666,13 @@ Now we can compute the mouse's overall accuracy. We first mask out the 0-contras
 
 ```{code-cell} ipython3
 # Mask out the 0 contrast stimuli
-mask = signed_contrast != 0
+non_zero_contrast = signed_contrast != 0
 
 # A correct choice is one that was rewarded
 correct_choices = rewards == 1
 
 # Compute the total accuracy applying the mask
-total_accuracy = np.mean(correct_choices[mask])
+total_accuracy = np.mean(correct_choices[non_zero_contrast])
 
 # Store in an array of dim 4 (overall + one per state)
 accuracies_to_plot_viterbi = np.zeros(4)
@@ -661,7 +685,7 @@ Then we can use the output of `decode_state` to segment the trials into the esti
 accuracy_per_state = np.zeros(n_states)
 for s in range(n_states):
     in_state = (decoded_states[:, s] == 1)
-    accuracy_per_state[s] = np.mean(correct_choices[in_state & mask])
+    accuracy_per_state[s] = np.mean(correct_choices[in_state & non_zero_contrast])
 
 accuracies_to_plot_viterbi[1:] = accuracy_per_state
 print(f"Overall and per-state accuracy: {accuracies_to_plot_viterbi}")
@@ -704,7 +728,7 @@ accuracies_to_plot_smooth_proba[0] = total_accuracy
 
 accuracy_per_state = np.zeros(n_states)
 for s in range(n_states):
-    in_state = (states_max_posterior == s) & mask[valid_post]
+    in_state = (states_max_posterior == s) & non_zero_contrast[valid_post]
     accuracy_per_state[s] = correct_choices[valid_post][in_state].mean()
 
 accuracies_to_plot_smooth_proba[1:] = accuracy_per_state
