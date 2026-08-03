@@ -2693,8 +2693,11 @@ class TestPopulationGLM:
         """
         is_classifier = "classifier" in model_instantiation
 
-        type_error_match = "feature_mask and X must have the same structure|feature_mask and coef must have the same structure"
-        shape_mismatch_match = "Inconsistent feature mask shape|The shape of the ``feature_mask`` array must match"
+        type_error_match = "feature_mask and X must have the same structure"
+        # every model now reports a leaf-by-leaf shape mismatch the same way
+        shape_mismatch_match = (
+            "The ``feature_mask`` must match the shape of the ``coef``, leaf by leaf"
+        )
 
         if is_classifier:
             # Classifier models expect feature_mask shape (n_features, n_neurons, n_classes)
@@ -2730,19 +2733,17 @@ class TestPopulationGLM:
                     ValueError, match=shape_mismatch_match
                 ),
                 "wrong_n_features_np": pytest.raises(
-                    ValueError,
-                    match="The shape of the ``feature_mask`` array must match that of the ``coef``",
+                    ValueError, match=shape_mismatch_match
                 ),
                 "wrong_n_neurons_np": pytest.raises(
-                    ValueError,
-                    match="The shape of the ``feature_mask`` array must match that of the ``coef``",
+                    ValueError, match=shape_mismatch_match
                 ),
                 "correct_shape_pytree": does_not_raise(),
                 "correct_shape_classifier_pytree": pytest.raises(
-                    ValueError, match="Inconsistent number of neurons. feature_mask has"
+                    ValueError, match=shape_mismatch_match
                 ),
                 "wrong_n_neurons_pytree": pytest.raises(
-                    ValueError, match="Inconsistent number of neurons. feature_mask has"
+                    ValueError, match=shape_mismatch_match
                 ),
                 "missing_key_pytree": pytest.raises(TypeError, match=type_error_match),
                 "missing_key_wrong_shape_pytree": pytest.raises(
@@ -2778,7 +2779,10 @@ class TestPopulationGLM:
             ),
             # Non-classifier pytree correct shape: {'input_1': (3, 3), 'input_2': (2, 3)}
             (
-                {"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])},
+                {
+                    "input_1": np.array([[0, 1, 0]] * 3),
+                    "input_2": np.array([[1, 0, 1]] * 2),
+                },
                 "missing_key_pytree",  # np expects array, not dict
                 "correct_shape_pytree",
             ),
@@ -2791,8 +2795,12 @@ class TestPopulationGLM:
                 "missing_key_pytree",  # np expects array, not dict
                 "correct_shape_classifier_pytree",
             ),
+            # one neuron too many in every leaf
             (
-                {"input_1": np.array([0, 1, 0, 1]), "input_2": np.array([1, 0, 1, 0])},
+                {
+                    "input_1": np.ones((3, 4), dtype=int),
+                    "input_2": np.ones((2, 4), dtype=int),
+                },
                 "missing_key_pytree",
                 "wrong_n_neurons_pytree",
             ),

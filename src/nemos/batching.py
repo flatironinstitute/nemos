@@ -41,8 +41,8 @@ class DataLoader(Protocol):
     Requirements:
 
     - Must be re-iterable: calling ``__iter__()`` must return a fresh iterator
-      each time. This is required for ``num_epochs > 1`` and because SVRG's full
-      gradient computation iterates through the data an additional time per epoch.
+      each time. This is required for ``n_passes > 1`` and because SVRG's full
+      gradient computation iterates through the data an additional time per pass.
     - ``sample_batch()`` should be cheap and deterministic (e.g., the first batch
       that contains valid data).
     - Batches should have consistent, non-zero sizes. Note that the solver's ``update``
@@ -86,7 +86,7 @@ class _BaseArrayDataLoader:
     Four shuffle strategies are supported (see ``SHUFFLE_STRATEGIES``):
 
     - ``"none"``: sequential, contiguous batches.
-    - ``"chunk_order"``: contiguous batches whose order is shuffled each epoch, with
+    - ``"chunk_order"``: contiguous batches whose order is shuffled each pass, with
       the samples kept in their original order within each batch. Batch membership is
       fixed, so this only requires contiguous reads. Because each batch is an intact,
       in-order segment, this is the strategy to use when wrapping the loader to do
@@ -321,7 +321,7 @@ class LazyArrayDataLoader(_BaseArrayDataLoader):
     than dataset size.
 
     The default shuffle strategy is ``"chunk_order"`` (approximate): chunk order is
-    randomized each epoch, but samples within the same chunk always stay together in
+    randomized each pass, but samples within the same chunk always stay together in
     the same batch and keep their original order. Use ``"chunk_and_samples"`` to also
     permute samples within each batch. Both require only contiguous reads. Passing
     ``shuffle="full"`` shuffles the whole dataset like ``ArrayDataLoader``. This
