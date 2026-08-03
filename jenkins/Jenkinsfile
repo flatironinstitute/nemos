@@ -14,9 +14,6 @@ catchError {
           "OMP_NUM_THREADS=8"
         ]) {
           sh '''#!/bin/bash -ex
-            # nemos derives its version from git tags, which the Jenkins checkout omits.
-            git fetch --tags
-
             python3.12 -m venv $HOME/venv
             source $HOME/venv/bin/activate
             pip install -U pip setuptools
