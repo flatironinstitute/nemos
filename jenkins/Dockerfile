@@ -7,6 +7,8 @@ RUN apt-get update && \
       python3.12 \
       python3.12-venv \
       ruby \
+      ruby-dev \
+      build-essential \
       libcurl4 \
       git \
       curl \
