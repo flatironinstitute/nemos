@@ -1,18 +1,12 @@
-FROM ubuntu:24.04
-
-ENV DEBIAN_FRONTEND=noninteractive
+FROM docker.io/ubuntu:24.04
 
 # Kept deliberately independent of the nemos source tree: this image only needs
 # rebuilding when these system dependencies change, not on every commit.
 RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive \
-    apt-get install -y \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
       python3.12 \
       python3.12-venv \
-      python3-pip \
       ruby \
-      ruby-dev \
-      build-essential \
       libcurl4 \
       git \
       curl \
