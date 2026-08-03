@@ -20,7 +20,7 @@ catchError {
             python3.12 -m venv $HOME/venv
             source $HOME/venv/bin/activate
             pip install -U pip setuptools
-            pip install .[docs]
+            pip install ".[docs]"
             pip freeze
 
             # Recorded so a slow build can be compared against the pod it landed on.
@@ -39,6 +39,65 @@ catchError {
 
             htmlproofer docs/_build/html/tutorials/plot_02_head_direction.html --checks Links,Scripts --allow-missing-href --ignore-urls "https://www.jneurosci.org/content/25/47/11003" --ignore-status-codes 400
           '''
+          lock('nemos_publish') {
+            def scm = scmGit(
+              branches: [[name: 'refs/heads/main']],
+              userRemoteConfigs: [[
+                credentialsId: 'github-jenkins',
+                url: 'https://github.com/flatironinstitute/nemos-documentation.git'
+              ]]
+            )
+            dir(path: 'published-docs') {
+              checkout(changelog: false, poll: false, scm: scm)
+              sh '''#!/bin/bash -ex
+                if [[ "$BRANCH_NAME" =~ ^PR- ]]; then
+                   out_dir="pulls/${BRANCH_NAME#PR-}"
+                elif [[ -n "$TAG_NAME" ]]; then
+                   out_dir="tags/$TAG_NAME"
+                else
+                   out_dir="branch/$BRANCH_NAME"
+                fi
+
+                dest="docs/$out_dir"
+                rm -rf "$dest"
+                mkdir -p "$dest"
+                cp -rp "$WORKSPACE/docs/_build/html/." "$dest"
+
+                # Read back by the Read the Docs build and compared against
+                # READTHEDOCS_GIT_COMMIT_HASH, so a tree built from a different
+                # commit is never served.
+                echo "$GIT_COMMIT" > "$dest/.nemos-commit"
+
+                # -f because generated trees carry .gitignore entries covering
+                # their own index.html files.
+                git add -A -f docs
+                GIT_COMMITTER_EMAIL="jenkins@flatironinstitute.org" GIT_COMMITTER_NAME="Flatiron Jenkins" \
+                  git commit --allow-empty \
+                    --author='Flatiron Jenkins <jenkins@flatironinstitute.org>' \
+                    -m "Generated documentation for $out_dir" -m "$BUILD_TAG"
+              '''
+              gitPush(gitScm: scm, targetBranch: 'main', targetRepo: 'origin')
+            }
+          }
+          withCredentials([string(credentialsId: 'rtd-nemos-token', variable: 'RTD_TOKEN')]) {
+            // Single quotes here are required: a double-quoted block would let
+            // Groovy interpolate RTD_TOKEN into the script, exposing it in the log.
+            sh '''#!/bin/bash -ex
+              if [[ "$BRANCH_NAME" =~ ^PR- ]]; then
+                 version="${BRANCH_NAME#PR-}"
+              elif [[ -n "$TAG_NAME" ]]; then
+                 version="$TAG_NAME"
+              elif [[ "$BRANCH_NAME" == "main" ]]; then
+                 version="latest"
+              else
+                 version="$BRANCH_NAME"
+              fi
+
+              curl -fsS -X POST \
+                -H "Authorization: Token $RTD_TOKEN" \
+                "https://app.readthedocs.org/api/v3/projects/nemos/versions/$version/builds/"
+            '''
+          }
         }
       }
     }
