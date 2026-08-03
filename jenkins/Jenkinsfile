@@ -1,0 +1,47 @@
+props = [
+  disableConcurrentBuilds(abortPrevious: true),
+  buildDiscarder(logRotator(numToKeepStr: '8', daysToKeepStr: '20'))
+]
+
+properties(props)
+
+catchError {
+  timeout(time: 3, unit: 'HOURS') {
+    buildPod(context: 'jenkins', cpus: 8) {
+      stage('docs') {
+        withEnv([
+          "HOME=$WORKSPACE",
+          "OMP_NUM_THREADS=8"
+        ]) {
+          sh '''#!/bin/bash -ex
+            # nemos derives its version from git tags, which the Jenkins checkout omits.
+            git fetch --tags
+
+            python3.12 -m venv $HOME/venv
+            source $HOME/venv/bin/activate
+            pip install -U pip setuptools
+            pip install .[docs]
+            pip freeze
+
+            # Recorded so a slow build can be compared against the pod it landed on.
+            nproc
+
+            # nb_execution_mode is "cache" in conf.py for local iteration. Forcing
+            # execution here keeps the build honest: a notebook that a source change
+            # broke must fail, not be served from a cache entry that predates it.
+            python -m sphinx -T -b html -d docs/_build/doctrees \
+              -D language=en \
+              -D nb_execution_mode=force \
+              docs docs/_build/html
+          '''
+          sh '''#!/bin/bash -ex
+            htmlproofer docs/_build/html --checks Links,Scripts,Images --allow-missing-href --ignore-urls "https://news.ycombinator.com/item?id=41901475,https://fonts.gstatic.com,/scikit-learn\\.org/,https://celltypes.brain-map.org/experiment/electrophysiology/478498617,https://www.jneurosci.org/content/25/47/11003,https://www.nature.com/articles/s41467-017-01908-3,https://doi.org/10.1038/s41467-017-01908-3,https://doi.org/10.1016/j.cell.2020.09.057,https://www.taylorfrancis.com/books/mono/10.4324/9780203774441/applied-multiple-regression-correlation-analysis-behavioral-sciences-jacob-cohen-patricia-cohen-stephen-west-leona-aiken" --assume-extension --check-external-hash --ignore-status-codes 0,302,400,403,406,503 --ignore-files "/.+\\/_static\\/.+/","/.+\\/stubs\\/.+/","/.+\\/tutorials/plot_02_head_direction.+/","/.+\\/how_to_guide\\/plot_06_sklearn_pipeline_cv_demo.+/","/.+\\/tutorials\\/plot_03_grid_cells.+/","/.+\\/tutorials\\/plot_06_calcium_imaging.+/"
+
+            htmlproofer docs/_build/html/tutorials/plot_02_head_direction.html --checks Links,Scripts --allow-missing-href --ignore-urls "https://www.jneurosci.org/content/25/47/11003" --ignore-status-codes 400
+          '''
+        }
+      }
+    }
+  }
+}
+emailFailure()
