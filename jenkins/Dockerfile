@@ -19,5 +19,7 @@ RUN apt-get update && \
     rm -rf /var/cache/apt/* /var/lib/apt/lists/*
 
 # Same checker and floor version the Read the Docs build used, so link-check
-# behaviour does not change when the build moves here.
+# behaviour does not change when the build moves here. Its async dependency
+# chain builds a native extension (io-event), which is why ruby-dev and
+# build-essential are installed above.
 RUN gem install html-proofer -v ">= 5.0.9"
