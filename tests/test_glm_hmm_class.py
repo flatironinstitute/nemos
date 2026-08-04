@@ -1694,6 +1694,72 @@ class TestUpdate:
             bool(captured["session_starts"][second_session_row - n_leading_nan]) is True
         )
 
+    # a boundary far enough from the edges
+    SECOND_SESSION_ROW = 30
+
+    @pytest.mark.parametrize(
+        "nan_rows, expected_second_start, expectation",
+        [
+            # NaN before either boundary: the marker on it moves to the next valid
+            # sample, and every later row shifts left by one
+            (0, SECOND_SESSION_ROW - 1, does_not_raise()),
+            # NaN on the last row of the first session, i.e. a trailing border
+            (SECOND_SESSION_ROW - 1, SECOND_SESSION_ROW - 1, does_not_raise()),
+            # NaN on the boundary row itself: the marker must move to the next valid
+            # sample rather than be dropped along with the row it sits on
+            (SECOND_SESSION_ROW, SECOND_SESSION_ROW, does_not_raise()),
+            # NaN strictly inside the second session: dropping it would splice bins
+            # that are not adjacent in time
+            (
+                SECOND_SESSION_ROW + 10,
+                None,
+                pytest.raises(ValueError, match="requires continuous time-series data"),
+            ),
+            # no valid sample left to run the EM step on
+            (
+                slice(None),
+                None,
+                pytest.raises(ValueError, match="At least a NaN or an Inf"),
+            ),
+        ],
+    )
+    def test_update_nan_placement_preserves_session_structure(
+        self,
+        nan_rows,
+        expected_second_start,
+        expectation,
+        glm_hmm_data,
+        monkeypatch,
+    ):
+        """update() hands the EM step the session partition fit() would hand it.
+
+        Each NaN placement is a distinct behaviour of the preamble: a NaN at a session
+        border is dropped and the boundary re-indexed, a NaN inside a session is
+        refused because dropping it would make two non-adjacent bins consecutive, and
+        an all-NaN input leaves nothing to iterate on.
+        """
+        d = glm_hmm_data
+        n = d["X"].shape[0]
+        model = GLMHMM(n_states=d["n_states"], solver_kwargs={"maxiter": 1})
+        init_params, opt_state = self._prepare(model, d["X"], d["y"])
+
+        X_nan = d["X"].copy().astype(float)
+        X_nan[nan_rows] = np.nan
+        session_starts = np.zeros(n, dtype=bool)
+        session_starts[0] = True
+        session_starts[self.SECOND_SESSION_ROW] = True
+
+        calls = _spy_calls(monkeypatch, model, "_optimizer_update")
+        with expectation:
+            model.update(init_params, opt_state, X_nan, d["y"], session_starts)
+
+        if expected_second_start is not None:
+            data, passed_starts = calls[0][0][2], calls[0][1]["session_starts"]
+            assert data.shape[0] == n - 1
+            np.testing.assert_array_equal(
+                np.flatnonzero(np.asarray(passed_starts)), [0, expected_second_start]
+            )
+
 
 # ---------------------------------------------------------------------------
 # TestGLMHMMParamsContainer — static helpers on the GLMHMMParams class itself
