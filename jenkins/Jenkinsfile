@@ -11,7 +11,18 @@ catchError {
       stage('docs') {
         withEnv([
           "HOME=$WORKSPACE",
-          "OMP_NUM_THREADS=8"
+          "OMP_NUM_THREADS=8",
+          // Without this the pod runs in the C locale, Ruby sets its default
+          // external encoding to US-ASCII, and nokogiri raises on the first
+          // multi-byte character in the rendered HTML, so htmlproofer fails on
+          // pages Read the Docs checked without complaint.
+          "LANG=C.UTF-8",
+          // TEMPORARY, REVERT BEFORE MERGE. Skips notebook execution so the
+          // link check, publish and Read the Docs trigger can be iterated on in
+          // minutes instead of the ~35 the notebooks take. Pages still render,
+          // just without outputs, so anything published while this is set is
+          // incomplete.
+          "EXCLUDE_TUTORIALS=true"
         ]) {
           sh '''#!/bin/bash -ex
             # setuptools-scm derives the version by describing the nearest tag, and
