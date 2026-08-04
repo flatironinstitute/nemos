@@ -9,9 +9,18 @@ catchError {
   timeout(time: 3, unit: 'HOURS') {
     buildPod(context: 'jenkins', cpus: 8) {
       stage('docs') {
+        // GIT_COMMIT is not exported into a pipeline's environment, so the built SHA
+        // is read from the source checkout here, before the publish step switches
+        // into the documentation clone where HEAD is that repository's commit.
+        // Writing an empty marker succeeds silently and only surfaces as a rejected
+        // Read the Docs build minutes later, hence the check.
+        def builtCommit = sh(returnStdout: true, script: 'git rev-parse HEAD').trim()
+        if (!builtCommit) error('could not determine the commit being built')
+
         withEnv([
           "HOME=$WORKSPACE",
           "OMP_NUM_THREADS=8",
+          "BUILT_COMMIT=${builtCommit}",
           // In the C locale Ruby sets its default external encoding to US-ASCII
           // and nokogiri raises on the first multi-byte character in the rendered
           // HTML, so htmlproofer fails on pages Read the Docs checked without
@@ -95,7 +104,7 @@ catchError {
                   # READTHEDOCS_GIT_COMMIT_HASH, so a tree built from a different
                   # commit is never served. The prune workflow in that repository
                   # also uses it to locate published trees.
-                  echo "$GIT_COMMIT" > "$dest/.nemos-commit"
+                  echo "$BUILT_COMMIT" > "$dest/.nemos-commit"
 
                   # -f because generated trees carry .gitignore entries covering
                   # their own index.html files.
