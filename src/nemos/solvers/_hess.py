@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Any
 
 # --- Properties ---
 
@@ -112,6 +113,7 @@ def combine_structure(s1, s2) -> type:
 class HessianTag:
     structure: type
     property: type
+    batch_axes: Any = None
 
 
 def combine_hessian_tags(
@@ -121,6 +123,8 @@ def combine_hessian_tags(
 
     Valid when the total objective is a sum of two functions (e.g. loss + regularizer),
     since the Hessian of a sum is the sum of the Hessians.
+
+    The batch_axes are taken from t1, which will typically be the model tag.
     """
     if t1 is None or t2 is None:
         return None
@@ -128,4 +132,5 @@ def combine_hessian_tags(
     return HessianTag(
         structure=combine_structure(t1.structure, t2.structure),
         property=prop,
+        batch_axes=t1.batch_axes,
     )

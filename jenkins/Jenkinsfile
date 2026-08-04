@@ -1,0 +1,148 @@
+props = [
+  disableConcurrentBuilds(abortPrevious: true),
+  buildDiscarder(logRotator(numToKeepStr: '8', daysToKeepStr: '20'))
+]
+
+properties(props)
+
+catchError {
+  timeout(time: 3, unit: 'HOURS') {
+    buildPod(context: 'jenkins', cpus: 8) {
+      stage('docs') {
+        // GIT_COMMIT is not exported into a pipeline's environment, so the built SHA
+        // is read from the source checkout here, before the publish step switches
+        // into the documentation clone where HEAD is that repository's commit.
+        // Writing an empty marker succeeds silently and only surfaces as a rejected
+        // Read the Docs build minutes later, hence the check.
+        def builtCommit = sh(returnStdout: true, script: 'git rev-parse HEAD').trim()
+        if (!builtCommit) error('could not determine the commit being built')
+
+        withEnv([
+          "HOME=$WORKSPACE",
+          "OMP_NUM_THREADS=8",
+          "BUILT_COMMIT=${builtCommit}",
+          // In the C locale Ruby sets its default external encoding to US-ASCII
+          // and nokogiri raises on the first multi-byte character in the rendered
+          // HTML, so htmlproofer fails on pages Read the Docs checked without
+          // complaint. LANG alone was not enough: it is outranked by the LC_ALL
+          // the pod already exports. RUBYOPT does not consult the locale at all.
+          "LC_ALL=C.UTF-8",
+          "RUBYOPT=-EUTF-8"
+        ]) {
+          sh '''#!/bin/bash -ex
+            python3.12 -m venv $HOME/venv
+            source $HOME/venv/bin/activate
+            pip install -U pip setuptools
+            pip install ".[docs]"
+            pip freeze
+
+            # Recorded so a slow build can be compared against the pod it landed on.
+            nproc
+
+            # nb_execution_mode is "cache" in conf.py for local iteration. Forcing
+            # execution here keeps the build honest: a notebook that a source change
+            # broke must fail, not be served from a cache entry that predates it.
+            python -m sphinx -T -b html -d docs/_build/doctrees \
+              -D language=en \
+              -D nb_execution_mode=force \
+              docs docs/_build/html
+          '''
+          sh '''#!/bin/bash -ex
+            # Recorded because a C locale here makes nokogiri read UTF-8 pages as
+            # US-ASCII and abort, which looks nothing like a link-check failure.
+            locale
+            ruby -e 'p Encoding.default_external'
+
+            htmlproofer docs/_build/html --checks Links,Scripts,Images --allow-missing-href --ignore-urls "https://news.ycombinator.com/item?id=41901475,https://fonts.gstatic.com,/scikit-learn\\.org/,https://celltypes.brain-map.org/experiment/electrophysiology/478498617,https://www.jneurosci.org/content/25/47/11003,https://www.nature.com/articles/s41467-017-01908-3,https://doi.org/10.1038/s41467-017-01908-3,https://doi.org/10.1016/j.cell.2020.09.057,https://www.taylorfrancis.com/books/mono/10.4324/9780203774441/applied-multiple-regression-correlation-analysis-behavioral-sciences-jacob-cohen-patricia-cohen-stephen-west-leona-aiken" --assume-extension --check-external-hash --ignore-status-codes 0,302,400,403,406,503 --ignore-files "/.+\\/_static\\/.+/","/.+\\/stubs\\/.+/","/.+\\/tutorials/plot_02_head_direction.+/","/.+\\/how_to_guide\\/plot_06_sklearn_pipeline_cv_demo.+/","/.+\\/tutorials\\/plot_03_grid_cells.+/","/.+\\/tutorials\\/plot_06_calcium_imaging.+/"
+
+            htmlproofer docs/_build/html/tutorials/plot_02_head_direction.html --checks Links,Scripts --allow-missing-href --ignore-urls "https://www.jneurosci.org/content/25/47/11003" --ignore-status-codes 400
+          '''
+
+          // Only what Read the Docs actually serves: open pull requests, tags, and
+          // main. Read the Docs has no "development" version, so publishing that
+          // branch would leave a tree nothing serves and the trigger below would
+          // skip on 404. Every other branch is still built and link checked above.
+          def publishable = env.TAG_NAME ||
+            env.BRANCH_NAME.startsWith('PR-') ||
+            env.BRANCH_NAME == 'main'
+
+          if (publishable) {
+            lock('nemos_publish') {
+              def scm = scmGit(
+                branches: [[name: 'refs/heads/main']],
+                userRemoteConfigs: [[
+                  credentialsId: 'github-jenkins',
+                  url: 'https://github.com/flatironinstitute/nemos-documentation.git'
+                ]]
+              )
+              dir(path: 'published-docs') {
+                checkout(changelog: false, poll: false, scm: scm)
+                sh '''#!/bin/bash -ex
+                  if [[ "$BRANCH_NAME" =~ ^PR- ]]; then
+                     out_dir="pulls/${BRANCH_NAME#PR-}"
+                  elif [[ -n "$TAG_NAME" ]]; then
+                     out_dir="tags/$TAG_NAME"
+                  else
+                     out_dir="branch/$BRANCH_NAME"
+                  fi
+
+                  dest="docs/$out_dir"
+                  rm -rf "$dest"
+                  mkdir -p "$dest"
+                  cp -rp "$WORKSPACE/docs/_build/html/." "$dest"
+
+                  # Read back by the Read the Docs build and compared against
+                  # READTHEDOCS_GIT_COMMIT_HASH, so a tree built from a different
+                  # commit is never served. The prune workflow in that repository
+                  # also uses it to locate published trees.
+                  echo "$BUILT_COMMIT" > "$dest/.nemos-commit"
+
+                  # -f because generated trees carry .gitignore entries covering
+                  # their own index.html files.
+                  git add -A -f docs
+                  GIT_COMMITTER_EMAIL="jenkins@flatironinstitute.org" GIT_COMMITTER_NAME="Flatiron Jenkins" \
+                    git commit --allow-empty \
+                      --author='Flatiron Jenkins <jenkins@flatironinstitute.org>' \
+                      -m "Generated documentation for $out_dir" -m "$BUILD_TAG"
+                '''
+                gitPush(gitScm: scm, targetBranch: 'main', targetRepo: 'origin')
+              }
+            }
+            withCredentials([string(credentialsId: 'rtd-nemos-token', variable: 'RTD_TOKEN')]) {
+              // Single quotes here are required: a double-quoted block would let
+              // Groovy interpolate RTD_TOKEN into the script, exposing it in the log.
+              sh '''#!/bin/bash -ex
+                if [[ "$BRANCH_NAME" =~ ^PR- ]]; then
+                   version="${BRANCH_NAME#PR-}"
+                elif [[ -n "$TAG_NAME" ]]; then
+                   version="$TAG_NAME"
+                elif [[ "$BRANCH_NAME" == "main" ]]; then
+                   version="latest"
+                else
+                   version="$BRANCH_NAME"
+                fi
+
+                # Read the Docs may not track every published branch, so a
+                # missing version is a skip; anything else, a rejected token for
+                # instance, fails the build.
+                status=$(curl -sS -o /tmp/rtd-response -w '%{http_code}' -X POST \
+                  -H "Authorization: Token $RTD_TOKEN" \
+                  "https://app.readthedocs.org/api/v3/projects/nemos/versions/$version/builds/")
+                cat /tmp/rtd-response
+
+                case "$status" in
+                  2*)   ;;
+                  404)  echo "No Read the Docs version '$version', nothing to trigger." ;;
+                  *)    echo "Read the Docs trigger failed with status $status"; exit 1 ;;
+                esac
+              '''
+            }
+          } else {
+            echo "Not publishing ${env.BRANCH_NAME}: built and link checked only."
+          }
+        }
+      }
+    }
+  }
+}
+emailFailure()

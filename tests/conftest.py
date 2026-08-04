@@ -264,18 +264,16 @@ def initialize_feature_mask_for_population_glm(
     Returns
     -------
     :
-        A feature mask with all ones. If coef is provided, returns ones_like(coef).
-        Otherwise, if X is a dict, returns a dict with arrays
-        of shape (n_neurons,) for each key.
-        If X is an array, returns an array of shape (n_features, n_neurons).
+        A feature mask with all ones, shaped like the coefficients it masks. If coef is
+        provided, returns ones_like(coef). Otherwise each leaf of X contributes a mask of
+        shape (n_features_in_leaf, n_neurons, *extra_shape).
     """
     extra_shape = (n_classes,) if n_classes else ()
     if coef is not None:
         return jax.tree_util.tree_map(lambda c: jnp.ones(c.shape), coef)
-    if isinstance(X, dict):
-        return jax.tree_util.tree_map(lambda x: jnp.ones((n_neurons, *extra_shape)), X)
-    else:
-        return jnp.ones((X.shape[1], n_neurons, *extra_shape))
+    return jax.tree_util.tree_map(
+        lambda x: jnp.ones((x.shape[1], n_neurons, *extra_shape)), X
+    )
 
 
 DEFAULT_KWARGS = {
