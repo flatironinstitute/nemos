@@ -27,13 +27,7 @@ catchError {
           // complaint. LANG alone was not enough: it is outranked by the LC_ALL
           // the pod already exports. RUBYOPT does not consult the locale at all.
           "LC_ALL=C.UTF-8",
-          "RUBYOPT=-EUTF-8",
-          // TEMPORARY, REVERT BEFORE MERGE. Skips notebook execution so the
-          // link check, publish and Read the Docs trigger can be iterated on in
-          // minutes instead of the ~35 the notebooks take. Pages still render,
-          // just without outputs, so anything published while this is set is
-          // incomplete.
-          "EXCLUDE_TUTORIALS=true"
+          "RUBYOPT=-EUTF-8"
         ]) {
           sh '''#!/bin/bash -ex
             python3.12 -m venv $HOME/venv
@@ -59,21 +53,18 @@ catchError {
             locale
             ruby -e 'p Encoding.default_external'
 
-            # TEMPORARY, REVERT WITH EXCLUDE_TUTORIALS. The gallery thumbnails under
-            # _static/thumbnails are written during notebook execution, so skipping
-            # execution makes the Images check fail on all 14 of them.
-            htmlproofer docs/_build/html --checks Links,Scripts --allow-missing-href --ignore-urls "https://news.ycombinator.com/item?id=41901475,https://fonts.gstatic.com,/scikit-learn\\.org/,https://celltypes.brain-map.org/experiment/electrophysiology/478498617,https://www.jneurosci.org/content/25/47/11003,https://www.nature.com/articles/s41467-017-01908-3,https://doi.org/10.1038/s41467-017-01908-3,https://doi.org/10.1016/j.cell.2020.09.057,https://www.taylorfrancis.com/books/mono/10.4324/9780203774441/applied-multiple-regression-correlation-analysis-behavioral-sciences-jacob-cohen-patricia-cohen-stephen-west-leona-aiken" --assume-extension --check-external-hash --ignore-status-codes 0,302,400,403,406,503 --ignore-files "/.+\\/_static\\/.+/","/.+\\/stubs\\/.+/","/.+\\/tutorials/plot_02_head_direction.+/","/.+\\/how_to_guide\\/plot_06_sklearn_pipeline_cv_demo.+/","/.+\\/tutorials\\/plot_03_grid_cells.+/","/.+\\/tutorials\\/plot_06_calcium_imaging.+/"
+            htmlproofer docs/_build/html --checks Links,Scripts,Images --allow-missing-href --ignore-urls "https://news.ycombinator.com/item?id=41901475,https://fonts.gstatic.com,/scikit-learn\\.org/,https://celltypes.brain-map.org/experiment/electrophysiology/478498617,https://www.jneurosci.org/content/25/47/11003,https://www.nature.com/articles/s41467-017-01908-3,https://doi.org/10.1038/s41467-017-01908-3,https://doi.org/10.1016/j.cell.2020.09.057,https://www.taylorfrancis.com/books/mono/10.4324/9780203774441/applied-multiple-regression-correlation-analysis-behavioral-sciences-jacob-cohen-patricia-cohen-stephen-west-leona-aiken" --assume-extension --check-external-hash --ignore-status-codes 0,302,400,403,406,503 --ignore-files "/.+\\/_static\\/.+/","/.+\\/stubs\\/.+/","/.+\\/tutorials/plot_02_head_direction.+/","/.+\\/how_to_guide\\/plot_06_sklearn_pipeline_cv_demo.+/","/.+\\/tutorials\\/plot_03_grid_cells.+/","/.+\\/tutorials\\/plot_06_calcium_imaging.+/"
 
             htmlproofer docs/_build/html/tutorials/plot_02_head_direction.html --checks Links,Scripts --allow-missing-href --ignore-urls "https://www.jneurosci.org/content/25/47/11003" --ignore-status-codes 400
           '''
 
-          // Open pull requests get a rendered preview, and so do the branches and
-          // tags Read the Docs serves. Every other branch is built and link
-          // checked above but not published, so the documentation repository
-          // never accumulates trees that nothing links to.
+          // Only what Read the Docs actually serves: open pull requests, tags, and
+          // main. Read the Docs has no "development" version, so publishing that
+          // branch would leave a tree nothing serves and the trigger below would
+          // skip on 404. Every other branch is still built and link checked above.
           def publishable = env.TAG_NAME ||
             env.BRANCH_NAME.startsWith('PR-') ||
-            env.BRANCH_NAME in ['main', 'development']
+            env.BRANCH_NAME == 'main'
 
           if (publishable) {
             lock('nemos_publish') {
