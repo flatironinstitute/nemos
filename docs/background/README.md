@@ -70,4 +70,16 @@ plot_03_1D_convolution.md
 ```
 :::
 
+:::
+
+:::{grid-item-card}
+
+```{toctree}
+:maxdepth: 2
+
+efgp.md
+```
+
+:::
+
 ::::

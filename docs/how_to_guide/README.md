@@ -95,18 +95,6 @@ glm_for_classification.md
 finegrained_regularization.md
 ```
 
-:::
-
-:::{grid-item-card}
-
-```{toctree}
-:maxdepth: 2
-
-efgp.md
-```
-
-:::
-
 ::::
 
 ## Feature Engineering

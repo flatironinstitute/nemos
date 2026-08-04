@@ -23,7 +23,6 @@ jax.config.update('jax_enable_x64', True)
 
 import jax.numpy as jnp
 import jax.random as jr
-from jax.scipy.sparse.linalg import cg
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 mpl.rcParams['axes.spines.right'] = False
@@ -147,6 +146,7 @@ Once we specify our prior beliefs by choosing a kernel, finding the predictive m
 When we try it out on the synthetic dataset from above, we can see that the GP is doing a fairly good job at capturing the relationship between the stimulus strength and the neural firing rate.
 
 ```{code-cell} ipython3
+@jax.jit
 def compute_predictive_mean(pred_stimuli, obs_stimuli, obs_firing_rate, noise_sigma):
     n_obs = obs_stimuli.shape[0]
     K_obs  = se_kernel(obs_stimuli, obs_stimuli) + (noise_sigma**2) * jnp.eye(n_obs)
@@ -173,6 +173,12 @@ axes.legend(frameon = False)
 Although computing the predictive mean is quite simple, it requires inverting an $n \times n$ matrix, where $n$ is the number of observations.
 This is an $\mathcal{O}(n^3)$ operation, which becomes prohibitive for increasingly large neuroscientific datasets.
 
+:::{attention}
+For timing comparisons in this notebook, we will use the ability to compile functions ahead-of-time in `jax`.
+This allows us to compare the pure runtime of GP inference approaches without timing artifacts due to compilation time.
+In real-world uses, the compilation time is typically negligible relative to the inference time, especially as datasets get larger.
+:::
+
 ```{code-cell} ipython3
 import time
 
@@ -180,14 +186,14 @@ dataset_sizes = jnp.logspace(1, 4, num = 9, dtype = int)
 times = []
 for (i, size) in enumerate(dataset_sizes):
     key = jr.key(seed = i)
-    compile_key, test_key = jr.split(key)
-    stimuli, firing_rate, true_firing_rate = generate_observations(compile_key, size, stimulus_min, stimulus_max, noise_sigma)
-    mu_pred = compute_predictive_mean(pred_stimuli, stimuli, firing_rate, noise_sigma).block_until_ready()
-    stimuli, firing_rate, true_firing_rate = generate_observations(test_key, size, stimulus_min, stimulus_max, noise_sigma)
+    stimuli, firing_rate, true_firing_rate = generate_observations(key, size, stimulus_min, stimulus_max, noise_sigma)
+    traced = compute_predictive_mean.trace(pred_stimuli, stimuli, firing_rate, noise_sigma)
+    lowered = traced.lower()
+    compiled = lowered.compile()
     start_time = time.perf_counter()
-    mu_pred = compute_predictive_mean(pred_stimuli, stimuli, firing_rate, noise_sigma).block_until_ready()
-    total_time = time.perf_counter() - start_time
-    times.append(total_time)
+    mu_pred = compiled(pred_stimuli, stimuli, firing_rate, noise_sigma)
+    inference_time = time.perf_counter() - start_time
+    times.append(inference_time)
 times = jnp.array(times)
 ```
 
@@ -244,14 +250,13 @@ axes.legend(frameon = False)
 With such a high-quality approximation to the kernel, the EFGP approximate predictions are practically indistinguishable from the exact GP prediction.
 
 ```{code-cell} ipython3
-def compute_efgp_mean(pred_stimuli, obs_stimuli, obs_firing_rate, noise_sigma):
-    obs_eval = basis.evaluate(obs_stimuli)
+@jax.jit
+def compute_efgp_mean(pred_eval, obs_eval, obs_firing_rate, noise_sigma):
     n_weights = obs_eval.shape[1]
     augmented_K_obs = (obs_eval.T @ obs_eval) + (noise_sigma**2) * jnp.eye(n_weights)
     L = jnp.linalg.cholesky(augmented_K_obs)
     beta = jnp.linalg.solve(L.T, jnp.linalg.solve(L, obs_eval.T @ obs_firing_rate))
     w = (obs_firing_rate - obs_eval @ beta) / (noise_sigma ** 2)
-    pred_eval = basis.evaluate(pred_stimuli)
     K_cross = pred_eval @ obs_eval.T
     mu_pred = K_cross @ w
     return mu_pred
@@ -262,7 +267,9 @@ fig, axes = plt.subplots(1, 1)
 axes.scatter(obs_stimuli, obs_firing_rate, s = 10, c = 'k', label = 'observations', zorder = 5)
 mu_pred = compute_predictive_mean(pred_stimuli, obs_stimuli, obs_firing_rate, noise_sigma)
 axes.plot(pred_stimuli, mu_pred, color = 'r', lw = 2, label = 'exact predictive mean', alpha = 0.75)
-approx_mu_pred = compute_efgp_mean(pred_stimuli, obs_stimuli, obs_firing_rate, noise_sigma)
+pred_eval = basis.evaluate(pred_stimuli)
+obs_eval = basis.evaluate(obs_stimuli)
+approx_mu_pred = compute_efgp_mean(pred_eval, obs_eval, obs_firing_rate, noise_sigma)
 axes.plot(pred_stimuli, approx_mu_pred, color = 'b', lw = 2, label = 'efgp predictive mean', alpha = 0.75)
 axes.set_xlabel('stimulus')
 axes.set_ylabel('change from baseline firing rate')
@@ -276,14 +283,16 @@ dataset_sizes = jnp.logspace(1, 4, num = 9, dtype = int)
 efgp_times = []
 for (i, size) in enumerate(dataset_sizes):
     key = jr.key(seed = i)
-    compile_key, test_key = jr.split(key)
-    stimuli, firing_rate, true_firing_rate = generate_observations(compile_key, size, stimulus_min, stimulus_max, noise_sigma)
-    mu_pred = compute_efgp_mean(pred_stimuli, stimuli, firing_rate, noise_sigma).block_until_ready()
-    stimuli, firing_rate, true_firing_rate = generate_observations(test_key, size, stimulus_min, stimulus_max, noise_sigma)
+    stimuli, firing_rate, true_firing_rate = generate_observations(key, size, stimulus_min, stimulus_max, noise_sigma)
+    pred_eval = basis.evaluate(pred_stimuli)
+    obs_eval = basis.evaluate(stimuli)
+    traced = compute_efgp_mean.trace(pred_eval, obs_eval, firing_rate, noise_sigma)
+    lowered = traced.lower()
+    compiled = lowered.compile()
     start_time = time.perf_counter()
-    mu_pred = compute_efgp_mean(pred_stimuli, stimuli, firing_rate, noise_sigma).block_until_ready()
-    total_time = time.perf_counter() - start_time
-    efgp_times.append(total_time)
+    mu_pred = compiled(pred_eval, obs_eval, firing_rate, noise_sigma).block_until_ready()
+    inference_time = time.perf_counter() - start_time
+    efgp_times.append(inference_time)
 efgp_times = jnp.array(efgp_times)
 ```
 
