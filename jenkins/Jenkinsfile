@@ -14,6 +14,11 @@ catchError {
           "OMP_NUM_THREADS=8"
         ]) {
           sh '''#!/bin/bash -ex
+            # setuptools-scm derives the version from git tags, which the checkout
+            # omits. Without this the wheel builds as 0.0.1.dev*, and conf.py reads
+            # that back into the version shown on every rendered page.
+            git fetch --tags
+
             python3.12 -m venv $HOME/venv
             source $HOME/venv/bin/activate
             pip install -U pip setuptools
