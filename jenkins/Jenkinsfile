@@ -25,13 +25,6 @@ catchError {
           "EXCLUDE_TUTORIALS=true"
         ]) {
           sh '''#!/bin/bash -ex
-            # setuptools-scm derives the version by describing the nearest tag, and
-            # the checkout is shallow at depth 16 while the latest tag is hundreds of
-            # commits back. Fetching tag refs alone leaves them unreachable, so the
-            # history has to be deepened or the wheel builds as 0.0.1.dev*, which
-            # conf.py then reads back into the version shown on every rendered page.
-            git fetch --unshallow --tags
-
             python3.12 -m venv $HOME/venv
             source $HOME/venv/bin/activate
             pip install -U pip setuptools
