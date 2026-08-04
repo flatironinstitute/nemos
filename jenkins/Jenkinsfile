@@ -45,6 +45,11 @@ catchError {
               docs docs/_build/html
           '''
           sh '''#!/bin/bash -ex
+            # Recorded because a C locale here makes nokogiri read UTF-8 pages as
+            # US-ASCII and abort, which looks nothing like a link-check failure.
+            locale
+            ruby -e 'p Encoding.default_external'
+
             htmlproofer docs/_build/html --checks Links,Scripts,Images --allow-missing-href --ignore-urls "https://news.ycombinator.com/item?id=41901475,https://fonts.gstatic.com,/scikit-learn\\.org/,https://celltypes.brain-map.org/experiment/electrophysiology/478498617,https://www.jneurosci.org/content/25/47/11003,https://www.nature.com/articles/s41467-017-01908-3,https://doi.org/10.1038/s41467-017-01908-3,https://doi.org/10.1016/j.cell.2020.09.057,https://www.taylorfrancis.com/books/mono/10.4324/9780203774441/applied-multiple-regression-correlation-analysis-behavioral-sciences-jacob-cohen-patricia-cohen-stephen-west-leona-aiken" --assume-extension --check-external-hash --ignore-status-codes 0,302,400,403,406,503 --ignore-files "/.+\\/_static\\/.+/","/.+\\/stubs\\/.+/","/.+\\/tutorials/plot_02_head_direction.+/","/.+\\/how_to_guide\\/plot_06_sklearn_pipeline_cv_demo.+/","/.+\\/tutorials\\/plot_03_grid_cells.+/","/.+\\/tutorials\\/plot_06_calcium_imaging.+/"
 
             htmlproofer docs/_build/html/tutorials/plot_02_head_direction.html --checks Links,Scripts --allow-missing-href --ignore-urls "https://www.jneurosci.org/content/25/47/11003" --ignore-status-codes 400
