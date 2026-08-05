@@ -1960,9 +1960,12 @@ class PopulationGLM(GLM):
     """
 
     _validator_class = PopulationGLMValidator
+    # positive semidefinite like the single-neuron GLM: the unpenalized block can be
+    # singular (a masked-out coefficient has no curvature). Ridge promotes it to
+    # positive definite through ``_hess_property_override``.
     _hess_tag: HessianTag = HessianTag(
         structure=BlockDiagonal,
-        property=PositiveDefinite,
+        property=PositiveSemiDefinite,
         batch_axes=GLMParams(1, 0),
     )
 
