@@ -198,7 +198,7 @@ class Observations(Base, abc.ABC):
     @abc.abstractmethod
     def deviance(
         self,
-        spike_counts: jnp.ndarray,
+        observations: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
     ):
@@ -206,7 +206,7 @@ class Observations(Base, abc.ABC):
 
         Parameters
         ----------
-        spike_counts:
+        observations:
             The observations. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
         predicted_rate:
             The predicted firing rates. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
@@ -582,7 +582,7 @@ class PoissonObservations(Observations):
 
     def deviance(
         self,
-        spike_counts: jnp.ndarray,
+        observations: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
@@ -590,7 +590,7 @@ class PoissonObservations(Observations):
 
         Parameters
         ----------
-        spike_counts:
+        observations:
             The observations. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
         predicted_rate:
             The predicted firing rates. Shape ``(n_time_bins, )``  or ``(n_time_bins, n_neurons)`` for
@@ -620,9 +620,9 @@ class PoissonObservations(Observations):
         """
         # this takes care of 0s in the log
         ratio = jnp.clip(
-            spike_counts / predicted_rate, jnp.finfo(predicted_rate.dtype).eps, jnp.inf
+            observations / predicted_rate, jnp.finfo(predicted_rate.dtype).eps, jnp.inf
         )
-        deviance = 2 * (spike_counts * jnp.log(ratio) - (spike_counts - predicted_rate))
+        deviance = 2 * (observations * jnp.log(ratio) - (observations - predicted_rate))
         return deviance
 
     def estimate_scale(
@@ -797,7 +797,7 @@ class GammaObservations(Observations):
 
     def deviance(
         self,
-        neural_activity: jnp.ndarray,
+        observations: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
@@ -805,7 +805,7 @@ class GammaObservations(Observations):
 
         Parameters
         ----------
-        neural_activity:
+        observations:
             The observations. Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
         predicted_rate:
             The predicted firing rates. Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
@@ -833,9 +833,9 @@ class GammaObservations(Observations):
         log-likelihood. Lower values of deviance indicate a better fit.
 
         """
-        y_mu = jnp.clip(neural_activity / predicted_rate, min=jnp.finfo(float).eps)
+        y_mu = jnp.clip(observations / predicted_rate, min=jnp.finfo(float).eps)
         resid_dev = 2 * (
-            -jnp.log(y_mu) + (neural_activity - predicted_rate) / predicted_rate
+            -jnp.log(y_mu) + (observations - predicted_rate) / predicted_rate
         )
         return resid_dev / scale
 
@@ -1653,7 +1653,7 @@ class GaussianObservations(Observations):
 
     def deviance(
         self,
-        neural_activity: jnp.ndarray,
+        observations: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
@@ -1661,7 +1661,7 @@ class GaussianObservations(Observations):
 
         Parameters
         ----------
-        neural_activity:
+        observations:
             The observations. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
         predicted_rate:
             The predicted firing rates. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
@@ -1685,7 +1685,7 @@ class GaussianObservations(Observations):
         the scale (variance) of the model. Lower values of deviance indicate a better fit.
 
         """
-        resid_dev = jnp.power(neural_activity - predicted_rate, 2)
+        resid_dev = jnp.power(observations - predicted_rate, 2)
         return resid_dev / scale
 
     def estimate_scale(
