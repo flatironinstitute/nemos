@@ -67,6 +67,7 @@ dev = [
     "h5py",                         # For testing lazy array loading from HDF5 files
     "fsspec",
     "tqdm",
+    "pyyaml",                       # Parses notebook front matter in scripts/check_notebook_metadata.py
 ]
 docs = [
     "pynapple>=0.11",               # Required for nap.compute_event_triggered_average(...) in a tutorial
