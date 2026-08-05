@@ -39,7 +39,10 @@ from nemos.basis._basis import (
     MultiplicativeBasis,
     add_docstring,
 )
-from nemos.basis._basis_mixin import AtomicBasisMixin, EvalBasisMixin
+from nemos.basis._basis_mixin import (
+    AtomicBasisMixin,
+    BoundedEvalBasisMixin,
+)
 from nemos.basis._composition_utils import generate_basis_label_pair, set_input_shape
 from nemos.basis._decaying_exponential import OrthExponentialBasis
 from nemos.basis._fourier_basis import FourierBasis
@@ -53,14 +56,14 @@ from nemos.basis._zero_basis import ZeroBasis
 from nemos.utils import pynapple_concatenate_numpy
 
 
-class EvalBasis2D(EvalBasisMixin, AtomicBasisMixin, Basis):
+class EvalBasis2D(BoundedEvalBasisMixin, AtomicBasisMixin, Basis):
     """Eval basis 2D for test purposes."""
 
     def __init__(self, ndim, bounds=None, label=None):
         self._n_inputs = ndim
         Basis.__init__(self)
         AtomicBasisMixin.__init__(self, n_basis_funcs=5, label=label)
-        EvalBasisMixin.__init__(self, bounds=bounds)
+        BoundedEvalBasisMixin.__init__(self, bounds=bounds)
 
     def evaluate(self, *x):
         # example implementation
@@ -149,15 +152,15 @@ def compare_basis(b1, b2):
     else:
         decay_rates_b1 = b1.__dict__.get("_decay_rates", -1)
         decay_rates_b2 = b2.__dict__.get("_decay_rates", -1)
-        assert np.array_equal(decay_rates_b1, decay_rates_b2)
+        np.testing.assert_array_equal(decay_rates_b1, decay_rates_b2)
         freqs1 = b1.__dict__.get("_frequencies", [-1])
         freqs2 = b2.__dict__.get("_frequencies", [-1])
         assert all(np.all(fi == fj) for fi, fj in zip(freqs1, freqs2))
         freqs1 = b1.__dict__.get("_freq_combinations", -1)
         freqs2 = b2.__dict__.get("_freq_combinations", -1)
-        assert np.all(freqs1 == freqs2)
-        f1, f2 = b1.__dict__.pop("_funcs", [True]), b2.__dict__.pop("_funcs", [True])
-        assert all(fi == fj for fi, fj in zip(f1, f2))
+        np.testing.assert_array_equal(freqs1, freqs2)
+        f1, f2 = b1.__dict__.get("_funcs", [True]), b2.__dict__.get("_funcs", [True])
+        assert all(fi == fj for fi, fj in zip(f1, f2, strict=True))
         d1 = filter_attributes(
             b1,
             exclude_keys=[
@@ -165,6 +168,7 @@ def compare_basis(b1, b2):
                 "_parent",
                 "_frequencies",
                 "_freq_combinations",
+                "_funcs",
             ],
         )
         d2 = filter_attributes(
@@ -174,6 +178,7 @@ def compare_basis(b1, b2):
                 "_parent",
                 "_frequencies",
                 "_freq_combinations",
+                "_funcs",
             ],
         )
         assert d1 == d2
@@ -2245,10 +2250,9 @@ class TestZeroBasis(BasisFuncsTesting):
         with pytest.raises(AttributeError):
             bas.n_basis_funcs = 11
 
-    def test_bounds_not_settable(self):
+    def test_has_no_bounds(self):
         bas = basis.Zero()
-        with pytest.raises(AttributeError):
-            bas.bounds = (0, 1)
+        assert not hasattr(bas, "bounds")
 
 
 class TestIdentityBasis(BasisFuncsTesting):
@@ -3264,49 +3268,25 @@ class TestFourierBasis(BasisFuncsTesting):
     @pytest.mark.parametrize(
         "frequency_mask, expectation, output_pairs",
         [
+            # "all" keeps the 8 half-space combinations of the [0, 1, 2] x
+            # [0, 1] axes (trailing axis mirrored to [-1, 0, 1]), DC first.
+            # Valid array masks are covered by test_frequency_mask_array_init_2d
+            # and test_frequency_mask_array_filters_current_combinations, since
+            # their expected length differs between the two paths below.
             (
                 None,
                 does_not_raise(),
                 np.array(
                     [
-                        [
-                            0,
-                            0,
-                            1,
-                            1,
-                            2,
-                            2,
-                        ],
-                        [
-                            0,
-                            1,
-                            0,
-                            1,
-                            0,
-                            1,
-                        ],
+                        [0, 0, 1, 1, 1, 2, 2, 2],
+                        [0, 1, -1, 0, 1, -1, 0, 1],
                     ]
                 ),
-            ),
-            (
-                np.array([[1, 0], [1, 1], [0, 1]]),
-                does_not_raise(),
-                np.array([[0, 1, 1, 2], [0, 0, 1, 1]]),
-            ),
-            (
-                np.array([[False, True], [False, False], [True, True]]),
-                does_not_raise(),
-                np.array([[0, 2, 2], [1, 0, 1]]),
             ),
             (
                 lambda *x: x[0] < 2 and x[1] == 1,
                 does_not_raise(),
                 np.array([[0, 1], [1, 1]]),
-            ),
-            (
-                np.array([[1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]),
-                does_not_raise(),
-                np.array([[0, 1, 1, 2], [0, 0, 1, 1]]),
             ),
             (
                 np.array([1.0, 0.0, 5.0]),
@@ -3334,7 +3314,7 @@ class TestFourierBasis(BasisFuncsTesting):
                 np.array([1, 0]),
                 pytest.raises(
                     ValueError,
-                    match="The frequency mask for a 2-dimensional Fourier basis must be",
+                    match="Mis-shaped ``frequency_mask``",
                 ),
                 None,
             ),
@@ -3376,22 +3356,8 @@ class TestFourierBasis(BasisFuncsTesting):
                 does_not_raise(),
                 np.array(
                     [
-                        [
-                            0,
-                            0,
-                            1,
-                            1,
-                            2,
-                            2,
-                        ],
-                        [
-                            0,
-                            1,
-                            0,
-                            1,
-                            0,
-                            1,
-                        ],
+                        [0, 0, 1, 1, 1, 2, 2, 2],
+                        [0, 1, -1, 0, 1, -1, 0, 1],
                     ]
                 ),
             ),
@@ -3401,22 +3367,8 @@ class TestFourierBasis(BasisFuncsTesting):
                 does_not_raise(),
                 np.array(
                     [
-                        [
-                            0,
-                            0,
-                            1,
-                            1,
-                            2,
-                            2,
-                        ],
-                        [
-                            0,
-                            1,
-                            0,
-                            1,
-                            0,
-                            1,
-                        ],
+                        [0, 0, 1, 1, 1, 2, 2, 2],
+                        [0, 1, -1, 0, 1, -1, 0, 1],
                     ]
                 ),
             ),
@@ -3444,6 +3396,71 @@ class TestFourierBasis(BasisFuncsTesting):
             # check setter directly
             bas.frequency_mask = frequency_mask
             np.testing.assert_array_equal(bas._freq_combinations, output_pairs)
+
+    @pytest.mark.parametrize("mode", ["eval"])
+    @pytest.mark.parametrize(
+        "frequency_mask, output_pairs",
+        [
+            # at construction the mask filters the default no-intercept
+            # combinations, i.e. the columns of ``masked_frequencies``:
+            # (0,1), (1,-1), (1,0), (1,1), (2,-1), (2,0), (2,1)
+            (
+                np.array([1, 0, 1, 0, 1, 0, 1]),
+                np.array([[0, 1, 2, 2], [1, 0, -1, 1]]),
+            ),
+            (
+                np.array([False, True, False, True, False, True, False]),
+                np.array([[1, 1, 2], [-1, 1, 0]]),
+            ),
+            (
+                np.ones(7),
+                np.array([[0, 1, 1, 1, 2, 2, 2], [1, -1, 0, 1, -1, 0, 1]]),
+            ),
+            (np.zeros(7), np.zeros((2, 0))),
+        ],
+    )
+    def test_frequency_mask_array_init_2d(self, mode, frequency_mask, output_pairs):
+        bas = self.cls[mode](
+            frequencies=[np.arange(3), np.arange(2)],
+            ndim=2,
+            frequency_mask=frequency_mask,
+        )
+        np.testing.assert_array_equal(bas.masked_frequencies, output_pairs)
+
+    @pytest.mark.parametrize("mode", ["eval"])
+    def test_frequency_mask_array_filters_current_combinations(self, mode):
+        # with ``frequency_mask=None`` all 8 half-space combinations are
+        # retained, DC first
+        bas = self.cls[mode](
+            frequencies=[np.arange(3), np.arange(2)], ndim=2, frequency_mask=None
+        )
+        all_pairs = np.asarray(bas.masked_frequencies)
+        assert all_pairs.shape == (2, 8)
+
+        # the mask indexes the current columns, so here the DC term is
+        # addressable and can be kept
+        mask = np.zeros(8, dtype=bool)
+        mask[[0, 3, 7]] = True
+        bas.frequency_mask = mask
+        np.testing.assert_array_equal(bas.masked_frequencies, all_pairs[:, mask])
+        assert bas.n_basis_funcs == 2 * 3 - 1  # no sine at the DC term
+
+        # a second mask filters the already-filtered combinations
+        bas.frequency_mask = np.array([True, False, True])
+        np.testing.assert_array_equal(bas.masked_frequencies, all_pairs[:, [0, 7]])
+
+    @pytest.mark.parametrize("mode", ["eval"])
+    @pytest.mark.parametrize("mask_shape", [(8,), (6,), (3, 2), (3, 3), (7, 1)])
+    def test_frequency_mask_wrong_shape(self, mode, mask_shape):
+        # the mask needs one entry per column of ``masked_frequencies``; at
+        # construction the default no-intercept selection leaves 7 columns,
+        # so anything but shape (7,) must raise
+        with pytest.raises(ValueError, match="Mis-shaped ``frequency_mask``"):
+            self.cls[mode](
+                frequencies=[np.arange(3), np.arange(2)],
+                ndim=2,
+                frequency_mask=np.ones(mask_shape),
+            )
 
     @pytest.mark.parametrize("mode", ["eval"])
     @pytest.mark.parametrize(
@@ -3486,15 +3503,17 @@ class TestFourierBasis(BasisFuncsTesting):
                 np.array([[0.0, 1.0, 2.0, 3.0, 4.0, 5.0]], dtype=np.float32),
                 does_not_raise(),
             ),
+            # at construction the mask has one entry per no-intercept
+            # combination [1, 2, 3, 4]
             (
-                [True, False, False, True, True],
+                [False, False, True, True],
                 5,
                 5,
-                np.array([[0.0, 3.0, 4.0]], dtype=np.float32),
+                np.array([[3.0, 4.0]], dtype=np.float32),
                 does_not_raise(),
             ),
             (
-                [True, False, False, True, True],
+                [False, False, True, True],
                 5,
                 6,
                 np.array([[1.0, 2.0, 3.0, 4.0, 5.0]], dtype=np.float32),
@@ -3565,36 +3584,29 @@ class TestFourierBasis(BasisFuncsTesting):
         "frequency_mask, ndim, expected_output_shape",
         [
             (None, 1, (1, 9)),  # 5 * 2 -1
-            (None, 2, (1, 49)),  # 5 * 5 * 2 -1
-            # drop tree frequencies
-            (jax.numpy.ones(5).at[1:4].set(0), 1, (1, 3)),  # (5 - 3) * 2 - 1
-            # drop tree elements, including 0
-            (jax.numpy.ones(5).at[:3].set(0), 1, (1, 4)),  # (5 - 3) * 2
+            # 2D half-space: |H| = ((2*4+1)**2 + 1) / 2 = 41 combinations; 2*41 - 1
+            (None, 2, (1, 81)),
+            # array masks at construction filter the no-intercept combinations:
+            # 1D that is the 4 frequencies [1, 2, 3, 4], 2D the 40 half-space
+            # combinations left after dropping the DC.
+            # keep frequencies {1, 4}: 2 * 2, no DC
+            (jax.numpy.ones(4).at[1:3].set(0), 1, (1, 4)),
+            # keep frequency {4} only: 2 * 1
+            (jax.numpy.ones(4).at[:3].set(0), 1, (1, 2)),
             (lambda x: x < 3.1, 1, (1, 7)),  # 4 * 2 - 1
-            # # The lambda func below returns true for 11 values:
-            # - (0, 0), (0, 1), (0, 2), (0, 3)
-            # - (1, 0), (1, 1), (1, 2)
-            # - (2, 0), (2, 1), (2, 2)
-            # - (3, 0)
-            (lambda x, y: np.sqrt(x**2 + y**2) < 3.1, 2, (1, 21)),  # 11 * 2 - 1
-            # set 3 entries to 0 from the 5 x 5 mask
+            # 15 half-space combinations have norm < 3.1 (mixed-sign pairs such
+            # as (1, -2), (2, -1) are now included); DC kept. 2*15 - 1
+            (lambda x, y: np.sqrt(x**2 + y**2) < 3.1, 2, (1, 29)),
+            # drop 3 of the 40 no-intercept combinations: 2*37
             (
-                jax.numpy.ones((5, 5))
-                .at[jax.numpy.array([1, 2, 3]), jax.numpy.array([2, 2, 4])]
-                .set(0),
+                jax.numpy.ones(40).at[jax.numpy.array([1, 2, 3])].set(0),
                 2,
-                (10, 43),  # (5 * 5 - 3) * 2 - 1
+                (10, 74),
             ),
-            # set 3 entries to 0 from the 5 x 5 mask, including (0, 0)
-            (
-                jax.numpy.ones((5, 5))
-                .at[jax.numpy.array([0, 2, 3]), jax.numpy.array([0, 2, 4])]
-                .set(0),
-                2,
-                (1, 44),  # (5 * 5 - 3) * 2
-            ),
-            (jax.numpy.zeros((5,)), 1, (1, 0)),
-            (jax.numpy.zeros((5, 5)), 2, (1, 0)),
+            # drop 1 of the 40 no-intercept combinations: 2*39
+            (jax.numpy.ones(40).at[0].set(0), 2, (1, 78)),
+            (jax.numpy.zeros((4,)), 1, (1, 0)),
+            (jax.numpy.zeros((40,)), 2, (1, 0)),
         ],
     )
     def test_n_basis_function_compute(

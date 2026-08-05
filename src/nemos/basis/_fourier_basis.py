@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
-import itertools
 import warnings
 from numbers import Number
-from typing import TYPE_CHECKING, Any, Callable, List, Literal, Optional, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    List,
+    Literal,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 import jax
 import jax.numpy as jnp
@@ -17,10 +25,14 @@ if TYPE_CHECKING:
     from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..type_casting import is_at_least_1d_numpy_array_like, support_pynapple
-from ..typing import FeatureMatrix
+from ..typing import Array, FeatureMatrix
 from ..utils import format_repr
 from ._basis import Basis, check_transform_input, min_max_rescale_samples
 from ._basis_mixin import AtomicBasisMixin
+
+# A collection of frequency arrays only needs to be indexable/sliceable and
+# iterable, hence ``Sequence``; each element is a NumPy or JAX ``Array``.
+FreqArrays = Sequence[Array]
 
 FREQUENCY_ERROR_MSGS = {
     "has_negative_values": "The provided frequencies contain negative values. Valid frequencies must be"
@@ -72,7 +84,7 @@ def _check_and_sort_frequencies(*frequencies) -> List[jnp.ndarray]:
     raise ValueError(_format_error_message(is_positive, is_int_like))
 
 
-def arange_constructor(arg: NDArray | int | Tuple[int, int]):
+def arange_constructor(arg: NDArray | int | Tuple[int, int]) -> jnp.ndarray:
     """
     Create an array of frequencies from different types of input.
 
@@ -144,7 +156,9 @@ def arange_constructor(arg: NDArray | int | Tuple[int, int]):
         raise TypeError("Each frequency must be an int or a 2-element tuple of ints.")
 
 
-def _process_tuple_frequencies(frequencies: tuple, ndim: int):
+def _process_tuple_frequencies(
+    frequencies: Tuple[int, int], ndim: int
+) -> List[jnp.ndarray]:
     """
     Process a tuple of frequencies and return the corresponding frequency arrays.
 
@@ -197,7 +211,7 @@ def _get_all_frequency_pairs(frequencies):
 
 
 def _get_frequency_pairs_from_callable(
-    frequency_mask: Callable[..., bool], frequencies: Tuple[jnp.ndarray, ...]
+    frequency_mask: Callable[..., bool], frequencies: List[jnp.ndarray]
 ):
     """
     Apply the callable assigned to `frequency_mask` to all frequency tuples.
@@ -207,22 +221,19 @@ def _get_frequency_pairs_from_callable(
     frequency_mask :
         A function with signature: frequency_mask(*freqs) -> bool (or 0/1).
     frequencies :
-        1D arrays of frequencies (one per dimension).
+        Non-negative 1D frequency arrays (one per dimension).
 
     Returns
     -------
     :
-        Shape (D, K): columns are the selected frequency tuples.
+        Shape (D, K): columns are the selected frequency tuples, taken from the
+        half-space combinations (DC first when kept).
     """
-    all_pairs = itertools.product(*frequencies)  # shape (D, N)
-
-    if not callable(frequency_mask):
-        raise TypeError(
-            "`frequency_mask` must be a callable like frequency_mask(*freqs) -> bool."
-        )
+    combinations = _combinator_builder(frequencies)  # (D, K), DC first
 
     selected = []
-    for j, freqs in enumerate(all_pairs):
+    for j in range(combinations.shape[1]):
+        freqs = np.asarray(combinations[:, j]).tolist()
         try:
             include = frequency_mask(*freqs)
         except Exception as e:
@@ -250,13 +261,111 @@ def _get_frequency_pairs_from_callable(
             )
 
         if include:
-            selected.append(jnp.asarray(freqs))
+            selected.append(j)
 
-    return (
-        jnp.stack(selected, axis=1)
-        if selected
-        else jnp.zeros((len(frequencies), 0), dtype=int)
-    )
+    if selected:
+        return combinations[:, jnp.asarray(selected)]
+    return jnp.zeros((len(frequencies), 0), dtype=int)
+
+
+def _signed_box_axes(freq_arrays: FreqArrays) -> List[Array]:
+    """Mirror every axis except the first to include negative frequencies.
+
+    The first axis stays non-negative; every other axis is extended symmetrically
+    with the negatives of its positive entries (the zero/DC entry, if present, is
+    not duplicated). Keeping the first axis non-negative is what lets
+    :func:`_half_space_selection` pick exactly one of each ``{J, -J}`` pair later.
+
+    Parameters
+    ----------
+    freq_arrays:
+        Non-negative, ascending frequency arrays, one per dimension.
+
+    Returns
+    -------
+    :
+        Per-axis arrays defining the signed bounding box of the half-space. The
+        first axis is unchanged; each remaining axis runs from ``-max`` to ``max``.
+    """
+    return [freq_arrays[0]] + [
+        np.concatenate([-f[f > 0][::-1], f]) for f in freq_arrays[1:]
+    ]
+
+
+def _half_space_selection(grid: Array) -> NDArray:
+    """Keep one frequency from each redundant ``{J, -J}`` pair.
+
+    A frequency multi-index ``J`` and its negation ``-J`` produce the same pair
+    of Fourier features (cosine is even, sine is odd), so only one of each pair
+    is kept: the origin, or whichever of ``J``/``-J`` has its first non-zero
+    coordinate positive (scanning coordinates left to right). For example, of
+    ``(0, 1)`` and ``(0, -1)`` it keeps ``(0, 1)``; of ``(1, -2)`` and
+    ``(-1, 2)`` it keeps ``(1, -2)``. The retained set is known formally as the
+    lexicographically positive half-space.
+
+    Parameters
+    ----------
+    grid:
+        Array of shape ``(ndim, n_combinations)`` whose columns are frequency
+        multi-indices.
+
+    Returns
+    -------
+    :
+        Boolean array of shape ``(n_combinations,)``, ``True`` for the columns to
+        keep.
+    """
+    non_zero = grid != 0
+    first_nonzero = np.argmax(non_zero, axis=0)
+    first_val = grid[first_nonzero, np.arange(grid.shape[1])]
+    return (~non_zero.any(axis=0)) | (first_val > 0)
+
+
+def _move_dc_first(combinations: Array) -> Array:
+    """Move the all-zero (DC) combination to the first column when present.
+
+    ``evaluate`` and ``_has_zero_phase`` assume the DC term is the first column,
+    because its sine contribution is identically zero and is dropped.
+
+    Parameters
+    ----------
+    combinations:
+        Array of shape ``(ndim, n_combinations)``.
+
+    Returns
+    -------
+    :
+        The same columns with the DC column first, when present.
+    """
+    is_dc = np.all(combinations == 0, axis=0)
+    if is_dc.any():
+        order = np.concatenate([np.flatnonzero(is_dc), np.flatnonzero(~is_dc)])
+        combinations = combinations[:, order]
+    return combinations
+
+
+def _combinator_builder(freq_arrays: FreqArrays) -> Array:
+    """Generate the half-space frequency combinations from non-negative axes.
+
+    Mirrors every axis but the first to a signed bounding box, takes the full
+    Cartesian product, and keeps one representative of each redundant ``J``/``-J``
+    pair (see :func:`_half_space_selection`). The DC term, if present, is placed
+    first.
+
+    Parameters
+    ----------
+    freq_arrays:
+        Non-negative, ascending frequency arrays, one per dimension.
+
+    Returns
+    -------
+    :
+        Array of shape ``(ndim, n_combinations)`` whose columns are the retained
+        frequency multi-indices.
+    """
+    grid = _get_all_frequency_pairs(_signed_box_axes(freq_arrays))
+    combinations = grid[:, _half_space_selection(grid)]
+    return _move_dc_first(combinations)
 
 
 class FourierBasis(AtomicBasisMixin, Basis):
@@ -300,10 +409,11 @@ class FourierBasis(AtomicBasisMixin, Basis):
             * ``no-intercept``: drop the all-zero frequency (DC component).
             * ``"all"``: Keep all frequencies
             * **None** : Keep all frequencies.
-            * **array_like** of {0, 1} or booleans : Shape must match the number
-              of possible frequency combinations for the given ``frequencies``.
-              - In 1D: shape = (n_freq,).
-              - In nD: shape = (n_freq_dim1, n_freq_dim2, ..., n_freq_dimN).
+            * **array_like** of {0, 1} or booleans : a 1D mask with one entry per
+              column of ``masked_frequencies``; 1/True keeps that frequency
+              combination, 0/False drops it. At construction the mask filters the
+              combinations left by the default ``"no-intercept"`` selection.
+              Print ``masked_frequencies`` to see the combinations in column order.
             * **callable** : A function applied to each tuple of frequency
               coordinates, returning a single boolean or {0, 1}. For example:
               ``lambda f1, f2, ...: condition``.
@@ -371,8 +481,8 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
         The frequency mask can be either:
 
-        - a boolean array (or array-like of 0s and 1s) whose shape matches the number
-          of frequencies along each input dimension, or
+        - a 1D boolean array with one entry per column of the ``masked_frequencies``
+          it was applied to, or
         - a callable with signature ``frequency_mask(*freqs) -> bool`` (or 0/1) applied
           to each frequency tuple, or
         - a string, either ``"all"``, if all possible frequency combinations are included, or
@@ -381,8 +491,8 @@ class FourierBasis(AtomicBasisMixin, Basis):
         Returns
         -------
         :
-            The callable used to build the mask, the boolean JAX array mask,
-            or ``None`` if no mask is applied.
+            The string, callable, or boolean JAX array mask that was last
+            assigned (``None`` is stored as ``"all"``).
         """
         # safe get when getter is called at init initialization
         return getattr(self, "_frequency_mask", "no-intercept")
@@ -407,10 +517,9 @@ class FourierBasis(AtomicBasisMixin, Basis):
             - :class:`Literal <typing.Literal>`: either `"no-intercept"`` - default - which drops
               the 0-frequency DC term, or ``"all"`` which keeps all the frequencies -
               equivalent to :class:`None <NoneType>`.
-            - **Array / array-like (bool or 0/1)**: Explicit mask over the
-              frequency grid. Must have shape
-              ``(len(frequencies[0]), len(frequencies[1]), ...)`` and contain
-              only booleans or the integers {0, 1}.
+            - **Array / array-like (bool or 0/1)**: a 1D mask with one entry per
+              column of the current ``masked_frequencies``; the retained columns
+              become the new ``masked_frequencies``.
             - :class:`callable`: A function with signature
               ``frequency_mask(*freqs) -> bool`` (or 0/1). It is applied to each
               frequency tuple ``(f1, f2, ..., f_n)`` to build the mask. The callable is
@@ -421,28 +530,31 @@ class FourierBasis(AtomicBasisMixin, Basis):
         ------
         ValueError
             If an array mask has values other than {0, 1}/booleans, or if its
-            shape does not match the expected grid shape.
+            length does not match the current number of frequency combinations.
         TypeError
             If ``values`` is neither array-like, callable, nor ``None``; or if
             the callable returns a value that is not a single boolean or 0/1.
 
         Notes
         -----
-        - Setting this property updates:
-          ``self._frequency_mask`` (callable or boolean mask),
-          ``self._n_basis_funcs`` (number of active basis functions),
-          and ``self._eval_freq`` (selected frequencies for evaluation).
+        - Setting this property updates ``frequency_mask`` and
+          ``masked_frequencies`` (and, through the latter, ``n_basis_funcs``).
+        - An array mask filters the *current* ``masked_frequencies``: assigning a
+          second array mask filters the already-filtered combinations. Assign
+          ``"all"`` or ``"no-intercept"`` to start from the full half-space again.
         """
 
         if isinstance(values, str) and values == "no-intercept":
             self._frequency_mask = "no-intercept"
-            self._freq_combinations = _get_all_frequency_pairs(self._frequencies)
-            if jnp.all(self._freq_combinations[..., 0] == 0):
-                self._freq_combinations = self._freq_combinations[..., 1:]
+            combinations = _combinator_builder(self._frequencies)
+            # the DC term, if present, is the first column; drop it.
+            if combinations.shape[1] and jnp.all(combinations[:, 0] == 0):
+                combinations = combinations[:, 1:]
+            self._freq_combinations = combinations
 
         elif values is None or isinstance(values, str) and values == "all":
             self._frequency_mask = "all"
-            self._freq_combinations = _get_all_frequency_pairs(self._frequencies)
+            self._freq_combinations = _combinator_builder(self._frequencies)
 
         elif callable(values):
             self._freq_combinations = _get_frequency_pairs_from_callable(
@@ -450,44 +562,7 @@ class FourierBasis(AtomicBasisMixin, Basis):
             )
             self._frequency_mask = values
         else:
-            try:
-                values = jnp.asarray(values)
-            except Exception as e:
-                raise ValueError(
-                    f"``frequency_mask`` {values} cannot be converted to a jax array of boolean."
-                ) from e
-
-            if not jnp.all((values == 0) | (values == 1)):
-                raise ValueError("Frequency mask must be an array-like of 0s and 1s.")
-
-            values = values.astype(bool)
-
-            if not values.ndim == self._n_inputs:
-                ndim = self._n_inputs
-                raise ValueError(
-                    f"The frequency mask for a {ndim}-dimensional Fourier basis "
-                    f"must be an {ndim}-dimensional array of 0s and 1s. "
-                    f"The provided mask is an {ndim}-dimensional array instead."
-                )
-
-            if tuple(len(freqs) for freqs in self._frequencies) != values.shape:
-                expected_shape = tuple(len(freqs) for freqs in self._frequencies)
-                raise ValueError(
-                    "Invalid shape for ``frequency_mask``. "
-                    f"Expected shape {expected_shape}, "
-                    f"but got {values.shape} instead. The mask must have one entry (0 or 1) for each "
-                    "frequency along every dimension of the Fourier basis."
-                )
-
-            self._frequency_mask = values
-            self._n_basis_funcs = 2 * int(jnp.sum(self._frequency_mask)) - int(
-                self._frequency_mask[(0,) * values.ndim]
-            )
-
-            idxs = jnp.stack(jnp.where(self._frequency_mask))
-            self._freq_combinations = jnp.stack(
-                [freqs[idxs[d]] for d, freqs in enumerate(self._frequencies)]
-            )
+            self._set_array_frequency_mask(values)
 
         # used to drop or not the zero phase
         self._has_zero_phase = (
@@ -495,6 +570,38 @@ class FourierBasis(AtomicBasisMixin, Basis):
             if self._freq_combinations.size == 0
             else int(jnp.all(self._freq_combinations[:, 0] == 0))
         )
+
+    def _set_array_frequency_mask(self, values: ArrayLike) -> None:
+        """Validate a boolean array mask and filter the frequency combinations.
+
+        The mask is checked for 0/1 values and for shape ``(K,)``, with ``K``
+        the current number of columns of ``masked_frequencies``. The columns
+        where the mask is ``True`` become the new ``_freq_combinations``, and
+        the boolean mask is stored as ``_frequency_mask``.
+        """
+        try:
+            values = jnp.asarray(values)
+        except Exception as e:
+            raise ValueError(
+                f"``frequency_mask`` {values} cannot be converted to a jax array of boolean."
+            ) from e
+
+        if not jnp.all((values == 0) | (values == 1)):
+            raise ValueError("Frequency mask must be an array-like of 0s and 1s.")
+
+        values = values.astype(bool)
+        expected_len = self.masked_frequencies.shape[1]
+        if not values.shape == (expected_len,):
+            raise ValueError(
+                f"Mis-shaped ``frequency_mask``. An array mask must have shape "
+                f"``({expected_len},)``, one entry per frequency combination: "
+                f"entry ``i`` keeps (1/True) or drops (0/False) the combination "
+                f"``masked_frequencies[:, i]``. Print the ``masked_frequencies`` "
+                "attribute to see the combinations currently included."
+            )
+
+        self._frequency_mask = values
+        self._freq_combinations = self._freq_combinations[:, values]
 
     @property
     def frequencies(self) -> List[jnp.ndarray]:
@@ -573,13 +680,16 @@ class FourierBasis(AtomicBasisMixin, Basis):
     @property
     def masked_frequencies(self) -> jnp.ndarray:
         """
-        The frequencies after the masking is applied.
+        The retained frequency combinations.
 
         Returns
         -------
-            The masked frequencies, shape ``(ndim, n_frequency_combinations)``.
-            ``masked_frequencies[:, i]`` is the frequency combination for the
-            i-th basis function.
+        :
+            The retained frequency combinations, shape
+            ``(ndim, n_frequency_combinations)``. Column ``i`` is the frequency
+            multi-index of the i-th combination; each column contributes a
+            cosine and a sine feature (cosine only for the DC term). Read-only:
+            assign ``frequency_mask`` to change it.
 
         """
         return self._freq_combinations

@@ -20,6 +20,8 @@ Helpers to look up or register solvers.
     list_algo_backends
     register
     set_default_backend
+    list_stochastic_solvers
+    supports_stochastic
 
     SolverSpec
 

@@ -50,8 +50,8 @@ counts = np.random.poisson(size=(100, 5))
 speed = np.random.normal(size=(100))
 
 # create a composite basis
-counts_basis = nmo.basis.RaisedCosineLogConv(5, window_size=10)
-speed_basis = nmo.basis.BSplineEval(5)
+counts_basis = nmo.basis.RaisedCosineLogConv(5, label="counts", window_size=10)
+speed_basis = nmo.basis.BSplineEval(5, label="speed")
 composite_basis = counts_basis + speed_basis
 
 # compute the features
@@ -99,7 +99,19 @@ As with any `sckit-learn` transformer, the `TransformerBasis` implements `fit`, 
 
 ## Setting up the TransformerBasis
 
-At this point, we have an object equipped with the necessary methods. So, all we need to do is concatenate the inputs into a single array and call fit_transform, right? **Not quite.** By default, `TransformerBasis` assumes that `inp` has one column per input in the composition. So in this example, with two one-dimensional basis functions, `TransformerBasis` expects an input of shape `(n_samples, 2)`.
+At this point, we have an object equipped with the necessary methods. So, all we need to do is concatenate the inputs into a single array and call fit_transform, right? **Not quite.**
+
+The `TransformerBasis` has two additional requirements: input shape (all basis objects) and bounds (`Eval` only).
+
+### Setting the `input_shape`
+
+:::{note}
+If each basis accepts a single column of the input, as in [this example](sklearn-how-to), then the default behavior works fine, and `set_input_shape` does not need to be called.
+:::
+
+#### The Problem
+
+By default, `TransformerBasis` assumes that `inp` has one column per input in the composition. So in this example, with two one-dimensional basis functions, `TransformerBasis` expects an input of shape `(n_samples, 2)`.
 
 However, our actual input has shape `(n_samples, 6)`:
 
@@ -115,8 +127,10 @@ This mismatch leads to an error when calling fit_transform:
 ```{code-cell} ipython3
 :tags: [raises-exception]
 
-# reinstantiate the basis transformer for illustration porpuses
+# reinstantiate the basis transformer for illustration purposes
 composite_basis = counts_basis + speed_basis
+# set the bounds now (see "Setting up the bounds" below for why this is required)
+composite_basis["speed"].bounds = (-2, 2)
 trans_bas = (composite_basis).to_transformer()
 # concatenate the inputs
 inp = np.concatenate([counts, speed[:, np.newaxis]], axis=1)
@@ -126,11 +140,8 @@ trans_bas.fit_transform(inp)
 
 ```
 
-### Defining the Input Shape
+#### The Solution: Defining the Input Shape
 
-:::{note}
-If each basis accepts a single column of the input, as in [this example](sklearn-how-to), then the default behavior works fine, and `set_input_shape` does not need to be called.
-:::
 
 To resolve this, we need to explicitly specify the input structure using the `set_input_shape` method. This method tells `TransformerBasis` how to interpret the input columns by storing the number of columns assigned to each basis function.
 
@@ -151,7 +162,7 @@ axis. For example, if the input is a 4D tensor, one needs to provide the last 3 
 x = np.random.randn(10, 3, 2, 1)
 
 # define and setup the basis
-basis = nmo.basis.BSplineEval(5).set_input_shape((3, 2, 1))
+basis = nmo.basis.BSplineEval(5, bounds=(-2, 2)).set_input_shape((3, 2, 1))
 
 X = basis.to_transformer().transform(
     x.reshape(10, -1)  # reshape to 2D
@@ -161,7 +172,6 @@ X = basis.to_transformer().transform(
 
 You can also invert the order of operations and call `to_transform` first and then set the input shapes.
 ```{code-cell} ipython3
-
 trans_bas = composite_basis.to_transformer()
 trans_bas.set_input_shape(5, 1)
 out = trans_bas.fit_transform(inp)
@@ -191,6 +201,51 @@ out2 = trans_bas.fit_transform(inp2)
 ```
 
 
-### Learn more
+(transformer-basis-bounds)=
+### Setting up the `bounds`
+
+#### The Problem
+
+Any basis that derives its domain from `bounds` must have `bounds` set explicitly before it can be used as a transformer. This is a deliberate safety choice. With `bounds` left unset, the domain is inferred from the data, so during cross-validation each fold would re-fit the domain to its own data range. The transformation would then differ from fold to fold, which is rarely what you want when cross-validating.
+
+Calling `fit`, `transform`, or `fit_transform` on a `TransformerBasis` whose domain-defining `bounds` are unset raises a `RuntimeError`.
+
+```{code-cell} ipython3
+:tags: [raises-exception]
+
+# reinstantiate the basis transformer for illustration purposes
+composite_basis = counts_basis + speed_basis
+trans_bas = (composite_basis).to_transformer()
+# set the input shape but NOT the bounds
+trans_bas.set_input_shape(counts, speed)
+# concatenate the inputs
+inp = np.concatenate([counts, speed[:, np.newaxis]], axis=1)
+print(inp.shape)
+
+trans_bas.fit_transform(inp)
+
+```
+
+#### The Solution
+
+We can finish setting up the `TransformerBasis` by setting the bounds for the `speed` component (`speed`) of `composite_basis`. We do not need to do this for the `position` component because it is `Conv` basis object, and only `Eval` basis objects have `bounds`.
+
+
+```{code-cell} ipython3
+
+# get the Eval basis using its label and set the bounds
+composite_basis["speed"].bounds = (-2, 2)
+
+# set the input shape
+composite_basis.set_input_shape(counts, speed)
+
+# convert to a transformer
+trans_bas = composite_basis.to_transformer()
+
+# transform the data
+X = trans_bas.fit_transform(inp)
+```
+
+## Learn more
 
 If you want to learn more about how to select basis' hyperparameters with `sklearn` pipelining and cross-validation, check out [this how-to guide](sklearn-how-to).

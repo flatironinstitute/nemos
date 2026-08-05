@@ -1792,6 +1792,8 @@ class TestGLMObservationModel:
         """
         Fixture for test_repr_out
         """
+        # These repr models are all UnRegularized, whose default solver is LBFGS
+        # (GLMs only override the default to Newton for Ridge).
         default_solver_name = nmo.solvers.get_solver(
             nmo.regularizer.UnRegularized().default_solver
         ).algo_name
@@ -2230,7 +2232,7 @@ class TestGLMObservationModel:
     def test_coef_tree_structure_after_initialize_params_pytree_x(
         self, pytree_x_factory, request, glm_type, model_instantiation
     ):
-        """coef tree structure matches X structure after initialize_params with pytree X."""
+        """Coef tree structure matches X structure after initialize_params with pytree X."""
         _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
         X = pytree_x_factory(y.shape[0])
         coef, _ = model.initialize_params(X, y)
@@ -2253,6 +2255,81 @@ class TestGLMObservationModel:
         assert jax.tree_util.tree_structure(
             model.coef_
         ) == jax.tree_util.tree_structure(X)
+
+    @pytest.mark.solver_related
+    def test_get_model_params_round_trip(
+        self, request, glm_type, model_instantiation, mock_glm_fit
+    ):
+        """get_model_params returns the fitted coef_ and intercept_."""
+        X, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        model.fit(X, y)
+        assert pytree_map_and_reduce(
+            jnp.array_equal,
+            all,
+            model.get_model_params(),
+            (model.coef_, model.intercept_),
+        )
+
+    @pytest.mark.parametrize("pytree_x_factory", _PYTREE_X_FACTORIES)
+    @pytest.mark.solver_related
+    def test_get_model_params_round_trip_pytree_x(
+        self,
+        pytree_x_factory,
+        request,
+        glm_type,
+        model_instantiation,
+        mock_glm_optimizer_run,
+    ):
+        """get_model_params returns the fitted params for pytree-valued coef."""
+        _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        X = pytree_x_factory(y.shape[0])
+        model.fit(X, y)
+        assert pytree_map_and_reduce(
+            jnp.array_equal,
+            all,
+            model.get_model_params(),
+            (model.coef_, model.intercept_),
+        )
+
+    @pytest.mark.parametrize(
+        "pytree_x_factory, mutate_coef",
+        [
+            pytest.param(
+                lambda n: {"a": jnp.ones((n, 1)), "b": jnp.ones((n, 1))},
+                lambda coef: coef.clear(),
+                id="dict",
+            ),
+            pytest.param(
+                lambda n: {"a": [jnp.ones((n, 1))], "b": jnp.ones((n, 1))},
+                lambda coef: coef["a"].clear(),
+                id="dict_list",
+            ),
+        ],
+    )
+    @pytest.mark.solver_related
+    def test_get_model_params_mutating_returned_containers_does_not_affect_model(
+        self,
+        pytree_x_factory,
+        mutate_coef,
+        request,
+        glm_type,
+        model_instantiation,
+        mock_glm_optimizer_run,
+    ):
+        """Mutating returned mutable containers does not affect model.coef_."""
+        _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        X = pytree_x_factory(y.shape[0])
+        model.fit(X, y)
+
+        coef, _ = model.get_model_params()
+        before = deepcopy(model.coef_)
+
+        mutate_coef(coef)
+
+        assert jax.tree_util.tree_structure(
+            model.coef_
+        ) == jax.tree_util.tree_structure(before)
+        assert pytree_map_and_reduce(jnp.array_equal, all, model.coef_, before)
 
     ######################
     # Optimizer defaults #
@@ -2616,8 +2693,11 @@ class TestPopulationGLM:
         """
         is_classifier = "classifier" in model_instantiation
 
-        type_error_match = "feature_mask and X must have the same structure|feature_mask and coef must have the same structure"
-        shape_mismatch_match = "Inconsistent feature mask shape|The shape of the ``feature_mask`` array must match"
+        type_error_match = "feature_mask and X must have the same structure"
+        # every model now reports a leaf-by-leaf shape mismatch the same way
+        shape_mismatch_match = (
+            "The ``feature_mask`` must match the shape of the ``coef``, leaf by leaf"
+        )
 
         if is_classifier:
             # Classifier models expect feature_mask shape (n_features, n_neurons, n_classes)
@@ -2653,19 +2733,17 @@ class TestPopulationGLM:
                     ValueError, match=shape_mismatch_match
                 ),
                 "wrong_n_features_np": pytest.raises(
-                    ValueError,
-                    match="The shape of the ``feature_mask`` array must match that of the ``coef``",
+                    ValueError, match=shape_mismatch_match
                 ),
                 "wrong_n_neurons_np": pytest.raises(
-                    ValueError,
-                    match="The shape of the ``feature_mask`` array must match that of the ``coef``",
+                    ValueError, match=shape_mismatch_match
                 ),
                 "correct_shape_pytree": does_not_raise(),
                 "correct_shape_classifier_pytree": pytest.raises(
-                    ValueError, match="Inconsistent number of neurons. feature_mask has"
+                    ValueError, match=shape_mismatch_match
                 ),
                 "wrong_n_neurons_pytree": pytest.raises(
-                    ValueError, match="Inconsistent number of neurons. feature_mask has"
+                    ValueError, match=shape_mismatch_match
                 ),
                 "missing_key_pytree": pytest.raises(TypeError, match=type_error_match),
                 "missing_key_wrong_shape_pytree": pytest.raises(
@@ -2701,7 +2779,10 @@ class TestPopulationGLM:
             ),
             # Non-classifier pytree correct shape: {'input_1': (3, 3), 'input_2': (2, 3)}
             (
-                {"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])},
+                {
+                    "input_1": np.array([[0, 1, 0]] * 3),
+                    "input_2": np.array([[1, 0, 1]] * 2),
+                },
                 "missing_key_pytree",  # np expects array, not dict
                 "correct_shape_pytree",
             ),
@@ -2714,8 +2795,12 @@ class TestPopulationGLM:
                 "missing_key_pytree",  # np expects array, not dict
                 "correct_shape_classifier_pytree",
             ),
+            # one neuron too many in every leaf
             (
-                {"input_1": np.array([0, 1, 0, 1]), "input_2": np.array([1, 0, 1, 0])},
+                {
+                    "input_1": np.ones((3, 4), dtype=int),
+                    "input_2": np.ones((2, 4), dtype=int),
+                },
                 "missing_key_pytree",
                 "wrong_n_neurons_pytree",
             ),
@@ -4366,3 +4451,275 @@ def test_glm_public_api_matches_subclasses():
         f"Missing from __all__: {expected_public - public}\n"
         f"Unexpected in __all__: {public - expected_public}"
     )
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+@pytest.mark.parametrize("solver_name", [None, "LBFGS", "Newton"])
+def test_glm_set_solver_name_invalidates(solver_name, model_instantiation, request):
+    X, y, model, params, state = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update solver
+    model.solver_name = solver_name
+
+    # Verify invalidated solver
+    assert model._solver is None
+    assert model._solver_loss_fun is None
+    assert model._optimizer_init_state is None
+    assert model._optimizer_update is None
+    assert model._optimizer_run is None
+    with pytest.raises(
+        RuntimeError, match="Attempt at update when solver was in invalid state."
+    ):
+        model.update(params, state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+@pytest.mark.parametrize("solver_name", [None, "LBFGS", "Newton"])
+def test_glm_set_solver_name_recovers(solver_name, model_instantiation, request):
+    X, y, model, params, _ = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update solver
+    model.solver_name = solver_name
+
+    # Verify reinitialisation fixes it
+    init_state = model.initialize_optimizer_and_state(
+        [params.coef, params.intercept], X, y
+    )
+    with does_not_raise():
+        model.update([params.coef, params.intercept], init_state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_solver_kwargs_invalidates(model_instantiation, request):
+    X, y, model, params, state = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update solver kwargs
+    model.solver_kwargs = {"maxiter": 2000}
+
+    # Verify invalidated solver
+    assert model._solver is None
+    assert model._solver_loss_fun is None
+    assert model._optimizer_init_state is None
+    assert model._optimizer_update is None
+    assert model._optimizer_run is None
+    with pytest.raises(
+        RuntimeError, match="Attempt at update when solver was in invalid state."
+    ):
+        model.update(params, state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_solver_kwargs_recovers(model_instantiation, request):
+    X, y, model, params, _ = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update solver kwargs
+    model.solver_kwargs = {"maxiter": 2000}
+
+    # Verify reinitialisation fixes it
+    init_state = model.initialize_optimizer_and_state(
+        [params.coef, params.intercept], X, y
+    )
+    with does_not_raise():
+        model.update([params.coef, params.intercept], init_state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_regularizer_invalidates(model_instantiation, request):
+    X, y, model, params, state = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update regularizer
+    model.regularizer = "Ridge"
+
+    # Verify invalidated solver
+    assert model._solver is None
+    assert model._solver_loss_fun is None
+    assert model._optimizer_init_state is None
+    assert model._optimizer_update is None
+    assert model._optimizer_run is None
+    with pytest.raises(
+        RuntimeError, match="Attempt at update when solver was in invalid state."
+    ):
+        model.update(params, state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_regularizer_recovers(model_instantiation, request):
+    X, y, model, params, _ = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update regularizer
+    model.regularizer = "Ridge"
+
+    # Verify reinitialisation fixes it
+    init_state = model.initialize_optimizer_and_state(
+        [params.coef, params.intercept], X, y
+    )
+    with does_not_raise():
+        model.update([params.coef, params.intercept], init_state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_regularizer_strength_invalidates(model_instantiation, request):
+    X, y, model, params, state = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update regularizer strength
+    model.regularizer_strength = 0.2
+
+    # Verify invalidated solver
+    assert model._solver is None
+    assert model._solver_loss_fun is None
+    assert model._optimizer_init_state is None
+    assert model._optimizer_update is None
+    assert model._optimizer_run is None
+    with pytest.raises(
+        RuntimeError, match="Attempt at update when solver was in invalid state."
+    ):
+        model.update(params, state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_regularizer_strength_recovers(model_instantiation, request):
+    X, y, model, params, _ = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update regularizer strength
+    model.regularizer_strength = 0.2
+
+    # Verify reinitialisation fixes it
+    init_state = model.initialize_optimizer_and_state(
+        [params.coef, params.intercept], X, y
+    )
+    with does_not_raise():
+        model.update([params.coef, params.intercept], init_state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_observation_model_invalidates(model_instantiation, request):
+    X, y, model, params, state = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update observation model
+    model.observation_model = "GammaObservations"
+
+    # Verify invalidated solver
+    assert model._solver is None
+    assert model._solver_loss_fun is None
+    assert model._optimizer_init_state is None
+    assert model._optimizer_update is None
+    assert model._optimizer_run is None
+    with pytest.raises(
+        RuntimeError, match="Attempt at update when solver was in invalid state."
+    ):
+        model.update(params, state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_observation_model_recovers(model_instantiation, request):
+    X, y, model, params, _ = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update observation model
+    model.observation_model = "GammaObservations"
+
+    # Verify reinitialisation fixes it
+    init_state = model.initialize_optimizer_and_state(
+        [params.coef, params.intercept], X, y
+    )
+    with does_not_raise():
+        model.update([params.coef, params.intercept], init_state, X, y)

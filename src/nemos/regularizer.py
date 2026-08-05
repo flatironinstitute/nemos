@@ -8,12 +8,14 @@ with various optimization methods, and they can be applied depending on the mode
 
 import abc
 import math
-from typing import Any, Callable, Tuple, Union
+from typing import Any, Callable, Optional, Tuple, Union
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
+
+from nemos.solvers._hess import Diagonal, General, HessianTag, PositiveDefinite
 
 from . import tree_utils
 from .base_class import Base
@@ -178,6 +180,32 @@ class Regularizer(Base, abc.ABC):
     _allowed_solvers: Tuple[str]
     _default_solver: str
     _proximal_operator: Callable
+    _hess_tag: HessianTag | None = None
+
+    def resolve_hess_tag(self, params: Any) -> HessianTag | None:
+        """Hessian tag of this regularizer's curvature for the given parameters.
+
+        The regularizer's Hessian is positive definite only on the subtrees it
+        penalizes (``params.regularizable_subtrees``); if it does not cover every
+        parameter it offers no global definiteness guarantee, so the property is
+        downgraded to ``General``.
+        """
+        if self._hess_tag is None:
+            return None
+        if hasattr(params, "regularizable_subtrees"):
+            regularized = {
+                id(leaf)
+                for where in params.regularizable_subtrees()
+                for leaf in jax.tree_util.tree_leaves(where(params))
+            }
+            all_regularized = regularized == {
+                id(leaf) for leaf in jax.tree_util.tree_leaves(params)
+            }
+        else:
+            all_regularized = True
+        if all_regularized:
+            return self._hess_tag
+        return HessianTag(self._hess_tag.structure, General)
 
     @property
     def allowed_solvers(self) -> Tuple[str]:
@@ -436,6 +464,62 @@ class Regularizer(Base, abc.ABC):
         strength = self._validate_strength_structure(params, strength)
         return {"strength": strength}
 
+    def _filter_kwargs_batch_axes(
+        self, params: Any, filter_kwargs: dict, batch_axes: Any
+    ) -> dict:
+        """Which axis carries the batch, for each ingredient of the penalty."""
+        strength = filter_kwargs["strength"]
+        wheres = getattr(params, "regularizable_subtrees", lambda: [lambda x: x])()
+        struct = jax.tree_util.tree_structure(strength)
+        axes = jax.tree_util.tree_unflatten(struct, [None] * struct.num_leaves)
+        for where in wheres:
+            axis = where(batch_axes)
+            axes = eqx.tree_at(
+                where,
+                axes,
+                jax.tree_util.tree_map(
+                    lambda s: None if _is_scalar_or_0d(s) else axis, where(strength)
+                ),
+                is_leaf=lambda x: x is None,
+            )
+        return {"strength": axes}
+
+    def _get_hess_fn(
+        self, params: Any, strength: Any, batch_axes: Optional[Any] = None
+    ) -> Callable | None:
+        """Return a function computing the second derivative of the regularizer penalty.
+
+        ``None`` when the regularizer declares no curvature (``_hess_tag is None``):
+        its penalty is either identically zero or has no second derivative.
+
+        Parameters
+        ----------
+        params:
+            Full, unsliced parameters. Used to expand the strength, so the shape checks
+            in ``_validate_strength_structure`` see the shapes the user passed.
+        strength:
+            The strength as the user set it.
+        batch_axes:
+            Which axis of each parameter carries the batch (for a ``PopulationGLM``,
+            the neurons). When given, the returned function produces one block per
+            batch element, stacked on a leading axis, matching the layout of the
+            model's block Hessian.
+        """
+        if self._hess_tag is None:
+            return None
+
+        filter_kwargs = self._get_filter_kwargs(strength=strength, params=params)
+
+        def hessian(p, kwargs):
+            return jax.hessian(self._penalization)(p, kwargs)
+
+        if batch_axes is None:
+            return lambda p: hessian(p, filter_kwargs)
+
+        kwargs_axes = self._filter_kwargs_batch_axes(params, filter_kwargs, batch_axes)
+        batched = jax.vmap(hessian, in_axes=(batch_axes, kwargs_axes))
+        return lambda p: batched(p, filter_kwargs)
+
 
 class UnRegularized(Regularizer):
     """
@@ -453,10 +537,12 @@ class UnRegularized(Regularizer):
         "ProximalGradient",
         "SVRG",
         "ProxSVRG",
+        "Newton",
     )
 
     _default_solver = "LBFGS"
     _proximal_operator = staticmethod(prox_none)
+    _hess_tag = None
 
     def _penalty_on_subtree(self, subtree, **kwargs) -> jnp.ndarray:
         return jnp.array(0.0)
@@ -481,11 +567,13 @@ class Ridge(Regularizer):
         "ProximalGradient",
         "SVRG",
         "ProxSVRG",
+        "Newton",
     )
 
     _default_solver = "LBFGS"
 
     _proximal_operator = staticmethod(prox_ridge)
+    _hess_tag = HessianTag(structure=Diagonal, property=PositiveDefinite)
 
     def _penalty_on_subtree(self, subtree, strength: Any, **kwargs) -> jnp.ndarray:
         """

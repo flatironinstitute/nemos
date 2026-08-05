@@ -84,13 +84,31 @@ def pytest_terminal_summary(terminalreporter):
         )
 
 
+def all_subclasses(cls):
+    """Recursively collect every (direct and indirect) subclass of ``cls``.
+
+    Only classes already imported are found; meta-tests that need exhaustive
+    coverage should first import all nemos submodules (see the
+    ``pkgutil.walk_packages`` idiom in test_hmm_validator/test_model_params).
+    """
+    seen = set()
+    stack = list(cls.__subclasses__())
+    while stack:
+        sub = stack.pop()
+        if sub in seen:
+            continue
+        seen.add(sub)
+        stack.extend(sub.__subclasses__())
+    return seen
+
+
 @pytest.fixture
 def mock_glm_fit(monkeypatch):
     """Replace GLM.fit with a pure-Python no-op that sets coef_/intercept_ from X/y shapes.
 
     Use in tests that only care about sklearn routing (cloning, parameter
     setting, pipeline plumbing) and do not need any fit validation logic.
-    For tests that need validation but not solver iterations, use mock_optimizer_run.
+    For tests that need validation but not solver iterations, use mock_glm_optimizer_run.
     """
 
     def _fit(self, X, y, init_params=None, **kwargs):
@@ -246,18 +264,16 @@ def initialize_feature_mask_for_population_glm(
     Returns
     -------
     :
-        A feature mask with all ones. If coef is provided, returns ones_like(coef).
-        Otherwise, if X is a dict, returns a dict with arrays
-        of shape (n_neurons,) for each key.
-        If X is an array, returns an array of shape (n_features, n_neurons).
+        A feature mask with all ones, shaped like the coefficients it masks. If coef is
+        provided, returns ones_like(coef). Otherwise each leaf of X contributes a mask of
+        shape (n_features_in_leaf, n_neurons, *extra_shape).
     """
     extra_shape = (n_classes,) if n_classes else ()
     if coef is not None:
         return jax.tree_util.tree_map(lambda c: jnp.ones(c.shape), coef)
-    if isinstance(X, dict):
-        return jax.tree_util.tree_map(lambda x: jnp.ones((n_neurons, *extra_shape)), X)
-    else:
-        return jnp.ones((X.shape[1], n_neurons, *extra_shape))
+    return jax.tree_util.tree_map(
+        lambda x: jnp.ones((x.shape[1], n_neurons, *extra_shape)), X
+    )
 
 
 DEFAULT_KWARGS = {
@@ -1990,11 +2006,14 @@ def instantiate_base_regressor_subclass(request):
     obs_model: str | nmo.observation_models.Observations = request.param["obs_model"]
     simulate: bool = request.param["simulate"]
 
-    # Create cache key (class-scoped)
+    # Create cache key (class-scoped). Include the x64 flag: data simulated under
+    # one precision must not be served to tests running under the other (the
+    # requires_x64 marker partitions the configs per test, not the cache).
     cache_key = (
         model_name,
         str(obs_model),
         simulate,
+        jax.config.jax_enable_x64,
         id(request.cls) if request.cls else id(request.module),
     )
 
@@ -2036,6 +2055,7 @@ def _clear_model_cache():
 _common_solvers = [
     nmo.solvers.SolverSpec("SVRG", "nemos", nmo.solvers.WrappedSVRG),
     nmo.solvers.SolverSpec("ProxSVRG", "nemos", nmo.solvers.WrappedProxSVRG),
+    nmo.solvers.SolverSpec("Newton", "nemos", nmo.solvers.Newton),
 ]
 _solvers_per_backend = {
     "optimistix": [
