@@ -83,7 +83,7 @@ axes.plot(
     obs_stimuli[sorted_indices], 
     true_firing_rate[sorted_indices], 
     lw = 2, 
-    c = 'r', 
+    c = 'tab:red', 
     label = 'ground truth'
 )
 axes.set_xlabel('stimulus')
@@ -130,21 +130,21 @@ axes.plot(
     test_stimuli_diffs, 
     kernel_evals, 
     lw = 2, 
-    c = 'k', 
+    c = 'tab:green', 
     label = 'length scale = 0.7'
 )
 axes.plot(
     test_stimuli_diffs, 
     smaller_length_scale_evals, 
     lw = 2, 
-    c = 'r', 
+    c = 'tab:purple', 
     label = 'length scale = 0.4'
 )
 axes.plot(
     test_stimuli_diffs, 
     larger_length_scale_evals, 
     lw = 2, 
-    c = 'b', 
+    c = 'tab:orange', 
     label = 'length scale = 1.0'
 )
 axes.legend()
@@ -195,7 +195,7 @@ axes[0].plot(
     stimuli_range, 
     samples_small.T, 
     lw = 2, 
-    c = 'r', 
+    c = 'tab:purple', 
     alpha = 0.3
 )
 axes[0].set_title('length scale = 0.4')
@@ -206,7 +206,7 @@ axes[1].plot(
     stimuli_range, 
     samples_medium.T, 
     lw = 2, 
-    c = 'k', 
+    c = 'tab:green', 
     alpha = 0.3
 )
 axes[1].set_title('length scale = 0.7')
@@ -216,7 +216,7 @@ axes[2].plot(
     stimuli_range, 
     samples_large.T, 
     lw = 2, 
-    c = 'b', 
+    c = 'tab:orange', 
     alpha = 0.3
 )
 axes[2].set_title('length scale = 1.0')
@@ -257,7 +257,7 @@ axes.plot(
     pred_stimuli, 
     evaluate_tuning(pred_stimuli), 
     lw = 2, 
-    c = 'r', 
+    c = 'tab:red', 
     label = 'ground truth'
 )
 
@@ -270,13 +270,35 @@ mu_pred = compute_predictive_mean(
 axes.plot(
     pred_stimuli, 
     mu_pred, 
-    color = 'b', 
+    color = 'tab:green', 
     lw = 2, 
     label = 'predictive mean'
 )
 axes.set_xlabel('stimulus')
 axes.set_ylabel('change from baseline firing rate')
 axes.legend(frameon = False)
+```
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+import os
+
+root = os.environ.get("READTHEDOCS_OUTPUT")
+if root:
+   path = Path(root) / "html/_static/thumbnails/background"
+# if local store in ../_build/html/...
+else:
+   path = Path("../_build/html/_static/thumbnails/background")
+
+# make sure the folder exists if run from build
+if root or Path("../assets/stylesheets").exists():
+   path.mkdir(parents=True, exist_ok=True)
+
+if path.exists():
+  fig.savefig(path / "plot_gp_regression.svg")
 ```
 
 ## what's the problem?
@@ -300,7 +322,7 @@ def compile(func, *args, **kwargs):
     """
     return jax.jit(func).trace(*args, **kwargs).lower().compile()
 
-dataset_sizes = jnp.logspace(1, 4, num = 9, dtype = int)
+dataset_sizes = jnp.logspace(2, 4, num = 9, dtype = int)
 times = []
 for (i, size) in enumerate(dataset_sizes):
     key = jr.key(seed = i)
@@ -333,22 +355,13 @@ times = jnp.array(times)
 
 ```{code-cell} ipython3
 fig, axes = plt.subplots(1, 1, sharex = True)
-axes.scatter(
+axes.plot(
     dataset_sizes, 
-    times, 
-    s = 30, 
+    times,
+    marker = '.', 
+    ms = 30, 
     c = 'k', 
     label = 'measured times'
-)
-
-p = jnp.polyfit(jnp.log(dataset_sizes), jnp.log(times), 1)
-tests = jnp.logspace(1, 4, 50)
-fit = jnp.exp(p[-1]) * (tests ** p[0])
-axes.plot(
-    tests, 
-    fit, 
-    c = 'r', 
-    label = 'line of best fit'
 )
 axes.set_yscale('log')
 axes.set_xscale('log')
@@ -480,7 +493,7 @@ axes.legend(frameon = False)
 However, we are able to achieve such high-quality predictions much more efficiently due to the use of a small set of basis functions!
 
 ```{code-cell} ipython3
-dataset_sizes = jnp.logspace(1, 4, num = 9, dtype = int)
+dataset_sizes = jnp.logspace(2, 4, num = 9, dtype = int)
 efgp_times = []
 for (i, size) in enumerate(dataset_sizes):
     key = jr.key(seed = i)
@@ -515,36 +528,22 @@ efgp_times = jnp.array(efgp_times)
 
 ```{code-cell} ipython3
 fig, axes = plt.subplots(1, 1, sharex = True)
-axes.scatter(
+axes.plot(
     dataset_sizes, 
-    times, 
-    s = 30, 
+    times,
+    marker = '.', 
+    ms = 30, 
     c = 'r', 
     label = 'exact'
 )
-p = jnp.polyfit(jnp.log(dataset_sizes), jnp.log(times), 1)
-tests = jnp.logspace(1, 4, 50)
-fit = jnp.exp(p[-1]) * (tests ** p[0])
-axes.plot(
-    tests, 
-    fit, 
-    c = 'r'
-)
 
-axes.scatter(
+axes.plot(
     dataset_sizes, 
-    efgp_times, 
-    s = 30, 
+    efgp_times,
+    marker = '.', 
+    ms = 30, 
     c = 'b', 
     label = 'efgp'
-)
-p = jnp.polyfit(jnp.log(dataset_sizes), jnp.log(efgp_times), 1)
-tests = jnp.logspace(1, 4, 50)
-fit = jnp.exp(p[-1]) * (tests ** p[0])
-axes.plot(
-    tests, 
-    fit, 
-    c = 'b'
 )
 
 axes.set_yscale('log')

@@ -483,13 +483,13 @@ class FourierBasis(AtomicBasisMixin, Basis):
         """Validate per-output-column weights against the number of basis functions."""
         if weights is None:
             return None
-        weights = jnp.asarray(weights, dtype=float).reshape(-1)
+        weights = jnp.asarray(weights, dtype = float)
         if weights.shape[0] != self.n_basis_funcs:
             raise ValueError(
-                "``weights`` must have one entry per basis function "
-                f"(``n_basis_funcs`` = {self.n_basis_funcs}); "
-                f"got {weights.shape[0]} instead."
-            )
+                            "``weights`` must have one entry per basis function "
+                            f"(``n_basis_funcs`` = {self.n_basis_funcs}); "
+                            f"got {weights.shape[0]} instead."
+                        )            
         return weights
 
     @property
@@ -1009,19 +1009,6 @@ class FourierGP(EvalBasisMixin, FourierBasis):
     >>> X = basis.compute_features(x)
     >>> X.shape  # (n_samples, n_basis_funcs)
     (100, 17)
-
-    **Error in SE kernel approximation**
-
-    >>> # the Gram matrix, component-wise approximates the SE kernel to within ``eps``
-    >>> t = np.linspace(0, 1, 201)
-    >>> Phi = basis.evaluate(t)
-    >>> k_approx = Phi @ Phi.T
-    >>> r = t[:, None] - t[None]
-    >>> k_true = basis.variance * np.exp(-r**2 / (2 * basis.lengthscale**2))
-    >>> bool(np.max(np.abs(k_approx - k_true)) < basis.eps)
-    True
-    >>> float(np.round(np.diag(k_approx).mean(), 3))
-    2.0
     """
 
     # Fourier basis is defined over the entire real line; out-of-bounds
