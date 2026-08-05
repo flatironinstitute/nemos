@@ -7,7 +7,7 @@ import numpy as np
 from jax.core import Tracer
 from numpy.typing import ArrayLike, NDArray
 
-from ..tree_utils import has_matching_axis_pytree
+from ..tree_utils import has_matching_axis_pytree, pytree_map_and_reduce
 from ._composition_utils import infer_input_dimensionality
 
 if TYPE_CHECKING:
@@ -74,8 +74,9 @@ def _check_transform_input(
     # check dimensionality
     _check_input_dimensionality(bas, xi)
 
-    # conversion type
-    if isinstance(xi[0], Tracer):
+    # conversion type: a single traced input forces the jax conversion for all
+    # of them, since numpy cannot convert tracers.
+    if pytree_map_and_reduce(lambda x: isinstance(x, Tracer), any, xi):
         at_least_1d = jnp.atleast_1d
     else:
         at_least_1d = np.atleast_1d
