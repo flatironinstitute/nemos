@@ -41,30 +41,51 @@ In this example, we've defined the ground truth tuning curve as a cubic function
 def evaluate_tuning(stimulus):
     return 0.2 * (stimulus ** 3) - 2.5 * (stimulus ** 2) + 6 * stimulus
 
-def generate_observations(key, n_obs, stimulus_min, stimulus_max, noise_sigma):
+def generate_observations(key, n_obs, stim_min, stim_max, noise_sigma):
     stimulus_key, subkey = jr.split(key)
-    obs_stimuli = jr.uniform(stimulus_key, shape = (n_obs,), minval = stimulus_min, maxval = stimulus_max)
+    obs_stimuli = jr.uniform(
+        stimulus_key,
+        shape = (n_obs,),
+        minval = stim_min,
+        maxval = stim_max
+    )
     true_firing_rate = evaluate_tuning(obs_stimuli)
     firing_rate_key, subkey = jr.split(subkey)
-    obs_firing_rate = true_firing_rate + jr.normal(firing_rate_key, shape = (n_obs,)) * noise_sigma
+    firing_rate_noise = jr.normal(firing_rate_key, shape = (n_obs,)) * noise_sigma
+    obs_firing_rate = true_firing_rate + firing_rate_noise
     return obs_stimuli, obs_firing_rate, true_firing_rate
 
 key = jr.key(seed = 0)
 n_obs = 100
-stimulus_min = 0
-stimulus_max = 10
+stim_min = 0
+stim_max = 10
 noise_sigma = 1
-obs_stimuli, obs_firing_rate, true_firing_rate = generate_observations(key, n_obs, stimulus_min, stimulus_max, noise_sigma)
+observations = generate_observations(key, n_obs, stim_min, stim_max, noise_sigma)
+obs_stimuli, obs_firing_rate, true_firing_rate = observations
 
 n_pred = 300
-pred_stimuli = jnp.linspace(stimulus_min, stimulus_max, n_pred)
+pred_stimuli = jnp.linspace(stim_min, stim_max, n_pred)
 ```
 
 ```{code-cell} ipython3
 fig, axes = plt.subplots(1, 1)
-axes.scatter(obs_stimuli, obs_firing_rate, s = 10, c = 'k', label = 'observations', zorder = 5)
+axes.scatter(
+    obs_stimuli, 
+    obs_firing_rate, 
+    s = 10, 
+    c = 'k', 
+    label = 'observations', 
+    zorder = 5
+)
+
 sorted_indices = jnp.argsort(obs_stimuli)
-axes.plot(obs_stimuli[sorted_indices], true_firing_rate[sorted_indices], lw = 2, c = 'r', label = 'ground truth')
+axes.plot(
+    obs_stimuli[sorted_indices], 
+    true_firing_rate[sorted_indices], 
+    lw = 2, 
+    c = 'r', 
+    label = 'ground truth'
+)
 axes.set_xlabel('stimulus')
 axes.set_ylabel('change from baseline firing rate')
 axes.legend(frameon = False)
@@ -85,24 +106,47 @@ The **length scale** parameter determines the degree of smoothness we expect in 
 ```{code-cell} ipython3
 length_scale = 0.7
 output_scale = 1
-def se_kernel(stim_1, stim_2=jnp.array([0]), length_scale=length_scale, output_scale=output_scale):
+def se_kernel(
+    stim_1, 
+    stim_2=jnp.array([0]), 
+    length_scale=length_scale, 
+    output_scale=output_scale
+):
     diff = stim_1[:, None] - stim_2[None, :]
     return output_scale * jnp.exp(-0.5 * diff**2 / length_scale**2)
 
 # odd count so the symmetric grid contains an exact 0 at index n_test_stimuli // 2;
-# the kernel-approximation cell uses that index as the zero-difference reference point.
+# the kernel-approximation cell uses that as the zero-difference reference point.
 n_test_stimuli = 101
-test_stimuli_diffs = jnp.linspace(-0.5*stimulus_max, 0.5*stimulus_max, n_test_stimuli)
+test_stimuli_diffs = jnp.linspace(-0.5*stim_max, 0.5*stim_max, n_test_stimuli)
 kernel_evals = se_kernel(test_stimuli_diffs)
-smaller_length_scale_kernel_evals = se_kernel(test_stimuli_diffs, length_scale = 0.4)
-larger_length_scale_kernel_evals = se_kernel(test_stimuli_diffs, length_scale = 1.0)
+smaller_length_scale_evals = se_kernel(test_stimuli_diffs, length_scale = 0.4)
+larger_length_scale_evals = se_kernel(test_stimuli_diffs, length_scale = 1.0)
 ```
 
 ```{code-cell} ipython3
 fig, axes = plt.subplots(1, 1)
-axes.plot(test_stimuli_diffs, kernel_evals, lw = 2, c = 'k', label = 'length scale = 0.7')
-axes.plot(test_stimuli_diffs, smaller_length_scale_kernel_evals, lw = 2, c = 'r', label = 'length scale = 0.4')
-axes.plot(test_stimuli_diffs, larger_length_scale_kernel_evals, lw = 2, c = 'b', label = 'length scale = 1.0')
+axes.plot(
+    test_stimuli_diffs, 
+    kernel_evals, 
+    lw = 2, 
+    c = 'k', 
+    label = 'length scale = 0.7'
+)
+axes.plot(
+    test_stimuli_diffs, 
+    smaller_length_scale_evals, 
+    lw = 2, 
+    c = 'r', 
+    label = 'length scale = 0.4'
+)
+axes.plot(
+    test_stimuli_diffs, 
+    larger_length_scale_evals, 
+    lw = 2, 
+    c = 'b', 
+    label = 'length scale = 1.0'
+)
 axes.legend()
 axes.set_xlabel('difference between stimuli')
 axes.set_ylabel('covariance between stimuli')
@@ -111,33 +155,70 @@ To get more intuition about how the choice of kernel specifies a prior over func
 
 ```{code-cell} ipython3
 n_stimuli_range = 101
-stimuli_range = jnp.linspace(stimulus_min, stimulus_max, n_stimuli_range)
+stimuli_range = jnp.linspace(stim_min, stim_max, n_stimuli_range)
 
 base_key = jr.key(seed = 123)
 sampling_keys = jr.split(base_key, 3)
 n_function_samples = 5
 
 mean_values = jnp.zeros(n_stimuli_range)
-jitter = 1e-6
+jitter = 1e-6 * jnp.eye(n_stimuli_range)
 
-K_medium = se_kernel(stimuli_range, stimuli_range) + jitter * jnp.eye(n_stimuli_range)
-samples_medium = jr.multivariate_normal(sampling_keys[0], mean_values, K_medium, shape = (n_function_samples, ))
-K_small = se_kernel(stimuli_range, stimuli_range, length_scale = 0.4) + jitter * jnp.eye(n_stimuli_range)
-samples_small = jr.multivariate_normal(sampling_keys[1], mean_values, K_small, shape = (n_function_samples, ))
-K_large = se_kernel(stimuli_range, stimuli_range, length_scale = 1.0) + jitter * jnp.eye(n_stimuli_range)
-samples_large = jr.multivariate_normal(sampling_keys[2], mean_values, K_large, shape = (n_function_samples, ))
+K_medium = se_kernel(stimuli_range, stimuli_range) + jitter
+samples_medium = jr.multivariate_normal(
+    sampling_keys[0], 
+    mean_values, 
+    K_medium, 
+    shape = (n_function_samples, )
+)
+
+K_small = se_kernel(stimuli_range, stimuli_range, length_scale = 0.4) + jitter
+samples_small = jr.multivariate_normal(
+    sampling_keys[1], 
+    mean_values, 
+    K_small, 
+    shape = (n_function_samples, )
+)
+
+K_large = se_kernel(stimuli_range, stimuli_range, length_scale = 1.0) + jitter
+samples_large = jr.multivariate_normal(
+    sampling_keys[2], 
+    mean_values, 
+    K_large, 
+    shape = (n_function_samples, )
+)
 ```
 
 ```{code-cell} ipython3
 fig, axes = plt.subplots(1, 3, sharex = True, sharey = True, layout = 'constrained')
-axes[0].plot(stimuli_range, samples_small.T, lw = 2, c = 'r', alpha = 0.3)
+axes[0].plot(
+    stimuli_range, 
+    samples_small.T, 
+    lw = 2, 
+    c = 'r', 
+    alpha = 0.3
+)
 axes[0].set_title('length scale = 0.4')
 axes[0].set_xlabel('stimulus')
 axes[0].set_ylabel('change from baseline firing rate')
-axes[1].plot(stimuli_range, samples_medium.T, lw = 2, c = 'k', alpha = 0.3)
+
+axes[1].plot(
+    stimuli_range, 
+    samples_medium.T, 
+    lw = 2, 
+    c = 'k', 
+    alpha = 0.3
+)
 axes[1].set_title('length scale = 0.7')
 axes[1].set_xlabel('stimulus')
-axes[2].plot(stimuli_range, samples_large.T, lw = 2, c = 'b', alpha = 0.3)
+
+axes[2].plot(
+    stimuli_range, 
+    samples_large.T, 
+    lw = 2, 
+    c = 'b', 
+    alpha = 0.3
+)
 axes[2].set_title('length scale = 1.0')
 axes[2].set_xlabel('stimulus')
 ```
@@ -146,23 +227,53 @@ Once we specify our prior beliefs by choosing a kernel, finding the predictive m
 When we try it out on the synthetic dataset from above, we can see that the GP is doing a fairly good job at capturing the relationship between the stimulus strength and the neural firing rate.
 
 ```{code-cell} ipython3
-@jax.jit
-def compute_predictive_mean(pred_stimuli, obs_stimuli, obs_firing_rate, noise_sigma):
+def compute_predictive_mean(
+    pred_stimuli, 
+    obs_stimuli, 
+    obs_firing_rate, 
+    noise_sigma
+):
     n_obs = obs_stimuli.shape[0]
-    K_obs  = se_kernel(obs_stimuli, obs_stimuli) + (noise_sigma**2) * jnp.eye(n_obs)
+    noise_matrix = (noise_sigma**2) * jnp.eye(n_obs)
+    K_obs  = se_kernel(obs_stimuli, obs_stimuli) + noise_matrix
     K_cross = se_kernel(pred_stimuli, obs_stimuli)
-    L = jnp.linalg.cholesky(K_obs)
-    w = jnp.linalg.solve(L.T, jnp.linalg.solve(L, obs_firing_rate))
+    cfac = jax.scipy.linalg.cho_factor(K_obs)
+    w = jax.scipy.linalg.cho_solve(cfac, obs_firing_rate)
     mu_pred = K_cross @ w
     return mu_pred
 ```
 
 ```{code-cell} ipython3
 fig, axes = plt.subplots(1, 1)
-axes.scatter(obs_stimuli, obs_firing_rate, s = 10, c = 'k', label = 'observations', zorder = 5)
-axes.plot(pred_stimuli, evaluate_tuning(pred_stimuli), lw = 2, c = 'r', label = 'ground truth')
-mu_pred = compute_predictive_mean(pred_stimuli, obs_stimuli, obs_firing_rate, noise_sigma)
-axes.plot(pred_stimuli, mu_pred, color = 'b', lw = 2, label = 'predictive mean')
+axes.scatter(
+    obs_stimuli, 
+    obs_firing_rate, 
+    s = 10, 
+    c = 'k', 
+    label = 'observations', 
+    zorder = 5
+)
+axes.plot(
+    pred_stimuli, 
+    evaluate_tuning(pred_stimuli), 
+    lw = 2, 
+    c = 'r', 
+    label = 'ground truth'
+)
+
+mu_pred = compute_predictive_mean(
+    pred_stimuli, 
+    obs_stimuli, 
+    obs_firing_rate, 
+    noise_sigma
+)
+axes.plot(
+    pred_stimuli, 
+    mu_pred, 
+    color = 'b', 
+    lw = 2, 
+    label = 'predictive mean'
+)
 axes.set_xlabel('stimulus')
 axes.set_ylabel('change from baseline firing rate')
 axes.legend(frameon = False)
@@ -182,16 +293,39 @@ In real-world uses, the compilation time is typically negligible relative to the
 ```{code-cell} ipython3
 import time
 
+def compile(func, *args, **kwargs):
+    """Compile ``func`` ahead of time for the shapes of the given arguments.
+    
+    ``jax.jit`` compiles on the first call, so timing that call would include tracing
+    """
+    return jax.jit(func).trace(*args, **kwargs).lower().compile()
+
 dataset_sizes = jnp.logspace(1, 4, num = 9, dtype = int)
 times = []
 for (i, size) in enumerate(dataset_sizes):
     key = jr.key(seed = i)
-    stimuli, firing_rate, true_firing_rate = generate_observations(key, size, stimulus_min, stimulus_max, noise_sigma)
-    traced = compute_predictive_mean.trace(pred_stimuli, stimuli, firing_rate, noise_sigma)
-    lowered = traced.lower()
-    compiled = lowered.compile()
+    observations = generate_observations(
+        key, 
+        size, 
+        stim_min, 
+        stim_max, 
+        noise_sigma
+    )
+    stimuli, firing_rate, true_firing_rate = observations
+    compiled = compile(
+        compute_predictive_mean,
+        pred_stimuli,
+        stimuli,
+        firing_rate,
+        noise_sigma
+    )
     start_time = time.perf_counter()
-    mu_pred = compiled(pred_stimuli, stimuli, firing_rate, noise_sigma)
+    mu_pred = compiled(
+        pred_stimuli, 
+        stimuli, 
+        firing_rate, 
+        noise_sigma
+    ).block_until_ready()
     inference_time = time.perf_counter() - start_time
     times.append(inference_time)
 times = jnp.array(times)
@@ -199,11 +333,23 @@ times = jnp.array(times)
 
 ```{code-cell} ipython3
 fig, axes = plt.subplots(1, 1, sharex = True)
-axes.scatter(dataset_sizes, times, s = 30, c = 'k', label = 'measured times')
+axes.scatter(
+    dataset_sizes, 
+    times, 
+    s = 30, 
+    c = 'k', 
+    label = 'measured times'
+)
+
 p = jnp.polyfit(jnp.log(dataset_sizes), jnp.log(times), 1)
 tests = jnp.logspace(1, 4, 50)
 fit = jnp.exp(p[-1]) * (tests ** p[0])
-axes.plot(tests, fit, c = 'r', label = 'line of best fit')
+axes.plot(
+    tests, 
+    fit, 
+    c = 'r', 
+    label = 'line of best fit'
+)
 axes.set_yscale('log')
 axes.set_xscale('log')
 axes.set_ylabel('wall-clock time (s)')
@@ -225,11 +371,14 @@ Extremely small values for `eps` should therefore be avoided whenever possible.
 :::
 
 ```{code-cell} ipython3
-bounds = (stimulus_min, stimulus_max)
+bounds = (stim_min, stim_max)
 eps = 1e-4
 
 basis = FourierGP(
-    lengthscale=length_scale, bounds=bounds, eps=eps, variance=output_scale
+    lengthscale=length_scale,
+    bounds=bounds, 
+    eps=eps, 
+    variance=output_scale
 )
 
 Phi = basis.evaluate(test_stimuli_diffs)
@@ -240,8 +389,22 @@ approx_kernel = K_pred_approx[half_index]
 
 ```{code-cell} ipython3
 fig, axes = plt.subplots(1, 1)
-axes.plot(test_stimuli_diffs, kernel_evals, lw = 2, c = 'r', label = 'true kernel', alpha = 0.75)
-axes.plot(test_stimuli_diffs, approx_kernel, lw = 2, c = 'b', label = 'approximated kernel', alpha = 0.75)
+axes.plot(
+    test_stimuli_diffs, 
+    kernel_evals, 
+    lw = 2, 
+    c = 'r', 
+    label = 'true kernel', 
+    alpha = 0.75
+)
+axes.plot(
+    test_stimuli_diffs, 
+    approx_kernel, 
+    lw = 2, 
+    c = 'b', 
+    label = 'approximated kernel', 
+    alpha = 0.75
+)
 axes.set_xlabel('difference between stimuli')
 axes.set_ylabel('covariance between stimuli')
 axes.legend(frameon = False)
@@ -250,12 +413,17 @@ axes.legend(frameon = False)
 With such a high-quality approximation to the kernel, the EFGP approximate predictions are practically indistinguishable from the exact GP prediction.
 
 ```{code-cell} ipython3
-@jax.jit
-def compute_efgp_mean(pred_eval, obs_eval, obs_firing_rate, noise_sigma):
+def compute_efgp_mean(
+    pred_eval, 
+    obs_eval, 
+    obs_firing_rate, 
+    noise_sigma
+):
     n_weights = obs_eval.shape[1]
-    augmented_K_obs = (obs_eval.T @ obs_eval) + (noise_sigma**2) * jnp.eye(n_weights)
-    L = jnp.linalg.cholesky(augmented_K_obs)
-    beta = jnp.linalg.solve(L.T, jnp.linalg.solve(L, obs_eval.T @ obs_firing_rate))
+    noise_matrix = (noise_sigma**2) * jnp.eye(n_weights)
+    augmented_K_obs = (obs_eval.T @ obs_eval) + noise_matrix
+    cfac = jax.scipy.linalg.cho_factor(augmented_K_obs)
+    beta = jax.scipy.linalg.cho_solve(cfac, obs_eval.T @ obs_firing_rate)
     w = (obs_firing_rate - obs_eval @ beta) / (noise_sigma ** 2)
     K_cross = pred_eval @ obs_eval.T
     mu_pred = K_cross @ w
@@ -264,13 +432,46 @@ def compute_efgp_mean(pred_eval, obs_eval, obs_firing_rate, noise_sigma):
 
 ```{code-cell} ipython3
 fig, axes = plt.subplots(1, 1)
-axes.scatter(obs_stimuli, obs_firing_rate, s = 10, c = 'k', label = 'observations', zorder = 5)
-mu_pred = compute_predictive_mean(pred_stimuli, obs_stimuli, obs_firing_rate, noise_sigma)
-axes.plot(pred_stimuli, mu_pred, color = 'r', lw = 2, label = 'exact predictive mean', alpha = 0.75)
+axes.scatter(
+    obs_stimuli, 
+    obs_firing_rate, 
+    s = 10, 
+    c = 'k', 
+    label = 'observations', 
+    zorder = 5
+)
+
+mu_pred = compute_predictive_mean(
+    pred_stimuli, 
+    obs_stimuli, 
+    obs_firing_rate, 
+    noise_sigma
+)
+axes.plot(
+    pred_stimuli, 
+    mu_pred, 
+    color = 'r', 
+    lw = 2, 
+    label = 'exact predictive mean', 
+    alpha = 0.75
+)
+
 pred_eval = basis.evaluate(pred_stimuli)
 obs_eval = basis.evaluate(obs_stimuli)
-approx_mu_pred = compute_efgp_mean(pred_eval, obs_eval, obs_firing_rate, noise_sigma)
-axes.plot(pred_stimuli, approx_mu_pred, color = 'b', lw = 2, label = 'efgp predictive mean', alpha = 0.75)
+approx_mu_pred = compute_efgp_mean(
+    pred_eval, 
+    obs_eval, 
+    obs_firing_rate, 
+    noise_sigma
+)
+axes.plot(
+    pred_stimuli, 
+    approx_mu_pred, 
+    color = 'b', 
+    lw = 2, 
+    label = 'efgp predictive mean', 
+    alpha = 0.75
+)
 axes.set_xlabel('stimulus')
 axes.set_ylabel('change from baseline firing rate')
 axes.legend(frameon = False)
@@ -283,14 +484,30 @@ dataset_sizes = jnp.logspace(1, 4, num = 9, dtype = int)
 efgp_times = []
 for (i, size) in enumerate(dataset_sizes):
     key = jr.key(seed = i)
-    stimuli, firing_rate, true_firing_rate = generate_observations(key, size, stimulus_min, stimulus_max, noise_sigma)
+    observations = generate_observations(
+        key, 
+        size, 
+        stim_min, 
+        stim_max, 
+        noise_sigma
+    )
+    stimuli, firing_rate, true_firing_rate = observations
     pred_eval = basis.evaluate(pred_stimuli)
     obs_eval = basis.evaluate(stimuli)
-    traced = compute_efgp_mean.trace(pred_eval, obs_eval, firing_rate, noise_sigma)
-    lowered = traced.lower()
-    compiled = lowered.compile()
+    compiled = compile(
+        compute_efgp_mean,
+        pred_eval,
+        obs_eval,
+        firing_rate,
+        noise_sigma
+    )
     start_time = time.perf_counter()
-    mu_pred = compiled(pred_eval, obs_eval, firing_rate, noise_sigma).block_until_ready()
+    mu_pred = compiled(
+        pred_eval, 
+        obs_eval, 
+        firing_rate, 
+        noise_sigma
+    ).block_until_ready()
     inference_time = time.perf_counter() - start_time
     efgp_times.append(inference_time)
 efgp_times = jnp.array(efgp_times)
@@ -298,17 +515,37 @@ efgp_times = jnp.array(efgp_times)
 
 ```{code-cell} ipython3
 fig, axes = plt.subplots(1, 1, sharex = True)
-axes.scatter(dataset_sizes, times, s = 30, c = 'r', label = 'exact')
+axes.scatter(
+    dataset_sizes, 
+    times, 
+    s = 30, 
+    c = 'r', 
+    label = 'exact'
+)
 p = jnp.polyfit(jnp.log(dataset_sizes), jnp.log(times), 1)
 tests = jnp.logspace(1, 4, 50)
 fit = jnp.exp(p[-1]) * (tests ** p[0])
-axes.plot(tests, fit, c = 'r')
+axes.plot(
+    tests, 
+    fit, 
+    c = 'r'
+)
 
-axes.scatter(dataset_sizes, efgp_times, s = 30, c = 'b', label = 'efgp')
+axes.scatter(
+    dataset_sizes, 
+    efgp_times, 
+    s = 30, 
+    c = 'b', 
+    label = 'efgp'
+)
 p = jnp.polyfit(jnp.log(dataset_sizes), jnp.log(efgp_times), 1)
 tests = jnp.logspace(1, 4, 50)
 fit = jnp.exp(p[-1]) * (tests ** p[0])
-axes.plot(tests, fit, c = 'b')
+axes.plot(
+    tests, 
+    fit, 
+    c = 'b'
+)
 
 axes.set_yscale('log')
 axes.set_xscale('log')
