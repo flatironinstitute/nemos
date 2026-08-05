@@ -592,8 +592,8 @@ class Ridge(Regularizer):
             The Ridge penalization value.
         """
 
-        def l2_penalty(coeff: jnp.ndarray, leaf_strength: jnp.ndarray):
-            return 0.5 * jnp.sum(leaf_strength * jnp.square(coeff))
+        def l2_penalty(coef: jnp.ndarray, leaf_strength: jnp.ndarray):
+            return 0.5 * jnp.sum(leaf_strength * jnp.square(coef))
 
         return tree_utils.pytree_map_and_reduce(
             l2_penalty,
@@ -637,8 +637,8 @@ class Lasso(Regularizer):
             The Lasso penalization value.
         """
 
-        def l1_penalty(coeff: jnp.ndarray, leaf_strength: jnp.ndarray):
-            return jnp.sum(leaf_strength * jnp.abs(coeff))
+        def l1_penalty(coef: jnp.ndarray, leaf_strength: jnp.ndarray):
+            return jnp.sum(leaf_strength * jnp.abs(coef))
 
         return tree_utils.pytree_map_and_reduce(
             l1_penalty,
@@ -713,10 +713,10 @@ class ElasticNet(Regularizer):
             The Elastic Net penalization value.
         """
 
-        def net_penalty(coeff, leaf_strength):
+        def net_penalty(coef, leaf_strength):
             s, r = leaf_strength
-            quad = 0.5 * (1.0 - r) * jnp.square(coeff)
-            l1 = r * jnp.abs(coeff)
+            quad = 0.5 * (1.0 - r) * jnp.square(coef)
+            l1 = r * jnp.abs(coef)
             return jnp.sum(s * (quad + l1))
 
         return tree_utils.pytree_map_and_reduce(
