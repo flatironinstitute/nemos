@@ -6,6 +6,7 @@ from typing import Any, Callable, Optional
 
 import jax
 import jax.numpy as jnp
+from jax.core import Tracer
 from jax.flatten_util import ravel_pytree
 
 
@@ -142,6 +143,38 @@ def pytree_map_and_reduce(
     cond_tree = jax.tree_util.tree_map(map_fn, *pytrees, is_leaf=is_leaf)
     # for some reason, tree_reduce doesn't work well with any.
     return reduce_fn(jax.tree_util.tree_leaves(cond_tree))
+
+
+def is_traced(*pytrees: Any) -> bool:
+    """
+    Check if any leaf of the pytrees is a JAX tracer.
+
+    A single traced leaf means the computation is running under a JAX
+    transformation (``jit``, ``vmap``, ``grad``, ...), and therefore that every
+    array operation applied to the pytrees must go through ``jax.numpy``:
+    NumPy cannot convert tracers.
+
+    Parameters
+    ----------
+    *pytrees :
+        One or more pytrees to inspect.
+
+    Returns
+    -------
+    :
+        True if at least one leaf is a tracer.
+
+    Examples
+    --------
+    >>> import jax
+    >>> import numpy as np
+    >>> from nemos.tree_utils import is_traced
+    >>> is_traced(np.arange(3))
+    False
+    >>> jax.jit(lambda x: is_traced(x))(np.arange(3))
+    True
+    """
+    return pytree_map_and_reduce(lambda x: isinstance(x, Tracer), any, pytrees)
 
 
 def tree_slice(data: Any, idx, is_leaf: Optional[Callable] = None):
