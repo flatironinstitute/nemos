@@ -546,16 +546,8 @@ class BaseRegressor(
         )
 
         if isinstance(solver, Newton):
-            # tree_leaves skips None leaves, so this is empty when nothing is frozen
-            if frozen_params is not None and jax.tree_util.tree_leaves(frozen_params):
-                raise ValueError(
-                    "The Newton solver does not support frozen parameters (e.g. "
-                    "`fit_intercept=False`): its Hessian is computed on the full "
-                    "parameter set and is not partition-aware. Choose a first-order "
-                    "solver such as 'LBFGS'."
-                )
             solver.setup_hessian(
-                self._get_hess_fn(),
+                self._get_hess_fn(frozen=frozen_params),
                 self._hess_tag,
                 regularizer.resolve_hess_tag(init_params),
                 self._hess_property_override(),
@@ -571,7 +563,7 @@ class BaseRegressor(
 
         return solver
 
-    def _get_hess_fn(self) -> Callable:
+    def _get_hess_fn(self, frozen: Optional[ModelParamsT] = None) -> Optional[Callable]:
         return None
 
     @abc.abstractmethod

@@ -10,7 +10,7 @@ from typing import Any, Callable, Literal, Optional, Tuple, Union
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, NDArray
 from sklearn.utils import InputTags, TargetTags
 
 from .. import observation_models as obs
@@ -336,12 +336,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         # Hessian positive definite, so the Cholesky-based Newton step is stable.
         # For other regularizers (e.g. UnRegularized, whose Hessian can be only
         # positive semidefinite) defer to the regularizer's own default.
-        # Newton's Hessian is not partition-aware, so a frozen intercept
-        # (``fit_intercept=False``) also defers to the regularizer default.
-        if (
-            self._fit_intercept
-            and isinstance(self.regularizer, Ridge)
-            and ("Newton" in self.regularizer.allowed_solvers)
+        if isinstance(self.regularizer, Ridge) and (
+            "Newton" in self.regularizer.allowed_solvers
         ):
             return "Newton"
         return super()._resolve_default_solver()
@@ -2040,6 +2036,9 @@ class PopulationGLM(GLM):
         self._feature_mask = self._validator.validate_and_cast_feature_mask(
             feature_mask
         )
+        # the loss and the Hessian read the mask at call time, so a solver built
+        # against the previous mask is stale.
+        self._invalidate_solver()
 
     @strip_metadata(arg_num=1, arg_name="y")
     def fit(
@@ -2193,24 +2192,34 @@ class PopulationGLM(GLM):
             mask
         )
 
-    def _get_hess_fn(self):
-        def per_neuron(params, X, y, mask):
+    def _get_hess_fn(self, frozen: Optional[GLMParams] = None) -> Callable:
+        # differentiating the combined loss with respect to the active subtree alone
+        # yields the active block of the Hessian directly, no slicing needed.
+        # ``batch_axes`` is prefix-spelled (one entry for all of ``coef``) while the
+        # filter spec is per-leaf, so expand before splitting the axes.
+        active_axis, frozen_axis = self._partition_active(
+            tree_utils.tree_broadcast_prefix(
+                self._hess_tag.batch_axes, self._active_filter_spec()
+            )
+        )
+
+        def per_neuron(params, X, y, mask, frozen_params):
             def loss(params):
+                params = eqx.combine(params, frozen_params)
                 rate = self._predict(params, X, feature_mask=mask)
                 return self._observation_model._negative_log_likelihood(y, rate)
 
             return jax.hessian(loss)(params)
 
         # the mask mirrors coef, so its neuron axis is coef's
-        return lambda params, X, y: jax.vmap(
-            per_neuron,
-            in_axes=(
-                self._hess_tag.batch_axes,
-                None,
-                1,
-                1,
-            ),
-        )(params, X, y, self._feature_mask)
+        vmap_per_neuron = jax.vmap(
+            per_neuron, in_axes=(active_axis, None, 1, 1, frozen_axis)
+        )
+
+        def hess_fn(params, X, y):
+            return vmap_per_neuron(params, X, y, self._feature_mask, frozen)
+
+        return hess_fn
 
     def __sklearn_clone__(self) -> PopulationGLM:
         """Clone the PopulationGLM, dropping feature_mask."""
