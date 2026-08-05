@@ -4,6 +4,7 @@ import importlib
 import pkgutil
 from copy import deepcopy
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import lineax as lx
@@ -212,36 +213,199 @@ def test_newton_glm_instantiate_solver(regularizer_name, glm_class):
     assert isinstance(solver, Newton)
 
 
+def _freeze_first_coef_leaf(model, params):
+    """Build a ``fix_params`` spec pinning the first ``coef`` leaf to its true value.
+
+    Freezing a coefficient leaf rather than the intercept is what exercises the
+    ``coef`` block of the Hessian: the intercept is a single row, so dropping it
+    leaves the interesting block untouched.
+    """
+    leaves, treedef = jax.tree_util.tree_flatten(params.coef)
+    spec = jax.tree_util.tree_unflatten(
+        treedef, [leaves[0]] + [None] * (len(leaves) - 1)
+    )
+    model.fix_params = (spec, None)
+    # read the spec back: the setter validates and casts it, so this is the value
+    # the frozen leaf is actually pinned to
+    return model.fix_params[0]
+
+
+@pytest.mark.requires_x64
 @pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
 @pytest.mark.parametrize(
     "model_fixture",
     ["poissonGLM_model_instantiation", "population_poissonGLM_model_instantiation"],
 )
-def test_newton_rejects_frozen_intercept(regularizer_name, model_fixture, request):
-    """Newton's Hessian is built over the full parameter set and is not
-    partition-aware, so requesting it with a frozen intercept
-    (``fit_intercept=False``) raises rather than silently ignoring the freeze."""
-    X, y, model, *_ = request.getfixturevalue(model_fixture)
+@pytest.mark.parametrize("freeze", ["intercept", "coef_leaf"])
+def test_newton_matches_first_order_solver_with_frozen_params(
+    regularizer_name, model_fixture, freeze, request
+):
+    """Newton differentiates the combined loss with respect to the active subtree,
+    so it must land on the same optimum as a partition-agnostic first-order solver.
+
+    Both freezing modes are covered: a frozen intercept drops a Hessian row, while a
+    frozen ``coef`` leaf carves a block out of the ``coef`` block itself.
+    """
+    X, y, model, true_params, _ = request.getfixturevalue(model_fixture)
+
+    def build(solver_name):
+        m = type(model)(
+            regularizer=regularizer_name,
+            regularizer_strength=1.0 if regularizer_name == "Ridge" else None,
+            solver_name=solver_name,
+            solver_kwargs={"tol": 10**-12},
+        )
+        if freeze == "intercept":
+            m.fit_intercept = False
+        else:
+            _freeze_first_coef_leaf(m, true_params)
+        return m
+
+    newton = build("Newton").fit(X, y)
+    reference = build("LBFGS").fit(X, y)
+
+    assert newton.solver_name == "Newton"
+    np.testing.assert_allclose(newton.coef_, reference.coef_, atol=1e-5)
+    np.testing.assert_allclose(newton.intercept_, reference.intercept_, atol=1e-5)
+
+
+@pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
+@pytest.mark.parametrize(
+    "model_fixture",
+    ["poissonGLM_model_instantiation", "population_poissonGLM_model_instantiation"],
+)
+@pytest.mark.parametrize("freeze", ["intercept", "coef_leaf"])
+def test_newton_leaves_frozen_params_untouched(
+    regularizer_name, model_fixture, freeze, request
+):
+    """The frozen leaves come back bit-identical, not merely close: a Hessian that
+    silently included them would move them by a small but nonzero amount."""
+    X, y, model, true_params, _ = request.getfixturevalue(model_fixture)
 
     frozen_model = type(model)(
-        regularizer=regularizer_name, fit_intercept=False, solver_name="Newton"
+        regularizer=regularizer_name,
+        regularizer_strength=1.0 if regularizer_name == "Ridge" else None,
+        solver_name="Newton",
     )
-    with pytest.raises(
-        ValueError, match="Newton solver does not support frozen parameters"
-    ):
+    if freeze == "intercept":
+        frozen_model.fit_intercept = False
         frozen_model.fit(X, y)
+        np.testing.assert_array_equal(
+            frozen_model.intercept_, np.zeros_like(true_params.intercept)
+        )
+    else:
+        pinned = _freeze_first_coef_leaf(frozen_model, true_params)
+        frozen_model.fit(X, y)
+        fitted = jax.tree_util.tree_leaves(frozen_model.coef_)[0]
+        np.testing.assert_array_equal(fitted, jax.tree_util.tree_leaves(pinned)[0])
 
 
 @pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
-def test_ridge_default_solver_skips_newton_when_intercept_frozen(glm_class):
-    """Ridge defaults to Newton because its penalized Hessian is positive definite,
-    but only when the intercept is estimated; freezing the intercept defers to the
-    regularizer's own default solver, since Newton is not partition-aware."""
-    assert glm_class(regularizer="Ridge", fit_intercept=True).solver_name == "Newton"
+@pytest.mark.parametrize("fit_intercept", [True, False])
+def test_ridge_defaults_to_newton_regardless_of_freezing(glm_class, fit_intercept):
+    """Ridge defaults to Newton because its penalized Hessian is positive definite.
+    Newton is partition-aware, so freezing the intercept no longer forces a fallback
+    to the regularizer's first-order default."""
+    model = glm_class(regularizer="Ridge", fit_intercept=fit_intercept)
+    assert model.solver_name == "Newton"
+    assert Ridge().default_solver != "Newton"  # the fallback would have been visible
 
-    frozen = glm_class(regularizer="Ridge", fit_intercept=False)
-    assert frozen.solver_name != "Newton"
-    assert frozen.solver_name == Ridge().default_solver
+
+@pytest.mark.requires_x64
+@pytest.mark.parametrize("regularizer_name", ["Ridge"])
+@pytest.mark.parametrize("freeze", ["intercept", "coef_leaf"])
+def test_newton_population_glm_feature_mask_with_frozen_params(
+    regularizer_name, freeze, request
+):
+    """The mask, the active axes and the frozen axes all index the neuron axis of the
+    block Hessian. A wrong ``in_axes`` survives the unmasked tests, so pair the mask
+    with a freeze and check Newton still lands where a first-order solver does.
+
+    Ridge only: a masked-out coefficient has zero gradient *and* zero curvature, so an
+    unpenalized masked Hessian is singular and the Newton step is NaN. That is unrelated
+    to parameter freezing (it reproduces with nothing frozen) and is tracked in #580.
+    """
+    X, y, model, true_params, _ = request.getfixturevalue(
+        "population_poissonGLM_model_instantiation_pytree"
+    )
+    mask = initialize_feature_mask_for_population_glm(X, y.shape[1])
+    # zero a block so the mask is not the identity: a masked-out coefficient must not
+    # pick up curvature from the neuron it is masked away from
+    first = sorted(mask)[0]
+    mask[first] = mask[first].at[:, 0].set(0.0)
+
+    def build(solver_name):
+        m = nmo.glm.PopulationGLM(
+            regularizer=regularizer_name,
+            regularizer_strength=1.0 if regularizer_name == "Ridge" else None,
+            solver_name=solver_name,
+            solver_kwargs={"tol": 10**-12},
+            feature_mask=mask,
+        )
+        if freeze == "intercept":
+            m.fit_intercept = False
+        else:
+            _freeze_first_coef_leaf(m, true_params)
+        return m
+
+    newton = build("Newton").fit(X, y)
+    reference = build("LBFGS").fit(X, y)
+
+    for key in mask:
+        np.testing.assert_allclose(newton.coef_[key], reference.coef_[key], atol=1e-5)
+    np.testing.assert_allclose(newton.intercept_, reference.intercept_, atol=1e-5)
+
+
+@pytest.mark.parametrize("freeze", ["intercept", "coef_leaf"])
+def test_population_glm_hess_fn_drops_frozen_leaves(freeze, request):
+    """``_get_hess_fn`` returns the active block only: every frozen leaf position is
+    ``None`` in the returned pytree, and the surviving blocks carry the neuron axis."""
+    X, y, model, true_params, _ = request.getfixturevalue(
+        "population_poissonGLM_model_instantiation_pytree"
+    )
+    model = nmo.glm.PopulationGLM(regularizer="Ridge", regularizer_strength=1.0)
+    if freeze == "intercept":
+        model.fit_intercept = False
+    else:
+        _freeze_first_coef_leaf(model, true_params)
+
+    params = model._model_specific_initialization(X, y)
+    active, frozen = model._partition_active(params)
+    hess = model._get_hess_fn(frozen=frozen)(active, X, y)
+
+    n_neurons = y.shape[1]
+    if freeze == "intercept":
+        assert hess.intercept is None
+        assert all(row.intercept is None for row in hess.coef.values())
+    else:
+        pinned = sorted(model.fix_params[0])[0]
+        assert active.coef[pinned] is None
+        assert hess.coef[pinned] is None
+        # the frozen leaf is dropped as a column too, not just as a row
+        assert all(
+            row.coef[pinned] is None for row in hess.coef.values() if row is not None
+        )
+
+    # every surviving block is stacked on the neuron axis
+    for block in jax.tree_util.tree_leaves(hess):
+        assert block.shape[0] == n_neurons
+
+
+def test_feature_mask_reassignment_invalidates_solver(request):
+    """The loss and the Hessian both read ``_feature_mask`` at call time, so a solver
+    built against the previous mask is stale and must be torn down."""
+    X, y, model, *_ = request.getfixturevalue(
+        "population_poissonGLM_model_instantiation"
+    )
+    model = nmo.glm.PopulationGLM(regularizer="Ridge", regularizer_strength=1.0)
+    params = model._model_specific_initialization(X, y)
+    active, frozen = model._partition_active(params)
+    model._initialize_optimizer_and_state(active, X, y, frozen_params=frozen)
+    assert model.solver is not None
+
+    model.feature_mask = initialize_feature_mask_for_population_glm(X, y.shape[1])
+    assert model.solver is None
+    assert model.optimizer_run is None
 
 
 @pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
@@ -361,7 +525,7 @@ def test_newton_population_glm_matches_full_autodiff(request, feature_mask):
         )
 
     full_model = deepcopy(model)
-    full_model._get_hess_fn = lambda: None
+    full_model._get_hess_fn = lambda frozen=None: None
     full_model._hess_tag = HessianTag(structure=Full, property=PositiveSemiDefinite)
 
     full_model.fit(X, y)
@@ -409,7 +573,7 @@ def test_newton_block_diagonal_matches_full_autodiff_update(
         )
 
     full_model = deepcopy(model)
-    full_model._get_hess_fn = lambda: None
+    full_model._get_hess_fn = lambda frozen=None: None
     full_model._hess_tag = HessianTag(structure=Full, property=PositiveSemiDefinite)
 
     p0 = model.initialize_params(X, y)
@@ -460,7 +624,7 @@ def test_newton_population_glm_block_hessian_matches_full(
         )
 
     full_model = deepcopy(model)
-    full_model._get_hess_fn = lambda: None
+    full_model._get_hess_fn = lambda frozen=None: None
     full_model._hess_tag = HessianTag(structure=Full, property=PositiveSemiDefinite)
 
     p0 = model.initialize_params(X, y)
@@ -578,7 +742,7 @@ def test_newton_population_classifier_glm_matches_full_autodiff(request, feature
         )
 
     full_model = deepcopy(model)
-    full_model._get_hess_fn = lambda: None
+    full_model._get_hess_fn = lambda frozen=None: None
     full_model._hess_tag = HessianTag(structure=Full, property=PositiveSemiDefinite)
 
     full_model.fit(X, y)
@@ -621,7 +785,7 @@ def test_newton_population_classifier_glm_block_hessian_matches_full(
         )
 
     full_model = deepcopy(model)
-    full_model._get_hess_fn = lambda: None
+    full_model._get_hess_fn = lambda frozen=None: None
     full_model._hess_tag = HessianTag(structure=Full, property=PositiveSemiDefinite)
 
     p0 = model.initialize_params(X, y)
@@ -697,9 +861,11 @@ class _FullHessianGLM(GLM):
     early return it triggers in ``Regularizer._get_hess_fn``.
     """
 
-    def _get_hess_fn(self):
+    def _get_hess_fn(self, frozen=None):
         def loss(params, X, y):
-            rate = self._predict(params, X)
+            # mirrors the in-tree implementations: differentiate the combined loss
+            # with respect to the active subtree alone
+            rate = self._predict(eqx.combine(params, frozen), X)
             return self._observation_model._negative_log_likelihood(y, rate)
 
         return jax.hessian(loss)
@@ -872,8 +1038,12 @@ def test_population_glm_hess_tag_structure():
 
 
 def test_population_glm_hess_tag_property():
-    """PopulationGLM Hessian should be PositiveDefinite at the class level."""
-    assert PopulationGLM._hess_tag.property is PositiveDefinite
+    """PopulationGLM certifies only PositiveSemiDefinite at the class level, like GLM
+    and ClassifierPopulationGLM: the unpenalized block is singular whenever a
+    coefficient carries no curvature (a masked-out feature). Ridge promotes it to
+    PositiveDefinite via ``_hess_property_override``, checked just below."""
+    assert PopulationGLM._hess_tag.property is PositiveSemiDefinite
+    assert PopulationGLM._hess_tag.property is GLM._hess_tag.property
 
 
 def test_population_glm_hess_tag_batch_axes():
