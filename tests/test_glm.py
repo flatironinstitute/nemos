@@ -3353,9 +3353,11 @@ def _set_masked_state(model, is_cls, as_pytree):
     ],
 )
 @pytest.mark.parametrize("n_samples", [20])
+@pytest.mark.parametrize("fit_intercept", [True, False])
 @pytest.mark.requires_x64
 def test_estimate_dof_resid_feature_mask(
     n_samples,
+    fit_intercept,
     reg,
     dof_per_neuron,
     scales_with_classes,
@@ -3366,19 +3368,22 @@ def test_estimate_dof_resid_feature_mask(
     """A masked-out feature is not charged against a neuron's residual DOF.
 
     Each neuron sees its own design, so the result is one DOF per neuron. The Lasso
-    branch reads the non-zero coefficients and is therefore mask-independent.
+    branch reads the non-zero coefficients and is therefore mask-independent. The mask
+    and the frozen intercept are independent subtractions: freezing the intercept shifts
+    every neuron's DOF by the same amount, whatever the mask lets through.
     """
     _, _, model, _, _ = request.getfixturevalue(
         model_instantiation + ("_pytree" if as_pytree else "")
     )
-    model.set_params(regularizer=reg)
+    model.set_params(regularizer=reg, fit_intercept=fit_intercept)
 
     is_cls = "classifier" in model_instantiation
     X = _set_masked_state(model, is_cls, as_pytree)
 
     n_m1_classes = getattr(model, "n_classes", 2) - 1
     dof = dof_per_neuron * n_m1_classes if scales_with_classes else dof_per_neuron
-    expected = n_samples - dof - n_m1_classes
+    intercept_dof = n_m1_classes if fit_intercept else 0
+    expected = n_samples - dof - intercept_dof
 
     num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
     np.testing.assert_allclose(num, expected)
@@ -3392,14 +3397,16 @@ def test_estimate_dof_resid_feature_mask(
         (nmo.regularizer.Ridge(), _DOF_MASK_COUNT),
     ],
 )
+@pytest.mark.parametrize("fit_intercept", [True, False])
 @pytest.mark.requires_x64
 def test_dof_resid_after_fit_feature_mask(
-    reg, dof_per_neuron, request, patch_optimizer_run
+    reg, dof_per_neuron, fit_intercept, request, patch_optimizer_run
 ):
     """fit stores the per-neuron DOF of the masked model.
 
     The solver is a no-op returning ``init_params``, so the fitted coefficients are the
-    injected ones and the DOF is fully determined.
+    injected ones and the DOF is fully determined. With ``fit_intercept=False`` the
+    intercept is frozen out of the partition and costs no DOF.
     """
     _, _, model, _, _ = request.getfixturevalue(
         "population_poissonGLM_model_instantiation"
@@ -3407,6 +3414,7 @@ def test_dof_resid_after_fit_feature_mask(
     patch_optimizer_run(nmo.glm.PopulationGLM)
     model.set_params(
         regularizer=reg,
+        fit_intercept=fit_intercept,
         regularizer_strength=(
             None if isinstance(reg, nmo.regularizer.UnRegularized) else 1.0
         ),
@@ -3418,8 +3426,19 @@ def test_dof_resid_after_fit_feature_mask(
     model.coef_, model.intercept_ = None, None
     y = np.ones((X.shape[0], _DOF_N_NEURONS))
 
-    model.fit(X, y, init_params=init_params)
-    np.testing.assert_allclose(model.dof_resid_, X.shape[0] - dof_per_neuron - 1)
+    # the injected init_params carry an intercept, which a frozen intercept discards
+    warns_ignored_intercept = (
+        does_not_raise()
+        if fit_intercept
+        else pytest.warns(UserWarning, match="the provided intercept is ignored")
+    )
+    with warns_ignored_intercept:
+        model.fit(X, y, init_params=init_params)
+
+    intercept_dof = 1 if fit_intercept else 0
+    np.testing.assert_allclose(
+        model.dof_resid_, X.shape[0] - dof_per_neuron - intercept_dof
+    )
 
 
 @pytest.mark.parametrize("glm_type", ["", "population_"])
