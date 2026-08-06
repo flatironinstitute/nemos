@@ -7,6 +7,7 @@ from functools import partial
 from pathlib import Path
 from unittest.mock import patch
 
+import jax
 import jax.numpy
 import numpy as np
 import pynapple as nap
@@ -51,7 +52,12 @@ from nemos.basis._raised_cosine_basis import (
     RaisedCosineBasisLinear,
     RaisedCosineBasisLog,
 )
-from nemos.basis._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
+from nemos.basis._spline_basis import (
+    BSplineBasis,
+    CyclicBSplineBasis,
+    MSplineBasis,
+    mspline,
+)
 from nemos.basis._zero_basis import ZeroBasis
 from nemos.utils import pynapple_concatenate_numpy
 
@@ -125,6 +131,48 @@ def extra_kwargs(cls, n_basis):
     elif "Fourier" in name:
         return dict(frequencies=(1, 1 + n_basis // 2))
     return {}
+
+
+# Samples for the jit tests: a clean grid, and one carrying a NaN and points
+# outside the bounds the tests set, which take the fill-value branch.
+JIT_INPUTS = {
+    "clean": np.linspace(0, 1, 20),
+    "nan-and-out-of-bounds": np.concatenate(
+        ([np.nan, -0.5], np.linspace(0, 1, 17), [1.5])
+    ),
+}
+
+
+def assert_jit_matches_eager(bas, *inputs):
+    """Check that tracing a basis does not change what it computes.
+
+    Both entry points are exercised: ``evaluate`` returns the basis functions,
+    ``compute_features`` the design matrix, and they reach the samples through
+    different code paths. NaNs must land in the same places, which
+    ``assert_allclose`` checks by default.
+    """
+    for method in ("evaluate", "compute_features"):
+        func = getattr(bas, method)
+        np.testing.assert_allclose(
+            np.asarray(jax.jit(func)(*inputs)),
+            np.asarray(func(*inputs)),
+            rtol=1e-8,
+            atol=1e-10,
+            err_msg=f"jit and eager ``{method}`` disagree for {bas}",
+        )
+
+
+def jit_composite_inputs(*bases, n_samples=20):
+    """One sample array per basis, integer coded for the discrete ones."""
+    grid = np.linspace(0, 1, n_samples)
+    return [
+        (
+            np.arange(n_samples) % bas.n_basis_funcs
+            if isinstance(bas, Category)
+            else grid
+        )
+        for bas in bases
+    ]
 
 
 def filter_attributes(obj, exclude_keys):
@@ -2245,6 +2293,15 @@ class TestSharedMethods:
 class TestZeroBasis(BasisFuncsTesting):
     cls = {"eval": basis.Zero}
 
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize(
+        "inp",
+        [np.linspace(0, 1, 12), np.random.randn(12, 2), np.random.randn(12, 2, 3)],
+    )
+    def test_jit_matches_eager(self, inp):
+        """The empty output is produced identically under tracing."""
+        assert_jit_matches_eager(basis.Zero(), inp)
+
     def test_n_basis_not_settable(self):
         bas = basis.Zero()
         with pytest.raises(AttributeError):
@@ -2257,6 +2314,23 @@ class TestZeroBasis(BasisFuncsTesting):
 
 class TestIdentityBasis(BasisFuncsTesting):
     cls = {"eval": IdentityEval}
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {},
+            {"bounds": (0.2, 0.8)},
+            {"bounds": (0.2, 0.8), "fill_value": 0.0},
+            {"bounds": (0.2, 0.8), "fill_value": -111.0},
+        ],
+    )
+    @pytest.mark.parametrize(
+        "inp", [np.linspace(0, 1, 12), np.linspace(0, 1, 12).reshape(6, 2)]
+    )
+    def test_jit_matches_eager(self, kwargs, inp):
+        """Bounds and fill value behave the same way under tracing."""
+        assert_jit_matches_eager(IdentityEval(**kwargs), inp)
 
     def test_n_basis_not_settable(self):
         bas = IdentityEval()
@@ -2298,6 +2372,18 @@ class TestIdentityBasis(BasisFuncsTesting):
 
 class TestHistoryBasis(BasisFuncsTesting):
     cls = {"conv": HistoryConv}
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("window_size", [1, 2, 7])
+    @pytest.mark.parametrize("inp_label", list(JIT_INPUTS))
+    def test_jit_matches_eager(self, window_size, inp_label):
+        """The shift-and-pad convolution traces to the same result.
+
+        Only 1D samples: ``HistoryBasis.evaluate`` rejects anything else.
+        """
+        assert_jit_matches_eager(
+            HistoryConv(window_size=window_size), JIT_INPUTS[inp_label]
+        )
 
     def test_n_basis_not_settable(self):
         bas = HistoryConv(window_size=8)
@@ -2356,6 +2442,27 @@ class TestHistoryBasis(BasisFuncsTesting):
 
 class TestRaisedCosineLogBasis(BasisFuncsTesting):
     cls = {"eval": basis.RaisedCosineLogEval, "conv": basis.RaisedCosineLogConv}
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("mode", ["eval", "conv"])
+    @pytest.mark.parametrize("inp_label", list(JIT_INPUTS))
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {},
+            {"width": 3.0},
+            {"time_scaling": 1.0},
+            {"enforce_decay_to_zero": False},
+            {"bounds": (0.2, 0.8)},
+            {"bounds": (0.2, 0.8), "fill_value": 0.0},
+        ],
+    )
+    def test_jit_matches_eager(self, mode, inp_label, kwargs):
+        """Each parameter branch of the log-spaced cosines survives tracing."""
+        bas = instantiate_atomic_basis(
+            self.cls[mode], n_basis_funcs=5, window_size=6, **kwargs
+        )
+        assert_jit_matches_eager(bas, JIT_INPUTS[inp_label])
 
     @pytest.mark.parametrize("width", [1.5, 2, 2.5])
     def test_decay_to_zero_basis_number_match(self, width):
@@ -2494,6 +2601,25 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
 class TestRaisedCosineLinearBasis(BasisFuncsTesting):
     cls = {"eval": basis.RaisedCosineLinearEval, "conv": basis.RaisedCosineLinearConv}
 
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("mode", ["eval", "conv"])
+    @pytest.mark.parametrize("inp_label", list(JIT_INPUTS))
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {},
+            {"width": 3.0},
+            {"bounds": (0.2, 0.8)},
+            {"bounds": (0.2, 0.8), "fill_value": 0.0},
+        ],
+    )
+    def test_jit_matches_eager(self, mode, inp_label, kwargs):
+        """Each parameter branch of the linear cosines survives tracing."""
+        bas = instantiate_atomic_basis(
+            self.cls[mode], n_basis_funcs=5, window_size=6, **kwargs
+        )
+        assert_jit_matches_eager(bas, JIT_INPUTS[inp_label])
+
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
     @pytest.mark.parametrize(
         "mode, kwargs", [("eval", {}), ("conv", {"window_size": 5})]
@@ -2567,6 +2693,42 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
 
 class TestMSplineBasis(BasisFuncsTesting):
     cls = {"eval": basis.MSplineEval, "conv": basis.MSplineConv}
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("mode", ["eval", "conv"])
+    @pytest.mark.parametrize("inp_label", list(JIT_INPUTS))
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {},
+            {"order": 1},
+            {"order": 3},
+            {"order": 5},
+            {"bounds": (0.2, 0.8)},
+            {"bounds": (0.2, 0.8), "fill_value": 0.0},
+        ],
+    )
+    def test_jit_matches_eager(self, mode, inp_label, kwargs):
+        """The recursive M-spline evaluation survives tracing at every order."""
+        bas = instantiate_atomic_basis(
+            self.cls[mode], n_basis_funcs=5, window_size=6, **kwargs
+        )
+        assert_jit_matches_eager(bas, JIT_INPUTS[inp_label])
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("order", [1, 2, 3, 5])
+    @pytest.mark.parametrize("n_basis_funcs", [5, 9])
+    def test_shared_cache_leaves_values_unchanged(self, order, n_basis_funcs):
+        """Reusing sub-splines across elements is an optimization, not a change."""
+        bas = self.cls["eval"](n_basis_funcs, order=order)
+        knots = bas._generate_knots()
+        sample_pts = np.linspace(0, 1, 30)
+        shared = {}
+        for i in range(n_basis_funcs):
+            np.testing.assert_array_equal(
+                np.asarray(mspline(sample_pts, order, i, knots, shared)),
+                np.asarray(mspline(sample_pts, order, i, knots)),
+            )
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
     @pytest.mark.parametrize("order", [-1, 0, 1, 2, 3, 4, 5])
@@ -2692,6 +2854,26 @@ class TestMSplineBasis(BasisFuncsTesting):
 class TestOrthExponentialBasis(BasisFuncsTesting):
     cls = {"eval": basis.OrthExponentialEval, "conv": basis.OrthExponentialConv}
 
+    @pytest.mark.requires_x64
+    @pytest.mark.xfail(
+        strict=True,
+        reason="``evaluate`` orthogonalizes with ``scipy.linalg.orth`` and takes the "
+        "width of its output from ``np.linalg.matrix_rank``, so the output shape "
+        "depends on the sample values and cannot be traced. Drop this marker once "
+        "the orthogonalization is ported to jax.",
+    )
+    @pytest.mark.parametrize("mode", ["eval", "conv"])
+    @pytest.mark.parametrize("inp_label", list(JIT_INPUTS))
+    def test_jit_matches_eager(self, mode, inp_label):
+        """Records that the orthogonalized exponentials are not traceable yet."""
+        bas = instantiate_atomic_basis(
+            self.cls[mode],
+            n_basis_funcs=5,
+            window_size=8,
+            decay_rates=np.arange(1, 6),
+        )
+        assert_jit_matches_eager(bas, JIT_INPUTS[inp_label])
+
     def test_check_window_size_after_init(self):
         decay_rates = np.asarray(np.arange(1, 5 + 1), dtype=float)
         expectation = pytest.raises(
@@ -2799,6 +2981,27 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
 class TestBSplineBasis(BasisFuncsTesting):
     cls = {"eval": basis.BSplineEval, "conv": basis.BSplineConv}
 
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("mode", ["eval", "conv"])
+    @pytest.mark.parametrize("inp_label", list(JIT_INPUTS))
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {},
+            {"order": 2},
+            {"order": 3},
+            {"order": 5},
+            {"bounds": (0.2, 0.8)},
+            {"bounds": (0.2, 0.8), "fill_value": 0.0},
+        ],
+    )
+    def test_jit_matches_eager(self, mode, inp_label, kwargs):
+        """Tracing swaps ``splev`` for ``bspline_jax`` without changing the output."""
+        bas = instantiate_atomic_basis(
+            self.cls[mode], n_basis_funcs=6, window_size=8, **kwargs
+        )
+        assert_jit_matches_eager(bas, JIT_INPUTS[inp_label])
+
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
     @pytest.mark.parametrize("order", [1, 2, 3, 4, 5])
     @pytest.mark.parametrize(
@@ -2886,6 +3089,26 @@ class TestBSplineBasis(BasisFuncsTesting):
 
 class TestCyclicBSplineBasis(BasisFuncsTesting):
     cls = {"eval": basis.CyclicBSplineEval, "conv": basis.CyclicBSplineConv}
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("mode", ["eval", "conv"])
+    @pytest.mark.parametrize("inp_label", list(JIT_INPUTS))
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {},
+            {"order": 3},
+            {"order": 4},
+            {"bounds": (0.2, 0.8)},
+            {"bounds": (0.2, 0.8), "fill_value": 0.0},
+        ],
+    )
+    def test_jit_matches_eager(self, mode, inp_label, kwargs):
+        """The wrap-around branch is masked rather than indexed when traced."""
+        bas = instantiate_atomic_basis(
+            self.cls[mode], n_basis_funcs=6, window_size=8, **kwargs
+        )
+        assert_jit_matches_eager(bas, JIT_INPUTS[inp_label])
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
     @pytest.mark.parametrize("order", [2, 3, 4, 5])
@@ -2993,6 +3216,67 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
 
 class TestFourierBasis(BasisFuncsTesting):
     cls = {"eval": FourierEval}
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("inp_label", list(JIT_INPUTS))
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            # frequency specifications, one per branch of the setter
+            {"frequencies": 3},
+            {"frequencies": (1, 4)},
+            {"frequencies": np.array([0, 2, 5])},
+            {"frequencies": [np.array([1, 3])]},
+            # frequency masks, one per branch of the setter
+            {"frequencies": 3, "frequency_mask": "all"},
+            {"frequencies": 3, "frequency_mask": None},
+            # one entry per combination left by the default "no-intercept" drop
+            {"frequencies": 3, "frequency_mask": np.array([1, 0])},
+            {"frequencies": 3, "frequency_mask": lambda f: f > 1},
+            # the period is read off the samples when bounds are left unset
+            {"frequencies": 3, "bounds": None},
+        ],
+    )
+    def test_jit_matches_eager(self, inp_label, kwargs):
+        """Each frequency and mask specification survives tracing."""
+        kwargs = {"bounds": (0.2, 0.8), **kwargs}
+        assert_jit_matches_eager(FourierEval(**kwargs), JIT_INPUTS[inp_label])
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("ndim", [2, 3])
+    @pytest.mark.parametrize("traced", [(True, False), (False, True), (True, True)])
+    def test_jit_matches_eager_mixed_traced_inputs(self, ndim, traced):
+        """A concrete first input must not send the traced ones down the numpy path.
+
+        ``FourierEval`` is the only atomic basis taking more than one input, so
+        it is the only one that can be handed a mix of traced and concrete
+        samples.
+        """
+        traced = traced + (True,) * (ndim - len(traced))
+        inputs = [np.linspace(0.1, 0.9, 15) + i / 10 for i in range(ndim)]
+        bas = FourierEval(2, ndim=ndim, bounds=(0, 1))
+
+        def call(*args):
+            merged = iter(args)
+            return bas.compute_features(
+                *(next(merged) if t else inp for t, inp in zip(traced, inputs))
+            )
+
+        jitted = jax.jit(call)(*(inp for t, inp in zip(traced, inputs) if t))
+        np.testing.assert_allclose(
+            np.asarray(jitted), np.asarray(bas.compute_features(*inputs))
+        )
+
+    @pytest.mark.parametrize("ndim", [1, 2, 3])
+    def test_tuple_frequencies_broadcast_over_dimensions(self, ndim):
+        """A single ``(low, high)`` range applies to every input dimension."""
+        from_tuple = FourierEval((0, 3), ndim=ndim)
+        from_int = FourierEval(3, ndim=ndim)
+        assert len(from_tuple.frequencies) == ndim
+        np.testing.assert_array_equal(
+            from_tuple.masked_frequencies, from_int.masked_frequencies
+        )
+        assert from_tuple.n_basis_funcs == from_int.n_basis_funcs
 
     @pytest.mark.parametrize("mode", ["eval"])
     @pytest.mark.parametrize(
@@ -3756,8 +4040,49 @@ class TestFourierBasis(BasisFuncsTesting):
         np.testing.assert_allclose(out1, out2, rtol=1e-5)
 
 
+# Pairs for the composite jit tests, one per path through the combination code:
+# eval with eval, eval with conv, the scipy-backed splines, the complex Fourier
+# basis, the empty basis and the discrete one. ``OrthExponentialEval`` is absent
+# because it cannot be traced, see ``TestOrthExponentialBasis``.
+JIT_BASIS_PAIRS = [
+    (basis.MSplineEval, basis.RaisedCosineLinearEval),
+    (basis.MSplineEval, basis.RaisedCosineLinearConv),
+    (basis.RaisedCosineLogConv, basis.MSplineConv),
+    (basis.BSplineEval, basis.CyclicBSplineEval),
+    (FourierEval, basis.MSplineEval),
+    (basis.Zero, basis.MSplineEval),
+    (Category, basis.MSplineEval),
+    (IdentityEval, HistoryConv),
+]
+
+
 class TestAdditiveBasis(CombinedBasis):
     cls = {"eval": AdditiveBasis, "conv": AdditiveBasis}
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("basis_a, basis_b", JIT_BASIS_PAIRS)
+    def test_jit_matches_eager(self, basis_a, basis_b, basis_class_specific_params):
+        """Concatenating the two sets of features traces to the same matrix."""
+        bas_a = self.instantiate_basis(
+            5, basis_a, basis_class_specific_params, window_size=8
+        )
+        bas_b = self.instantiate_basis(
+            5, basis_b, basis_class_specific_params, window_size=8
+        )
+        inputs = jit_composite_inputs(bas_a, bas_b)
+        assert_jit_matches_eager(bas_a + bas_b, *inputs)
+
+    @pytest.mark.requires_x64
+    def test_jit_matches_eager_nested(self, basis_class_specific_params):
+        """Nesting a multiplicative basis inside an additive one still traces."""
+        bas_a, bas_b, bas_c = (
+            self.instantiate_basis(
+                5, cls, basis_class_specific_params, window_size=8
+            )
+            for cls in (basis.MSplineEval, basis.RaisedCosineLinearEval, basis.BSplineEval)
+        )
+        bas = bas_a + (bas_b * bas_c)
+        assert_jit_matches_eager(bas, *jit_composite_inputs(bas_a, bas_b, bas_c))
 
     @pytest.mark.parametrize("shape", [(0, 1, 2), (1, 0, 2), (1, 2, 0), (0,), (0, 0)])
     @pytest.mark.parametrize(
@@ -5392,6 +5717,30 @@ class TestAdditiveBasis(CombinedBasis):
 
 class TestMultiplicativeBasis(CombinedBasis):
     cls = {"eval": MultiplicativeBasis, "conv": MultiplicativeBasis}
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("basis_a, basis_b", JIT_BASIS_PAIRS)
+    def test_jit_matches_eager(self, basis_a, basis_b, basis_class_specific_params):
+        """The row-wise Kronecker product traces to the same matrix."""
+        bas_a = self.instantiate_basis(
+            5, basis_a, basis_class_specific_params, window_size=8
+        )
+        bas_b = self.instantiate_basis(
+            5, basis_b, basis_class_specific_params, window_size=8
+        )
+        assert_jit_matches_eager(bas_a * bas_b, *jit_composite_inputs(bas_a, bas_b))
+
+    @pytest.mark.requires_x64
+    def test_jit_matches_eager_nested(self, basis_class_specific_params):
+        """Nesting an additive basis inside a multiplicative one still traces."""
+        bas_a, bas_b, bas_c = (
+            self.instantiate_basis(
+                5, cls, basis_class_specific_params, window_size=8
+            )
+            for cls in (basis.MSplineEval, basis.RaisedCosineLinearEval, basis.BSplineEval)
+        )
+        bas = (bas_a + bas_b) * bas_c
+        assert_jit_matches_eager(bas, *jit_composite_inputs(bas_a, bas_b, bas_c))
 
     @pytest.mark.parametrize("shape", [(0, 1, 2), (1, 0, 2), (1, 2, 0), (0,), (0, 0)])
     @pytest.mark.parametrize(
@@ -8217,6 +8566,25 @@ class TestCategory(BasisFuncsTesting):
     """Tests for Category-specific logic not covered by TestSharedMethods."""
 
     cls = {"eval": Category}
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize(
+        "categories, inp",
+        [
+            (3, np.array([0, 1, 2, 1, 0])),
+            ([2, 5, 8], np.array([2, 5, 8, 8, 2])),
+            ([2, 5, 8], np.array([2, 99, 8, 0, 5])),
+            (np.array([2, 5, 8]), np.array([2, 5, 8, 5, 2])),
+            (["a", "b", "c"], np.array(["a", "z", "b", "c", "a"])),
+        ],
+    )
+    def test_jit_matches_eager(self, categories, inp):
+        """One-hot encoding traces identically, out-of-category rows included.
+
+        ``out_of_category=False`` is left out: it raises under jit by design,
+        which ``test_evaluate_jit_out_of_category_false_raises`` covers.
+        """
+        assert_jit_matches_eager(Category(categories, out_of_category=True), inp)
 
     # ------------------------------------------------------------------
     # Priority 1 – one-hot correctness
