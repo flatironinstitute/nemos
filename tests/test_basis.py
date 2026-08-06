@@ -4073,10 +4073,12 @@ class TestAdditiveBasis(CombinedBasis):
     def test_jit_matches_eager_nested(self, basis_class_specific_params):
         """Nesting a multiplicative basis inside an additive one still traces."""
         bas_a, bas_b, bas_c = (
-            self.instantiate_basis(
-                5, cls, basis_class_specific_params, window_size=8
+            self.instantiate_basis(5, cls, basis_class_specific_params, window_size=8)
+            for cls in (
+                basis.MSplineEval,
+                basis.RaisedCosineLinearEval,
+                basis.BSplineEval,
             )
-            for cls in (basis.MSplineEval, basis.RaisedCosineLinearEval, basis.BSplineEval)
         )
         bas = bas_a + (bas_b * bas_c)
         assert_jit_matches_eager(bas, *jit_composite_inputs(bas_a, bas_b, bas_c))
@@ -5731,10 +5733,12 @@ class TestMultiplicativeBasis(CombinedBasis):
     def test_jit_matches_eager_nested(self, basis_class_specific_params):
         """Nesting an additive basis inside a multiplicative one still traces."""
         bas_a, bas_b, bas_c = (
-            self.instantiate_basis(
-                5, cls, basis_class_specific_params, window_size=8
+            self.instantiate_basis(5, cls, basis_class_specific_params, window_size=8)
+            for cls in (
+                basis.MSplineEval,
+                basis.RaisedCosineLinearEval,
+                basis.BSplineEval,
             )
-            for cls in (basis.MSplineEval, basis.RaisedCosineLinearEval, basis.BSplineEval)
         )
         bas = (bas_a + bas_b) * bas_c
         assert_jit_matches_eager(bas, *jit_composite_inputs(bas_a, bas_b, bas_c))
