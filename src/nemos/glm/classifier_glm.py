@@ -985,7 +985,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
     Specify which features predict each neuron:
 
-    >>> feature_mask = jnp.array([[[1, 1, 1], [0, 0, 0]], [[1, 1, 1], [1, 1, 1]]])
+    >>> feature_mask = jnp.array([[1, 0], [1, 1]])
     >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
     >>> model = nmo.glm.ClassifierPopulationGLM(
     ...     n_classes=3,
