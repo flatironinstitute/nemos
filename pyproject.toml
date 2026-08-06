@@ -190,13 +190,13 @@ convention = "numpy"
 
 
 [tool.jupytext]
-# Intent: keep the writer's local jupytext version and kernel display name out of
-# the myst-nb markdown notebooks, so saving one from Jupyter Lab does not add
-# unrelated front matter changes to the diff.
+# Keep the writer's local jupytext version out of the myst-nb markdown notebooks,
+# so saving one from Jupyter Lab does not stamp it into the front matter and add
+# an unrelated change to the diff.
 #
-# Caveat: as of jupytext 1.19 this filter only understands top level metadata
-# keys, so neither entry below takes effect and the version stamp is not
-# filterable at all. scripts/check_notebook_metadata.py is what actually enforces
-# this today. The setting is kept so the intent is recorded in one place and
-# starts working if jupytext gains sub-key support.
-notebook_metadata_filter = "-jupytext.text_representation.jupytext_version,-kernelspec.display_name"
+# The kernel display name is the other field Jupyter Lab rewrites, but it cannot
+# be filtered the same way: `kernelspec.display_name` is a required property of
+# the nbformat schema, so a notebook without it fails validation and jupytext can
+# no longer read the file. scripts/check_notebook_metadata.py enforces that one
+# instead.
+notebook_metadata_filter = "-jupytext.text_representation.jupytext_version"

@@ -8,11 +8,13 @@ changes how the notebook is executed or rendered, but both produce diffs that
 have nothing to do with the change under review.
 
 The ``[tool.jupytext] notebook_metadata_filter`` setting in ``pyproject.toml``
-keeps jupytext from writing those fields in the first place. This script is the
-backstop for that setting: it reports any notebook that still carries them, for
-instance one written before the setting existed or by a tool that did not read
-the configuration. It only reports, it never rewrites, so the fix is to let
-jupytext round-trip the file or to delete the offending lines by hand.
+keeps jupytext from writing the version stamp in the first place, so this script
+is the backstop for it: it reports any notebook that still carries one, for
+instance a file written before the setting existed or by a tool that did not
+read the configuration. The display name cannot be handled that way, since
+``kernelspec.display_name`` is required by the nbformat schema and filtering it
+out leaves a notebook jupytext refuses to read, so this script is what keeps it
+uniform. It only reports, it never rewrites.
 """
 
 import pathlib
@@ -51,7 +53,7 @@ def problems(path):
     if "jupytext_version" in text_repr:
         found.append("carries jupytext_version")
     display_name = meta.get("kernelspec", {}).get("display_name")
-    if display_name not in (None, CANONICAL_DISPLAY_NAME):
+    if display_name != CANONICAL_DISPLAY_NAME:
         found.append(f"display_name is {display_name!r}")
     return found
 
@@ -71,9 +73,10 @@ def main():
     for path, found in offenders:
         print(f"\t- {path}: {', '.join(found)}")
     print(
-        "\nThese fields are filtered by `[tool.jupytext] notebook_metadata_filter` in "
-        "pyproject.toml. Re-saving the notebook through jupytext, or removing the lines "
-        "by hand, will clear this."
+        f"\nDelete the `jupytext_version` line, and set `display_name` to "
+        f"{CANONICAL_DISPLAY_NAME!r}. Note that re-saving the file through jupytext is "
+        "not a substitute: it drops any root level front matter the page relies on, "
+        "such as the `hide:` key of docs/quickstart.md."
     )
     return 1
 
