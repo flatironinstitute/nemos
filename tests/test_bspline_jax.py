@@ -99,8 +99,12 @@ def test_matches_splev_called_directly(order, der, n_basis, knots_builder):
     if knots_builder is cyclic_knots and n_basis < order + 2:
         pytest.skip("cyclic knots need more basis elements than the spline order")
     knots = knots_builder(n_basis, order)
-    # in-range samples only: the NaN filling is ``bspline``'s, not scipy's
-    sample_pts = np.linspace(knots[0], knots[-1], 41, endpoint=False)
+    # Sample the span the knots actually define, ``[t[order - 1], t[nk - order]]``.
+    # Outside it ``splev`` extrapolates the boundary polynomial instead of
+    # returning the basis, which is what the knot padding in ``bspline`` is for.
+    sample_pts = np.linspace(
+        knots[order - 1], knots[knots.shape[0] - order], 41, endpoint=False
+    )
     expected = splev_reference(sample_pts, knots, order, der)
     actual = np.asarray(bspline_jax(sample_pts, knots, order=order, der=der))
     assert_same_basis(expected, actual)
