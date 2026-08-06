@@ -2969,89 +2969,56 @@ class TestPopulationGLM:
             model.feature_mask = mask
 
     @pytest.fixture
-    def feature_mask_compatibility_fit_expectation(self, model_instantiation):
+    def feature_mask_compatibility_fit_expectation(self):
         """
-        Fixture to return the expected exceptions for test_feature_mask_compatibility_fit
-        based on the model type (classifier vs non-classifier).
+        Fixture to return the expected exceptions for test_feature_mask_compatibility_fit.
 
-        For classifier models, the feature_mask shape is (n_features, n_neurons, n_classes)
-        which means all the test masks (which lack the n_classes dimension) will fail
-        shape validation.
+        Every model expects a feature_mask of shape (n_features, n_neurons): a classifier
+        masks a feature for a neuron across all of its classes, so a mask carrying the
+        trailing class axis of the coefficients is rejected like any other wrong shape.
         """
-        is_classifier = "classifier" in model_instantiation
-
         type_error_match = "feature_mask and X must have the same structure"
         # every model now reports a leaf-by-leaf shape mismatch the same way
         shape_mismatch_match = (
             "The ``feature_mask`` must match the shape of the ``coef``, leaf by leaf"
         )
 
-        if is_classifier:
-            # Classifier models expect feature_mask shape (n_features, n_neurons, n_classes)
-            # Masks without n_classes dimension fail shape validation
-            return {
-                "correct_shape_np": pytest.raises(
-                    ValueError, match=shape_mismatch_match
-                ),
-                "correct_shape_classifier_np": does_not_raise(),
-                "wrong_n_features_np": pytest.raises(
-                    ValueError, match=shape_mismatch_match
-                ),
-                "wrong_n_neurons_np": pytest.raises(
-                    ValueError, match=shape_mismatch_match
-                ),
-                "correct_shape_pytree": pytest.raises(
-                    ValueError, match=shape_mismatch_match
-                ),
-                "correct_shape_classifier_pytree": does_not_raise(),
-                "wrong_n_neurons_pytree": pytest.raises(
-                    ValueError, match=shape_mismatch_match
-                ),
-                "missing_key_pytree": pytest.raises(TypeError, match=type_error_match),
-                "missing_key_wrong_shape_pytree": pytest.raises(
-                    TypeError, match=type_error_match
-                ),
-            }
-        else:
-            # Non-classifier models expect feature_mask shape (n_features, n_neurons)
-            return {
-                "correct_shape_np": does_not_raise(),
-                "correct_shape_classifier_np": pytest.raises(
-                    ValueError, match=shape_mismatch_match
-                ),
-                "wrong_n_features_np": pytest.raises(
-                    ValueError, match=shape_mismatch_match
-                ),
-                "wrong_n_neurons_np": pytest.raises(
-                    ValueError, match=shape_mismatch_match
-                ),
-                "correct_shape_pytree": does_not_raise(),
-                "correct_shape_classifier_pytree": pytest.raises(
-                    ValueError, match=shape_mismatch_match
-                ),
-                "wrong_n_neurons_pytree": pytest.raises(
-                    ValueError, match=shape_mismatch_match
-                ),
-                "missing_key_pytree": pytest.raises(TypeError, match=type_error_match),
-                "missing_key_wrong_shape_pytree": pytest.raises(
-                    TypeError, match=type_error_match
-                ),
-            }
+        return {
+            "correct_shape_np": does_not_raise(),
+            "extra_class_axis_np": pytest.raises(
+                ValueError, match=shape_mismatch_match
+            ),
+            "wrong_n_features_np": pytest.raises(
+                ValueError, match=shape_mismatch_match
+            ),
+            "wrong_n_neurons_np": pytest.raises(ValueError, match=shape_mismatch_match),
+            "correct_shape_pytree": does_not_raise(),
+            "extra_class_axis_pytree": pytest.raises(
+                ValueError, match=shape_mismatch_match
+            ),
+            "wrong_n_neurons_pytree": pytest.raises(
+                ValueError, match=shape_mismatch_match
+            ),
+            "missing_key_pytree": pytest.raises(TypeError, match=type_error_match),
+            "missing_key_wrong_shape_pytree": pytest.raises(
+                TypeError, match=type_error_match
+            ),
+        }
 
     # Parametrization for test_feature_mask_compatibility_fit masks
     feature_mask_compatibility_fit_masks = (
         "mask, mask_key_np, mask_key_pytree",
         [
-            # Non-classifier correct shape: (n_features, n_neurons) = (5, 3)
+            # Correct shape: (n_features, n_neurons) = (5, 3)
             (
                 np.array([0, 1, 1] * 5).reshape(5, 3),
                 "correct_shape_np",
                 "missing_key_pytree",  # pytree expects dict, not array
             ),
-            # Classifier correct shape: (n_features, n_neurons, n_classes) = (5, 3, 3)
+            # One class axis too many: (n_features, n_neurons, n_classes) = (5, 3, 3)
             (
                 np.ones((5, 3, 3), dtype=int),
-                "correct_shape_classifier_np",
+                "extra_class_axis_np",
                 "missing_key_pytree",  # pytree expects dict, not array
             ),
             (
@@ -3064,7 +3031,7 @@ class TestPopulationGLM:
                 "wrong_n_neurons_np",
                 "missing_key_pytree",
             ),
-            # Non-classifier pytree correct shape: {'input_1': (3, 3), 'input_2': (2, 3)}
+            # Pytree correct shape: {'input_1': (3, 3), 'input_2': (2, 3)}
             (
                 {
                     "input_1": np.array([[0, 1, 0]] * 3),
@@ -3073,14 +3040,14 @@ class TestPopulationGLM:
                 "missing_key_pytree",  # np expects array, not dict
                 "correct_shape_pytree",
             ),
-            # Classifier pytree correct shape: {'input_1': (3, 3, 3), 'input_2': (2, 3, 3)}
+            # Pytree with one class axis too many: {'input_1': (3, 3, 3), 'input_2': (2, 3, 3)}
             (
                 {
                     "input_1": np.ones((3, 3, 3), dtype=int),
                     "input_2": np.ones((2, 3, 3), dtype=int),
                 },
                 "missing_key_pytree",  # np expects array, not dict
-                "correct_shape_classifier_pytree",
+                "extra_class_axis_pytree",
             ),
             # one neuron too many in every leaf
             (
@@ -3323,6 +3290,136 @@ def test_estimate_dof_resid(
     expected = n_samples - dof - intercept_dof
     num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
     assert np.allclose(num, expected)
+
+
+# A design whose last column duplicates the previous one: a neuron keeping both spends
+# two coefficients on one dimension, which is what separates the Ridge count from the
+# UnRegularized rank.
+_DOF_MASK_DESIGN = (
+    jnp.eye(_DOF_N_FEATURES).at[:, -1].set(jnp.eye(_DOF_N_FEATURES)[:, -2])
+)
+# neuron 0 keeps every feature, neuron 1 the first three, neuron 2 the collinear pair
+_DOF_MASK = jnp.array([[1, 1, 0], [1, 1, 0], [1, 1, 0], [1, 0, 1], [1, 0, 1]])
+_DOF_MASK_COUNT = jnp.array([5, 3, 2])  # features the mask lets through, per neuron
+_DOF_MASK_RANK = jnp.array([4, 3, 1])  # rank of each neuron's own design
+_DOF_MASK_NONZERO = jnp.array([3, 1, 1])  # non-zero coefficients set below, per neuron
+
+
+def _set_masked_state(model, is_cls, as_pytree):
+    """Assign a coef_/intercept_ and feature_mask, and return the matching design.
+
+    The non-zero coefficients sit at features the mask lets through, as a fitted model's
+    would; for the classifier they all sit in the first class, so the per-neuron counts
+    match the non-classifier case.
+    """
+    nf, nn = _DOF_N_FEATURES, _DOF_N_NEURONS
+    if is_cls:
+        coef = jnp.zeros((nf, nn, _DOF_N_CLASSES))
+        coef = coef.at[:3, 0, 0].set(1.0).at[:1, 1, 0].set(1.0).at[3:4, 2, 0].set(1.0)
+        intercept = jnp.zeros((nn, _DOF_N_CLASSES))
+    else:
+        coef = jnp.zeros((nf, nn))
+        coef = coef.at[:3, 0].set(1.0).at[:1, 1].set(1.0).at[3:4, 2].set(1.0)
+        intercept = jnp.zeros((nn,))
+
+    X, mask = _DOF_MASK_DESIGN, _DOF_MASK
+    if as_pytree:
+        # leaves are traversed in sorted-key order, matching the column order of X
+        X = {"input_1": X[:, :3], "input_2": X[:, 3:]}
+        mask = {"input_1": mask[:3], "input_2": mask[3:]}
+        coef = {"input_1": coef[:3], "input_2": coef[3:]}
+
+    # the mask goes in first: its setter refuses a model that already holds parameters
+    model.feature_mask = mask
+    model.coef_ = coef
+    model.intercept_ = intercept
+    return X
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "population_poissonGLM_model_instantiation",
+        "population_classifierGLM_model_instantiation",
+    ],
+)
+@pytest.mark.parametrize("as_pytree", [False, True])
+@pytest.mark.parametrize(
+    "reg, dof_per_neuron, scales_with_classes",
+    [
+        (nmo.regularizer.UnRegularized(), _DOF_MASK_RANK, True),
+        (nmo.regularizer.Lasso(), _DOF_MASK_NONZERO, False),
+        (nmo.regularizer.Ridge(), _DOF_MASK_COUNT, True),
+    ],
+)
+@pytest.mark.parametrize("n_samples", [20])
+@pytest.mark.requires_x64
+def test_estimate_dof_resid_feature_mask(
+    n_samples,
+    reg,
+    dof_per_neuron,
+    scales_with_classes,
+    as_pytree,
+    request,
+    model_instantiation,
+):
+    """A masked-out feature is not charged against a neuron's residual DOF.
+
+    Each neuron sees its own design, so the result is one DOF per neuron. The Lasso
+    branch reads the non-zero coefficients and is therefore mask-independent.
+    """
+    _, _, model, _, _ = request.getfixturevalue(
+        model_instantiation + ("_pytree" if as_pytree else "")
+    )
+    model.set_params(regularizer=reg)
+
+    is_cls = "classifier" in model_instantiation
+    X = _set_masked_state(model, is_cls, as_pytree)
+
+    n_m1_classes = getattr(model, "n_classes", 2) - 1
+    dof = dof_per_neuron * n_m1_classes if scales_with_classes else dof_per_neuron
+    expected = n_samples - dof - n_m1_classes
+
+    num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
+    np.testing.assert_allclose(num, expected)
+
+
+@pytest.mark.parametrize(
+    "reg, dof_per_neuron",
+    [
+        (nmo.regularizer.UnRegularized(), _DOF_MASK_RANK),
+        (nmo.regularizer.Lasso(), _DOF_MASK_NONZERO),
+        (nmo.regularizer.Ridge(), _DOF_MASK_COUNT),
+    ],
+)
+@pytest.mark.requires_x64
+def test_dof_resid_after_fit_feature_mask(
+    reg, dof_per_neuron, request, patch_optimizer_run
+):
+    """fit stores the per-neuron DOF of the masked model.
+
+    The solver is a no-op returning ``init_params``, so the fitted coefficients are the
+    injected ones and the DOF is fully determined.
+    """
+    _, _, model, _, _ = request.getfixturevalue(
+        "population_poissonGLM_model_instantiation"
+    )
+    patch_optimizer_run(nmo.glm.PopulationGLM)
+    model.set_params(
+        regularizer=reg,
+        regularizer_strength=(
+            None if isinstance(reg, nmo.regularizer.UnRegularized) else 1.0
+        ),
+    )
+
+    X = _set_masked_state(model, False, as_pytree=False)
+    # hand the sparse state to fit as the starting point, leaving the model unfitted
+    init_params = (model.coef_, model.intercept_)
+    model.coef_, model.intercept_ = None, None
+    y = np.ones((X.shape[0], _DOF_N_NEURONS))
+
+    model.fit(X, y, init_params=init_params)
+    np.testing.assert_allclose(model.dof_resid_, X.shape[0] - dof_per_neuron - 1)
 
 
 @pytest.mark.parametrize("glm_type", ["", "population_"])
@@ -4301,7 +4398,7 @@ class TestClassifierGLM:
         )
         model.inverse_link_function = inv_link
         if is_population_glm_type(glm_type):
-            model.feature_mask = jnp.ones((X.shape[1], y.shape[1], model.n_classes))
+            model.feature_mask = jnp.ones((X.shape[1], y.shape[1]))
             model.scale_ = jnp.ones((y.shape[1]))
             shape_log_proba = (X.shape[0], y.shape[1], model.n_classes)
         else:

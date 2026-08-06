@@ -275,7 +275,7 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         )
 
         shape_match = pytree_map_and_reduce(
-            lambda fm, coef: fm.shape == coef.shape,
+            lambda fm, coef: fm.shape == self._expected_mask_shape(coef),
             all,
             feature_mask,
             params.coef,
@@ -283,11 +283,22 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         if not shape_match:
             raise ValueError(
                 "The ``feature_mask`` must match the shape of the ``coef``, leaf by leaf. "
-                f"Expected {jax.tree_util.tree_map(lambda c: c.shape, params.coef)}, "
+                f"Expected "
+                f"{jax.tree_util.tree_map(lambda c: self._expected_mask_shape(c), params.coef)}, "
                 f"got {jax.tree_util.tree_map(lambda m: m.shape, feature_mask)} instead. "
                 "A pytree mask holding one entry per neuron is no longer accepted; broadcast "
                 "it to the shape of the coefficients."
             )
+
+    @staticmethod
+    def _expected_mask_shape(coef: jnp.ndarray) -> tuple[int, ...]:
+        """Shape a ``feature_mask`` leaf must have to mask ``coef``.
+
+        The mask selects features, so it carries one entry per coefficient the model
+        estimates. Subclasses whose coefficients carry an axis the mask does not
+        distinguish (the classes of a classifier) drop that axis here.
+        """
+        return coef.shape
 
     def get_empty_params(self, X, y) -> GLMParams:
         """Return the param shape given the input data."""
@@ -386,6 +397,19 @@ class ClassifierGLMValidator(GLMValidator):
     extra_params: Dict[Literal["n_classes"], int] = field(kw_only=True)
     expected_param_dims: Tuple[int] = (2, 1)
     model_class: str = "ClassifierGLM"
+
+    @staticmethod
+    def _expected_mask_shape(coef: jnp.ndarray) -> tuple[int, ...]:
+        """Drop the trailing class axis: a feature is masked for a neuron or not at all.
+
+        Coefficients carry a class axis, but nothing distinguishes the classes when
+        deciding whether a feature reaches a neuron, and a mask free to vary across
+        classes would make the per-neuron residual degrees of freedom ambiguous. The
+        mask is therefore ``(n_features, n_neurons)`` (or ``(n_features,)`` for the
+        single-neuron classifier) and broadcasts over classes at prediction time.
+        """
+        return coef.shape[:-1]
+
     params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
         *RegressorValidator.params_validation_sequence[:2],
         (

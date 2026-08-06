@@ -274,9 +274,7 @@ ModelFixture = namedtuple(
 )
 
 
-def initialize_feature_mask_for_population_glm(
-    X, n_neurons: int, n_classes: int = 0, coef=None
-):
+def initialize_feature_mask_for_population_glm(X, n_neurons: int, coef=None):
     """
     Create a feature mask of ones for PopulationGLM testing.
 
@@ -291,24 +289,19 @@ def initialize_feature_mask_for_population_glm(
         Number of neurons (determines the second dimension of the mask).
         Ignored if coef is provided.
     coef :
-        Optional coefficient array/pytree. If provided, the mask shape will match
-        coef shape exactly (required for ClassifierPopulationGLM).
-    n_classes:
-        Number of classes (determines the second dimension of the mask).
+        Optional coefficient array/pytree. If provided, the mask leaves are shaped like
+        the features-by-neurons block of the coefficients.
 
     Returns
     -------
     :
-        A feature mask with all ones, shaped like the coefficients it masks. If coef is
-        provided, returns ones_like(coef). Otherwise each leaf of X contributes a mask of
-        shape (n_features_in_leaf, n_neurons, *extra_shape).
+        A feature mask with all ones, of shape (n_features_in_leaf, n_neurons) leaf by
+        leaf. Classifier coefficients carry a trailing class axis, which the mask does
+        not distinguish and therefore drops.
     """
-    extra_shape = (n_classes,) if n_classes else ()
     if coef is not None:
-        return jax.tree_util.tree_map(lambda c: jnp.ones(c.shape), coef)
-    return jax.tree_util.tree_map(
-        lambda x: jnp.ones((x.shape[1], n_neurons, *extra_shape)), X
-    )
+        return jax.tree_util.tree_map(lambda c: jnp.ones(c.shape[:2]), coef)
+    return jax.tree_util.tree_map(lambda x: jnp.ones((x.shape[1], n_neurons)), X)
 
 
 DEFAULT_KWARGS = {
