@@ -8,6 +8,7 @@ two must agree on every input the basis can be handed.
 import jax
 import numpy as np
 import pytest
+from scipy.interpolate import splev
 
 import nemos.basis as basis
 from nemos.basis._spline_basis import bspline, bspline_jax
@@ -46,13 +47,35 @@ SAMPLES = {
 }
 
 
+def splev_reference(sample_pts, knots, order, der):
+    """Basis matrix built by calling ``splev`` directly, one element at a time.
+
+    ``bspline`` is the only other caller of ``splev`` in the package, so going
+    through it would make the comparison vacuous the day that path is dropped.
+    This reference is written against scipy alone.
+    """
+    knots = np.sort(knots)
+    n_basis = knots.shape[0] - order
+    coefficients = np.eye(n_basis, knots.shape[0])
+    return np.stack(
+        [
+            splev(sample_pts, (knots, coefficients[i], order - 1), der=der)
+            for i in range(n_basis)
+        ],
+        axis=1,
+    )
+
+
 def assert_same_basis(expected, actual):
     """Same shape, same NaN pattern, same values."""
     assert expected.shape == actual.shape
     np.testing.assert_array_equal(
         np.isnan(expected), np.isnan(actual), err_msg="NaN patterns differ"
     )
-    np.testing.assert_allclose(expected, actual, rtol=1e-10, atol=1e-12)
+    # high derivatives reach 1e5, and the cancellation between the two terms of
+    # the recursion leaves a residue there where the exact value is zero
+    scale = max(1.0, np.nanmax(np.abs(expected)))
+    np.testing.assert_allclose(expected, actual, rtol=1e-10, atol=1e-10 * scale)
 
 
 @pytest.mark.parametrize("order, der", ORDER_DER)
@@ -66,6 +89,21 @@ def test_matches_splev_open_knots(order, der, n_basis, sample_label):
     actual = np.asarray(bspline_jax(sample_pts, knots, order=order, der=der))
     assert_same_basis(expected, actual)
     assert actual.shape == (sample_pts.shape[0], knots.shape[0] - order)
+
+
+@pytest.mark.parametrize("order, der", ORDER_DER)
+@pytest.mark.parametrize("n_basis", [6, 12])
+@pytest.mark.parametrize("knots_builder", [open_knots, cyclic_knots])
+def test_matches_splev_called_directly(order, der, n_basis, knots_builder):
+    """Reference scipy itself, so the check survives dropping the ``bspline`` path."""
+    if knots_builder is cyclic_knots and n_basis < order + 2:
+        pytest.skip("cyclic knots need more basis elements than the spline order")
+    knots = knots_builder(n_basis, order)
+    # in-range samples only: the NaN filling is ``bspline``'s, not scipy's
+    sample_pts = np.linspace(knots[0], knots[-1], 41, endpoint=False)
+    expected = splev_reference(sample_pts, knots, order, der)
+    actual = np.asarray(bspline_jax(sample_pts, knots, order=order, der=der))
+    assert_same_basis(expected, actual)
 
 
 @pytest.mark.parametrize("order, der", ORDER_DER)
@@ -156,14 +194,21 @@ def test_partition_of_unity(order, n_basis):
     np.testing.assert_allclose(actual.sum(axis=1), 1.0, rtol=1e-10)
 
 
-@pytest.mark.parametrize("order", [3, 4, 5, 6])
-@pytest.mark.parametrize("der", [1, 2])
+@pytest.mark.parametrize(
+    "order, der", [(order, der) for order in ORDERS for der in range(1, order - 1)]
+)
 def test_derivative_matches_finite_difference(order, der):
-    """The derivative recursion is the derivative, not only a match to ``splev``."""
+    """The derivative recursion differentiates, it does not only match ``splev``."""
     knots = open_knots(10, order)
+    # sample at the interval midpoints: the derivative of order ``der - 1`` has
+    # kinks at the knots, where a difference quotient does not converge
+    edges = np.unique(knots)
+    sample_pts = (edges[:-1] + edges[1:]) / 2
     step = 1e-6
-    sample_pts = np.linspace(0.2, 0.8, 25)
     lower = np.asarray(bspline_jax(sample_pts - step, knots, order=order, der=der - 1))
     upper = np.asarray(bspline_jax(sample_pts + step, knots, order=order, der=der - 1))
     actual = np.asarray(bspline_jax(sample_pts, knots, order=order, der=der))
-    np.testing.assert_allclose((upper - lower) / (2 * step), actual, atol=1e-4)
+    scale = max(1.0, np.abs(actual).max())
+    np.testing.assert_allclose(
+        (upper - lower) / (2 * step), actual, rtol=1e-4, atol=1e-4 * scale
+    )
