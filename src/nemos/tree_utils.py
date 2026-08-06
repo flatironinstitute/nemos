@@ -171,7 +171,7 @@ def is_traced(*pytrees: Any) -> bool:
     >>> from nemos.tree_utils import is_traced
     >>> is_traced(np.arange(3))
     False
-    >>> jax.jit(lambda x: is_traced(x))(np.arange(3))
+    >>> bool(jax.jit(lambda x: is_traced(x))(np.arange(3)))
     True
     """
     return pytree_map_and_reduce(lambda x: isinstance(x, Tracer), any, pytrees)
