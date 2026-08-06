@@ -214,7 +214,7 @@ def test_newton_glm_instantiate_solver(regularizer_name, glm_class):
 
 
 def _freeze_first_coef_leaf(model, params):
-    """Build a ``fix_params`` spec pinning the first ``coef`` leaf to its true value.
+    """Build a ``_fix_params`` spec pinning the first ``coef`` leaf to its true value.
 
     Freezing a coefficient leaf rather than the intercept is what exercises the
     ``coef`` block of the Hessian: the intercept is a single row, so dropping it
@@ -224,10 +224,8 @@ def _freeze_first_coef_leaf(model, params):
     spec = jax.tree_util.tree_unflatten(
         treedef, [leaves[0]] + [None] * (len(leaves) - 1)
     )
-    model.fix_params = (spec, None)
-    # read the spec back: the setter validates and casts it, so this is the value
-    # the frozen leaf is actually pinned to
-    return model.fix_params[0]
+    model._fix_params = GLMParams(spec, None)
+    return spec
 
 
 @pytest.mark.requires_x64
@@ -378,7 +376,7 @@ def test_population_glm_hess_fn_drops_frozen_leaves(freeze, request):
         assert hess.intercept is None
         assert all(row.intercept is None for row in hess.coef.values())
     else:
-        pinned = sorted(model.fix_params[0])[0]
+        pinned = sorted(model._fix_params.coef)[0]
         assert active.coef[pinned] is None
         assert hess.coef[pinned] is None
         # the frozen leaf is dropped as a column too, not just as a row
