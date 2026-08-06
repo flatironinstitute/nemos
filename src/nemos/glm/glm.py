@@ -60,6 +60,16 @@ REGRESSION_GLM_TYPES = Union[
 ]
 
 
+def _broadcast_mask_to(mask: jnp.ndarray, coef: jnp.ndarray) -> jnp.ndarray:
+    """Add trailing singleton axes so ``mask`` broadcasts against ``coef``.
+
+    The mask is spelled ``(n_features, n_neurons)``: it says which features reach which
+    neuron and knows nothing about axes the coefficients add beyond that (the classes of
+    a classifier). A no-op when the two already share a shape.
+    """
+    return mask.reshape(mask.shape + (1,) * (coef.ndim - mask.ndim))
+
+
 def _glm_hessian_block(
     X,
     eta,
@@ -1334,12 +1344,32 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             return n_samples - resid_dof - 1
 
         elif isinstance(self.regularizer, Ridge):
-            # for Ridge, use the tot parameters (X.shape[1] + intercept)
-            return (n_samples - X.shape[1] - 1) * jnp.ones_like(params.intercept)
+            # for Ridge, use the tot parameters (estimated features + intercept)
+            return (n_samples - self._n_estimated_features(X) - 1) * jnp.ones_like(
+                params.intercept
+            )
         else:
             # for UnRegularized, use the rank
-            rank = jnp.linalg.matrix_rank(X)
-            return (n_samples - rank - 1) * jnp.ones_like(params.intercept)
+            return (n_samples - self._design_rank(X) - 1) * jnp.ones_like(
+                params.intercept
+            )
+
+    def _n_estimated_features(self, X: jnp.ndarray) -> jnp.ndarray:
+        """Count the coefficients the model estimates, as a scalar or one per neuron.
+
+        Every column of the design contributes a coefficient here. ``PopulationGLM``
+        overrides this: a masked-out feature is not estimated for that neuron.
+        """
+        return X.shape[1]
+
+    def _design_rank(self, X: jnp.ndarray) -> jnp.ndarray:
+        """Rank of the design, as a scalar or one per neuron.
+
+        The rank, rather than the column count, is what an unpenalized fit consumes:
+        collinear columns share degrees of freedom. ``PopulationGLM`` overrides this to
+        take the rank per neuron, since the mask gives each neuron its own design.
+        """
+        return jnp.linalg.matrix_rank(X)
 
     def _initialize_optimizer_and_state(
         self,
@@ -1997,13 +2027,39 @@ class PopulationGLM(GLM):
             # then sum across all features and add the intercept, before
             # passing to the inverse link function
             tree_utils.pytree_map_and_reduce(
-                lambda x, w, m: jnp.einsum("ti, i...->t...", x, w * m),
+                lambda x, w, m: jnp.einsum(
+                    "ti, i...->t...", x, w * _broadcast_mask_to(m, w)
+                ),
                 sum,
                 X,
                 params.coef,
                 feature_mask,
             )
             + params.intercept
+        )
+
+    def _n_estimated_features(self, X: jnp.ndarray) -> jnp.ndarray:
+        """Count the features the mask lets through, per neuron.
+
+        A masked-out coefficient contributes nothing to the rate and is never estimated,
+        so it must not be charged against the residual degrees of freedom.
+        """
+        if self._feature_mask is None:
+            return super()._n_estimated_features(X)
+        mask = jnp.concatenate(jax.tree_util.tree_leaves(self._feature_mask), axis=0)
+        return jnp.sum(mask, axis=0)
+
+    def _design_rank(self, X: jnp.ndarray) -> jnp.ndarray:
+        """Rank of each neuron's own design, after its masked columns are dropped.
+
+        Zeroing the masked columns leaves the rank unchanged relative to deleting them,
+        so this stays a plain array op rather than a boolean index.
+        """
+        if self._feature_mask is None:
+            return super()._design_rank(X)
+        mask = jnp.concatenate(jax.tree_util.tree_leaves(self._feature_mask), axis=0)
+        return jax.vmap(lambda m: jnp.linalg.matrix_rank(X * m), in_axes=1, out_axes=0)(
+            mask
         )
 
     def _get_hess_fn(self):
