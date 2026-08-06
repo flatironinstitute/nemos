@@ -66,10 +66,9 @@ class PPGLMValidator(GLMValidator):
         ),
         *RegressorValidator.params_validation_sequence[3:],
         ("validate_intercept_shape", None),
-        ("validate_random_key", None),
     )
 
-    def validate_random_key(self, random_key, dtype: type = jnp.uint32):
+    def validate_random_key(self, random_key: jax.Array, dtype: type = jnp.uint32):
         """Validate random key dtype and shape.
 
         Parameters
@@ -119,7 +118,7 @@ class PPGLMValidator(GLMValidator):
 
     def get_empty_params(self, X, y) -> GLMParams:
         """Return the param shape given the input data."""
-        n_features = int(jnp.unique(X.ids).size * self.n_basis_funcs)
+        n_features = int(jnp.unique(X.predictor_ids).size * self.n_basis_funcs)
         empty_coef = jnp.zeros(n_features)
         empty_intercept = jnp.empty((1,))
         return to_glm_params((empty_coef, empty_intercept))
@@ -144,19 +143,65 @@ class PPGLMValidator(GLMValidator):
                     f"recording_time span should match the time support of your data."
                 )
 
-    def _validate_time_series(self, time_series, name: str) -> int:  # noqa: C901
+    def _validate_tsgroup(self, time_series: TsGroup, name: str) -> int:
+        empty_ids = [i for i, ts in time_series.items() if len(ts) == 0]
+        if empty_ids:
+            raise ValueError(
+                f"Empty time series found in {name} at index(es) {empty_ids}. "
+                "All time series must be non-empty."
+            )
+        return len(time_series)
+
+    def _validate_ts(self, time_series: Ts, name: str) -> int:
+        if len(time_series) == 0:
+            raise ValueError(f"{name} is empty. All time series must be non-empty.")
+        return 1
+
+    def _validate_dict(self, time_series: dict, name: str) -> int:
+        empty_keys = [k for k, arr in time_series.items() if len(arr) == 0]
+        if empty_keys:
+            raise ValueError(
+                f"Empty time series found in {name} at key(s) {empty_keys}. "
+                "All time series must be non-empty."
+            )
+        return len(time_series)
+
+    def _validate_array_like(self, time_series: np.ndarray | list, name: str) -> int:
+        if len(time_series) == 0:
+            raise ValueError(f"{name} is empty. All time series must be non-empty.")
+        if np.isscalar(time_series[0]):
+            times = np.asarray(time_series, dtype=float).ravel()
+            if len(times) == 0:
+                raise ValueError(f"{name} is empty. All time series must be non-empty.")
+            return 1
+        empty_idx = [i for i, s in enumerate(time_series) if len(s) == 0]
+        if empty_idx:
+            raise ValueError(
+                f"Empty time series found in {name} at index(es) {empty_idx}. "
+                "All time series must be non-empty."
+            )
+        return len(time_series)
+
+    _VALIDATORS = {
+        TsGroup: _validate_tsgroup,
+        Ts: _validate_ts,
+        dict: _validate_dict,
+        np.ndarray: _validate_array_like,
+        list: _validate_array_like,
+    }
+
+    def _validate_time_series(self, time_series: TimeSeriesInput, name: str) -> int:
         """Validate a single time-series input's type and non-emptiness.
 
         Parameters
         ----------
-        time_series : array-like or pynapple.Ts or pynapple.TsGroup or dict
+        time_series :
             Event or spike timestamps to validate.
-        name : str
-            Name of the input (e.g. "X" or "y"), used in error messages.
+        name :
+            Name of the input ("X" or "y"), used in error messages.
 
         Returns
         -------
-        int
         Number of individual time series contained in the input (e.g.
         number of neurons/predictors).
 
@@ -167,56 +212,12 @@ class PPGLMValidator(GLMValidator):
         TypeError
             If time_series is not one of the supported types.
         """
-
-        # convert jax to numpy
         if isinstance(time_series, jax.Array):
             time_series = np.asarray(time_series)
 
-        # --- TsGroup ---
-        if isinstance(time_series, TsGroup):
-            empty_ids = [i for i, ts in time_series.items() if len(ts) == 0]
-            if empty_ids:
-                raise ValueError(
-                    f"Empty time series found in {name} at index(es) {empty_ids}. "
-                    "All time series must be non-empty."
-                )
-            return len(time_series)
-
-        # --- single Ts ---
-        if isinstance(time_series, Ts):
-            if len(time_series) == 0:
-                raise ValueError(f"{name} is empty. All time series must be non-empty.")
-            return 1
-
-        # --- dict ---
-        if isinstance(time_series, dict):
-            empty_keys = [k for k, arr in time_series.items() if len(arr) == 0]
-            if empty_keys:
-                raise ValueError(
-                    f"Empty time series found in {name} at key(s) {empty_keys}. "
-                    "All time series must be non-empty."
-                )
-            return len(time_series)
-
-        # --- np.ndarray or list ---
-        if isinstance(time_series, (np.ndarray, list)):
-            if len(time_series) == 0:
-                raise ValueError(f"{name} is empty. All time series must be non-empty.")
-            if len(time_series) > 0 and np.isscalar(time_series[0]):
-                times = np.asarray(time_series, dtype=float).ravel()
-                if len(times) == 0:
-                    raise ValueError(
-                        f"{name} is empty. All time series must be non-empty."
-                    )
-                return 1
-            else:
-                empty_idx = [i for i, s in enumerate(time_series) if len(s) == 0]
-                if empty_idx:
-                    raise ValueError(
-                        f"Empty time series found in {name} at index(es) {empty_idx}. "
-                        "All time series must be non-empty."
-                    )
-                return len(time_series)
+        validator = self._VALIDATORS.get(type(time_series), None)
+        if validator:
+            return validator(self, time_series, name)
 
         raise TypeError(
             f"Unsupported type for {name}: {type(time_series)}. "
@@ -228,7 +229,7 @@ class PPGLMValidator(GLMValidator):
 
         Parameters
         ----------
-        n_series : int
+        n_series :
             Number of time series found in y.
 
         Raises
@@ -255,9 +256,9 @@ class PPGLMValidator(GLMValidator):
 
         Parameters
         ----------
-        X : array-like or pynapple.Ts or pynapple.TsGroup or dict, optional
+        X :
             Event timestamps for the model predictors.
-        y : array-like or pynapple.Ts or pynapple.TsGroup or dict, optional
+        y :
             Spike timestamps for the postsynaptic neuron(s).
 
         Raises
@@ -307,7 +308,6 @@ class PopulationPPGLMValidator(PPGLMValidator):
             ),
         ),
         *RegressorValidator.params_validation_sequence[3:],
-        ("validate_random_key", None),
     )
 
     def validate_consistency(
@@ -349,7 +349,7 @@ class PopulationPPGLMValidator(PPGLMValidator):
 
         Parameters
         ----------
-        n_series : int
+        n_series :
             Number of time series found in y.
 
         Raises
@@ -365,8 +365,8 @@ class PopulationPPGLMValidator(PPGLMValidator):
 
     def get_empty_params(self, X, y) -> GLMParams:
         """Return the param shape given the input data."""
-        n_features = int(jnp.unique(X.ids).size * self.n_basis_funcs)
-        n_neurons = jnp.unique(y.ids).size
+        n_features = int(jnp.unique(X.predictor_ids).size * self.n_basis_funcs)
+        n_neurons = jnp.unique(y.neuron_ids).size
         empty_coef = jnp.zeros((n_features, n_neurons))
         empty_intercept = jnp.empty((n_neurons,))
         return to_glm_params((empty_coef, empty_intercept))

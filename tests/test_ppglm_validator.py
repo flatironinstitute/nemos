@@ -489,6 +489,16 @@ class TestPPGLMValidator:
         with pytest.raises(ValueError, match="must contain exactly 1"):
             validator.validate_inputs(X=X, y=y_pop)
 
+    def test_get_empty_params(self, validator, processed_X_y):
+        X, y = processed_X_y
+        n_features = int(jnp.unique(X.predictor_ids).size * validator.n_basis_funcs)
+
+        params = validator.get_empty_params(X, y)
+
+        assert params.coef.shape == (n_features,)
+        assert params.intercept.shape == (1,)
+        assert isinstance(params, GLMParams)
+
 
 class TestPopulationPPGLMValidator:
     """Test suite for input validation logic in PopulationPPGLMValidator. Only needed to test consistency for y"""
@@ -562,3 +572,14 @@ class TestPopulationPPGLMValidator:
         y_single = nap.Ts(np.sort(np.random.uniform(0, 10, 20)))
         with pytest.raises(ValueError, match="must contain more than 1"):
             population_validator.validate_inputs(X=X, y=y_single)
+
+    def test_get_empty_params(self, validator, processed_X_y):
+        X, y = processed_X_y
+        n_features = int(jnp.unique(X.predictor_ids).size * validator.n_basis_funcs)
+        n_neurons = jnp.unique(y.neuron_ids).size
+
+        params = validator.get_empty_params(X, y)
+
+        assert params.coef.shape == (n_features,)
+        assert params.intercept.shape == (n_neurons,)
+        assert isinstance(params, GLMParams)
