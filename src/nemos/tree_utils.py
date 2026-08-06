@@ -259,7 +259,7 @@ def tree_broadcast_prefix(prefix: Any, full: Any) -> Any:
     Examples
     --------
     >>> from nemos.tree_utils import tree_broadcast_prefix
-    >>> tree_broadcast_prefix({"a": 1, "b": 0}, {"a": {"x": None, "y": None}, "b": None})
+    >>> tree_broadcast_prefix({"a": 1, "b": 0}, {"a": {"x": True, "y": True}, "b": True})
     {'a': {'x': 1, 'y': 1}, 'b': 0}
     """
     treedef = jax.tree_util.tree_structure(prefix)
