@@ -1455,15 +1455,12 @@ class TestEvalBasis:
     @pytest.mark.requires_x64
     def test_jit_compilation_with_bounds(self, cls):
         """Test that compute_features can be JIT compiled when bounds are set."""
-        # Skip bases that depend on un-jittable scipy functions
-        if cls in [
-            basis.BSplineEval,
-            basis.CyclicBSplineEval,
-            basis.OrthExponentialEval,
-        ]:
+        # The orthogonalization sizes its output by the numerical rank of the
+        # samples, a shape jax cannot know while tracing.
+        if cls is basis.OrthExponentialEval:
             pytest.skip(
                 f"Skipping test_jit_compilation_with_bounds for {cls.__name__}, "
-                "which depends on un-jittable scipy functions."
+                "whose output width depends on the sample values."
             )
         # Skip Zero since it doesn't have bounds
         if cls in [basis.Zero, Category]:
