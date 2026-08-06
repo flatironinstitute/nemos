@@ -8575,14 +8575,15 @@ class TestCategory(BasisFuncsTesting):
             ([2, 5, 8], np.array([2, 5, 8, 8, 2])),
             ([2, 5, 8], np.array([2, 99, 8, 0, 5])),
             (np.array([2, 5, 8]), np.array([2, 5, 8, 5, 2])),
-            (["a", "b", "c"], np.array(["a", "z", "b", "c", "a"])),
         ],
     )
     def test_jit_matches_eager(self, categories, inp):
         """One-hot encoding traces identically, out-of-category rows included.
 
-        ``out_of_category=False`` is left out: it raises under jit by design,
-        which ``test_evaluate_jit_out_of_category_false_raises`` covers.
+        Two cases are out of scope. String-labelled samples cannot be traced at
+        all, since jax has no string arrays. ``out_of_category=False`` raises
+        under jit by design, which
+        ``test_evaluate_jit_out_of_category_false_raises`` covers.
         """
         assert_jit_matches_eager(Category(categories, out_of_category=True), inp)
 
