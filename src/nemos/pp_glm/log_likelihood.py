@@ -62,17 +62,17 @@ def _draw_mc_sample(
 
     Parameters
     ----------
-    X : X_ppglm
+    X :
         Preprocessed predictors with fields ``times`` (event timestamps) and
-        ``ids`` (predictor neuron indices).
+        ``predictor_ids``.
     random_key :
         JAX PRNG key for sampling the jitter.
 
     Returns
     -------
-    mc_sample_pts : mc_sample_ppglm
+    mc_sample_pts :
         Monte Carlo samples with fields ``times`` (sampled timestamps) and
-        ``idx`` (indices into event times).
+        ``timestamp_idx`` (indices into event times).
     """
     dt = recording_time.tot_length() / M_samples
     epsilon_m = jax.random.uniform(
@@ -80,7 +80,7 @@ def _draw_mc_sample(
     )
     tau_m = M_grid + epsilon_m
     tau_m_idx = jnp.searchsorted(X.times, tau_m)
-    mc_sample_pts = MCSamplePPGLM(times=tau_m, idx=tau_m_idx)
+    mc_sample_pts = MCSamplePPGLM(times=tau_m, timestamp_idx=tau_m_idx)
 
     return mc_sample_pts
 
@@ -106,14 +106,14 @@ def _scan_fn_log_lam_y(
     lam_sum :
         Running scalar sum of log-firing rates (scan carry).
     i :
-        Current eval point with fields ``times`` (spike timestamp), ``ids``
-        (postsynaptic neuron index), and ``idx`` (index into event times).
+        Current eval point with fields ``times`` (spike timestamp), ``neuron_ids``
+        (postsynaptic neuron index), and ``timestamp_idx`` (index into event times).
 
     Closed over via ``functools.partial``
     --------------------------------------
     X :
          Preprocessed predictors with fields ``times`` (event timestamps) and
-        ``ids`` (predictor neuron indices).
+        ``predictor_ids``.
     weights :
         Reshaped basis coefficients. Shape (n_predictors, n_basis_funcs, n_neurons).
     bias :
@@ -127,20 +127,20 @@ def _scan_fn_log_lam_y(
 
     Returns
     -------
-    lam_sum : jnp.ndarray
+    lam_sum :
         Updated scalar sum.
     None
         No concatenated per-step output (required by jax.lax.scan).
     """
     history_slice = jax.tree_util.tree_map(
-        lambda arr: utils.slice_array(arr, i.idx, max_window), X
+        lambda arr: utils.slice_array(arr, i.timestamp_idx, max_window), X
     )
 
     dts = i.times - history_slice.times
     lam_tilde = _compute_lam_tilde(
         dts,
-        weights[history_slice.ids, :, i.ids, None],
-        bias[i.ids],
+        weights[history_slice.predictor_ids, :, i.timestamp_idx, None],
+        bias[i.neuron_ids],
         eval_function,
     )
     lam_sum += jnp.log(inverse_link_function(lam_tilde)).sum()
@@ -171,13 +171,13 @@ def _scan_fn_mc_est(
         Running scalar sum of log-firing rates (scan carry).
     i :
         Current eval point with fields ``times`` (sampled timestamps) and
-        ``idx`` (indices into event times).
+        ``timestamp_idx`` (indices into event times).
 
     Closed over via ``functools.partial``
     --------------------------------------
     X :
         Preprocessed predictors with fields ``times`` (event timestamps) and
-        ``ids`` (predictor neuron indices).
+        ``predictor_ids``.
     weights :
         Reshaped basis coefficients. Shape (n_predictors, n_basis_funcs, n_neurons).
     bias :
@@ -197,12 +197,12 @@ def _scan_fn_mc_est(
         No concatenated per-step output (required by jax.lax.scan).
     """
     history_slice = jax.tree_util.tree_map(
-        lambda arr: utils.slice_array(arr, i.idx, max_window), X
+        lambda arr: utils.slice_array(arr, i.timestamp_idx, max_window), X
     )
     dts = i.times - history_slice.times
     lam_tilde = _compute_lam_tilde(
         dts,
-        weights[history_slice.ids],
+        weights[history_slice.predictor_ids],
         bias,
         eval_function,
     )
@@ -232,11 +232,11 @@ def _log_likelihood_scan(
     Parameters
     ----------
     X :
-        Preprocessed predictors with fields ``times`` (event timestamps) and ``ids`` (predictor neuron indices).
+        Preprocessed predictors with fields ``times`` (event timestamps) and ``predictor_ids``.
     eval_pts :
-        Observed spike time series with fields ``times`` (spike timestamps), ``ids``(postsynaptic neuron indices),
-        and ``idx`` (indices into event times) or MC sample points with fields ``times`` (sampled timestamps) and
-        ``idx`` (indices into event times).
+        Observed spike time series with fields ``times`` (spike timestamps), ``neuron_ids``(postsynaptic neuron indices),
+        and ``timestamp_idx`` (indices into event times) or MC sample points with fields ``times`` (sampled timestamps) and
+        ``timestamp_idx``.
     params :
         GLMParams containing the basis coefficients and bias terms.
     scan_function :
@@ -290,7 +290,6 @@ def _negative_log_likelihood(
     scan_size: int,
     max_window: int,
     eval_function: Callable,
-    aggregate_sample_scores: Callable = lambda l, y: l / y.shape[0],
 ) -> jnp.ndarray:
     r"""
     Compute the Poisson point process negative log-likelihood with a Monte Carlo
@@ -306,10 +305,10 @@ def _negative_log_likelihood(
     Parameters
     ----------
     X :
-        Preprocessed predictors with fields ``times`` (event timestamps) and ``ids`` (predictor neuron indices).
+        Preprocessed predictors with fields ``times`` (event timestamps) and ``predcitor_ids``.
     y :
-        Preprocessed spikes with fields ``times`` (spike timestamps), ``ids``
-        (postsynaptic neuron indices), and ``idx`` (indices into event times).
+        Preprocessed spikes with fields ``times`` (spike timestamps), ``neuron_ids``
+        (postsynaptic neuron indices), and ``timestamp_idx`` (indices into event times).
     params :
         GLMParams containing the basis coefficients and bias terms.
     random_key :
@@ -373,7 +372,7 @@ def _negative_log_likelihood(
 
     nll_sum = ((recording_time.tot_length() / M_samples) * mc_estimate) - log_lambda_y
 
-    return aggregate_sample_scores(nll_sum, y.times)
+    return nll_sum / y.times.shape[0]
 
 
 def _compute_loss(

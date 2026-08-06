@@ -7,7 +7,7 @@ from pynapple import IntervalSet
 from nemos.basis import RaisedCosineLogEval
 from nemos.glm.validation import to_glm_params
 from nemos.pp_glm import log_likelihood, utils
-from nemos.pp_glm.data import X_ppglm, y_ppglm, mc_sample_ppglm
+from nemos.pp_glm.data import PredictorsPPGLM, SpikesPPGLM, MCSamplePPGLM
 from nemos.pp_glm.validation import to_pp_glm_params_with_key
 
 
@@ -59,21 +59,24 @@ def create_dataset(
     spike_times = np.sort(np.random.uniform(0, sim_time, n_spikes))
     spike_ids = np.random.choice(np.arange(n_neurons), n_spikes)
 
-    X = X_ppglm(times=jnp.asarray(spike_times), ids=jnp.asarray(spike_ids, dtype=int))
-
-    y = y_ppglm(
+    X = PredictorsPPGLM(
         times=jnp.asarray(spike_times),
-        ids=jnp.asarray(spike_ids, dtype=int),
-        idx=jnp.arange(spike_times.size, dtype=int),
+        predictor_ids=jnp.asarray(spike_ids, dtype=int)
+    )
+
+    y = SpikesPPGLM(
+        times=jnp.asarray(spike_times),
+        neuron_ids=jnp.asarray(spike_ids, dtype=int),
+        timestamp_idx=jnp.arange(spike_times.size, dtype=int),
     )
 
     if all_to_one:
         n_target = 0
-        mask = y.ids == n_target
-        y = y_ppglm(
+        mask = y.neuron_ids == n_target
+        y = SpikesPPGLM(
             times=y.times[mask],
-            ids=y.ids[mask],
-            idx=y.idx[mask],
+            neuron_ids=y.neuron_ids[mask],
+            timestamp_idx=y.timestamp_idx[mask],
         )
 
     max_window = int(
@@ -115,12 +118,15 @@ def create_dataset_single_spike(
     spike_times = jnp.array([spike_time])
     spike_ids = jnp.array([0]).astype(int)
 
-    X = X_ppglm(times=jnp.asarray(spike_times), ids=jnp.asarray(spike_ids, dtype=int))
-
-    y = y_ppglm(
+    X = PredictorsPPGLM(
         times=jnp.asarray(spike_times),
-        ids=jnp.asarray(spike_ids, dtype=int),
-        idx=jnp.arange(1, dtype=int),
+        predictor_ids=jnp.asarray(spike_ids, dtype=int)
+    )
+
+    y = SpikesPPGLM(
+        times=jnp.asarray(spike_times),
+        neuron_ids=jnp.asarray(spike_ids, dtype=int),
+        timestamp_idx=jnp.arange(1, dtype=int),
     )
 
     max_window = int(
@@ -176,7 +182,7 @@ class TestUtils:
     def test_reshape_input_for_scan(self):
         """Test that reshaping works properly and that padding length and value are correct"""
         # when divisible, padding length is 0
-        times = mc_sample_ppglm(times=jnp.ones(8), idx=jnp.arange(8).astype(int))
+        times = MCSamplePPGLM(times=jnp.ones(8), timestamp_idx=jnp.arange(8).astype(int))
 
         reshaped, pad_val, pad_len = utils.reshape_input_for_scan(times, scan_size=2)
         jax.tree_util.tree_map(
@@ -188,7 +194,7 @@ class TestUtils:
         assert pad_len == 0
 
         # when not divisible, padding fills to next multiple
-        times = mc_sample_ppglm(times=jnp.ones(9), idx=jnp.arange(9).astype(int))
+        times = MCSamplePPGLM(times=jnp.ones(9), timestamp_idx=jnp.arange(9).astype(int))
         reshaped, pad_val, pad_len = utils.reshape_input_for_scan(times, scan_size=2)
         jax.tree_util.tree_map(
             lambda arr: np.testing.assert_array_equal(
@@ -199,7 +205,7 @@ class TestUtils:
         assert pad_len == 1
 
         # test that padding is the last value and that it's consistent
-        times = mc_sample_ppglm(times=jnp.ones(4), idx=jnp.arange(4).astype(int))
+        times = MCSamplePPGLM(times=jnp.ones(4), timestamp_idx=jnp.arange(4).astype(int))
         reshaped, pad_val, pad_len = utils.reshape_input_for_scan(times, scan_size=3)
         # check padding is filled with last value
         jax.tree_util.tree_map(
@@ -261,7 +267,7 @@ class TestUtils:
         )
 
         # test y index is shifted by max_window
-        assert dataset["y"].idx[0] == dataset["max_window"]
+        assert dataset["y"].timestamp_idx[0] == dataset["max_window"]
 
         # test padding values are out of bound and basis evals to 0
         bound = dataset["recording_time"].start[0] - dataset["history_window"]
@@ -423,10 +429,10 @@ class TestLogLikelihood:
 
         log_lam_y_loop = 0
         for sp in range(n_spikes):
-            t, id, slice_end = y.times[sp], y.ids[sp], y.idx[sp]
+            t, id, slice_end = y.times[sp], y.neuron_ids[sp], y.timestamp_idx[sp]
             slice_start = slice_end - max_window
             spk_in_window = X.times[slice_start:slice_end]
-            ids_in_window = X.ids[slice_start:slice_end]
+            ids_in_window = X.predictor_ids[slice_start:slice_end]
             dts = t - spk_in_window
             basis_at_dts = eval_function(dts)
             selected_w = weights[ids_in_window, :, id]
@@ -461,10 +467,10 @@ class TestLogLikelihood:
         # numpy loop
         mc_est_loop = 0
         for sp in range(M_samples):
-            t, slice_end = mc_samples.times[sp], mc_samples.idx[sp]
+            t, slice_end = mc_samples.times[sp], mc_samples.timestamp_idx[sp]
             slice_start = slice_end - max_window
             spk_in_window = X.times[slice_start:slice_end]
-            ids_in_window = X.ids[slice_start:slice_end]
+            ids_in_window = X.predictor_ids[slice_start:slice_end]
             dts = t - spk_in_window
             basis_at_dts = eval_function(dts)
             selected_w = weights[ids_in_window]
