@@ -221,8 +221,10 @@ def _freeze_first_coef_leaf(model, params):
     leaves the interesting block untouched.
     """
     leaves, treedef = jax.tree_util.tree_flatten(params.coef)
+    # cast the pinned leaf: ``fit`` casts its inputs, so an un-cast spec would be
+    # compared against a fitted leaf of a different dtype
     spec = jax.tree_util.tree_unflatten(
-        treedef, [leaves[0]] + [None] * (len(leaves) - 1)
+        treedef, [jnp.asarray(leaves[0])] + [None] * (len(leaves) - 1)
     )
     model._fix_params = GLMParams(spec, None)
     return spec
@@ -293,7 +295,16 @@ def test_newton_leaves_frozen_params_untouched(
         )
     else:
         pinned = _freeze_first_coef_leaf(frozen_model, true_params)
-        frozen_model.fit(X, y)
+        # the spec decides which leaves the solver skips, not what they are worth: a
+        # frozen leaf is held at whatever the initialization put there. The intercept
+        # is filled from the spec at init time, a coef leaf is not, so the pinned value
+        # is handed in through ``init_params`` for the fitted leaf to be comparable.
+        zeros = jax.tree_util.tree_map(jnp.zeros_like, true_params.coef)
+        init_params = (
+            eqx.combine(pinned, zeros),
+            jnp.zeros_like(true_params.intercept),
+        )
+        frozen_model.fit(X, y, init_params=init_params)
         fitted = jax.tree_util.tree_leaves(frozen_model.coef_)[0]
         np.testing.assert_array_equal(fitted, jax.tree_util.tree_leaves(pinned)[0])
 
