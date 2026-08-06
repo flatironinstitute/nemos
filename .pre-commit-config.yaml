@@ -58,12 +58,12 @@ repos:
       language: system
       types: [python]
       pass_filenames: false
-    # Reports myst-nb markdown notebooks that still carry the jupytext version or a
-    # non-canonical kernel display name, which the [tool.jupytext] filter in
-    # pyproject.toml is meant to keep out of the front matter.
-    - id: check-notebook-metadata
-      name: Check notebook metadata
-      entry: python scripts/check_notebook_metadata.py
+    # Strips the jupytext version stamp and restores the canonical kernel display
+    # name in the myst-nb markdown notebooks, both of which Jupyter Lab writes into
+    # the front matter on save. Only the staged files are passed, so a commit never
+    # rewrites a notebook that was not part of it.
+    - id: fix-notebook-metadata
+      name: Fix notebook metadata
+      entry: python scripts/check_notebook_metadata.py --fix
       language: system
       files: ^docs/.*\.md$
-      pass_filenames: false
