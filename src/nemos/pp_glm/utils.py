@@ -3,7 +3,6 @@ from typing import List, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 import pynapple as nap
 from numpy.typing import ArrayLike
 
@@ -77,9 +76,9 @@ def reshape_input_for_scan(data: SpikesPPGLM | MCSamplePPGLM, scan_size: int):
 
     Returns
     -------
-    reshaped : y_ppglm
+    reshaped :
         Reshaped padded input. Each field has shape (n_scans, scan_size).
-    padding_values : y_ppglm
+    padding_values :
         The last value of each field.
     padding_len :
         Number of padding time points appended to make n_points divisible by scan_size.
@@ -132,64 +131,6 @@ def build_mc_sampling_grid(recording_time: nap.IntervalSet, M_samples: int):
 
 
 ### DATA PREPROCESSING UTILS
-def to_tsgroup(time_series) -> nap.TsGroup:
-    """Convert various spike timestamp formats to a re-indexed TsGroup.
-
-    If time_series is a pynapple object, the output will preserve its time support.
-    """
-
-    error_message = "All time series must be non-empty. "
-
-    # --- convert jax to numpy ---
-    if isinstance(time_series, jax.Array):
-        time_series = np.asarray(time_series)
-
-    # --- TsGroup ---
-    if isinstance(time_series, nap.TsGroup):
-        if any(len(ts) == 0 for ts in time_series.values()):
-            raise ValueError(error_message)
-        return nap.TsGroup(
-            {i: ts for i, ts in enumerate(time_series.values())},
-            time_support=time_series.time_support,
-        )
-
-    # --- single Ts ---
-    if isinstance(time_series, nap.Ts):
-        if len(time_series) == 0:
-            raise ValueError(error_message)
-        return nap.TsGroup({0: time_series}, time_support=time_series.time_support)
-
-    # --- dict ---
-    if isinstance(time_series, dict):
-        if any(len(arr) == 0 for arr in time_series.values()):
-            raise ValueError(error_message)
-        return nap.TsGroup(
-            {i: nap.Ts(np.asarray(arr)) for i, arr in enumerate(time_series.values())}
-        )
-
-    # --- np.ndarray or list ---
-    if isinstance(time_series, (np.ndarray, list)):
-        if len(time_series) > 0 and np.isscalar(time_series[0]):
-            times = np.asarray(time_series, dtype=float).ravel()
-            if len(times) == 0:
-                raise ValueError(error_message)
-            return nap.TsGroup({0: nap.Ts(times)})
-        else:
-            if any(len(s) == 0 for s in time_series):
-                raise ValueError(error_message)
-            return nap.TsGroup(
-                {
-                    i: nap.Ts(np.asarray(s, dtype=float))
-                    for i, s in enumerate(time_series)
-                }
-            )
-
-    raise TypeError(
-        f"Unsupported type for input: {type(time_series)}. "
-        "Expected np.ndarray, list, dict, pynapple.Ts, or pynapple.TsGroup."
-    )
-
-
 @jax.jit
 def compute_max_window_size(
     bounds: Union[ArrayLike, List, Tuple],
@@ -237,31 +178,32 @@ def adjust_indices_and_spike_times(
 
     Parameters
     ----------
-    X : X_ppglm
+    X :
         Preprocessed predictor time series to be padded.
     history_window : float
         Duration of the history window (s).
     max_window : int
         The maximum number of events in the history window.
-    y : y_ppglm, optional
+    y :
         Preprocessed postsynaptic spike train.
 
     Returns
     -------
-    shifted_X : X_ppglm
+    shifted_X :
         Padded predictor time series with max_window dummy events prepended.
-    shifted_y : y_ppglm, optional
+    shifted_y :
         Spike train with idx shifted by max_window. Only returned if y is not None.
     """
     shifted_X = PredictorsPPGLM(
         times=jnp.concatenate([jnp.full(max_window, -history_window - 1), X.times]),
-        ids=jnp.concatenate([jnp.zeros(max_window, dtype=jnp.int32), X.ids]),
+        predictor_ids=jnp.concatenate([jnp.zeros(max_window, dtype=jnp.int32), X.predictor_ids]),
     )
+
+    shifted_y = None
     if y is not None:
         shifted_y = SpikesPPGLM(
             times=y.times,
-            ids=y.ids,
-            idx=y.idx + max_window,
+            neuron_ids=y.neuron_ids,
+            timestamp_idx=y.timestamp_idx + max_window,
         )
-        return shifted_X, shifted_y
-    return shifted_X, None
+    return shifted_X, shifted_y
