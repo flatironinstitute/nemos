@@ -1069,15 +1069,15 @@ class TestObservationModel:
             (
                 nmo.regularizer.Regularizer,
                 pytest.raises(
-                    AttributeError,
-                    match="The provided object does not have the required",
+                    ValueError,
+                    match="Invalid observation model",
                 ),
             ),
             (
                 1,
                 pytest.raises(
-                    AttributeError,
-                    match="The provided object does not have the required",
+                    ValueError,
+                    match="Invalid observation model: 1",
                 ),
             ),
         ],
