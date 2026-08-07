@@ -22,7 +22,6 @@ from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
 from .solvers._hess import HessianTag
-from .solvers._newton import Newton
 from .type_casting import cast_to_jax, is_numpy_array_like
 from .typing import (
     DESIGN_INPUT_TYPE,
@@ -432,13 +431,15 @@ class BaseRegressor(
             **solver_kwargs,
         )
 
-        if isinstance(solver, Newton):
-            solver.setup_hessian(
-                self._get_hess_fn(),
-                self._hess_tag,
-                regularizer.resolve_hess_tag(init_params),
-                self._hess_property_override(),
-            )
+        # ``AbstractSolver.setup_hessian`` is a no-op by default, so solvers that ignore
+        # curvature need no special case here. ``getattr`` covers custom solvers written
+        # against the how-to guide, which are duck-typed rather than subclasses.
+        getattr(solver, "setup_hessian", lambda *a: None)(
+            self._get_hess_fn(),
+            self._hess_tag,
+            regularizer.resolve_hess_tag(init_params),
+            self._hess_property_override(),
+        )
 
         # nemos's solvers store a .fun attribute, but it's not necessary for a solver to work.
         # A test relies on having _solver_loss_fun saved, so still check and save it if possible.

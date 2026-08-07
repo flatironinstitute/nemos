@@ -1,16 +1,18 @@
 """Newton-based optimization solvers."""
 
-from typing import Any, Callable, Optional
+from typing import Any, Callable, ClassVar, Optional
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 import lineax as lx
 import optax
+import optimistix as optx
 
 from .. import tree_utils
 from ..typing import Params
 from ._abstract_solver import OptimizationInfo
+from ._fista import FISTA
 from ._hess import (
     BlockDiagonal,
     Full,
@@ -34,6 +36,11 @@ NewtonStepResult = tuple[Params, NewtonState]
 
 
 class Newton:
+    # When True, the solver minimizes a composite objective: it receives the
+    # unregularized loss and reaches the penalty through its proximal operator.
+    # Same convention as ``OptimistixAdapter._proximal``.
+    _proximal: ClassVar[bool] = False
+
     def __init__(
         self,
         unregularized_loss: Callable,
@@ -61,11 +68,20 @@ class Newton:
         self._regularizer_strength = regularizer_strength
         self._init_params = init_params
 
-        loss_fn = regularizer.penalized_loss(
-            unregularized_loss,
-            params=init_params,
-            strength=regularizer_strength,
-        )
+        # A proximal solver differentiates the smooth part only and carries the penalty
+        # in its proximal operator, so it must not be handed the penalized loss.
+        if self._proximal:
+            loss_fn = unregularized_loss
+            self.prox = regularizer.get_proximal_operator(
+                params=init_params, strength=regularizer_strength
+            )
+        else:
+            loss_fn = regularizer.penalized_loss(
+                unregularized_loss,
+                params=init_params,
+                strength=regularizer_strength,
+            )
+            self.prox = None
 
         # split scalar vs aux
         if has_aux:
@@ -96,6 +112,10 @@ class Newton:
         reg_tag: HessianTag | None = None,
         property_override: Optional[type] = None,
     ):
+        # A proximal solver models the smooth part only, so the penalty contributes
+        # neither curvature nor structure to the Hessian it works with.
+        if self._proximal:
+            reg_tag = None
         tag = hess_tag if reg_tag is None else combine_hessian_tags(hess_tag, reg_tag)
         if property_override is not None and tag is not None:
             tag = HessianTag(
@@ -119,6 +139,11 @@ class Newton:
         """
         if hess_fn is None:
             return None
+
+        # For a proximal solver the penalty is applied by the prox, not modelled by the
+        # quadratic, so adding its curvature here would double-count it.
+        if self._proximal:
+            return hess_fn
 
         batch_axes = (
             model_tag.batch_axes
@@ -174,7 +199,11 @@ class Newton:
             ls_state=ls_state,
         )
 
-    def _solve(self, grad, H):
+    def _solve(self, grad, H, params):
+        # ``params`` is unused for the smooth step, which depends only on the local
+        # quadratic. Proximal subclasses need it: their penalty is evaluated at
+        # ``params + d``, not at ``d``.
+        del params
         operator = lx.PyTreeLinearOperator(
             H,
             jax.eval_shape(lambda: grad),
@@ -187,15 +216,34 @@ class Newton:
             self._linear_solver,
         ).value
 
-    def _newton_direction(self, grad, H):
+    def _newton_direction(self, grad, H, params):
         if self._hess_tag.structure is BlockDiagonal:
             return jax.vmap(
                 self._solve,
-                in_axes=(self._hess_tag.batch_axes, 0),
+                in_axes=(self._hess_tag.batch_axes, 0, self._hess_tag.batch_axes),
                 out_axes=self._hess_tag.batch_axes,
-            )(grad, H)
+            )(grad, H, params)
         else:
-            return self._solve(grad, H)
+            return self._solve(grad, H, params)
+
+    def _stationarity(self, params, grad):
+        """Distance from a stationary point, used as the convergence criterion.
+
+        ``||grad||`` for a smooth objective. Proximal subclasses override it: the
+        gradient of the smooth part does not vanish at the optimum of a composite one.
+        """
+        del params
+        return jnp.sqrt(lx.internal.tree_dot(grad, grad))
+
+    def _line_search_inputs(self, params, step, grad, fval, *args):
+        """Value, slope and objective handed to ``self._line_search``.
+
+        ``optax``'s backtracking search forms the slope as ``vdot(updates, grad)``; the
+        vector is an argument it never differentiates, so a composite subclass can
+        supply a slope accounting for its nonsmooth term without a bespoke search.
+        """
+        del params, step
+        return fval, grad, lambda p: self.fun(p, *args)
 
     def _apply_or_reject(
         self,
@@ -207,16 +255,19 @@ class Newton:
         *args,
     ):
         """Accept or reject step based on descent condition and line search."""
-        descent = lx.internal.tree_dot(grad, step)
+        value, slope, value_fn = self._line_search_inputs(
+            params, step, grad, fval, *args
+        )
+        descent = lx.internal.tree_dot(slope, step)
 
         def accept(_):
             updates, new_ls_state = self._line_search.update(
                 step,
                 state.ls_state,
                 params,
-                value=fval,
-                grad=grad,
-                value_fn=lambda p: self.fun(p, *args),
+                value=value,
+                grad=slope,
+                value_fn=value_fn,
             )
 
             new_params = jax.tree_util.tree_map(
@@ -241,12 +292,12 @@ class Newton:
     ) -> NewtonStepResult:
 
         (fval, aux), grad = self._gradient(params, *args)
-        gnorm = jnp.sqrt(lx.internal.tree_dot(grad, grad))
+        gnorm = self._stationarity(params, grad)
         converged = gnorm <= self.tol
 
         def step(_):
             H = self._hessian(params, *args)
-            step = self._newton_direction(grad, H)
+            step = self._newton_direction(grad, H, params)
 
             new_params, new_ls_state = self._apply_or_reject(
                 params,
@@ -336,3 +387,160 @@ class Newton:
         **kwargs,
     ) -> OptimizationInfo:
         return state.stats
+
+
+class ProximalNewton(Newton):
+    r"""Proximal Newton solver for composite objectives.
+
+    Minimizes :math:`f(\beta) + P(\beta)` with :math:`f` the smooth loss and :math:`P`
+    a penalty reached through its proximal operator. Each iteration builds the quadratic
+    model of :math:`f` and solves
+
+    .. math::
+        \min_d \; \nabla f^\top d + \tfrac{1}{2} d^\top H d + P(\beta + d)
+
+    with :class:`~nemos.solvers._fista.FISTA`, then backtracks on the composite
+    objective. This is the scheme ``glmnet`` [1]_ uses, with FISTA in place of
+    coordinate descent for the inner problem; see [2]_ for the general method.
+
+    Unlike :class:`Newton` the Hessian is never inverted, only multiplied, so a singular
+    smooth Hessian is not by itself a problem: any quadratic part of the penalty makes
+    the inner subproblem strongly convex. This suits penalties such as
+    :class:`~nemos.regularizer.ElasticNet`, whose nonsmooth term puts first-order
+    methods at the mercy of the design's conditioning.
+
+    Parameters
+    ----------
+    inner_iter :
+        Maximum FISTA steps on the subproblem. The subproblem uses the assembled
+        Hessian block and touches no data, so these steps are cheap.
+    inner_atol, inner_rtol :
+        Tolerances for the subproblem, acting as the forcing sequence of the inexact
+        proximal Newton method.
+
+    References
+    ----------
+    .. [1] Friedman, J., Hastie, T., & Tibshirani, R. (2010).
+        "Regularization Paths for Generalized Linear Models via Coordinate Descent."
+        *Journal of Statistical Software*, 33(1), 1-22.
+        https://doi.org/10.18637/jss.v033.i01
+    .. [2] Lee, J. D., Sun, Y., & Saunders, M. A. (2014).
+        "Proximal Newton-type methods for minimizing composite functions."
+        *SIAM Journal on Optimization*, 24(3), 1420-1443.
+        https://doi.org/10.1137/130921428
+    """
+
+    _proximal: ClassVar[bool] = True
+
+    def __init__(
+        self,
+        unregularized_loss: Callable,
+        regularizer,
+        regularizer_strength: float | None,
+        has_aux: bool,
+        init_params: Params | None = None,
+        jit: bool = True,
+        maxiter: int = DEFAULT_MAX_STEPS,
+        tol: float = DEFAULT_ATOL,
+        inner_iter: int = 100,
+        inner_atol: float = 1e-8,
+        inner_rtol: float = 1e-8,
+    ):
+        super().__init__(
+            unregularized_loss,
+            regularizer,
+            regularizer_strength,
+            has_aux,
+            init_params=init_params,
+            jit=jit,
+            maxiter=maxiter,
+            tol=tol,
+        )
+        # the penalty alone, for the composite line search. self.fun is the smooth
+        # loss here, so the composite objective is self.fun + self._penalty.
+        filter_kwargs = regularizer._get_filter_kwargs(
+            strength=regularizer_strength, params=init_params
+        )
+        self._penalty = lambda p: regularizer._penalization(
+            p, filter_kwargs=filter_kwargs
+        )
+
+        self.inner_iter = inner_iter
+        self.inner_atol = inner_atol
+        self.inner_rtol = inner_rtol
+
+    def _solve(self, grad, H, params):
+        """Solve the penalized quadratic subproblem for one Hessian block."""
+        operator = lx.PyTreeLinearOperator(
+            H,
+            jax.eval_shape(lambda: grad),
+            tags=self._operator_tags,
+        )
+
+        def quadratic(d, _):
+            return lx.internal.tree_dot(grad, d) + 0.5 * lx.internal.tree_dot(
+                d, operator.mv(d)
+            )
+
+        def prox(d, hyperparams, scaling=1.0):
+            # the penalty applies to params + d, so shift the prox into d-space
+            shifted = self.prox(tree_utils.tree_add(params, d), hyperparams, scaling)
+            return tree_utils.tree_sub(shifted, params)
+
+        return optx.minimise(
+            quadratic,
+            FISTA(
+                atol=self.inner_atol,
+                rtol=self.inner_rtol,
+                norm=optx.two_norm,
+                prox=prox,
+                while_loop_kind="lax",
+            ),
+            y0=tree_utils.tree_zeros_like(grad),
+            max_steps=self.inner_iter,
+            throw=False,
+        ).value
+
+    def _stationarity(self, params, grad):
+        """``||beta - prox(beta - grad)||``, the natural residual of a composite problem.
+
+        Reduces to ``||grad||`` when the prox is the identity, recovering the criterion
+        :class:`Newton` uses for smooth objectives.
+        """
+        stepped = self.prox(tree_utils.tree_sub(params, grad), (), 1.0)
+        resid = tree_utils.tree_sub(params, stepped)
+        return jnp.sqrt(lx.internal.tree_dot(resid, resid))
+
+    def _line_search_inputs(self, params, step, grad, fval, *args):
+        r"""Feed the composite objective and its slope to the inherited line search.
+
+        Tseng & Yun (2009) require the sufficient-decrease slope of a composite
+        objective to be
+
+        .. math::
+            \Delta = \nabla f^\top d + P(\beta + d) - P(\beta),
+
+        the :math:`P` difference being what makes :math:`\Delta < 0` a descent
+        certificate when :math:`F` is nonsmooth. Since the search only ever forms
+        ``vdot(step, slope)``, adding the penalty difference along ``step`` reproduces
+        :math:`\Delta` exactly, and the stock Armijo search then applies unchanged.
+        """
+        penalty = self._penalty(params)
+        penalty_diff = self._penalty(tree_utils.tree_add(params, step)) - penalty
+        sq_norm = lx.internal.tree_dot(step, step)
+        slope = tree_utils.tree_add_scalar_mul(
+            grad, jnp.where(sq_norm > 0.0, penalty_diff / sq_norm, 0.0), step
+        )
+        return (
+            fval + penalty,
+            slope,
+            lambda p: self.fun(p, *args) + self._penalty(p),
+        )
+
+    @classmethod
+    def get_accepted_arguments(cls) -> set[str]:
+        return super().get_accepted_arguments() | {
+            "inner_iter",
+            "inner_atol",
+            "inner_rtol",
+        }

@@ -115,6 +115,22 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         """
         pass
 
+    def setup_hessian(
+        self,
+        hess_fn: Callable | None = None,
+        hess_tag: Any = None,
+        reg_tag: Any = None,
+        property_override: type | None = None,
+    ) -> None:
+        """
+        Receive the model's analytic Hessian, if the solver can exploit curvature.
+
+        Called by ``BaseRegressor`` after construction. Not abstract: solvers that do
+        not use second-order information inherit this no-op, so the caller never has to
+        know which kind of solver it holds.
+        """
+        return None
+
     @classmethod
     @abc.abstractmethod
     def get_accepted_arguments(cls) -> set[str]:
