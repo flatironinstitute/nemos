@@ -151,6 +151,7 @@ VALID_PAIRS = [
     {"X_test", "y_test"},
     {"basis_coeff", "basis_col"},
     {"n_classes", "n_passes"},
+    {"true_intercept", "fit_intercept"},
 ]
 
 
