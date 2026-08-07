@@ -10,7 +10,7 @@ from typing import Any, Callable, Literal, Optional, Tuple, Union
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from numpy.typing import ArrayLike, NDArray
+from numpy.typing import ArrayLike
 from sklearn.utils import InputTags, TargetTags
 
 from .. import observation_models as obs
