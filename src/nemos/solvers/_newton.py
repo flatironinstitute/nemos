@@ -8,6 +8,7 @@ import jax.numpy as jnp
 import lineax as lx
 import optax
 import optimistix as optx
+from optimistix._misc import cauchy_termination
 
 from .. import tree_utils
 from ..typing import Params
@@ -23,6 +24,7 @@ from ._hess import (
 )
 
 DEFAULT_ATOL = 1e-4
+DEFAULT_RTOL = 0.0
 DEFAULT_MAX_STEPS = 100
 
 
@@ -30,6 +32,9 @@ class NewtonState(eqx.Module):
     grad_norm: jax.Array
     stats: OptimizationInfo
     ls_state: Optional[Any] = None
+    # Previous accepted step, for solvers whose convergence test is Cauchy rather than
+    # gradient based. Initialized to inf so the first iteration never counts as converged.
+    y_diff: Optional[Any] = None
 
 
 NewtonStepResult = tuple[Params, NewtonState]
@@ -51,6 +56,7 @@ class Newton:
         jit: bool = True,
         maxiter: int = DEFAULT_MAX_STEPS,
         tol: float = DEFAULT_ATOL,
+        rtol: float = DEFAULT_RTOL,
     ):
         if init_params is None:
             raise ValueError(
@@ -62,6 +68,7 @@ class Newton:
         self.jit = jit
         self.maxiter = maxiter
         self.tol = tol
+        self.rtol = rtol
 
         # kept so setup_hessian can ask the regularizer for its penalty Hessian
         self._regularizer = regularizer
@@ -197,6 +204,8 @@ class Newton:
                 reached_max_steps=jnp.array(False),
             ),
             ls_state=ls_state,
+            # inf so a Cauchy criterion cannot fire before the first step is taken
+            y_diff=jax.tree.map(lambda x: jnp.full_like(x, jnp.inf), init_params),
         )
 
     def _solve(self, grad, H, params):
@@ -230,14 +239,10 @@ class Newton:
     def _newton_direction(self, grad, H, params):
         return self._block_apply(self._solve, grad, H, params)
 
-    def _stationarity(self, params, grad):
-        """Distance from a stationary point, used as the convergence criterion.
-
-        ``||grad||`` for a smooth objective. Proximal subclasses override it: the
-        gradient of the smooth part does not vanish at the optimum of a composite one.
-        """
-        del params
-        return jnp.sqrt(lx.internal.tree_dot(grad, grad))
+    def _converged(self, params, state, grad, fval):
+        """Convergence test. ``||grad|| <= tol`` for a smooth objective."""
+        del params, state, fval
+        return jnp.sqrt(lx.internal.tree_dot(grad, grad)) <= self.tol
 
     def _line_search_inputs(self, params, step, grad, fval, *args):
         """Value, slope and objective handed to ``self._line_search``.
@@ -296,8 +301,8 @@ class Newton:
     ) -> NewtonStepResult:
 
         (fval, aux), grad = self._gradient(params, *args)
-        gnorm = self._stationarity(params, grad)
-        converged = gnorm <= self.tol
+        gnorm = jnp.sqrt(lx.internal.tree_dot(grad, grad))
+        converged = self._converged(params, state, grad, fval)
 
         def step(_):
             H = self._hessian(params, *args)
@@ -339,6 +344,7 @@ class Newton:
                 reached_max_steps=new_iter >= self.maxiter,
             ),
             ls_state=new_ls_state,
+            y_diff=tree_utils.tree_sub(new_params, params),
         )
 
         return new_params, new_state, aux
@@ -383,7 +389,7 @@ class Newton:
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
-        return {"maxiter", "tol", "autodiff", "jit"}
+        return {"maxiter", "tol", "rtol", "autodiff", "jit"}
 
     def _get_optim_info(
         self,
@@ -514,15 +520,24 @@ class ProximalNewton(Newton):
             throw=False,
         ).value
 
-    def _stationarity(self, params, grad):
-        """``||beta - prox(beta - grad)||``, the natural residual of a composite problem.
+    def _converged(self, params, state, grad, fval):
+        """Cauchy criterion on the accepted step, as :class:`~nemos.solvers._fista.FISTA` uses.
 
-        Reduces to ``||grad||`` when the prox is the identity, recovering the criterion
-        :class:`Newton` uses for smooth objectives.
+        A gradient-based test is unusable here: this solver differentiates the smooth
+        part only, so its gradient does not vanish at the optimum of a composite
+        objective, and any residual built from it inherits the curvature scale -- on
+        badly conditioned data it never falls below ``tol`` even once the iterate has
+        stopped moving.
         """
-        stepped = self.prox(tree_utils.tree_sub(params, grad), (), 1.0)
-        resid = tree_utils.tree_sub(params, stepped)
-        return jnp.sqrt(lx.internal.tree_dot(resid, resid))
+        return cauchy_termination(
+            self.rtol,
+            self.tol,
+            optx.two_norm,
+            params,
+            state.y_diff,
+            fval,
+            fval - state.stats.function_val,
+        )
 
     def _line_search_inputs(self, params, step, grad, fval, *args):
         r"""Feed the composite objective and its slope to the inherited line search.
