@@ -80,19 +80,23 @@ class GLMHMM(
 
     Below is a table listing the default and available solvers for each regularizer.
 
-    +---------------+------------------+-------------------------------------------------------------+
-    | Regularizer   | Default Solver   | Available Solvers                                           |
-    +===============+==================+=============================================================+
-    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
-    +---------------+------------------+-------------------------------------------------------------+
-    | Ridge         | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
-    +---------------+------------------+-------------------------------------------------------------+
-    | Lasso         | ProximalGradient | ProximalGradient                                            |
-    +---------------+------------------+-------------------------------------------------------------+
-    | ElasticNet    | ProximalGradient | ProximalGradient                                            |
-    +---------------+------------------+-------------------------------------------------------------+
-    | GroupLasso    | ProximalGradient | ProximalGradient                                            |
-    +---------------+------------------+-------------------------------------------------------------+
+    +---------------+------------------+-------------------------------------------------------+
+    | Regularizer   | Default Solver   | Available Solvers                                     |
+    +===============+==================+=======================================================+
+    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG,            |
+    |               |                  | ProximalGradient, SVRG, ProxSVRG, Newton,             |
+    |               |                  | ProximalNewton                                        |
+    +---------------+------------------+-------------------------------------------------------+
+    | Ridge         | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG,            |
+    |               |                  | ProximalGradient, SVRG, ProxSVRG, Newton,             |
+    |               |                  | ProximalNewton                                        |
+    +---------------+------------------+-------------------------------------------------------+
+    | Lasso         | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |
+    +---------------+------------------+-------------------------------------------------------+
+    | ElasticNet    | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |
+    +---------------+------------------+-------------------------------------------------------+
+    | GroupLasso    | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |
+    +---------------+------------------+-------------------------------------------------------+
 
     Parameters
     ----------
