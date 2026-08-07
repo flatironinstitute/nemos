@@ -150,6 +150,11 @@ VALID_PAIRS = [
     {"event", "events"},
     {"X_test", "y_test"},
     {"basis_coeff", "basis_col"},
+    # glm-hmm doc utils: trial counts and true/recovered parameter pairs
+    {"trials", "n_trials"},
+    {"true_coef", "rec_coef"},
+    {"true_intercept", "rec_intercept"},
+    {"true_trans", "rec_trans"},
     {"n_classes", "n_passes"},
 ]
 
