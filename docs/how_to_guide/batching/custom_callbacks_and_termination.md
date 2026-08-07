@@ -54,7 +54,7 @@ nap.nap_config.suppress_conversion_warnings = True
 np.random.seed(123)
 ```
 
-First, quickly set up and run a stochastic fit for 10 epochs:
+First, quickly set up and run a stochastic fit for 10 passes:
 
 ```{code-cell} ipython3
 _simulate_and_write_to_disk()
@@ -80,7 +80,7 @@ glm = nmo.glm.PopulationGLM(
     solver_kwargs={"stepsize": 0.05, "acceleration": False},
 )
 
-glm.stochastic_fit(loader, num_epochs=10, callbacks=batch_logger)
+glm.stochastic_fit(loader, n_passes=10, callbacks=batch_logger)
 
 plot_loss_history(batch_logger.loss_history)
 ```
@@ -89,13 +89,13 @@ plot_loss_history(batch_logger.loss_history)
 
 +++
 
-Instead of guessing how many epochs we need, undershooting and restarting, or overshooting and waiting too long, we can use callbacks to run optimization until convergence.
+Instead of guessing how many passes we need, undershooting and restarting, or overshooting and waiting too long, we can use callbacks to run optimization until convergence.
 
 +++
 
 As mentioned before, to monitor training progress and the optimization's state during the fitting run, NeMoS has a callback system, allowing to execute custom code on the following events:
 - beginning and end of training
-- before and after each epoch
+- before and after each pass
 - before and after each batch
 
 +++
@@ -104,11 +104,11 @@ As mentioned before, to monitor training progress and the optimization's state d
 
 +++
 
-We define a custom callback that requests a stop based on the loss evaluated on a test set if it hasn't improved much for a given number of epochs.
+We define a custom callback that requests a stop based on the loss evaluated on a test set if it hasn't improved much for a given number of passes through the data.
 
-Custom callbacks should inherit from [`Callback`](nemos.callbacks.Callback) and overwrite the required methods. In the current example we will implement `on_epoch_end` to evaluate the loss after every epoch.
+Custom callbacks should inherit from [`Callback`](nemos.callbacks.Callback) and overwrite the required methods. In the current example we will implement `on_pass_end` to evaluate the loss after every pass.
 
-Information is passed to callbacks through a [`TrainingContext`](nemos.callbacks.TrainingContext) object, which carries information about the state of the training such as the solver state, the current parameters, and the current epoch and batch indices.
+Information is passed to callbacks through a [`TrainingContext`](nemos.callbacks.TrainingContext) object, which carries information about the state of the training such as the solver state, the current parameters, and the current pass and batch indices.
 For convenience, the model being fit is also added to the context.
 
 Requesting a stop of the optimization can be done by calling `ctx.request_stop()`.
@@ -118,9 +118,9 @@ class EarlyStoppingCallback(nmo.callbacks.Callback):
     """
     Stop training when test loss stops improving.
 
-    Evaluates ``model.compute_loss(params, X_test, y_test)`` at the end of each epoch.
+    Evaluates ``model.compute_loss(params, X_test, y_test)`` at the end of each pass.
     If the loss does not improve by at least ``min_delta`` for
-    ``patience`` consecutive epochs, requests an early stop.
+    ``patience`` consecutive passes through the data, requests an early stop.
 
     Parameters
     ----------
@@ -129,7 +129,7 @@ class EarlyStoppingCallback(nmo.callbacks.Callback):
     y_test :
         Test target data.
     patience :
-        Number of epochs with no improvement before stopping.
+        Number of passes with no improvement before stopping.
     min_delta :
         Minimum decrease in loss to count as an improvement.
     """
@@ -143,7 +143,7 @@ class EarlyStoppingCallback(nmo.callbacks.Callback):
         self._ref_loss = np.inf
         self._wait = 0
 
-    def on_epoch_end(self, ctx: nmo.callbacks.TrainingContext) -> None:
+    def on_pass_end(self, ctx: nmo.callbacks.TrainingContext) -> None:
         """Check whether test loss has improved and request stop if patience exceeded."""
         current_loss = ctx.model.compute_loss(
             (ctx.params.coef, ctx.params.intercept),
@@ -158,7 +158,7 @@ class EarlyStoppingCallback(nmo.callbacks.Callback):
             self._wait += 1
             if self._wait >= self.patience:
                 ctx.request_stop(
-                    f"Loss improved by less than {self.min_delta} for {self.patience} consecutive epochs.\n"
+                    f"Loss improved by less than {self.min_delta} for {self.patience} consecutive passes through the data (training epochs).\n"
                     f"last loss: {current_loss:.6f}\n"
                     f"reference loss: {self._ref_loss:.6f}\n"
                 )
@@ -170,7 +170,7 @@ Convergence can be defined in multiple ways, loss on a test set is just one of t
 NeMoS provides a [`SolverConvergenceCallback`](nemos.callbacks.SolverConvergenceCallback)
 which evaluates the solver's own convergence criterion defined as its
 `stochastic_convergence_criterion`. For built-in solvers this means
-examining the change in parameter values at the end of each epoch.
+examining the change in parameter values at the end of each pass.
 :::
 
 +++
@@ -209,8 +209,8 @@ Here, we continue logging the loss and add the early stopping callback:
 ```{code-cell} ipython3
 glm.stochastic_fit(
     loader,
-    # set num_epochs very high, so stopping has to be triggered by the callback
-    num_epochs=10_000,
+    # set n_passes very high, so stopping has to be triggered by the callback
+    n_passes=10_000,
     init_params=glm.get_model_params(),
     callbacks=[batch_logger, early_stopping],
 )

@@ -155,6 +155,7 @@ VALID_PAIRS = [
     {"true_coef", "rec_coef"},
     {"true_intercept", "rec_intercept"},
     {"true_trans", "rec_trans"},
+    {"n_classes", "n_passes"},
 ]
 
 

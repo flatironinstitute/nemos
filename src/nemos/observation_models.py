@@ -419,6 +419,27 @@ class PoissonObservations(Observations):
     with a given rate. It provides methods for computing the negative log-likelihood, generating samples,
     and computing the residual deviance for the given spike count data.
 
+    Notes
+    -----
+    This class is not meant to be used on its own. It is intended to be passed to a model
+    such as :class:`~nemos.glm.GLM`, which relies on it to compute the log-likelihood and
+    to set the default inverse link function.
+
+    Examples
+    --------
+    >>> import nemos as nmo
+
+    Select the observation model by name:
+
+    >>> nmo.glm.GLM(observation_model="Poisson").observation_model
+    PoissonObservations()
+
+    Equivalently, pass an instance:
+
+    >>> obs_model = nmo.observation_models.PoissonObservations()
+    >>> nmo.glm.GLM(observation_model=obs_model).observation_model
+    PoissonObservations()
+
     """
 
     def __init__(self):
@@ -644,6 +665,27 @@ class GammaObservations(Observations):
     with a given rate. It provides methods for computing the negative log-likelihood, generating samples,
     and computing the residual deviance for the given spike count data.
 
+    Notes
+    -----
+    This class is not meant to be used on its own. It is intended to be passed to a model
+    such as :class:`~nemos.glm.GLM`, which relies on it to compute the log-likelihood and
+    to set the default inverse link function.
+
+    Examples
+    --------
+    >>> import nemos as nmo
+
+    Select the observation model by name:
+
+    >>> nmo.glm.GLM(observation_model="Gamma").observation_model
+    GammaObservations()
+
+    Equivalently, pass an instance:
+
+    >>> obs_model = nmo.observation_models.GammaObservations()
+    >>> nmo.glm.GLM(observation_model=obs_model).observation_model
+    GammaObservations()
+
     """
 
     def __init__(
@@ -847,6 +889,27 @@ class BernoulliObservations(Observations):
     with a given success probability. When using a logit link function (i.e. a logistic inverse link function),
     this is equivalent to Logistic Regression. It provides methods for computing the negative log-likelihood,
     generating samples, and computing the residual deviance for the given binary observations.
+
+    Notes
+    -----
+    This class is not meant to be used on its own. It is intended to be passed to a model
+    such as :class:`~nemos.glm.GLM`, which relies on it to compute the log-likelihood and
+    to set the default inverse link function.
+
+    Examples
+    --------
+    >>> import nemos as nmo
+
+    Select the observation model by name:
+
+    >>> nmo.glm.GLM(observation_model="Bernoulli").observation_model
+    BernoulliObservations()
+
+    Equivalently, pass an instance:
+
+    >>> obs_model = nmo.observation_models.BernoulliObservations()
+    >>> nmo.glm.GLM(observation_model=obs_model).observation_model
+    BernoulliObservations()
 
     """
 
@@ -1139,6 +1202,14 @@ class NegativeBinomialObservations(Observations):
         :math:`\phi \to 0`, the model behaves like a Poisson. The shape parameter of
         the Negative Binomial is given by `r = 1 / scale`.
 
+    Notes
+    -----
+    This class is not meant to be used on its own. It is intended to be passed to a model
+    such as :class:`~nemos.glm.GLM`, which relies on it to compute the log-likelihood and
+    to set the default inverse link function. Note that ``scale`` is not estimated during the
+    fit: the value provided at initialization is used as-is, so it has to be chosen beforehand,
+    for example by cross-validation as described above.
+
     References
     ----------
     .. [4] https://en.wikipedia.org/wiki/Negative_binomial_distribution
@@ -1148,6 +1219,49 @@ class NegativeBinomialObservations(Observations):
 
     .. [6] Wei, Ganchao, et al. "Calibrating Bayesian decoders of neural spiking activity."
         Journal of Neuroscience 44.18 (2024).
+
+    Examples
+    --------
+    >>> import nemos as nmo
+
+    Select the observation model by name, which uses the default ``scale``:
+
+    >>> nmo.glm.GLM(observation_model="NegativeBinomial").observation_model
+    NegativeBinomialObservations(scale=1.0)
+
+    Pass an instance instead to set the dispersion explicitly:
+
+    >>> obs_model = nmo.observation_models.NegativeBinomialObservations(scale=2.0)
+    >>> nmo.glm.GLM(observation_model=obs_model).observation_model
+    NegativeBinomialObservations(scale=2.0)
+
+    A larger ``scale`` yields more variable counts for the same mean rate:
+
+    .. plot::
+        :include-source: True
+        :caption: Effect of the scale parameter on the sampled counts.
+
+        >>> import jax
+        >>> import matplotlib.pyplot as plt
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> obs_low = nmo.observation_models.NegativeBinomialObservations(scale=0.05)
+        >>> obs_high = nmo.observation_models.NegativeBinomialObservations(scale=2.0)
+        >>> rate = np.full(1000, fill_value=10.0)
+        >>> key = jax.random.PRNGKey(123)
+        >>> samples_low = obs_low.sample_generator(key, rate)
+        >>> samples_high = obs_high.sample_generator(key, rate)
+        >>> bool(samples_high.var() > samples_low.var())
+        True
+        >>> _ = plt.subplot(211)
+        >>> _, edges, _ = plt.hist(samples_high, bins=50)
+        >>> _ = plt.title("scale = 2.0")
+        >>> _ = plt.subplot(212)
+        >>> _ = plt.hist(samples_low, bins=edges)
+        >>> _ = plt.title("scale = 0.05")
+        >>> plt.tight_layout()
+        >>> plt.show()
+
     """
 
     def __init__(
@@ -1398,6 +1512,27 @@ class GaussianObservations(Observations):
     The GaussianObservations is designed to model data based on a Gaussian distribution
     with a given mean (predicted rate) and variance (scale). It provides methods for computing the negative
     log-likelihood, generating samples, and computing the residual deviance for the given spike count data.
+
+    Notes
+    -----
+    This class is not meant to be used on its own. It is intended to be passed to a model
+    such as :class:`~nemos.glm.GLM`, which relies on it to compute the log-likelihood and
+    to set the default inverse link function.
+
+    Examples
+    --------
+    >>> import nemos as nmo
+
+    Select the observation model by name:
+
+    >>> nmo.glm.GLM(observation_model="Gaussian").observation_model
+    GaussianObservations()
+
+    Equivalently, pass an instance:
+
+    >>> obs_model = nmo.observation_models.GaussianObservations()
+    >>> nmo.glm.GLM(observation_model=obs_model).observation_model
+    GaussianObservations()
 
     """
 
@@ -1758,6 +1893,21 @@ class CategoricalObservations(Observations):
     It provides methods for computing the negative log-likelihood,
     generating samples, and computing the residual deviance for the given categorical observations.
     This distribution is equivalent to a multinomial with ``n=1``.
+
+    Notes
+    -----
+    This class is not meant to be used on its own, and unlike the other observation models it
+    cannot be passed to :class:`~nemos.glm.GLM`. It is the observation model of the
+    classification models, :class:`~nemos.glm.ClassifierGLM` and
+    :class:`~nemos.glm.ClassifierPopulationGLM`, which set it automatically.
+
+    Examples
+    --------
+    >>> import nemos as nmo
+    >>> nmo.glm.ClassifierGLM().observation_model
+    CategoricalObservations()
+    >>> nmo.glm.ClassifierPopulationGLM().observation_model
+    CategoricalObservations()
 
     """
 

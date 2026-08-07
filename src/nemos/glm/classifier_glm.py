@@ -23,7 +23,7 @@ from ..typing import (
     UserProvidedParamsT,
 )
 from .glm import GLM, PopulationGLM
-from .params import GLMUserParams
+from .params import GLMParams, GLMUserParams
 from .validation import (
     ClassifierGLMValidator,
     PopulationClassifierGLMValidator,
@@ -851,9 +851,6 @@ class ClassifierGLM(ClassifierMixin, GLM):
         y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
 
-    def _get_hess_fn(self, params, autodiff: bool = False) -> Callable | None:
-        return None
-
 
 class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     """
@@ -1014,7 +1011,9 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
     _validator_class = PopulationClassifierGLMValidator
     _hess_tag: HessianTag = HessianTag(
-        structure=BlockDiagonal, property=PositiveSemiDefinite
+        structure=BlockDiagonal,
+        property=PositiveSemiDefinite,
+        batch_axes=GLMParams(1, 0),
     )
 
     def __init__(
@@ -1167,6 +1166,3 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         self._label_encoder.check_classes_is_set("score")
         y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
-
-    def _get_hess_fn(self, params, autodiff: bool = False):
-        return super()._get_hess_fn(params, autodiff=True)

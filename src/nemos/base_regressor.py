@@ -353,9 +353,6 @@ class BaseRegressor(
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
             )
 
-    def _get_hess_fn(self, params, autodiff: bool) -> Callable | None:
-        return None
-
     def _invalidate_solver(self):
         self._solver = None
         self._solver_loss_fun = None
@@ -437,9 +434,9 @@ class BaseRegressor(
 
         if isinstance(solver, Newton):
             solver.setup_hessian(
-                self._get_hess_fn(init_params, autodiff=solver.autodiff),
+                self._get_hess_fn(),
                 self._hess_tag,
-                self.regularizer.resolve_hess_tag(init_params),
+                regularizer.resolve_hess_tag(init_params),
                 self._hess_property_override(),
             )
 
@@ -452,6 +449,9 @@ class BaseRegressor(
             self._solver_loss_fun = solver.fun
 
         return solver
+
+    def _get_hess_fn(self) -> Callable:
+        return None
 
     @abc.abstractmethod
     def fit(
