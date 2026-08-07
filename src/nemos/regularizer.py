@@ -538,6 +538,7 @@ class UnRegularized(Regularizer):
         "SVRG",
         "ProxSVRG",
         "Newton",
+        "ProximalNewton",
     )
 
     _default_solver = "LBFGS"
@@ -568,6 +569,7 @@ class Ridge(Regularizer):
         "SVRG",
         "ProxSVRG",
         "Newton",
+        "ProximalNewton",
     )
 
     _default_solver = "LBFGS"
@@ -614,6 +616,7 @@ class Lasso(Regularizer):
     _allowed_solvers = (
         "ProximalGradient",
         "ProxSVRG",
+        "ProximalNewton",
     )
 
     _default_solver = "ProximalGradient"
@@ -679,6 +682,7 @@ class ElasticNet(Regularizer):
     _allowed_solvers = (
         "ProximalGradient",
         "ProxSVRG",
+        "ProximalNewton",
     )
 
     _default_solver = "ProximalGradient"
@@ -837,6 +841,7 @@ class GroupLasso(Regularizer):
     _allowed_solvers = (
         "ProximalGradient",
         "ProxSVRG",
+        "ProximalNewton",
     )
 
     _default_solver = "ProximalGradient"

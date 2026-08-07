@@ -216,15 +216,19 @@ class Newton:
             self._linear_solver,
         ).value
 
-    def _newton_direction(self, grad, H, params):
+    def _block_apply(self, fn, grad, H, other):
+        """Apply ``fn(grad, H, other)`` once per Hessian block.
+
+        Split out so that anything needing the block structure -- the Newton solve, or a
+        subclass' Hessian-vector product -- shares one place that reads ``_hess_tag``.
+        """
         if self._hess_tag.structure is BlockDiagonal:
-            return jax.vmap(
-                self._solve,
-                in_axes=(self._hess_tag.batch_axes, 0, self._hess_tag.batch_axes),
-                out_axes=self._hess_tag.batch_axes,
-            )(grad, H, params)
-        else:
-            return self._solve(grad, H, params)
+            axes = self._hess_tag.batch_axes
+            return jax.vmap(fn, in_axes=(axes, 0, axes), out_axes=axes)(grad, H, other)
+        return fn(grad, H, other)
+
+    def _newton_direction(self, grad, H, params):
+        return self._block_apply(self._solve, grad, H, params)
 
     def _stationarity(self, params, grad):
         """Distance from a stationary point, used as the convergence criterion.
@@ -469,18 +473,27 @@ class ProximalNewton(Newton):
         self.inner_atol = inner_atol
         self.inner_rtol = inner_rtol
 
-    def _solve(self, grad, H, params):
-        """Solve the penalized quadratic subproblem for one Hessian block."""
-        operator = lx.PyTreeLinearOperator(
-            H,
-            jax.eval_shape(lambda: grad),
-            tags=self._operator_tags,
-        )
+    def _hvp_block(self, grad, H, d):
+        """Hessian-vector product for a single block."""
+        del grad
+        return lx.PyTreeLinearOperator(
+            H, jax.eval_shape(lambda: d), tags=self._operator_tags
+        ).mv(d)
+
+    def _newton_direction(self, grad, H, params):
+        r"""Minimize :math:`\nabla f^\top d + \frac12 d^\top H d + P(\beta + d)`.
+
+        The proximal operator carries metadata defined on the whole parameter tree --
+        ``GroupLasso``'s mask, or a per-feature strength -- so the subproblem is solved
+        on the full tree and only the Hessian-vector product is split per block. That
+        keeps every regularizer usable without slicing each one's penalty metadata.
+        """
+
+        def hvp(d):
+            return self._block_apply(self._hvp_block, grad, H, d)
 
         def quadratic(d, _):
-            return lx.internal.tree_dot(grad, d) + 0.5 * lx.internal.tree_dot(
-                d, operator.mv(d)
-            )
+            return lx.internal.tree_dot(grad, d) + 0.5 * lx.internal.tree_dot(d, hvp(d))
 
         def prox(d, hyperparams, scaling=1.0):
             # the penalty applies to params + d, so shift the prox into d-space
