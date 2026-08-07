@@ -22,7 +22,13 @@ Importantly, throughout the notebook we will assume you already have a solid the
 ```{code-cell} ipython3
 :tags: [hide-input]
 
+import os
 import warnings
+
+# On a cold cache, ONE downloads the dataset with a tqdm progress bar written to
+# stderr. Its S3 downloader ignores ONE's `silent` flag, so disable tqdm itself.
+# This has to happen before the bar is created, hence before the ONE import.
+os.environ["TQDM_DISABLE"] = "1"
 
 # The helper functions live in nemos's documentation utilities, which warn on
 # import that they are not part of the public API; silence that here.
@@ -37,6 +43,13 @@ warnings.filterwarnings(
     "ignore",
     message="coroutine .* was never awaited",
     category=RuntimeWarning,
+)
+
+# ONE warns that the aggregate table has no default revision when it downloads
+# it for the first time; silence it.
+warnings.filterwarnings(
+    "ignore",
+    message="No default revision for dataset.*",
 )
 ```
 
@@ -251,9 +264,13 @@ We will build the design matrix using the NeMoS basis module `nmo.basis`, which 
 
 ### Predictor 1: previous choice
 
+:::{div} predictor-table
+
 | Input | Definition | Interpretation |
 |---|---|---|
 | Previous choice <br> <img src="../assets/previous_choice.svg" alt="two trial frames: the previous trial holds the mouse's wheel turn, the current trial is empty" width="110"> | $\text{Previous choice}_t = c_{t-1}$ <br> with $c_t \in \{-1, +1\}$ | Direct lagged choice predictor, capturing serial dependence in decisions. |
+
+:::
 
 Previous choice is a lagged version of current choice, and it reflects serial dependence on decisions. For every time point, the predictor is the immediate previous choice taken. To create it, we can use the `HistoryConv` basis.
 
@@ -275,9 +292,13 @@ We get a lagged list. Notice that the first element is a `NaN`: a history featur
 
 ### Predictor 2: WSLS
 
+:::{div} predictor-table
+
 | Input | Definition | Interpretation |
 |---|---|---|
 | Win-stay lose-shift <br> <img src="../assets/win_stay_lose_shift.svg" alt="after a reward the mouse repeats its wheel turn; after no reward it makes the opposite turn" width="180"> | $\text{WSLS}_t = c_{t-1} \cdot r_{t-1}$ <br> with $c_t, r_t \in \{-1, +1\}$ | Interaction of past choice and outcome: repeat a rewarded choice, switch away from an unrewarded one. |
+
+:::
 
 The four combinations of previous choice and previous outcome give:
 
@@ -316,9 +337,13 @@ The result is an element-wise multiplication, shifted by one. The first element 
 
 ### Predictor 3: stimulus contrast
 
+:::{div} predictor-table
+
 | Input | Definition | Interpretation |
 |---|---|---|
 | Signed contrast <br> <img src="../assets/screen_grating.svg" alt="stimulus grating" width="80"> | $\text{signed contrast} = \text{contrast}_\text{left} - \text{contrast}_\text{right}$ <br> with $\text{contrast}_\text{left}, \text{contrast}_\text{right} \in S$ <br> where $S = \{0, 0.0625, 0.125, 0.25, 1\}$ | Encodes sensory evidence in 1D; magnitude reflects strength, sign encodes direction. <br> $> 0$: left-favoring evidence <br> $< 0$: right-favoring evidence <br> $= 0$: no directional evidence |
+
+:::
 
 The signed contrast encodes sensory evidence in 1D. Its magnitude reflects the strength of evidence and its sign encodes direction. To build it, we replace `NaN` contrast values with `0` (a stimulus not being shown on one side is equivalent to a `0`-contrast stimulus on that side) and compute the difference between the left and right contrasts.
 

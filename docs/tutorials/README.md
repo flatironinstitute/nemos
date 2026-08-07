@@ -95,7 +95,7 @@ plot_06_calcium_imaging.md
 :::{grid-item-card}
 
 <figure>
-<img src="../_static/thumbnails/tutorials/plot_07_behavioral_states.svg" style="height: 100px", alt="GLMHMM weights."/>
+<img src="../_static/glm_hmm_graphical_model.svg" style="height: 100px", alt="GLM-HMM graphical model."/>
 </figure>
 
 ```{toctree}
