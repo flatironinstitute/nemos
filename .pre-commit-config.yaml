@@ -58,3 +58,12 @@ repos:
       language: system
       types: [python]
       pass_filenames: false
+    # Strips the jupytext version stamp and restores the canonical kernel display
+    # name in the myst-nb markdown notebooks, both of which Jupyter Lab writes into
+    # the front matter on save. Only the staged files are passed, so a commit never
+    # rewrites a notebook that was not part of it.
+    - id: fix-notebook-metadata
+      name: Fix notebook metadata
+      entry: python scripts/check_notebook_metadata.py --fix
+      language: system
+      files: ^docs/.*\.md$

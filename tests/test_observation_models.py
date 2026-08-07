@@ -1148,6 +1148,32 @@ def test_nemos_model_pass_check(observation):
 
 
 @pytest.mark.parametrize(
+    "invalid_model",
+    [
+        1,
+        None,
+        "Poisson",
+        jnp.array([1.0, 2.0]),
+        nmo.regularizer.Ridge(),
+    ],
+)
+def test_not_an_observation_model(invalid_model):
+    """Test that objects implementing none of the required methods are reported as such."""
+    with pytest.raises(ValueError, match="Invalid observation model"):
+        nmo.observation_models.check_observation_model(invalid_model)
+
+
+def test_not_an_observation_model_message():
+    """Test that the error message lists the available models and links the docs."""
+    with pytest.raises(ValueError) as excinfo:
+        nmo.observation_models.check_observation_model(1)
+    message = str(excinfo.value)
+    assert "Invalid observation model: 1" in message
+    assert all(model in message for model in AVAILABLE_OBSERVATION_MODELS)
+    assert "https://nemos.readthedocs.io" in message
+
+
+@pytest.mark.parametrize(
     "missing_method",
     [
         "_negative_log_likelihood",

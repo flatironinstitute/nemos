@@ -331,7 +331,6 @@ class ClassifierMixin:
                     f"Type {type(n_samples)} provided instead!"
                 )
 
-        n_features = sum(x.shape[1] for x in x_leaf)
         # Effective degrees of freedom is n_classes - 1 due to probability simplex constraint
         n_m1_classes = self._label_encoder.n_classes - 1
         params = self._get_model_params()
@@ -355,18 +354,15 @@ class ClassifierMixin:
             )
             return jnp.atleast_1d(n_samples - resid_dof - n_m1_classes)
 
-        elif isinstance(self.regularizer, Ridge):
+        # each estimated feature costs one coefficient per free class
+        design = jnp.concatenate(x_leaf, axis=1)
+        if isinstance(self.regularizer, Ridge):
             # For Ridge, use total parameters
-            return (n_samples - n_m1_classes * n_features - n_m1_classes) * jnp.ones(
-                n_neurons
-            )
-
+            n_est = self._n_estimated_features(design)
         else:
             # For UnRegularized, use the rank
-            rank = jnp.linalg.matrix_rank(jnp.concatenate(x_leaf, axis=1))
-            return (n_samples - rank * n_m1_classes - n_m1_classes) * jnp.ones(
-                n_neurons
-            )
+            n_est = self._design_rank(design)
+        return (n_samples - n_est * n_m1_classes - n_m1_classes) * jnp.ones(n_neurons)
 
     def simulate(
         self,
@@ -977,7 +973,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
     Specify which features predict each neuron:
 
-    >>> feature_mask = jnp.array([[[1, 1, 1], [0, 0, 0]], [[1, 1, 1], [1, 1, 1]]])
+    >>> feature_mask = jnp.array([[1, 0], [1, 1]])
     >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
     >>> model = nmo.glm.ClassifierPopulationGLM(
     ...     n_classes=3,
