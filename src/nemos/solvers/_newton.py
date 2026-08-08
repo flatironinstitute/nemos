@@ -14,14 +14,7 @@ from .. import tree_utils
 from ..typing import Params
 from ._abstract_solver import OptimizationInfo
 from ._fista import FISTA
-from ._hess import (
-    BlockDiagonal,
-    Full,
-    General,
-    HessianTag,
-    PositiveDefinite,
-    combine_hessian_tags,
-)
+from ._hessian_mixins import HessianMixin
 
 DEFAULT_ATOL = 1e-4
 DEFAULT_RTOL = 0.0
@@ -40,12 +33,7 @@ class NewtonState(eqx.Module):
 NewtonStepResult = tuple[Params, NewtonState]
 
 
-class Newton:
-    # When True, the solver minimizes a composite objective: it receives the
-    # unregularized loss and reaches the penalty through its proximal operator.
-    # Same convention as ``OptimistixAdapter._proximal``.
-    _proximal: ClassVar[bool] = False
-
+class Newton(HessianMixin):
     def __init__(
         self,
         unregularized_loss: Callable,
@@ -70,10 +58,7 @@ class Newton:
         self.tol = tol
         self.rtol = rtol
 
-        # kept so setup_hessian can ask the regularizer for its penalty Hessian
-        self._regularizer = regularizer
-        self._regularizer_strength = regularizer_strength
-        self._init_params = init_params
+        self._init_hessian(regularizer, regularizer_strength, init_params)
 
         # A proximal solver differentiates the smooth part only and carries the penalty
         # in its proximal operator, so it must not be handed the penalized loss.
@@ -98,76 +83,12 @@ class Newton:
             self.fun = loss_fn
             self.fun_with_aux = lambda p, *a: (loss_fn(p, *a), None)
 
-        self._hess_tag: HessianTag | None = None
-
         self._line_search = optax.scale_by_backtracking_linesearch(
             max_backtracking_steps=30
         )
 
         # Cache
         self._gradient: Callable | None = None
-        self._hessian: Callable | None = None
-
-        # Linear solver + operator tags, resolved once from the Hessian tag in init_state
-        self._linear_solver = lx.AutoLinearSolver(well_posed=False)
-        self._operator_tags = ()
-
-    def setup_hessian(
-        self,
-        hess_fn: Callable | None = None,
-        hess_tag: HessianTag | None = None,
-        reg_tag: HessianTag | None = None,
-        property_override: Optional[type] = None,
-    ):
-        # A proximal solver models the smooth part only, so the penalty contributes
-        # neither curvature nor structure to the Hessian it works with.
-        if self._proximal:
-            reg_tag = None
-        tag = hess_tag if reg_tag is None else combine_hessian_tags(hess_tag, reg_tag)
-        if property_override is not None and tag is not None:
-            tag = HessianTag(
-                tag.structure, property_override, batch_axes=tag.batch_axes
-            )
-        self._hess_tag = tag
-        self._hessian = self._penalize_hessian(hess_fn, hess_tag)
-
-    def _penalize_hessian(self, hess_fn, model_tag):
-        """Add the regularizer's penalty Hessian to the model's likelihood Hessian.
-
-        Models supply the second derivative of the likelihood alone. Adding the penalty's
-        is valid because ``Regularizer.penalized_loss`` returns ``loss + penalty``, and the
-        second derivative of a sum is the sum of the second derivatives.
-
-        ``None`` passes through: without a model-supplied Hessian, ``_build_cache``
-        autodiffs ``self.fun``, which is the penalized loss and already carries the penalty.
-
-        The batching comes from ``model_tag`` rather than the combined tag, because whether
-        the Hessian is assembled one block per neuron is a property of the model.
-        """
-        if hess_fn is None:
-            return None
-
-        # For a proximal solver the penalty is applied by the prox, not modelled by the
-        # quadratic, so adding its curvature here would double-count it.
-        if self._proximal:
-            return hess_fn
-
-        batch_axes = (
-            model_tag.batch_axes
-            if model_tag is not None and model_tag.structure is BlockDiagonal
-            else None
-        )
-        penalty_hess_fn = self._regularizer._get_hess_fn(
-            self._init_params, self._regularizer_strength, batch_axes=batch_axes
-        )
-        if penalty_hess_fn is None:
-            # the regularizer declares no curvature, so the likelihood term is the whole
-            return hess_fn
-
-        def penalized_hessian(params, *args):
-            return tree_utils.tree_add(hess_fn(params, *args), penalty_hess_fn(params))
-
-        return penalized_hessian
 
     def _build_cache(self):
         if self._gradient is None:
@@ -180,20 +101,9 @@ class Newton:
             self._hessian = jax.hessian(self.fun)
 
     def init_state(self, init_params, *args):
-        if self._hess_tag is None:
-            self._hess_tag = HessianTag(structure=Full, property=General)
-
         self._build_cache()
+        self._resolve_linear_solver()
         ls_state = self._line_search.init(init_params)
-
-        # Resolve the linear solver once: Cholesky for positive-definite Hessians,
-        # otherwise a robust least-squares solve that tolerates rank deficiency.
-        if self._hess_tag.property is PositiveDefinite:
-            self._linear_solver = lx.Cholesky()
-            self._operator_tags = lx.positive_semidefinite_tag
-        else:
-            self._linear_solver = lx.AutoLinearSolver(well_posed=False)
-            self._operator_tags = ()
 
         return NewtonState(
             grad_norm=jnp.inf,
@@ -224,17 +134,6 @@ class Newton:
             jax.tree.map(lambda x: -x, grad),
             self._linear_solver,
         ).value
-
-    def _block_apply(self, fn, grad, H, other):
-        """Apply ``fn(grad, H, other)`` once per Hessian block.
-
-        Split out so that anything needing the block structure -- the Newton solve, or a
-        subclass' Hessian-vector product -- shares one place that reads ``_hess_tag``.
-        """
-        if self._hess_tag.structure is BlockDiagonal:
-            axes = self._hess_tag.batch_axes
-            return jax.vmap(fn, in_axes=(axes, 0, axes), out_axes=axes)(grad, H, other)
-        return fn(grad, H, other)
 
     def _newton_direction(self, grad, H, params):
         return self._block_apply(self._solve, grad, H, params)

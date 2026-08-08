@@ -436,15 +436,16 @@ class BaseRegressor(
             **solver_kwargs,
         )
 
-        # ``AbstractSolver.setup_hessian`` is a no-op by default, so solvers that ignore
-        # curvature need no special case here. ``getattr`` covers custom solvers written
-        # against the how-to guide, which are duck-typed rather than subclasses.
-        getattr(solver, "setup_hessian", lambda *a: None)(
-            self._get_hess_fn(),
-            self._hess_tag,
-            regularizer.resolve_hess_tag(init_params),
-            self._hess_property_override(),
-        )
+        # Offer the analytic Hessian to any solver declaring it can use curvature,
+        # the same way ``_supports_stochastic`` declares stochastic support. ``getattr``
+        # covers duck-typed custom solvers that subclass nothing.
+        if getattr(solver, "_uses_hessian", False):
+            solver.setup_hessian(
+                self._get_hess_fn(),
+                self._hess_tag,
+                regularizer.resolve_hess_tag(init_params),
+                self._hess_property_override(),
+            )
 
         # nemos's solvers store a .fun attribute, but it's not necessary for a solver to work.
         # A test relies on having _solver_loss_fun saved, so still check and save it if possible.

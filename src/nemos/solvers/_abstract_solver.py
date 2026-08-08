@@ -54,6 +54,11 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
     # Set to True in subclasses that support stochastic optimization
     _supports_stochastic: ClassVar[bool] = False
 
+    # Set to True in solvers that can exploit the model's analytic Hessian. The
+    # machinery lives in ``HessianMixin``, which flips this; only the capability
+    # is declared here.
+    _uses_hessian: ClassVar[bool] = False
+
     @abc.abstractmethod
     def __init__(
         self,
@@ -114,22 +119,6 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         Used by ``BaseRegressor.fit``.
         """
         pass
-
-    def setup_hessian(
-        self,
-        hess_fn: Callable | None = None,
-        hess_tag: Any = None,
-        reg_tag: Any = None,
-        property_override: type | None = None,
-    ) -> None:
-        """
-        Receive the model's analytic Hessian, if the solver can exploit curvature.
-
-        Called by ``BaseRegressor`` after construction. Not abstract: solvers that do
-        not use second-order information inherit this no-op, so the caller never has to
-        know which kind of solver it holds.
-        """
-        return None
 
     @classmethod
     @abc.abstractmethod
