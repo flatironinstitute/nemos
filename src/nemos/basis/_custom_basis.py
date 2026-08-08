@@ -17,10 +17,9 @@ import lazy_loader as lazy
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from nemos.typing import FeatureMatrix
-
 from ..base_class import Base
 from ..type_casting import support_pynapple
+from ..typing import FeatureMatrix
 from ..utils import format_repr
 from . import AdditiveBasis, MultiplicativeBasis
 from ._basis_mixin import BasisMixin, BasisTransformerMixin, set_input_shape_state

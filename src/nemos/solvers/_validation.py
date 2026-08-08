@@ -141,7 +141,7 @@ def _validate_solver_class_on_ridge(
 
     if solver_kwargs is None:
         solver_kwargs = {}
-    from nemos.regularizer import Ridge
+    from ..regularizer import Ridge
 
     regularizer = Ridge()
     regularizer_strength = 1e-2
