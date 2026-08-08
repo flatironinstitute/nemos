@@ -1,6 +1,6 @@
 """Initialization of GLM parameters."""
 
-from typing import Callable
+from typing import Callable, Optional, Union
 
 import jax
 import jax.numpy as jnp
@@ -15,6 +15,7 @@ from ..inverse_link_function_utils import (
     norm_cdf,
     softplus,
 )
+from ..typing import Pytree
 from ..utils import one_over_x
 
 
@@ -172,3 +173,86 @@ def initialize_intercept_matching_mean_rate(
         raise non_finite_error
 
     return out
+
+
+def initialize_constant_coef_matching_mean_rate(
+    inverse_link_function: Callable,
+    X: Union[Pytree, jnp.ndarray],
+    y: jnp.ndarray,
+    empty_coef: Union[Pytree, jnp.ndarray],
+    eps: Optional[float] = None,
+) -> Union[Pytree, jnp.ndarray]:
+    r"""
+    Initialize coefficients as a constant matching the mean rate, with no intercept.
+
+    When the intercept is held fixed at zero, coefficients initialized to zero would
+    force the linear predictor to zero and, for example, imply an unreasonably high
+    firing rate for a Poisson GLM with an exponential link. Instead, this sets every
+    coefficient to a single constant ``c`` (per output), so that the linear predictor is
+
+    .. math::
+        \eta_t = \sum_j X_{tj}\, c = c\, s_t, \qquad s_t = \sum_j X_{tj},
+
+    where :math:`s_t` is the row-sum of the design matrix. The constant is chosen as the
+    least-squares projection of the uniform offset :math:`\eta^\star` (the value a free
+    intercept would take, i.e. the inverse link of the mean rate) onto :math:`s` (see Notes):
+
+    .. math::
+        c = \eta^\star\, \frac{\sum_t s_t + \varepsilon}{\sum_t s_t^2 + \varepsilon},
+
+    so the linear predictor stays close to :math:`\eta^\star` regardless of how large
+    ``c`` grows. :math:`\varepsilon` is the numerical precision, introduced to get finite
+    ``c`` even when :math:`s_t` is identically zero.
+
+    Parameters
+    ----------
+    inverse_link_function :
+        The inverse link function of the model.
+    X :
+        The design matrix, an array of shape ``(n_samples, n_features)`` or a pytree of
+        such arrays. NaNs are ignored when forming the row-sum.
+    y :
+        The neural activity, shape ``(n_samples,)`` for single-output regressors such as
+        ``GLM`` or ``(n_samples, n_neurons)`` for multi-output regressors such as
+        ``PopulationGLM``.
+    empty_coef :
+        A pytree matching the target coefficient structure and shapes (e.g. as returned
+        by the validator's ``get_empty_params``). Used only for its leaf shapes.
+    eps :
+        Stabilization added to both numerator and denominator. Defaults to the machine
+        epsilon of the row-sum dtype, which only intervenes when the design row-sums are
+        numerically zero and is otherwise negligible.
+
+    Returns
+    -------
+    :
+        The initialized coefficients, matching the structure and shapes of ``empty_coef``.
+
+    Notes
+    -----
+    The constant :math:`c \in \mathbb{R}` is the minimizer of
+
+    .. math::
+        \mathcal{L}(c) = \sum_t \left(c\, s_t - \eta^\star\right)^2,
+
+    where :math:`\eta^\star` is the linear-predictor value whose inverse link matches the
+    mean rate (:math:`\text{inverse\_link}(\eta^\star) = \bar{y}`), and
+    :math:`s_t = \sum_j X_{tj}` is the sum of the design over features. Setting
+    :math:`\mathcal{L}'(c) = 0` gives the closed form above (with the
+    :math:`\varepsilon` terms added for numerical stability). The problem is degenerate
+    only when :math:`s \equiv 0`, in which case no constant coefficient can inject an
+    offset and the :math:`\varepsilon` stabilization keeps :math:`c` finite.
+    """
+    # the linear-predictor target a free intercept would supply, shape (n_out,)
+    eta_target = initialize_intercept_matching_mean_rate(inverse_link_function, y)
+
+    # row-sum of the design across all features of all leaves, shape (n_samples,)
+    row_sum = sum(jnp.nansum(leaf, axis=1) for leaf in jax.tree_util.tree_leaves(X))
+
+    if eps is None:
+        eps = jnp.finfo(row_sum.dtype).eps
+
+    scale = (jnp.sum(row_sum) + eps) / (jnp.sum(row_sum**2) + eps)
+    const = eta_target * scale  # (n_out,)
+
+    return jax.tree_util.tree_map(lambda leaf: jnp.full_like(leaf, const), empty_coef)

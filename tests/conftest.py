@@ -48,6 +48,8 @@ from nemos.hmm.params import HMMParams
 from nemos.hmm.utils import initialize_session_starts
 from nemos.hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
 from nemos.params import ModelParams
+from nemos.regularizer import UnRegularized
+from nemos.solvers import get_solver
 from nemos.tree_utils import tree_full_like
 
 _totals = defaultdict(float)
@@ -103,6 +105,39 @@ def all_subclasses(cls):
 
 
 @pytest.fixture
+def setup_solver():
+    """Factory instantiating a nemos solver directly from an objective.
+
+    Returns a callable ``setup(objective, init_params, ...)`` that builds a solver
+    through the nemos solver registry (``get_solver``), bypassing model plumbing.
+    Useful for exercising a raw objective (e.g. a partition-wrapped ``_compute_loss``)
+    with the maintained solver stack. ``solver.run(init_params, *args)`` returns the
+    usual ``(params, state, aux)`` tuple.
+    """
+
+    def _setup(
+        objective,
+        init_params,
+        tol=1e-12,
+        solver_name="LBFGS",
+        regularizer_strength=0.0,
+        regularizer=None,
+        has_aux=False,
+    ):
+        solver_class = get_solver(solver_name).implementation
+        return solver_class(
+            objective,
+            init_params=init_params,
+            regularizer=UnRegularized() if regularizer is None else regularizer,
+            regularizer_strength=regularizer_strength,
+            has_aux=has_aux,
+            tol=tol,
+        )
+
+    return _setup
+
+
+@pytest.fixture
 def mock_glm_fit(monkeypatch):
     """Replace GLM.fit with a pure-Python no-op that sets coef_/intercept_ from X/y shapes.
 
@@ -154,8 +189,8 @@ def _make_optimizer_run_patch(monkeypatch, model_cls):
     real_init = model_cls._initialize_optimizer_and_state
     noop = _NOOP_OPTIMIZER_RUN.get(model_cls, _DEFAULT_NOOP_OPTIMIZER_RUN)
 
-    def _patched(self, init_params, data, y):
-        result = real_init(self, init_params, data, y)
+    def _patched(self, init_params, data, y, *args, **kwargs):
+        result = real_init(self, init_params, data, y, *args, **kwargs)
         self._optimizer_run = noop
         return result
 
@@ -205,8 +240,8 @@ def _make_optimizer_update_patch(monkeypatch, model_cls):
     real_init = model_cls._initialize_optimizer_and_state
     noop = _NOOP_OPTIMIZER_UPDATE.get(model_cls, _DEFAULT_NOOP_OPTIMIZER_UPDATE)
 
-    def _patched(self, init_params, data, y):
-        result = real_init(self, init_params, data, y)
+    def _patched(self, init_params, data, y, *args, **kwargs):
+        result = real_init(self, init_params, data, y, *args, **kwargs)
         self._optimizer_update = noop
         return result
 
@@ -239,9 +274,7 @@ ModelFixture = namedtuple(
 )
 
 
-def initialize_feature_mask_for_population_glm(
-    X, n_neurons: int, n_classes: int = 0, coef=None
-):
+def initialize_feature_mask_for_population_glm(X, n_neurons: int, coef=None):
     """
     Create a feature mask of ones for PopulationGLM testing.
 
@@ -256,24 +289,19 @@ def initialize_feature_mask_for_population_glm(
         Number of neurons (determines the second dimension of the mask).
         Ignored if coef is provided.
     coef :
-        Optional coefficient array/pytree. If provided, the mask shape will match
-        coef shape exactly (required for ClassifierPopulationGLM).
-    n_classes:
-        Number of classes (determines the second dimension of the mask).
+        Optional coefficient array/pytree. If provided, the mask leaves are shaped like
+        the features-by-neurons block of the coefficients.
 
     Returns
     -------
     :
-        A feature mask with all ones, shaped like the coefficients it masks. If coef is
-        provided, returns ones_like(coef). Otherwise each leaf of X contributes a mask of
-        shape (n_features_in_leaf, n_neurons, *extra_shape).
+        A feature mask with all ones, of shape (n_features_in_leaf, n_neurons) leaf by
+        leaf. Classifier coefficients carry a trailing class axis, which the mask does
+        not distinguish and therefore drops.
     """
-    extra_shape = (n_classes,) if n_classes else ()
     if coef is not None:
-        return jax.tree_util.tree_map(lambda c: jnp.ones(c.shape), coef)
-    return jax.tree_util.tree_map(
-        lambda x: jnp.ones((x.shape[1], n_neurons, *extra_shape)), X
-    )
+        return jax.tree_util.tree_map(lambda c: jnp.ones(c.shape[:2]), coef)
+    return jax.tree_util.tree_map(lambda x: jnp.ones((x.shape[1], n_neurons)), X)
 
 
 DEFAULT_KWARGS = {

@@ -1,5 +1,6 @@
 """Tests for GLMHMM.fit and related fit-path validation."""
 
+import inspect
 import math
 import warnings
 from contextlib import nullcontext as does_not_raise
@@ -244,6 +245,41 @@ def glm_hmm_data():
         init_params=(coef, intercept, scale, init_prob, trans_prob),
         n_states=s,
     )
+
+
+class TestFitInterceptDeferred:
+    """Parameter freezing (``fit_intercept``) is not extended to GLM-HMM; the base
+    signature change (``frozen_params``) must stay compatible and inert."""
+
+    def test_fit_intercept_not_exposed(self, glm_hmm_data):
+        """GLM-HMM does not expose ``fit_intercept`` (freezing is deferred)."""
+        model = GLMHMM(n_states=glm_hmm_data["n_states"], observation_model="Bernoulli")
+        assert "fit_intercept" not in model.get_params()
+        assert not hasattr(model, "fit_intercept")
+
+    def test_initialize_optimizer_accepts_frozen_params(self):
+        """``_initialize_optimizer_and_state`` accepts ``frozen_params`` for signature
+        compatibility with the base entry points."""
+        sig = inspect.signature(GLMHMM._initialize_optimizer_and_state)
+        assert "frozen_params" in sig.parameters
+
+    def test_frozen_params_is_ignored(self, glm_hmm_data):
+        """Passing a non-None ``frozen_params`` yields the same optimizer state as
+        passing None: the GLM-HMM ignores it."""
+        model = GLMHMM(n_states=glm_hmm_data["n_states"], observation_model="Bernoulli")
+        X, y = glm_hmm_data["X"], glm_hmm_data["y"]
+        casted = model._validator.validate_and_cast_params(glm_hmm_data["init_params"])
+
+        state_none = model._initialize_optimizer_and_state(
+            casted, X, y, frozen_params=None
+        )
+        state_frozen = model._initialize_optimizer_and_state(
+            casted, X, y, frozen_params="ignored-sentinel"
+        )
+
+        assert isinstance(state_none, EMState) and isinstance(state_frozen, EMState)
+        assert state_none.iterations == state_frozen.iterations == 0
+        assert bool(state_none.converged) is bool(state_frozen.converged) is False
 
 
 def _spy_instantiate_solver(monkeypatch):
