@@ -159,6 +159,61 @@ class TestCallbackSystem:
         assert ctx.should_stop
         assert ctx.stop_reason == "test reason"
 
+    def test_training_context_params_passthrough_when_no_frozen(self):
+        """With ``frozen=None`` the params getter returns exactly what was set."""
+        params = SimpleNamespace(coef="COEF", intercept="INT")
+        ctx = TrainingContext(params=params)
+        assert ctx.params is params
+
+    def test_training_context_params_recombines_frozen(self):
+        """With a frozen subtree set, reading ``params`` recombines it with the
+        active subtree, while the setter stores only the active subtree (so
+        callbacks always see the complete parameters)."""
+        frozen = (None, jnp.array([7.0]))
+        ctx = TrainingContext(params=(jnp.array([0.0, 0.0]), None), frozen=frozen)
+
+        # the constructor-provided active subtree recombines with frozen on read
+        np.testing.assert_array_equal(ctx.params[0], jnp.array([0.0, 0.0]))
+        np.testing.assert_array_equal(ctx.params[1], jnp.array([7.0]))
+
+        # the training loop assigns a new active subtree ...
+        ctx.params = (jnp.array([3.0, 4.0]), None)
+        # ... stored active-only (the frozen slot stays empty) ...
+        assert ctx._params[1] is None
+        # ... and recombined with frozen on the next read
+        np.testing.assert_array_equal(ctx.params[0], jnp.array([3.0, 4.0]))
+        np.testing.assert_array_equal(ctx.params[1], jnp.array([7.0]))
+
+    def test_repr_single_line(self):
+        """A short context renders on one line; None fields are omitted."""
+        ctx = TrainingContext(pass_idx=1, batch_idx=3, n_passes=5)
+        assert repr(ctx) == "TrainingContext(pass_idx=1, batch_idx=3, n_passes=5)"
+
+    def test_repr_empty(self):
+        """Only ``n_passes`` (default 0, not None) shows for a bare context."""
+        assert repr(TrainingContext()) == "TrainingContext(n_passes=0)"
+
+    def test_repr_multiline_over_threshold(self):
+        """Past ``N_CHAR_MAX`` the repr breaks to one field per line."""
+        ctx = TrainingContext(pass_idx=1, batch_idx=3, n_passes=5)
+        assert ctx.__repr__(N_CHAR_MAX=10) == (
+            "TrainingContext(\n"
+            "    pass_idx=1,\n"
+            "    batch_idx=3,\n"
+            "    n_passes=5,\n"
+            ")"
+        )
+
+    def test_repr_shows_recombined_params(self):
+        """``params`` renders through the property: the complete (recombined)
+        parameters, not the partial active-only subtree."""
+        ctx = TrainingContext(
+            params=(jnp.array([1.0]), None), frozen=(None, jnp.array([7.0]))
+        )
+        text = repr(ctx)
+        assert f"params={ctx.params}" in text
+        assert f"params={ctx._params}" not in text
+
     def test_callback_hooks_are_noop(self):
         """Base Callback hooks don't raise."""
         cb = Callback()
@@ -294,6 +349,24 @@ class TestGLMStochasticFit:
         assert model.coef_ is not None
         assert model.intercept_ is not None
         assert model.coef_.shape == (5,)
+
+    @pytest.mark.parametrize("solver", _stochastic_solver_names)
+    def test_stochastic_fit_frozen_intercept(self, simple_data, solver):
+        """With ``fit_intercept=False`` stochastic_fit holds the intercept at zero
+        while still estimating the coefficients."""
+        X, y = simple_data
+        loader = ArrayDataLoader(X, y, batch_size=32, shuffle="full")
+
+        model = nmo.glm.GLM(
+            fit_intercept=False,
+            solver_name=solver,
+            solver_kwargs=self._default_solver_kwargs(solver),
+        )
+        model.stochastic_fit(loader, n_passes=5)
+
+        np.testing.assert_array_equal(model.intercept_, jnp.zeros(1))
+        assert model.coef_.shape == (5,)
+        assert np.all(np.isfinite(model.coef_))
 
     @pytest.mark.parametrize("solver", _stochastic_solver_names)
     def test_stochastic_fit_with_init_params(self, simple_data, solver):
@@ -848,6 +921,27 @@ class TestPopulationGLMStochasticFit:
         assert model.intercept_ is not None
         assert model.coef_.shape == (5, 3)
         assert model.intercept_.shape == (3,)
+
+    @pytest.mark.parametrize("solver", _stochastic_solver_names)
+    def test_population_stochastic_fit_frozen_intercept(self, population_data, solver):
+        """With ``fit_intercept=False`` the per-neuron intercept stays at zero while
+        the coefficients are estimated for every neuron."""
+        X, y = population_data
+        loader = ArrayDataLoader(X, y, batch_size=32, shuffle="full")
+
+        solver_kwargs = {"stepsize": 0.001, "maxiter": 100}
+        solver_class = solvers.get_solver(solver).implementation
+        if "acceleration" in solver_class.get_accepted_arguments():
+            solver_kwargs["acceleration"] = False
+
+        model = nmo.glm.PopulationGLM(
+            fit_intercept=False, solver_name=solver, solver_kwargs=solver_kwargs
+        )
+        model.stochastic_fit(loader, n_passes=5)
+
+        np.testing.assert_array_equal(model.intercept_, jnp.zeros(3))
+        assert model.coef_.shape == (5, 3)
+        assert np.all(np.isfinite(model.coef_))
 
 
 class TestSolverStochasticRun:

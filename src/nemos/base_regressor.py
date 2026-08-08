@@ -10,6 +10,7 @@ from functools import wraps
 from pathlib import Path
 from typing import Any, Callable, Generic, Optional, Tuple, Type, Union
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -119,6 +120,9 @@ class BaseRegressor(
 
     # overwrite this in subclasses if their objective functions return aux
     _has_aux: bool = False
+
+    # user setting: fixed-parameter spec (array leaf = fixed value, None leaf = learn).
+    _fix_params: Optional[ModelParamsT] = None
 
     def __init__(
         self,
@@ -364,6 +368,103 @@ class BaseRegressor(
         self._optimizer_update = None
         self._optimizer_run = None
 
+    def _partition_active(
+        self, params: ModelParamsT
+    ) -> Tuple[ModelParamsT, ModelParamsT]:
+        """
+        Compute active and frozen parameter trees.
+
+        Parameters
+        ----------
+        params:
+            The model parameters.
+
+        Returns
+        -------
+        :
+            A tuple containing the active and frozen parameter trees.
+
+        """
+        return eqx.partition(params, self._active_filter_spec())
+
+    def _active_filter_spec(self) -> Any:
+        """Boolean filter spec (tree-prefix) marking the actively optimized leaves.
+
+        Derived from ``_fix_params`` alone: a leaf is active iff the spec holds
+        ``None`` there. Subclasses fold model-specific settings in (e.g. the GLM
+        freezes the intercept when ``fit_intercept=False``).
+        """
+        return jax.tree_util.tree_map(
+            lambda x: x is None, self._fix_params, is_leaf=lambda x: x is None
+        )
+
+    def _frozen_values(
+        self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray
+    ) -> Optional[ModelParamsT]:
+        """Values the frozen leaves are pinned to, implied by the model settings.
+
+        Complement of :meth:`_active_filter_spec`: the spec marks *which* leaves are
+        actively optimized, this returns *what* the remaining leaves are held at
+        (tree-prefix with ``None`` on active leaves; ``None`` when nothing is frozen).
+        Derived from ``_fix_params`` alone here — its array leaves are the fixed
+        values. Subclasses fold model-specific settings in (e.g. the GLM pins the
+        intercept at zero when ``fit_intercept=False``); ``X`` and ``y`` let them
+        infer the shape of a pinned leaf.
+        """
+        return self._fix_params
+
+    def _normalize_user_params(
+        self,
+        init_params: UserProvidedParamsT,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+    ) -> UserProvidedParamsT:
+        """Complete a user-provided parameter set before validation.
+
+        User-facing entry points (``fit``, ``initialize_optimizer_and_state``) accept
+        parameters in a convenient, possibly *incomplete* form: leaves that the model
+        will not learn may be omitted (passed as ``None``) so the user does not have to
+        supply a value for something that is held fixed. This hook is the single seam
+        where such input is turned into a complete, concrete parameter set, filling in
+        the omitted leaves with their fixed defaults (and warning if the user supplied a
+        value for a leaf that will not be estimated).
+
+        It is separate from the other parameter-processing steps because it is the only
+        one allowed to *change values*, and the only one that is inherently model
+        specific:
+
+        - ``_normalize_user_params`` (this method): inject defaults for omitted/fixed
+          leaves, coerce/override, warn. Model specific — the base class does not know
+          which leaves a subclass can leave unset (e.g. the GLM intercept when
+          ``fit_intercept=False``), so it is a no-op here and subclasses override it.
+        - ``validate_and_cast_params``: validate structure/dtype/shape and cast the
+          user tuple to a ``ModelParams`` pytree. Assumes a *complete* set of concrete
+          arrays, which is why normalization must run first.
+        - ``validate_consistency``: check the parameters against the data (feature and
+          output dimensions).
+        - ``_partition_active``: split the concrete parameters into the active subtree
+          the solver optimizes and the frozen subtree recombined afterwards. The fixed
+          values injected here are what end up in the frozen subtree.
+
+        Running order is therefore: normalize -> validate/cast -> check consistency ->
+        partition. The default implementation returns ``init_params`` unchanged.
+
+        Parameters
+        ----------
+        init_params :
+            User-provided parameters, in the model's user-facing format.
+        X :
+            Input predictors, used to infer the shape/default of any omitted leaf.
+        y :
+            Target data, used to infer the shape/default of any omitted leaf.
+
+        Returns
+        -------
+        :
+            The parameters with any omitted fixed leaves filled in.
+        """
+        return init_params
+
     def _instantiate_solver(
         self,
         loss,
@@ -372,6 +473,7 @@ class BaseRegressor(
         solver_kwargs: Optional[dict] = None,
         regularizer: Optional[Regularizer] = None,
         regularizer_strength: Optional[Any] = None,
+        frozen_params: Optional[ModelParamsT] = None,
     ) -> SolverProtocol:
         """
         Instantiate the solver with the provided loss function.
@@ -403,6 +505,8 @@ class BaseRegressor(
             Optional regularizer, default is self.regularizer.
         regularizer_strength:
             Optional regularization strength, default is self.regularizer_strength.
+        frozen_params:
+            Set of fixed parameters that will be combined with actively learned ``init_params``.
 
         Returns
         -------
@@ -427,8 +531,17 @@ class BaseRegressor(
 
         self._check_solver_kwargs(solver_cls, solver_kwargs)
 
+        if frozen_params is not None:
+
+            def _loss(params, *args, **kwargs):
+                params = eqx.combine(params, frozen_params)
+                return loss(params, *args, **kwargs)
+
+        else:
+            _loss = loss
+
         solver = solver_cls(
-            loss,
+            _loss,
             regularizer,
             regularizer_strength,
             has_aux=self._has_aux,
@@ -441,7 +554,7 @@ class BaseRegressor(
         # covers duck-typed custom solvers that subclass nothing.
         if getattr(solver, "_uses_hessian", False):
             solver.setup_hessian(
-                self._get_hess_fn(),
+                self._get_hess_fn(frozen=frozen_params),
                 self._hess_tag,
                 regularizer.resolve_hess_tag(init_params),
                 self._hess_property_override(),
@@ -457,7 +570,7 @@ class BaseRegressor(
 
         return solver
 
-    def _get_hess_fn(self) -> Callable:
+    def _get_hess_fn(self, frozen: Optional[ModelParamsT] = None) -> Optional[Callable]:
         return None
 
     @abc.abstractmethod
@@ -743,6 +856,7 @@ class BaseRegressor(
         init_params: ModelParamsT,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
+        frozen_params: Optional[ModelParamsT] = None,
     ) -> SolverState:
         """Initialize the optimizer and the state of the optimizer for running fit and update."""
         pass
@@ -780,10 +894,13 @@ class BaseRegressor(
             If inputs or parameters have incompatible shapes or invalid values.
         """
         self._validator.validate_inputs(X, y)
+        init_params = self._normalize_user_params(init_params, X, y)
         init_params = self._validator.validate_and_cast_params(init_params)
         self._validator.validate_consistency(init_params, X=X, y=y)
         X, y = self._preprocess_inputs(X, y, drop_nans=True)
-        return self._initialize_optimizer_and_state(init_params, X, y)
+        active, frozen = self._partition_active(init_params)
+        state = self._initialize_optimizer_and_state(active, X, y, frozen_params=frozen)
+        return state
 
     def _optimize_solver_params(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> dict:
         """

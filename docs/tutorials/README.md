@@ -92,4 +92,16 @@ plot_06_calcium_imaging.md
 ```
 :::
 
+:::{grid-item-card}
+
+<figure>
+<img src="../_static/glm_hmm_graphical_model.svg" style="height: 100px", alt="GLM-HMM graphical model."/>
+</figure>
+
+```{toctree}
+:maxdepth: 2
+plot_07_behavioral_states.md
+```
+:::
+
 ::::
