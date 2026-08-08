@@ -378,6 +378,17 @@ class ProximalNewton(Newton):
         self.inner_atol = inner_atol
         self.inner_rtol = inner_rtol
 
+        # The subproblem is solved for the new parameters, so the prox is the
+        # regularizer's own and the solver does not depend on the current iterate:
+        # build it once rather than per outer iteration.
+        self._inner_solver = FISTA(
+            atol=inner_atol,
+            rtol=inner_rtol,
+            norm=optx.two_norm,
+            prox=self.prox,
+            while_loop_kind="lax",
+        )
+
     def _hvp_block(self, grad, H, d):
         """Hessian-vector product for a single block."""
         del grad
@@ -386,7 +397,11 @@ class ProximalNewton(Newton):
         ).mv(d)
 
     def _newton_direction(self, grad, H, params):
-        r"""Minimize :math:`\nabla f^\top d + \frac12 d^\top H d + P(\beta + d)`.
+        r"""Minimize :math:`\nabla f^\top (z - \beta) + \frac12 (z - \beta)^\top H (z - \beta) + P(z)`.
+
+        Solving for the new parameters :math:`z` rather than the step keeps the penalty
+        where it is defined, so ``self.prox`` applies unchanged and the inner solver does
+        not depend on the current iterate.
 
         The proximal operator carries metadata defined on the whole parameter tree --
         ``GroupLasso``'s mask, or a per-feature strength -- so the subproblem is solved
@@ -394,30 +409,22 @@ class ProximalNewton(Newton):
         keeps every regularizer usable without slicing each one's penalty metadata.
         """
 
-        def hvp(d):
-            return self._block_apply(self._hvp_block, grad, H, d)
+        def quadratic(z, _):
+            step = tree_utils.tree_sub(z, params)
+            hvp = self._block_apply(self._hvp_block, grad, H, step)
+            return lx.internal.tree_dot(grad, step) + 0.5 * lx.internal.tree_dot(
+                step, hvp
+            )
 
-        def quadratic(d, _):
-            return lx.internal.tree_dot(grad, d) + 0.5 * lx.internal.tree_dot(d, hvp(d))
-
-        def prox(d, hyperparams, scaling=1.0):
-            # the penalty applies to params + d, so shift the prox into d-space
-            shifted = self.prox(tree_utils.tree_add(params, d), hyperparams, scaling)
-            return tree_utils.tree_sub(shifted, params)
-
-        return optx.minimise(
+        new_params = optx.minimise(
             quadratic,
-            FISTA(
-                atol=self.inner_atol,
-                rtol=self.inner_rtol,
-                norm=optx.two_norm,
-                prox=prox,
-                while_loop_kind="lax",
-            ),
-            y0=tree_utils.tree_zeros_like(grad),
+            self._inner_solver,
+            y0=params,
             max_steps=self.inner_iter,
             throw=False,
         ).value
+        # ``_apply_or_reject`` scales and adds the result, so return the step
+        return tree_utils.tree_sub(new_params, params)
 
     def _converged(self, params, state, grad, fval):
         """Cauchy criterion on the accepted step, as :class:`~nemos.solvers._fista.FISTA` uses.
