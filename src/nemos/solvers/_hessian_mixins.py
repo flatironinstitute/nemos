@@ -6,7 +6,7 @@ import jax
 import lineax as lx
 
 from .. import tree_utils
-from ._hess import (
+from .._hess import (
     BlockDiagonal,
     Full,
     General,

@@ -13,6 +13,13 @@ import pytest
 
 import nemos as nmo
 from conftest import all_subclasses, initialize_feature_mask_for_population_glm
+from nemos._hess import (
+    BlockDiagonal,
+    Full,
+    HessianTag,
+    PositiveDefinite,
+    PositiveSemiDefinite,
+)
 from nemos._inspect_utils import is_abstract
 from nemos.base_regressor import BaseRegressor
 from nemos.glm import GLM, PopulationGLM
@@ -20,13 +27,6 @@ from nemos.glm.classifier_glm import ClassifierGLM, ClassifierPopulationGLM
 from nemos.glm.params import GLMParams
 from nemos.regularizer import Regularizer, Ridge, UnRegularized
 from nemos.solvers._abstract_solver import OptimizationInfo
-from nemos.solvers._hess import (
-    BlockDiagonal,
-    Full,
-    HessianTag,
-    PositiveDefinite,
-    PositiveSemiDefinite,
-)
 from nemos.solvers._newton import Newton, NewtonState
 from nemos.tree_utils import pytree_map_and_reduce
 

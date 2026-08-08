@@ -15,9 +15,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from nemos.solvers._hess import Diagonal, General, HessianTag, PositiveDefinite
-
 from . import tree_utils
+from ._hess import Diagonal, General, HessianTag, PositiveDefinite
 from .base_class import Base
 from .proximal_operator import (
     compute_normalization,

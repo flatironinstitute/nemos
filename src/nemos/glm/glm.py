@@ -15,6 +15,13 @@ from sklearn.utils import InputTags, TargetTags
 
 from .. import observation_models as obs
 from .. import tree_utils, validation
+from .._hess import (
+    BlockDiagonal,
+    Full,
+    HessianTag,
+    PositiveDefinite,
+    PositiveSemiDefinite,
+)
 from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor, strip_metadata
 from ..batching import DataLoader, _PreprocessedDataLoader, is_data_loader
@@ -25,13 +32,6 @@ from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers import WrappedProxSVRG, WrappedSVRG, list_stochastic_solvers
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
-from ..solvers._hess import (
-    BlockDiagonal,
-    Full,
-    HessianTag,
-    PositiveDefinite,
-    PositiveSemiDefinite,
-)
 from ..type_casting import cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, SolverState, StepResult
 from ..utils import _elementwise_derivative, format_repr
