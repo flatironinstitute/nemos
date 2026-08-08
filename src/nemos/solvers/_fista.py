@@ -5,6 +5,7 @@ from typing import Any, Callable, ClassVar, Literal
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+import lineax as lx
 import optimistix as optx
 from jaxtyping import Array, Bool, Float, Int, PyTree
 from optimistix._custom_types import Aux, Y
@@ -279,7 +280,7 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
             new_fun_val = fun(next_x, args)
 
             diff_x = tree_sub(next_x, x)
-            sqdist = optx._misc.sum_squares(diff_x)
+            sqdist = lx.internal.sum_squares(diff_x)
 
             # verbatim from JAXopt
             # The expression below checks the sufficient decrease condition
@@ -287,7 +288,7 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
             # where the terms have been reordered for numerical stability.
             fun_decrease = stepsize * (new_fun_val - x_fun_val)
             expected_decrease = (
-                stepsize * optx._misc.tree_dot(diff_x, grad) + 0.5 * sqdist
+                stepsize * lx.internal.tree_dot(diff_x, grad) + 0.5 * sqdist
             )
 
             return fun_decrease > expected_decrease + eps

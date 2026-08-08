@@ -384,7 +384,7 @@ class ProximalNewton(Newton):
         self._inner_solver = FISTA(
             atol=inner_atol,
             rtol=inner_rtol,
-            norm=optx.two_norm,
+            norm=lx.internal.two_norm,
             prox=self.prox,
             while_loop_kind="lax",
         )
@@ -438,7 +438,7 @@ class ProximalNewton(Newton):
         return cauchy_termination(
             self.rtol,
             self.tol,
-            optx.two_norm,
+            lx.internal.two_norm,
             params,
             state.y_diff,
             fval,
