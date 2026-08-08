@@ -577,10 +577,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         See Also
         --------
         :meth:`nemos.glm.GLM.score`
-            Score predicted rates against target spike counts.
+            Score predicted rates against the observations.
 
         :meth:`nemos.glm.GLM.simulate`
-            Simulate neural activity in response to a feed-forward input (feed-forward only).
+            Simulate observations in response to a feed-forward input (feed-forward only).
 
         :func:`nemos.simulation.simulate_recurrent`
             Simulate neural activity in response to a feed-forward input
@@ -1227,10 +1227,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         Returns
         -------
         simulated_activity :
-            Simulated activity (spike counts for Poisson GLMs) for the neuron over time.
+            Simulated observations (spike counts for a Poisson GLM) over time.
             Shape: ``(n_time_bins, )``.
         firing_rates :
-            Simulated rates for the neuron over time. Shape, ``(n_time_bins, )``.
+            Simulated rates over time. Shape, ``(n_time_bins, )``.
 
         Raises
         ------
