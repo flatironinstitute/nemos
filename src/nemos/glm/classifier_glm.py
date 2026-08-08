@@ -335,6 +335,12 @@ class ClassifierMixin:
         n_m1_classes = self._label_encoder.n_classes - 1
         params = self._get_model_params()
 
+        # The intercept consumes ``n_m1_classes`` degrees of freedom when estimated;
+        # a frozen intercept (``fit_intercept=False``) is None in the active tree and
+        # consumes none.
+        active, _ = self._partition_active(params)
+        intercept_dof = 0 if active.intercept is None else n_m1_classes
+
         # Infer n_neurons from coef shape:
         # ClassifierGLM: coef is (n_features, n_classes) -> n_neurons = 1
         # ClassifierPopulationGLM: coef is (n_features, n_neurons, n_classes) -> n_neurons = shape[1]
@@ -352,7 +358,7 @@ class ClassifierMixin:
                 lambda x: sum([jnp.sum(i, axis=(0, -1)) for i in x]),
                 params.coef,
             )
-            return jnp.atleast_1d(n_samples - resid_dof - n_m1_classes)
+            return jnp.atleast_1d(n_samples - resid_dof - intercept_dof)
 
         # each estimated feature costs one coefficient per free class
         design = jnp.concatenate(x_leaf, axis=1)
@@ -362,7 +368,7 @@ class ClassifierMixin:
         else:
             # For UnRegularized, use the rank
             n_est = self._design_rank(design)
-        return (n_samples - n_est * n_m1_classes - n_m1_classes) * jnp.ones(n_neurons)
+        return (n_samples - n_est * n_m1_classes - intercept_dof) * jnp.ones(n_neurons)
 
     def simulate(
         self,
@@ -594,6 +600,8 @@ class ClassifierGLM(ClassifierMixin, GLM):
         will result in non-identifiable coefficients, see note below.
     regularizer_strength
         The strength of the regularization.
+    fit_intercept
+        When True (default), an intercept term is fit. When False, only the coefficients are fit.
     solver_name
         The solver to use for optimization.
     solver_kwargs
@@ -735,6 +743,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Any = None,
+        fit_intercept: bool = True,
         solver_name: str = None,
         solver_kwargs: dict = None,
     ):
@@ -747,6 +756,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
             inverse_link_function=inverse_link_function,
             regularizer=regularizer,
             regularizer_strength=regularizer_strength,
+            fit_intercept=fit_intercept,
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
         )
@@ -871,6 +881,8 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         will result in non-identifiable coefficients, see note below.
     regularizer_strength
         The strength of the regularization.
+    fit_intercept
+        When True (default), an intercept term is fit. When False, only the coefficients are fit.
     solver_name
         The solver to use for optimization.
     solver_kwargs
@@ -1018,6 +1030,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Any = None,
+        fit_intercept: bool = True,
         solver_name: str = None,
         solver_kwargs: dict = None,
         feature_mask: Optional[jnp.ndarray] = None,
@@ -1031,6 +1044,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
             inverse_link_function=inverse_link_function,
             regularizer=regularizer,
             regularizer_strength=regularizer_strength,
+            fit_intercept=fit_intercept,
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
             feature_mask=feature_mask,

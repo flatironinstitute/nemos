@@ -2,6 +2,7 @@ import inspect
 from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
 from typing import Callable
+from unittest.mock import MagicMock
 
 import equinox as eqx
 import jax
@@ -1631,6 +1632,200 @@ _PYTREE_X_FACTORIES = [
 ]
 
 
+class TestNormalizeUserParams:
+    """Unit tests for ``GLM._normalize_user_params`` (the ``fit_intercept=False`` seam)."""
+
+    @pytest.mark.filterwarnings("error::UserWarning")
+    def test_fit_intercept_true_is_passthrough(self, poissonGLM_model_instantiation):
+        """With ``fit_intercept=True`` the user params are returned unchanged."""
+        X, y, model, true_params, _ = poissonGLM_model_instantiation
+        model.fit_intercept = True
+        init_params = (true_params.coef, true_params.intercept)
+        assert model._normalize_user_params(init_params, X, y) is init_params
+
+    @pytest.mark.filterwarnings("error::UserWarning")
+    @pytest.mark.parametrize(
+        "supply_intercept, expectation",
+        [
+            (False, does_not_raise()),
+            (True, pytest.warns(UserWarning, match="fit_intercept=False")),
+        ],
+    )
+    def test_fit_intercept_false_fills_intercept_with_zeros(
+        self, poissonGLM_model_instantiation, supply_intercept, expectation
+    ):
+        """With ``fit_intercept=False`` the intercept is filled with zeros and the
+        coefficients are left untouched. Omitting the intercept (``None``) is accepted
+        quietly; supplying one raises a ``UserWarning`` and the value is ignored."""
+        X, y, model, true_params, _ = poissonGLM_model_instantiation
+        model.fit_intercept = False
+        intercept = true_params.intercept + 5.0 if supply_intercept else None
+
+        with expectation:
+            coef, out_intercept = model._normalize_user_params(
+                (true_params.coef, intercept), X, y
+            )
+
+        np.testing.assert_array_equal(coef, true_params.coef)
+        np.testing.assert_array_equal(
+            out_intercept, jnp.zeros_like(true_params.intercept)
+        )
+
+    @pytest.mark.parametrize("n_elements", [1, 3])
+    def test_malformed_structure_raises(
+        self, poissonGLM_model_instantiation, n_elements
+    ):
+        """A user-params tuple whose length is not two is rejected."""
+        X, y, model, true_params, _ = poissonGLM_model_instantiation
+        model.fit_intercept = False
+        bad_params = (true_params.coef,) * n_elements
+        with pytest.raises(ValueError, match="length two"):
+            model._normalize_user_params(bad_params, X, y)
+
+
+@pytest.mark.parametrize(
+    "glm_class",
+    [
+        nmo.glm.GLM,
+        nmo.glm.PopulationGLM,
+        nmo.glm.ClassifierGLM,
+        nmo.glm.ClassifierPopulationGLM,
+    ],
+)
+class TestFitInterceptProperty:
+    """Tests for the ``GLM.fit_intercept`` property: getter, bool coercion, the
+    active-parameter partition it drives, and the solver-invalidation-on-flip
+    contract."""
+
+    @pytest.mark.parametrize(
+        "value, expected",
+        [(True, True), (False, False), (1, True), (0, False), ("x", True), ("", False)],
+    )
+    def test_value_is_coerced_to_bool(self, glm_class, value, expected):
+        model = glm_class()
+        model.fit_intercept = value
+        assert model.fit_intercept is expected
+
+    @pytest.mark.parametrize("value", [True, False])
+    def test_partition_tracks_fit_intercept(self, glm_class, value):
+        """coef is always active; the intercept is active iff ``fit_intercept``."""
+        model = glm_class()
+        model.fit_intercept = value
+        params = nmo.glm.params.GLMParams(
+            coef=jnp.array([1.0, 2.0, 3.0]), intercept=jnp.array([5.0])
+        )
+        active, frozen = model._partition_active(params)
+        np.testing.assert_array_equal(active.coef, params.coef)
+        assert frozen.coef is None
+        if value:
+            np.testing.assert_array_equal(active.intercept, params.intercept)
+            assert frozen.intercept is None
+        else:
+            assert active.intercept is None
+            np.testing.assert_array_equal(frozen.intercept, params.intercept)
+
+    def test_invalidates_solver_only_on_flip(self, glm_class, monkeypatch):
+        """``_invalidate_solver`` runs only when the flag actually changes value,
+        not when it is re-assigned the same value."""
+        model = glm_class()  # constructed with the default fit_intercept=True
+        spy = MagicMock(wraps=model._invalidate_solver)
+        monkeypatch.setattr(model, "_invalidate_solver", spy)
+
+        model.fit_intercept = True  # no change
+        spy.assert_not_called()
+
+        model.fit_intercept = False  # flip
+        assert spy.call_count == 1
+
+        model.fit_intercept = False  # no change
+        assert spy.call_count == 1
+
+        model.fit_intercept = True  # flip back
+        assert spy.call_count == 2
+
+
+class TestPartitionActive:
+    """Tests for ``BaseRegressor._partition_active`` as driven by the GLM."""
+
+    @pytest.fixture
+    def params(self):
+        return nmo.glm.params.GLMParams(
+            coef=jnp.array([1.0, 2.0, 3.0]), intercept=jnp.array([5.0])
+        )
+
+    def test_all_active_when_fit_intercept_true(self, params):
+        """fit_intercept=True keeps every leaf active; the frozen tree is all-None."""
+        model = nmo.glm.GLM()
+        model.fit_intercept = True
+        active, frozen = model._partition_active(params)
+        np.testing.assert_array_equal(active.coef, params.coef)
+        np.testing.assert_array_equal(active.intercept, params.intercept)
+        assert frozen.coef is None
+        assert frozen.intercept is None
+
+    def test_intercept_frozen_when_fit_intercept_false(self, params):
+        """fit_intercept=False moves the intercept into the frozen tree and leaves
+        the coefficients active."""
+        model = nmo.glm.GLM()
+        model.fit_intercept = False
+        active, frozen = model._partition_active(params)
+        np.testing.assert_array_equal(active.coef, params.coef)
+        assert active.intercept is None
+        assert frozen.coef is None
+        np.testing.assert_array_equal(frozen.intercept, params.intercept)
+
+    def test_default_settings_return_full_and_empty(self, params):
+        """With the defaults (``_fix_params=None``, ``fit_intercept=True``, neither
+        ever assigned) every value stays active and the frozen tree is all-None."""
+        model = nmo.glm.GLM()
+        active, frozen = model._partition_active(params)
+        np.testing.assert_array_equal(active.coef, params.coef)
+        np.testing.assert_array_equal(active.intercept, params.intercept)
+        assert jax.tree_util.tree_leaves(frozen) == []
+        assert frozen.coef is None
+        assert frozen.intercept is None
+
+
+@pytest.mark.parametrize(
+    "model_fixture",
+    ["poissonGLM_model_instantiation", "population_poissonGLM_model_instantiation"],
+)
+class TestFitInterceptIterative:
+    """``initialize_optimizer_and_state`` + ``update`` with a frozen intercept."""
+
+    @pytest.mark.parametrize("n_updates", [1, 5])
+    def test_update_keeps_intercept_zero(self, model_fixture, request, n_updates):
+        """With ``fit_intercept=False`` the intercept stays exactly zero across one
+        or more update steps, while the coefficients are updated."""
+        X, y, model, true_params, _ = request.getfixturevalue(model_fixture)
+        model.fit_intercept = False
+        coef0, _ = model.initialize_params(X, y)
+        # omit the frozen intercept on setup (the sanctioned input); no warning
+        state = model.initialize_optimizer_and_state((coef0, None), X, y)
+
+        params = (coef0, None)
+        for _ in range(n_updates):
+            params, state = model.update(params, state, X, y)
+
+        np.testing.assert_array_equal(
+            model.intercept_, jnp.zeros_like(true_params.intercept)
+        )
+        assert not np.allclose(model.coef_, coef0)
+
+    def test_flip_after_initialize_then_update_raises(self, model_fixture, request):
+        """Flipping ``fit_intercept`` after initializing the optimizer invalidates the
+        solver, so a subsequent update raises instead of using the stale solver."""
+        X, y, model, true_params, _ = request.getfixturevalue(model_fixture)
+        model.fit_intercept = False
+        coef0, _ = model.initialize_params(X, y)
+        state = model.initialize_optimizer_and_state((coef0, None), X, y)
+
+        model.fit_intercept = True  # flip -> invalidates the solver
+
+        with pytest.raises(RuntimeError, match="invalid state"):
+            model.update((coef0, None), state, X, y)
+
+
 @pytest.mark.parametrize("glm_type", ["", "population_"])
 @pytest.mark.parametrize(
     "model_instantiation",
@@ -1723,20 +1918,23 @@ class TestGLMObservationModel:
             raise ValueError("Unknown model instantiation")
         return ll
 
-    @pytest.fixture
-    def sklearn_model(self, model_instantiation):
-        """
-        Fixture for test_glm_fit_matches_sklearn
+    @staticmethod
+    def _make_sklearn_model(model_instantiation, fit_intercept):
+        """Build the matching unregularized sklearn estimator.
+
+        ``fit_intercept`` toggles whether sklearn estimates the bias, mirroring
+        nemos ``GLM(fit_intercept=...)``. Returns ``None`` when no sklearn
+        counterpart exists (negative-binomial).
         """
         if "poisson" in model_instantiation:
-            return PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
+            return PoissonRegressor(fit_intercept=fit_intercept, tol=10**-12, alpha=0.0)
 
         elif "gamma" in model_instantiation:
-            return GammaRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
+            return GammaRegressor(fit_intercept=fit_intercept, tol=10**-12, alpha=0.0)
 
         elif "bernoulli" in model_instantiation:
             return LogisticRegression(
-                fit_intercept=True,
+                fit_intercept=fit_intercept,
                 tol=10**-12,
                 C=np.inf,
             )
@@ -1745,13 +1943,13 @@ class TestGLMObservationModel:
             return None
 
         elif "gaussian" in model_instantiation:
-            return LinearRegression(fit_intercept=True)
+            return LinearRegression(fit_intercept=fit_intercept)
 
         elif "classifier" in model_instantiation:
             # In sklearn 1.5+, multinomial is the default with lbfgs solver
             # Use C=1.0 (Ridge with strength=1.0) for identifiable parameters
             return LogisticRegression(
-                fit_intercept=True,
+                fit_intercept=fit_intercept,
                 tol=10**-12,
                 C=1.0,
                 solver="lbfgs",
@@ -1760,6 +1958,20 @@ class TestGLMObservationModel:
 
         else:
             raise ValueError("Unknown model instantiation")
+
+    @pytest.fixture
+    def sklearn_model(self, model_instantiation):
+        """
+        Fixture for test_glm_fit_matches_sklearn
+        """
+        return self._make_sklearn_model(model_instantiation, fit_intercept=True)
+
+    @pytest.fixture
+    def sklearn_model_no_intercept(self, model_instantiation):
+        """
+        Fixture for test_fit_intercept_false_matches_sklearn
+        """
+        return self._make_sklearn_model(model_instantiation, fit_intercept=False)
 
     @pytest.fixture
     def obs_has_defaults(self, model_instantiation):
@@ -1838,6 +2050,7 @@ class TestGLMObservationModel:
             f"{second_line}"
             f"    inverse_link_function={inverse_link_function},\n"
             "    regularizer=UnRegularized(),\n"
+            "    fit_intercept=True,\n"
             f"    solver_name='{solver_name}'\n"
             ")"
         )
@@ -2086,6 +2299,12 @@ class TestGLMObservationModel:
             intercept = sklearn_model.intercept_
         else:
             coef, intercept = sklearn_model.coef_, sklearn_model.intercept_
+
+        if isinstance(
+            nemos_model.observation_model, nmo.observation_models.BernoulliObservations
+        ):
+            # Logistic regression of sklearn always returns a 2d array
+            coef = np.squeeze(coef)
         return coef, intercept
 
     @staticmethod
@@ -2093,28 +2312,49 @@ class TestGLMObservationModel:
         sklearn_coef, sklearn_intercept, nemos_coef, nemos_intercept, atol=1e-6
     ):
         """Assert that sklearn and nemos parameters match within tolerance."""
-        match_weights = jnp.allclose(sklearn_coef, nemos_coef, atol=atol, rtol=0.0)
-        match_intercepts = jnp.allclose(
+        np.testing.assert_allclose(sklearn_coef, nemos_coef, atol=atol, rtol=0.0)
+        np.testing.assert_allclose(
             sklearn_intercept, nemos_intercept, atol=atol, rtol=0.0
         )
-        if not (match_weights and match_intercepts):
-            raise ValueError("GLM.fit estimate does not match sklearn!")
 
-    @pytest.mark.parametrize("solver_name", ["LBFGS"])
-    @pytest.mark.solver_related
-    @pytest.mark.requires_x64
-    @pytest.mark.filterwarnings("ignore:Setting penalty=None will ignore:UserWarning")
-    def test_glm_fit_matches_sklearn(
-        self, solver_name, request, glm_type, model_instantiation, sklearn_model
+    def _fit_and_compare_to_sklearn(self, model, sklearn_model, X, y, atol=1e-6):
+        """Fit ``model`` and ``sklearn_model`` on the same data and assert their
+        coefficients and intercepts match within ``atol``.
+
+        Population models are compared neuron-by-neuron, since sklearn fits each
+        output independently. When the nemos model has ``fit_intercept=False`` the
+        sklearn counterpart is built with ``fit_intercept=False`` too, so both
+        intercepts are zero and the comparison still holds.
+        """
+        model.fit(X, y)
+        if is_population_model(model):
+            for n in range(y.shape[1]):
+                sklearn_model.fit(X, y[:, n])
+                sk_coef, sk_intercept = self._format_sklearn_params(
+                    sklearn_model, model
+                )
+                self._assert_params_match(
+                    sk_coef, sk_intercept, model.coef_[:, n], model.intercept_[n], atol
+                )
+        else:
+            sklearn_model.fit(X, y)
+            sk_coef, sk_intercept = self._format_sklearn_params(sklearn_model, model)
+            self._assert_params_match(
+                sk_coef, sk_intercept, model.coef_, model.intercept_, atol
+            )
+
+    @staticmethod
+    def _build_matched_model(
+        model_obs, model_instantiation, X, solver_name, fit_intercept=True
     ):
-        """Test that nemos GLM produces the same estimates as sklearn."""
-        if sklearn_model is None:
-            pytest.skip(f"sklearn model is not available for {model_instantiation}")
+        """Reconstruct a nemos model configured to match its sklearn counterpart.
 
-        X, y, model_obs, true_params, firing_rate = request.getfixturevalue(
-            glm_type + model_instantiation
-        )
-
+        Uses the ``_get_param_names`` filter so the same call works for GLM,
+        PopulationGLM and their classifier variants (which take ``n_classes``
+        rather than ``observation_model``). Classifier models get the Ridge
+        strength that matches sklearn's ``C=1.0``; other models are unregularized.
+        ``fit_intercept`` is forwarded to toggle intercept estimation.
+        """
         n_samples = (
             X.shape[0] if not isinstance(X, dict) else list(X.values())[0].shape[0]
         )
@@ -2134,6 +2374,7 @@ class TestGLMObservationModel:
             regularizer=regularizer,
             regularizer_strength=regularizer_strength,
             observation_model=model_obs.observation_model,
+            fit_intercept=fit_intercept,
             solver_name=solver_name,
             solver_kwargs={"tol": 10**-12},
         )
@@ -2147,34 +2388,80 @@ class TestGLMObservationModel:
         if "gamma" in model_instantiation:
             model.inverse_link_function = jnp.exp
 
+        return model
+
+    @pytest.mark.parametrize("solver_name", ["BFGS"])
+    @pytest.mark.solver_related
+    @pytest.mark.requires_x64
+    @pytest.mark.filterwarnings("ignore:Setting penalty=None will ignore:UserWarning")
+    def test_glm_fit_matches_sklearn(
+        self, solver_name, request, glm_type, model_instantiation, sklearn_model
+    ):
+        """Test that nemos GLM produces the same estimates as sklearn."""
+        if sklearn_model is None:
+            pytest.skip(f"sklearn model is not available for {model_instantiation}")
+
+        X, y, model_obs, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+
+        model = self._build_matched_model(
+            model_obs, model_instantiation, X, solver_name
+        )
+        self._fit_and_compare_to_sklearn(model, sklearn_model, X, y, atol=1e-6)
+
+    @pytest.mark.parametrize("solver_name", ["LBFGS", "Newton"])
+    @pytest.mark.solver_related
+    @pytest.mark.requires_x64
+    @pytest.mark.filterwarnings("ignore:Setting penalty=None will ignore:UserWarning")
+    def test_fit_intercept_false_matches_sklearn(
+        self,
+        solver_name,
+        request,
+        glm_type,
+        model_instantiation,
+        sklearn_model_no_intercept,
+    ):
+        """With ``fit_intercept=False`` the estimated coefficients match an
+        sklearn fit that also drops the intercept, and the frozen nemos intercept
+        stays exactly zero."""
+        if sklearn_model_no_intercept is None:
+            pytest.skip(f"sklearn model is not available for {model_instantiation}")
+
+        X, y, model_obs, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+
+        model = self._build_matched_model(
+            model_obs, model_instantiation, X, solver_name, fit_intercept=False
+        )
+        self._fit_and_compare_to_sklearn(
+            model, sklearn_model_no_intercept, X, y, atol=1e-6
+        )
+        assert jnp.all(model.intercept_ == 0.0)
+
+    @pytest.mark.parametrize("solver_name", ["GradientDescent", "LBFGS", "Newton"])
+    @pytest.mark.solver_related
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
+    def test_fit_intercept_false_leaves_intercept_zero(
+        self, solver_name, request, glm_type, model_instantiation
+    ):
+        """Fitting with ``fit_intercept=False`` holds the intercept exactly at
+        zero while the coefficients are still estimated (finite and moved off the
+        zero-valued leaves)."""
+        X, y, model_obs, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+
+        model = self._build_matched_model(
+            model_obs, model_instantiation, X, solver_name, fit_intercept=False
+        )
         model.fit(X, y)
 
-        is_population = is_population_model(model)
-
-        if is_population:
-            # Population GLM: fit each neuron separately in sklearn and compare
-            for n in range(y.shape[1]):
-                sklearn_model.fit(X, y[:, n])
-                sk_coef, sk_intercept = self._format_sklearn_params(
-                    sklearn_model, model
-                )
-                self._assert_params_match(
-                    sk_coef,
-                    sk_intercept,
-                    model.coef_[:, n],
-                    model.intercept_[n],
-                    atol=1e-6,
-                )
-        else:
-            sklearn_model.fit(X, y)
-            sk_coef, sk_intercept = self._format_sklearn_params(sklearn_model, model)
-            self._assert_params_match(
-                sk_coef,
-                sk_intercept,
-                model.coef_,
-                model.intercept_,
-                atol=1e-6,
-            )
+        coef_leaves = jax.tree_util.tree_leaves(model.coef_)
+        assert jnp.all(model.intercept_ == 0.0)
+        assert all(jnp.all(jnp.isfinite(leaf)) for leaf in coef_leaves)
+        assert any(jnp.any(leaf != 0.0) for leaf in coef_leaves)
 
     @staticmethod
     def _get_expected_par_shape(X, y, model):
@@ -2972,14 +3259,18 @@ def _set_sparse_state(model, glm_type, model_instantiation):
     ],
 )
 @pytest.mark.parametrize("n_samples", [1, 20])
+@pytest.mark.parametrize("fit_intercept", [True, False])
 @pytest.mark.requires_x64
-def test_estimate_dof_resid(n_samples, reg, request, glm_type, model_instantiation):
+def test_estimate_dof_resid(
+    n_samples, fit_intercept, reg, request, glm_type, model_instantiation
+):
     """_estimate_resid_degrees_of_freedom returns the correct residual DOF.
 
-    Uses a fixed sparse coef_ so no solver run is needed.
+    Uses a fixed sparse coef_ so no solver run is needed. A frozen intercept
+    (``fit_intercept=False``) consumes no degrees of freedom.
     """
     _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
-    model.set_params(regularizer=reg)
+    model.set_params(regularizer=reg, fit_intercept=fit_intercept)
 
     X, n_nonzero = _set_sparse_state(model, glm_type, model_instantiation)
 
@@ -2994,7 +3285,9 @@ def test_estimate_dof_resid(n_samples, reg, request, glm_type, model_instantiati
         rank = int(jnp.linalg.matrix_rank(X))
         dof = rank * n_m1_classes if is_cls else rank
 
-    expected = n_samples - dof - n_m1_classes
+    # the intercept consumes n_m1_classes dof when estimated, none when frozen
+    intercept_dof = n_m1_classes if fit_intercept else 0
+    expected = n_samples - dof - intercept_dof
     num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
     assert np.allclose(num, expected)
 
@@ -3060,9 +3353,11 @@ def _set_masked_state(model, is_cls, as_pytree):
     ],
 )
 @pytest.mark.parametrize("n_samples", [20])
+@pytest.mark.parametrize("fit_intercept", [True, False])
 @pytest.mark.requires_x64
 def test_estimate_dof_resid_feature_mask(
     n_samples,
+    fit_intercept,
     reg,
     dof_per_neuron,
     scales_with_classes,
@@ -3073,19 +3368,22 @@ def test_estimate_dof_resid_feature_mask(
     """A masked-out feature is not charged against a neuron's residual DOF.
 
     Each neuron sees its own design, so the result is one DOF per neuron. The Lasso
-    branch reads the non-zero coefficients and is therefore mask-independent.
+    branch reads the non-zero coefficients and is therefore mask-independent. The mask
+    and the frozen intercept are independent subtractions: freezing the intercept shifts
+    every neuron's DOF by the same amount, whatever the mask lets through.
     """
     _, _, model, _, _ = request.getfixturevalue(
         model_instantiation + ("_pytree" if as_pytree else "")
     )
-    model.set_params(regularizer=reg)
+    model.set_params(regularizer=reg, fit_intercept=fit_intercept)
 
     is_cls = "classifier" in model_instantiation
     X = _set_masked_state(model, is_cls, as_pytree)
 
     n_m1_classes = getattr(model, "n_classes", 2) - 1
     dof = dof_per_neuron * n_m1_classes if scales_with_classes else dof_per_neuron
-    expected = n_samples - dof - n_m1_classes
+    intercept_dof = n_m1_classes if fit_intercept else 0
+    expected = n_samples - dof - intercept_dof
 
     num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
     np.testing.assert_allclose(num, expected)
@@ -3099,14 +3397,16 @@ def test_estimate_dof_resid_feature_mask(
         (nmo.regularizer.Ridge(), _DOF_MASK_COUNT),
     ],
 )
+@pytest.mark.parametrize("fit_intercept", [True, False])
 @pytest.mark.requires_x64
 def test_dof_resid_after_fit_feature_mask(
-    reg, dof_per_neuron, request, patch_optimizer_run
+    reg, dof_per_neuron, fit_intercept, request, patch_optimizer_run
 ):
     """fit stores the per-neuron DOF of the masked model.
 
     The solver is a no-op returning ``init_params``, so the fitted coefficients are the
-    injected ones and the DOF is fully determined.
+    injected ones and the DOF is fully determined. With ``fit_intercept=False`` the
+    intercept is frozen out of the partition and costs no DOF.
     """
     _, _, model, _, _ = request.getfixturevalue(
         "population_poissonGLM_model_instantiation"
@@ -3114,6 +3414,7 @@ def test_dof_resid_after_fit_feature_mask(
     patch_optimizer_run(nmo.glm.PopulationGLM)
     model.set_params(
         regularizer=reg,
+        fit_intercept=fit_intercept,
         regularizer_strength=(
             None if isinstance(reg, nmo.regularizer.UnRegularized) else 1.0
         ),
@@ -3125,8 +3426,19 @@ def test_dof_resid_after_fit_feature_mask(
     model.coef_, model.intercept_ = None, None
     y = np.ones((X.shape[0], _DOF_N_NEURONS))
 
-    model.fit(X, y, init_params=init_params)
-    np.testing.assert_allclose(model.dof_resid_, X.shape[0] - dof_per_neuron - 1)
+    # the injected init_params carry an intercept, which a frozen intercept discards
+    warns_ignored_intercept = (
+        does_not_raise()
+        if fit_intercept
+        else pytest.warns(UserWarning, match="the provided intercept is ignored")
+    )
+    with warns_ignored_intercept:
+        model.fit(X, y, init_params=init_params)
+
+    intercept_dof = 1 if fit_intercept else 0
+    np.testing.assert_allclose(
+        model.dof_resid_, X.shape[0] - dof_per_neuron - intercept_dof
+    )
 
 
 @pytest.mark.parametrize("glm_type", ["", "population_"])

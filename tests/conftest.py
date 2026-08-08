@@ -48,6 +48,8 @@ from nemos.hmm.params import HMMParams
 from nemos.hmm.utils import initialize_session_starts
 from nemos.hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
 from nemos.params import ModelParams
+from nemos.regularizer import UnRegularized
+from nemos.solvers import get_solver
 from nemos.tree_utils import tree_full_like
 
 _totals = defaultdict(float)
@@ -103,6 +105,39 @@ def all_subclasses(cls):
 
 
 @pytest.fixture
+def setup_solver():
+    """Factory instantiating a nemos solver directly from an objective.
+
+    Returns a callable ``setup(objective, init_params, ...)`` that builds a solver
+    through the nemos solver registry (``get_solver``), bypassing model plumbing.
+    Useful for exercising a raw objective (e.g. a partition-wrapped ``_compute_loss``)
+    with the maintained solver stack. ``solver.run(init_params, *args)`` returns the
+    usual ``(params, state, aux)`` tuple.
+    """
+
+    def _setup(
+        objective,
+        init_params,
+        tol=1e-12,
+        solver_name="LBFGS",
+        regularizer_strength=0.0,
+        regularizer=None,
+        has_aux=False,
+    ):
+        solver_class = get_solver(solver_name).implementation
+        return solver_class(
+            objective,
+            init_params=init_params,
+            regularizer=UnRegularized() if regularizer is None else regularizer,
+            regularizer_strength=regularizer_strength,
+            has_aux=has_aux,
+            tol=tol,
+        )
+
+    return _setup
+
+
+@pytest.fixture
 def mock_glm_fit(monkeypatch):
     """Replace GLM.fit with a pure-Python no-op that sets coef_/intercept_ from X/y shapes.
 
@@ -154,8 +189,8 @@ def _make_optimizer_run_patch(monkeypatch, model_cls):
     real_init = model_cls._initialize_optimizer_and_state
     noop = _NOOP_OPTIMIZER_RUN.get(model_cls, _DEFAULT_NOOP_OPTIMIZER_RUN)
 
-    def _patched(self, init_params, data, y):
-        result = real_init(self, init_params, data, y)
+    def _patched(self, init_params, data, y, *args, **kwargs):
+        result = real_init(self, init_params, data, y, *args, **kwargs)
         self._optimizer_run = noop
         return result
 
@@ -205,8 +240,8 @@ def _make_optimizer_update_patch(monkeypatch, model_cls):
     real_init = model_cls._initialize_optimizer_and_state
     noop = _NOOP_OPTIMIZER_UPDATE.get(model_cls, _DEFAULT_NOOP_OPTIMIZER_UPDATE)
 
-    def _patched(self, init_params, data, y):
-        result = real_init(self, init_params, data, y)
+    def _patched(self, init_params, data, y, *args, **kwargs):
+        result = real_init(self, init_params, data, y, *args, **kwargs)
         self._optimizer_update = noop
         return result
 
