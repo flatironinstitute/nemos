@@ -444,10 +444,7 @@ def _benchmark_nemos(config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int) 
         if not is_scipy:
             t2 = perf_counter()
             compiled = (
-                jax.jit(model._optimizer_run)
-                .trace(active_pars, X, y)
-                .lower()
-                .compile()
+                jax.jit(model._optimizer_run).trace(active_pars, X, y).lower().compile()
             )
             t3 = perf_counter()
             compilation_s.append(t3 - t2)

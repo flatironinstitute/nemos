@@ -4,6 +4,7 @@ These exercise the benchmarking harness itself (not just nemos), since the
 harness calls private solver internals directly and can drift out of sync
 with what model.fit() actually does.
 """
+
 import sys
 from pathlib import Path
 
@@ -13,7 +14,11 @@ import pytest
 sys.path.insert(
     0, str(Path(__file__).resolve().parents[1] / "scripts" / "benchmarking")
 )
-from benchmarking_glm import benchmark_fit, generate_data, model_from_config  # noqa: E402
+from benchmarking_glm import (  # noqa: E402
+    benchmark_fit,
+    generate_data,
+    model_from_config,
+)
 
 
 @pytest.mark.solver_related
