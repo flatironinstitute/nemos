@@ -15,6 +15,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import List, Literal, Optional, Tuple
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import pandas as pd
@@ -404,6 +405,14 @@ def _benchmark_nemos(config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int) 
     model = model_from_config(config)
     pars = model.initialize_params(X, y)
     model_pars = model._validator.to_model_params(pars)
+    # Mirror what model.fit() does before touching the solver: split params into
+    # the active subtree the optimizer actually runs on and the (here, empty)
+    # frozen subtree, and thread frozen_params through init. Skipping this — as
+    # this function used to — breaks PopulationGLM's Newton solver: its
+    # per-neuron Hessian vmaps over `frozen`, and that vmap's in_axes spec
+    # assumes the partitioned GLMParams shape, not the bare `None` you get by
+    # calling _initialize_optimizer_and_state/_optimizer_run without it.
+    active_pars, frozen_pars = model._partition_active(model_pars)
 
     is_scipy = model.solver_spec.backend == "scipy"
 
@@ -426,14 +435,16 @@ def _benchmark_nemos(config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int) 
         model = model_from_config(config)
 
         t0 = perf_counter()
-        _ = model._initialize_optimizer_and_state(model_pars, X, y)
+        _ = model._initialize_optimizer_and_state(
+            active_pars, X, y, frozen_params=frozen_pars
+        )
         t1 = perf_counter()
         solver_init_s.append(t1 - t0)
 
         if not is_scipy:
             t2 = perf_counter()
             compiled = (
-                jax.jit(model._optimizer_run).trace(model_pars, X, y).lower().compile()
+                jax.jit(model._optimizer_run).trace(active_pars, X, y).lower().compile()
             )
             t3 = perf_counter()
             compilation_s.append(t3 - t2)
@@ -442,7 +453,8 @@ def _benchmark_nemos(config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int) 
             compilation_s.append(jnp.nan)
 
         t4 = perf_counter()
-        pars, state, _ = compiled(model_pars, X, y)
+        pars, state, _ = compiled(active_pars, X, y)
+        pars = eqx.combine(pars, frozen_pars)
         pars.coef.block_until_ready()
         t5 = perf_counter()
         fit_s.append(t5 - t4)
