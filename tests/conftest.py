@@ -1100,21 +1100,6 @@ def example_data_prox_operator_multineuron():
 
 
 @pytest.fixture
-def poisson_observation_model():
-    return nmo.observation_models.PoissonObservations(jnp.exp)
-
-
-@pytest.fixture
-def ridge_regularizer():
-    return nmo.regularizer.Ridge()
-
-
-@pytest.fixture
-def lasso_regularizer():
-    return nmo.regularizer.Lasso()
-
-
-@pytest.fixture
 def group_lasso_2groups_5features_regularizer():
     mask = np.zeros((2, 5))
     mask[0, :2] = 1
