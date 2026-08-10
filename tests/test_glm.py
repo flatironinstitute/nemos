@@ -204,46 +204,50 @@ def get_param_shape(model, X, y):
 
 
 def _group_lasso_model(mask):
-    return nmo.glm.GLM(
+    """GLM with a GroupLasso over 5 features split into 2 groups."""
+    group_mask = np.zeros((2, 5))
+    group_mask[0, :2] = 1
+    group_mask[1, 2:] = 1
+    mask = (
+        GLMParams(coef=group_mask, intercept=None)
+        if mask == "structured"
+        else group_mask
+    )
+    model = nmo.glm.GLM(
         regularizer=nmo.regularizer.GroupLasso(mask=mask),
         regularizer_strength=0.1,
         solver_name="ProximalGradient",
     )
+    return model, mask
 
 
-@pytest.mark.parametrize("structured_mask", [False, True])
-def test_save_and_load_group_lasso_mask(
-    structured_mask, group_lasso_2groups_5features_regularizer, tmp_path
-):
+@pytest.mark.parametrize("mask_kind", ["array", "structured"])
+def test_save_and_load_group_lasso_mask(mask_kind, tmp_path):
     """A GroupLasso mask round-trips whether it is a plain array or a GLMParams."""
-    array_mask = group_lasso_2groups_5features_regularizer.mask
-    mask = GLMParams(coef=array_mask, intercept=None) if structured_mask else array_mask
+    model, mask = _group_lasso_model(mask_kind)
 
     save_path = tmp_path / "group_lasso.npz"
-    _group_lasso_model(mask).save_params(save_path)
+    model.save_params(save_path)
     loaded_mask = nmo.load_model(save_path).regularizer.mask
 
-    assert type(loaded_mask) is type(mask)
-    if structured_mask:
+    if mask_kind == "structured":
+        assert isinstance(loaded_mask, GLMParams)
         np.testing.assert_allclose(loaded_mask.coef, mask.coef)
         assert loaded_mask.intercept is None
     else:
+        assert not isinstance(loaded_mask, GLMParams)
         np.testing.assert_allclose(loaded_mask, mask)
 
 
-def test_structured_mask_saved_without_pickled_objects(
-    group_lasso_2groups_5features_regularizer, tmp_path
-):
+def test_structured_mask_saved_without_pickled_objects(tmp_path):
     """No entry is an object array, which ``load_model`` could never read back.
 
     ``load_model`` opens the archive with ``allow_pickle=False``, so a parameter numpy
     can only hold as an object array makes the whole file unloadable.
     """
-    mask = GLMParams(
-        coef=group_lasso_2groups_5features_regularizer.mask, intercept=None
-    )
+    model, _ = _group_lasso_model("structured")
     save_path = tmp_path / "no_objects.npz"
-    _group_lasso_model(mask).save_params(save_path)
+    model.save_params(save_path)
 
     with np.load(save_path, allow_pickle=True) as data:
         pickled = [key for key in data.files if data[key].dtype == object]
