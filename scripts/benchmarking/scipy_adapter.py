@@ -143,7 +143,7 @@ class ScipySolver:
 
         # pass the flat parameters and the objective function taking them
         # also the custom parameters we saved in __init__
-        options = self.options.copy()
+        options = dict(self.options or {})
         options.update({"maxiter": n_steps})
         res = scipy.optimize.minimize(
             fun=_flat_obj,
@@ -183,4 +183,39 @@ class ScipyLBFGS(ScipySolver):
             maxiter=maxiter,
             tol=tol,
             options=options,
+        )
+
+
+class ScipyLBFGSGradStop(ScipyLBFGS):
+    """L-BFGS-B stopped on the projected gradient alone.
+
+    `scipy.optimize.minimize` routes its `tol` onto both `ftol` and `gtol` for
+    L-BFGS-B and stops on whichever fires first. `ftol` tests the *relative
+    decrease per iteration*, so it halts on stalled progress rather than on
+    stationarity: on the head-direction benchmark it fires while the gradient
+    sup-norm is still 2e-2. Pinning `ftol=0` leaves `gtol` as the only stopping
+    rule, which makes the reported iteration counts comparable to the
+    gradient-converged solvers in the grid.
+    """
+
+    def __init__(
+        self,
+        unregularized_loss,
+        regularizer,
+        regularizer_strength,
+        has_aux,
+        init_params,
+        maxiter: int = 100,
+        tol: float = 1e-8,
+        options: Optional[dict] = None,
+    ):
+        return super().__init__(
+            unregularized_loss,
+            regularizer,
+            regularizer_strength,
+            has_aux,
+            init_params,
+            maxiter=maxiter,
+            tol=tol,
+            options={**(options or {}), "ftol": 0.0},
         )

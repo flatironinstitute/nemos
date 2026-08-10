@@ -20,16 +20,18 @@ import jax
 import jax.numpy as jnp
 import pandas as pd
 import pynapple as nap
-from scipy_adapter import ScipyLBFGS
+from scipy_adapter import ScipyLBFGS, ScipyLBFGSGradStop
 from sklearn.linear_model import PoissonRegressor
 
 import nemos as nmo
+from nemos.utils import get_flattener_unflattener
 
 
 def _setup() -> None:
     """Configure JAX and register custom solvers. Must be called before any fitting."""
     jax.config.update("jax_enable_x64", True)
     nmo.solvers.register("LBFGS", ScipyLBFGS, "scipy")
+    nmo.solvers.register("LBFGS", ScipyLBFGSGradStop, "scipy-gradstop")
 
 
 # --- grid defaults ---
@@ -41,6 +43,9 @@ DEFAULT_SOLVER_NAMES = [
     # smooth — benchmarked against Ridge; filtered out for Lasso via allowed_reg
     "LBFGS[optax+optimistix]",
     "LBFGS[scipy]",
+    # same solver as above with scipy's relative-decrease test disabled, so it
+    # stops on the projected gradient instead of on stalled progress
+    "LBFGS[scipy-gradstop]",
     "BFGS[optimistix]",
     "GradientDescent[optimistix]",
     "SVRG[nemos]",
@@ -127,7 +132,7 @@ def generate_glm_configs(
                     continue
                 if base_name in _prox_solvers and reg in _smooth_regs:
                     continue
-                solver_kw = {"maxiter": 3000, "tol": 1e-6}
+                solver_kw = {"maxiter": 4000, "tol": 1e-6}
                 if base_name in _svrg_solvers:
                     solver_kw["batch_size"] = max(1, samp // 10)
                 fit_config = {
@@ -184,7 +189,7 @@ def generate_glm_configs(
                     continue
                 if base_name in _prox_solvers and reg in _smooth_regs:
                     continue
-                solver_kw = {"maxiter": 3000, "tol": 1e-6}
+                solver_kw = {"maxiter": 4000, "tol": 1e-6}
                 if base_name in _svrg_solvers:
                     solver_kw["batch_size"] = max(1, X.shape[0] // 10)
                 configs.append(
@@ -400,6 +405,23 @@ def _get_meta() -> dict:
     }
 
 
+def _solution_quality(
+    model, X: jnp.ndarray, y: jnp.ndarray, config: dict
+) -> Tuple[float, float]:
+    """Penalized loss and gradient sup-norm at a fitted model's parameters.
+
+    Evaluates the same objective the solver minimized -- unregularized loss plus
+    the regularizer's penalty -- so the two numbers are comparable across every
+    solver in the grid regardless of which stopping rule ended the fit.
+    """
+    params = model._validator.to_model_params((model.coef_, model.intercept_))
+    strength = config["model_conf"]["regularizer_strength"]
+    penalized = model.regularizer.penalized_loss(model._compute_loss, params, strength)
+    loss, grad = jax.value_and_grad(penalized)(params, X, y)
+    flatten, _ = get_flattener_unflattener(params)
+    return float(loss), float(jnp.abs(flatten(grad)).max())
+
+
 def _benchmark_nemos(config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int) -> dict:
     """Benchmark a NeMoS GLM/PopulationGLM, isolating solver init, compilation, and execution."""
     model = model_from_config(config)
@@ -414,7 +436,8 @@ def _benchmark_nemos(config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int) 
     # calling _initialize_optimizer_and_state/_optimizer_run without it.
     active_pars, frozen_pars = model._partition_active(model_pars)
 
-    is_scipy = model.solver_spec.backend == "scipy"
+    # matches both "scipy" and "scipy-gradstop": they share the ScipySolver state
+    is_scipy = model.solver_spec.backend.startswith("scipy")
 
     def _get_iter_num(m):
         if is_scipy:
@@ -483,6 +506,14 @@ def _benchmark_nemos(config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int) 
         f / n if n > 0 else float("nan") for f, n in zip(fit_s, num_solver_iter)
     ]
 
+    # Solution quality of the last fit. Without this, iteration counts and
+    # timings are not comparable across solvers: each stops on its own rule, so
+    # a low count can mean "converged fast" or "quit early". scipy's default
+    # `ftol` test in particular halts on stalled progress, at a point where the
+    # gradient sup-norm can still be ~1e-2. Computed once rather than per rep,
+    # so it does not add an objective+gradient pass to every timed iteration.
+    final_loss, final_grad_max = _solution_quality(model, X, y, config)
+
     input_shapes = config["input_shapes"]
     model_conf = config["model_conf"]
     flat_config = {
@@ -515,6 +546,8 @@ def _benchmark_nemos(config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int) 
             "converged": converged,
             "iter_num": num_solver_iter,
             "param_norm": param_norm,
+            "final_loss": final_loss,
+            "final_grad_max": final_grad_max,
         },
         "meta": _get_meta(),
     }
@@ -579,6 +612,10 @@ def _benchmark_sklearn(
             "converged": converged,
             "iter_num": num_solver_iter,
             "param_norm": param_norm,
+            # sklearn fits one model per neuron against its own objective, which
+            # is not the single penalized loss the NeMoS solvers minimize.
+            "final_loss": nan,
+            "final_grad_max": nan,
         },
         "meta": _get_meta(),
     }
@@ -679,6 +716,9 @@ def aggregate_results(results_dir: str, csv_path: str) -> None:
                     "converged": res["converged"][i],
                     "iter_num": res["iter_num"][i],
                     "param_norm": res["param_norm"][i],
+                    # measured once for the config, not per rep
+                    "final_loss": res["final_loss"],
+                    "final_grad_max": res["final_grad_max"],
                 }
             )
 
@@ -719,6 +759,8 @@ def compute_summary_stats(df: pd.DataFrame) -> pd.DataFrame:
             converged=("converged", "all"),
             iter_num=("iter_num", "mean"),
             compile_time_fraction=("compile_time_fraction", "mean"),
+            final_loss=("final_loss", "mean"),
+            final_grad_max=("final_grad_max", "mean"),
         )
         .sort_values("fit_time_s")
         .reset_index()
