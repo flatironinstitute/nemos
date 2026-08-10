@@ -1604,6 +1604,11 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         >>> opt_state = model.initialize_optimizer_and_state(params, X, y)
         >>> # Now ready to run optimization or update steps
         """
+        # ``eqx.partition`` leaves ``None`` on the frozen leaves and jax drops those, so
+        # an empty leaf list means every parameter is fixed and there is nothing to run.
+        if not jax.tree_util.tree_leaves(init_params):
+            return self._no_op_optimizer()
+
         opt_solver_kwargs = self._optimize_solver_params(X, y)
         #  set up the solver init/run/update attrs
         self._solver = self._instantiate_solver(

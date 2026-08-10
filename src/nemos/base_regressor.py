@@ -24,6 +24,7 @@ from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
 from .solvers._hess import HessianTag
 from .solvers._newton import Newton
+from .solvers._no_op import NoOpSolver
 from .type_casting import cast_to_jax, is_numpy_array_like
 from .typing import (
     DESIGN_INPUT_TYPE,
@@ -363,6 +364,19 @@ class BaseRegressor(
         self._optimizer_init_state = None
         self._optimizer_update = None
         self._optimizer_run = None
+
+    def _no_op_optimizer(self) -> SolverState:
+        """Install :class:`NoOpSolver`, for when the active parameter tree is empty."""
+        warnings.warn(
+            "Every parameter is fixed, through `fix_params` and/or `fit_intercept=False`; "
+            "no optimization will run and the fixed values are returned unchanged.",
+            UserWarning,
+        )
+        self._solver = NoOpSolver()
+        self._optimizer_init_state = self._solver.init_state
+        self._optimizer_update = self._solver.update
+        self._optimizer_run = self._solver.run
+        return self._optimizer_init_state(None)
 
     def _partition_active(
         self, params: ModelParamsT
