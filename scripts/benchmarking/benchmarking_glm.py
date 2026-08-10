@@ -20,7 +20,7 @@ import jax
 import jax.numpy as jnp
 import pandas as pd
 import pynapple as nap
-from scipy_adapter import ScipyLBFGS, ScipyLBFGSGradStop
+from scipy_adapter import ScipyLBFGS
 from sklearn.linear_model import PoissonRegressor
 
 import nemos as nmo
@@ -31,7 +31,6 @@ def _setup() -> None:
     """Configure JAX and register custom solvers. Must be called before any fitting."""
     jax.config.update("jax_enable_x64", True)
     nmo.solvers.register("LBFGS", ScipyLBFGS, "scipy")
-    nmo.solvers.register("LBFGS", ScipyLBFGSGradStop, "scipy-gradstop")
 
 
 # --- grid defaults ---
@@ -43,9 +42,6 @@ DEFAULT_SOLVER_NAMES = [
     # smooth — benchmarked against Ridge; filtered out for Lasso via allowed_reg
     "LBFGS[optax+optimistix]",
     "LBFGS[scipy]",
-    # same solver as above with scipy's relative-decrease test disabled, so it
-    # stops on the projected gradient instead of on stalled progress
-    "LBFGS[scipy-gradstop]",
     "BFGS[optimistix]",
     "GradientDescent[optimistix]",
     "SVRG[nemos]",
@@ -436,8 +432,7 @@ def _benchmark_nemos(config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int) 
     # calling _initialize_optimizer_and_state/_optimizer_run without it.
     active_pars, frozen_pars = model._partition_active(model_pars)
 
-    # matches both "scipy" and "scipy-gradstop": they share the ScipySolver state
-    is_scipy = model.solver_spec.backend.startswith("scipy")
+    is_scipy = model.solver_spec.backend == "scipy"
 
     def _get_iter_num(m):
         if is_scipy:
@@ -508,9 +503,8 @@ def _benchmark_nemos(config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int) 
 
     # Solution quality of the last fit. Without this, iteration counts and
     # timings are not comparable across solvers: each stops on its own rule, so
-    # a low count can mean "converged fast" or "quit early". scipy's default
-    # `ftol` test in particular halts on stalled progress, at a point where the
-    # gradient sup-norm can still be ~1e-2. Computed once rather than per rep,
+    # a low count can mean "converged fast" or "quit early" (which is why the
+    # scipy wrapper pins `ftol=0`, see `ScipyLBFGS`). Computed once rather than per rep,
     # so it does not add an objective+gradient pass to every timed iteration.
     final_loss, final_grad_max = _solution_quality(model, X, y, config)
 
