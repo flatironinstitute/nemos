@@ -1108,7 +1108,7 @@ class TestGLM:
         ],
     )
     @pytest.mark.parametrize(
-        "model_class, fit_state_attrs",
+        "model_class, fit_state_attrs, fix_params",
         [
             (
                 nmo.glm.GLM,
@@ -1121,6 +1121,9 @@ class TestGLM:
                     "dof_resid_": 3,
                     "aux_": None,
                 },
+                # coef pinned, intercept left learnable: a spec with both an array and a
+                # ``None`` leaf, the latter being the fragile half of the round-trip
+                (jnp.ones((3,)), None),
             ),
             (
                 nmo.glm.PopulationGLM,
@@ -1131,6 +1134,7 @@ class TestGLM:
                     "dof_resid_": 3,
                     "aux_": None,
                 },
+                (jnp.ones((3, 1)), None),
             ),
             (
                 nmo.glm.ClassifierGLM,
@@ -1142,6 +1146,7 @@ class TestGLM:
                     "aux_": None,
                     "classes_": np.array([2, 3]),
                 },
+                (jnp.ones((3, 2)), None),
             ),
             (
                 nmo.glm.ClassifierPopulationGLM,
@@ -1153,6 +1158,7 @@ class TestGLM:
                     "aux_": None,
                     "classes_": np.array([2, 3]),
                 },
+                (jnp.ones((3, 1, 2)), None),
             ),
         ],
     )
@@ -1161,6 +1167,7 @@ class TestGLM:
         regularizer,
         obs_model,
         solver_name,
+        fix_params,
         tmp_path,
         glm_class_type,
         fit_state_attrs,
@@ -1186,6 +1193,7 @@ class TestGLM:
             regularizer=regularizer,
             regularizer_strength=2.0,
             solver_kwargs={"tol": 10**-6},
+            fix_params=fix_params,
         )
         clean_kwargs = dict(
             (k, p) for k, p in kwargs.items() if k in model_class._get_param_names()
@@ -1231,6 +1239,20 @@ class TestGLM:
                 assert np.allclose(
                     np.array(init_val), np.array(load_val)
                 ), f"{key} array mismatch"
+            elif isinstance(init_val, tuple):
+                # e.g. ``fix_params``: compare leafwise, keeping ``None`` a leaf so a
+                # dropped one cannot pass as an empty pytree node
+                is_none = lambda leaf: leaf is None
+                init_leaves = jax.tree_util.tree_leaves(init_val, is_leaf=is_none)
+                load_leaves = jax.tree_util.tree_leaves(load_val, is_leaf=is_none)
+                assert len(init_leaves) == len(
+                    load_leaves
+                ), f"{key} structure mismatch: {init_val} != {load_val}"
+                for init_leaf, load_leaf in zip(init_leaves, load_leaves):
+                    if init_leaf is None:
+                        assert load_leaf is None, f"{key} lost a None leaf"
+                    else:
+                        np.testing.assert_allclose(load_leaf, init_leaf)
             elif isinstance(init_val, Callable):
                 assert _get_name(init_val) == _get_name(
                     load_val

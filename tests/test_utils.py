@@ -668,8 +668,7 @@ def test_inspect_npz(tmp_path, model_class, monkeypatch, capsys):
         lines.append("feature_mask           : None")
 
     lines.append("fit_intercept          : True")
-    if model_class is nmo.glm.GLM:
-        lines.append("fix_params             : (None, None)")
+    lines.append("fix_params             : (None, None)")
     lines += [
         "inverse_link_function  : jax.numpy.exp",
         "observation_model      : {'class': 'nemos.observation_models.PoissonObservations'}",

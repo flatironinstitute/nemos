@@ -82,6 +82,22 @@ def _leaves(tree):
     return jax.tree_util.tree_leaves(tree, is_leaf=lambda x: x is None)
 
 
+def _assert_same_spec(got, want):
+    """Two specs agree in structure and values, ``None`` leaves included.
+
+    ``None`` is kept a leaf: as an empty pytree node a dropped one would compare equal.
+    """
+    is_none = lambda leaf: leaf is None
+    assert jax.tree_util.tree_structure(
+        got, is_leaf=is_none
+    ) == jax.tree_util.tree_structure(want, is_leaf=is_none)
+    for got_leaf, want_leaf in zip(_leaves(got), _leaves(want)):
+        if want_leaf is None:
+            assert got_leaf is None
+        else:
+            np.testing.assert_array_equal(got_leaf, want_leaf)
+
+
 def _configure(model, X, y, coef_mode, intercept_pinned, fit_intercept):
     """Apply a spec through the public setters, returning the model."""
     intercept = _pinned_intercept(model, X, y) if intercept_pinned else None
@@ -229,16 +245,7 @@ def test_fix_params_survives_save_load(
     model.save_params(path)
     loaded = nmo.load_model(path)
 
-    before, after = model.fix_params, loaded.fix_params
-    is_none = lambda x: x is None
-    assert jax.tree_util.tree_structure(
-        after, is_leaf=is_none
-    ) == jax.tree_util.tree_structure(before, is_leaf=is_none)
-    for got, want in zip(_leaves(after), _leaves(before)):
-        if want is None:
-            assert got is None
-        else:
-            np.testing.assert_array_equal(got, want)
+    _assert_same_spec(loaded.fix_params, model.fix_params)
 
 
 class CoefModule(eqx.Module):
@@ -523,3 +530,62 @@ class TestFrozenValuesEnterTheObjective:
             )
             > 1e-2
         )
+
+
+@pytest.mark.parametrize("model_fixture", MODEL_FIXTURES)
+@pytest.mark.parametrize("coef_mode", COEF_MODES)
+@pytest.mark.parametrize("intercept_pinned", [False, True])
+class TestSpecSurvivesSklearnProtocol:
+    """``fix_params`` travels through ``get_params``/``set_params``/``clone``.
+
+    A spec that does not survive ``clone`` breaks every cross-validation and pipeline
+    silently: sklearn rebuilds the estimator from ``get_params`` before each fit, so the
+    freezing would just stop happening.
+    """
+
+    def test_clone_reproduces_the_spec(
+        self, request, model_fixture, coef_mode, intercept_pinned
+    ):
+        """``clone`` rebuilds from ``get_params`` and must carry the spec across."""
+        X, y, model = request.getfixturevalue(model_fixture)[:3]
+        _configure(model, X, y, coef_mode, intercept_pinned, fit_intercept=True)
+
+        _assert_same_spec(clone(model).fix_params, model.fix_params)
+
+    def test_set_params_applies_the_spec(
+        self, request, model_fixture, coef_mode, intercept_pinned
+    ):
+        """A spec handed to ``set_params`` reads back the same through ``get_params``."""
+        X, y, model = request.getfixturevalue(model_fixture)[:3]
+        spec = (
+            _coef_spec(model, X, y, coef_mode),
+            _pinned_intercept(model, X, y) if intercept_pinned else None,
+        )
+
+        model.set_params(fix_params=spec)
+
+        _assert_same_spec(model.get_params()["fix_params"], spec)
+
+
+def test_set_params_validates_the_spec(poissonGLM_model_instantiation):
+    """``set_params`` rejects what the constructor would reject."""
+    X, y, model = poissonGLM_model_instantiation[:3]
+
+    with pytest.raises(ValueError, match="Intercept term should be"):
+        model.set_params(fix_params=(None, jnp.zeros((5,))))
+
+
+def test_reassigning_the_spec_invalidates_the_solver(poissonGLM_model_instantiation):
+    """A new spec changes the partition, so the built solver is stale."""
+    X, y, model = poissonGLM_model_instantiation[:3]
+    params = model.initialize_params(X, y)
+    model.initialize_optimizer_and_state(params, X, y)
+    assert model._solver is not None
+
+    model.fix_params = (None, _pinned_intercept(model, X, y))
+
+    assert model._solver is None
+    assert model._solver_loss_fun is None
+    assert model._optimizer_init_state is None
+    assert model._optimizer_update is None
+    assert model._optimizer_run is None
