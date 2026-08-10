@@ -589,3 +589,24 @@ def test_reassigning_the_spec_invalidates_the_solver(poissonGLM_model_instantiat
     assert model._optimizer_init_state is None
     assert model._optimizer_update is None
     assert model._optimizer_run is None
+
+
+def test_all_fixed_spec_still_short_circuits_after_reload(
+    poissonGLM_model_instantiation, tmp_path
+):
+    """A reloaded all-fixed model round-trips and keeps skipping the solver."""
+    X, y, model = poissonGLM_model_instantiation[:3]
+    coef, intercept = _pin_everything(model, X, y)
+    model.fix_params = (coef, intercept)
+
+    path = tmp_path / "all_fixed.npz"
+    model.save_params(path)
+    loaded = nmo.load_model(path)
+
+    _assert_same_spec(loaded.fix_params, model.fix_params)
+    with pytest.warns(UserWarning, match="Every parameter is fixed"):
+        loaded.fit(X, y)
+
+    np.testing.assert_array_equal(loaded.coef_, coef)
+    np.testing.assert_array_equal(loaded.intercept_, intercept)
+    assert isinstance(loaded.solver, NoOpSolver)
