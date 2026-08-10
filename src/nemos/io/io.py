@@ -11,12 +11,14 @@ import numpy as np
 if TYPE_CHECKING:
     from ..base_regressor import BaseRegressor
     from ..observation_models import Observations
+    from ..params import ModelParams
     from ..regularizer import Regularizer
 
 from .._observation_model_builder import (
     AVAILABLE_OBSERVATION_MODELS,
     instantiate_observation_model,
 )
+from .._params_builder import AVAILABLE_PARAM_CONTAINERS, instantiate_param_container
 from .._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from ..glm import GLM, ClassifierGLM, ClassifierPopulationGLM, PopulationGLM
 from ..glm_hmm import GLMHMM
@@ -194,7 +196,7 @@ def _is_param(par):
 
 def _safe_instantiate(
     param_name: str, class_name: str, **kwargs
-) -> "Regularizer | Observations":
+) -> "Regularizer | Observations | ModelParams":
     if not isinstance(class_name, str):
         # this should not be hit, if it does the saved params had been modified.
         raise ValueError(
@@ -205,6 +207,8 @@ def _safe_instantiate(
     class_basename = class_name.split(".")[-1]
     if class_basename in AVAILABLE_REGULARIZERS:
         return instantiate_regularizer(class_name, **kwargs)
+    elif class_basename in AVAILABLE_PARAM_CONTAINERS:
+        return instantiate_param_container(class_name, **kwargs)
     elif any(class_basename.startswith(obs) for obs in AVAILABLE_OBSERVATION_MODELS):
         return instantiate_observation_model(class_name, **kwargs)
     else:

@@ -1111,7 +1111,7 @@ def ridge_regularizer():
 
 @pytest.fixture
 def lasso_regularizer():
-    return nmo.regularizer.Lasso(solver_name="ProximalGradient")
+    return nmo.regularizer.Lasso()
 
 
 @pytest.fixture
@@ -1119,7 +1119,7 @@ def group_lasso_2groups_5features_regularizer():
     mask = np.zeros((2, 5))
     mask[0, :2] = 1
     mask[1, 2:] = 1
-    return nmo.regularizer.GroupLasso(solver_name="ProximalGradient", mask=mask)
+    return nmo.regularizer.GroupLasso(mask=mask)
 
 
 @pytest.fixture

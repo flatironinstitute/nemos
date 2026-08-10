@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import inspect
 import os
 import warnings
@@ -14,6 +15,7 @@ import jax.numpy as jnp
 import numpy as np
 from numpy.typing import NDArray
 
+from .params import ModelParams
 from .tree_utils import pytree_map_and_reduce
 from .type_casting import support_pynapple
 from .typing import Pytree
@@ -831,6 +833,16 @@ def _unpack_params(params_dict: dict, string_attrs: list = None) -> dict:
             cls_name = _get_name(value)
             params = _unpack_params(value.get_params(deep=False), string_attrs)
             out[key] = {"class": cls_name, "params": params}
+        elif isinstance(value, ModelParams):
+            # parameter containers are equinox modules and have no ``get_params``, so
+            # unpack them field by field through the same class/params convention.
+            # Without this they reach ``_flatten_dict`` whole and are stored as pickled
+            # object arrays, which ``load_model`` cannot read back.
+            fields = {f.name: getattr(value, f.name) for f in dataclasses.fields(value)}
+            out[key] = {
+                "class": _get_name(value),
+                "params": _unpack_params(fields, string_attrs),
+            }
         elif isinstance(value, dict):
             # serialize callable/class leaves inside plain dicts by their name,
             # so npz can store them as strings instead of pickled object arrays.
