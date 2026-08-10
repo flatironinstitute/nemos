@@ -25,6 +25,7 @@ import nemos as nmo
 from conftest import initialize_feature_mask_for_population_glm
 from nemos._observation_model_builder import instantiate_observation_model
 from nemos._regularizer_builder import instantiate_regularizer
+from nemos.glm.params import GLMParams
 from nemos.inverse_link_function_utils import identity, log_softmax
 from nemos.tree_utils import (
     pytree_map_and_reduce,
@@ -200,6 +201,57 @@ def test_get_fit_attrs(
 def get_param_shape(model, X, y):
     empty_par = model._validator.get_empty_params(X, y)
     return jax.tree_util.tree_map(lambda x: x.shape, empty_par)
+
+
+def _group_lasso_model(mask_kind):
+    """GLM with a GroupLasso over 5 features split into 2 groups."""
+    group_mask = np.zeros((2, 5))
+    group_mask[0, :2] = 1
+    group_mask[1, 2:] = 1
+    mask = (
+        GLMParams(coef=group_mask, intercept=None)
+        if mask_kind == "structured"
+        else group_mask
+    )
+    model = nmo.glm.GLM(
+        regularizer=nmo.regularizer.GroupLasso(mask=mask),
+        regularizer_strength=0.1,
+        solver_name="ProximalGradient",
+    )
+    return model, mask
+
+
+@pytest.mark.parametrize("mask_kind", ["array", "structured"])
+def test_save_and_load_group_lasso_mask(mask_kind, tmp_path):
+    """A GroupLasso mask round-trips whether it is a plain array or a GLMParams."""
+    model, mask = _group_lasso_model(mask_kind)
+
+    save_path = tmp_path / "group_lasso.npz"
+    model.save_params(save_path)
+    loaded_mask = nmo.load_model(save_path).regularizer.mask
+
+    if mask_kind == "structured":
+        assert isinstance(loaded_mask, GLMParams)
+        np.testing.assert_allclose(loaded_mask.coef, mask.coef)
+        assert loaded_mask.intercept is None
+    else:
+        assert not isinstance(loaded_mask, GLMParams)
+        np.testing.assert_allclose(loaded_mask, mask)
+
+
+def test_structured_mask_saved_without_pickled_objects(tmp_path):
+    """No entry is an object array, which ``load_model`` could never read back.
+
+    ``load_model`` opens the archive with ``allow_pickle=False``, so a parameter numpy
+    can only hold as an object array makes the whole file unloadable.
+    """
+    model, _ = _group_lasso_model("structured")
+    save_path = tmp_path / "no_objects.npz"
+    model.save_params(save_path)
+
+    with np.load(save_path, allow_pickle=True) as data:
+        pickled = [key for key in data.files if data[key].dtype == object]
+    assert pickled == []
 
 
 @pytest.mark.parametrize(
