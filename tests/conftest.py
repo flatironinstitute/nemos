@@ -1100,14 +1100,6 @@ def example_data_prox_operator_multineuron():
 
 
 @pytest.fixture
-def group_lasso_2groups_5features_regularizer():
-    mask = np.zeros((2, 5))
-    mask[0, :2] = 1
-    mask[1, 2:] = 1
-    return nmo.regularizer.GroupLasso(mask=mask)
-
-
-@pytest.fixture
 def mock_data():
     return jnp.array([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]), jnp.array([[1, 2], [3, 4]])
 
