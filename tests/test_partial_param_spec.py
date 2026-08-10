@@ -7,8 +7,11 @@ import numpy as np
 import pytest
 
 import nemos as nmo
+from sklearn.base import clone
+
 from nemos.batching import ArrayDataLoader
 from nemos.callbacks import Callback
+from nemos.glm.params import GLMParams
 from nemos.solvers._abstract_solver import AbstractSolver
 from nemos.solvers._no_op import NoOpSolver
 from nemos.tree_utils import tree_broadcast_prefix
@@ -427,3 +430,96 @@ def test_no_op_solver_covers_the_solver_interface():
 
     missing = sorted(name for name in expected if not hasattr(NoOpSolver, name))
     assert missing == []
+
+
+def _solver_grad_norm(model, active, X, y):
+    """Norm of the gradient of the loss the solver minimized, evaluated at ``active``.
+
+    ``_solver_loss_fun`` is the penalized loss closed over the frozen leaves and taking
+    the active subtree alone. The unpenalized model loss is the wrong object: its
+    gradient keeps a residual equal to the penalty gradient, no matter the tolerance.
+    """
+    grad = jax.grad(model._solver_loss_fun)(active, X, y)
+    return float(
+        jnp.sqrt(
+            sum(jnp.sum(jnp.square(leaf)) for leaf in jax.tree_util.tree_leaves(grad))
+        )
+    )
+
+
+def _grad_norm_under_other_spec(model, active, X, y, fix_params, full_params):
+    """``_solver_grad_norm`` at ``active``, but with different values frozen.
+
+    The frozen values are closed over when the solver is built, so the contrast needs a
+    second model carrying the alternative spec.
+    """
+    other = clone(model)
+    other.set_params(fix_params=fix_params)
+    other.initialize_optimizer_and_state(full_params, X, y)
+    return _solver_grad_norm(other, active, X, y)
+
+
+@pytest.mark.requires_x64
+class TestFrozenValuesEnterTheObjective:
+    """Pinned values take part in the objective, not reattached to the result.
+
+    Preservation alone cannot detect a frozen leaf dropped from the linear predictor: the
+    returned parameters look identical either way. The active gradient of the solver's own
+    loss vanishes at the fitted point only if the pinned value was in the objective, so
+    freezing a different value there must spoil stationarity.
+    """
+
+    def test_pinned_intercept_is_used_by_the_loss(self, poissonGLM_model_instantiation):
+        """coef converges to the optimum *given* the pinned intercept."""
+        X, y, model = poissonGLM_model_instantiation[:3]
+        pinned = _pinned_intercept(model, X, y)
+        model.set_params(fix_params=(None, pinned), solver_kwargs={"tol": 1e-12})
+
+        model.fit(X, y)
+
+        np.testing.assert_allclose(model.intercept_, pinned)
+        active, _ = model._partition_active(GLMParams(model.coef_, model.intercept_))
+        zeros = jnp.zeros_like(pinned)
+        # float64 with tol=1e-12 lands at ~1e-13; three orders of margin, no more
+        assert _solver_grad_norm(model, active, X, y) < 1e-10
+        assert (
+            _grad_norm_under_other_spec(
+                model, active, X, y, (None, zeros), (model.coef_, zeros)
+            )
+            > 1e-2
+        )
+
+    def test_pinned_coef_leaf_is_used_by_the_loss(
+        self, poissonGLM_model_instantiation_pytree
+    ):
+        """The free coef leaves converge to the optimum *given* the pinned leaf."""
+        X, y, model = poissonGLM_model_instantiation_pytree[:3]
+        spec = _coef_spec(model, X, y, "pin_first")
+        model.set_params(fix_params=(spec, None), solver_kwargs={"tol": 1e-12})
+
+        model.fit(X, y)
+
+        pinned_key = next(key for key, val in spec.items() if val is not None)
+        np.testing.assert_allclose(model.coef_[pinned_key], spec[pinned_key])
+        active, _ = model._partition_active(GLMParams(model.coef_, model.intercept_))
+        zeroed_spec = {
+            key: jnp.zeros_like(val) if key == pinned_key else val
+            for key, val in spec.items()
+        }
+        zeroed_coef = {
+            key: jnp.zeros_like(leaf) if key == pinned_key else leaf
+            for key, leaf in model.coef_.items()
+        }
+        # float64 with tol=1e-12 lands at ~1e-13; three orders of margin, no more
+        assert _solver_grad_norm(model, active, X, y) < 1e-10
+        assert (
+            _grad_norm_under_other_spec(
+                model,
+                active,
+                X,
+                y,
+                (zeroed_spec, None),
+                (zeroed_coef, model.intercept_),
+            )
+            > 1e-2
+        )
