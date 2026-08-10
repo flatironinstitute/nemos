@@ -1,7 +1,4 @@
-"""Tests for the partial parameter specification (``fix_params``) machinery.
-
-Tree algebra only: no optimization runs here.
-"""
+"""Tests for the partial parameter specification (``fix_params``) machinery."""
 
 import equinox as eqx
 import jax
@@ -10,8 +7,37 @@ import numpy as np
 import pytest
 
 import nemos as nmo
+from nemos.batching import ArrayDataLoader
+from nemos.callbacks import Callback
+from nemos.solvers._abstract_solver import AbstractSolver
 from nemos.solvers._no_op import NoOpSolver
 from nemos.tree_utils import tree_broadcast_prefix
+
+
+class _RecordingCallback(Callback):
+    """Records which hooks the solver invoked, in order."""
+
+    def __init__(self):
+        self.calls = []
+
+    def on_train_begin(self, ctx):
+        self.calls.append("on_train_begin")
+
+    def on_train_end(self, ctx):
+        self.calls.append("on_train_end")
+
+    def on_pass_begin(self, ctx):
+        self.calls.append("on_pass_begin")
+
+    def on_pass_end(self, ctx):
+        self.calls.append("on_pass_end")
+
+    def on_batch_begin(self, ctx):
+        self.calls.append("on_batch_begin")
+
+    def on_batch_end(self, ctx):
+        self.calls.append("on_batch_end")
+
 
 # conftest fixtures, picked to vary the coef pytree structure and the intercept shape
 MODEL_FIXTURES = [
@@ -219,45 +245,24 @@ class CoefModule(eqx.Module):
     b: object
 
 
-def _custom_node_model(poissonGLM_model_instantiation, tmp_path):
-    """Save a model whose ``fix_params`` coef is a custom pytree node."""
+def test_user_defined_node_spec_cannot_be_loaded(
+    poissonGLM_model_instantiation, tmp_path
+):
+    """A spec built on a user-defined pytree node saves, then fails to load.
+
+    Only nemos-native containers are rebuilt at load time, so a foreign node reaches the
+    archive as an object array. Saving still succeeds: unserializable pieces are meant to
+    be supplied back through ``mapping_dict``, which accepts callables and classes only
+    and so cannot carry a parameter spec.
+    """
     X, y, model = poissonGLM_model_instantiation[:3]
-    spec = CoefModule(jnp.ones((3,)), None)
-    model.fix_params = (spec, None)
+    model.fix_params = (CoefModule(jnp.ones((3,)), None), None)
 
     path = tmp_path / "model.npz"
     model.save_params(path)
-    return path, spec
-
-
-def test_custom_node_spec_saves_but_needs_a_mapping(
-    poissonGLM_model_instantiation, tmp_path
-):
-    """Saving a custom-node spec succeeds; a bare load cannot read it back."""
-    path, _ = _custom_node_model(poissonGLM_model_instantiation, tmp_path)
 
     with pytest.raises(ValueError, match="allow_pickle=False"):
         nmo.load_model(path)
-
-
-@pytest.mark.xfail(
-    reason="load_model unflattens every key before applying mapping_dict, so the "
-    "mapping cannot rescue a fix_params spec holding a custom pytree node",
-    raises=ValueError,
-    strict=True,
-)
-def test_custom_node_spec_recoverable_through_mapping(
-    poissonGLM_model_instantiation, tmp_path
-):
-    """``mapping_dict`` should supply back a spec that could not be serialized."""
-    path, spec = _custom_node_model(poissonGLM_model_instantiation, tmp_path)
-
-    loaded = nmo.load_model(path, mapping_dict={"fix_params": (spec, None)})
-
-    coef_spec = loaded.fix_params[0]
-    assert isinstance(coef_spec, CoefModule)
-    np.testing.assert_array_equal(coef_spec.a, spec.a)
-    assert coef_spec.b is None
 
 
 def _pin_everything(model, X, y):
@@ -338,3 +343,87 @@ class TestEveryParameterFixed:
         assert [
             w for w in recwarn if "Every parameter is fixed" in str(w.message)
         ] == []
+
+    @pytest.mark.parametrize("solver_name", ["LBFGS", "Newton"])
+    def test_fit_pins_values_for_hessian_and_gradient_solvers(
+        self, poissonGLM_model_instantiation, solver_name
+    ):
+        """Newton needs a Hessian the stand-in never supplies, and still short-circuits.
+
+        ``setup_hessian`` is only reached while instantiating a real solver, which the
+        empty-tree case skips, so no Newton-specific hook is required of the stand-in.
+        """
+        X, y, model = poissonGLM_model_instantiation[:3]
+        coef, intercept = _pin_everything(model, X, y)
+        model.set_params(fix_params=(coef, intercept), solver_name=solver_name)
+
+        with pytest.warns(UserWarning, match="Every parameter is fixed"):
+            model.fit(X, y)
+
+        np.testing.assert_array_equal(model.coef_, coef)
+        np.testing.assert_array_equal(model.intercept_, intercept)
+        assert isinstance(model.solver, NoOpSolver)
+
+    def test_stochastic_fit_returns_the_pinned_values(
+        self, poissonGLM_model_instantiation
+    ):
+        """``stochastic_fit`` reaches the solver directly, so it needs its own coverage."""
+        X, y, model = poissonGLM_model_instantiation[:3]
+        coef, intercept = _pin_everything(model, X, y)
+        model.set_params(fix_params=(coef, intercept), solver_name="SVRG")
+
+        with pytest.warns(UserWarning, match="Every parameter is fixed"):
+            model.stochastic_fit(ArrayDataLoader(X, y, batch_size=32), n_passes=2)
+
+        np.testing.assert_array_equal(model.coef_, coef)
+        np.testing.assert_array_equal(model.intercept_, intercept)
+
+    def test_stochastic_fit_pins_a_frozen_leaf_exactly(
+        self, poissonGLM_model_instantiation, recwarn
+    ):
+        """With coef free, the real stochastic solver runs and never moves the intercept."""
+        X, y, model = poissonGLM_model_instantiation[:3]
+        _, intercept = _pin_everything(model, X, y)
+        model.set_params(fix_params=(None, intercept), solver_name="SVRG")
+
+        model.stochastic_fit(ArrayDataLoader(X, y, batch_size=32), n_passes=2)
+
+        np.testing.assert_array_equal(model.intercept_, intercept)
+        assert not isinstance(model.solver, NoOpSolver)
+        assert [
+            w for w in recwarn if "Every parameter is fixed" in str(w.message)
+        ] == []
+
+    def test_stochastic_fit_skips_the_data_passes(self, poissonGLM_model_instantiation):
+        """No pass or batch runs, so only the train-level callbacks fire.
+
+        Iterating the loader could not change a fully fixed tree, and for out-of-memory
+        data it would read everything to no effect.
+        """
+        X, y, model = poissonGLM_model_instantiation[:3]
+        model.set_params(fix_params=_pin_everything(model, X, y), solver_name="SVRG")
+        callback = _RecordingCallback()
+
+        with pytest.warns(UserWarning, match="Every parameter is fixed"):
+            model.stochastic_fit(
+                ArrayDataLoader(X, y, batch_size=32), n_passes=3, callbacks=callback
+            )
+
+        assert callback.calls == ["on_train_begin", "on_train_end"]
+
+
+def test_no_op_solver_covers_the_solver_interface():
+    """``NoOpSolver`` replaces any configured solver, so it must implement all of it.
+
+    The model reaches for solver methods after initialization — ``stochastic_run`` is one
+    — and a missing one only shows up as an ``AttributeError`` mid-fit. Comparing the
+    public surface catches that when the interface grows, e.g. a Hessian mixin.
+    """
+    expected = {
+        name
+        for name in dir(AbstractSolver)
+        if not name.startswith("_") and callable(getattr(AbstractSolver, name, None))
+    }
+
+    missing = sorted(name for name in expected if not hasattr(NoOpSolver, name))
+    assert missing == []
