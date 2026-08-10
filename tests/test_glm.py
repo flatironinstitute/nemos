@@ -203,14 +203,14 @@ def get_param_shape(model, X, y):
     return jax.tree_util.tree_map(lambda x: x.shape, empty_par)
 
 
-def _group_lasso_model(mask):
+def _group_lasso_model(mask_kind):
     """GLM with a GroupLasso over 5 features split into 2 groups."""
     group_mask = np.zeros((2, 5))
     group_mask[0, :2] = 1
     group_mask[1, 2:] = 1
     mask = (
         GLMParams(coef=group_mask, intercept=None)
-        if mask == "structured"
+        if mask_kind == "structured"
         else group_mask
     )
     model = nmo.glm.GLM(
