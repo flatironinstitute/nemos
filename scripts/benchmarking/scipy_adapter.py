@@ -1,4 +1,4 @@
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 import scipy.optimize
 
@@ -30,6 +30,7 @@ class ScipySolver:
         hess=None,
         maxiter: int = 100,
         tol: float = 1e-8,
+        options: Optional[dict] = None,
     ) -> None:
         """
         Required arguments to accept are `unregularized_loss`, `regularizer`, `regularizer_strength`.
@@ -56,6 +57,7 @@ class ScipySolver:
         self.method = method
         self.tol = tol
         self.maxiter = maxiter
+        self.options = options
 
         if has_aux:
             raise NotImplementedError(
@@ -69,7 +71,7 @@ class ScipySolver:
         For alternative, more flexible implementations see the solvers
         implemented in `nemos.solvers`.
         """
-        return {"method", "hess", "maxiter", "tol"}
+        return {"method", "hess", "maxiter", "tol", "options"}
 
     def init_state(self, init_params, *args):
         """
@@ -141,6 +143,8 @@ class ScipySolver:
 
         # pass the flat parameters and the objective function taking them
         # also the custom parameters we saved in __init__
+        options = self.options.copy()
+        options.update({"maxiter": n_steps})
         res = scipy.optimize.minimize(
             fun=_flat_obj,
             jac=True,
@@ -148,7 +152,7 @@ class ScipySolver:
             x0=_flat_params,
             args=args,
             method=self.method,
-            options={"maxiter": n_steps},
+            options=options,
             tol=self.tol,
         )
 
@@ -167,6 +171,7 @@ class ScipyLBFGS(ScipySolver):
         init_params,
         maxiter: int = 100,
         tol: float = 1e-8,
+        options: Optional[dict] = None,
     ):
         return super().__init__(
             unregularized_loss,
@@ -177,4 +182,5 @@ class ScipyLBFGS(ScipySolver):
             method="L-BFGS-B",
             maxiter=maxiter,
             tol=tol,
+            options=options,
         )
