@@ -11,7 +11,7 @@ from ..tree_utils import pytree_map_and_reduce
 
 
 def compute_rate_per_state(
-    X: Any, glm_params: GLMParams, inverse_link_function: Callable
+    X: Any, glm_params: GLMParams[jnp.ndarray], inverse_link_function: Callable
 ) -> Array:
     """
     Compute GLM predicted rates for all latent states.

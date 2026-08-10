@@ -3449,16 +3449,33 @@ def test_estimate_dof_resid_feature_mask(
         (nmo.regularizer.Ridge(), _DOF_MASK_COUNT),
     ],
 )
-@pytest.mark.parametrize("fit_intercept", [True, False])
+@pytest.mark.parametrize(
+    "fit_intercept, init_intercept, warn_match",
+    [
+        (True, "pinned_value", None),
+        # a frozen intercept handed the value it is pinned at discards nothing
+        (False, "pinned_value", None),
+        # handed anything else, the value is dropped and the user is told
+        (False, "other_value", "the provided intercept is ignored"),
+    ],
+)
 @pytest.mark.requires_x64
 def test_dof_resid_after_fit_feature_mask(
-    reg, dof_per_neuron, fit_intercept, request, patch_optimizer_run
+    reg,
+    dof_per_neuron,
+    fit_intercept,
+    init_intercept,
+    warn_match,
+    request,
+    patch_optimizer_run,
+    recwarn,
 ):
     """fit stores the per-neuron DOF of the masked model.
 
     The solver is a no-op returning ``init_params``, so the fitted coefficients are the
     injected ones and the DOF is fully determined. With ``fit_intercept=False`` the
-    intercept is frozen out of the partition and costs no DOF.
+    intercept is frozen out of the partition and costs no DOF, whatever intercept the
+    caller passed in.
     """
     _, _, model, _, _ = request.getfixturevalue(
         "population_poissonGLM_model_instantiation"
@@ -3474,18 +3491,18 @@ def test_dof_resid_after_fit_feature_mask(
 
     X = _set_masked_state(model, False, as_pytree=False)
     # hand the sparse state to fit as the starting point, leaving the model unfitted
-    init_params = (model.coef_, model.intercept_)
+    offset = 1.0 if init_intercept == "other_value" else 0.0
+    intercept = model.intercept_ + offset
+    init_params = (model.coef_, intercept)
     model.coef_, model.intercept_ = None, None
     y = np.ones((X.shape[0], _DOF_N_NEURONS))
 
-    # the injected init_params carry an intercept, which a frozen intercept discards
-    warns_ignored_intercept = (
-        does_not_raise()
-        if fit_intercept
-        else pytest.warns(UserWarning, match="the provided intercept is ignored")
-    )
-    with warns_ignored_intercept:
+    if warn_match is None:
         model.fit(X, y, init_params=init_params)
+        assert not [w for w in recwarn if issubclass(w.category, UserWarning)]
+    else:
+        with pytest.warns(UserWarning, match=warn_match):
+            model.fit(X, y, init_params=init_params)
 
     intercept_dof = 1 if fit_intercept else 0
     np.testing.assert_allclose(
