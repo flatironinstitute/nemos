@@ -15,6 +15,7 @@ import pytest
 
 import nemos
 import nemos._inspect_utils as inspect_utils
+import nemos.basis._basis_mixin as _basis_mixin
 import nemos.basis.basis as basis
 import nemos.convolve as convolve
 from conftest import (
@@ -22,6 +23,7 @@ from conftest import (
     BasisFuncsTesting,
     CombinedBasis,
     SizeTerminal,
+    _BASIS_BEHAVIOUR_MIXINS,
     atomic_basis_superclass_pairs,
     custom_basis,
     is_conv_basis,
@@ -69,6 +71,50 @@ from nemos.utils import pynapple_concatenate_numpy
 
 # Exported but not discovered: ``TransformerBasis`` wraps a basis for sklearn, it is not one.
 _PUBLIC_NOT_DISCOVERED = {"TransformerBasis"}
+
+# Mixins in _basis_mixin.py that do not give a basis its evaluation behaviour.
+_NON_BEHAVIOUR_MIXINS = {
+    "BasisMixin",  # shared base for all of them
+    "AtomicBasisMixin",  # atomic vs composite, orthogonal to how the input is mapped
+    "BoundedEvalBasisMixin",  # an EvalBasisMixin that also carries bounds
+    "BasisTransformerMixin",  # supplies to_transformer for the sklearn API
+}
+
+
+@pytest.mark.metatest
+def test_behaviour_mixins_match_the_mixin_module():
+    """``_BASIS_BEHAVIOUR_MIXINS`` drives basis discovery, so it must track its module.
+
+    Discovery finds a basis by combining ``Basis`` with one of those mixins. A new behaviour
+    mixin left out of the tuple makes every basis carrying it invisible, and hence absent from
+    every parametrization built on ``list_all_basis_classes``.
+
+    Both differences are asserted. The forward one pins the mixins in the module that are
+    deliberately not behaviour, so a genuinely new one shows up as an undeclared name rather
+    than being silently ignored. The reverse one must be empty: a behaviour mixin defined
+    outside ``_basis_mixin.py`` would escape this check entirely.
+    """
+    defined = {
+        name
+        for name, obj in inspect.getmembers(_basis_mixin, inspect.isclass)
+        if obj.__module__ == _basis_mixin.__name__
+    }
+    behaviour = {cls.__name__ for cls in _BASIS_BEHAVIOUR_MIXINS}
+
+    undeclared = defined - behaviour - _NON_BEHAVIOUR_MIXINS
+    assert not undeclared, (
+        "mixins in _basis_mixin.py that are neither a declared behaviour mixin nor declared "
+        "non-behaviour. If one of these gives a basis its evaluation behaviour, add it to "
+        "_BASIS_BEHAVIOUR_MIXINS in conftest, otherwise to _NON_BEHAVIOUR_MIXINS here: "
+        f"{sorted(undeclared)}"
+    )
+    stale = _NON_BEHAVIOUR_MIXINS - defined
+    assert not stale, f"declared non-behaviour but no longer in the module: {sorted(stale)}"
+
+    assert not (behaviour - defined), (
+        "behaviour mixins defined outside nemos/basis/_basis_mixin.py, so this guard cannot "
+        f"see them. Basis mixins should live in that module: {sorted(behaviour - defined)}"
+    )
 
 
 @pytest.mark.metatest
@@ -464,8 +510,7 @@ def test_all_basis_are_tested() -> None:
             f"The following classes are not tested: {[bas.__qualname__ for bas in all_bases.difference(tested_bases)]}"
         )
 
-    # Shared/Eval/Conv classes now derive their parametrization; discovery is guarded by
-    # test_list_all_basis_classes_matches_the_public_api.
+    # Shared/Eval/Conv classes derive their parametrization; discovery itself is guarded above.
 
 
 @pytest.mark.parametrize(
