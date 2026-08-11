@@ -357,9 +357,7 @@ def extra_kwargs(cls, n_basis):
     # bounds is left to instantiate_atomic_basis: call sites pass it and would collide here.
     elif cls.__name__ in CLASS_DEFAULT_KWARGS:
         return {
-            k: v
-            for k, v in CLASS_DEFAULT_KWARGS[cls.__name__].items()
-            if k != "bounds"
+            k: v for k, v in CLASS_DEFAULT_KWARGS[cls.__name__].items() if k != "bounds"
         }
     elif "Fourier" in name:
         return dict(frequencies=(1, 1 + n_basis // 2))
