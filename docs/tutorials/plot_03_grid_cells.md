@@ -4,7 +4,6 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.4
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -16,6 +15,9 @@ kernelspec:
 
 %matplotlib inline
 import warnings
+import jax
+
+jax.config.update("jax_enable_x64", True)
 
 # Ignore the first specific warning
 warnings.filterwarnings(
@@ -212,9 +214,6 @@ Here we will focus on the last neuron (neuron 7) who has a nice grid pattern
 model = nmo.glm.GLM(
     regularizer="Ridge",
     regularizer_strength=0.0001,
-    # lowering the tolerance means that the solution will be closer to the optimum
-    # (at the cost of increasing execution time)
-    solver_kwargs=dict(tol=10**-12),
 )
 ```
 

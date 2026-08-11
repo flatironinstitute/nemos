@@ -153,6 +153,13 @@ VALID_PAIRS = [
     {"xs", "xis"},
     {"xi", "xis"},
     {"axis", "xis"},
+    # glm-hmm doc utils: trial counts and true/recovered parameter pairs
+    {"trials", "n_trials"},
+    {"true_coef", "rec_coef"},
+    {"true_intercept", "rec_intercept"},
+    {"true_trans", "rec_trans"},
+    {"n_classes", "n_passes"},
+    {"true_intercept", "fit_intercept"},
 ]
 
 

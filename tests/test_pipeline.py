@@ -27,6 +27,7 @@ def test_sklearn_transformer_pipeline(
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
     bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_inputs))
+    bas.bounds = (0, 1.1)
     pipe = pipeline.Pipeline([("eval", bas), ("fit", model)])
     pipe.fit(X[:, : bas.basis._n_inputs] ** 2, y)
 
@@ -44,6 +45,7 @@ def test_sklearn_transformer_pipeline_cv(
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
     bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_inputs))
+    bas.bounds = (0, 1.1)
     pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
     param_grid = dict(basis__n_basis_funcs=(4, 5, 10))
     gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv=3, error_score="raise")
@@ -54,6 +56,7 @@ def test_sklearn_cv_clone(population_poissonGLM_model_instantiation, mock_glm_fi
     X, y, model, _, _ = population_poissonGLM_model_instantiation
     bas = basis.CyclicBSplineEval(5)
     bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_inputs))
+    bas.bounds = (0, 1.1)
     pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
     pipe.fit(X[:, : bas._n_inputs] ** 2, y)
     param_grid = dict(basis__n_basis_funcs=(4, 8))
@@ -76,6 +79,7 @@ def test_sklearn_transformer_pipeline_cv_multiprocess(
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
     bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_inputs))
+    bas.bounds = (0, 1.1)
     pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
     param_grid = dict(basis__n_basis_funcs=(4, 5, 10))
     gridsearch = GridSearchCV(
@@ -101,13 +105,14 @@ def test_sklearn_transformer_pipeline_cv_directly_over_basis(
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
     bas = TransformerBasis(bas_cls(5))
+    bas.bounds = (0, 1.1)
     bas.set_input_shape(*([1] * bas._n_inputs))
     pipe = pipeline.Pipeline([("transformerbasis", bas), ("fit", model)])
     param_grid = dict(
         transformerbasis__basis=(
-            bas_cls(5).set_input_shape(*([1] * bas._n_inputs)),
-            bas_cls(10).set_input_shape(*([1] * bas._n_inputs)),
-            bas_cls(20).set_input_shape(*([1] * bas._n_inputs)),
+            bas_cls(5, bounds=(0, 1.1)).set_input_shape(*([1] * bas._n_inputs)),
+            bas_cls(10, bounds=(0, 1.1)).set_input_shape(*([1] * bas._n_inputs)),
+            bas_cls(20, bounds=(0, 1.1)).set_input_shape(*([1] * bas._n_inputs)),
         )
     )
     gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv=3, error_score="raise")
@@ -130,6 +135,7 @@ def test_sklearn_transformer_pipeline_cv_illegal_combination(
     X, y, model, _, _ = poissonGLM_model_instantiation
     bas = TransformerBasis(bas_cls(5))
     bas.set_input_shape(*([1] * bas._n_inputs))
+    bas.bounds = (0, 1.1)
     pipe = pipeline.Pipeline([("transformerbasis", bas), ("fit", model)])
     param_grid = dict(
         transformerbasis__basis=(bas_cls(5), bas_cls(10), bas_cls(20)),
@@ -147,13 +153,22 @@ def test_sklearn_transformer_pipeline_cv_illegal_combination(
 @pytest.mark.parametrize(
     "bas, expected_nans",
     [
-        (basis.MSplineEval(5), 0),
-        (basis.BSplineEval(5), 0),
-        (basis.CyclicBSplineEval(5), 0),
-        (basis.OrthExponentialEval(5, decay_rates=np.arange(1, 6)), 0),
-        (basis.RaisedCosineLinearEval(5), 0),
-        (basis.RaisedCosineLogEval(5), 0),
-        (basis.RaisedCosineLogEval(5) + basis.MSplineEval(5), 0),
+        (basis.MSplineEval(5, bounds=(-1e3, 1e3)), 0),
+        (basis.BSplineEval(5, bounds=(-1e3, 1e3)), 0),
+        (basis.CyclicBSplineEval(5, bounds=(-1e3, 1e3)), 0),
+        (
+            basis.OrthExponentialEval(
+                5, bounds=(-1e3, 1e3), decay_rates=np.arange(1, 6)
+            ),
+            0,
+        ),
+        (basis.RaisedCosineLinearEval(5, bounds=(-1e3, 1e3)), 0),
+        (basis.RaisedCosineLogEval(5, bounds=(-1e3, 1e3)), 0),
+        (
+            basis.RaisedCosineLogEval(5, bounds=(-1e3, 1e3))
+            + basis.MSplineEval(5, bounds=(-1e3, 1e3)),
+            0,
+        ),
         (basis.MSplineConv(5, window_size=3), 6),
         (basis.BSplineConv(5, window_size=3), 6),
         (
@@ -171,11 +186,13 @@ def test_sklearn_transformer_pipeline_cv_illegal_combination(
         (basis.RaisedCosineLinearConv(5, window_size=3), 6),
         (basis.RaisedCosineLogConv(5, window_size=3), 6),
         (
-            basis.RaisedCosineLogConv(5, window_size=3) + basis.MSplineEval(5),
+            basis.RaisedCosineLogConv(5, window_size=3)
+            + basis.MSplineEval(5, bounds=(-1e3, 1e3)),
             6,
         ),
         (
-            basis.RaisedCosineLogConv(5, window_size=3) * basis.MSplineEval(5),
+            basis.RaisedCosineLogConv(5, window_size=3)
+            * basis.MSplineEval(5, bounds=(-1e3, 1e3)),
             6,
         ),
     ],
@@ -190,13 +207,13 @@ def test_sklearn_transformer_pipeline_pynapple(
     X_nap = nap.TsdFrame(t=np.arange(X.shape[0]), d=X, time_support=ep)
     y_nap = nap.Tsd(t=np.arange(X.shape[0]), d=y, time_support=ep)
     bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_inputs))
-
+    x = X_nap[:, : bas.basis._n_inputs] ** 2
     # fit a pipeline & predict from pynapple
     pipe = pipeline.Pipeline([("eval", bas), ("fit", model)])
-    pipe.fit(X_nap[:, : bas.basis._n_inputs] ** 2, y_nap)
+    pipe.fit(x, y_nap)
 
     # get rate
-    rate = pipe.predict(X_nap[:, : bas.basis._n_inputs] ** 2)
+    rate = pipe.predict(x)
     # check rate is Tsd with same time info
     assert isinstance(rate, nap.Tsd)
     assert np.all(rate.t == X_nap.t)
@@ -272,7 +289,9 @@ def test_cross_validate_multiplicative_basis_in_pipe_with_label(
     poissonGLM_model_instantiation, mock_glm_fit
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
-    bas = basis.RaisedCosineLinearEval(4, label="x") * basis.MSplineEval(5, label="y")
+    bas = basis.RaisedCosineLinearEval(4, bounds=(0, 2), label="x") * basis.MSplineEval(
+        5, bounds=(0, 2), label="y"
+    )
     pipe = Pipeline(
         [("bas", bas.to_transformer().set_input_shape(1, 1)), ("fit", model)]
     )
@@ -290,7 +309,9 @@ def test_cross_validate_additive_basis_in_pipe_with_label(
     poissonGLM_model_instantiation, mock_glm_fit
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
-    bas = basis.RaisedCosineLinearEval(4, label="x") + basis.MSplineEval(5, label="y")
+    bas = basis.RaisedCosineLinearEval(4, bounds=(0, 2), label="x") + basis.MSplineEval(
+        5, bounds=(0, 2), label="y"
+    )
     pipe = Pipeline(
         [("bas", bas.to_transformer().set_input_shape(1, 1)), ("fit", model)]
     )

@@ -4,7 +4,6 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.18.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -16,6 +15,9 @@ kernelspec:
 
 %matplotlib inline
 import warnings
+import jax
+
+jax.config.update("jax_enable_x64", True)
 
 # Ignore the first specific warning
 warnings.filterwarnings(
@@ -353,10 +355,7 @@ print(X)
 We can now use the Poisson GLM from NeMoS to learn the model.
 
 ```{code-cell} ipython3
-glm = nmo.glm.GLM(
-    solver_kwargs=dict(tol=10**-12),
-    solver_name="LBFGS"
-)
+glm = nmo.glm.GLM()
 
 glm.fit(X, count)
 ```

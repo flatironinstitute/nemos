@@ -7,12 +7,15 @@ from functools import partial
 from pathlib import Path
 from unittest.mock import patch
 
+import jax
 import jax.numpy
 import numpy as np
 import pynapple as nap
 import pytest
 
+import nemos
 import nemos._inspect_utils as inspect_utils
+import nemos.basis._basis_mixin as _basis_mixin
 import nemos.basis.basis as basis
 import nemos.convolve as convolve
 from conftest import (
@@ -20,7 +23,10 @@ from conftest import (
     BasisFuncsTesting,
     CombinedBasis,
     SizeTerminal,
+    _BASIS_BEHAVIOUR_MIXINS,
+    atomic_basis_superclass_pairs,
     custom_basis,
+    is_conv_basis,
     is_eval_basis,
     list_all_basis_classes,
     list_all_real_basis_classes,
@@ -39,7 +45,12 @@ from nemos.basis._basis import (
     MultiplicativeBasis,
     add_docstring,
 )
-from nemos.basis._basis_mixin import AtomicBasisMixin, EvalBasisMixin
+from nemos.basis._basis_mixin import (
+    AtomicBasisMixin,
+    BoundedEvalBasisMixin,
+    ConvBasisMixin,
+    EvalBasisMixin,
+)
 from nemos.basis._composition_utils import generate_basis_label_pair, set_input_shape
 from nemos.basis._decaying_exponential import OrthExponentialBasis
 from nemos.basis._fourier_basis import FourierBasis
@@ -48,19 +59,233 @@ from nemos.basis._raised_cosine_basis import (
     RaisedCosineBasisLinear,
     RaisedCosineBasisLog,
 )
-from nemos.basis._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
+from nemos.basis._spline_basis import (
+    BSplineBasis,
+    CyclicBSplineBasis,
+    MSplineBasis,
+    mspline,
+)
 from nemos.basis._zero_basis import ZeroBasis
 from nemos.utils import pynapple_concatenate_numpy
 
 
-class EvalBasis2D(EvalBasisMixin, AtomicBasisMixin, Basis):
+# Exported but not discovered: ``TransformerBasis`` wraps a basis for sklearn, it is not one.
+_PUBLIC_NOT_DISCOVERED = {"TransformerBasis"}
+
+# Mixins in _basis_mixin.py that do not give a basis its evaluation behaviour.
+_NON_BEHAVIOUR_MIXINS = {
+    "BasisMixin",  # shared base for all of them
+    "AtomicBasisMixin",  # atomic vs composite, orthogonal to how the input is mapped
+    "BoundedEvalBasisMixin",  # an EvalBasisMixin that also carries bounds
+    "BasisTransformerMixin",  # supplies to_transformer for the sklearn API
+}
+
+
+@pytest.mark.metatest
+def test_behaviour_mixins_match_the_mixin_module():
+    """``_BASIS_BEHAVIOUR_MIXINS`` drives basis discovery, so it must track its module.
+
+    Discovery finds a basis by combining ``Basis`` with one of those mixins. A new behaviour
+    mixin left out of the tuple makes every basis carrying it invisible, and hence absent from
+    every parametrization built on ``list_all_basis_classes``.
+
+    Both differences are asserted. The forward one pins the mixins in the module that are
+    deliberately not behaviour, so a genuinely new one shows up as an undeclared name rather
+    than being silently ignored. The reverse one must be empty: a behaviour mixin defined
+    outside ``_basis_mixin.py`` would escape this check entirely.
+    """
+    defined = {
+        name
+        for name, obj in inspect.getmembers(_basis_mixin, inspect.isclass)
+        if obj.__module__ == _basis_mixin.__name__
+    }
+    behaviour = {cls.__name__ for cls in _BASIS_BEHAVIOUR_MIXINS}
+
+    undeclared = defined - behaviour - _NON_BEHAVIOUR_MIXINS
+    assert not undeclared, (
+        "mixins in _basis_mixin.py that are neither a declared behaviour mixin nor declared "
+        "non-behaviour. If one of these gives a basis its evaluation behaviour, add it to "
+        "_BASIS_BEHAVIOUR_MIXINS in conftest, otherwise to _NON_BEHAVIOUR_MIXINS here: "
+        f"{sorted(undeclared)}"
+    )
+    stale = _NON_BEHAVIOUR_MIXINS - defined
+    assert not stale, f"declared non-behaviour but no longer in the module: {sorted(stale)}"
+
+    assert not (behaviour - defined), (
+        "behaviour mixins defined outside nemos/basis/_basis_mixin.py, so this guard cannot "
+        f"see them. Basis mixins should live in that module: {sorted(behaviour - defined)}"
+    )
+
+
+@pytest.mark.metatest
+def test_list_all_basis_classes_matches_the_public_api():
+    """``list_all_basis_classes`` must account for everything ``nemos.basis`` exports.
+
+    Nearly every parametrization in this file derives from that helper, so discovery failing
+    to find a basis silently drops it from all of them. Discovery works by combining ``Basis``
+    with one of the behaviour mixins, which is exactly what can go wrong: a basis that does
+    not follow the mixin convention, or a **new** mixin (a hypothetical ``ConvNDMixin``) that
+    ``_discover_basis_classes`` does not know about, would be exported and yet invisible here.
+
+    The comparison is a raw name diff in both directions against a declared expectation,
+    rather than a filtered subset check. Filtering ``__all__`` down to concrete ``Basis``
+    subclasses first would swallow precisely the case worth catching.
+    """
+    public = set(nemos.basis.__all__)
+    discovered = {cls.__name__ for cls in list_all_basis_classes()}
+
+    assert public - discovered == _PUBLIC_NOT_DISCOVERED, (
+        "the difference between nemos.basis.__all__ and what list_all_basis_classes finds "
+        "has changed. Exported but undiscovered means the basis is missing from every "
+        "parametrization built on the helper -- usually a mixin that is not carried, or a new "
+        f"behaviour mixin discovery has not been taught about: "
+        f"{sorted(public - discovered - _PUBLIC_NOT_DISCOVERED)}"
+    )
+    assert not (discovered - public), (
+        "discovered as a basis but not exported from nemos.basis, so it is tested but "
+        f"unreachable for users: {sorted(discovered - public)}"
+    )
+
+
+# Every basis is either covered by a derived parametrization or declared below with a reason.
+
+# Bases with no implementation superclass, hence outside every public-vs-superclass test.
+_NO_IMPLEMENTATION_SUPERCLASS = {
+    # evaluates categorical input directly; shares no maths with an Eval/Conv sibling
+    "Category",
+    # composites combine two bases rather than implementing an evaluation of their own
+    "AdditiveBasis",
+    "MultiplicativeBasis",
+    # wraps a user-supplied callable and is not a Basis subclass at all
+    "CustomBasis",
+}
+
+# Bases that are not atomic, hence outside every atomic-only parametrization.
+_NON_ATOMIC_BASIS = {"AdditiveBasis", "MultiplicativeBasis", "CustomBasis"}
+
+
+@pytest.mark.metatest
+def test_every_basis_is_paired_with_a_superclass_or_declared():
+    """``list_all_basis_classes`` is the source of truth; every basis is paired or declared.
+
+    The tests comparing a public basis against the base implementing its maths derive from
+    ``atomic_basis_superclass_pairs``, which silently omits anything with no such base. This
+    turns that silence into a failure: a new basis either gets a superclass and joins those
+    tests, or is named in ``_NO_IMPLEMENTATION_SUPERCLASS`` with a reason.
+
+    Asserted against the full concrete list rather than against the pair helper itself, which
+    is built from the same expression and so could never disagree.
+    """
+    all_basis = {cls.__name__ for cls in list_all_basis_classes()}
+    paired = {cls.__name__ for cls, _ in atomic_basis_superclass_pairs()}
+
+    undeclared = all_basis - paired - _NO_IMPLEMENTATION_SUPERCLASS
+    assert not undeclared, (
+        "bases with no implementation superclass and no declaration, so excluded from every "
+        "public-vs-superclass comparison without saying so. Give them a superclass or add "
+        f"them to _NO_IMPLEMENTATION_SUPERCLASS with a reason: {sorted(undeclared)}"
+    )
+    stale = _NO_IMPLEMENTATION_SUPERCLASS & paired
+    assert not stale, (
+        "declared as having no implementation superclass but now paired with one, so the "
+        f"declaration is stale and hides real coverage: {sorted(stale)}"
+    )
+    gone = _NO_IMPLEMENTATION_SUPERCLASS - all_basis
+    assert not gone, f"declared but no such basis exists: {sorted(gone)}"
+
+
+@pytest.mark.metatest
+def test_every_basis_is_atomic_or_declared():
+    """Same partition for ``AtomicBasisMixin``, which gates the atomic-only parametrizations.
+
+    A basis that forgets the mixin would drop out of them, and a new composite would need to
+    be recognised as such rather than assumed atomic.
+    """
+    all_basis = {cls.__name__ for cls in list_all_basis_classes()}
+    atomic = {
+        cls.__name__
+        for cls in list_all_basis_classes()
+        if issubclass(cls, AtomicBasisMixin)
+    }
+
+    undeclared = all_basis - atomic - _NON_ATOMIC_BASIS
+    assert not undeclared, (
+        "bases carrying no AtomicBasisMixin and not declared non-atomic, so excluded from "
+        f"every atomic parametrization without saying so: {sorted(undeclared)}"
+    )
+    stale = _NON_ATOMIC_BASIS & atomic
+    assert not stale, (
+        f"declared non-atomic but now carrying AtomicBasisMixin: {sorted(stale)}"
+    )
+    gone = _NON_ATOMIC_BASIS - all_basis
+    assert not gone, f"declared but no such basis exists: {sorted(gone)}"
+
+
+@pytest.mark.metatest
+def test_eval_and_conv_filters_partition_the_basis_list():
+    """``list_all_basis_classes("Eval")`` and ``("Conv")`` must partition the unfiltered list.
+
+    Those two filtered lists drive the Eval-only and Conv-only parametrizations, so a
+    misclassification moves a basis into the wrong contract or out of both. The unfiltered
+    list is guarded against the public API elsewhere; this guards the filters applied to it.
+
+    Stated directly rather than left as a consequence of the atomic and mixin guards, because
+    those two together do not cover the non-atomic case: a composite that acquired
+    ``EvalBasisMixin`` would silently join every Eval parametrization, and nothing else here
+    would notice.
+    """
+    all_basis = set(list_all_basis_classes())
+    eval_basis = set(list_all_basis_classes("Eval"))
+    conv_basis = set(list_all_basis_classes("Conv"))
+
+    assert not (eval_basis & conv_basis), (
+        "classified as both Eval and Conv, so tested under both contracts: "
+        f"{sorted(cls.__name__ for cls in eval_basis & conv_basis)}"
+    )
+    unclassified = all_basis - eval_basis - conv_basis
+    assert {cls.__name__ for cls in unclassified} == _NON_ATOMIC_BASIS, (
+        "the set of bases that are neither Eval nor Conv has changed. Anything here is "
+        "excluded from both filtered parametrizations; anything newly absent has been "
+        "pulled into one of them. Composites and CustomBasis are the only expected members: "
+        f"{sorted(cls.__name__ for cls in unclassified)}"
+    )
+
+
+@pytest.mark.metatest
+def test_eval_conv_mixins_agree_with_the_name_convention():
+    """``is_eval_basis`` / ``is_conv_basis`` split the public bases into the ``Eval`` and
+    ``Conv`` parametrizations, so a misclassified basis is tested under the wrong contract.
+
+    Both predicates accept either the mixin or the name suffix, which is deliberate but only
+    safe while the two agree. This asserts they do, for every public basis: a class carrying
+    ``EvalBasisMixin`` but named ``...Conv`` (or the reverse) is a naming bug worth failing
+    on rather than silently resolving through whichever check runs first.
+    """
+    for cls in list_all_basis_classes():
+        by_mixin_eval = issubclass(cls, EvalBasisMixin)
+        by_mixin_conv = issubclass(cls, ConvBasisMixin)
+        assert not (
+            by_mixin_eval and by_mixin_conv
+        ), f"{cls.__name__} carries both EvalBasisMixin and ConvBasisMixin"
+        if cls.__name__.endswith("Eval"):
+            assert by_mixin_eval, f"{cls.__name__} is named Eval but lacks EvalBasisMixin"
+        if cls.__name__.endswith("Conv"):
+            assert by_mixin_conv, f"{cls.__name__} is named Conv but lacks ConvBasisMixin"
+        # every atomic basis must land in exactly one of the two parametrizations
+        if issubclass(cls, AtomicBasisMixin):
+            assert is_eval_basis(cls) != is_conv_basis(
+                cls
+            ), f"{cls.__name__} is atomic but is neither exactly Eval nor exactly Conv"
+
+
+class EvalBasis2D(BoundedEvalBasisMixin, AtomicBasisMixin, Basis):
     """Eval basis 2D for test purposes."""
 
     def __init__(self, ndim, bounds=None, label=None):
         self._n_inputs = ndim
         Basis.__init__(self)
         AtomicBasisMixin.__init__(self, n_basis_funcs=5, label=label)
-        EvalBasisMixin.__init__(self, bounds=bounds)
+        BoundedEvalBasisMixin.__init__(self, bounds=bounds)
 
     def evaluate(self, *x):
         # example implementation
@@ -122,6 +347,48 @@ def extra_kwargs(cls, n_basis):
     elif "Fourier" in name:
         return dict(frequencies=(1, 1 + n_basis // 2))
     return {}
+
+
+# Samples for the jit tests: a clean grid, and one carrying a NaN and points
+# outside the bounds the tests set, which take the fill-value branch.
+JIT_INPUTS = {
+    "clean": np.linspace(0, 1, 20),
+    "nan-and-out-of-bounds": np.concatenate(
+        ([np.nan, -0.5], np.linspace(0, 1, 17), [1.5])
+    ),
+}
+
+
+def assert_jit_matches_eager(bas, *inputs):
+    """Check that tracing a basis does not change what it computes.
+
+    Both entry points are exercised: ``evaluate`` returns the basis functions,
+    ``compute_features`` the design matrix, and they reach the samples through
+    different code paths. NaNs must land in the same places, which
+    ``assert_allclose`` checks by default.
+    """
+    for method in ("evaluate", "compute_features"):
+        func = getattr(bas, method)
+        np.testing.assert_allclose(
+            np.asarray(jax.jit(func)(*inputs)),
+            np.asarray(func(*inputs)),
+            rtol=1e-8,
+            atol=1e-10,
+            err_msg=f"jit and eager ``{method}`` disagree for {bas}",
+        )
+
+
+def jit_composite_inputs(*bases, n_samples=20):
+    """One sample array per basis, integer coded for the discrete ones."""
+    grid = np.linspace(0, 1, n_samples)
+    return [
+        (
+            np.arange(n_samples) % bas.n_basis_funcs
+            if isinstance(bas, Category)
+            else grid
+        )
+        for bas in bases
+    ]
 
 
 def filter_attributes(obj, exclude_keys):
@@ -205,6 +472,7 @@ def create_atomic_basis_pairs(full_list):
     ]
 
 
+@pytest.mark.metatest
 def test_all_basis_are_tested() -> None:
     """Meta-test.
 
@@ -242,23 +510,7 @@ def test_all_basis_are_tested() -> None:
             f"The following classes are not tested: {[bas.__qualname__ for bas in all_bases.difference(tested_bases)]}"
         )
 
-    pytest_marks = getattr(TestSharedMethods, "pytestmark", [])
-
-    # Find the parametrize mark for TestSharedMethods
-    out = None
-    for mark in pytest_marks:
-        if mark.name == "parametrize":
-            # Return the arguments of the parametrize mark
-            out = mark.args[1]  # The second argument contains the list
-
-    if out is None:
-        raise ValueError("cannot fine parametrization.")
-
-    basis_tested_in_shared_methods = set(out)
-    all_one_dim_basis = set(
-        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis]
-    )
-    assert basis_tested_in_shared_methods == all_one_dim_basis
+    # Shared/Eval/Conv classes derive their parametrization; discovery itself is guarded above.
 
 
 @pytest.mark.parametrize(
@@ -330,65 +582,37 @@ def test_example_docstrings_add(
         assert f" {basis_name}" not in doc_components[1]
 
 
-@pytest.mark.parametrize(
-    "public_class, meth_super",
-    [
-        ("IdentityEval", "IdentityBasis"),
-        ("HistoryConv", "HistoryBasis"),
-        ("MSplineEval", "MSplineBasis"),
-        ("MSplineConv", "MSplineBasis"),
-        ("BSplineEval", "BSplineBasis"),
-        ("BSplineConv", "BSplineBasis"),
-        ("CyclicBSplineEval", "CyclicBSplineBasis"),
-        ("CyclicBSplineConv", "CyclicBSplineBasis"),
-        ("RaisedCosineLinearEval", "RaisedCosineBasisLinear"),
-        ("RaisedCosineLinearConv", "RaisedCosineBasisLinear"),
-        ("RaisedCosineLogEval", "RaisedCosineBasisLog"),
-        ("RaisedCosineLogConv", "RaisedCosineBasisLog"),
-        ("OrthExponentialEval", "OrthExponentialBasis"),
-        ("OrthExponentialConv", "OrthExponentialBasis"),
-        ("FourierEval", "FourierBasis"),
-    ],
-)
+# (public basis, base implementing its maths) for every atomic basis, derived from the MRO.
+_SUPERCLASS_PAIRS = [
+    pytest.param(cls, sup, id=f"{cls.__name__}-{sup.__name__}")
+    for cls, sup in atomic_basis_superclass_pairs()
+]
+
+# every atomic basis, including the ones with no implementation superclass
+_ATOMIC_BASIS = [
+    pytest.param(cls, id=cls.__name__)
+    for cls in list_all_basis_classes()
+    if issubclass(cls, AtomicBasisMixin)
+]
+
+
+@pytest.mark.parametrize("cls_pub, cls_sup", _SUPERCLASS_PAIRS)
 @pytest.mark.parametrize("method", ["evaluate", "split_by_feature", "evaluate_on_grid"])
-def test_docstrings_decorator_superclass(public_class, meth_super, method):
-    cls_pub = getattr(basis, public_class)
-    cls_sup = getattr(basis, meth_super)
+def test_docstrings_decorator_superclass(cls_pub, cls_sup, method):
     meth_pub = getattr(cls_pub, method)
     meth_super = getattr(cls_sup, method)
     assert meth_pub.__doc__.startswith(meth_super.__doc__)
 
 
-@pytest.mark.parametrize(
-    "public_class",
-    [
-        "IdentityEval",
-        "HistoryConv",
-        "MSplineEval",
-        "MSplineConv",
-        "BSplineEval",
-        "BSplineConv",
-        "CyclicBSplineEval",
-        "CyclicBSplineConv",
-        "RaisedCosineLinearEval",
-        "RaisedCosineLinearConv",
-        "RaisedCosineLogEval",
-        "RaisedCosineLogConv",
-        "OrthExponentialEval",
-        "OrthExponentialConv",
-        "FourierEval",
-        "Zero",
-    ],
-)
+@pytest.mark.parametrize("cls_pub", _ATOMIC_BASIS)
 @pytest.mark.parametrize(
     "method, mixin",
     [("set_input_shape", "AtomicBasisMixin"), ("compute_features", None)],
 )
-def test_docstrings_decorator_mixinclass(public_class, mixin, method):
-    cls_pub = getattr(basis, public_class)
+def test_docstrings_decorator_mixinclass(cls_pub, mixin, method):
     if mixin is None:
-        is_eval = public_class.endswith("Eval") or public_class == "Zero"
-        mixin = "EvalBasisMixin" if is_eval else "ConvBasisMixin"
+        # decided by the mixin the class carries, not by its name
+        mixin = "EvalBasisMixin" if is_eval_basis(cls_pub) else "ConvBasisMixin"
         mixin_meth = getattr(getattr(basis, mixin), "_" + method)
     else:
         mixin_meth = getattr(getattr(basis, mixin), method)
@@ -423,62 +647,26 @@ def test_add_docstring():
         CustomSubClass2()
 
 
-@pytest.mark.parametrize(
-    "basis_instance, super_class",
-    [
-        (basis.BSplineEval(10), BSplineBasis),
-        (basis.BSplineConv(10, window_size=11), BSplineBasis),
-        (basis.CyclicBSplineEval(10), CyclicBSplineBasis),
-        (basis.CyclicBSplineConv(10, window_size=11), CyclicBSplineBasis),
-        (basis.MSplineEval(10), MSplineBasis),
-        (basis.MSplineConv(10, window_size=11), MSplineBasis),
-        (basis.RaisedCosineLinearEval(10), RaisedCosineBasisLinear),
-        (basis.RaisedCosineLinearConv(10, window_size=11), RaisedCosineBasisLinear),
-        (basis.RaisedCosineLogEval(10), RaisedCosineBasisLog),
-        (basis.RaisedCosineLogConv(10, window_size=11), RaisedCosineBasisLog),
-        (basis.OrthExponentialEval(10, np.arange(1, 11)), OrthExponentialBasis),
-        (
-            basis.OrthExponentialConv(10, decay_rates=np.arange(1, 11), window_size=12),
-            OrthExponentialBasis,
-        ),
-        (basis.IdentityEval(), IdentityBasis),
-        (basis.HistoryConv(11), HistoryBasis),
-        (basis.FourierEval(11), FourierBasis),
-        (basis.Zero(), ZeroBasis),
-    ],
-)
-def test_expected_output_eval_on_grid(basis_instance, super_class):
+@pytest.mark.parametrize("cls_pub, super_class", _SUPERCLASS_PAIRS)
+def test_expected_output_eval_on_grid(
+    cls_pub, super_class, basis_class_specific_params
+):
+    basis_instance = CombinedBasis().instantiate_basis(
+        5, cls_pub, basis_class_specific_params, window_size=10
+    )
     x, y = super_class.evaluate_on_grid(basis_instance, 100)
     xx, yy = basis_instance.evaluate_on_grid(100)
     np.testing.assert_equal(xx, x)
     np.testing.assert_equal(np.asarray(yy), np.asarray(y))
 
 
-@pytest.mark.parametrize(
-    "basis_instance, super_class",
-    [
-        (basis.BSplineEval(10), BSplineBasis),
-        (basis.BSplineConv(10, window_size=11), BSplineBasis),
-        (basis.CyclicBSplineEval(10), CyclicBSplineBasis),
-        (basis.CyclicBSplineConv(10, window_size=11), CyclicBSplineBasis),
-        (basis.MSplineEval(10), MSplineBasis),
-        (basis.MSplineConv(10, window_size=11), MSplineBasis),
-        (basis.RaisedCosineLinearEval(10), RaisedCosineBasisLinear),
-        (basis.RaisedCosineLinearConv(10, window_size=11), RaisedCosineBasisLinear),
-        (basis.RaisedCosineLogEval(10), RaisedCosineBasisLog),
-        (basis.RaisedCosineLogConv(10, window_size=11), RaisedCosineBasisLog),
-        (basis.OrthExponentialEval(10, np.arange(1, 11)), OrthExponentialBasis),
-        (
-            basis.OrthExponentialConv(10, decay_rates=np.arange(1, 11), window_size=12),
-            OrthExponentialBasis,
-        ),
-        (basis.IdentityEval(), IdentityBasis),
-        (basis.HistoryConv(11), HistoryBasis),
-        (basis.FourierEval(10), FourierBasis),
-        (basis.Zero(), ZeroBasis),
-    ],
-)
-def test_expected_output_compute_features(basis_instance, super_class):
+@pytest.mark.parametrize("cls_pub, super_class", _SUPERCLASS_PAIRS)
+def test_expected_output_compute_features(
+    cls_pub, super_class, basis_class_specific_params
+):
+    basis_instance = CombinedBasis().instantiate_basis(
+        5, cls_pub, basis_class_specific_params, window_size=10
+    )
     x = super_class.compute_features(basis_instance, np.linspace(0, 1, 100))
     xx = basis_instance.compute_features(np.linspace(0, 1, 100))
     nans = np.isnan(x.sum(axis=1))
@@ -623,18 +811,7 @@ def test_composite_split_by_feature_multiply(input_shape):
     )
 
 
-@pytest.mark.parametrize(
-    "cls",
-    [
-        basis.RaisedCosineLogConv,
-        basis.RaisedCosineLinearConv,
-        basis.BSplineConv,
-        basis.CyclicBSplineConv,
-        basis.MSplineConv,
-        basis.OrthExponentialConv,
-        basis.HistoryConv,
-    ],
-)
+@pytest.mark.parametrize("cls", list_all_basis_classes("Conv"))
 class TestConvBasis:
     @pytest.mark.parametrize("n_basis", [5, 6])
     @pytest.mark.parametrize("ws", [10, 20])
@@ -972,22 +1149,7 @@ class TestConvBasis:
             bas.set_params(bounds=(1, 2))
 
 
-@pytest.mark.parametrize(
-    "cls",
-    [
-        CustomBasis,
-        basis.RaisedCosineLogEval,
-        basis.RaisedCosineLinearEval,
-        basis.BSplineEval,
-        basis.CyclicBSplineEval,
-        basis.MSplineEval,
-        basis.OrthExponentialEval,
-        basis.IdentityEval,
-        basis.FourierEval,
-        basis.Zero,
-        Category,
-    ],
-)
+@pytest.mark.parametrize("cls", list_all_basis_classes("EvalLike"))
 class TestEvalBasis:
     @pytest.mark.parametrize("n_basis", [5, 6])
     @pytest.mark.parametrize("vmin, vmax", [(0, 1), (-1, 1)])
@@ -1404,15 +1566,12 @@ class TestEvalBasis:
     @pytest.mark.requires_x64
     def test_jit_compilation_with_bounds(self, cls):
         """Test that compute_features can be JIT compiled when bounds are set."""
-        # Skip bases that depend on un-jittable scipy functions
-        if cls in [
-            basis.BSplineEval,
-            basis.CyclicBSplineEval,
-            basis.OrthExponentialEval,
-        ]:
+        # The orthogonalization sizes its output by the numerical rank of the
+        # samples, a shape jax cannot know while tracing.
+        if cls is basis.OrthExponentialEval:
             pytest.skip(
                 f"Skipping test_jit_compilation_with_bounds for {cls.__name__}, "
-                "which depends on un-jittable scipy functions."
+                "whose output width depends on the sample values."
             )
         # Skip Zero since it doesn't have bounds
         if cls in [basis.Zero, Category]:
@@ -1478,26 +1637,7 @@ def test_call_equivalent_in_conv(n_basis, cls):
 
 @pytest.mark.parametrize(
     "cls",
-    [
-        CustomBasis,
-        basis.RaisedCosineLogEval,
-        basis.RaisedCosineLogConv,
-        basis.RaisedCosineLinearEval,
-        basis.RaisedCosineLinearConv,
-        basis.BSplineEval,
-        basis.BSplineConv,
-        basis.CyclicBSplineEval,
-        basis.CyclicBSplineConv,
-        basis.MSplineEval,
-        basis.MSplineConv,
-        basis.OrthExponentialEval,
-        basis.OrthExponentialConv,
-        basis.IdentityEval,
-        basis.HistoryConv,
-        basis.FourierEval,
-        basis.Zero,
-        Category,
-    ],
+    list_all_basis_classes("NonComposite"),
 )
 class TestSharedMethods:
     @pytest.mark.parametrize(
@@ -2242,19 +2382,44 @@ class TestSharedMethods:
 class TestZeroBasis(BasisFuncsTesting):
     cls = {"eval": basis.Zero}
 
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize(
+        "inp",
+        [np.linspace(0, 1, 12), np.random.randn(12, 2), np.random.randn(12, 2, 3)],
+    )
+    def test_jit_matches_eager(self, inp):
+        """The empty output is produced identically under tracing."""
+        assert_jit_matches_eager(basis.Zero(), inp)
+
     def test_n_basis_not_settable(self):
         bas = basis.Zero()
         with pytest.raises(AttributeError):
             bas.n_basis_funcs = 11
 
-    def test_bounds_not_settable(self):
+    def test_has_no_bounds(self):
         bas = basis.Zero()
-        with pytest.raises(AttributeError):
-            bas.bounds = (0, 1)
+        assert not hasattr(bas, "bounds")
 
 
 class TestIdentityBasis(BasisFuncsTesting):
     cls = {"eval": IdentityEval}
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {},
+            {"bounds": (0.2, 0.8)},
+            {"bounds": (0.2, 0.8), "fill_value": 0.0},
+            {"bounds": (0.2, 0.8), "fill_value": -111.0},
+        ],
+    )
+    @pytest.mark.parametrize(
+        "inp", [np.linspace(0, 1, 12), np.linspace(0, 1, 12).reshape(6, 2)]
+    )
+    def test_jit_matches_eager(self, kwargs, inp):
+        """Bounds and fill value behave the same way under tracing."""
+        assert_jit_matches_eager(IdentityEval(**kwargs), inp)
 
     def test_n_basis_not_settable(self):
         bas = IdentityEval()
@@ -2296,6 +2461,18 @@ class TestIdentityBasis(BasisFuncsTesting):
 
 class TestHistoryBasis(BasisFuncsTesting):
     cls = {"conv": HistoryConv}
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("window_size", [1, 2, 7])
+    @pytest.mark.parametrize("inp_label", list(JIT_INPUTS))
+    def test_jit_matches_eager(self, window_size, inp_label):
+        """The shift-and-pad convolution traces to the same result.
+
+        Only 1D samples: ``HistoryBasis.evaluate`` rejects anything else.
+        """
+        assert_jit_matches_eager(
+            HistoryConv(window_size=window_size), JIT_INPUTS[inp_label]
+        )
 
     def test_n_basis_not_settable(self):
         bas = HistoryConv(window_size=8)
@@ -2354,6 +2531,27 @@ class TestHistoryBasis(BasisFuncsTesting):
 
 class TestRaisedCosineLogBasis(BasisFuncsTesting):
     cls = {"eval": basis.RaisedCosineLogEval, "conv": basis.RaisedCosineLogConv}
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("mode", ["eval", "conv"])
+    @pytest.mark.parametrize("inp_label", list(JIT_INPUTS))
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {},
+            {"width": 3.0},
+            {"time_scaling": 1.0},
+            {"enforce_decay_to_zero": False},
+            {"bounds": (0.2, 0.8)},
+            {"bounds": (0.2, 0.8), "fill_value": 0.0},
+        ],
+    )
+    def test_jit_matches_eager(self, mode, inp_label, kwargs):
+        """Each parameter branch of the log-spaced cosines survives tracing."""
+        bas = instantiate_atomic_basis(
+            self.cls[mode], n_basis_funcs=5, window_size=6, **kwargs
+        )
+        assert_jit_matches_eager(bas, JIT_INPUTS[inp_label])
 
     @pytest.mark.parametrize("width", [1.5, 2, 2.5])
     def test_decay_to_zero_basis_number_match(self, width):
@@ -2492,6 +2690,25 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
 class TestRaisedCosineLinearBasis(BasisFuncsTesting):
     cls = {"eval": basis.RaisedCosineLinearEval, "conv": basis.RaisedCosineLinearConv}
 
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("mode", ["eval", "conv"])
+    @pytest.mark.parametrize("inp_label", list(JIT_INPUTS))
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {},
+            {"width": 3.0},
+            {"bounds": (0.2, 0.8)},
+            {"bounds": (0.2, 0.8), "fill_value": 0.0},
+        ],
+    )
+    def test_jit_matches_eager(self, mode, inp_label, kwargs):
+        """Each parameter branch of the linear cosines survives tracing."""
+        bas = instantiate_atomic_basis(
+            self.cls[mode], n_basis_funcs=5, window_size=6, **kwargs
+        )
+        assert_jit_matches_eager(bas, JIT_INPUTS[inp_label])
+
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
     @pytest.mark.parametrize(
         "mode, kwargs", [("eval", {}), ("conv", {"window_size": 5})]
@@ -2565,6 +2782,42 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
 
 class TestMSplineBasis(BasisFuncsTesting):
     cls = {"eval": basis.MSplineEval, "conv": basis.MSplineConv}
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("mode", ["eval", "conv"])
+    @pytest.mark.parametrize("inp_label", list(JIT_INPUTS))
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {},
+            {"order": 1},
+            {"order": 3},
+            {"order": 5},
+            {"bounds": (0.2, 0.8)},
+            {"bounds": (0.2, 0.8), "fill_value": 0.0},
+        ],
+    )
+    def test_jit_matches_eager(self, mode, inp_label, kwargs):
+        """The recursive M-spline evaluation survives tracing at every order."""
+        bas = instantiate_atomic_basis(
+            self.cls[mode], n_basis_funcs=5, window_size=6, **kwargs
+        )
+        assert_jit_matches_eager(bas, JIT_INPUTS[inp_label])
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("order", [1, 2, 3, 5])
+    @pytest.mark.parametrize("n_basis_funcs", [5, 9])
+    def test_shared_cache_leaves_values_unchanged(self, order, n_basis_funcs):
+        """Reusing sub-splines across elements is an optimization, not a change."""
+        bas = self.cls["eval"](n_basis_funcs, order=order)
+        knots = bas._generate_knots()
+        sample_pts = np.linspace(0, 1, 30)
+        shared = {}
+        for i in range(n_basis_funcs):
+            np.testing.assert_array_equal(
+                np.asarray(mspline(sample_pts, order, i, knots, shared)),
+                np.asarray(mspline(sample_pts, order, i, knots)),
+            )
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
     @pytest.mark.parametrize("order", [-1, 0, 1, 2, 3, 4, 5])
@@ -2690,6 +2943,26 @@ class TestMSplineBasis(BasisFuncsTesting):
 class TestOrthExponentialBasis(BasisFuncsTesting):
     cls = {"eval": basis.OrthExponentialEval, "conv": basis.OrthExponentialConv}
 
+    @pytest.mark.requires_x64
+    @pytest.mark.xfail(
+        strict=True,
+        reason="``evaluate`` orthogonalizes with ``scipy.linalg.orth`` and takes the "
+        "width of its output from ``np.linalg.matrix_rank``, so the output shape "
+        "depends on the sample values and cannot be traced. Drop this marker once "
+        "the orthogonalization is ported to jax.",
+    )
+    @pytest.mark.parametrize("mode", ["eval", "conv"])
+    @pytest.mark.parametrize("inp_label", list(JIT_INPUTS))
+    def test_jit_matches_eager(self, mode, inp_label):
+        """Records that the orthogonalized exponentials are not traceable yet."""
+        bas = instantiate_atomic_basis(
+            self.cls[mode],
+            n_basis_funcs=5,
+            window_size=8,
+            decay_rates=np.arange(1, 6),
+        )
+        assert_jit_matches_eager(bas, JIT_INPUTS[inp_label])
+
     def test_check_window_size_after_init(self):
         decay_rates = np.asarray(np.arange(1, 5 + 1), dtype=float)
         expectation = pytest.raises(
@@ -2797,6 +3070,27 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
 class TestBSplineBasis(BasisFuncsTesting):
     cls = {"eval": basis.BSplineEval, "conv": basis.BSplineConv}
 
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("mode", ["eval", "conv"])
+    @pytest.mark.parametrize("inp_label", list(JIT_INPUTS))
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {},
+            {"order": 2},
+            {"order": 3},
+            {"order": 5},
+            {"bounds": (0.2, 0.8)},
+            {"bounds": (0.2, 0.8), "fill_value": 0.0},
+        ],
+    )
+    def test_jit_matches_eager(self, mode, inp_label, kwargs):
+        """Tracing swaps ``splev`` for ``bspline_jax`` without changing the output."""
+        bas = instantiate_atomic_basis(
+            self.cls[mode], n_basis_funcs=6, window_size=8, **kwargs
+        )
+        assert_jit_matches_eager(bas, JIT_INPUTS[inp_label])
+
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
     @pytest.mark.parametrize("order", [1, 2, 3, 4, 5])
     @pytest.mark.parametrize(
@@ -2884,6 +3178,26 @@ class TestBSplineBasis(BasisFuncsTesting):
 
 class TestCyclicBSplineBasis(BasisFuncsTesting):
     cls = {"eval": basis.CyclicBSplineEval, "conv": basis.CyclicBSplineConv}
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("mode", ["eval", "conv"])
+    @pytest.mark.parametrize("inp_label", list(JIT_INPUTS))
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {},
+            {"order": 3},
+            {"order": 4},
+            {"bounds": (0.2, 0.8)},
+            {"bounds": (0.2, 0.8), "fill_value": 0.0},
+        ],
+    )
+    def test_jit_matches_eager(self, mode, inp_label, kwargs):
+        """The wrap-around branch is masked rather than indexed when traced."""
+        bas = instantiate_atomic_basis(
+            self.cls[mode], n_basis_funcs=6, window_size=8, **kwargs
+        )
+        assert_jit_matches_eager(bas, JIT_INPUTS[inp_label])
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
     @pytest.mark.parametrize("order", [2, 3, 4, 5])
@@ -2991,6 +3305,67 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
 
 class TestFourierBasis(BasisFuncsTesting):
     cls = {"eval": FourierEval}
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("inp_label", list(JIT_INPUTS))
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            # frequency specifications, one per branch of the setter
+            {"frequencies": 3},
+            {"frequencies": (1, 4)},
+            {"frequencies": np.array([0, 2, 5])},
+            {"frequencies": [np.array([1, 3])]},
+            # frequency masks, one per branch of the setter
+            {"frequencies": 3, "frequency_mask": "all"},
+            {"frequencies": 3, "frequency_mask": None},
+            # one entry per combination left by the default "no-intercept" drop
+            {"frequencies": 3, "frequency_mask": np.array([1, 0])},
+            {"frequencies": 3, "frequency_mask": lambda f: f > 1},
+            # the period is read off the samples when bounds are left unset
+            {"frequencies": 3, "bounds": None},
+        ],
+    )
+    def test_jit_matches_eager(self, inp_label, kwargs):
+        """Each frequency and mask specification survives tracing."""
+        kwargs = {"bounds": (0.2, 0.8), **kwargs}
+        assert_jit_matches_eager(FourierEval(**kwargs), JIT_INPUTS[inp_label])
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("ndim", [2, 3])
+    @pytest.mark.parametrize("traced", [(True, False), (False, True), (True, True)])
+    def test_jit_matches_eager_mixed_traced_inputs(self, ndim, traced):
+        """A concrete first input must not send the traced ones down the numpy path.
+
+        ``FourierEval`` is the only atomic basis taking more than one input, so
+        it is the only one that can be handed a mix of traced and concrete
+        samples.
+        """
+        traced = traced + (True,) * (ndim - len(traced))
+        inputs = [np.linspace(0.1, 0.9, 15) + i / 10 for i in range(ndim)]
+        bas = FourierEval(2, ndim=ndim, bounds=(0, 1))
+
+        def call(*args):
+            merged = iter(args)
+            return bas.compute_features(
+                *(next(merged) if t else inp for t, inp in zip(traced, inputs))
+            )
+
+        jitted = jax.jit(call)(*(inp for t, inp in zip(traced, inputs) if t))
+        np.testing.assert_allclose(
+            np.asarray(jitted), np.asarray(bas.compute_features(*inputs))
+        )
+
+    @pytest.mark.parametrize("ndim", [1, 2, 3])
+    def test_tuple_frequencies_broadcast_over_dimensions(self, ndim):
+        """A single ``(low, high)`` range applies to every input dimension."""
+        from_tuple = FourierEval((0, 3), ndim=ndim)
+        from_int = FourierEval(3, ndim=ndim)
+        assert len(from_tuple.frequencies) == ndim
+        np.testing.assert_array_equal(
+            from_tuple.masked_frequencies, from_int.masked_frequencies
+        )
+        assert from_tuple.n_basis_funcs == from_int.n_basis_funcs
 
     @pytest.mark.parametrize("mode", ["eval"])
     @pytest.mark.parametrize(
@@ -3754,16 +4129,57 @@ class TestFourierBasis(BasisFuncsTesting):
         np.testing.assert_allclose(out1, out2, rtol=1e-5)
 
 
+# Pairs for the composite jit tests, one per path through the combination code:
+# eval with eval, eval with conv, the scipy-backed splines, the complex Fourier
+# basis, the empty basis and the discrete one. ``OrthExponentialEval`` is absent
+# because it cannot be traced, see ``TestOrthExponentialBasis``.
+JIT_BASIS_PAIRS = [
+    (basis.MSplineEval, basis.RaisedCosineLinearEval),
+    (basis.MSplineEval, basis.RaisedCosineLinearConv),
+    (basis.RaisedCosineLogConv, basis.MSplineConv),
+    (basis.BSplineEval, basis.CyclicBSplineEval),
+    (FourierEval, basis.MSplineEval),
+    (basis.Zero, basis.MSplineEval),
+    (Category, basis.MSplineEval),
+    (IdentityEval, HistoryConv),
+]
+
+
 class TestAdditiveBasis(CombinedBasis):
     cls = {"eval": AdditiveBasis, "conv": AdditiveBasis}
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("basis_a, basis_b", JIT_BASIS_PAIRS)
+    def test_jit_matches_eager(self, basis_a, basis_b, basis_class_specific_params):
+        """Concatenating the two sets of features traces to the same matrix."""
+        bas_a = self.instantiate_basis(
+            5, basis_a, basis_class_specific_params, window_size=8
+        )
+        bas_b = self.instantiate_basis(
+            5, basis_b, basis_class_specific_params, window_size=8
+        )
+        inputs = jit_composite_inputs(bas_a, bas_b)
+        assert_jit_matches_eager(bas_a + bas_b, *inputs)
+
+    @pytest.mark.requires_x64
+    def test_jit_matches_eager_nested(self, basis_class_specific_params):
+        """Nesting a multiplicative basis inside an additive one still traces."""
+        bas_a, bas_b, bas_c = (
+            self.instantiate_basis(5, cls, basis_class_specific_params, window_size=8)
+            for cls in (
+                basis.MSplineEval,
+                basis.RaisedCosineLinearEval,
+                basis.BSplineEval,
+            )
+        )
+        bas = bas_a + (bas_b * bas_c)
+        assert_jit_matches_eager(bas, *jit_composite_inputs(bas_a, bas_b, bas_c))
 
     @pytest.mark.parametrize("shape", [(0, 1, 2), (1, 0, 2), (1, 2, 0), (0,), (0, 0)])
     @pytest.mark.parametrize(
         "basis_a, basis_b",
         create_atomic_basis_pairs(
-            list_all_basis_classes("Eval")
-            + list_all_basis_classes("Conv")
-            + [CustomBasis]
+            list_all_basis_classes("NonComposite")
         ),
     )
     def test_empty_inputs_compute_features(
@@ -3794,9 +4210,7 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize(
         "basis_a, basis_b",
         create_atomic_basis_pairs(
-            list_all_basis_classes("Eval")
-            + list_all_basis_classes("Conv")
-            + [CustomBasis]
+            list_all_basis_classes("NonComposite")
         ),
     )
     def test_empty_inputs_evaluate(
@@ -3825,7 +4239,7 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "bas_cls",
-        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
+        list_all_basis_classes("NonComposite"),
     )
     def test_mul_by_int_basis_with_label(self, bas_cls, basis_class_specific_params):
         basis_obj = self.instantiate_basis(
@@ -3838,7 +4252,7 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "basis_a",
-        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
+        list_all_basis_classes("NonComposite"),
     )
     def test_add_label_using_class_name(self, basis_a, basis_class_specific_params):
         basis_a_obj = self.instantiate_basis(
@@ -3949,9 +4363,7 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize(
         "basis_a, basis_b",
         create_atomic_basis_pairs(
-            list_all_basis_classes("Eval")
-            + list_all_basis_classes("Conv")
-            + [CustomBasis]
+            list_all_basis_classes("NonComposite")
         ),
     )
     def test_input_shape_product_init(
@@ -3978,7 +4390,7 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "bas",
-        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
+        list_all_basis_classes("NonComposite"),
     )
     def test_rmul_lmul(self, bas, basis_class_specific_params):
         basis_obj = self.instantiate_basis(
@@ -3994,9 +4406,7 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize(
         "basis_a, basis_b",
         create_atomic_basis_pairs(
-            list_all_basis_classes("Eval")
-            + list_all_basis_classes("Conv")
-            + [CustomBasis]
+            list_all_basis_classes("NonComposite")
         ),
     )
     def test_provide_label_at_init(self, basis_a, basis_b, basis_class_specific_params):
@@ -4866,9 +5276,7 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize(
         "basis_a, basis_b",
         create_atomic_basis_pairs(
-            list_all_basis_classes("Eval")
-            + list_all_basis_classes("Conv")
-            + [CustomBasis]
+            list_all_basis_classes("NonComposite")
         ),
     )
     @pytest.mark.parametrize("shape_a", [1, (), np.ones(3)])
@@ -4904,9 +5312,7 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize(
         "basis_a, basis_b",
         create_atomic_basis_pairs(
-            list_all_basis_classes("Eval")
-            + list_all_basis_classes("Conv")
-            + [CustomBasis]
+            list_all_basis_classes("NonComposite")
         ),
     )
     @pytest.mark.parametrize("shape_a", [2, (2,), np.ones((3, 2))])
@@ -4942,9 +5348,7 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize(
         "basis_a, basis_b",
         create_atomic_basis_pairs(
-            list_all_basis_classes("Eval")
-            + list_all_basis_classes("Conv")
-            + [CustomBasis]
+            list_all_basis_classes("NonComposite")
         ),
     )
     @pytest.mark.parametrize("shape_a", [(2, 2), np.ones((3, 2, 2))])
@@ -4998,9 +5402,7 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize(
         "basis_a, basis_b",
         create_atomic_basis_pairs(
-            list_all_basis_classes("Eval")
-            + list_all_basis_classes("Conv")
-            + [CustomBasis]
+            list_all_basis_classes("NonComposite")
         ),
     )
     def test_set_input_value_types(
@@ -5019,9 +5421,7 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize(
         "basis_a, basis_b",
         create_atomic_basis_pairs(
-            list_all_basis_classes("Eval")
-            + list_all_basis_classes("Conv")
-            + [CustomBasis]
+            list_all_basis_classes("NonComposite")
         ),
     )
     def test_deep_copy_basis(self, basis_a, basis_b, basis_class_specific_params):
@@ -5071,9 +5471,7 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize(
         "basis_a, basis_b",
         create_atomic_basis_pairs(
-            list_all_basis_classes("Eval")
-            + list_all_basis_classes("Conv")
-            + [CustomBasis]
+            list_all_basis_classes("NonComposite")
         ),
     )
     def test_compute_n_basis_runtime(
@@ -5198,9 +5596,7 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "real_cls",
-        list_all_real_basis_classes("Eval")
-        + list_all_real_basis_classes("Conv")
-        + [CustomBasis],
+        list_all_real_basis_classes("NonComposite"),
     )
     @pytest.mark.parametrize("complex_cls", [basis.FourierEval])
     def test_multiply_complex(self, real_cls, complex_cls, basis_class_specific_params):
@@ -5231,9 +5627,7 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize(
         "basis_a, basis_b",
         create_atomic_basis_pairs(
-            list_all_basis_classes("Eval")
-            + list_all_basis_classes("Conv")
-            + [CustomBasis]
+            list_all_basis_classes("NonComposite")
         ),
     )
     def test_bounds_property(self, basis_a, basis_b, basis_class_specific_params):
@@ -5391,13 +5785,37 @@ class TestAdditiveBasis(CombinedBasis):
 class TestMultiplicativeBasis(CombinedBasis):
     cls = {"eval": MultiplicativeBasis, "conv": MultiplicativeBasis}
 
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("basis_a, basis_b", JIT_BASIS_PAIRS)
+    def test_jit_matches_eager(self, basis_a, basis_b, basis_class_specific_params):
+        """The row-wise Kronecker product traces to the same matrix."""
+        bas_a = self.instantiate_basis(
+            5, basis_a, basis_class_specific_params, window_size=8
+        )
+        bas_b = self.instantiate_basis(
+            5, basis_b, basis_class_specific_params, window_size=8
+        )
+        assert_jit_matches_eager(bas_a * bas_b, *jit_composite_inputs(bas_a, bas_b))
+
+    @pytest.mark.requires_x64
+    def test_jit_matches_eager_nested(self, basis_class_specific_params):
+        """Nesting an additive basis inside a multiplicative one still traces."""
+        bas_a, bas_b, bas_c = (
+            self.instantiate_basis(5, cls, basis_class_specific_params, window_size=8)
+            for cls in (
+                basis.MSplineEval,
+                basis.RaisedCosineLinearEval,
+                basis.BSplineEval,
+            )
+        )
+        bas = (bas_a + bas_b) * bas_c
+        assert_jit_matches_eager(bas, *jit_composite_inputs(bas_a, bas_b, bas_c))
+
     @pytest.mark.parametrize("shape", [(0, 1, 2), (1, 0, 2), (1, 2, 0), (0,), (0, 0)])
     @pytest.mark.parametrize(
         "basis_a, basis_b",
         create_atomic_basis_pairs(
-            list_all_basis_classes("Eval")
-            + list_all_basis_classes("Conv")
-            + [CustomBasis]
+            list_all_basis_classes("NonComposite")
         ),
     )
     def test_empty_inputs_compute_features(
@@ -5432,9 +5850,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize(
         "basis_a, basis_b",
         create_atomic_basis_pairs(
-            list_all_basis_classes("Eval")
-            + list_all_basis_classes("Conv")
-            + [CustomBasis]
+            list_all_basis_classes("NonComposite")
         ),
     )
     def test_empty_inputs_evaluate(
@@ -5468,9 +5884,7 @@ class TestMultiplicativeBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "bas_cls",
-        list_all_real_basis_classes("Eval")
-        + list_all_real_basis_classes("Conv")
-        + [CustomBasis],
+        list_all_real_basis_classes("NonComposite"),
     )
     def test_pow_by_int_basis_with_label(self, bas_cls, basis_class_specific_params):
         basis_obj = self.instantiate_basis(
@@ -5483,9 +5897,7 @@ class TestMultiplicativeBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "basis_a",
-        list_all_real_basis_classes("Eval")
-        + list_all_real_basis_classes("Conv")
-        + [CustomBasis],
+        list_all_real_basis_classes("NonComposite"),
     )
     def test_add_label_using_class_name(self, basis_a, basis_class_specific_params):
         basis_a_obj = self.instantiate_basis(
@@ -5520,9 +5932,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize(
         "basis_a, basis_b",
         create_atomic_basis_pairs(
-            list_all_real_basis_classes("Eval")
-            + list_all_real_basis_classes("Conv")
-            + [CustomBasis]
+            list_all_real_basis_classes("NonComposite")
         ),
     )
     def test_input_shape_product_init(
@@ -6422,9 +6832,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize(
         "basis_a, basis_b",
         create_atomic_basis_pairs(
-            list_all_basis_classes("Eval")
-            + list_all_basis_classes("Conv")
-            + [CustomBasis]
+            list_all_basis_classes("NonComposite")
         ),
     )
     @pytest.mark.parametrize("shape", [1, (), np.ones(3)])
@@ -6456,9 +6864,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize(
         "basis_a, basis_b",
         create_atomic_basis_pairs(
-            list_all_basis_classes("Eval")
-            + list_all_basis_classes("Conv")
-            + [CustomBasis]
+            list_all_basis_classes("NonComposite")
         ),
     )
     @pytest.mark.parametrize("shape", [2, (2,), np.ones((3, 2))])
@@ -6490,9 +6896,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize(
         "basis_a, basis_b",
         create_atomic_basis_pairs(
-            list_all_basis_classes("Eval")
-            + list_all_basis_classes("Conv")
-            + [CustomBasis]
+            list_all_basis_classes("NonComposite")
         ),
     )
     @pytest.mark.parametrize("shape", [(2, 2), np.ones((3, 2, 2))])
@@ -6542,9 +6946,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize(
         "basis_a, basis_b",
         create_atomic_basis_pairs(
-            list_all_basis_classes("Eval")
-            + list_all_basis_classes("Conv")
-            + [CustomBasis]
+            list_all_basis_classes("NonComposite")
         ),
     )
     def test_set_input_value_types(
@@ -6563,9 +6965,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize(
         "basis_a, basis_b",
         create_atomic_basis_pairs(
-            list_all_basis_classes("Eval")
-            + list_all_basis_classes("Conv")
-            + [CustomBasis]
+            list_all_basis_classes("NonComposite")
         ),
     )
     def test_deep_copy_basis(self, basis_a, basis_b, basis_class_specific_params):
@@ -6601,9 +7001,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize(
         "basis_a, basis_b",
         create_atomic_basis_pairs(
-            list_all_basis_classes("Eval")
-            + list_all_basis_classes("Conv")
-            + [CustomBasis]
+            list_all_basis_classes("NonComposite")
         ),
     )
     def test_compute_n_basis_runtime(
@@ -6683,9 +7081,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     )
     @pytest.mark.parametrize(
         "bas",
-        list_all_real_basis_classes("Eval")
-        + list_all_real_basis_classes("Conv")
-        + [CustomBasis],
+        list_all_real_basis_classes("NonComposite"),
     )
     def test_vectorization_equivalence(self, bas, x_shape, basis_class_specific_params):
         """Test that vectorized computation equals explicit nested loops."""
@@ -6741,7 +7137,7 @@ class TestMultiplicativeBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "bas",
-        list_all_real_basis_classes("Eval") + [CustomBasis],
+        list_all_real_basis_classes("EvalLike"),
     )
     @pytest.mark.parametrize("x, y", [(np.random.randn(10, 2), np.random.randn(10, 2))])
     def test_eval_and_compute_features_equivalence(
@@ -6769,9 +7165,7 @@ class TestMultiplicativeBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "real_cls",
-        list_all_real_basis_classes("Eval")
-        + list_all_real_basis_classes("Conv")
-        + [CustomBasis],
+        list_all_real_basis_classes("NonComposite"),
     )
     @pytest.mark.parametrize("complex_cls", [basis.FourierEval])
     def test_multiply_complex(self, real_cls, complex_cls, basis_class_specific_params):
@@ -6828,9 +7222,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize(
         "basis_a, basis_b",
         create_atomic_basis_pairs(
-            list_all_real_basis_classes("Eval")
-            + list_all_real_basis_classes("Conv")
-            + [CustomBasis]
+            list_all_real_basis_classes("NonComposite")
         ),
     )
     def test_bounds_property(self, basis_a, basis_b, basis_class_specific_params):
@@ -7113,9 +7505,7 @@ def test_mul_of_basis_by_int(mul, basis_class, basis_class_specific_params):
 
 @pytest.mark.parametrize(
     "basis_class",
-    list_all_real_basis_classes("Eval")
-    + list_all_real_basis_classes("Conv")
-    + [CustomBasis],
+    list_all_real_basis_classes("NonComposite"),
 )
 def test_mul_of_basis_from_nested(basis_class, basis_class_specific_params):
     basis_obj = CombinedBasis.instantiate_basis(
@@ -7142,9 +7532,7 @@ def test_mul_of_basis_from_nested(basis_class, basis_class_specific_params):
 
 @pytest.mark.parametrize(
     "basis_class",
-    list_all_real_basis_classes("Eval")
-    + list_all_real_basis_classes("Conv")
-    + [CustomBasis],
+    list_all_real_basis_classes("NonComposite"),
 )
 def test_pow_of_basis_from_nested(basis_class, basis_class_specific_params):
     basis_obj = CombinedBasis.instantiate_basis(
@@ -8186,17 +8574,23 @@ def test_composite_basis_repr_wrapping():
         assert "    ...\n" in out
 
 
+@pytest.mark.metatest
 def test_basis_public_api_matches_subclasses():
-    import nemos as nmo
+    """Coverage guard: ``nemos.basis.__all__`` names exactly the exposed Basis subclasses.
 
+    Pairs with ``test_list_all_basis_classes_covers_the_public_api``, which closes the next
+    link in the chain: this one checks source classes against the public API, that one checks
+    the public API against the test helper driving the parametrizations. A basis exported
+    without a behaviour mixin passes here and fails there.
+    """
     # Public contract of the module
-    public = set(nmo.basis.__all__)
+    public = set(nemos.basis.__all__)
 
     # All Basis subclasses exposed through the namespace
     basis_subclasses = {
         name
-        for name, obj in inspect.getmembers(nmo.basis, inspect.isclass)
-        if issubclass(obj, nmo.basis._basis.Basis) and obj is not nmo.basis._basis.Basis
+        for name, obj in inspect.getmembers(nemos.basis, inspect.isclass)
+        if issubclass(obj, Basis) and obj is not Basis
     }
 
     # Known public names that are not direct subclasses
@@ -8215,6 +8609,26 @@ class TestCategory(BasisFuncsTesting):
     """Tests for Category-specific logic not covered by TestSharedMethods."""
 
     cls = {"eval": Category}
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize(
+        "categories, inp",
+        [
+            (3, np.array([0, 1, 2, 1, 0])),
+            ([2, 5, 8], np.array([2, 5, 8, 8, 2])),
+            ([2, 5, 8], np.array([2, 99, 8, 0, 5])),
+            (np.array([2, 5, 8]), np.array([2, 5, 8, 5, 2])),
+        ],
+    )
+    def test_jit_matches_eager(self, categories, inp):
+        """One-hot encoding traces identically, out-of-category rows included.
+
+        Two cases are out of scope. String-labelled samples cannot be traced at
+        all, since jax has no string arrays. ``out_of_category=False`` raises
+        under jit by design, which
+        ``test_evaluate_jit_out_of_category_false_raises`` covers.
+        """
+        assert_jit_matches_eager(Category(categories, out_of_category=True), inp)
 
     # ------------------------------------------------------------------
     # Priority 1 – one-hot correctness

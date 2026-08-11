@@ -17,10 +17,9 @@ import lazy_loader as lazy
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from nemos.typing import FeatureMatrix
-
 from ..base_class import Base
 from ..type_casting import support_pynapple
+from ..typing import FeatureMatrix
 from ..utils import format_repr
 from . import AdditiveBasis, MultiplicativeBasis
 from ._basis_mixin import BasisMixin, BasisTransformerMixin, set_input_shape_state
@@ -163,6 +162,31 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         restriction exists because after multiplication, ``basis.compute_features``
         does not distinguish between real and imaginary components, which would lead
         to incorrect outputs.
+    bounds :
+        Interval ``(low, high)`` outside which samples are replaced by ``fill_value``; ``None`` (default)
+        applies no filling. Unlike the ``Eval`` bases, ``bounds`` here does not define or rescale the
+        domain, it only masks out-of-range samples.
+    fill_value :
+        Value assigned to samples falling outside ``bounds``. Defaults to ``jnp.nan``.
+
+    Notes
+    -----
+    ``CustomBasis`` does not derive any state from the data: each function in ``self.funcs`` is applied
+    to the raw input, and ``bounds`` only controls which samples are replaced by ``fill_value`` when they
+    fall outside the given interval. The transformation is therefore identical across inputs whenever each
+    output row depends only on the corresponding input row.
+
+    .. warning::
+
+        Functions that normalize by a quantity computed from the input are unsafe here, because that
+        quantity — and so the transformation — changes from one input to the next, whereas across
+        cross-validation folds it must stay identical.
+
+        Thus, you should precompute any such quantity once (e.g. on the training set) and pass it in
+        as a constant, so the output depends only on each sample. When z-scoring, for example, this
+        means precomputing the centering and scaling instead of recomputing them from each input:
+        replace ``lambda x: (x - x.mean()) / x.std()`` with ``lambda x: (x - mean) / std``, where ``mean``
+        and ``std`` are fixed. See Examples below for an example of this.
 
     Examples
     --------
@@ -192,6 +216,23 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
     >>> X = add.compute_features(samples, samples)
     >>> X.shape
     (50, 20)
+
+    **Use CustomBasis as Transformer**
+
+    Whether a ``CustomBasis`` is safe as a transformer depends on the functions you pass. A
+    sample-wise function transforms a given row the same way regardless of the other rows:
+
+    >>> x = np.array([1.0, 2.0, 3.0])
+    >>> safe = nmo.basis.CustomBasis([lambda x: x ** 2])
+    >>> np.array_equal(safe.compute_features(x)[0], safe.compute_features(x[:1])[0])
+    True
+
+    A data-dependent function (here, centering by the input mean) transforms the same row
+    differently depending on the rest of the input, so it is unsafe across cross-validation folds:
+
+    >>> unsafe = nmo.basis.CustomBasis([lambda x: x - x.mean()])
+    >>> np.array_equal(unsafe.compute_features(x)[0], unsafe.compute_features(x[:1])[0])
+    False
     """
 
     _allow_inputs_of_different_shape = False
@@ -366,6 +407,10 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         -------
         :
             The resulting design matrix, with one row per sample and one column per output feature.
+
+        Notes
+        -----
+        See the class docstring for when the transformation is safe to use as a transformer.
 
         Examples
         --------

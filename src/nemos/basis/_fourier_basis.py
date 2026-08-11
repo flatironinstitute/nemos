@@ -164,12 +164,9 @@ def _process_tuple_frequencies(
     """
     Process a tuple of frequencies and return the corresponding frequency arrays.
 
-    This function handles two valid cases for specifying frequencies as a tuple:
-
-    - A 2-element tuple of integers:
-       - Both elements must be numeric and equal to their integer representation.
-       - Returns a single-element tuple containing the result of `arange_constructor(frequencies)`.
-
+    The tuple must be a 2-element tuple of integers, i.e. both elements must be
+    numeric and equal to their integer representation. It is interpreted as a
+    single range specification and broadcast to all ``ndim`` dimensions.
 
     Parameters
     ----------
@@ -177,29 +174,31 @@ def _process_tuple_frequencies(
         The input tuple specifying frequencies. It must be a 2-element tuple of integers.
 
     ndim :
-        The expected number of input dimensions. Used to validate the tuple length
-        in the second case.
+        The number of input dimensions the range is broadcast to.
 
     Returns
     -------
     :
-        A tuple of frequency arrays processed according to the input.
+        A list of ``ndim`` frequency arrays, one per input dimension.
 
     Raises
     ------
     ValueError
-        If the tuple does not match one of the expected formats.
+        If the tuple does not match the expected format.
 
     Examples
     --------
     >>> _process_tuple_frequencies((2, 5), 1)
     [Array([2., 3., 4.], dtype=float32)]
 
+    >>> _process_tuple_frequencies((2, 5), 2)
+    [Array([2., 3., 4.], dtype=float32), Array([2., 3., 4.], dtype=float32)]
+
     """
     if len(frequencies) == 2 and all(
         isinstance(f, Number) and (f == int(f)) for f in frequencies
     ):
-        return [arange_constructor(frequencies)]
+        return [arange_constructor(frequencies)] * ndim
 
     raise ValueError(
         "Invalid frequencies specification. If ``frequencies`` are provided as a tuple, "

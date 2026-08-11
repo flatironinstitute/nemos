@@ -63,6 +63,7 @@ DEFAULT_OBS_SHAPE = {
 
 HARD_CODED_GET_PARAMS_KEYS = {
     "GLM": {
+        "fit_intercept",
         "inverse_link_function",
         "observation_model",
         "regularizer",
@@ -71,6 +72,7 @@ HARD_CODED_GET_PARAMS_KEYS = {
         "solver_name",
     },
     "ClassifierGLM": {
+        "fit_intercept",
         "inverse_link_function",
         "n_classes",
         "regularizer",
@@ -79,6 +81,7 @@ HARD_CODED_GET_PARAMS_KEYS = {
         "solver_name",
     },
     "ClassifierPopulationGLM": {
+        "fit_intercept",
         "inverse_link_function",
         "n_classes",
         "regularizer",
@@ -87,6 +90,7 @@ HARD_CODED_GET_PARAMS_KEYS = {
         "solver_name",
     },
     "PopulationGLM": {
+        "fit_intercept",
         "inverse_link_function",
         "observation_model",
         "regularizer",
@@ -1065,15 +1069,15 @@ class TestObservationModel:
             (
                 nmo.regularizer.Regularizer,
                 pytest.raises(
-                    AttributeError,
-                    match="The provided object does not have the required",
+                    ValueError,
+                    match="Invalid observation model",
                 ),
             ),
             (
                 1,
                 pytest.raises(
-                    AttributeError,
-                    match="The provided object does not have the required",
+                    ValueError,
+                    match="Invalid observation model: 1",
                 ),
             ),
         ],

@@ -775,13 +775,13 @@ class GLMHMM(
         setup : Configure the initializers used when ``init_params is None``.
         update : Run a single EM iteration (advanced, manual loop).
         """
-        self._validator.validate_inputs(X=X, y=y)
-        # validate and cast session boundaries, shifting markers off NaN samples
-        session_starts = self._validator.validate_and_cast_session_starts(
+        # validate inputs, cast the session boundaries shifting markers off NaN samples,
+        # then check continuity within each session
+        session_starts = self._validator.validate_and_cast_inputs(
             X, y, session_starts=session_starts
         )
 
-        # validate the inputs & initialize solver
+        # initialize solver
         # initialize params if no params are provided
         if init_params is None:
             init_params = self._model_specific_initialization(X, y, session_starts)
@@ -1551,8 +1551,7 @@ class GLMHMM(
         >>> new_params, new_state = model.update(init_params, opt_state, X, y)
         """
         # validate inputs and session boundaries
-        self._validator.validate_inputs(X=X, y=y)
-        session_starts = self._validator.validate_and_cast_session_starts(
+        session_starts = self._validator.validate_and_cast_inputs(
             X, y, session_starts=session_starts
         )
 
@@ -1588,8 +1587,13 @@ class GLMHMM(
         init_params: ModelParamsT,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
+        frozen_params: Optional[ModelParamsT] = None,
     ) -> SolverState:
-        """Initialize the optimizer and state of the model."""
+        """Initialize the optimizer and state of the model.
+
+        ``frozen_params`` is accepted for signature compatibility with the base
+        entry points but ignored: the GLM-HMM does not support parameter freezing.
+        """
         # glm params m-step setup
         is_population = y.ndim > 1
         m_step_update = prepare_mstep_update_fn(

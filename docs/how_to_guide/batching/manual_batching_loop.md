@@ -4,7 +4,6 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.19.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -88,7 +87,7 @@ glm = nmo.glm.PopulationGLM(
 Basic SGD can effectively be reproduced by the following manual loop with score logging included after every batch:
 
 ```{code-cell} ipython3
-n_epochs = 10
+n_passes = 10
 ```
 
 ```{code-cell} ipython3
@@ -97,7 +96,7 @@ params = glm.initialize_params(X_sample, y_sample)
 opt_state = glm.initialize_optimizer_and_state(params, X_sample, y_sample)
 
 scores = []
-for i in range(n_epochs):
+for i in range(n_passes):
     for X_batch, y_batch in loader:
         params, opt_state = glm.update(params, opt_state, X_batch, y_batch)
         scores.append(glm.score(X, spike_trains))
