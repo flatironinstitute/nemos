@@ -618,7 +618,8 @@ def atomic_basis_superclass_pairs() -> list[tuple]:
     return [
         (cls, implementation_superclass(cls))
         for cls in list_all_basis_classes()
-        if issubclass(cls, AtomicBasisMixin) and implementation_superclass(cls) is not None
+        if issubclass(cls, AtomicBasisMixin)
+        and implementation_superclass(cls) is not None
     ]
 
 
