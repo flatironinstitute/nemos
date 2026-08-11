@@ -181,6 +181,36 @@ def test_every_basis_is_atomic_or_declared():
 
 
 @pytest.mark.metatest
+def test_eval_and_conv_filters_partition_the_basis_list():
+    """``list_all_basis_classes("Eval")`` and ``("Conv")`` must partition the unfiltered list.
+
+    Those two filtered lists drive the Eval-only and Conv-only parametrizations, so a
+    misclassification moves a basis into the wrong contract or out of both. The unfiltered
+    list is guarded against the public API elsewhere; this guards the filters applied to it.
+
+    Stated directly rather than left as a consequence of the atomic and mixin guards, because
+    those two together do not cover the non-atomic case: a composite that acquired
+    ``EvalBasisMixin`` would silently join every Eval parametrization, and nothing else here
+    would notice.
+    """
+    all_basis = set(list_all_basis_classes())
+    eval_basis = set(list_all_basis_classes("Eval"))
+    conv_basis = set(list_all_basis_classes("Conv"))
+
+    assert not (eval_basis & conv_basis), (
+        "classified as both Eval and Conv, so tested under both contracts: "
+        f"{sorted(cls.__name__ for cls in eval_basis & conv_basis)}"
+    )
+    unclassified = all_basis - eval_basis - conv_basis
+    assert {cls.__name__ for cls in unclassified} == _NON_ATOMIC_BASIS, (
+        "the set of bases that are neither Eval nor Conv has changed. Anything here is "
+        "excluded from both filtered parametrizations; anything newly absent has been "
+        "pulled into one of them. Composites and CustomBasis are the only expected members: "
+        f"{sorted(cls.__name__ for cls in unclassified)}"
+    )
+
+
+@pytest.mark.metatest
 def test_eval_conv_mixins_agree_with_the_name_convention():
     """``is_eval_basis`` / ``is_conv_basis`` split the public bases into the ``Eval`` and
     ``Conv`` parametrizations, so a misclassified basis is tested under the wrong contract.
