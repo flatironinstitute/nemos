@@ -10,7 +10,10 @@ Note:
 """
 
 import abc
+import importlib
+import inspect
 import os
+import pkgutil
 import re
 from collections import defaultdict, namedtuple
 from copy import deepcopy
@@ -32,8 +35,12 @@ from nemos.base_regressor import BaseRegressor
 from nemos.base_validator import RegressorValidator
 from nemos.basis import AdditiveBasis, Category, CustomBasis, MultiplicativeBasis, Zero
 from nemos.basis._basis import Basis
-from nemos.basis._basis_mixin import BasisMixin
-from nemos.basis._transformer_basis import TransformerBasis
+from nemos.basis._basis_mixin import (
+    BasisMixin,
+    CompositeBasisMixin,
+    ConvBasisMixin,
+    EvalBasisMixin,
+)
 from nemos.glm.params import GLMParams
 from nemos.glm.validation import GLMValidator
 from nemos.glm_hmm.initialize_parameters import random_glm_params_init
@@ -479,36 +486,70 @@ class CombinedBasis(BasisFuncsTesting):
 
 
 def is_eval_basis(basis_cls) -> bool:
-    is_eval = "Eval" in basis_cls.__name__ or issubclass(
-        basis_cls, (basis.Zero, Category)
-    )
-    return is_eval
+    """Whether a basis maps its input through the basis functions.
+
+    The mixin is the criterion: it is what actually gives the class its ``Eval`` behaviour,
+    so it classifies correctly regardless of naming. The name suffix is kept as a fallback
+    for classes that implement the behaviour without the mixin, such as test doubles.
+    ``Zero`` and ``Category`` need no special case -- both carry ``EvalBasisMixin``.
+    """
+    return issubclass(basis_cls, EvalBasisMixin) or basis_cls.__name__.endswith("Eval")
 
 
 def is_conv_basis(basis_cls) -> bool:
-    is_eval = "Conv" in basis_cls.__name__
-    return is_eval
+    """Whether a basis convolves its input with the basis kernel. See ``is_eval_basis``."""
+    return issubclass(basis_cls, ConvBasisMixin) or basis_cls.__name__.endswith("Conv")
+
+
+# A basis is instantiable exactly when it combines ``Basis`` with one of these behaviour
+# mixins. That is what separates a user-facing basis from a shared implementation base:
+# ``FourierEval`` is ``FourierBasis`` plus ``EvalBasisMixin``, and ``FourierBasis`` alone is
+# not meant to be instantiated. Filtering on the mixin therefore drops the intermediates
+# without naming them.
+_BASIS_BEHAVIOUR_MIXINS = (EvalBasisMixin, ConvBasisMixin, CompositeBasisMixin)
+
+
+def _discover_basis_classes() -> list:
+    """Every instantiable basis in ``nemos.basis``, found by walking the whole package.
+
+    Walking the package rather than naming modules is what keeps this from going stale: a
+    basis added in a new private module (as ``Category`` was, in ``nemos.basis._category``)
+    is picked up without touching this helper.
+
+    ``CustomBasis`` is the one genuine exception, and for a substantive reason -- it is not a
+    ``Basis`` subclass, so no amount of discovery over ``Basis`` will find it.
+    """
+    found = set()
+    for _, modname, _ in pkgutil.walk_packages(
+        nmo.basis.__path__, prefix="nemos.basis."
+    ):
+        try:
+            module = importlib.import_module(modname)
+        except Exception:  # pragma: no cover - an unimportable private module
+            continue
+        for _, obj in inspect.getmembers(module, inspect.isclass):
+            if (
+                issubclass(obj, Basis)
+                and issubclass(obj, _BASIS_BEHAVIOUR_MIXINS)
+                and not inspect_utils.is_abstract(obj)
+                and obj.__module__.startswith("nemos.basis")
+            ):
+                found.add(obj)
+    # sorted so parametrization ids and ordering are reproducible across runs
+    return sorted(found, key=lambda cls: cls.__name__) + [CustomBasis]
+
+
+# computed once: the walk imports every submodule, which should not run per call
+_ALL_BASIS_CLASSES = _discover_basis_classes()
 
 
 # automatic define user accessible basis and check the methods
 def list_all_basis_classes(filter_basis="all") -> list[BasisMixin]:
     """
-    Return all the classes in nemos.basis which are a subclass of Basis,
-    which should be all concrete classes except TransformerBasis.
+    Return all the instantiable basis classes in nemos.basis, which is every concrete
+    class combining ``Basis`` with an Eval/Conv/Composite mixin, plus ``CustomBasis``.
     """
-    all_basis = (
-        [
-            class_obj
-            for _, class_obj in inspect_utils.get_non_abstract_classes(basis)
-            if issubclass(class_obj, Basis)
-        ]
-        + [
-            bas
-            for _, bas in inspect_utils.get_non_abstract_classes(nmo.basis._basis)
-            if bas != TransformerBasis
-        ]
-        + [CustomBasis, Category]
-    )
+    all_basis = list(_ALL_BASIS_CLASSES)
     if filter_basis != "all":
         cond_fn = is_eval_basis if filter_basis == "Eval" else is_conv_basis
         all_basis = [a for a in all_basis if cond_fn(a)]

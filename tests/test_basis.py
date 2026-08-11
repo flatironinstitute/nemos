@@ -13,6 +13,7 @@ import numpy as np
 import pynapple as nap
 import pytest
 
+import nemos
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
 import nemos.convolve as convolve
@@ -22,6 +23,7 @@ from conftest import (
     CombinedBasis,
     SizeTerminal,
     custom_basis,
+    is_conv_basis,
     is_eval_basis,
     list_all_basis_classes,
     list_all_real_basis_classes,
@@ -43,6 +45,8 @@ from nemos.basis._basis import (
 from nemos.basis._basis_mixin import (
     AtomicBasisMixin,
     BoundedEvalBasisMixin,
+    ConvBasisMixin,
+    EvalBasisMixin,
 )
 from nemos.basis._composition_utils import generate_basis_label_pair, set_input_shape
 from nemos.basis._decaying_exponential import OrthExponentialBasis
@@ -60,6 +64,62 @@ from nemos.basis._spline_basis import (
 )
 from nemos.basis._zero_basis import ZeroBasis
 from nemos.utils import pynapple_concatenate_numpy
+
+
+@pytest.mark.metatest
+def test_list_all_basis_classes_covers_the_public_api():
+    """``list_all_basis_classes`` drives most parametrizations in this file, so a basis
+    missing from it is silently untested rather than failing.
+
+    The contract is the public API: every concrete ``Basis`` subclass exported from
+    ``nemos.basis`` must appear. Subclass discovery is deliberately not the reference, for
+    two reasons -- this module defines its own ``Basis`` subclasses for testing, and the
+    package holds concrete intermediates (``FourierBasis``, ``HistoryBasis``,
+    ``IdentityBasis``, ``ZeroBasis``) that users reach through their ``Eval``/``Conv`` forms
+    instead. Neither belongs in the helper.
+    """
+    public = {
+        obj
+        for name in nemos.basis.__all__
+        if inspect.isclass(obj := getattr(nemos.basis, name, None))
+        and issubclass(obj, Basis)
+        and not inspect_utils.is_abstract(obj)
+    }
+    covered = set(list_all_basis_classes())
+    assert public, "no public Basis subclasses found; is nemos.basis.__all__ populated?"
+
+    missing = public - covered
+    assert not missing, (
+        "exported from nemos.basis but absent from list_all_basis_classes, so untested by "
+        f"every parametrization built on it: {sorted(cls.__name__ for cls in missing)}"
+    )
+
+
+@pytest.mark.metatest
+def test_eval_conv_mixins_agree_with_the_name_convention():
+    """``is_eval_basis`` / ``is_conv_basis`` split the public bases into the ``Eval`` and
+    ``Conv`` parametrizations, so a misclassified basis is tested under the wrong contract.
+
+    Both predicates accept either the mixin or the name suffix, which is deliberate but only
+    safe while the two agree. This asserts they do, for every public basis: a class carrying
+    ``EvalBasisMixin`` but named ``...Conv`` (or the reverse) is a naming bug worth failing
+    on rather than silently resolving through whichever check runs first.
+    """
+    for cls in list_all_basis_classes():
+        by_mixin_eval = issubclass(cls, EvalBasisMixin)
+        by_mixin_conv = issubclass(cls, ConvBasisMixin)
+        assert not (
+            by_mixin_eval and by_mixin_conv
+        ), f"{cls.__name__} carries both EvalBasisMixin and ConvBasisMixin"
+        if cls.__name__.endswith("Eval"):
+            assert by_mixin_eval, f"{cls.__name__} is named Eval but lacks EvalBasisMixin"
+        if cls.__name__.endswith("Conv"):
+            assert by_mixin_conv, f"{cls.__name__} is named Conv but lacks ConvBasisMixin"
+        # every atomic basis must land in exactly one of the two parametrizations
+        if issubclass(cls, AtomicBasisMixin):
+            assert is_eval_basis(cls) != is_conv_basis(
+                cls
+            ), f"{cls.__name__} is atomic but is neither exactly Eval nor exactly Conv"
 
 
 class EvalBasis2D(BoundedEvalBasisMixin, AtomicBasisMixin, Basis):
