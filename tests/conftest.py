@@ -36,6 +36,7 @@ from nemos.base_validator import RegressorValidator
 from nemos.basis import AdditiveBasis, Category, CustomBasis, MultiplicativeBasis, Zero
 from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import (
+    AtomicBasisMixin,
     BasisMixin,
     CompositeBasisMixin,
     ConvBasisMixin,
@@ -554,6 +555,39 @@ def list_all_basis_classes(filter_basis="all") -> list[BasisMixin]:
         cond_fn = is_eval_basis if filter_basis == "Eval" else is_conv_basis
         all_basis = [a for a in all_basis if cond_fn(a)]
     return all_basis
+
+
+def implementation_superclass(basis_cls) -> Optional[type]:
+    """The shared implementation base a public basis inherits its maths from.
+
+    ``MSplineEval`` and ``MSplineConv`` both derive from ``MSplineBasis``, which holds the
+    evaluation logic; the public classes add only the Eval/Conv behaviour. Several tests need
+    that pairing so they can call the superclass implementation directly and compare.
+
+    Read off the MRO rather than tabulated, so a renamed or newly added basis needs no edit
+    here. No mixin has to be excluded by name because none of them subclass ``Basis``.
+
+    Returns ``None`` where no such base exists: the composites (``AdditiveBasis``,
+    ``MultiplicativeBasis``), ``CustomBasis``, and ``Category``, which implements its own
+    evaluation directly. Callers comparing against a superclass should skip those.
+    """
+    for base in basis_cls.__mro__[1:]:
+        if base is not Basis and isinstance(base, type) and issubclass(base, Basis):
+            return base
+    return None
+
+
+def atomic_basis_superclass_pairs() -> list[tuple]:
+    """``(basis_cls, implementation_superclass)`` for every atomic basis that has one.
+
+    The single source for the tests that pair a public basis against the base implementing
+    its maths, so they cannot drift apart or fall behind a newly added basis.
+    """
+    return [
+        (cls, implementation_superclass(cls))
+        for cls in list_all_basis_classes()
+        if issubclass(cls, AtomicBasisMixin) and implementation_superclass(cls) is not None
+    ]
 
 
 def list_all_real_basis_classes(filter_basis="all"):

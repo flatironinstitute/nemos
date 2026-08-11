@@ -22,6 +22,7 @@ from conftest import (
     BasisFuncsTesting,
     CombinedBasis,
     SizeTerminal,
+    atomic_basis_superclass_pairs,
     custom_basis,
     is_conv_basis,
     is_eval_basis,
@@ -93,6 +94,83 @@ def test_list_all_basis_classes_covers_the_public_api():
         "exported from nemos.basis but absent from list_all_basis_classes, so untested by "
         f"every parametrization built on it: {sorted(cls.__name__ for cls in missing)}"
     )
+
+
+# Every concrete basis is either covered by a parametrization derived from
+# ``list_all_basis_classes`` or declared here with a reason. The guards below assert that
+# partition exactly, so a newly added basis either joins the derived tests automatically or
+# fails until someone states why it cannot.
+
+# Bases with no implementation superclass, hence outside every public-vs-superclass test.
+_NO_IMPLEMENTATION_SUPERCLASS = {
+    # evaluates categorical input directly; shares no maths with an Eval/Conv sibling
+    "Category",
+    # composites combine two bases rather than implementing an evaluation of their own
+    "AdditiveBasis",
+    "MultiplicativeBasis",
+    # wraps a user-supplied callable and is not a Basis subclass at all
+    "CustomBasis",
+}
+
+# Bases that are not atomic, hence outside every atomic-only parametrization.
+_NON_ATOMIC_BASIS = {"AdditiveBasis", "MultiplicativeBasis", "CustomBasis"}
+
+
+@pytest.mark.metatest
+def test_every_basis_is_paired_with_a_superclass_or_declared():
+    """``list_all_basis_classes`` is the source of truth; every basis is paired or declared.
+
+    The tests comparing a public basis against the base implementing its maths derive from
+    ``atomic_basis_superclass_pairs``, which silently omits anything with no such base. This
+    turns that silence into a failure: a new basis either gets a superclass and joins those
+    tests, or is named in ``_NO_IMPLEMENTATION_SUPERCLASS`` with a reason.
+
+    Asserted against the full concrete list rather than against the pair helper itself, which
+    is built from the same expression and so could never disagree.
+    """
+    all_basis = {cls.__name__ for cls in list_all_basis_classes()}
+    paired = {cls.__name__ for cls, _ in atomic_basis_superclass_pairs()}
+
+    undeclared = all_basis - paired - _NO_IMPLEMENTATION_SUPERCLASS
+    assert not undeclared, (
+        "bases with no implementation superclass and no declaration, so excluded from every "
+        "public-vs-superclass comparison without saying so. Give them a superclass or add "
+        f"them to _NO_IMPLEMENTATION_SUPERCLASS with a reason: {sorted(undeclared)}"
+    )
+    stale = _NO_IMPLEMENTATION_SUPERCLASS & paired
+    assert not stale, (
+        "declared as having no implementation superclass but now paired with one, so the "
+        f"declaration is stale and hides real coverage: {sorted(stale)}"
+    )
+    gone = _NO_IMPLEMENTATION_SUPERCLASS - all_basis
+    assert not gone, f"declared but no such basis exists: {sorted(gone)}"
+
+
+@pytest.mark.metatest
+def test_every_basis_is_atomic_or_declared():
+    """Same partition for ``AtomicBasisMixin``, which gates the atomic-only parametrizations.
+
+    A basis that forgets the mixin would drop out of them, and a new composite would need to
+    be recognised as such rather than assumed atomic.
+    """
+    all_basis = {cls.__name__ for cls in list_all_basis_classes()}
+    atomic = {
+        cls.__name__
+        for cls in list_all_basis_classes()
+        if issubclass(cls, AtomicBasisMixin)
+    }
+
+    undeclared = all_basis - atomic - _NON_ATOMIC_BASIS
+    assert not undeclared, (
+        "bases carrying no AtomicBasisMixin and not declared non-atomic, so excluded from "
+        f"every atomic parametrization without saying so: {sorted(undeclared)}"
+    )
+    stale = _NON_ATOMIC_BASIS & atomic
+    assert not stale, (
+        f"declared non-atomic but now carrying AtomicBasisMixin: {sorted(stale)}"
+    )
+    gone = _NON_ATOMIC_BASIS - all_basis
+    assert not gone, f"declared but no such basis exists: {sorted(gone)}"
 
 
 @pytest.mark.metatest
@@ -316,6 +394,7 @@ def create_atomic_basis_pairs(full_list):
     ]
 
 
+@pytest.mark.metatest
 def test_all_basis_are_tested() -> None:
     """Meta-test.
 
@@ -441,65 +520,40 @@ def test_example_docstrings_add(
         assert f" {basis_name}" not in doc_components[1]
 
 
-@pytest.mark.parametrize(
-    "public_class, meth_super",
-    [
-        ("IdentityEval", "IdentityBasis"),
-        ("HistoryConv", "HistoryBasis"),
-        ("MSplineEval", "MSplineBasis"),
-        ("MSplineConv", "MSplineBasis"),
-        ("BSplineEval", "BSplineBasis"),
-        ("BSplineConv", "BSplineBasis"),
-        ("CyclicBSplineEval", "CyclicBSplineBasis"),
-        ("CyclicBSplineConv", "CyclicBSplineBasis"),
-        ("RaisedCosineLinearEval", "RaisedCosineBasisLinear"),
-        ("RaisedCosineLinearConv", "RaisedCosineBasisLinear"),
-        ("RaisedCosineLogEval", "RaisedCosineBasisLog"),
-        ("RaisedCosineLogConv", "RaisedCosineBasisLog"),
-        ("OrthExponentialEval", "OrthExponentialBasis"),
-        ("OrthExponentialConv", "OrthExponentialBasis"),
-        ("FourierEval", "FourierBasis"),
-    ],
-)
+# ``(public basis, the base implementing its maths)`` for every atomic basis that has one,
+# derived from the MRO rather than tabulated. Shared by the tests that compare a public class
+# against its superclass, so they cannot drift apart or fall behind a newly added basis.
+_SUPERCLASS_PAIRS = [
+    pytest.param(cls, sup, id=f"{cls.__name__}-{sup.__name__}")
+    for cls, sup in atomic_basis_superclass_pairs()
+]
+
+# every atomic basis, including the ones with no implementation superclass
+_ATOMIC_BASIS = [
+    pytest.param(cls, id=cls.__name__)
+    for cls in list_all_basis_classes()
+    if issubclass(cls, AtomicBasisMixin)
+]
+
+
+@pytest.mark.parametrize("cls_pub, cls_sup", _SUPERCLASS_PAIRS)
 @pytest.mark.parametrize("method", ["evaluate", "split_by_feature", "evaluate_on_grid"])
-def test_docstrings_decorator_superclass(public_class, meth_super, method):
-    cls_pub = getattr(basis, public_class)
-    cls_sup = getattr(basis, meth_super)
+def test_docstrings_decorator_superclass(cls_pub, cls_sup, method):
     meth_pub = getattr(cls_pub, method)
     meth_super = getattr(cls_sup, method)
     assert meth_pub.__doc__.startswith(meth_super.__doc__)
 
 
-@pytest.mark.parametrize(
-    "public_class",
-    [
-        "IdentityEval",
-        "HistoryConv",
-        "MSplineEval",
-        "MSplineConv",
-        "BSplineEval",
-        "BSplineConv",
-        "CyclicBSplineEval",
-        "CyclicBSplineConv",
-        "RaisedCosineLinearEval",
-        "RaisedCosineLinearConv",
-        "RaisedCosineLogEval",
-        "RaisedCosineLogConv",
-        "OrthExponentialEval",
-        "OrthExponentialConv",
-        "FourierEval",
-        "Zero",
-    ],
-)
+@pytest.mark.parametrize("cls_pub", _ATOMIC_BASIS)
 @pytest.mark.parametrize(
     "method, mixin",
     [("set_input_shape", "AtomicBasisMixin"), ("compute_features", None)],
 )
-def test_docstrings_decorator_mixinclass(public_class, mixin, method):
-    cls_pub = getattr(basis, public_class)
+def test_docstrings_decorator_mixinclass(cls_pub, mixin, method):
     if mixin is None:
-        is_eval = public_class.endswith("Eval") or public_class == "Zero"
-        mixin = "EvalBasisMixin" if is_eval else "ConvBasisMixin"
+        # which behaviour mixin supplies the method is decided by the mixin the class
+        # actually carries, not by its name
+        mixin = "EvalBasisMixin" if is_eval_basis(cls_pub) else "ConvBasisMixin"
         mixin_meth = getattr(getattr(basis, mixin), "_" + method)
     else:
         mixin_meth = getattr(getattr(basis, mixin), method)
@@ -565,31 +619,13 @@ def test_expected_output_eval_on_grid(basis_instance, super_class):
     np.testing.assert_equal(np.asarray(yy), np.asarray(y))
 
 
-@pytest.mark.parametrize(
-    "basis_instance, super_class",
-    [
-        (basis.BSplineEval(10), BSplineBasis),
-        (basis.BSplineConv(10, window_size=11), BSplineBasis),
-        (basis.CyclicBSplineEval(10), CyclicBSplineBasis),
-        (basis.CyclicBSplineConv(10, window_size=11), CyclicBSplineBasis),
-        (basis.MSplineEval(10), MSplineBasis),
-        (basis.MSplineConv(10, window_size=11), MSplineBasis),
-        (basis.RaisedCosineLinearEval(10), RaisedCosineBasisLinear),
-        (basis.RaisedCosineLinearConv(10, window_size=11), RaisedCosineBasisLinear),
-        (basis.RaisedCosineLogEval(10), RaisedCosineBasisLog),
-        (basis.RaisedCosineLogConv(10, window_size=11), RaisedCosineBasisLog),
-        (basis.OrthExponentialEval(10, np.arange(1, 11)), OrthExponentialBasis),
-        (
-            basis.OrthExponentialConv(10, decay_rates=np.arange(1, 11), window_size=12),
-            OrthExponentialBasis,
-        ),
-        (basis.IdentityEval(), IdentityBasis),
-        (basis.HistoryConv(11), HistoryBasis),
-        (basis.FourierEval(10), FourierBasis),
-        (basis.Zero(), ZeroBasis),
-    ],
-)
-def test_expected_output_compute_features(basis_instance, super_class):
+@pytest.mark.parametrize("cls_pub, super_class", _SUPERCLASS_PAIRS)
+def test_expected_output_compute_features(
+    cls_pub, super_class, basis_class_specific_params
+):
+    basis_instance = CombinedBasis().instantiate_basis(
+        5, cls_pub, basis_class_specific_params, window_size=10
+    )
     x = super_class.compute_features(basis_instance, np.linspace(0, 1, 100))
     xx = basis_instance.compute_features(np.linspace(0, 1, 100))
     nans = np.isnan(x.sum(axis=1))
