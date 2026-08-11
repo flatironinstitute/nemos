@@ -40,14 +40,31 @@ for _, _modname, _ in pkgutil.walk_packages(nmo.__path__, prefix="nemos."):
 pytestmark = pytest.mark.solver_related
 
 
-def _newton_regularizers():
-    """Auto-discover every regularizer that advertises Newton as an allowed solver.
+# The two second-order solvers. Everything ``Newton`` converges to, ``ProximalNewton``
+# converges to as well: they differ in how the penalty is reached (a proximal operator
+# rather than the penalized loss) and in the convergence test, not in the optimum. So the
+# solver-agnostic tests below run for both, and only the genuinely divergent behaviour gets
+# a dedicated test.
+_NEWTON_SOLVERS = ("Newton", "ProximalNewton")
+
+_SOLVERS = pytest.mark.parametrize("solver_name", _NEWTON_SOLVERS)
+
+_SOLVER_CLASSES = {"Newton": Newton, "ProximalNewton": ProximalNewton}
+
+
+def _solver_regularizers(solver_name):
+    """Auto-discover every regularizer that advertises ``solver_name`` as allowed.
 
     The block-diagonal Hessian equals the full Hessian's diagonal blocks only if the
     penalty is additive (so the Hessian factorizes into loss + penalty terms). Additivity
     is currently baked into ``Regularizer.penalized_loss``; parametrizing over the
     discovered set means a future Newton-eligible regularizer that breaks additivity is
     caught here instead of silently mis-regularizing the Newton step.
+
+    Membership is an exact match against the ``_allowed_solvers`` tuple, so ``"Newton"``
+    does not also select ``"ProximalNewton"``. The two therefore get their own correct
+    sets, and ``ProximalNewton`` picks up the nonsmooth penalties (``Lasso``,
+    ``ElasticNet``, ``GroupLasso``) that ``Newton`` is not allowed for.
     """
 
     return sorted(
@@ -55,10 +72,39 @@ def _newton_regularizers():
             cls
             for cls in all_subclasses(Regularizer)
             if cls.__module__.startswith("nemos")
-            and "Newton" in getattr(cls, "_allowed_solvers", ())
+            and solver_name in getattr(cls, "_allowed_solvers", ())
         ),
         key=lambda cls: cls.__name__,
     )
+
+
+def _solver_regularizer_cases():
+    """``(solver_name, regularizer_cls)`` pairs, discovered rather than listed."""
+    return [
+        pytest.param(solver_name, cls, id=f"{solver_name}-{cls.__name__}")
+        for solver_name in _NEWTON_SOLVERS
+        for cls in _solver_regularizers(solver_name)
+    ]
+
+
+def _strength_for(regularizer_cls, value=0.1):
+    """``None`` for the unpenalized regularizer, ``value`` for every other.
+
+    ``ElasticNet`` expands a scalar into an ``(alpha, l1_ratio)`` pair in the model's
+    setter, so a caller needing the value the regularizer actually sees must read
+    ``model.regularizer_strength`` back rather than reuse ``value``.
+    """
+    return None if regularizer_cls is UnRegularized else value
+
+
+def _reference_solver(regularizer_cls):
+    """A first-order solver allowed for ``regularizer_cls``, to compare an optimum against.
+
+    ``LBFGS`` cannot be used for the nonsmooth penalties, so those fall back to
+    ``ProximalGradient``.
+    """
+    allowed = getattr(regularizer_cls, "_allowed_solvers", ())
+    return "LBFGS" if "LBFGS" in allowed else "ProximalGradient"
 
 
 def _block_diagonal_models():
@@ -133,6 +179,7 @@ _STRENGTHS = pytest.mark.parametrize(
 )
 
 
+@_SOLVERS
 @pytest.mark.parametrize(
     "regr_setup",
     [
@@ -143,11 +190,11 @@ _STRENGTHS = pytest.mark.parametrize(
     ],
 )
 @pytest.mark.requires_x64
-def test_newton_linear_or_ridge_regression(request, regr_setup):
+def test_newton_linear_or_ridge_regression(request, regr_setup, solver_name):
     X, y, _, params, loss = request.getfixturevalue(regr_setup)
 
     param_init = jax.tree_util.tree_map(np.zeros_like, params)
-    newton_params, state, _ = Newton(
+    newton_params, state, _ = _SOLVER_CLASSES[solver_name](
         loss,
         regularizer=UnRegularized(),
         regularizer_strength=0.0,
@@ -163,6 +210,7 @@ def test_newton_linear_or_ridge_regression(request, regr_setup):
     )
 
 
+@_SOLVERS
 @pytest.mark.parametrize(
     "regr_setup, regularizer",
     [
@@ -173,11 +221,11 @@ def test_newton_linear_or_ridge_regression(request, regr_setup):
     ],
 )
 @pytest.mark.requires_x64
-def test_newton_init_state_default(request, regr_setup, regularizer):
+def test_newton_init_state_default(request, regr_setup, regularizer, solver_name):
     X, y, _, params, loss = request.getfixturevalue(regr_setup)
 
     param_init = jax.tree_util.tree_map(np.zeros_like, params)
-    newton = Newton(
+    newton = _SOLVER_CLASSES[solver_name](
         loss,
         regularizer=regularizer,
         regularizer_strength=0.5,
@@ -198,19 +246,21 @@ def test_newton_init_state_default(request, regr_setup, regularizer):
     assert isinstance(state.ls_state, optax.ScaleByBacktrackingLinesearchState)
 
 
+@_SOLVERS
 @pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
 @pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
-def test_newton_glm_instantiate_solver(regularizer_name, glm_class):
+def test_newton_glm_instantiate_solver(regularizer_name, glm_class, solver_name):
     glm = glm_class(
         regularizer=regularizer_name,
-        solver_name="Newton",
+        solver_name=solver_name,
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
     )
     solver = glm._instantiate_solver(glm._compute_loss, np.zeros(1))
 
-    # currently glm._solver is a Wrapped(Prox)SVRG
-    assert glm.solver_name == "Newton"
-    assert isinstance(solver, Newton)
+    assert glm.solver_name == solver_name
+    # exact type, not ``isinstance``: ``ProximalNewton`` subclasses ``Newton``, so an
+    # isinstance check cannot tell the two apart and would pass for the wrong solver
+    assert type(solver) is _SOLVER_CLASSES[solver_name]
 
 
 def _freeze_first_coef_leaf(model, params):
@@ -231,6 +281,7 @@ def _freeze_first_coef_leaf(model, params):
 
 
 @pytest.mark.requires_x64
+@_SOLVERS
 @pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
 @pytest.mark.parametrize(
     "model_fixture",
@@ -238,21 +289,25 @@ def _freeze_first_coef_leaf(model, params):
 )
 @pytest.mark.parametrize("freeze", ["intercept", "coef_leaf"])
 def test_newton_matches_first_order_solver_with_frozen_params(
-    regularizer_name, model_fixture, freeze, request
+    regularizer_name, model_fixture, freeze, request, solver_name
 ):
-    """Newton differentiates the combined loss with respect to the active subtree,
-    so it must land on the same optimum as a partition-agnostic first-order solver.
+    """A second-order solver differentiates the combined loss with respect to the active
+    subtree, so it must land on the same optimum as a partition-agnostic first-order solver.
 
     Both freezing modes are covered: a frozen intercept drops a Hessian row, while a
     frozen ``coef`` leaf carves a block out of the ``coef`` block itself.
+
+    For ``ProximalNewton`` this additionally checks that the proximal operator is built
+    against the active subtree: a prox constructed over the full tree would shrink frozen
+    leaves and move the optimum away from the reference.
     """
     X, y, model, true_params, _ = request.getfixturevalue(model_fixture)
 
-    def build(solver_name):
+    def build(name):
         m = type(model)(
             regularizer=regularizer_name,
             regularizer_strength=1.0 if regularizer_name == "Ridge" else None,
-            solver_name=solver_name,
+            solver_name=name,
             solver_kwargs={"tol": 10**-12},
         )
         if freeze == "intercept":
@@ -261,14 +316,15 @@ def test_newton_matches_first_order_solver_with_frozen_params(
             _freeze_first_coef_leaf(m, true_params)
         return m
 
-    newton = build("Newton").fit(X, y)
+    newton = build(solver_name).fit(X, y)
     reference = build("LBFGS").fit(X, y)
 
-    assert newton.solver_name == "Newton"
+    assert newton.solver_name == solver_name
     np.testing.assert_allclose(newton.coef_, reference.coef_, atol=1e-5)
     np.testing.assert_allclose(newton.intercept_, reference.intercept_, atol=1e-5)
 
 
+@_SOLVERS
 @pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
 @pytest.mark.parametrize(
     "model_fixture",
@@ -276,16 +332,19 @@ def test_newton_matches_first_order_solver_with_frozen_params(
 )
 @pytest.mark.parametrize("freeze", ["intercept", "coef_leaf"])
 def test_newton_leaves_frozen_params_untouched(
-    regularizer_name, model_fixture, freeze, request
+    regularizer_name, model_fixture, freeze, request, solver_name
 ):
     """The frozen leaves come back bit-identical, not merely close: a Hessian that
-    silently included them would move them by a small but nonzero amount."""
+    silently included them would move them by a small but nonzero amount.
+
+    For ``ProximalNewton`` the proximal operator is the second way a frozen leaf could get
+    moved, since a prox applied over the full tree would shrink it."""
     X, y, model, true_params, _ = request.getfixturevalue(model_fixture)
 
     frozen_model = type(model)(
         regularizer=regularizer_name,
         regularizer_strength=1.0 if regularizer_name == "Ridge" else None,
-        solver_name="Newton",
+        solver_name=solver_name,
     )
     if freeze == "intercept":
         frozen_model.fit_intercept = False
@@ -321,18 +380,21 @@ def test_ridge_defaults_to_newton_regardless_of_freezing(glm_class, fit_intercep
 
 
 @pytest.mark.requires_x64
+@_SOLVERS
 @pytest.mark.parametrize("regularizer_name", ["Ridge"])
 @pytest.mark.parametrize("freeze", ["intercept", "coef_leaf"])
 def test_newton_population_glm_feature_mask_with_frozen_params(
-    regularizer_name, freeze, request
+    regularizer_name, freeze, request, solver_name
 ):
     """The mask, the active axes and the frozen axes all index the neuron axis of the
     block Hessian. A wrong ``in_axes`` survives the unmasked tests, so pair the mask
-    with a freeze and check Newton still lands where a first-order solver does.
+    with a freeze and check the solver still lands where a first-order solver does.
 
-    Ridge only: a masked-out coefficient has zero gradient *and* zero curvature, so an
-    unpenalized masked Hessian is singular and the Newton step is NaN. That is unrelated
-    to parameter freezing (it reproduces with nothing frozen) and is tracked in #580.
+    Ridge only, and for ``Newton`` only by necessity: a masked-out coefficient has zero
+    gradient *and* zero curvature, so an unpenalized masked Hessian is singular and the
+    Newton step is NaN. That is unrelated to parameter freezing (it reproduces with nothing
+    frozen) and is tracked in #580. ``ProximalNewton`` survives the same singular Hessian
+    because it only multiplies by it, which is asserted separately.
     """
     X, y, model, true_params, _ = request.getfixturevalue(
         "population_poissonGLM_model_instantiation_pytree"
@@ -343,11 +405,11 @@ def test_newton_population_glm_feature_mask_with_frozen_params(
     first = sorted(mask)[0]
     mask[first] = mask[first].at[:, 0].set(0.0)
 
-    def build(solver_name):
+    def build(name):
         m = nmo.glm.PopulationGLM(
             regularizer=regularizer_name,
             regularizer_strength=1.0 if regularizer_name == "Ridge" else None,
-            solver_name=solver_name,
+            solver_name=name,
             solver_kwargs={"tol": 10**-12},
             feature_mask=mask,
         )
@@ -357,7 +419,7 @@ def test_newton_population_glm_feature_mask_with_frozen_params(
             _freeze_first_coef_leaf(m, true_params)
         return m
 
-    newton = build("Newton").fit(X, y)
+    newton = build(solver_name).fit(X, y)
     reference = build("LBFGS").fit(X, y)
 
     for key in mask:
@@ -417,6 +479,7 @@ def test_feature_mask_reassignment_invalidates_solver(request):
     assert model.optimizer_run is None
 
 
+@_SOLVERS
 @pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
 @pytest.mark.parametrize(
     "glm_class",
@@ -427,16 +490,21 @@ def test_feature_mask_reassignment_invalidates_solver(request):
         nmo.glm.ClassifierPopulationGLM,
     ],
 )
-def test_newton_glm_passes_solver_kwargs(regularizer_name, glm_class):
+def test_newton_glm_passes_solver_kwargs(regularizer_name, glm_class, solver_name):
     solver_kwargs = {
         "maxiter": np.random.randint(1, 100),
         "jit": False,
         "tol": 1e-6,
+        # ``rtol`` is read by ``ProximalNewton._converged`` and merely stored by
+        # ``Newton``; both accept it, so it belongs in the shared set
+        "rtol": 1e-7,
     }
+    if solver_name == "ProximalNewton":
+        solver_kwargs |= {"inner_iter": 7, "inner_atol": 1e-9, "inner_rtol": 1e-9}
 
     glm = glm_class(
         regularizer=regularizer_name,
-        solver_name="Newton",
+        solver_name=solver_name,
         solver_kwargs=solver_kwargs,
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
     )
@@ -446,9 +514,12 @@ def test_newton_glm_passes_solver_kwargs(regularizer_name, glm_class):
         assert getattr(solver, k) == v
 
 
+@_SOLVERS
 @pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
 @pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
-def test_newton_glm_initialize_state(glm_class, regularizer_name, linear_regression):
+def test_newton_glm_initialize_state(
+    glm_class, regularizer_name, linear_regression, solver_name
+):
     X, y, _, _, _ = linear_regression
 
     if glm_class == nmo.glm.PopulationGLM:
@@ -459,7 +530,7 @@ def test_newton_glm_initialize_state(glm_class, regularizer_name, linear_regress
 
     glm = glm_class(
         regularizer=reg,
-        solver_name="Newton",
+        solver_name=solver_name,
         inverse_link_function=jax.nn.softplus,
         observation_model=nmo.observation_models.PoissonObservations(),
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
@@ -480,15 +551,16 @@ def test_newton_glm_initialize_state(glm_class, regularizer_name, linear_regress
 
 
 @pytest.mark.requires_x64
-@pytest.mark.parametrize("regularizer_cls", _newton_regularizers())
+@pytest.mark.parametrize("solver_name, regularizer_cls", _solver_regularizer_cases())
 @pytest.mark.parametrize("structure", ["", "_pytree"])
-def test_newton_glm_converges(request, regularizer_cls, structure):
-    """Newton-fitted GLM should converge and return finite parameters."""
+def test_newton_glm_converges(request, solver_name, regularizer_cls, structure):
+    """A second-order-fitted GLM should converge and return finite parameters."""
     X, y, model, _, _ = request.getfixturevalue(
         "poissonGLM_model_instantiation" + structure
     )
     model.regularizer = regularizer_cls()
     model.regularizer_strength = 1e-3
+    model.solver_name = solver_name
     model = model.fit(X, y)
 
     assert model.coef_ is not None
@@ -497,15 +569,18 @@ def test_newton_glm_converges(request, regularizer_cls, structure):
 
 
 @pytest.mark.requires_x64
-@pytest.mark.parametrize("regularizer_cls", _newton_regularizers())
+@pytest.mark.parametrize("solver_name, regularizer_cls", _solver_regularizer_cases())
 @pytest.mark.parametrize("feature_mask", [True, False])
-def test_newton_population_glm_converges(request, regularizer_cls, feature_mask):
-    """Newton-fitted PopulationGLM should converge and return finite parameters."""
+def test_newton_population_glm_converges(
+    request, solver_name, regularizer_cls, feature_mask
+):
+    """A second-order-fitted PopulationGLM should converge and return finite parameters."""
     X, y, model, params, _ = request.getfixturevalue(
         "population_poissonGLM_model_instantiation"
     )
     model.regularizer = regularizer_cls()
     model.regularizer_strength = 1e-3
+    model.solver_name = solver_name
 
     if feature_mask:
         model._feature_mask = initialize_feature_mask_for_population_glm(
@@ -520,14 +595,16 @@ def test_newton_population_glm_converges(request, regularizer_cls, feature_mask)
 
 
 @pytest.mark.requires_x64
+@_SOLVERS
 @pytest.mark.parametrize("feature_mask", [True, False])
-def test_newton_population_glm_matches_full_autodiff(request, feature_mask):
-    """Newton-fitted PopulationGLM should match a full autodiff model that does not vmap over subproblems."""
+def test_newton_population_glm_matches_full_autodiff(request, feature_mask, solver_name):
+    """A block-Hessian fit should match a full autodiff model that does not vmap over subproblems."""
     X, y, model, params, _ = request.getfixturevalue(
         "population_poissonGLM_model_instantiation"
     )
     model.regularizer = "Ridge"
     model.regularizer_strength = 0.1
+    model.solver_name = solver_name
     if feature_mask:
         model._feature_mask = initialize_feature_mask_for_population_glm(
             X, y.shape[1], coef=params.coef
@@ -559,13 +636,14 @@ def test_every_block_diagonal_model_has_fixtures():
 
 
 @pytest.mark.requires_x64
+@_SOLVERS
 @_STRENGTHS
 @pytest.mark.parametrize("feature_mask", [True, False])
 @pytest.mark.parametrize("fixture_name", _BLOCK_MODEL_CASES)
 def test_newton_block_diagonal_matches_full_autodiff_update(
-    request, fixture_name, feature_mask, make_strength
+    request, fixture_name, feature_mask, make_strength, solver_name
 ):
-    """One Newton update() on the block Hessian must match a full autodiff model.
+    """One update() on the block Hessian must match a full autodiff model.
 
     Runs for every model declaring a block-diagonal Hessian, in both ``coef`` layouts and
     under a scalar and a per-neuron strength. The block path vmaps the regularizer's penalty
@@ -574,7 +652,7 @@ def test_newton_block_diagonal_matches_full_autodiff_update(
     """
     X, y, model, params, _ = request.getfixturevalue(fixture_name)
     model.regularizer = "Ridge"
-    model.solver_name = "Newton"
+    model.solver_name = solver_name
     model.regularizer_strength = make_strength(params.coef)
     if feature_mask:
         model._feature_mask = initialize_feature_mask_for_population_glm(
@@ -607,10 +685,10 @@ def test_newton_block_diagonal_matches_full_autodiff_update(
 
 
 @pytest.mark.requires_x64
-@pytest.mark.parametrize("regularizer_cls", _newton_regularizers())
+@pytest.mark.parametrize("solver_name, regularizer_cls", _solver_regularizer_cases())
 @pytest.mark.parametrize("feature_mask", [True, False])
 def test_newton_population_glm_block_hessian_matches_full(
-    request, feature_mask, regularizer_cls
+    request, feature_mask, regularizer_cls, solver_name
 ):
     """
     The vmapped per-neuron Hessian should equal the diagonal neuron-blocks of the
@@ -618,15 +696,19 @@ def test_newton_population_glm_block_hessian_matches_full(
 
     Both Hessians are rendered as dense matrices (per neuron) via a flatten/unflatten of
     the parameter pytree, so the comparison is on the actual matrices the Newton solve
-    consumes. Parametrized over every Newton-eligible regularizer: the block/full match
-    holds only for additive penalties, so a non-additive one would fail here.
+    consumes. Parametrized over every eligible regularizer: the block/full match holds only
+    for additive penalties, so a non-additive one would fail here.
+
+    Both solvers are covered, and the comparison is valid for each because the two models
+    use the same solver: for ``Newton`` both sides carry the penalty curvature, for
+    ``ProximalNewton`` neither does.
     """
     X, y, model, params, _ = request.getfixturevalue(
         "population_poissonGLM_model_instantiation"
     )
     model.regularizer = regularizer_cls()
-    model.regularizer_strength = None if regularizer_cls is UnRegularized else 0.1
-    model.solver_name = "Newton"
+    model.regularizer_strength = _strength_for(regularizer_cls)
+    model.solver_name = solver_name
     if feature_mask:
         model._feature_mask = initialize_feature_mask_for_population_glm(
             X, y.shape[1], coef=params.coef
@@ -697,15 +779,18 @@ def test_newton_population_glm_block_hessian_matches_full(
 
 
 @pytest.mark.requires_x64
-@pytest.mark.parametrize("regularizer_cls", _newton_regularizers())
+@pytest.mark.parametrize("solver_name, regularizer_cls", _solver_regularizer_cases())
 @pytest.mark.parametrize("structure", ["", "_pytree"])
-def test_newton_classifier_glm_converges(request, regularizer_cls, structure):
-    """Newton-fitted ClassifierGLM should converge and return finite parameters."""
+def test_newton_classifier_glm_converges(
+    request, solver_name, regularizer_cls, structure
+):
+    """A second-order-fitted ClassifierGLM should converge and return finite parameters."""
     X, y, model, _, _ = request.getfixturevalue(
         "classifierGLM_model_instantiation" + structure
     )
     model.regularizer = regularizer_cls()
     model.regularizer_strength = 1e-3
+    model.solver_name = solver_name
     model = model.fit(X, y)
 
     assert model.coef_ is not None
@@ -714,17 +799,18 @@ def test_newton_classifier_glm_converges(request, regularizer_cls, structure):
 
 
 @pytest.mark.requires_x64
-@pytest.mark.parametrize("regularizer_cls", _newton_regularizers())
+@pytest.mark.parametrize("solver_name, regularizer_cls", _solver_regularizer_cases())
 @pytest.mark.parametrize("feature_mask", [True, False])
 def test_newton_classifier_population_glm_converges(
-    request, regularizer_cls, feature_mask
+    request, solver_name, regularizer_cls, feature_mask
 ):
-    """Newton-fitted ClassifierPopulationGLM should converge and return finite parameters."""
+    """A second-order-fitted ClassifierPopulationGLM converges and returns finite params."""
     X, y, model, params, _ = request.getfixturevalue(
         "population_classifierGLM_model_instantiation"
     )
     model.regularizer = regularizer_cls()
     model.regularizer_strength = 1e-3
+    model.solver_name = solver_name
     if feature_mask:
         model._feature_mask = initialize_feature_mask_for_population_glm(
             X, y.shape[1], coef=params.coef
@@ -737,14 +823,18 @@ def test_newton_classifier_population_glm_converges(
 
 
 @pytest.mark.requires_x64
+@_SOLVERS
 @pytest.mark.parametrize("feature_mask", [True, False])
-def test_newton_population_classifier_glm_matches_full_autodiff(request, feature_mask):
-    """Newton-fitted ClassifierPopulationGLM should match a full autodiff model that does not vmap over subproblems."""
+def test_newton_population_classifier_glm_matches_full_autodiff(
+    request, feature_mask, solver_name
+):
+    """A block-Hessian classifier fit should match a full autodiff model that does not vmap."""
     X, y, model, params, _ = request.getfixturevalue(
         "population_classifierGLM_model_instantiation"
     )
     model.regularizer = "Ridge"
     model.regularizer_strength = 0.1
+    model.solver_name = solver_name
     if feature_mask:
         model._feature_mask = initialize_feature_mask_for_population_glm(
             X, y.shape[1], coef=params.coef
@@ -760,18 +850,22 @@ def test_newton_population_classifier_glm_matches_full_autodiff(request, feature
 
 
 @pytest.mark.requires_x64
-@pytest.mark.parametrize("regularizer_cls", _newton_regularizers())
+@pytest.mark.parametrize("solver_name, regularizer_cls", _solver_regularizer_cases())
 @pytest.mark.parametrize("feature_mask", [True, False])
 def test_newton_population_classifier_glm_block_hessian_matches_full(
-    request, feature_mask, regularizer_cls
+    request, feature_mask, regularizer_cls, solver_name
 ):
     """The vmapped per-neuron Hessian should equal the diagonal neuron-blocks of the
     full autodiff Hessian, and the full Hessian should be block-diagonal across neurons.
 
     Both Hessians are rendered as dense matrices (per neuron) via a flatten/unflatten of
     the parameter pytree, so the comparison is on the actual matrices the Newton solve
-    consumes. Parametrized over every Newton-eligible regularizer: the block/full match
-    holds only for additive penalties, so a non-additive one would fail here.
+    consumes. Parametrized over every eligible regularizer: the block/full match holds only
+    for additive penalties, so a non-additive one would fail here.
+
+    Both solvers are covered, and the comparison is valid for each because the two models
+    use the same solver: for ``Newton`` both sides carry the penalty curvature, for
+    ``ProximalNewton`` neither does.
 
     Notes
     -----
@@ -786,8 +880,8 @@ def test_newton_population_classifier_glm_block_hessian_matches_full(
         "population_classifierGLM_model_instantiation"
     )
     model.regularizer = regularizer_cls()
-    model.regularizer_strength = None if regularizer_cls is UnRegularized else 0.1
-    model.solver_name = "Newton"
+    model.regularizer_strength = _strength_for(regularizer_cls)
+    model.solver_name = solver_name
     if feature_mask:
         model._feature_mask = initialize_feature_mask_for_population_glm(
             X, y.shape[1], coef=params.coef
@@ -881,23 +975,36 @@ class _FullHessianGLM(GLM):
 
 
 @pytest.mark.requires_x64
-@pytest.mark.parametrize("regularizer_cls", _newton_regularizers())
-def test_newton_unbatched_model_hessian_includes_penalty(request, regularizer_cls):
-    """A model-supplied Hessian that is not block-diagonal must still get the penalty added."""
+@pytest.mark.parametrize("solver_name, regularizer_cls", _solver_regularizer_cases())
+def test_newton_unbatched_model_hessian_matches_differentiated_loss(
+    request, regularizer_cls, solver_name
+):
+    """``_hessian`` must be the Hessian of the smooth objective the solver differentiates.
+
+    That is the single invariant ``setup_hessian`` maintains, and each solver satisfies it
+    for the opposite reason: ``Newton`` differentiates the penalized loss, so
+    ``_penalize_hessian`` adds the penalty's curvature to the model's likelihood term;
+    ``ProximalNewton`` differentiates the unregularized loss and reaches the penalty through
+    its prox, so no curvature is added. Comparing against
+    ``jax.hessian(solver.fun)`` checks both without special-casing either, and would catch a
+    penalty added twice as readily as one omitted.
+
+    Uses a model supplying an unbatched Hessian, which is the only way to reach
+    ``batch_axes=None`` in ``BaseRegressor._instantiate_solver`` and the early return it
+    triggers in ``Regularizer._get_hess_fn``.
+    """
     X, y, model, _, _ = request.getfixturevalue("poissonGLM_model_instantiation")
     model = _FullHessianGLM(
         observation_model=model.observation_model,
         regularizer=regularizer_cls(),
-        regularizer_strength=0.1,
-        solver_name="Newton",
+        regularizer_strength=_strength_for(regularizer_cls),
+        solver_name=solver_name,
     )
 
     p0 = model.initialize_params(X, y)
     model.initialize_optimizer_and_state(p0, X, y)
     p = GLMParams(*p0)
 
-    # the model contributes the likelihood term only, so the Hessian the solve consumes must
-    # equal the autodiff Hessian of the penalized loss the solver actually minimizes
     jax.tree.map(
         lambda a, b: np.testing.assert_allclose(a, b, atol=1e-8),
         model._solver._hessian(p, X, y),
@@ -1107,15 +1214,17 @@ def test_default_solver_is_not_newton_for_unregularized(glm_class):
     assert model.solver_name != "Newton"
 
 
+@_SOLVERS
 @pytest.mark.parametrize(
     "glm_class", [GLM, PopulationGLM, ClassifierGLM, ClassifierPopulationGLM]
 )
-def test_solver_name_respected_when_explicitly_set(glm_class):
-    """Explicitly setting solver_name='Newton' should be respected."""
-    model = glm_class(regularizer="UnRegularized", solver_name="Newton")
-    assert model.solver_name == "Newton"
+def test_solver_name_respected_when_explicitly_set(glm_class, solver_name):
+    """An explicitly set second-order solver_name should be respected."""
+    model = glm_class(regularizer="UnRegularized", solver_name=solver_name)
+    assert model.solver_name == solver_name
 
 
+@_SOLVERS
 @pytest.mark.parametrize(
     "model_instantiation_type",
     [
@@ -1125,16 +1234,18 @@ def test_solver_name_respected_when_explicitly_set(glm_class):
         "population_classifierGLM_model_instantiation",
     ],
 )
-def test_newton_solver_type_after_fit(request, model_instantiation_type):
-    """After fit(), model._solver should be a Newton instance."""
+def test_newton_solver_type_after_fit(request, model_instantiation_type, solver_name):
+    """After fit(), model._solver should be an instance of the requested solver."""
     X, y, model, _, _ = request.getfixturevalue(model_instantiation_type)
     model.regularizer = "Ridge"
+    model.solver_name = solver_name
     model.fit(X, y)
-    from nemos.solvers._newton import Newton
 
-    assert isinstance(model._solver, Newton)
+    # exact type: ``ProximalNewton`` subclasses ``Newton``, so isinstance cannot separate them
+    assert type(model._solver) is _SOLVER_CLASSES[solver_name]
 
 
+@_SOLVERS
 @pytest.mark.parametrize(
     "model_instantiation_type",
     [
@@ -1144,9 +1255,12 @@ def test_newton_solver_type_after_fit(request, model_instantiation_type):
         "population_classifierGLM_model_instantiation",
     ],
 )
-def test_newton_update_increments_step_count(request, model_instantiation_type):
+def test_newton_update_increments_step_count(
+    request, model_instantiation_type, solver_name
+):
     """Each call to update() should increment the step counter by exactly 1."""
     X, y, model, _, _ = request.getfixturevalue(model_instantiation_type)
+    model.solver_name = solver_name
     init_params = model.initialize_params(X, y)
     state = model.initialize_optimizer_and_state(init_params, X, y)
     assert state.stats.num_steps == 0
@@ -1158,6 +1272,7 @@ def test_newton_update_increments_step_count(request, model_instantiation_type):
     assert state2.stats.num_steps == 2
 
 
+@_SOLVERS
 @pytest.mark.parametrize(
     "model_instantiation_type",
     [
@@ -1167,10 +1282,11 @@ def test_newton_update_increments_step_count(request, model_instantiation_type):
         "population_classifierGLM_model_instantiation",
     ],
 )
-def test_newton_maxiter_respected(request, model_instantiation_type):
+def test_newton_maxiter_respected(request, model_instantiation_type, solver_name):
     """Setting maxiter=1 should bound the solver to at most 1 step."""
     X, y, model, _, _ = request.getfixturevalue(model_instantiation_type)
     model.regularizer = "Ridge"
+    model.solver_name = solver_name
     model.solver_kwargs = {"maxiter": 1}
     model.fit(X, y)
 
@@ -1178,16 +1294,17 @@ def test_newton_maxiter_respected(request, model_instantiation_type):
     assert n_steps <= 1, f"Expected at most 1 step, got {n_steps}"
 
 
+@_SOLVERS
 @pytest.mark.parametrize(
     "glm_class", [GLM, PopulationGLM, ClassifierGLM, ClassifierPopulationGLM]
 )
-def test_newton_invalid_kwarg_raises(glm_class):
+def test_newton_invalid_kwarg_raises(glm_class, solver_name):
     """Passing an unrecognised kwarg should raise a NameError immediately."""
     with pytest.raises(NameError, match="not a kwarg"):
         glm_class(
             regularizer="Ridge",
             regularizer_strength=0.1,
-            solver_name="Newton",
+            solver_name=solver_name,
             solver_kwargs={"totally_fake_kwarg": 99},
         )
 
