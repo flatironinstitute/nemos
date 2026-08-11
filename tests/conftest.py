@@ -324,12 +324,33 @@ DEFAULT_KWARGS = {
     "window_size": 11,
     "decay_rates": np.arange(1, 1 + 5),
     "categories": 4,
-    # FourierGP-only required args, at the values its own tests use. ``bounds`` is not here:
-    # ten classes accept it, so a default would change how all of them are built.
-    "lengthscale": 1e-2,
-    "variance": 1.0,
-    "eps": 1e-4,
 }
+
+# Per-class overrides, for signatures the shared table cannot express. Applied on top of
+# DEFAULT_KWARGS and then filtered to the names the class accepts.
+CLASS_DEFAULT_KWARGS = {
+    # bounds is mandatory here but optional for nine other classes, so it cannot be shared.
+    # lengthscale/eps are picked for a small derived width (5 features, matching
+    # n_basis_funcs elsewhere) rather than for the approximation accuracy TestFourierGP wants.
+    "FourierGP": {
+        "bounds": (0.0, 1.0),
+        "lengthscale": 1.0,
+        "eps": 0.3,
+        "variance": 1.0,
+    },
+}
+
+
+def default_kwargs_for(basis_cls, **overrides) -> dict:
+    """Constructor arguments for any basis: shared table, class overrides, then filtered."""
+    kwargs = {
+        **DEFAULT_KWARGS,
+        **CLASS_DEFAULT_KWARGS.get(basis_cls.__name__, {}),
+        **overrides,
+    }
+    accepted = set(basis_cls._get_param_names())
+    return {k: v for k, v in kwargs.items() if k in accepted}
+
 
 # shut-off conversion warnings
 nap.nap_config.suppress_conversion_warnings = True
@@ -428,12 +449,6 @@ def basis_with_add_kwargs(label=None, basis_kwargs=None):
     return CustomBasis([func], label=label, basis_kwargs=basis_kwargs)
 
 
-def _requires_bounds(basis_cls) -> bool:
-    """Whether ``bounds`` is a mandatory constructor argument for this basis."""
-    param = inspect.signature(basis_cls.__init__).parameters.get("bounds")
-    return param is not None and param.default is inspect.Parameter.empty
-
-
 class CombinedBasis(BasisFuncsTesting):
     """
     This class is used to run tests on combination operations (e.g., addition, multiplication) among Basis functions.
@@ -471,10 +486,8 @@ class CombinedBasis(BasisFuncsTesting):
         # Merge with provided  extra kwargs
         kwargs = {**default_kwargs, **kwargs}
 
-        # bounds is required by some bases and optional for ten others, where defaulting it
-        # would silently change how they are built; supply it only where it has no default.
-        if _requires_bounds(basis_class):
-            kwargs.setdefault("bounds", (0.0, 1.0))
+        # per-class overrides for signatures the shared table cannot express
+        kwargs = {**CLASS_DEFAULT_KWARGS.get(basis_class.__name__, {}), **kwargs}
 
         if basis_class == AdditiveBasis:
             kwargs_mspline = inspect_utils.trim_kwargs(
