@@ -311,9 +311,11 @@ def instantiate_atomic_basis(cls, **kwargs):
         return custom_basis(**kwargs)
     names = cls._get_param_names()
 
-    all_defaults = DEFAULT_KWARGS.copy()
+    # per-class overrides win over the shared table, but never over an explicit kwarg
+    defaults = {**DEFAULT_KWARGS, **CLASS_DEFAULT_KWARGS.get(cls.__name__, {})}
+    all_defaults = defaults.copy()
 
-    for name in DEFAULT_KWARGS:
+    for name in defaults:
         if name not in names:
             all_defaults.pop(name)
         elif name not in kwargs:
@@ -351,9 +353,14 @@ def extra_kwargs(cls, n_basis):
     name = cls.__name__
     if "OrthExp" in name:
         return dict(decay_rates=np.arange(1, n_basis + 1))
-    # before the "Fourier" branch: FourierGP matches that substring but takes no frequencies
+    # before the "Fourier" branch: FourierGP matches that substring but takes no frequencies.
+    # bounds is left to instantiate_atomic_basis: call sites pass it and would collide here.
     elif cls.__name__ in CLASS_DEFAULT_KWARGS:
-        return dict(CLASS_DEFAULT_KWARGS[cls.__name__])
+        return {
+            k: v
+            for k, v in CLASS_DEFAULT_KWARGS[cls.__name__].items()
+            if k != "bounds"
+        }
     elif "Fourier" in name:
         return dict(frequencies=(1, 1 + n_basis // 2))
     return {}
