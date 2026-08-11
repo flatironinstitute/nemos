@@ -567,6 +567,11 @@ def list_all_basis_classes(filter_basis="all") -> list[BasisMixin]:
         *carries*, rather than by the absence of Eval and Conv, keeps it correct if a further
         behaviour mixin is ever introduced -- such a basis would still be non-composite, and
         the Eval/Conv partition guard is what would flag the new behaviour.
+
+        ``"EvalLike"`` is the non-composite bases that do not convolve, i.e. the former
+        ``list_all_basis_classes("Eval") + [CustomBasis]``. ``CustomBasis`` belongs there
+        because it evaluates a user-supplied callable, which is Eval behaviour without the
+        mixin.
     """
     all_basis = list(_ALL_BASIS_CLASSES)
     if filter_basis == "all":
@@ -575,6 +580,7 @@ def list_all_basis_classes(filter_basis="all") -> list[BasisMixin]:
         "Eval": is_eval_basis,
         "Conv": is_conv_basis,
         "NonComposite": lambda cls: not is_composite_basis(cls),
+        "EvalLike": lambda cls: not is_composite_basis(cls) and not is_conv_basis(cls),
     }[filter_basis]
     return [a for a in all_basis if cond_fn(a)]
 
