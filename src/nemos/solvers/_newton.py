@@ -288,7 +288,7 @@ class Newton(HessianMixin):
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
-        return {"maxiter", "tol", "rtol", "autodiff", "jit"}
+        return {"maxiter", "tol", "rtol", "jit"}
 
     def _get_optim_info(
         self,
@@ -320,6 +320,10 @@ class ProximalNewton(Newton):
 
     Parameters
     ----------
+    tol, rtol :
+        Absolute and relative tolerances of the outer Cauchy criterion on the accepted
+        step. Unlike :class:`Newton`, which tests ``||grad|| <= tol``, both are read
+        here: see :meth:`_converged`.
     inner_iter :
         Maximum FISTA steps on the subproblem. The subproblem uses the assembled
         Hessian block and touches no data, so these steps are cheap.
@@ -351,6 +355,7 @@ class ProximalNewton(Newton):
         jit: bool = True,
         maxiter: int = DEFAULT_MAX_STEPS,
         tol: float = DEFAULT_ATOL,
+        rtol: float = DEFAULT_RTOL,
         inner_iter: int = 100,
         inner_atol: float = 1e-8,
         inner_rtol: float = 1e-8,
@@ -364,14 +369,13 @@ class ProximalNewton(Newton):
             jit=jit,
             maxiter=maxiter,
             tol=tol,
+            rtol=rtol,
         )
         # the penalty alone, for the composite line search. self.fun is the smooth
-        # loss here, so the composite objective is self.fun + self._penalty.
-        filter_kwargs = regularizer._get_filter_kwargs(
-            strength=regularizer_strength, params=init_params
-        )
-        self._penalty = lambda p: regularizer._penalization(
-            p, filter_kwargs=filter_kwargs
+        # loss here, so the composite objective is self.fun + self._penalty, which is
+        # exactly what ``regularizer.penalized_loss`` builds from the same accessor.
+        self._penalty = regularizer.penalty_fn(
+            params=init_params, strength=regularizer_strength
         )
 
         self.inner_iter = inner_iter
