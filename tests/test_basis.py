@@ -19,11 +19,11 @@ import nemos.basis._basis_mixin as _basis_mixin
 import nemos.basis.basis as basis
 import nemos.convolve as convolve
 from conftest import (
+    _BASIS_BEHAVIOUR_MIXINS,
     DEFAULT_KWARGS,
     BasisFuncsTesting,
     CombinedBasis,
     SizeTerminal,
-    _BASIS_BEHAVIOUR_MIXINS,
     atomic_basis_superclass_pairs,
     custom_basis,
     is_conv_basis,
@@ -68,7 +68,6 @@ from nemos.basis._spline_basis import (
 from nemos.basis._zero_basis import ZeroBasis
 from nemos.utils import pynapple_concatenate_numpy
 
-
 # Exported but not discovered: ``TransformerBasis`` wraps a basis for sklearn, it is not one.
 _PUBLIC_NOT_DISCOVERED = {"TransformerBasis"}
 
@@ -109,7 +108,9 @@ def test_behaviour_mixins_match_the_mixin_module():
         f"{sorted(undeclared)}"
     )
     stale = _NON_BEHAVIOUR_MIXINS - defined
-    assert not stale, f"declared non-behaviour but no longer in the module: {sorted(stale)}"
+    assert (
+        not stale
+    ), f"declared non-behaviour but no longer in the module: {sorted(stale)}"
 
     assert not (behaviour - defined), (
         "behaviour mixins defined outside nemos/basis/_basis_mixin.py, so this guard cannot "
@@ -214,9 +215,9 @@ def test_every_basis_is_atomic_or_declared():
         f"every atomic parametrization without saying so: {sorted(undeclared)}"
     )
     stale = _NON_ATOMIC_BASIS & atomic
-    assert not stale, (
-        f"declared non-atomic but now carrying AtomicBasisMixin: {sorted(stale)}"
-    )
+    assert (
+        not stale
+    ), f"declared non-atomic but now carrying AtomicBasisMixin: {sorted(stale)}"
     gone = _NON_ATOMIC_BASIS - all_basis
     assert not gone, f"declared but no such basis exists: {sorted(gone)}"
 
@@ -268,9 +269,13 @@ def test_eval_conv_mixins_agree_with_the_name_convention():
             by_mixin_eval and by_mixin_conv
         ), f"{cls.__name__} carries both EvalBasisMixin and ConvBasisMixin"
         if cls.__name__.endswith("Eval"):
-            assert by_mixin_eval, f"{cls.__name__} is named Eval but lacks EvalBasisMixin"
+            assert (
+                by_mixin_eval
+            ), f"{cls.__name__} is named Eval but lacks EvalBasisMixin"
         if cls.__name__.endswith("Conv"):
-            assert by_mixin_conv, f"{cls.__name__} is named Conv but lacks ConvBasisMixin"
+            assert (
+                by_mixin_conv
+            ), f"{cls.__name__} is named Conv but lacks ConvBasisMixin"
         # every atomic basis must land in exactly one of the two parametrizations
         if issubclass(cls, AtomicBasisMixin):
             assert is_eval_basis(cls) != is_conv_basis(
@@ -4178,9 +4183,7 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("shape", [(0, 1, 2), (1, 0, 2), (1, 2, 0), (0,), (0, 0)])
     @pytest.mark.parametrize(
         "basis_a, basis_b",
-        create_atomic_basis_pairs(
-            list_all_basis_classes("NonComposite")
-        ),
+        create_atomic_basis_pairs(list_all_basis_classes("NonComposite")),
     )
     def test_empty_inputs_compute_features(
         self, shape: tuple[int], basis_a, basis_b, basis_class_specific_params
@@ -4209,9 +4212,7 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("shape", [(0, 1, 2), (1, 0, 2), (1, 2, 0), (0,), (0, 0)])
     @pytest.mark.parametrize(
         "basis_a, basis_b",
-        create_atomic_basis_pairs(
-            list_all_basis_classes("NonComposite")
-        ),
+        create_atomic_basis_pairs(list_all_basis_classes("NonComposite")),
     )
     def test_empty_inputs_evaluate(
         self, shape: tuple[int], basis_a, basis_b, basis_class_specific_params
@@ -4362,9 +4363,7 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "basis_a, basis_b",
-        create_atomic_basis_pairs(
-            list_all_basis_classes("NonComposite")
-        ),
+        create_atomic_basis_pairs(list_all_basis_classes("NonComposite")),
     )
     def test_input_shape_product_init(
         self, basis_a, basis_b, basis_class_specific_params
@@ -4405,9 +4404,7 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "basis_a, basis_b",
-        create_atomic_basis_pairs(
-            list_all_basis_classes("NonComposite")
-        ),
+        create_atomic_basis_pairs(list_all_basis_classes("NonComposite")),
     )
     def test_provide_label_at_init(self, basis_a, basis_b, basis_class_specific_params):
         basis_a_obj = self.instantiate_basis(
@@ -5275,9 +5272,7 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "basis_a, basis_b",
-        create_atomic_basis_pairs(
-            list_all_basis_classes("NonComposite")
-        ),
+        create_atomic_basis_pairs(list_all_basis_classes("NonComposite")),
     )
     @pytest.mark.parametrize("shape_a", [1, (), np.ones(3)])
     @pytest.mark.parametrize("shape_b", [1, (), np.ones(3)])
@@ -5311,9 +5306,7 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "basis_a, basis_b",
-        create_atomic_basis_pairs(
-            list_all_basis_classes("NonComposite")
-        ),
+        create_atomic_basis_pairs(list_all_basis_classes("NonComposite")),
     )
     @pytest.mark.parametrize("shape_a", [2, (2,), np.ones((3, 2))])
     @pytest.mark.parametrize("shape_b", [3, (3,), np.ones((3, 3))])
@@ -5347,9 +5340,7 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "basis_a, basis_b",
-        create_atomic_basis_pairs(
-            list_all_basis_classes("NonComposite")
-        ),
+        create_atomic_basis_pairs(list_all_basis_classes("NonComposite")),
     )
     @pytest.mark.parametrize("shape_a", [(2, 2), np.ones((3, 2, 2))])
     @pytest.mark.parametrize("shape_b", [(3, 1), np.ones((3, 3, 1))])
@@ -5401,9 +5392,7 @@ class TestAdditiveBasis(CombinedBasis):
     )
     @pytest.mark.parametrize(
         "basis_a, basis_b",
-        create_atomic_basis_pairs(
-            list_all_basis_classes("NonComposite")
-        ),
+        create_atomic_basis_pairs(list_all_basis_classes("NonComposite")),
     )
     def test_set_input_value_types(
         self, inp_shape, expectation, basis_a, basis_b, basis_class_specific_params
@@ -5420,9 +5409,7 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "basis_a, basis_b",
-        create_atomic_basis_pairs(
-            list_all_basis_classes("NonComposite")
-        ),
+        create_atomic_basis_pairs(list_all_basis_classes("NonComposite")),
     )
     def test_deep_copy_basis(self, basis_a, basis_b, basis_class_specific_params):
 
@@ -5470,9 +5457,7 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "basis_a, basis_b",
-        create_atomic_basis_pairs(
-            list_all_basis_classes("NonComposite")
-        ),
+        create_atomic_basis_pairs(list_all_basis_classes("NonComposite")),
     )
     def test_compute_n_basis_runtime(
         self, basis_a, basis_b, basis_class_specific_params
@@ -5626,9 +5611,7 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "basis_a, basis_b",
-        create_atomic_basis_pairs(
-            list_all_basis_classes("NonComposite")
-        ),
+        create_atomic_basis_pairs(list_all_basis_classes("NonComposite")),
     )
     def test_bounds_property(self, basis_a, basis_b, basis_class_specific_params):
         """Test that the bounds property correctly combines bounds from component bases."""
@@ -5814,9 +5797,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("shape", [(0, 1, 2), (1, 0, 2), (1, 2, 0), (0,), (0, 0)])
     @pytest.mark.parametrize(
         "basis_a, basis_b",
-        create_atomic_basis_pairs(
-            list_all_basis_classes("NonComposite")
-        ),
+        create_atomic_basis_pairs(list_all_basis_classes("NonComposite")),
     )
     def test_empty_inputs_compute_features(
         self, shape: tuple[int], basis_a, basis_b, basis_class_specific_params
@@ -5849,9 +5830,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("shape", [(0, 1, 2), (1, 0, 2), (1, 2, 0), (0,), (0, 0)])
     @pytest.mark.parametrize(
         "basis_a, basis_b",
-        create_atomic_basis_pairs(
-            list_all_basis_classes("NonComposite")
-        ),
+        create_atomic_basis_pairs(list_all_basis_classes("NonComposite")),
     )
     def test_empty_inputs_evaluate(
         self, shape: tuple[int], basis_a, basis_b, basis_class_specific_params
@@ -5931,9 +5910,7 @@ class TestMultiplicativeBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "basis_a, basis_b",
-        create_atomic_basis_pairs(
-            list_all_real_basis_classes("NonComposite")
-        ),
+        create_atomic_basis_pairs(list_all_real_basis_classes("NonComposite")),
     )
     def test_input_shape_product_init(
         self, basis_a, basis_b, basis_class_specific_params
@@ -6831,9 +6808,7 @@ class TestMultiplicativeBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "basis_a, basis_b",
-        create_atomic_basis_pairs(
-            list_all_basis_classes("NonComposite")
-        ),
+        create_atomic_basis_pairs(list_all_basis_classes("NonComposite")),
     )
     @pytest.mark.parametrize("shape", [1, (), np.ones(3)])
     @pytest.mark.parametrize("add_shape", [(), (1,)])
@@ -6863,9 +6838,7 @@ class TestMultiplicativeBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "basis_a, basis_b",
-        create_atomic_basis_pairs(
-            list_all_basis_classes("NonComposite")
-        ),
+        create_atomic_basis_pairs(list_all_basis_classes("NonComposite")),
     )
     @pytest.mark.parametrize("shape", [2, (2,), np.ones((3, 2))])
     @pytest.mark.parametrize("add_shape", [(), (1,)])
@@ -6895,9 +6868,7 @@ class TestMultiplicativeBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "basis_a, basis_b",
-        create_atomic_basis_pairs(
-            list_all_basis_classes("NonComposite")
-        ),
+        create_atomic_basis_pairs(list_all_basis_classes("NonComposite")),
     )
     @pytest.mark.parametrize("shape", [(2, 2), np.ones((3, 2, 2))])
     @pytest.mark.parametrize("add_shape", [(), (1,)])
@@ -6945,9 +6916,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     )
     @pytest.mark.parametrize(
         "basis_a, basis_b",
-        create_atomic_basis_pairs(
-            list_all_basis_classes("NonComposite")
-        ),
+        create_atomic_basis_pairs(list_all_basis_classes("NonComposite")),
     )
     def test_set_input_value_types(
         self, inp_shape, expectation, basis_a, basis_b, basis_class_specific_params
@@ -6964,9 +6933,7 @@ class TestMultiplicativeBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "basis_a, basis_b",
-        create_atomic_basis_pairs(
-            list_all_basis_classes("NonComposite")
-        ),
+        create_atomic_basis_pairs(list_all_basis_classes("NonComposite")),
     )
     def test_deep_copy_basis(self, basis_a, basis_b, basis_class_specific_params):
 
@@ -7000,9 +6967,7 @@ class TestMultiplicativeBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "basis_a, basis_b",
-        create_atomic_basis_pairs(
-            list_all_basis_classes("NonComposite")
-        ),
+        create_atomic_basis_pairs(list_all_basis_classes("NonComposite")),
     )
     def test_compute_n_basis_runtime(
         self, basis_a, basis_b, basis_class_specific_params
@@ -7221,9 +7186,7 @@ class TestMultiplicativeBasis(CombinedBasis):
 
     @pytest.mark.parametrize(
         "basis_a, basis_b",
-        create_atomic_basis_pairs(
-            list_all_real_basis_classes("NonComposite")
-        ),
+        create_atomic_basis_pairs(list_all_real_basis_classes("NonComposite")),
     )
     def test_bounds_property(self, basis_a, basis_b, basis_class_specific_params):
         """Test that the bounds property correctly combines bounds from component bases."""
