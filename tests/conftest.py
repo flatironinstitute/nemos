@@ -545,7 +545,15 @@ _ALL_BASIS_CLASSES = _discover_basis_classes()
 
 
 def is_composite_basis(basis_cls) -> bool:
-    """Whether a basis combines other bases rather than evaluating an input itself."""
+    """Whether a basis combines other bases rather than evaluating an input itself.
+
+    Note this is **not** the complement of ``AtomicBasisMixin``, tempting as that reading is.
+    The two agree on 19 of the 20 bases; ``CustomBasis`` carries neither mixin, since it is
+    not a ``Basis`` subclass. That one class is why the non-composite sets below have to be
+    defined by the absence of ``CompositeBasisMixin`` rather than the presence of
+    ``AtomicBasisMixin`` -- the latter would drop ``CustomBasis``, which is precisely the
+    class every call site used to append by hand.
+    """
     return issubclass(basis_cls, CompositeBasisMixin)
 
 
