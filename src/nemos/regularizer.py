@@ -27,6 +27,7 @@ from .proximal_operator import (
     prox_none,
     prox_ridge,
 )
+from .solvers._hess import Diagonal, General, HessianTag, PositiveDefinite
 from .tree_utils import pytree_map_and_reduce
 from .type_casting import _is_scalar_or_0d
 from .typing import ProximalOperator

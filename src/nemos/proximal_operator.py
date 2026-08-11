@@ -30,7 +30,7 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 
-from nemos.tree_utils import pytree_map_and_reduce
+from .tree_utils import pytree_map_and_reduce
 
 
 def compute_normalization(mask):
