@@ -5,10 +5,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-
-import nemos as nmo
 from sklearn.base import clone
 
+import nemos as nmo
 from nemos.batching import ArrayDataLoader
 from nemos.callbacks import Callback
 from nemos.glm.params import GLMParams
