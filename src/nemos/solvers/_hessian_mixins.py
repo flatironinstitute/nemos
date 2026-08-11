@@ -58,18 +58,32 @@ class HessianMixin:
         reg_tag: HessianTag | None = None,
         property_override: Optional[type] = None,
     ) -> None:
-        """Accept the model's analytic Hessian and resolve the tag describing it."""
-        # A proximal solver models the smooth part only, so the penalty contributes
-        # neither curvature nor structure to the Hessian it works with.
+        """Accept the model's analytic Hessian and resolve the tag describing it.
+
+        The invariant, whichever branch runs: ``self._hessian`` is the Hessian of the
+        smooth objective the solver differentiates, and ``self._hess_tag`` describes that
+        same matrix.
+        """
         if self._proximal:
-            reg_tag = None
+            # NeMoS splits the *whole* penalty into the proximal operator -- so much so
+            # that ``prox_elastic_net`` rescales for its own L2 term -- leaving the smooth
+            # objective equal to the unregularized loss. Its curvature is therefore the
+            # model's alone: the penalty contributes no curvature, no structure, and no
+            # ``property_override``, the last because that override describes the
+            # *penalized* Hessian, which a proximal solver does not hold. Promoting the
+            # tag here would claim definiteness for a matrix that is merely positive
+            # semidefinite.
+            reg_tag = property_override = None
+        else:
+            hess_fn = self._penalize_hessian(hess_fn, hess_tag)
+
         tag = hess_tag if reg_tag is None else combine_hessian_tags(hess_tag, reg_tag)
         if property_override is not None and tag is not None:
             tag = HessianTag(
                 tag.structure, property_override, batch_axes=tag.batch_axes
             )
         self._hess_tag = tag
-        self._hessian = self._penalize_hessian(hess_fn, hess_tag)
+        self._hessian = hess_fn
 
     def _penalize_hessian(self, hess_fn, model_tag):
         """Add the regularizer's penalty Hessian to the model's likelihood Hessian.
@@ -83,14 +97,12 @@ class HessianMixin:
 
         The batching comes from ``model_tag`` rather than the combined tag, because whether
         the Hessian is assembled one block per neuron is a property of the model.
+
+        Only reached for a non-proximal solver: ``setup_hessian`` decides whether there is
+        a penalty to add, so this method always adds one.
         """
         if hess_fn is None:
             return None
-
-        # For a proximal solver the penalty is applied by the prox, not modelled by the
-        # quadratic, so adding its curvature here would double-count it.
-        if self._proximal:
-            return hess_fn
 
         batch_axes = (
             model_tag.batch_axes

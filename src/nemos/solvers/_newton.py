@@ -312,11 +312,18 @@ class ProximalNewton(Newton):
     objective. This is the scheme ``glmnet`` [1]_ uses, with FISTA in place of
     coordinate descent for the inner problem; see [2]_ for the general method.
 
-    Unlike :class:`Newton` the Hessian is never inverted, only multiplied, so a singular
-    smooth Hessian is not by itself a problem: any quadratic part of the penalty makes
-    the inner subproblem strongly convex. This suits penalties such as
-    :class:`~nemos.regularizer.ElasticNet`, whose nonsmooth term puts first-order
-    methods at the mercy of the design's conditioning.
+    Well-posedness of the subproblem needs two conditions:
+
+    - :math:`H \succeq 0`, making it convex. Definiteness is only needed to invert
+      :math:`H`, and here :math:`H` is only multiplied (:meth:`_hvp_block`).
+    - :math:`\nabla f` restricted to :math:`\ker H` dominated by the growth of :math:`P`,
+      making it bounded below. This constrains the quadratic model at the current iterate,
+      not :math:`f`: a loss bounded below still has an unbounded model wherever :math:`H`
+      is singular and the gradient has a component in :math:`\ker H`.
+
+    A singular :math:`H` is therefore not by itself a problem, and no :math:`\ell_2` term
+    is needed to supply the missing curvature. An indefinite :math:`H` is unsupported: the
+    subproblem is unbounded below, so no solver has a minimum to find.
 
     Parameters
     ----------
