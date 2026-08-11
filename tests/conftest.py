@@ -324,6 +324,11 @@ DEFAULT_KWARGS = {
     "window_size": 11,
     "decay_rates": np.arange(1, 1 + 5),
     "categories": 4,
+    # FourierGP-only required args, at the values its own tests use. ``bounds`` is not here:
+    # ten classes accept it, so a default would change how all of them are built.
+    "lengthscale": 1e-2,
+    "variance": 1.0,
+    "eps": 1e-4,
 }
 
 # shut-off conversion warnings
@@ -423,6 +428,12 @@ def basis_with_add_kwargs(label=None, basis_kwargs=None):
     return CustomBasis([func], label=label, basis_kwargs=basis_kwargs)
 
 
+def _requires_bounds(basis_cls) -> bool:
+    """Whether ``bounds`` is a mandatory constructor argument for this basis."""
+    param = inspect.signature(basis_cls.__init__).parameters.get("bounds")
+    return param is not None and param.default is inspect.Parameter.empty
+
+
 class CombinedBasis(BasisFuncsTesting):
     """
     This class is used to run tests on combination operations (e.g., addition, multiplication) among Basis functions.
@@ -459,6 +470,11 @@ class CombinedBasis(BasisFuncsTesting):
 
         # Merge with provided  extra kwargs
         kwargs = {**default_kwargs, **kwargs}
+
+        # bounds is required by some bases and optional for ten others, where defaulting it
+        # would silently change how they are built; supply it only where it has no default.
+        if _requires_bounds(basis_class):
+            kwargs.setdefault("bounds", (0.0, 1.0))
 
         if basis_class == AdditiveBasis:
             kwargs_mspline = inspect_utils.trim_kwargs(
