@@ -544,17 +544,39 @@ def _discover_basis_classes() -> list:
 _ALL_BASIS_CLASSES = _discover_basis_classes()
 
 
+def is_composite_basis(basis_cls) -> bool:
+    """Whether a basis combines other bases rather than evaluating an input itself."""
+    return issubclass(basis_cls, CompositeBasisMixin)
+
+
 # automatic define user accessible basis and check the methods
 def list_all_basis_classes(filter_basis="all") -> list[BasisMixin]:
     """
     Return all the instantiable basis classes in nemos.basis, which is every concrete
     class combining ``Basis`` with an Eval/Conv/Composite mixin, plus ``CustomBasis``.
+
+    Parameters
+    ----------
+    filter_basis :
+        ``"all"`` for everything, ``"Eval"`` or ``"Conv"`` for the bases carrying that
+        behaviour, or ``"NonComposite"`` for everything that is not a composite.
+
+        ``"NonComposite"`` is the entry point for the tests that exercise single bases: it is
+        the set that used to be spelled ``list_all_basis_classes("Eval") +
+        list_all_basis_classes("Conv") + [CustomBasis]``. Defining it by the mixin a composite
+        *carries*, rather than by the absence of Eval and Conv, keeps it correct if a further
+        behaviour mixin is ever introduced -- such a basis would still be non-composite, and
+        the Eval/Conv partition guard is what would flag the new behaviour.
     """
     all_basis = list(_ALL_BASIS_CLASSES)
-    if filter_basis != "all":
-        cond_fn = is_eval_basis if filter_basis == "Eval" else is_conv_basis
-        all_basis = [a for a in all_basis if cond_fn(a)]
-    return all_basis
+    if filter_basis == "all":
+        return all_basis
+    cond_fn = {
+        "Eval": is_eval_basis,
+        "Conv": is_conv_basis,
+        "NonComposite": lambda cls: not is_composite_basis(cls),
+    }[filter_basis]
+    return [a for a in all_basis if cond_fn(a)]
 
 
 def implementation_superclass(basis_cls) -> Optional[type]:
