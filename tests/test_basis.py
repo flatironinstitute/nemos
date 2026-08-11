@@ -67,32 +67,39 @@ from nemos.basis._zero_basis import ZeroBasis
 from nemos.utils import pynapple_concatenate_numpy
 
 
+# Names in ``nemos.basis.__all__`` that ``list_all_basis_classes`` deliberately does not
+# return. ``TransformerBasis`` wraps a basis for the scikit-learn API rather than being one,
+# so it is not a ``Basis`` subclass and has no basis behaviour to test here.
+_PUBLIC_NOT_DISCOVERED = {"TransformerBasis"}
+
+
 @pytest.mark.metatest
-def test_list_all_basis_classes_covers_the_public_api():
-    """``list_all_basis_classes`` drives most parametrizations in this file, so a basis
-    missing from it is silently untested rather than failing.
+def test_list_all_basis_classes_matches_the_public_api():
+    """``list_all_basis_classes`` must account for everything ``nemos.basis`` exports.
 
-    The contract is the public API: every concrete ``Basis`` subclass exported from
-    ``nemos.basis`` must appear. Subclass discovery is deliberately not the reference, for
-    two reasons -- this module defines its own ``Basis`` subclasses for testing, and the
-    package holds concrete intermediates (``FourierBasis``, ``HistoryBasis``,
-    ``IdentityBasis``, ``ZeroBasis``) that users reach through their ``Eval``/``Conv`` forms
-    instead. Neither belongs in the helper.
+    Nearly every parametrization in this file derives from that helper, so discovery failing
+    to find a basis silently drops it from all of them. Discovery works by combining ``Basis``
+    with one of the behaviour mixins, which is exactly what can go wrong: a basis that does
+    not follow the mixin convention, or a **new** mixin (a hypothetical ``ConvNDMixin``) that
+    ``_discover_basis_classes`` does not know about, would be exported and yet invisible here.
+
+    The comparison is a raw name diff in both directions against a declared expectation,
+    rather than a filtered subset check. Filtering ``__all__`` down to concrete ``Basis``
+    subclasses first would swallow precisely the case worth catching.
     """
-    public = {
-        obj
-        for name in nemos.basis.__all__
-        if inspect.isclass(obj := getattr(nemos.basis, name, None))
-        and issubclass(obj, Basis)
-        and not inspect_utils.is_abstract(obj)
-    }
-    covered = set(list_all_basis_classes())
-    assert public, "no public Basis subclasses found; is nemos.basis.__all__ populated?"
+    public = set(nemos.basis.__all__)
+    discovered = {cls.__name__ for cls in list_all_basis_classes()}
 
-    missing = public - covered
-    assert not missing, (
-        "exported from nemos.basis but absent from list_all_basis_classes, so untested by "
-        f"every parametrization built on it: {sorted(cls.__name__ for cls in missing)}"
+    assert public - discovered == _PUBLIC_NOT_DISCOVERED, (
+        "the difference between nemos.basis.__all__ and what list_all_basis_classes finds "
+        "has changed. Exported but undiscovered means the basis is missing from every "
+        "parametrization built on the helper -- usually a mixin that is not carried, or a new "
+        f"behaviour mixin discovery has not been taught about: "
+        f"{sorted(public - discovered - _PUBLIC_NOT_DISCOVERED)}"
+    )
+    assert not (discovered - public), (
+        "discovered as a basis but not exported from nemos.basis, so it is tested but "
+        f"unreachable for users: {sorted(discovered - public)}"
     )
 
 
@@ -432,23 +439,12 @@ def test_all_basis_are_tested() -> None:
             f"The following classes are not tested: {[bas.__qualname__ for bas in all_bases.difference(tested_bases)]}"
         )
 
-    pytest_marks = getattr(TestSharedMethods, "pytestmark", [])
-
-    # Find the parametrize mark for TestSharedMethods
-    out = None
-    for mark in pytest_marks:
-        if mark.name == "parametrize":
-            # Return the arguments of the parametrize mark
-            out = mark.args[1]  # The second argument contains the list
-
-    if out is None:
-        raise ValueError("cannot fine parametrization.")
-
-    basis_tested_in_shared_methods = set(out)
-    all_one_dim_basis = set(
-        list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis]
-    )
-    assert basis_tested_in_shared_methods == all_one_dim_basis
+    # ``TestSharedMethods``, ``TestEvalBasis`` and ``TestConvBasis`` used to be checked here
+    # by reading their ``parametrize`` mark and comparing it against the discovered set. They
+    # now derive their parametrization from ``list_all_basis_classes`` directly, so their
+    # coverage is structural and such a check would compare an expression against itself.
+    # What can still go wrong -- discovery not finding an exported basis -- is caught by
+    # ``test_list_all_basis_classes_matches_the_public_api``.
 
 
 @pytest.mark.parametrize(
@@ -588,31 +584,13 @@ def test_add_docstring():
         CustomSubClass2()
 
 
-@pytest.mark.parametrize(
-    "basis_instance, super_class",
-    [
-        (basis.BSplineEval(10), BSplineBasis),
-        (basis.BSplineConv(10, window_size=11), BSplineBasis),
-        (basis.CyclicBSplineEval(10), CyclicBSplineBasis),
-        (basis.CyclicBSplineConv(10, window_size=11), CyclicBSplineBasis),
-        (basis.MSplineEval(10), MSplineBasis),
-        (basis.MSplineConv(10, window_size=11), MSplineBasis),
-        (basis.RaisedCosineLinearEval(10), RaisedCosineBasisLinear),
-        (basis.RaisedCosineLinearConv(10, window_size=11), RaisedCosineBasisLinear),
-        (basis.RaisedCosineLogEval(10), RaisedCosineBasisLog),
-        (basis.RaisedCosineLogConv(10, window_size=11), RaisedCosineBasisLog),
-        (basis.OrthExponentialEval(10, np.arange(1, 11)), OrthExponentialBasis),
-        (
-            basis.OrthExponentialConv(10, decay_rates=np.arange(1, 11), window_size=12),
-            OrthExponentialBasis,
-        ),
-        (basis.IdentityEval(), IdentityBasis),
-        (basis.HistoryConv(11), HistoryBasis),
-        (basis.FourierEval(11), FourierBasis),
-        (basis.Zero(), ZeroBasis),
-    ],
-)
-def test_expected_output_eval_on_grid(basis_instance, super_class):
+@pytest.mark.parametrize("cls_pub, super_class", _SUPERCLASS_PAIRS)
+def test_expected_output_eval_on_grid(
+    cls_pub, super_class, basis_class_specific_params
+):
+    basis_instance = CombinedBasis().instantiate_basis(
+        5, cls_pub, basis_class_specific_params, window_size=10
+    )
     x, y = super_class.evaluate_on_grid(basis_instance, 100)
     xx, yy = basis_instance.evaluate_on_grid(100)
     np.testing.assert_equal(xx, x)
@@ -770,18 +748,7 @@ def test_composite_split_by_feature_multiply(input_shape):
     )
 
 
-@pytest.mark.parametrize(
-    "cls",
-    [
-        basis.RaisedCosineLogConv,
-        basis.RaisedCosineLinearConv,
-        basis.BSplineConv,
-        basis.CyclicBSplineConv,
-        basis.MSplineConv,
-        basis.OrthExponentialConv,
-        basis.HistoryConv,
-    ],
-)
+@pytest.mark.parametrize("cls", list_all_basis_classes("Conv"))
 class TestConvBasis:
     @pytest.mark.parametrize("n_basis", [5, 6])
     @pytest.mark.parametrize("ws", [10, 20])
@@ -1119,22 +1086,7 @@ class TestConvBasis:
             bas.set_params(bounds=(1, 2))
 
 
-@pytest.mark.parametrize(
-    "cls",
-    [
-        CustomBasis,
-        basis.RaisedCosineLogEval,
-        basis.RaisedCosineLinearEval,
-        basis.BSplineEval,
-        basis.CyclicBSplineEval,
-        basis.MSplineEval,
-        basis.OrthExponentialEval,
-        basis.IdentityEval,
-        basis.FourierEval,
-        basis.Zero,
-        Category,
-    ],
-)
+@pytest.mark.parametrize("cls", list_all_basis_classes("Eval") + [CustomBasis])
 class TestEvalBasis:
     @pytest.mark.parametrize("n_basis", [5, 6])
     @pytest.mark.parametrize("vmin, vmax", [(0, 1), (-1, 1)])
@@ -1622,26 +1574,7 @@ def test_call_equivalent_in_conv(n_basis, cls):
 
 @pytest.mark.parametrize(
     "cls",
-    [
-        CustomBasis,
-        basis.RaisedCosineLogEval,
-        basis.RaisedCosineLogConv,
-        basis.RaisedCosineLinearEval,
-        basis.RaisedCosineLinearConv,
-        basis.BSplineEval,
-        basis.BSplineConv,
-        basis.CyclicBSplineEval,
-        basis.CyclicBSplineConv,
-        basis.MSplineEval,
-        basis.MSplineConv,
-        basis.OrthExponentialEval,
-        basis.OrthExponentialConv,
-        basis.IdentityEval,
-        basis.HistoryConv,
-        basis.FourierEval,
-        basis.Zero,
-        Category,
-    ],
+    list_all_basis_classes("Eval") + list_all_basis_classes("Conv") + [CustomBasis],
 )
 class TestSharedMethods:
     @pytest.mark.parametrize(
@@ -8634,17 +8567,23 @@ def test_composite_basis_repr_wrapping():
         assert "    ...\n" in out
 
 
+@pytest.mark.metatest
 def test_basis_public_api_matches_subclasses():
-    import nemos as nmo
+    """Coverage guard: ``nemos.basis.__all__`` names exactly the exposed Basis subclasses.
 
+    Pairs with ``test_list_all_basis_classes_covers_the_public_api``, which closes the next
+    link in the chain: this one checks source classes against the public API, that one checks
+    the public API against the test helper driving the parametrizations. A basis exported
+    without a behaviour mixin passes here and fails there.
+    """
     # Public contract of the module
-    public = set(nmo.basis.__all__)
+    public = set(nemos.basis.__all__)
 
     # All Basis subclasses exposed through the namespace
     basis_subclasses = {
         name
-        for name, obj in inspect.getmembers(nmo.basis, inspect.isclass)
-        if issubclass(obj, nmo.basis._basis.Basis) and obj is not nmo.basis._basis.Basis
+        for name, obj in inspect.getmembers(nemos.basis, inspect.isclass)
+        if issubclass(obj, Basis) and obj is not Basis
     }
 
     # Known public names that are not direct subclasses
