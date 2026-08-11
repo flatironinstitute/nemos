@@ -67,9 +67,7 @@ from nemos.basis._zero_basis import ZeroBasis
 from nemos.utils import pynapple_concatenate_numpy
 
 
-# Names in ``nemos.basis.__all__`` that ``list_all_basis_classes`` deliberately does not
-# return. ``TransformerBasis`` wraps a basis for the scikit-learn API rather than being one,
-# so it is not a ``Basis`` subclass and has no basis behaviour to test here.
+# Exported but not discovered: ``TransformerBasis`` wraps a basis for sklearn, it is not one.
 _PUBLIC_NOT_DISCOVERED = {"TransformerBasis"}
 
 
@@ -103,10 +101,7 @@ def test_list_all_basis_classes_matches_the_public_api():
     )
 
 
-# Every concrete basis is either covered by a parametrization derived from
-# ``list_all_basis_classes`` or declared here with a reason. The guards below assert that
-# partition exactly, so a newly added basis either joins the derived tests automatically or
-# fails until someone states why it cannot.
+# Every basis is either covered by a derived parametrization or declared below with a reason.
 
 # Bases with no implementation superclass, hence outside every public-vs-superclass test.
 _NO_IMPLEMENTATION_SUPERCLASS = {
@@ -469,12 +464,8 @@ def test_all_basis_are_tested() -> None:
             f"The following classes are not tested: {[bas.__qualname__ for bas in all_bases.difference(tested_bases)]}"
         )
 
-    # ``TestSharedMethods``, ``TestEvalBasis`` and ``TestConvBasis`` used to be checked here
-    # by reading their ``parametrize`` mark and comparing it against the discovered set. They
-    # now derive their parametrization from ``list_all_basis_classes`` directly, so their
-    # coverage is structural and such a check would compare an expression against itself.
-    # What can still go wrong -- discovery not finding an exported basis -- is caught by
-    # ``test_list_all_basis_classes_matches_the_public_api``.
+    # Shared/Eval/Conv classes now derive their parametrization; discovery is guarded by
+    # test_list_all_basis_classes_matches_the_public_api.
 
 
 @pytest.mark.parametrize(
@@ -546,9 +537,7 @@ def test_example_docstrings_add(
         assert f" {basis_name}" not in doc_components[1]
 
 
-# ``(public basis, the base implementing its maths)`` for every atomic basis that has one,
-# derived from the MRO rather than tabulated. Shared by the tests that compare a public class
-# against its superclass, so they cannot drift apart or fall behind a newly added basis.
+# (public basis, base implementing its maths) for every atomic basis, derived from the MRO.
 _SUPERCLASS_PAIRS = [
     pytest.param(cls, sup, id=f"{cls.__name__}-{sup.__name__}")
     for cls, sup in atomic_basis_superclass_pairs()
@@ -577,8 +566,7 @@ def test_docstrings_decorator_superclass(cls_pub, cls_sup, method):
 )
 def test_docstrings_decorator_mixinclass(cls_pub, mixin, method):
     if mixin is None:
-        # which behaviour mixin supplies the method is decided by the mixin the class
-        # actually carries, not by its name
+        # decided by the mixin the class carries, not by its name
         mixin = "EvalBasisMixin" if is_eval_basis(cls_pub) else "ConvBasisMixin"
         mixin_meth = getattr(getattr(basis, mixin), "_" + method)
     else:

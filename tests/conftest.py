@@ -502,11 +502,7 @@ def is_conv_basis(basis_cls) -> bool:
     return issubclass(basis_cls, ConvBasisMixin) or basis_cls.__name__.endswith("Conv")
 
 
-# A basis is instantiable exactly when it combines ``Basis`` with one of these behaviour
-# mixins. That is what separates a user-facing basis from a shared implementation base:
-# ``FourierEval`` is ``FourierBasis`` plus ``EvalBasisMixin``, and ``FourierBasis`` alone is
-# not meant to be instantiated. Filtering on the mixin therefore drops the intermediates
-# without naming them.
+# Instantiable means ``Basis`` plus a behaviour mixin, which drops bases like ``FourierBasis``.
 _BASIS_BEHAVIOUR_MIXINS = (EvalBasisMixin, ConvBasisMixin, CompositeBasisMixin)
 
 
