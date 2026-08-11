@@ -26,9 +26,9 @@ from nemos.base_regressor import BaseRegressor
 from nemos.glm import GLM, PopulationGLM
 from nemos.glm.classifier_glm import ClassifierGLM, ClassifierPopulationGLM
 from nemos.glm.params import GLMParams
-from nemos.regularizer import Regularizer, Ridge, UnRegularized
+from nemos.regularizer import Lasso, Regularizer, Ridge, UnRegularized
 from nemos.solvers._abstract_solver import OptimizationInfo
-from nemos.solvers._newton import Newton, NewtonState
+from nemos.solvers._newton import Newton, NewtonState, ProximalNewton
 from nemos.tree_utils import pytree_map_and_reduce
 
 # Import every submodule so all BaseRegressor subclasses are registered before the
@@ -1190,3 +1190,230 @@ def test_newton_invalid_kwarg_raises(glm_class):
             solver_name="Newton",
             solver_kwargs={"totally_fake_kwarg": 99},
         )
+
+
+# Squared error, averaged. Its Hessian is the constant ``(2/n) X^T X``, which makes every
+# reference below a closed form rather than another solver's output.
+def _mse(params, X, y):
+    return jnp.power(y - jnp.dot(X, params), 2).mean()
+
+
+def _run_prox_newton(loss, X, y, init, regularizer, strength, **kwargs):
+    solver = ProximalNewton(
+        loss,
+        regularizer=regularizer,
+        regularizer_strength=strength,
+        has_aux=False,
+        init_params=init,
+        tol=1e-12,
+        maxiter=500,
+        **kwargs,
+    )
+    return solver, *solver.run(init, X, y)
+
+
+@pytest.mark.requires_x64
+def test_prox_newton_matches_closed_form_lasso():
+    """On an orthonormal design the Lasso solution is a soft-threshold, in closed form.
+
+    With ``X^T X = I`` the averaged squared error separates per coordinate, and minimizing
+    ``(1/n)(b^2 - 2 b z) + lam |b|`` over each gives ``b = soft(z, n lam / 2)`` for
+    ``z = X^T y``. ``lam`` is chosen so both branches of the threshold are exercised: a
+    threshold above every ``|z|`` returns all zeros and would pass while testing nothing.
+
+    Measured agreement is 4.3e-8 at the default ``inner_atol``/``inner_rtol`` of 1e-8, and
+    tightening those moves it to 5.1e-9, so the floor is set by the inner solve. The 1e-6
+    bound below sits ~20x above the measured value.
+    """
+    np.random.seed(0)
+    n, n_features = 200, 6
+    X, _ = np.linalg.qr(np.random.normal(size=(n, n_features)))
+    y = np.random.normal(size=n)
+    np.testing.assert_allclose(X.T @ X, np.eye(n_features), atol=1e-12)
+
+    strength = 0.005
+    z = X.T @ y
+    threshold = n * strength / 2.0
+    expected = np.sign(z) * np.maximum(np.abs(z) - threshold, 0.0)
+    # the point of the chosen strength: neither branch is empty
+    assert 0 < (expected != 0).sum() < n_features
+
+    init = jnp.zeros(n_features)
+    _, params, state, _ = _run_prox_newton(_mse, X, y, init, Lasso(), strength)
+
+    np.testing.assert_allclose(params, expected, atol=1e-8)
+    assert bool(state.stats.converged)
+    # the prox produces exact zeros, not merely small numbers
+    np.testing.assert_array_equal(np.asarray(params) == 0.0, expected == 0.0)
+
+
+@pytest.mark.requires_x64
+def test_prox_newton_reduces_to_newton_without_penalty():
+    """With ``P = 0`` the composite objective is smooth and both solvers must agree.
+
+    ``ProximalNewton`` differs from ``Newton`` only in how it reaches the penalty and in
+    its convergence test, so an unpenalized problem is where the two have to coincide --
+    on each other and on the least-squares solution.
+    """
+    np.random.seed(0)
+    X = np.random.normal(size=(200, 4))
+    y = np.random.normal(size=200)
+    ols, *_ = np.linalg.lstsq(X, y, rcond=-1)
+
+    init = jnp.zeros(4)
+    _, prox_params, _, _ = _run_prox_newton(_mse, X, y, init, UnRegularized(), None)
+    newton_params, _, _ = Newton(
+        _mse,
+        regularizer=UnRegularized(),
+        regularizer_strength=None,
+        has_aux=False,
+        init_params=init,
+        tol=1e-12,
+    ).run(init, X, y)
+
+    np.testing.assert_allclose(prox_params, ols, atol=1e-6)
+    np.testing.assert_allclose(prox_params, newton_params, atol=1e-6)
+
+
+@pytest.mark.requires_x64
+def test_prox_newton_singular_hessian_converges(request):
+    """A rank-deficient design gives a singular ``H``, which is not by itself a problem.
+
+    ``H`` is only multiplied, never inverted, so the solve does not need definiteness. The
+    subproblem also stays bounded below here because ``grad f`` lies in ``range(X^T)``
+    while ``ker H = ker X``, leaving the two orthogonal -- asserted directly, since it is
+    the condition the class docstring names.
+
+    Starting from zero, no iterate acquires a component in ``ker H``, so the run lands on
+    the minimum-norm least-squares solution that ``lstsq`` returns.
+    """
+    np.random.seed(0)
+    n = 200
+    Z = np.random.normal(size=(n, 3))
+    X = np.column_stack([Z, Z[:, 0], Z[:, 1] + Z[:, 2]])
+    y = np.random.normal(size=n)
+    assert np.linalg.matrix_rank(X) == 3
+
+    min_norm, *_ = np.linalg.lstsq(X, y, rcond=None)
+    init = jnp.zeros(X.shape[1])
+    _, params, state, _ = _run_prox_newton(_mse, X, y, init, UnRegularized(), None)
+
+    hess = (2.0 / n) * X.T @ X
+    eigvals = np.linalg.eigvalsh(hess)
+    assert eigvals.min() > -1e-10, "Hessian must be positive semidefinite"
+    assert eigvals.min() < 1e-10, "Hessian must be singular for this test to mean anything"
+
+    # grad f orthogonal to ker H: the condition that bounds the subproblem below
+    grad = -(2.0 / n) * X.T @ (y - X @ np.asarray(params))
+    _, singular_values, right_vectors = np.linalg.svd(hess)
+    null_space = right_vectors[singular_values < 1e-10 * singular_values.max()]
+    assert null_space.shape[0] == 2
+    for direction in null_space:
+        assert abs(grad @ direction) < 1e-10
+
+    assert bool(state.stats.converged)
+    np.testing.assert_allclose(params, min_norm, atol=1e-6)
+
+
+@pytest.mark.requires_x64
+def test_prox_newton_prox_applies_across_a_pytree():
+    """The prox is applied to every leaf of a pytree, and the structure survives.
+
+    ``b = 0`` is the exact Lasso optimum whenever ``lam >= ||grad f(0)||_inf``, which makes
+    an all-zero solution a derived reference rather than a guess. Doubling that bound puts
+    the problem strictly inside the regime, so every leaf must come back exactly zero.
+    """
+    np.random.seed(0)
+    n = 200
+    X = {"input_1": np.random.normal(size=(n, 2)), "input_2": np.random.normal(size=(n, 3))}
+    y = np.random.normal(size=n)
+
+    def loss(params, X, y):
+        pred = sum(jnp.dot(X[k], params[k]) for k in X)
+        return jnp.power(y - pred, 2).mean()
+
+    zeros = {k: jnp.zeros(v.shape[1]) for k, v in X.items()}
+    grad_at_zero = jax.grad(loss)(zeros, X, y)
+    strength = 2.0 * max(
+        float(jnp.max(jnp.abs(leaf))) for leaf in jax.tree_util.tree_leaves(grad_at_zero)
+    )
+    # start away from the optimum: initializing at zero would let a solver that never
+    # moved pass this test
+    init = {k: jnp.asarray(np.random.normal(size=v.shape[1])) for k, v in X.items()}
+    assert all(np.any(np.asarray(leaf) != 0.0) for leaf in init.values())
+
+    _, params, state, _ = _run_prox_newton(loss, X, y, init, Lasso(), strength)
+
+    assert jax.tree_util.tree_structure(params) == jax.tree_util.tree_structure(init)
+    assert bool(state.stats.converged)
+    for key in X:
+        np.testing.assert_array_equal(np.asarray(params[key]), np.zeros(X[key].shape[1]))
+
+
+@pytest.mark.requires_x64
+def test_prox_newton_autodiff_hessian_matches_supplied_hessian():
+    """Without ``setup_hessian`` the solver autodiffs its smooth loss; the two agree.
+
+    ``_build_cache`` falls back to ``jax.hessian(self.fun)`` when no Hessian was supplied.
+    For a squared-error loss the analytic Hessian is the constant ``(2/n) X^T X``, so the
+    two paths must produce the same iterates, not merely similar ones.
+    """
+    np.random.seed(0)
+    n = 200
+    X = np.random.normal(size=(n, 4))
+    y = np.random.normal(size=n)
+    init = jnp.zeros(4)
+
+    _, autodiff_params, _, _ = _run_prox_newton(_mse, X, y, init, Lasso(), 0.005)
+
+    solver = ProximalNewton(
+        _mse,
+        regularizer=Lasso(),
+        regularizer_strength=0.005,
+        has_aux=False,
+        init_params=init,
+        tol=1e-12,
+        maxiter=500,
+    )
+    solver.setup_hessian(lambda params, X, y: (2.0 / n) * X.T @ X)
+    supplied_params, _, _ = solver.run(init, X, y)
+
+    np.testing.assert_allclose(autodiff_params, supplied_params, atol=1e-10)
+
+
+@pytest.mark.requires_x64
+def test_prox_newton_indefinite_hessian_does_not_report_success():
+    """An indefinite ``H`` is outside the solver's contract, and it says so.
+
+    The subproblem ``min_d grad^T d + 0.5 d^T H d + P(b + d)`` is unbounded below along a
+    direction of negative curvature whenever ``P`` grows at most linearly there, so no
+    minimizer exists for any inner solver to find. Fixing that needs Hessian modification
+    (damping or a trust region), which this solver does not do.
+
+    The assertion is deliberately weak: whatever comes back, the solver must not return a
+    finite point while reporting convergence. Pinning the exact NaN output would freeze an
+    implementation detail rather than the contract.
+    """
+    np.random.seed(0)
+    n = 200
+    X = np.random.normal(size=(n, 4))
+    y = np.random.normal(size=n)
+    init = jnp.zeros(4)
+
+    solver = ProximalNewton(
+        _mse,
+        regularizer=Lasso(),
+        regularizer_strength=0.005,
+        has_aux=False,
+        init_params=init,
+        tol=1e-12,
+        maxiter=50,
+    )
+    indefinite = np.diag([2.0, 1.0, 0.5, -1.0])
+    assert np.linalg.eigvalsh(indefinite).min() < 0
+    solver.setup_hessian(lambda params, X, y: indefinite)
+
+    params, state, _ = solver.run(init, X, y)
+
+    finite = bool(np.all(np.isfinite(np.asarray(params))))
+    assert not (finite and bool(state.stats.converged))
