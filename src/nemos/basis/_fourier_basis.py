@@ -30,7 +30,7 @@ from ..type_casting import is_at_least_1d_numpy_array_like, support_pynapple
 from ..typing import Array, FeatureMatrix
 from ..utils import format_repr
 from ._basis import Basis, check_transform_input, min_max_rescale_samples
-from ._basis_mixin import AtomicBasisMixin, EvalBasisMixin
+from ._basis_mixin import AtomicBasisMixin, BoundedEvalBasisMixin
 
 # A collection of frequency arrays only needs to be indexable/sliceable and
 # iterable, hence ``Sequence``; each element is a NumPy or JAX ``Array``.
@@ -948,7 +948,7 @@ def _grid_params_from_nodes(xis: ArrayLike) -> Tuple[float, int]:
     return h, m
 
 
-class FourierGP(EvalBasisMixin, FourierBasis):
+class FourierGP(BoundedEvalBasisMixin, FourierBasis):
     """1d Fourier basis with an approximate squared-exponential GP prior.
 
     Generates ``cos`` and ``sin`` basis functions on a domain ``[t0, t1]``
@@ -1058,7 +1058,7 @@ class FourierGP(EvalBasisMixin, FourierBasis):
             weights=weights,
             label=label,
         )
-        EvalBasisMixin.__init__(self, bounds=(t0, t1))
+        BoundedEvalBasisMixin.__init__(self, bounds=(t0, t1))
 
     @property
     def lengthscale(self) -> float:

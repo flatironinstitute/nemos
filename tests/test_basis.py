@@ -3340,8 +3340,8 @@ class TestFourierGP(BasisFuncsTesting):
     @pytest.mark.parametrize("variance", [1e0])
     @pytest.mark.parametrize("eps", [1e-4])
     @pytest.mark.parametrize("bounds", [(0.0, 1.0)])
-    def test_real_weights(self, length_scale, eps, bounds):
-        basis = FourierGP(lengthscale=length_scale, bounds=bounds, eps=eps)
+    def test_real_weights(self, length_scale, eps, bounds, variance):
+        basis = FourierGP(lengthscale=length_scale, variance=variance, bounds=bounds, eps=eps)
         assert np.all(np.isreal(basis._weights))
 
     @pytest.mark.parametrize("length_scale", [1e-2])
@@ -3373,8 +3373,8 @@ class TestFourierGP(BasisFuncsTesting):
     @pytest.mark.parametrize("variance", [1e0])
     @pytest.mark.parametrize("eps", [1e-4])
     @pytest.mark.parametrize("bounds", [(0.0, 1.0)])
-    def test_equispaced_grid(self, length_scale, eps, bounds):
-        basis = FourierGP(lengthscale=length_scale, bounds=bounds, eps=eps)
+    def test_equispaced_grid(self, length_scale, eps, bounds, variance):
+        basis = FourierGP(lengthscale=length_scale, variance=variance, bounds=bounds, eps=eps)
         gaps = np.diff(basis.xis)
         np.testing.assert_allclose(gaps, basis.frequency_spacing, rtol=1e-4)
 
@@ -3382,8 +3382,10 @@ class TestFourierGP(BasisFuncsTesting):
     @pytest.mark.parametrize("variance", [1e0])
     @pytest.mark.parametrize("eps", [1e-4])
     @pytest.mark.parametrize("bounds", [(0.0, 1.0)])
-    def test_n_frequencies_matches_shapes(self, length_scale, eps, bounds):
-        basis = FourierGP(lengthscale=length_scale, bounds=bounds, eps=eps)
+    def test_n_frequencies_matches_shapes(self, length_scale, eps, bounds, variance):
+        basis = FourierGP(
+            lengthscale=length_scale, variance=variance, bounds=bounds, eps=eps
+        )
         assert basis.n_frequencies == len(basis.xis) - 1
         assert basis.n_frequencies == len(basis.frequencies[0]) - 1
 
