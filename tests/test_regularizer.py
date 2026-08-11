@@ -824,6 +824,8 @@ class TestUnRegularized:
             (1, pytest.raises(TypeError, match="solver_name must be a string")),
             ("SVRG", does_not_raise()),
             ("ProxSVRG", does_not_raise()),
+            ("Newton", does_not_raise()),
+            ("ProximalNewton", does_not_raise()),
         ],
     )
     def test_init_solver_name(self, solver_name, expectation):
@@ -847,6 +849,8 @@ class TestUnRegularized:
             (1, pytest.raises(TypeError, match="solver_name must be a string")),
             ("SVRG", does_not_raise()),
             ("ProxSVRG", does_not_raise()),
+            ("Newton", does_not_raise()),
+            ("ProximalNewton", does_not_raise()),
         ],
     )
     def test_set_solver_name_allowed(self, solver_name, expectation):
@@ -1189,6 +1193,8 @@ class TestRidge:
             (1, pytest.raises(TypeError, match="solver_name must be a string")),
             ("SVRG", does_not_raise()),
             ("ProxSVRG", does_not_raise()),
+            ("Newton", does_not_raise()),
+            ("ProximalNewton", does_not_raise()),
         ],
     )
     def test_init_solver_name(self, solver_name, expectation):
@@ -1212,6 +1218,8 @@ class TestRidge:
             (1, pytest.raises(TypeError, match="solver_name must be a string")),
             ("SVRG", does_not_raise()),
             ("ProxSVRG", does_not_raise()),
+            ("Newton", does_not_raise()),
+            ("ProximalNewton", does_not_raise()),
         ],
     )
     def test_set_solver_name_allowed(self, solver_name, expectation):
@@ -1471,6 +1479,10 @@ class TestLasso:
             (1, pytest.raises(TypeError, match="solver_name must be a string")),
             ("SVRG", pytest.raises(ValueError, match="not allowed for")),
             ("ProxSVRG", does_not_raise()),
+            # a nonsmooth penalty has no second derivative for Newton to fold into its
+            # quadratic; ProximalNewton reaches it through the prox instead
+            ("Newton", pytest.raises(ValueError, match="not allowed for")),
+            ("ProximalNewton", does_not_raise()),
         ],
     )
     def test_init_solver_name(self, solver_name, expectation):
@@ -1494,6 +1506,10 @@ class TestLasso:
             (1, pytest.raises(TypeError, match="solver_name must be a string")),
             ("SVRG", pytest.raises(ValueError, match="not allowed for")),
             ("ProxSVRG", does_not_raise()),
+            # a nonsmooth penalty has no second derivative for Newton to fold into its
+            # quadratic; ProximalNewton reaches it through the prox instead
+            ("Newton", pytest.raises(ValueError, match="not allowed for")),
+            ("ProximalNewton", does_not_raise()),
         ],
     )
     def test_set_solver_name_allowed(self, solver_name, expectation):
@@ -2250,6 +2266,10 @@ class TestElasticNet:
             (1, pytest.raises(TypeError, match="solver_name must be a string")),
             ("SVRG", pytest.raises(ValueError, match="not allowed for")),
             ("ProxSVRG", does_not_raise()),
+            # a nonsmooth penalty has no second derivative for Newton to fold into its
+            # quadratic; ProximalNewton reaches it through the prox instead
+            ("Newton", pytest.raises(ValueError, match="not allowed for")),
+            ("ProximalNewton", does_not_raise()),
         ],
     )
     def test_init_solver_name(self, solver_name, expectation):
@@ -2273,6 +2293,10 @@ class TestElasticNet:
             (1, pytest.raises(TypeError, match="solver_name must be a string")),
             ("SVRG", pytest.raises(ValueError, match="not allowed for")),
             ("ProxSVRG", does_not_raise()),
+            # a nonsmooth penalty has no second derivative for Newton to fold into its
+            # quadratic; ProximalNewton reaches it through the prox instead
+            ("Newton", pytest.raises(ValueError, match="not allowed for")),
+            ("ProximalNewton", does_not_raise()),
         ],
     )
     def test_set_solver_name_allowed(self, solver_name, expectation):
@@ -2804,6 +2828,10 @@ class TestGroupLasso:
             (1, pytest.raises(TypeError, match="solver_name must be a string")),
             ("SVRG", pytest.raises(ValueError, match="not allowed for")),
             ("ProxSVRG", does_not_raise()),
+            # a nonsmooth penalty has no second derivative for Newton to fold into its
+            # quadratic; ProximalNewton reaches it through the prox instead
+            ("Newton", pytest.raises(ValueError, match="not allowed for")),
+            ("ProximalNewton", does_not_raise()),
         ],
     )
     def test_init_solver_name(self, solver_name, expectation):
@@ -2832,6 +2860,10 @@ class TestGroupLasso:
             (1, pytest.raises(TypeError, match="solver_name must be a string")),
             ("SVRG", pytest.raises(ValueError, match="not allowed for")),
             ("ProxSVRG", does_not_raise()),
+            # a nonsmooth penalty has no second derivative for Newton to fold into its
+            # quadratic; ProximalNewton reaches it through the prox instead
+            ("Newton", pytest.raises(ValueError, match="not allowed for")),
+            ("ProximalNewton", does_not_raise()),
         ],
     )
     def test_set_solver_name_allowed(self, solver_name, expectation):

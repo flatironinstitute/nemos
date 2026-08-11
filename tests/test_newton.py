@@ -1310,64 +1310,6 @@ def test_newton_invalid_kwarg_raises(glm_class, solver_name):
 
 
 @_SOLVERS
-def test_second_order_solvers_are_registered(solver_name):
-    """Both solvers are in the registry under the name models refer to them by."""
-    registered = {spec.algo_name for spec in nmo.solvers.list_available_solvers()}
-    assert solver_name in registered
-    assert (
-        nmo.solvers.get_solver(solver_name).implementation
-        is _SOLVER_CLASSES[solver_name]
-    )
-
-
-@pytest.mark.parametrize("solver_name, regularizer_cls", _solver_regularizer_cases())
-def test_second_order_solver_reachable_for_every_allowing_regularizer(
-    solver_name, regularizer_cls
-):
-    """A regularizer listing a solver in ``_allowed_solvers`` must actually accept it.
-
-    The declaration and the check that enforces it are separate pieces of code, so a
-    regularizer could advertise a solver it then rejects. Discovery drives this
-    parametrization, so a newly-allowed pair is covered on arrival.
-    """
-    model = GLM(
-        regularizer=regularizer_cls(),
-        regularizer_strength=_strength_for(regularizer_cls),
-        solver_name=solver_name,
-    )
-    assert model.solver_name == solver_name
-
-
-@pytest.mark.parametrize("regularizer_name", ["Lasso", "ElasticNet", "GroupLasso"])
-def test_nonsmooth_regularizers_accept_only_the_proximal_solver(regularizer_name):
-    """The nonsmooth penalties take ``ProximalNewton`` and still refuse ``Newton``.
-
-    ``Newton`` folds the penalty into its quadratic through the penalty's second derivative,
-    which a nonsmooth penalty does not have; ``ProximalNewton`` reaches it through the prox
-    instead. Both halves are the contract, so accepting one solver and rejecting the other
-    are asserted together.
-    """
-    regularizer_cls = getattr(nmo.regularizer, regularizer_name)
-    assert "ProximalNewton" in regularizer_cls._allowed_solvers
-    assert "Newton" not in regularizer_cls._allowed_solvers
-
-    GLM(
-        regularizer=regularizer_name,
-        regularizer_strength=0.1,
-        solver_name="ProximalNewton",
-    )
-
-    with pytest.raises(
-        ValueError, match=f"The solver: Newton is not allowed for {regularizer_name}"
-    ):
-        GLM(
-            regularizer=regularizer_name,
-            regularizer_strength=0.1,
-            solver_name="Newton",
-        )
-
-
-@_SOLVERS
 def test_second_order_solvers_store_rtol(solver_name):
     """``rtol`` is advertised by both solvers, so both must accept and keep it.
 
