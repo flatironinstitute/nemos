@@ -20,7 +20,11 @@ from ..base_regressor import BaseRegressor, strip_metadata
 from ..batching import DataLoader, _PreprocessedDataLoader, is_data_loader
 from ..callbacks import Callback, TrainingContext, _normalize_callbacks
 from ..exceptions import NotFittedError
-from ..inverse_link_function_utils import resolve_inverse_link_function, softplus
+from ..inverse_link_function_utils import (
+    LINK_NAME_TO_FUNC,
+    resolve_inverse_link_function,
+    softplus,
+)
 from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers import WrappedProxSVRG, WrappedSVRG, list_stochastic_solvers
@@ -31,6 +35,7 @@ from ..solvers._hess import (
     HessianTag,
     PositiveDefinite,
     PositiveSemiDefinite,
+    Symmetric,
 )
 from ..type_casting import cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, SolverState, StepResult
@@ -341,6 +346,35 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         ):
             return "Newton"
         return super()._resolve_default_solver()
+
+    def _resolve_hess_property(self) -> type:
+        """Resolve the hessian property.
+
+        Return the property of the GLM loss function for an unpenalized model.
+        The penalization contribution is resolved by combining the hessian tag
+        of the model with that of the regularizer.
+
+        Notes
+        -----
+        Unknown links can easily break convexity: always tag as Symmetric if the link is unknown.
+
+        """
+        conv_preserving_inv_links = (
+            self._observation_model.glm_convexity_preserving_links
+        )
+        link = self._inverse_link_function
+
+        if hasattr(link, "__module__") and hasattr(link, "__name__"):
+            qual_name = f"{link.__module__}.{link.__name__}"
+        else:
+            qual_name = None
+
+        convexity_preserving = (
+            link in conv_preserving_inv_links
+            or LINK_NAME_TO_FUNC.get(qual_name) in conv_preserving_inv_links
+        )
+
+        return PositiveSemiDefinite if convexity_preserving else Symmetric
 
     def _hess_property_override(self) -> type | None:
         # The GLM loss is positive definite on the intercept (its all-ones column is
