@@ -160,6 +160,11 @@ filterwarnings = [
 markers = [
   "solver_related: tests that interact with solvers",
   "requires_x64: mark test as requiring JAX float64 precision",
+  # Coverage guards: compare what the package registers/discovers against what the test
+  # parametrizations cover, so an uncovered component fails instead of passing silently.
+  # No fitting, so the whole set runs in about a second -- run it BEFORE writing tests
+  # (`pytest -m metatest -q`). Never exclude it from a run.
+  "metatest: coverage guard asserting the test suite covers every registered component",
 ]
 # -s: no capture from pytest (prints will show)
 addopts = ["-s", "--strict-markers"]
