@@ -74,6 +74,31 @@ def combine_property(p1, p2) -> type:
     return Symmetric
 
 
+_WEAKENED_PROPERTY: dict[type, type] = {
+    PositiveDefinite: PositiveSemiDefinite,
+    NegativeDefinite: Symmetric,
+}
+
+
+def weaken_property(p) -> type:
+    """Weakest property still guaranteed once some directions of ``H`` carry no curvature.
+
+    Models what happens to a definiteness claim when the matrix it describes is padded
+    with zero rows and columns, or scaled by zero: a term that is definite on the block
+    it acts upon and flat elsewhere, such as a ridge penalty that does not reach the
+    intercept. Zeros add directions of no curvature and cannot add negative curvature,
+    so the sign survives and only strictness is lost:
+
+    - ``PositiveDefinite -> PositiveSemiDefinite``.
+    - ``NegativeDefinite -> Symmetric``, the lattice having no negative-semidefinite
+      property to weaken into.
+    - a property claiming no strict definiteness has nothing to give up and is returned
+      unchanged.
+    """
+    cls = p if isinstance(p, type) else type(p)
+    return _WEAKENED_PROPERTY.get(cls, cls)
+
+
 # --- Structures ---
 
 
