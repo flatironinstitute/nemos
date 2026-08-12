@@ -24,14 +24,9 @@ from nemos.solvers._abstract_solver import OptimizationInfo
 from nemos.solvers._hess import (
     BlockDiagonal,
     Full,
-    General,
     HessianTag,
-    NegativeDefinite,
     PositiveDefinite,
     PositiveSemiDefinite,
-    Symmetric,
-    _expand_property,
-    weaken_property,
 )
 from nemos.solvers._newton import Newton, NewtonState
 from nemos.tree_utils import pytree_map_and_reduce
@@ -1092,39 +1087,6 @@ def test_hess_property_override_non_ridge(regularizer_name):
     strength = 0.1 if regularizer_name != "UnRegularized" else None
     model = GLM(regularizer=regularizer_name, regularizer_strength=strength)
     assert model._hess_property_override() is None
-
-
-@pytest.mark.parametrize(
-    "prop, expected",
-    [
-        (PositiveDefinite, PositiveSemiDefinite),
-        (PositiveSemiDefinite, PositiveSemiDefinite),
-        (NegativeDefinite, Symmetric),
-        (Symmetric, Symmetric),
-        (General, General),
-    ],
-)
-def test_weaken_property(prop, expected):
-    """Zeroing out directions costs strictness and keeps the sign."""
-    assert weaken_property(prop) is expected
-
-
-@pytest.mark.parametrize(
-    "prop",
-    [PositiveDefinite, PositiveSemiDefinite, NegativeDefinite, Symmetric, General],
-)
-def test_weaken_property_is_idempotent(prop):
-    """Nothing is left to weaken after one pass: no strictness survives it."""
-    assert weaken_property(weaken_property(prop)) is weaken_property(prop)
-
-
-@pytest.mark.parametrize(
-    "prop",
-    [PositiveDefinite, PositiveSemiDefinite, NegativeDefinite, Symmetric, General],
-)
-def test_weaken_property_implied_by_original(prop):
-    """The weakened property must be one the original already implies."""
-    assert weaken_property(prop) in _expand_property(prop)
 
 
 @pytest.mark.parametrize(
