@@ -1555,6 +1555,8 @@ class GaussianObservations(Observations):
 
     """
 
+    glm_convexity_preserving_links = (identity,)
+
     def __init__(
         self,
     ):
