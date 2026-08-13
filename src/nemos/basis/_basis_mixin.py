@@ -7,7 +7,6 @@ import copy
 import inspect
 import re
 from collections import OrderedDict
-from contextlib import contextmanager
 from functools import wraps
 from itertools import chain
 from typing import (
@@ -36,8 +35,10 @@ from ._composition_utils import (
     get_input_shape,
     infer_input_dimensionality,
     is_basis_like,
+    is_shallow_construction,
     label_setter,
     set_input_shape,
+    shallow_construction,
 )
 from ._transformer_basis import TransformerBasis
 
@@ -523,18 +524,10 @@ class AtomicBasisMixin(BasisMixin):
 
 
 class EvalBasisMixin:
-    """Mixin class for evaluational basis."""
+    """Mixin providing the evaluation lifecycle shared by all evaluational bases.
 
-    # Whether to fill out-of-bounds samples with fill_value.
-    # Set to False for bases defined over the entire real line (e.g., Fourier).
-    _apply_bounds_fill = True
-
-    def __init__(
-        self, bounds: Optional[Tuple[float, float]] = None, fill_value: float = jnp.nan
-    ):
-        if not getattr(self, "_is_discrete", False):
-            self.bounds = bounds
-        self.fill_value = fill_value
+    Bounds storage and out-of-bounds fill handling live in :class:`BoundedEvalBasisMixin`.
+    """
 
     def _compute_features(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor):
         """Evaluate basis at sample points.
@@ -562,32 +555,7 @@ class EvalBasisMixin:
 
         """
         out = self.evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
-        if (
-            self._apply_bounds_fill
-            and (not self._is_discrete)
-            and self.bounds is not None
-        ):
-            out = self._apply_fill_value(*xi, out=out)
         return np.reshape(out, (out.shape[0], -1))
-
-    @support_pynapple(conv_type="jax")
-    def _apply_fill_value(self, *xi: ArrayLike, out: NDArray) -> jax.Array:
-        """Apply fill value to out-of-bounds samples."""
-        to_fill = jnp.any(
-            jnp.stack(
-                [
-                    jnp.any(
-                        (jnp.reshape(x, (x.shape[0], -1)) < lo)
-                        | (jnp.reshape(x, (x.shape[0], -1)) > hi),
-                        axis=1,
-                    )
-                    for x, (lo, hi) in zip(xi, self._get_bounds_per_dim(), strict=True)
-                ]
-            ),
-            axis=0,
-        )
-        to_fill_broadcast = to_fill.reshape(to_fill.shape[0], *([1] * (out.ndim - 1)))
-        return jnp.where(to_fill_broadcast, self.fill_value, out)
 
     def setup_basis(self, *xi: NDArray) -> Basis:
         """
@@ -627,9 +595,102 @@ class EvalBasisMixin:
         """
         return self
 
+
+class BoundedEvalBasisMixin(EvalBasisMixin):
+    """Evaluational basis with a bounded domain and out-of-bounds fill handling."""
+
+    # Whether to fill out-of-bounds samples with fill_value.
+    # Set to False for bases defined over the entire real line (e.g., Fourier).
+    _apply_bounds_fill = True
+
+    # Whether ``bounds=None`` makes the basis derive its domain from the input data
+    # (e.g. via ``min_max_rescale_samples``). Set to True on the rescaling base classes;
+    # the transformer safety gate requires explicit ``bounds`` for these.
+    _bounds_define_domain = True
+
+    def __init__(
+        self, bounds: Optional[Tuple[float, float]] = None, fill_value: float = jnp.nan
+    ):
+        if not getattr(self, "_is_discrete", False):
+            self.bounds = bounds
+        self.fill_value = fill_value
+
+    def _compute_features(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor):
+        """Evaluate basis at sample points.
+
+        The basis is evaluated at the locations specified in the inputs. For example,
+        ``compute_features(np.array([0, .5]))`` would return the array:
+
+        .. code-block:: text
+
+           b_1(0) ... b_n(0)
+           b_1(.5) ... b_n(.5)
+
+        where ``b_i`` is the i-th basis.
+
+        Parameters
+        ----------
+        *xi:
+            The input samples over which to apply the basis transformation. The samples can be passed
+            as multiple arguments, each representing a different dimension for multivariate inputs.
+
+        Returns
+        -------
+        :
+            A matrix with the transformed features.
+
+        Notes
+        -----
+        When ``bounds`` is ``None``, the domain of the basis is taken from the min and max of
+        the input ``xi``. Calling this method on inputs with different ranges therefore yields
+        different transformations, even for the same basis object: you get the same basis
+        *functions*, but the domain is re-fit to each input. Set ``bounds`` explicitly to fix the
+        domain and obtain an identical transformation across inputs (required when the basis is
+        used as a transformer, e.g. inside a cross-validation loop).
+
+        """
+        out = self.evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
+        if (
+            self._apply_bounds_fill
+            and (not self._is_discrete)
+            and self.bounds is not None
+        ):
+            out = self._apply_fill_value(*xi, out=out)
+        return np.reshape(out, (out.shape[0], -1))
+
+    @support_pynapple(conv_type="jax")
+    def _apply_fill_value(self, *xi: ArrayLike, out: NDArray) -> jax.Array:
+        """Apply fill value to out-of-bounds samples."""
+        to_fill = jnp.any(
+            jnp.stack(
+                [
+                    jnp.any(
+                        (jnp.reshape(x, (x.shape[0], -1)) < lo)
+                        | (jnp.reshape(x, (x.shape[0], -1)) > hi),
+                        axis=1,
+                    )
+                    for x, (lo, hi) in zip(xi, self._get_bounds_per_dim(), strict=True)
+                ]
+            ),
+            axis=0,
+        )
+        to_fill_broadcast = to_fill.reshape(to_fill.shape[0], *([1] * (out.ndim - 1)))
+        return jnp.where(to_fill_broadcast, self.fill_value, out)
+
     @property
     def bounds(self) -> List[Tuple[float, float]] | Tuple[float, float] | None:
-        """Returns bounds, as provided."""
+        """Returns bounds, as provided.
+
+        Notes
+        -----
+        For some bases, ``bounds`` defines the domain over which the basis is constructed. When it is
+        left unset, that domain is inferred from the range of the input instead, so it can change from
+        one call to the next.
+
+        A basis of this kind can be used as a transformer only if ``bounds`` is set explicitly. Fixing
+        the bounds keeps the domain constant across calls, for instance across cross-validation folds.
+
+        """
         return self._bounds
 
     def _get_bounds_per_dim(self) -> List[Tuple[float, float]]:
@@ -890,6 +951,12 @@ class BasisTransformerMixin:
         """
         Turn the Basis into a TransformerBasis for use with scikit-learn.
 
+        .. attention::
+
+            Any ``Eval`` basis composing the transformer must have its ``bounds`` set, so its domain is
+            fixed rather than re-inferred on each cross-validation fold. Otherwise
+            ``fit``/``transform``/``fit_transform`` raise a ``RuntimeError``.
+
         Examples
         --------
         Jointly cross-validating basis and GLM parameters with scikit-learn.
@@ -899,7 +966,7 @@ class BasisTransformerMixin:
         >>> from sklearn.model_selection import GridSearchCV
         >>> # load some data
         >>> X, y = np.random.normal(size=(30, 1)), np.random.poisson(size=30)
-        >>> basis = nmo.basis.RaisedCosineLinearEval(10).set_input_shape(1).to_transformer()
+        >>> basis = nmo.basis.RaisedCosineLinearEval(10, bounds=(X.min(), X.max())).set_input_shape(1).to_transformer()
         >>> glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=1.)
         >>> pipeline = Pipeline([("basis", basis), ("glm", glm)])
         >>> param_grid = dict(
@@ -923,8 +990,6 @@ class CompositeBasisMixin(BasisMixin):
     (AdditiveBasis and MultiplicativeBasis).
     """
 
-    _shallow_copy: bool = False
-
     def __init__(
         self, basis1: BasisMixin, basis2: BasisMixin, label: Optional[str] = None
     ):
@@ -944,7 +1009,7 @@ class CompositeBasisMixin(BasisMixin):
         # deep copy to avoid changes directly to the 1d basis to be reflected
         # in the composite basis.
 
-        if not self.__class__._shallow_copy:
+        if not is_shallow_construction():
             basis1 = copy.deepcopy(basis1)
             basis2 = copy.deepcopy(basis2)
 
@@ -1154,16 +1219,6 @@ class CompositeBasisMixin(BasisMixin):
         if hasattr(self.basis2, "_set_input_independent_states"):
             self.basis2._set_input_independent_states()
 
-    @contextmanager
-    def _set_shallow_copy(self, value):
-        """Context manager for setting the shallow copy flag in a thread safe way."""
-        old_value = self.__class__._shallow_copy
-        self.__class__._shallow_copy = value
-        try:
-            yield
-        finally:
-            self.__class__._shallow_copy = old_value
-
     @set_input_shape_state(states=("_input_shape_product", "_label"))
     def __sklearn_clone__(self) -> Basis:
         """Clone the basis while preserving attributes related to input shapes.
@@ -1176,10 +1231,11 @@ class CompositeBasisMixin(BasisMixin):
 
         Notes
         -----
-        The ``_shallow_copy`` attribute is set to True in the context, forcing a shallow copy, at
-        before the klass definition, and reset to False after cloning.
+        The construction runs inside a :func:`shallow_construction` context, so the
+        freshly cloned components are stored by reference instead of being deep-copied
+        again.
         """
-        with self._set_shallow_copy(True):
+        with shallow_construction():
             # clone recursively
             basis1 = self.basis1.__sklearn_clone__()
             basis2 = self.basis2.__sklearn_clone__()

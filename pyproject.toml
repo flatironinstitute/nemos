@@ -63,8 +63,11 @@ dev = [
     "myst-nb",                      # Test myst_nb utils for glue
     "hmmlearn",                     # Test algorithmic implementations of HMM
     "tox-uv",                       # Run tox with uv for faster installs
+    "zarr",                         # For testing lazy array loading from zarr files
+    "h5py",                         # For testing lazy array loading from HDF5 files
     "fsspec",
     "tqdm",
+    "pyyaml",                       # Parses notebook front matter in scripts/check_notebook_metadata.py
 ]
 docs = [
     "pynapple>=0.11",               # Required for nap.compute_event_triggered_average(...) in a tutorial
@@ -95,6 +98,7 @@ docs = [
     "patsy",
     "tqdm",
     "formulaic",                    # Design matrix constuction package, used in a doc note
+    "one-api"
 ]
 examples = [
     "scikit-learn",
@@ -184,3 +188,16 @@ ignore = ["D202"]  # this conflicts with black
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
+
+
+[tool.jupytext]
+# Keep the writer's local jupytext version out of the myst-nb markdown notebooks,
+# so saving one from Jupyter Lab does not stamp it into the front matter and add
+# an unrelated change to the diff.
+#
+# The kernel display name is the other field Jupyter Lab rewrites, but it cannot
+# be filtered the same way: `kernelspec.display_name` is a required property of
+# the nbformat schema, so a notebook without it fails validation and jupytext can
+# no longer read the file. scripts/check_notebook_metadata.py enforces that one
+# instead.
+notebook_metadata_filter = "-jupytext.text_representation.jupytext_version"

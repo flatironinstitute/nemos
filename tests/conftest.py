@@ -48,6 +48,8 @@ from nemos.hmm.params import HMMParams
 from nemos.hmm.utils import initialize_session_starts
 from nemos.hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
 from nemos.params import ModelParams
+from nemos.regularizer import UnRegularized
+from nemos.solvers import get_solver
 from nemos.tree_utils import tree_full_like
 
 _totals = defaultdict(float)
@@ -103,12 +105,45 @@ def all_subclasses(cls):
 
 
 @pytest.fixture
+def setup_solver():
+    """Factory instantiating a nemos solver directly from an objective.
+
+    Returns a callable ``setup(objective, init_params, ...)`` that builds a solver
+    through the nemos solver registry (``get_solver``), bypassing model plumbing.
+    Useful for exercising a raw objective (e.g. a partition-wrapped ``_compute_loss``)
+    with the maintained solver stack. ``solver.run(init_params, *args)`` returns the
+    usual ``(params, state, aux)`` tuple.
+    """
+
+    def _setup(
+        objective,
+        init_params,
+        tol=1e-12,
+        solver_name="LBFGS",
+        regularizer_strength=0.0,
+        regularizer=None,
+        has_aux=False,
+    ):
+        solver_class = get_solver(solver_name).implementation
+        return solver_class(
+            objective,
+            init_params=init_params,
+            regularizer=UnRegularized() if regularizer is None else regularizer,
+            regularizer_strength=regularizer_strength,
+            has_aux=has_aux,
+            tol=tol,
+        )
+
+    return _setup
+
+
+@pytest.fixture
 def mock_glm_fit(monkeypatch):
     """Replace GLM.fit with a pure-Python no-op that sets coef_/intercept_ from X/y shapes.
 
     Use in tests that only care about sklearn routing (cloning, parameter
     setting, pipeline plumbing) and do not need any fit validation logic.
-    For tests that need validation but not solver iterations, use mock_optimizer_run.
+    For tests that need validation but not solver iterations, use mock_glm_optimizer_run.
     """
 
     def _fit(self, X, y, init_params=None, **kwargs):
@@ -154,8 +189,8 @@ def _make_optimizer_run_patch(monkeypatch, model_cls):
     real_init = model_cls._initialize_optimizer_and_state
     noop = _NOOP_OPTIMIZER_RUN.get(model_cls, _DEFAULT_NOOP_OPTIMIZER_RUN)
 
-    def _patched(self, init_params, data, y):
-        result = real_init(self, init_params, data, y)
+    def _patched(self, init_params, data, y, *args, **kwargs):
+        result = real_init(self, init_params, data, y, *args, **kwargs)
         self._optimizer_run = noop
         return result
 
@@ -205,8 +240,8 @@ def _make_optimizer_update_patch(monkeypatch, model_cls):
     real_init = model_cls._initialize_optimizer_and_state
     noop = _NOOP_OPTIMIZER_UPDATE.get(model_cls, _DEFAULT_NOOP_OPTIMIZER_UPDATE)
 
-    def _patched(self, init_params, data, y):
-        result = real_init(self, init_params, data, y)
+    def _patched(self, init_params, data, y, *args, **kwargs):
+        result = real_init(self, init_params, data, y, *args, **kwargs)
         self._optimizer_update = noop
         return result
 
@@ -239,9 +274,7 @@ ModelFixture = namedtuple(
 )
 
 
-def initialize_feature_mask_for_population_glm(
-    X, n_neurons: int, n_classes: int = 0, coef=None
-):
+def initialize_feature_mask_for_population_glm(X, n_neurons: int, coef=None):
     """
     Create a feature mask of ones for PopulationGLM testing.
 
@@ -256,26 +289,19 @@ def initialize_feature_mask_for_population_glm(
         Number of neurons (determines the second dimension of the mask).
         Ignored if coef is provided.
     coef :
-        Optional coefficient array/pytree. If provided, the mask shape will match
-        coef shape exactly (required for ClassifierPopulationGLM).
-    n_classes:
-        Number of classes (determines the second dimension of the mask).
+        Optional coefficient array/pytree. If provided, the mask leaves are shaped like
+        the features-by-neurons block of the coefficients.
 
     Returns
     -------
     :
-        A feature mask with all ones. If coef is provided, returns ones_like(coef).
-        Otherwise, if X is a dict, returns a dict with arrays
-        of shape (n_neurons,) for each key.
-        If X is an array, returns an array of shape (n_features, n_neurons).
+        A feature mask with all ones, of shape (n_features_in_leaf, n_neurons) leaf by
+        leaf. Classifier coefficients carry a trailing class axis, which the mask does
+        not distinguish and therefore drops.
     """
-    extra_shape = (n_classes,) if n_classes else ()
     if coef is not None:
-        return jax.tree_util.tree_map(lambda c: jnp.ones(c.shape), coef)
-    if isinstance(X, dict):
-        return jax.tree_util.tree_map(lambda x: jnp.ones((n_neurons, *extra_shape)), X)
-    else:
-        return jnp.ones((X.shape[1], n_neurons, *extra_shape))
+        return jax.tree_util.tree_map(lambda c: jnp.ones(c.shape[:2]), coef)
+    return jax.tree_util.tree_map(lambda x: jnp.ones((x.shape[1], n_neurons)), X)
 
 
 DEFAULT_KWARGS = {
@@ -1071,29 +1097,6 @@ def example_data_prox_operator_multineuron():
     scaling = 0.5
 
     return params, regularizer_strength, mask, scaling
-
-
-@pytest.fixture
-def poisson_observation_model():
-    return nmo.observation_models.PoissonObservations(jnp.exp)
-
-
-@pytest.fixture
-def ridge_regularizer():
-    return nmo.regularizer.Ridge()
-
-
-@pytest.fixture
-def lasso_regularizer():
-    return nmo.regularizer.Lasso(solver_name="ProximalGradient")
-
-
-@pytest.fixture
-def group_lasso_2groups_5features_regularizer():
-    mask = np.zeros((2, 5))
-    mask[0, :2] = 1
-    mask[1, 2:] = 1
-    return nmo.regularizer.GroupLasso(solver_name="ProximalGradient", mask=mask)
 
 
 @pytest.fixture
@@ -2008,11 +2011,14 @@ def instantiate_base_regressor_subclass(request):
     obs_model: str | nmo.observation_models.Observations = request.param["obs_model"]
     simulate: bool = request.param["simulate"]
 
-    # Create cache key (class-scoped)
+    # Create cache key (class-scoped). Include the x64 flag: data simulated under
+    # one precision must not be served to tests running under the other (the
+    # requires_x64 marker partitions the configs per test, not the cache).
     cache_key = (
         model_name,
         str(obs_model),
         simulate,
+        jax.config.jax_enable_x64,
         id(request.cls) if request.cls else id(request.module),
     )
 

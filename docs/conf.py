@@ -164,8 +164,11 @@ html_js_files = [
 ]
 
 # Copybutton settings (to hide prompt)
-copybutton_prompt_text = r">>> |\$ "
-copybutton_prompt_is_regexp = True
+# Exclude prompts/output via Pygments CSS classes rather than a text regex.
+# `.gp` covers both `>>>` and `...` continuation prompts (and shell `$`),
+# `.go` covers console output. This avoids dropping `...` continuation lines.
+# https://sphinx-copybutton.readthedocs.io/en/latest/use.html#automatic-exclusion-of-prompts-from-the-copies
+copybutton_exclude = ".linenos, .gp, .go"
 
 sphinxemoji_style = 'twemoji'
 
@@ -177,7 +180,16 @@ nitpicky = True
 exclude_tutorials = os.environ.get("EXCLUDE_TUTORIALS", "false").lower() == "true"
 
 if exclude_tutorials:
-    nb_execution_excludepatterns = ["tutorials/*md", "how_to_guide/*md", "background/*md", "background/*/*md"]
+    # myst-nb matches these with PurePosixPath.match, which anchors from the right
+    # and treats "**" as non-recursive, so a glob covers a single directory level.
+    # Listing the files instead keeps notebooks in new subdirectories excluded
+    # without anyone having to add a deeper pattern by hand.
+    _docs_root = Path(__file__).parent
+    nb_execution_excludepatterns = [
+        path.relative_to(_docs_root).as_posix()
+        for root in ("tutorials", "how_to_guide", "background")
+        for path in sorted((_docs_root / root).rglob("*.md"))
+    ]
 
 viewcode_follow_imported_members = True
 
@@ -207,6 +219,7 @@ api_order = [
     "regularizers.rst",
     "io.rst",
     "solvers.rst",
+    "stochastic_optimization.rst",
     "convolve.rst",
     "simulations.rst",
     "identifiability.rst",

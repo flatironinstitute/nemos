@@ -1,5 +1,6 @@
 """Tests for GLMHMM.fit and related fit-path validation."""
 
+import inspect
 import math
 import warnings
 from contextlib import nullcontext as does_not_raise
@@ -110,6 +111,27 @@ def test_get_fit_attrs(instantiate_base_regressor_subclass, mock_glm_hmm_optimiz
 )
 class TestGLMHMM:
     """Unit tests for GLMHMM.fit that are observation-model-agnostic."""
+
+    @pytest.mark.requires_x64
+    def test_fit_accepts_bool_y(self, instantiate_base_regressor_subclass):
+        """Test that bool array are valid inputs.
+
+        Notes
+        -----
+        The test requires x64 to generate a corner case. The initialization function
+        for the intercept calls a``jnp.nanmean``, which for bool arrays returns x32
+        regardless of the jax configuration.
+        If we do not cast y to float (inheriting the dtype from the configurations)
+        the dtype change will raise at compilation time. This bug emerges only if the
+        jax configuration is enabling x64, otherwise everything would remain x32 and
+        the compilation would not raise.
+        """
+        fixture = instantiate_base_regressor_subclass
+        n = 10
+        X = fixture.X[:n]
+        y = fixture.y[:n]
+        y = y.astype(bool)
+        fixture.model.fit(X, y)
 
     def test_fit_pynapple_tsd(self, instantiate_base_regressor_subclass):
         """Pynapple TSD/TsdFrame accepted; session boundaries affect the fit."""
@@ -225,6 +247,41 @@ def glm_hmm_data():
     )
 
 
+class TestFitInterceptDeferred:
+    """Parameter freezing (``fit_intercept``) is not extended to GLM-HMM; the base
+    signature change (``frozen_params``) must stay compatible and inert."""
+
+    def test_fit_intercept_not_exposed(self, glm_hmm_data):
+        """GLM-HMM does not expose ``fit_intercept`` (freezing is deferred)."""
+        model = GLMHMM(n_states=glm_hmm_data["n_states"], observation_model="Bernoulli")
+        assert "fit_intercept" not in model.get_params()
+        assert not hasattr(model, "fit_intercept")
+
+    def test_initialize_optimizer_accepts_frozen_params(self):
+        """``_initialize_optimizer_and_state`` accepts ``frozen_params`` for signature
+        compatibility with the base entry points."""
+        sig = inspect.signature(GLMHMM._initialize_optimizer_and_state)
+        assert "frozen_params" in sig.parameters
+
+    def test_frozen_params_is_ignored(self, glm_hmm_data):
+        """Passing a non-None ``frozen_params`` yields the same optimizer state as
+        passing None: the GLM-HMM ignores it."""
+        model = GLMHMM(n_states=glm_hmm_data["n_states"], observation_model="Bernoulli")
+        X, y = glm_hmm_data["X"], glm_hmm_data["y"]
+        casted = model._validator.validate_and_cast_params(glm_hmm_data["init_params"])
+
+        state_none = model._initialize_optimizer_and_state(
+            casted, X, y, frozen_params=None
+        )
+        state_frozen = model._initialize_optimizer_and_state(
+            casted, X, y, frozen_params="ignored-sentinel"
+        )
+
+        assert isinstance(state_none, EMState) and isinstance(state_frozen, EMState)
+        assert state_none.iterations == state_frozen.iterations == 0
+        assert bool(state_none.converged) is bool(state_frozen.converged) is False
+
+
 def _spy_instantiate_solver(monkeypatch):
     """Wrap GLMHMM._instantiate_solver to capture each call's resolved args.
 
@@ -277,6 +334,29 @@ def _spy_calls(monkeypatch, container, attr_name):
 
     monkeypatch.setattr(container, attr_name, spy)
     return calls
+
+
+def _spy_call_order(monkeypatch, container, *attr_names):
+    """Wrap several attributes of ``container`` with spies sharing one call log.
+
+    Returns a list holding the name of each attribute in the order it was called,
+    forwarding to the real callables. Complements ``_spy_calls``, which logs the
+    arguments of a single attribute and so cannot capture the relative order of two.
+    """
+    order = []
+
+    def make_spy(attr_name, real):
+        def spy(*args, **kwargs):
+            order.append(attr_name)
+            return real(*args, **kwargs)
+
+        return spy
+
+    for attr_name in attr_names:
+        monkeypatch.setattr(
+            container, attr_name, make_spy(attr_name, getattr(container, attr_name))
+        )
+    return order
 
 
 def _make_model_params(n_features, n_states, n_neurons=None):
@@ -684,6 +764,49 @@ class TestFitDelegation:
 
         mock.assert_called_once()
 
+    def test_fit_calls_check_is_continuous(
+        self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
+    ):
+        """fit() forwards X, y and the cast boundaries to check_is_continuous."""
+        calls = _spy_calls(monkeypatch, GLMHMMValidator, "check_is_continuous")
+
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+
+        assert len(calls) == 1
+        _, kwargs = calls[0]
+        assert kwargs["X"] is glm_hmm_data["X"]
+        assert kwargs["y"] is glm_hmm_data["y"]
+        assert kwargs["session_starts"].shape == (glm_hmm_data["X"].shape[0],)
+
+    def test_simulate_calls_check_is_continuous(
+        self,
+        glm_hmm_data,
+        mock_glm_hmm_optimizer_run,
+        stub_glmhmm_simulate,
+        monkeypatch,
+    ):
+        """simulate() checks the feedforward input, with no observations to pair it to."""
+        n = glm_hmm_data["X"].shape[0]
+        X = glm_hmm_data["X"]
+
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        model.fit(X, glm_hmm_data["y"], init_params=glm_hmm_data["init_params"])
+
+        calls = _spy_calls(monkeypatch, GLMHMMValidator, "check_is_continuous")
+        stub_glmhmm_simulate(n)
+
+        model.simulate(jax.random.key(0), X)
+
+        assert len(calls) == 1
+        _, kwargs = calls[0]
+        assert kwargs["X"] is X
+        assert kwargs["y"] is None
+
     def test_fit_calls_validate_inputs(
         self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
     ):
@@ -789,6 +912,90 @@ class TestFitDelegation:
         calls = _spy_calls(monkeypatch, GLMHMMValidator, "validate_and_cast_params")
         model.fit(glm_hmm_data["X"], glm_hmm_data["y"])
         assert len(calls) == 1
+
+
+# ---------------------------------------------------------------------------
+# TestValidationSequence — order of the input validation steps
+# ---------------------------------------------------------------------------
+
+
+VALIDATION_SEQUENCE = [
+    method_name for method_name, _ in GLMHMMValidator.inputs_validation_sequence
+]
+
+
+class TestValidationSequence:
+    """Every entry point runs the declared inputs_validation_sequence, in order. The
+    order is load bearing: check_is_continuous reads the boundaries that
+    validate_and_cast_session_starts produces, NaN shifts included, so running it
+    earlier would check a session partition other than the one inference uses."""
+
+    def test_declared_sequence(self):
+        """The sequence the entry points are expected to run, spelled out."""
+        assert VALIDATION_SEQUENCE == [
+            "validate_inputs",
+            "validate_and_cast_session_starts",
+            "check_is_continuous",
+        ]
+
+    @pytest.fixture
+    def fitted_model(self, glm_hmm_data, mock_glm_hmm_optimizer_run):
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+        return model
+
+    def test_fit(self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch):
+        order = _spy_call_order(monkeypatch, GLMHMMValidator, *VALIDATION_SEQUENCE)
+
+        GLMHMM(n_states=glm_hmm_data["n_states"]).fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+
+        assert order == VALIDATION_SEQUENCE
+
+    def test_update(self, glm_hmm_data, patch_optimizer_update, monkeypatch):
+        patch_optimizer_update(GLMHMM)
+        X, y, init_params = (
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            glm_hmm_data["init_params"],
+        )
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        opt_state = model.initialize_optimizer_and_state(init_params, X, y)
+
+        # spy after the setup calls, so that only update() is recorded
+        order = _spy_call_order(monkeypatch, GLMHMMValidator, *VALIDATION_SEQUENCE)
+        model.update(init_params, opt_state, X, y)
+
+        assert order == VALIDATION_SEQUENCE
+
+    @pytest.mark.parametrize(
+        "method_name", ["score", "smooth_proba", "filter_proba", "decode_state"]
+    )
+    def test_inference_methods(
+        self, method_name, fitted_model, glm_hmm_data, monkeypatch
+    ):
+        order = _spy_call_order(monkeypatch, GLMHMMValidator, *VALIDATION_SEQUENCE)
+
+        getattr(fitted_model, method_name)(glm_hmm_data["X"], glm_hmm_data["y"])
+
+        assert order == VALIDATION_SEQUENCE
+
+    def test_simulate(
+        self, fitted_model, glm_hmm_data, stub_glmhmm_simulate, monkeypatch
+    ):
+        stub_glmhmm_simulate(glm_hmm_data["X"].shape[0])
+        order = _spy_call_order(monkeypatch, GLMHMMValidator, *VALIDATION_SEQUENCE)
+
+        fitted_model.simulate(jax.random.key(0), glm_hmm_data["X"])
+
+        assert order == VALIDATION_SEQUENCE
 
 
 # ---------------------------------------------------------------------------

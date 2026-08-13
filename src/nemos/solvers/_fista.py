@@ -12,6 +12,7 @@ from optimistix._custom_types import Aux, Y
 from ..proximal_operator import prox_none
 from ..tree_utils import tree_add_scalar_mul, tree_sub
 from ._optimistix_adapter import _OPTX_V_010, OptimistixAdapter
+from ._stochastic_mixins import OptimistixStochasticSolverMixin
 
 
 def tree_nan_like(x: PyTree):
@@ -76,7 +77,7 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
     stepsize: float | None = None
     maxls: int = 15
     decrease_factor: float = 0.5
-    max_stepsize: float | None = 1.0
+    max_stepsize: float | None = None
 
     acceleration: bool = True
 
@@ -245,9 +246,8 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
                 jnp.array(1.0),
                 new_stepsize / self.decrease_factor,
             )
-            # B: in my experience, this guard helps stabilize and reduce the number of iterations
-            # For some reason, without it this implementation sometimes needs more iterations than the
-            # original JAXopt implementation, which in theory should be mathematically identical.
+            # Unbounded by default, matching JAXopt: its `ProximalGradient` has no
+            # `max_stepsize`.
             if self.max_stepsize is not None:
                 new_stepsize = jnp.minimum(new_stepsize, self.max_stepsize)
         else:
@@ -358,7 +358,7 @@ class GradientDescent(FISTA):
     prox: ClassVar[Callable] = staticmethod(prox_none)
 
 
-class OptimistixFISTA(OptimistixAdapter):
+class OptimistixFISTA(OptimistixStochasticSolverMixin, OptimistixAdapter):
     """Port of JAXopt's ProximalGradient to the Optimistix API."""
 
     _solver_cls = FISTA
@@ -381,7 +381,7 @@ class OptimistixFISTA(OptimistixAdapter):
         return {"while_loop_kind": kind, **solver_init_kwargs}
 
 
-class OptimistixNAG(OptimistixAdapter):
+class OptimistixNAG(OptimistixStochasticSolverMixin, OptimistixAdapter):
     """Port of Nesterov's accelerated gradient descent from JAXopt to the Optimistix API."""
 
     _solver_cls = GradientDescent

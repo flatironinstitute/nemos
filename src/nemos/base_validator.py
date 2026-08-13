@@ -299,6 +299,7 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         self,
         X: Optional[DESIGN_INPUT_TYPE] = None,
         y: Optional[jnp.ndarray | Tsd | TsdFrame] = None,
+        **kwargs,
     ):
         """
         Validate input data dimensions and sample consistency.
@@ -313,6 +314,11 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
             Input features. Should have dimensionality matching X_dimensionality.
         y : jnp.ndarray, optional
             Output/target data. Should have dimensionality matching y_dimensionality.
+        **kwargs
+            Ignored here. Accepted so that this check can run as a step of a validation
+            sequence whose steps all receive the same arguments, such as the session
+            boundaries threaded by
+            :meth:`~nemos.hmm.validation.HMMValidator.validate_and_cast_inputs`.
 
         Raises
         ------

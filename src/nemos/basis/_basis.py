@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..base_class import Base
+from ..tree_utils import is_traced
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ..utils import row_wise_kron
@@ -37,6 +38,7 @@ from ._composition_utils import (
     promote_to_transformer,
     raise_basis_to_power,
     set_input_shape,
+    shallow_construction,
 )
 
 
@@ -654,7 +656,9 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
                 f"``AdditiveBasis.evaluate`` requires all inputs to have the same shape. "
                 f"Got shapes: {shapes}."
             )
-        X = np.concatenate(
+        # numpy cannot concatenate tracers, jax.numpy handles both
+        concatenate = jnp.concatenate if is_traced(xi) else np.concatenate
+        X = concatenate(
             (
                 self.basis1.evaluate(*xi[: self.basis1._n_inputs]),
                 self.basis2.evaluate(*xi[self.basis1._n_inputs :]),
@@ -703,8 +707,13 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
 
         """
         # the numpy conversion is important, there is some in-place
-        # array modification in basis.
-        hstack_pynapple = support_pynapple(conv_type="numpy")(np.hstack)
+        # array modification in basis. Under a jax transformation the
+        # inputs are tracers, which numpy cannot convert (and which cannot
+        # be modified in-place anyway), so stack them with jax.numpy.
+        if is_traced(xi):
+            hstack_pynapple = jnp.hstack
+        else:
+            hstack_pynapple = support_pynapple(conv_type="numpy")(np.hstack)
         comp_feature_1 = getattr(
             self.basis1, "_compute_features", self.basis1.compute_features
         )
@@ -1016,7 +1025,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
                 "Resetting input shape to default (None).",
             )
 
-        with self._set_shallow_copy(not have_unique_shapes):
+        with shallow_construction(not have_unique_shapes):
             CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
         Basis.__init__(self)
 
@@ -1076,7 +1085,9 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         # For example, in a multiplication with Zero basis
         x1_shape = math.prod(x1.shape[:-1])
         x2_shape = math.prod(x2.shape[:-1])
-        X = np.asarray(
+        # numpy cannot convert tracers, jax.numpy handles both
+        asarray = jnp.asarray if is_traced(xi) else np.asarray
+        X = asarray(
             row_wise_kron(
                 x1.reshape(x1_shape, x1.shape[-1]),
                 x2.reshape(x2_shape, x2.shape[-1]),
