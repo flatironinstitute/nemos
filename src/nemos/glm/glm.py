@@ -138,22 +138,26 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
     Below is a table listing the default and available solvers for each regularizer.
 
-    +---------------+------------------+---------------------------------------------------------------------+
-    | Regularizer   | Default Solver   | Available Solvers                                                   |
-    +===============+==================+=====================================================================+
-    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
-    +---------------+------------------+---------------------------------------------------------------------+
-    | Ridge         | Newton           | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
-    +---------------+------------------+---------------------------------------------------------------------+
-    | Lasso         | ProximalGradient | ProximalGradient                                                    |
-    +---------------+------------------+---------------------------------------------------------------------+
-    | GroupLasso    | ProximalGradient | ProximalGradient                                                    |
-    +---------------+------------------+---------------------------------------------------------------------+
+    +---------------+------------------+--------------------------------+
+    | Regularizer   | Default Solver   | Available Solvers              |
+    +===============+==================+================================+
+    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS,  |
+    |               |                  | NonlinearCG, ProximalGradient, |
+    |               |                  | NewtonCholesky                 |
+    +---------------+------------------+--------------------------------+
+    | Ridge         | NewtonCholesky   | GradientDescent, BFGS, LBFGS,  |
+    |               |                  | NonlinearCG, ProximalGradient, |
+    |               |                  | NewtonCholesky                 |
+    +---------------+------------------+--------------------------------+
+    | Lasso         | ProximalGradient | ProximalGradient               |
+    +---------------+------------------+--------------------------------+
+    | GroupLasso    | ProximalGradient | ProximalGradient               |
+    +---------------+------------------+--------------------------------+
 
-    The default solver for ``Ridge`` is ``Newton``: the ridge penalty makes the Hessian positive
+    The default solver for ``Ridge`` is ``NewtonCholesky``: the ridge penalty makes the Hessian positive
     definite, so each step is a stable Cholesky solve that converges in a handful of iterations at the
-    feature counts typical of neural GLMs. ``Newton`` is also available for ``UnRegularized`` problems
-    but is not the default there, since the unpenalized Hessian can be singular. A Newton step solves a
+    feature counts typical of neural GLMs. ``NewtonCholesky`` is also available for ``UnRegularized`` problems
+    but is not the default there, since the unpenalized Hessian can be singular. A NewtonCholesky step solves a
     Hessian system, costing ``O(d**2)`` memory and ``O(d**3)`` compute in the number of features ``d``,
     so for models with many features ``LBFGS`` is preferable: it is memory-light and more robust on
     noisy objective landscapes. Switch solver by passing ``solver_name=...`` at initialization.
@@ -322,14 +326,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
     _hess_tag: HessianTag = HessianTag(structure=Full, property=PositiveSemiDefinite)
 
     def _resolve_default_solver(self) -> str:
-        # Newton is the default for Ridge: the ridge penalty makes the penalized
-        # Hessian positive definite, so the Cholesky-based Newton step is stable.
+        # NewtonCholesky is the default for Ridge: the ridge penalty makes the penalized
+        # Hessian positive definite, so the Cholesky-based NewtonCholesky step is stable.
         # For other regularizers (e.g. UnRegularized, whose Hessian can be only
         # positive semidefinite) defer to the regularizer's own default.
         if isinstance(self.regularizer, Ridge) and (
-            "Newton" in self.regularizer.allowed_solvers
+            "NewtonCholesky" in self.regularizer.allowed_solvers
         ):
-            return "Newton"
+            return "NewtonCholesky"
         return super()._resolve_default_solver()
 
     def _hess_property_override(self) -> type | None:
@@ -1654,22 +1658,26 @@ class PopulationGLM(GLM):
     stored in tabular format, shape (n_timebins, num_features) or as a pytree of arrays of the same shape.
     Below is a table listing the default and available solvers for each regularizer.
 
-    +---------------+------------------+---------------------------------------------------------------------+
-    | Regularizer   | Default Solver   | Available Solvers                                                   |
-    +===============+==================+=====================================================================+
-    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
-    +---------------+------------------+---------------------------------------------------------------------+
-    | Ridge         | Newton           | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
-    +---------------+------------------+---------------------------------------------------------------------+
-    | Lasso         | ProximalGradient | ProximalGradient                                                    |
-    +---------------+------------------+---------------------------------------------------------------------+
-    | GroupLasso    | ProximalGradient | ProximalGradient                                                    |
-    +---------------+------------------+---------------------------------------------------------------------+
+    +---------------+------------------+--------------------------------+
+    | Regularizer   | Default Solver   | Available Solvers              |
+    +===============+==================+================================+
+    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS,  |
+    |               |                  | NonlinearCG, ProximalGradient, |
+    |               |                  | NewtonCholesky                 |
+    +---------------+------------------+--------------------------------+
+    | Ridge         | NewtonCholesky   | GradientDescent, BFGS, LBFGS,  |
+    |               |                  | NonlinearCG, ProximalGradient, |
+    |               |                  | NewtonCholesky                 |
+    +---------------+------------------+--------------------------------+
+    | Lasso         | ProximalGradient | ProximalGradient               |
+    +---------------+------------------+--------------------------------+
+    | GroupLasso    | ProximalGradient | ProximalGradient               |
+    +---------------+------------------+--------------------------------+
 
-    The default solver for ``Ridge`` is ``Newton``: the ridge penalty makes the Hessian positive
+    The default solver for ``Ridge`` is ``NewtonCholesky``: the ridge penalty makes the Hessian positive
     definite, so each step is a stable Cholesky solve that converges in a handful of iterations at the
-    feature counts typical of neural GLMs. ``Newton`` is also available for ``UnRegularized`` problems
-    but is not the default there, since the unpenalized Hessian can be singular. A Newton step solves a
+    feature counts typical of neural GLMs. ``NewtonCholesky`` is also available for ``UnRegularized`` problems
+    but is not the default there, since the unpenalized Hessian can be singular. A NewtonCholesky step solves a
     Hessian system, costing ``O(d**2)`` memory and ``O(d**3)`` compute in the number of features ``d``,
     so for models with many features ``LBFGS`` is preferable: it is memory-light and more robust on
     noisy objective landscapes. Switch solver by passing ``solver_name=...`` at initialization.

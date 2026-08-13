@@ -22,7 +22,7 @@ from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
 from .solvers._hess import HessianTag
-from .solvers._newton import Newton
+from .solvers._newton import NewtonCholesky
 from .type_casting import cast_to_jax, is_numpy_array_like
 from .typing import (
     DESIGN_INPUT_TYPE,
@@ -302,7 +302,7 @@ class BaseRegressor(
 
         Defaults to the regularizer's own default solver. Subclasses may override to
         express a model- and regularizer-specific preference (e.g. GLMs default to
-        Newton when the regularizer makes the Hessian positive definite).
+        NewtonCholesky when the regularizer makes the Hessian positive definite).
         """
         return self.regularizer.default_solver
 
@@ -432,7 +432,7 @@ class BaseRegressor(
             **solver_kwargs,
         )
 
-        if isinstance(solver, Newton):
+        if isinstance(solver, NewtonCholesky):
             solver.setup_hessian(
                 self._get_hess_fn(),
                 self._hess_tag,

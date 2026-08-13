@@ -356,8 +356,8 @@ def test_svrg_glm_update(
         ("Ridge", "GradientDescent", None),
         ("Ridge", "SVRG", None),
         ("UnRegularized", "SVRG", None),
-        ("Ridge", "Newton", None),
-        ("UnRegularized", "Newton", None),
+        ("Ridge", "NewtonCholesky", None),
+        ("UnRegularized", "NewtonCholesky", None),
     ],
 )
 @pytest.mark.parametrize(

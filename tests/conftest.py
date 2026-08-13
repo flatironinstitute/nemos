@@ -2048,7 +2048,7 @@ def _clear_model_cache():
 _common_solvers = [
     nmo.solvers.SolverSpec("SVRG", "nemos", nmo.solvers.WrappedSVRG),
     nmo.solvers.SolverSpec("ProxSVRG", "nemos", nmo.solvers.WrappedProxSVRG),
-    nmo.solvers.SolverSpec("Newton", "nemos", nmo.solvers.Newton),
+    nmo.solvers.SolverSpec("NewtonCholesky", "nemos", nmo.solvers.NewtonCholesky),
 ]
 _solvers_per_backend = {
     "optimistix": [

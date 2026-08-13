@@ -17,6 +17,7 @@ from ._hess import (
     General,
     HessianTag,
     PositiveDefinite,
+    PositiveSemiDefinite,
     combine_hessian_tags,
 )
 
@@ -26,6 +27,8 @@ DEFAULT_MAX_STEPS = 100
 
 class NewtonState(eqx.Module):
     grad_norm: jax.Array
+    newton_decrement: jax.Array
+    diverged: jax.numpy.ndarray
     stats: OptimizationInfo
     ls_state: Optional[Any] = None
 
@@ -33,7 +36,27 @@ class NewtonState(eqx.Module):
 NewtonStepResult = tuple[Params, NewtonState]
 
 
-class Newton:
+def _add_diagonal_damping(H, tau):
+    def damp(path, h):
+        n = len(path)
+
+        # A Hessian leaf path is:
+        #   (path_to_row_parameter, path_to_col_parameter)
+        #
+        # So a self-block has identical first and second halves.
+        if n % 2 == 0 and path[: n // 2] == path[n // 2 :]:
+            return h + tau * jnp.eye(
+                h.shape[0],
+                h.shape[1],
+                dtype=h.dtype,
+            )
+
+        return h
+
+    return jax.tree.map_with_path(damp, H)
+
+
+class NewtonCholesky:
     def __init__(
         self,
         unregularized_loss: Callable,
@@ -85,9 +108,10 @@ class Newton:
         self._gradient: Callable | None = None
         self._hessian: Callable | None = None
 
-        # Linear solver + operator tags, resolved once from the Hessian tag in init_state
-        self._linear_solver = lx.AutoLinearSolver(well_posed=False)
-        self._operator_tags = ()
+        self._linear_solver = lx.Cholesky()
+        self._operator_tags = lx.positive_semidefinite_tag
+        self._shift_fn: Callable | None = None
+        self._shift_const: float = 0.0
 
     def setup_hessian(
         self,
@@ -97,6 +121,13 @@ class Newton:
         property_override: Optional[type] = None,
     ):
         tag = hess_tag if reg_tag is None else combine_hessian_tags(hess_tag, reg_tag)
+        if tag is not None and tag.property not in (
+            PositiveDefinite,
+            PositiveSemiDefinite,
+        ):
+            raise ValueError(
+                "NewtonCholesky requires a positive (semi)definite Hessian; use the Newton solver for the general case."
+            )
         if property_override is not None and tag is not None:
             tag = HessianTag(
                 tag.structure, property_override, batch_axes=tag.batch_axes
@@ -154,17 +185,31 @@ class Newton:
         self._build_cache()
         ls_state = self._line_search.init(init_params)
 
-        # Resolve the linear solver once: Cholesky for positive-definite Hessians,
-        # otherwise a robust least-squares solve that tolerates rank deficiency.
+        # Resolve the shift and convergence policies
         if self._hess_tag.property is PositiveDefinite:
-            self._linear_solver = lx.Cholesky()
-            self._operator_tags = lx.positive_semidefinite_tag
+            self._shift_fn = lambda H: jnp.zeros((), H.dtype)
+            self._converged_fn = lambda lambda_sq, gnorm: 0.5 * lambda_sq <= self.tol
         else:
-            self._linear_solver = lx.AutoLinearSolver(well_posed=False)
-            self._operator_tags = ()
+            self._shift_fn = lambda H: (
+                self._shift_const
+                * max(leaf.shape[-1] for leaf in jax.tree.leaves(H))
+                * max(jnp.finfo(leaf.dtype).eps for leaf in jax.tree.leaves(H))
+                * jax.tree_util.tree_reduce(
+                    jnp.maximum,
+                    jax.tree.map(
+                        lambda leaf: jnp.max(
+                            jnp.abs(jnp.diagonal(leaf, axis1=-2, axis2=-1))
+                        ),
+                        H,
+                    ),
+                )
+            )
+            self._converged_fn = lambda lambda_sq, gnorm: gnorm <= self.tol
 
         return NewtonState(
             grad_norm=jnp.inf,
+            newton_decrement=jnp.array(0.0),
+            diverged=jnp.array(False),
             stats=OptimizationInfo(
                 function_val=jnp.nan,
                 num_steps=jnp.array(0),
@@ -175,29 +220,36 @@ class Newton:
         )
 
     def _solve(self, grad, H):
+        tau = self._shift_fn(H)
+        H_mod = _add_diagonal_damping(H, tau)
+
         operator = lx.PyTreeLinearOperator(
-            H,
+            H_mod,
             jax.eval_shape(lambda: grad),
             tags=self._operator_tags,
         )
-
-        return lx.linear_solve(
+        step = lx.linear_solve(
             operator,
             jax.tree.map(lambda x: -x, grad),
             self._linear_solver,
         ).value
+        lambda_sq = -sum(
+            jnp.vdot(g, s) for g, s in zip(jax.tree.leaves(grad), jax.tree.leaves(step))
+        )
+        return step, lambda_sq
 
-    def _newton_direction(self, grad, H):
-        if self._hess_tag.structure is BlockDiagonal:
-            return jax.vmap(
+    def _newton_direction(self, grad, H, tag):
+        if tag.structure is BlockDiagonal:
+            step, lambda_sq_per_block = jax.vmap(
                 self._solve,
-                in_axes=(self._hess_tag.batch_axes, 0),
-                out_axes=self._hess_tag.batch_axes,
+                in_axes=(tag.batch_axes, 0),
+                out_axes=(tag.batch_axes, 0),
             )(grad, H)
+            return step, jnp.sum(lambda_sq_per_block)
         else:
             return self._solve(grad, H)
 
-    def _apply_or_reject(
+    def _apply(
         self,
         params,
         step,
@@ -206,31 +258,21 @@ class Newton:
         fval,
         *args,
     ):
-        """Accept or reject step based on descent condition and line search."""
-        descent = lx.internal.tree_dot(grad, step)
+        updates, new_ls_state = self._line_search.update(
+            step,
+            state.ls_state,
+            params,
+            value=fval,
+            grad=grad,
+            value_fn=lambda p: self.fun(p, *args),
+        )
 
-        def accept(_):
-            updates, new_ls_state = self._line_search.update(
-                step,
-                state.ls_state,
-                params,
-                value=fval,
-                grad=grad,
-                value_fn=lambda p: self.fun(p, *args),
-            )
+        new_params = jax.tree_util.tree_map(
+            lambda p, u: p + u,
+            params,
+            updates,
+        )
 
-            new_params = jax.tree_util.tree_map(
-                lambda p, u: p + u,
-                params,
-                updates,
-            )
-
-            return new_params, new_ls_state
-
-        def reject(_):
-            return params, state.ls_state
-
-        new_params, new_ls_state = jax.lax.cond(descent, accept, reject, None)
         return new_params, new_ls_state
 
     def update(
@@ -239,16 +281,15 @@ class Newton:
         state: NewtonState,
         *args,
     ) -> NewtonStepResult:
-
         (fval, aux), grad = self._gradient(params, *args)
+        H = self._hessian(params, *args)
+        step, lambda_sq = self._newton_direction(grad, H, self._hess_tag)
+
         gnorm = jnp.sqrt(lx.internal.tree_dot(grad, grad))
-        converged = gnorm <= self.tol
+        converged = self._converged_fn(lambda_sq, gnorm)
 
-        def step(_):
-            H = self._hessian(params, *args)
-            step = self._newton_direction(grad, H)
-
-            new_params, new_ls_state = self._apply_or_reject(
+        def do_step(_):
+            return self._apply(
                 params,
                 step,
                 grad,
@@ -257,16 +298,19 @@ class Newton:
                 *args,
             )
 
-            return new_params, new_ls_state
-
         def no_step(_):
             return params, state.ls_state
 
         new_params, new_ls_state = jax.lax.cond(
             converged,
             no_step,
-            step,
+            do_step,
             None,
+        )
+
+        new_params_flat = jax.tree.leaves(new_params)
+        diverged = ~jnp.all(
+            jnp.isfinite(jnp.concatenate([x.ravel() for x in new_params_flat]))
         )
 
         new_iter = jnp.where(
@@ -274,9 +318,10 @@ class Newton:
             state.stats.num_steps,
             state.stats.num_steps + 1,
         )
-
         new_state = NewtonState(
             grad_norm=gnorm,
+            newton_decrement=jnp.sqrt(lambda_sq),
+            diverged=diverged,
             stats=OptimizationInfo(
                 function_val=fval,
                 num_steps=new_iter,
@@ -285,7 +330,6 @@ class Newton:
             ),
             ls_state=new_ls_state,
         )
-
         return new_params, new_state, aux
 
     def run(
@@ -298,7 +342,11 @@ class Newton:
 
         def cond(carry):
             p, s = carry
-            return (~s.stats.converged) & (s.stats.num_steps < self.maxiter)
+            return (
+                (~s.stats.converged)
+                & (~s.diverged)
+                & (s.stats.num_steps < self.maxiter)
+            )
 
         def body(carry):
             p, s = carry
@@ -328,7 +376,7 @@ class Newton:
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
-        return {"maxiter", "tol", "autodiff", "jit"}
+        return {"maxiter", "tol", "autodiff", "jit", "shift_const"}
 
     def _get_optim_info(
         self,
