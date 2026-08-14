@@ -9,6 +9,7 @@ them, and compare the eigenvalues of the sum against the combined tag.
 
 from itertools import combinations, product
 
+import numpy as np
 import pytest
 
 from nemos._hess import (
@@ -17,7 +18,9 @@ from nemos._hess import (
     MatrixStructure,
     NormalizedHessianTag,
     combine_definite_on,
+    combine_hessian_tags,
     combine_property,
+    combine_structure,
     is_covering,
     is_negative_signed,
     is_positive_signed,
@@ -48,6 +51,14 @@ SIGN_STRENGTH = {
     MatrixProperty.NEGATIVE_SEMI_DEFINITE: 1,
     MatrixProperty.POSITIVE_DEFINITE: 2,
     MatrixProperty.NEGATIVE_DEFINITE: 2,
+}
+
+# How much of the matrix each structure leaves filled in, written out by hand so that a
+# renumbering of the enum is caught rather than followed.
+GENERALITY = {
+    MatrixStructure.DIAGONAL: 0,
+    MatrixStructure.BLOCK_DIAGONAL: 1,
+    MatrixStructure.FULL: 2,
 }
 
 # Short names, so that each row of the tables below fits on one line.
@@ -89,13 +100,21 @@ def universe(t):
     return set(t.flat_on)
 
 
-def tag(tree, prop=SYM, structure=MatrixStructure.FULL, flat_on=None, definite_on=None):
+def tag(
+    tree,
+    prop=SYM,
+    structure=MatrixStructure.FULL,
+    flat_on=None,
+    definite_on=None,
+    batch_axes=None,
+):
     """Build a tag over ``tree``, claiming nothing that is not passed explicitly."""
     return HessianTag(
         structure=structure,
         property=prop,
         flat_on=mask(tree) if flat_on is None else flat_on,
         definite_on=mask(tree) if definite_on is None else definite_on,
+        batch_axes=batch_axes,
     )
 
 
@@ -586,3 +605,398 @@ def test_the_sum_is_definite_exactly_when_the_pair_is_linked(tree):
         linked = same_sign and (linked_on(n1, n2, whole) or linked_on(n2, n1, whole))
         verdict = combine_property(n1, n2, combine_definite_on(n1, n2))
         assert (verdict in (PD, ND)) is linked
+
+
+# --- the algebra against real matrices ---
+#
+# Everything above is set arithmetic. What the tags are *for* is describing matrices, so
+# these build matrices with a chosen spectrum and chosen flat blocks, tag them from what
+# they were built from, add them, and check the combined tag against the spectrum of the
+# sum. A leaf here is a group of coordinates rather than a name: ``SIZES`` gives one block
+# per leaf, of different widths, so a leaf is never a single coordinate.
+
+SIZES = {"a": 2, "b": 1, "c": 2}
+SIZE = sum(SIZES.values())
+TOL = 1e-9
+
+
+def coordinates(names):
+    """Map the leaves named in ``names`` to their coordinates in the matrix."""
+    start, chosen = 0, []
+    for leaf, size in SIZES.items():
+        if leaf in names:
+            chosen.extend(range(start, start + size))
+        start += size
+    return chosen
+
+
+def block(matrix, names):
+    """Take the principal submatrix on the coordinates of ``names``."""
+    idx = coordinates(names)
+    return matrix[np.ix_(idx, idx)]
+
+
+def build_matrix(rng, eigenvalues, flat=()):
+    """Build a symmetric matrix with a chosen spectrum and chosen zero blocks.
+
+    The coordinates of ``flat`` get zero rows and columns, which is what makes their block
+    zero; on the rest the matrix is ``Q diag(eigenvalues) Q.T`` with ``Q`` orthonormal, so
+    its spectrum is exactly ``eigenvalues`` together with one zero per flat coordinate. The
+    rotation is what keeps the matrix from being diagonal, i.e. from making every block
+    trivially easy.
+
+    Parameters
+    ----------
+    rng :
+        Source of randomness, for the rotation.
+    eigenvalues :
+        One per coordinate that is not flat.
+    flat :
+        Leaf names whose block is to be zero.
+
+    Returns
+    -------
+    :
+        A symmetric matrix of size ``SIZE``.
+    """
+    free = [i for i in range(SIZE) if i not in coordinates(flat)]
+    rotation, _ = np.linalg.qr(rng.standard_normal((len(free), len(free))))
+    matrix = np.zeros((SIZE, SIZE))
+    matrix[np.ix_(free, free)] = (rotation * eigenvalues) @ rotation.T
+    return matrix
+
+
+def term(rng, flat=(), zeros=0, negative=False):
+    """Build a matrix together with the tag it is built to satisfy.
+
+    Nothing here is measured: the spectrum is chosen, and both the sign and the definite
+    leaves follow from it. With no zero eigenvalue and no flat leaf the matrix is definite;
+    a zero eigenvalue, whether asked for or coming from a flat leaf, makes it semidefinite
+    and no more. Every principal block of a definite matrix is definite, which is what lets
+    the non-flat leaves be claimed when ``zeros`` is 0 — and when it is not, the claim is
+    left out rather than checked for, since the tag is meant to be declared without looking.
+
+    Parameters
+    ----------
+    rng :
+        Source of randomness.
+    flat :
+        Leaf names whose block is to be zero.
+    zeros :
+        How many zero eigenvalues to put on the coordinates that are not flat.
+    negative :
+        Build the negated matrix, which is negative (semi)definite instead.
+
+    Returns
+    -------
+    matrix, tag :
+        The matrix, and a tag that is true of it by construction.
+    """
+    free = SIZE - len(coordinates(flat))
+    eigenvalues = np.concatenate([np.zeros(zeros), np.linspace(1.0, 2.0, free - zeros)])
+    matrix = build_matrix(rng, eigenvalues, flat=flat)
+    singular = zeros > 0 or bool(flat)
+    if negative:
+        matrix, sign = -matrix, NSD if singular else ND
+    else:
+        sign = PSD if singular else PD
+    definite = () if zeros else tuple(leaf for leaf in SIZES if leaf not in flat)
+    return matrix, tag(
+        tuple(SIZES),
+        prop=sign,
+        flat_on=mask(tuple(SIZES), flat),
+        definite_on=mask(tuple(SIZES), definite),
+    )
+
+
+def eigenvalue_counts(matrix):
+    """Count how many eigenvalues of ``matrix`` are positive, zero and negative."""
+    eigenvalues = np.linalg.eigvalsh(matrix)
+    return (
+        int(np.sum(eigenvalues > TOL)),
+        int(np.sum(np.abs(eigenvalues) <= TOL)),
+        int(np.sum(eigenvalues < -TOL)),
+    )
+
+
+def check_sound(t, matrix):
+    """Check the sign ``t`` claims is true of ``matrix``.
+
+    True, not exact: a tag may say less than the matrix delivers, and a combined tag usually
+    does. The matrix is never negated on the way in, so a failure reports the spectrum it
+    actually has.
+    """
+    positive, zero, negative = eigenvalue_counts(matrix)
+    spectrum = f"{positive} positive, {zero} zero, {negative} negative"
+    if t.property is PD:
+        assert zero == 0 and negative == 0, f"claimed positive definite, got {spectrum}"
+    elif t.property is ND:
+        assert zero == 0 and positive == 0, f"claimed negative definite, got {spectrum}"
+    elif t.property is PSD:
+        assert negative == 0, f"claimed positive semidefinite, got {spectrum}"
+    elif t.property is NSD:
+        assert positive == 0, f"claimed negative semidefinite, got {spectrum}"
+
+
+def strongest_signs(matrix):
+    """Find the strongest signs true of ``matrix``.
+
+    One, except for the zero matrix, which is both positive and negative semidefinite and
+    neither of them upgradeably so.
+    """
+    positive, zero, negative = eigenvalue_counts(matrix)
+    if positive and negative:
+        return {SYM}
+    if not positive and not negative:
+        return {PSD, NSD}
+    if negative == 0:
+        return {PD} if zero == 0 else {PSD}
+    return {ND} if zero == 0 else {NSD}
+
+
+def check_strict(t, matrix):
+    """Check the sign ``t`` claims is the strongest one ``matrix`` supports.
+
+    A semidefinite claim about a definite matrix fails here, though it is perfectly true.
+    """
+    strongest = strongest_signs(matrix)
+    assert t.property in strongest, (
+        f"claimed {t.property.name}, strongest true is "
+        f"{' or '.join(sorted(sign.name for sign in strongest))}"
+    )
+
+
+def check_leaf_claims(t, matrix):
+    """Check the leaves ``t`` calls flat and definite really are, in ``matrix``.
+
+    A definite claim carries the sign of ``property``, so a negative one asks for every
+    eigenvalue of the block to be below zero rather than above it. The sets are never
+    required to be the largest available: for ``definite_on`` there is in general no single
+    largest.
+    """
+    flat = claimed(t.flat_on)
+    if flat:
+        assert np.abs(block(matrix, flat)).max() < TOL, f"claimed flat on {flat}"
+
+    definite = claimed(t.definite_on)
+    if definite:
+        eigenvalues = np.linalg.eigvalsh(block(matrix, definite))
+        if t.property in (ND, NSD):
+            assert eigenvalues.max() < -TOL, f"claimed negative definite on {definite}"
+        else:
+            assert eigenvalues.min() > TOL, f"claimed positive definite on {definite}"
+
+
+def check_claims(t, matrix, strict=False):
+    """Check ``t`` against ``matrix``: the sign, then the leaves it calls flat and definite.
+
+    ``strict`` asks for the sign to be the strongest one true of ``matrix`` rather than
+    merely a true one. Off by default, which is what soundness asks of a combined tag; on
+    where the matrix was built to a known spectrum and the tag should name it exactly.
+    """
+    check_strict(t, matrix) if strict else check_sound(t, matrix)
+    check_leaf_claims(t, matrix)
+
+
+# How the terms are built: which leaves are flat, and how many zero eigenvalues the rest
+# carries. Between them these cover a definite term, a term that is singular only because
+# of its flat block, and one that is singular in a direction no leaf set can name.
+TERMS = [
+    ((), 0),
+    ((), 1),
+    ((), 2),
+    (("a",), 0),
+    (("a",), 1),
+    (("a", "b"), 0),
+    (("c",), 0),
+    (("c",), 1),
+]
+
+
+@pytest.mark.parametrize("flat, zeros", TERMS)
+def test_built_matrices_have_the_spectrum_they_were_built_with(flat, zeros):
+    """Check the construction delivers the spectrum it was asked for.
+
+    Everything below reads a term's sign and definite leaves off what it was built from
+    rather than off the matrix, so this is where that reading is earned: the zero
+    eigenvalues are the ones asked for plus one per flat coordinate, and the rest are the
+    positive values requested.
+    """
+    rng = np.random.default_rng(0)
+    matrix, _ = term(rng, flat=flat, zeros=zeros)
+    positive, zero, negative = eigenvalue_counts(matrix)
+    assert negative == 0
+    assert zero == zeros + len(coordinates(flat))
+    assert positive == SIZE - zero
+
+
+@pytest.mark.parametrize("flat, zeros", TERMS)
+@pytest.mark.parametrize("negative", [False, True])
+def test_built_matrices_satisfy_the_tags_they_are_built_for(flat, zeros, negative):
+    """Check each matrix satisfies its own tag before any of them are combined.
+
+    Without this the rest is vacuous: a term whose flat block was not actually zero, or
+    whose blocks were not actually definite, would let the combination tests pass while
+    checking nothing.
+    """
+    rng = np.random.default_rng(1)
+    for _ in range(10):
+        matrix, t = term(rng, flat=flat, zeros=zeros, negative=negative)
+        # sanity check of test cases
+        check_claims(t, matrix)
+
+
+@pytest.mark.parametrize("first", TERMS)
+@pytest.mark.parametrize("second", TERMS)
+@pytest.mark.parametrize("negative", [False, True])
+def test_combined_tag_holds_of_the_sum(first, second, negative):
+    """Check every claim the combined tag makes is true of the sum of the two matrices.
+
+    This is the soundness direction, over every pair of terms and both signs: the sign, the
+    flat leaves and the definite leaves are each checked against the spectrum of the sum, so
+    a rule claiming one leaf too many fails here rather than inside a solver.
+    """
+    rng = np.random.default_rng(2)
+    for _ in range(5):
+        m1, t1 = term(rng, flat=first[0], zeros=first[1], negative=negative)
+        m2, t2 = term(rng, flat=second[0], zeros=second[1], negative=negative)
+        check_claims(combine_hessian_tags(t1, t2), m1 + m2)
+
+
+@pytest.mark.parametrize("first", TERMS)
+@pytest.mark.parametrize("second", TERMS)
+def test_a_definite_verdict_means_the_sum_is_nonsingular(first, second):
+    """Check a definite verdict is matched by the spectrum, not merely not contradicted.
+
+    Soundness alone would be satisfied by a rule that never claimed anything, so where the
+    verdict is definite the sum must have no zero eigenvalue at all. The reverse does not
+    hold and is not asserted: the sum is sometimes definite where the tags cannot say so,
+    which is the incompleteness Theorem 1 proves is unavoidable.
+    """
+    rng = np.random.default_rng(3)
+    for _ in range(5):
+        m1, t1 = term(rng, flat=first[0], zeros=first[1])
+        m2, t2 = term(rng, flat=second[0], zeros=second[1])
+        combined = combine_hessian_tags(t1, t2)
+        positive, zero, negative = eigenvalue_counts(m1 + m2)
+        if combined.property is PD:
+            assert zero == 0 and negative == 0, f"claimed definite, spectrum {(positive, zero, negative)}"
+        assert negative == 0, "two semidefinite terms cannot sum to an indefinite one"
+
+
+def test_two_terms_sharing_a_null_direction_are_not_claimed_definite():
+    """Check the case a union rule would get wrong, against the spectrum.
+
+    One matrix, with a single zero eigenvalue whose direction crosses the leaves ``a`` and
+    ``c``, is definite on ``a`` and on ``c`` separately, so each term truthfully claims one
+    of them. Their sum is that matrix doubled, still singular in that direction, so claiming
+    both leaves would be a definite verdict for a matrix with a zero eigenvalue.
+    """
+    direction = np.zeros(SIZE)
+    direction[coordinates(("a",))[0]] = 1.0
+    direction[coordinates(("c",))[0]] = -1.0
+    direction /= np.linalg.norm(direction)
+    matrix = np.eye(SIZE) - np.outer(direction, direction)
+
+    leaves = tuple(SIZES)
+    left = tag(leaves, prop=PSD, definite_on=mask(leaves, ("a",)))
+    right = tag(leaves, prop=PSD, definite_on=mask(leaves, ("c",)))
+    check_claims(left, matrix)
+    check_claims(right, matrix)
+
+    combined = combine_hessian_tags(left, right)
+    assert claimed(combined.definite_on) in ({"a"}, {"c"})
+    assert combined.property is PSD
+    assert eigenvalue_counts(matrix + matrix)[1] == 1
+    check_claims(combined, matrix + matrix)
+
+
+@pytest.mark.parametrize("flat, zeros", TERMS)
+def test_opposite_signs_are_claimed_nothing(flat, zeros):
+    """Check a positive term plus a negative one gets no sign, and needs none.
+
+    The two curvatures cancel in the directions they share, so the sum is generally
+    indefinite — which is what a tag claiming a sign here would be contradicted by.
+    """
+    rng = np.random.default_rng(4)
+    positive, t1 = term(rng, flat=flat, zeros=zeros)
+    negative, t2 = term(rng, flat=flat, zeros=zeros, negative=True)
+    combined = combine_hessian_tags(t1, t2)
+    assert combined.property is SYM
+    assert not claimed(combined.definite_on)
+    check_claims(combined, positive + negative)
+
+
+def test_flat_on_combines_by_intersection(tree):
+    """Check a leaf is flat in the sum exactly when both terms are flat on it.
+
+    Neither less nor more: a leaf only one term is flat on carries the other's curvature, so
+    claiming it would be wrong, and a leaf both are flat on is zero in the sum, so dropping
+    it would give away a claim for nothing. The two tags are normalized first because that
+    is what ``combine_hessian_tags`` does to them, and normalizing can empty ``flat_on``.
+    """
+    for t1, t2 in product(realizable_tags(tree), repeat=2):
+        combined = combine_hessian_tags(t1, t2)
+        both = claimed(normalize(t1).flat_on) & claimed(normalize(t2).flat_on)
+        assert claimed(combined.flat_on) == both
+
+
+@pytest.mark.parametrize("first", TERMS)
+@pytest.mark.parametrize("second", TERMS)
+def test_leaves_flat_in_both_terms_are_flat_and_claimed_in_the_sum(first, second):
+    """Check the combined flat claim against the matrices, in both directions.
+
+    Where both terms are flat the sum's block is measured to be zero and the tag has to say
+    so, and where only one is the tag must not say so. Soundness alone would let the rule
+    drop every flat claim and still pass.
+    """
+    rng = np.random.default_rng(5)
+    m1, t1 = term(rng, flat=first[0], zeros=first[1])
+    m2, t2 = term(rng, flat=second[0], zeros=second[1])
+    combined = combine_hessian_tags(t1, t2)
+
+    for leaf in SIZES:
+        flat_in_sum = np.abs(block(m1 + m2, (leaf,))).max() < TOL
+        if leaf in claimed(t1.flat_on) & claimed(t2.flat_on):
+            assert flat_in_sum, f"{leaf} is flat in both terms but not in the sum"
+            assert leaf in claimed(combined.flat_on), f"{leaf} was flat, and not claimed"
+        else:
+            assert leaf not in claimed(combined.flat_on), (
+                f"{leaf} claimed flat, but only one of the two terms is flat on it"
+            )
+
+
+# --- combine_structure and the assembled tag ---
+
+
+@pytest.mark.parametrize("s1", list(MatrixStructure))
+@pytest.mark.parametrize("s2", list(MatrixStructure))
+def test_structure_of_the_sum_is_the_more_general_one(s1, s2):
+    """Check the sum keeps whichever structure leaves more of the matrix filled in.
+
+    Adding a diagonal term to a block diagonal one cannot create an entry outside the
+    blocks, and adding anything to a full one cannot remove entries. Every ordered pair is
+    covered, so the order of the arguments cannot matter either.
+    """
+    combined = combine_structure(s1, s2)
+    assert GENERALITY[combined] == max(GENERALITY[s1], GENERALITY[s2])
+    assert combined in (s1, s2)
+
+
+@pytest.mark.parametrize("s1", list(MatrixStructure))
+@pytest.mark.parametrize("s2", list(MatrixStructure))
+def test_combined_tag_carries_the_structure_and_the_first_batch_axes(s1, s2, tree):
+    """Check the assembled tag keeps the structure of the sum and the first tag's axes.
+
+    The batch axes say which axis of each parameter carries the batch, which is a property
+    of the model rather than of the pair, so they come from the model's tag — the first
+    argument — and are not merged. ``Newton`` reads both of these to decide whether to
+    ``vmap`` the linear solve, so dropping either one silently would cost a block solve.
+    """
+    left = tag(tree, prop=PSD, structure=s1, batch_axes="model axes")
+    right = tag(tree, prop=PSD, structure=s2, batch_axes="penalty axes")
+
+    combined = combine_hessian_tags(left, right)
+    assert GENERALITY[combined.structure] == max(GENERALITY[s1], GENERALITY[s2])
+    assert combined.batch_axes == "model axes"
+    assert combine_hessian_tags(right, left).batch_axes == "penalty axes"
