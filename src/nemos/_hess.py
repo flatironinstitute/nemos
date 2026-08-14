@@ -1,63 +1,163 @@
+from __future__ import annotations
+
+import operator
 from dataclasses import dataclass
-from typing import Any
+from enum import Enum, IntEnum, auto
+
+import jax
+from jaxtyping import PyTree
+
+from .inverse_link_function_utils import identity
+from .tree_utils import pytree_map_and_reduce
 
 # --- Properties ---
 
 
-class MatrixProperty:
-    pass
+class MatrixProperty(Enum):
+    """The sign a term claims for its Hessian, at every parameter value.
 
+    Only these five are needed, because they are what the decisions turn on: whether a
+    Newton step points downhill at all, and whether the matrix can be Cholesky-factorized.
+    ``SYMMETRIC`` is the floor, claiming no sign whatsoever.
+    """
 
-class Symmetric(MatrixProperty):
-    pass
-
-
-class PositiveSemiDefinite(MatrixProperty):
-    pass
-
-
-class PositiveDefinite(MatrixProperty):
-    pass
-
-
-class NegativeSemiDefinite(MatrixProperty):
-    pass
-
-
-class NegativeDefinite(MatrixProperty):
-    pass
+    SYMMETRIC = auto()
+    POSITIVE_SEMI_DEFINITE = auto()
+    POSITIVE_DEFINITE = auto()
+    NEGATIVE_SEMI_DEFINITE = auto()
+    NEGATIVE_DEFINITE = auto()
 
 
 # --- Structures ---
 
 
-class MatrixStructure:
-    pass
+class MatrixStructure(IntEnum):
+    """The sparsity a term claims for its Hessian.
+
+    The value is how general the structure is, so the structure of a sum is the larger of
+    the two: a diagonal matrix plus a block diagonal one is block diagonal, and anything
+    plus a full one is full. ``FULL`` is the floor, claiming no sparsity to exploit.
+    """
+
+    DIAGONAL = 0
+    BLOCK_DIAGONAL = 1
+    FULL = 2
 
 
-class Full(MatrixStructure):
-    pass
+def combine_structure(s1: MatrixStructure, s2: MatrixStructure) -> MatrixStructure:
+    """Combine two structures: ``H1 + H2`` is as general as the more general of the two.
+
+    Only correct because the block diagonal case in nemos always comes from vmapping over
+    a batch axis, so the two terms are block diagonal with respect to the *same* partition.
+    Two block diagonal matrices with different partitions sum to something with no block
+    structure at all; see ``developers_notes/08-hessian_tagging.md``.
+
+    Parameters
+    ----------
+    s1, s2 :
+        The structures of the two terms.
+
+    Returns
+    -------
+    :
+        The structure of their sum.
+    """
+    return max(s1, s2)
 
 
-class BlockDiagonal(MatrixStructure):
-    pass
+# --- Leaf claims ---
 
 
-class Diagonal(MatrixStructure):
-    pass
+class LeafClaim(Enum):
+    """What a term certifies about one leaf's own block of the Hessian.
+
+    A leaf carries exactly one of these, so it can never be declared both flat and definite
+    — a pair of claims no matrix satisfies, since a zero block is singular.
+
+    - ``UNCLAIMED``: nothing is certified about this leaf's block.
+    - ``FLAT``: the block is zero, i.e. the term has no curvature there at all.
+    - ``DEFINITE``: the block is definite, with the sign carried by the tag's ``property``.
+    """
+
+    UNCLAIMED = auto()
+    FLAT = auto()
+    DEFINITE = auto()
 
 
-_STRUCTURE_GENERALITY: dict[type, int] = {
-    Diagonal: 0,
-    BlockDiagonal: 1,
-    Full: 2,
-}
+# --- Leaf sets ---
+#
+# A leaf set is a tree with the structure of the parameters and a boolean at every leaf:
+# ``True`` where the claim holds, ``False`` where it does not. Two leaf sets can be
+# combined leaf by leaf, and a claim about the whole matrix is a leaf set that is ``True``
+# everywhere. Parameters held fixed are ``None`` in the parameter tree and ``None`` in the
+# leaf set as well, so a claim about them drops out with them.
 
 
-def combine_structure(s1, s2) -> type:
-    c1 = s1 if isinstance(s1, type) else type(s1)
-    c2 = s2 if isinstance(s2, type) else type(s2)
-    return max(c1, c2, key=lambda t: _STRUCTURE_GENERALITY[t])
+def claim_nothing(params: PyTree) -> PyTree[LeafClaim]:
+    """Build a claim tree that certifies nothing about any leaf.
+
+    Parameters
+    ----------
+    params :
+        The parameters the claims are about. Only its structure is read.
+
+    Returns
+    -------
+    :
+        A tree shaped like ``params``, carrying ``LeafClaim.UNCLAIMED`` at every leaf. Leaves
+        that are ``None`` in ``params`` — parameters held fixed — stay ``None``, so the
+        tree keeps talking about exactly the parameters that are being fitted.
+    """
+    return jax.tree_util.tree_map(lambda _: LeafClaim.UNCLAIMED, params)
+
+
+def mask_of_claim(claims: PyTree[LeafClaim], claim: LeafClaim) -> PyTree[bool]:
+    """Turn a claim tree into the leaf set carrying one particular claim.
+
+    Parameters
+    ----------
+    claims :
+        A tree with a :class:`LeafClaim` member at every leaf.
+    claim :
+        The claim to look for, e.g. ``LeafClaim.DEFINITE``.
+
+    Returns
+    -------
+    :
+        A leaf set: a tree shaped like ``claims`` holding ``True`` at the leaves carrying
+        ``claim`` and ``False`` elsewhere. ``None`` leaves stay ``None``.
+    """
+    return jax.tree_util.tree_map(lambda leaf_claim: leaf_claim is claim, claims)
+
+
+def mask_union(m1: PyTree[bool], m2: PyTree[bool]) -> PyTree[bool]:
+    """Leaves claimed by either one."""
+    return jax.tree_util.tree_map(operator.or_, m1, m2)
+
+
+def mask_intersection(m1: PyTree[bool], m2: PyTree[bool]) -> PyTree[bool]:
+    """Leaves claimed by both."""
+    return jax.tree_util.tree_map(operator.and_, m1, m2)
+
+
+def mask_claim_none(like: PyTree) -> PyTree[bool]:
+    """Build a leaf set over the same tree that claims no leaf."""
+    return jax.tree_util.tree_map(lambda _: False, like)
+
+
+def mask_claim_all(like: PyTree) -> PyTree[bool]:
+    """Build a leaf set over the same tree that claims every leaf."""
+    return jax.tree_util.tree_map(lambda _: True, like)
+
+
+def mask_claims_all(mask: PyTree[bool]) -> bool:
+    """Whether every leaf is claimed."""
+    return pytree_map_and_reduce(identity, all, mask)
+
+
+def mask_n_claimed(mask: PyTree[bool]) -> int:
+    """How many leaves are claimed."""
+    return pytree_map_and_reduce(identity, sum, mask)
 
 
 # --- Combined tag ---
@@ -65,61 +165,59 @@ def combine_structure(s1, s2) -> type:
 
 @dataclass(frozen=True)
 class HessianTag:
-    """Structure and definiteness of a Hessian, with optional detail per parameter.
+    """Structure and definiteness of a Hessian, with detail per parameter.
 
-    ``flat_on`` and ``definite_on`` describe single parts of the parameter tree rather
-    than the whole matrix. Both are sets of leaf ids, taken with ``id()`` on the leaves
-    of the parameters. ``combine_hessian_tags`` reads them to tell whether the sum of two
-    Hessians is positive definite even when neither one is. They say different things:
+    ``flat_on`` and ``definite_on`` are leaf sets: trees shaped like the parameters, with a
+    boolean at every leaf. They talk about single parts of the parameter tree rather than
+    about the whole matrix, and ``combine_hessian_tags`` reads them to tell whether the sum
+    of two Hessians is definite even when neither one is. They say different things:
 
-    - ``flat_on``: the term has no curvature at all on these parameters, and is positive
-      definite on all the others. A ridge penalty that skips the intercept says this,
-      because the penalty does not depend on the intercept, so its second derivative
-      there is zero.
+    - ``flat_on``: the term has no curvature at all on these parameters. A ridge penalty
+      that skips the intercept says this, because the penalty does not depend on the
+      intercept, so its second derivative there is zero.
     - ``definite_on``: the term curves on these parameters, with the sign of ``property``,
       and nothing is claimed about the rest. A GLM loss says this about its intercept,
       where the curvature is the sum of the per-sample weights and so is positive.
-    - ``leaves``: every leaf id the tag speaks about. ``flat_on`` and ``definite_on`` are
-      subsets of it, and comparing against it is how the algebra recognizes a claim that
-      reaches the whole matrix.
 
-    ``None`` means the tag says nothing about single parameters.
+    Both are claims about the parameters the solver is optimizing, so they are built when
+    the solver is set up rather than declared ahead of time: which parameters a penalty
+    reaches depends on its strength, and which parameters exist at all depends on what is
+    held fixed. A term with nothing to say about single parameters passes leaf sets that
+    are ``False`` everywhere.
     """
 
-    structure: type
-    property: type
-    leaves: frozenset
-    batch_axes: Any = None
-    flat_on: frozenset | None = None
-    definite_on: frozenset | None = None
+    structure: MatrixStructure
+    property: MatrixProperty
+    flat_on: PyTree[bool]
+    definite_on: PyTree[bool]
+    batch_axes: PyTree[int | None] | None = None
 
 
 @dataclass(frozen=True)
 class NormalizedHessianTag:
     """Normalized version of ``HessianTag``."""
 
-    structure: type
-    property: type
-    leaves: frozenset
-    batch_axes: Any
-    flat_on: frozenset
-    definite_on: frozenset
+    structure: MatrixStructure
+    property: MatrixProperty
+    flat_on: PyTree[bool]
+    definite_on: PyTree[bool]
+    batch_axes: PyTree[int | None] | None
 
 
 def combine_definite_on(
     t1: NormalizedHessianTag, t2: NormalizedHessianTag
-) -> frozenset:
-    """Largest leaf set on which ``H1 + H2`` is guaranteed definite.
+) -> PyTree[bool]:
+    """Find the largest set of leaves on which ``H1 + H2`` is guaranteed definite.
 
-    A leaf set is guaranteed definite when the two tags restricted to it are linked in
+    A set of leaves is guaranteed definite when the two tags restricted to it are linked in
     the sense of Theorem 2, which is a pair of conditions of the form ``S <= ...``, so
     each side of the disjunction has a greatest element: the term's own ``definite_on``,
     grown by the leaves it is flat on and the other term curves on.
 
     The two candidates are both maximal and their union is *not* sound — two terms can
-    each be definite on their own leaves and share a null direction that neither set
-    names — so one of them has to be chosen and the other discarded. A model has an
-    empty ``flat_on``, so it is the penalty side that grows.
+    each be definite on their own leaves and share a null direction that neither one
+    mentions — so one of them has to be chosen and the other discarded. Ties go to the
+    first argument. A model is flat on no leaf, so it is the penalty side that grows.
 
     Opposite signs cancel, and an unsigned term cannot be bounded below on the leaves
     the other one curves on, so a pair that is not signed the same way keeps nothing.
@@ -128,15 +226,15 @@ def combine_definite_on(
         (is_positive_signed(t1) and is_positive_signed(t2))
         or (is_negative_signed(t1) and is_negative_signed(t2))
     ):
-        return frozenset()
-    m1 = t1.definite_on.union(t1.flat_on.intersection(t2.definite_on))
-    m2 = t2.definite_on.union(t2.flat_on.intersection(t1.definite_on))
-    return max(m1, m2, key=len)
+        return mask_claim_none(t1.definite_on)
+    m1 = mask_union(t1.definite_on, mask_intersection(t1.flat_on, t2.definite_on))
+    m2 = mask_union(t2.definite_on, mask_intersection(t2.flat_on, t1.definite_on))
+    return max(m1, m2, key=mask_n_claimed)
 
 
 def combine_property(
-    t1: NormalizedHessianTag, t2: NormalizedHessianTag, definite_on: frozenset
-) -> type:
+    t1: NormalizedHessianTag, t2: NormalizedHessianTag, definite_on: PyTree[bool]
+) -> MatrixProperty:
     """Resolve the definiteness of the sum ``H1 + H2`` from the summands' properties.
 
     Used for additive objectives (e.g. loss + regularizer), where the Hessian of a sum
@@ -145,20 +243,24 @@ def combine_property(
     - a combined ``definite_on`` that reaches every leaf is a definite block on the whole
       matrix, hence a definite matrix. This is where the sum can be definite although
       neither summand is, and it subsumes the case of a summand that is definite already,
-      which ``normalize`` states as ``definite_on == leaves``.
+      which ``normalize`` states as a ``definite_on`` claiming every leaf.
     - like-signed semidefinite terms stay semidefinite.
-    - anything else degrades to ``Symmetric`` (no definiteness guarantee, e.g. mixing
+    - anything else degrades to ``MatrixProperty.SYMMETRIC`` (no definiteness guarantee, e.g. mixing
       positive and negative curvature).
     """
     # Theorem 2, developers_notes/08-hessian_tagging.md: the linked condition holds
     # exactly when the combined definite set covers the tree.
-    if definite_on == t1.leaves:
-        return PositiveDefinite if is_positive_signed(t1) else NegativeDefinite
+    if mask_claims_all(definite_on):
+        return (
+            MatrixProperty.POSITIVE_DEFINITE
+            if is_positive_signed(t1)
+            else MatrixProperty.NEGATIVE_DEFINITE
+        )
     elif is_positive_signed(t1) and is_positive_signed(t2):
-        return PositiveSemiDefinite
+        return MatrixProperty.POSITIVE_SEMI_DEFINITE
     elif is_negative_signed(t1) and is_negative_signed(t2):
-        return NegativeSemiDefinite
-    return Symmetric
+        return MatrixProperty.NEGATIVE_SEMI_DEFINITE
+    return MatrixProperty.SYMMETRIC
 
 
 def normalize(tag: HessianTag | None) -> NormalizedHessianTag | None:
@@ -173,29 +275,36 @@ def normalize(tag: HessianTag | None) -> NormalizedHessianTag | None:
 
     structure = tag.structure
     sign = tag.property
-    flat_on = frozenset() if tag.flat_on is None else tag.flat_on
-    definite_on = frozenset() if tag.definite_on is None else tag.definite_on
+    flat_on = tag.flat_on
+    definite_on = tag.definite_on
 
-    if flat_on == tag.leaves:
+    if mask_claims_all(flat_on):
         # every block vanishes, so the matrix is zero
-        sign = NegativeSemiDefinite if is_negative_signed(tag) else PositiveSemiDefinite
-        structure = Diagonal
-        definite_on = frozenset()
+        sign = (
+            MatrixProperty.NEGATIVE_SEMI_DEFINITE
+            if is_negative_signed(tag)
+            else MatrixProperty.POSITIVE_SEMI_DEFINITE
+        )
+        structure = MatrixStructure.DIAGONAL
+        definite_on = mask_claim_none(definite_on)
     elif not (is_positive_signed(tag) or is_negative_signed(tag)):
         # with no sign for the whole matrix, definite_on carries no sign either
-        definite_on = frozenset()
-    elif sign in (PositiveDefinite, NegativeDefinite):
+        definite_on = mask_claim_none(definite_on)
+    elif sign in (MatrixProperty.POSITIVE_DEFINITE, MatrixProperty.NEGATIVE_DEFINITE):
         # a definite matrix is definite on every block and flat on none
-        flat_on, definite_on = frozenset(), tag.leaves
-    elif definite_on == tag.leaves:
+        flat_on, definite_on = mask_claim_none(flat_on), mask_claim_all(definite_on)
+    elif mask_claims_all(definite_on):
         # the block on every leaf is the whole matrix
-        sign = PositiveDefinite if is_positive_signed(tag) else NegativeDefinite
-        flat_on = frozenset()
+        sign = (
+            MatrixProperty.POSITIVE_DEFINITE
+            if is_positive_signed(tag)
+            else MatrixProperty.NEGATIVE_DEFINITE
+        )
+        flat_on = mask_claim_none(flat_on)
 
     return NormalizedHessianTag(
         structure=structure,
         property=sign,
-        leaves=tag.leaves,
         batch_axes=tag.batch_axes,
         flat_on=flat_on,
         definite_on=definite_on,
@@ -203,16 +312,22 @@ def normalize(tag: HessianTag | None) -> NormalizedHessianTag | None:
 
 
 def is_negative_signed(tag: HessianTag | NormalizedHessianTag) -> bool:
-    return tag.property in (NegativeDefinite, NegativeSemiDefinite)
+    return tag.property in (
+        MatrixProperty.NEGATIVE_DEFINITE,
+        MatrixProperty.NEGATIVE_SEMI_DEFINITE,
+    )
 
 
 def is_positive_signed(tag: HessianTag | NormalizedHessianTag) -> bool:
-    return tag.property in (PositiveDefinite, PositiveSemiDefinite)
+    return tag.property in (
+        MatrixProperty.POSITIVE_DEFINITE,
+        MatrixProperty.POSITIVE_SEMI_DEFINITE,
+    )
 
 
 def is_covering(tag: NormalizedHessianTag) -> bool:
     """Whether the tag speaks about every leaf, each one either flat or definite."""
-    return tag.flat_on.union(tag.definite_on) == tag.leaves
+    return mask_claims_all(mask_union(tag.flat_on, tag.definite_on))
 
 
 def combine_hessian_tags(
@@ -242,8 +357,7 @@ def combine_hessian_tags(
     return HessianTag(
         structure=combine_structure(t1.structure, t2.structure),
         property=combine_property(t1, t2, definite_on),
-        leaves=t1.leaves,
         batch_axes=t1.batch_axes,
-        flat_on=t1.flat_on.intersection(t2.flat_on),
+        flat_on=mask_intersection(t1.flat_on, t2.flat_on),
         definite_on=definite_on,
     )

@@ -16,12 +16,9 @@ from sklearn.utils import InputTags, TargetTags
 from .. import observation_models as obs
 from .. import tree_utils, validation
 from .._hess import (
-    BlockDiagonal,
-    Full,
-    HessianTag,
-    PositiveDefinite,
-    PositiveSemiDefinite,
-    Symmetric,
+    LeafClaim,
+    MatrixProperty,
+    MatrixStructure,
 )
 from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor, strip_metadata
@@ -380,17 +377,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             return "Newton"
         return super()._resolve_default_solver()
 
-    @property
-    def _hess_tag(self) -> HessianTag:
-        # The unregularized GLM loss Hessian (Fisher information) is positive
-        # semidefinite; a strictly positive-definite regularizer (e.g. Ridge) promotes
-        # it to positive definite via ``combine_hessian_tags``.
-        _hess_tag: HessianTag = HessianTag(
-            structure=Full, property=PositiveSemiDefinite
-        )
-        return _hess_tag
-
-    def _resolve_hess_property(self) -> type:
+    def _resolve_hess_property(self) -> MatrixProperty:
         """Resolve the hessian property.
 
         Return the property of the GLM loss function for an unpenalized model.
@@ -399,7 +386,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
         Notes
         -----
-        Unknown links can easily break convexity: always tag as Symmetric if the link is unknown.
+        Unknown links can easily break convexity: always tag as MatrixProperty.SYMMETRIC if the link is unknown.
 
         """
         conv_preserving_inv_links = (
@@ -417,16 +404,46 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             or LINK_NAME_TO_FUNC.get(qual_name) in conv_preserving_inv_links
         )
 
-        return PositiveSemiDefinite if convexity_preserving else Symmetric
+        return (
+            MatrixProperty.POSITIVE_SEMI_DEFINITE
+            if convexity_preserving
+            else MatrixProperty.SYMMETRIC
+        )
 
-    def _hess_property_override(self) -> type | None:
-        # The GLM loss is positive definite on the intercept (its all-ones column is
-        # independent of X), the one subtree Ridge leaves unpenalized. So a Ridge-
-        # penalized GLM Hessian is positive definite even though coverage inference,
-        # seeing only the regularizer, certifies no more than General.
-        if isinstance(self.regularizer, Ridge):
-            return PositiveDefinite
-        return None
+    def _hess_leaf_claims(
+        self, params: GLMParams[jnp.ndarray], active_spec: GLMParams[bool]
+    ) -> GLMParams[LeafClaim]:
+        """Certify the intercept, whenever it is being fitted.
+
+        The intercept's own block of the loss Hessian is ``1.T W 1``, the per-sample
+        curvatures added up. They are non-negative for a link that keeps the likelihood
+        convex, and their sum is positive, so that block is definite for any design matrix.
+        No other block can be certified: each one is ``X.T W X`` on some columns of ``X``,
+        and whether that is definite is a question about the rank of the design.
+
+        The link is not checked here. One that breaks convexity leaves the whole tag
+        unsigned, and ``normalize`` drops the definite claim of an unsigned tag, so a single
+        rule covers every model rather than each model repeating the check.
+
+        Parameters
+        ----------
+        params :
+            The parameters being fitted.
+        active_spec :
+            The filter spec ``params`` was partitioned with.
+
+        Returns
+        -------
+        :
+            A tree shaped like ``params`` with ``LeafClaim.DEFINITE`` on the
+            intercept and ``LeafClaim.UNCLAIMED`` on the coefficients. An intercept that is
+            not being fitted is absent from ``params``, and so is its claim: there is no
+            block of the Hessian to describe.
+        """
+        claims = super()._hess_leaf_claims(params, active_spec)
+        if not active_spec.intercept:
+            return claims
+        return eqx.tree_at(lambda p: p.intercept, claims, LeafClaim.DEFINITE)
 
     def __init__(
         self,
@@ -2103,17 +2120,12 @@ class PopulationGLM(GLM):
     """
 
     _validator_class = PopulationGLMValidator
-    # positive semidefinite like the single-neuron GLM: the unpenalized block can be
-    # singular (a masked-out coefficient has no curvature). Ridge promotes it to
-    # positive definite through ``_hess_property_override``.
-    _hess_tag: HessianTag = HessianTag(
-        structure=BlockDiagonal,
-        property=PositiveSemiDefinite,
-        batch_axes=GLMParams(1, 0),
-        leaves=None,
-        flat_on=None,
-        definite_on=None,
-    )
+    # One block per neuron, since the Hessian is assembled by vmapping over the neuron
+    # axis: axis 1 of ``coef``, which is ``(n_features, n_neurons)``, and axis 0 of
+    # ``intercept``. The sign and the per-leaf claims are inherited from ``GLM`` and hold
+    # block by block — each neuron's intercept block is that neuron's sum of weights.
+    _hess_structure = MatrixStructure.BLOCK_DIAGONAL
+    _hess_batch_axes = GLMParams(1, 0)
 
     def __init__(
         self,
@@ -2355,7 +2367,7 @@ class PopulationGLM(GLM):
         # filter spec is per-leaf, so expand before splitting the axes.
         active_axis, frozen_axis = self._partition_active(
             tree_utils.tree_broadcast_prefix(
-                self._hess_tag.batch_axes, self._active_filter_spec()
+                self._hess_batch_axes, self._active_filter_spec()
             )
         )
 

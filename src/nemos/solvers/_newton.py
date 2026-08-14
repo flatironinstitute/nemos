@@ -10,12 +10,11 @@ import optax
 
 from .. import tree_utils
 from .._hess import (
-    BlockDiagonal,
-    Full,
     HessianTag,
-    PositiveDefinite,
-    Symmetric,
+    MatrixProperty,
+    MatrixStructure,
     combine_hessian_tags,
+    mask_claim_none,
 )
 from ..typing import Params
 from ._abstract_solver import OptimizationInfo
@@ -94,13 +93,8 @@ class Newton:
         hess_fn: Callable | None = None,
         hess_tag: HessianTag | None = None,
         reg_tag: HessianTag | None = None,
-        property_override: Optional[type] = None,
     ):
         tag = hess_tag if reg_tag is None else combine_hessian_tags(hess_tag, reg_tag)
-        if property_override is not None and tag is not None:
-            tag = HessianTag(
-                tag.structure, property_override, batch_axes=tag.batch_axes
-            )
         self._hess_tag = tag
         self._hessian = self._penalize_hessian(hess_fn, hess_tag)
 
@@ -122,7 +116,8 @@ class Newton:
 
         batch_axes = (
             model_tag.batch_axes
-            if model_tag is not None and model_tag.structure is BlockDiagonal
+            if model_tag is not None
+            and model_tag.structure is MatrixStructure.BLOCK_DIAGONAL
             else None
         )
         penalty_hess_fn = self._regularizer._get_hess_fn(
@@ -149,12 +144,12 @@ class Newton:
 
     def init_state(self, init_params, *args):
         if self._hess_tag is None:
+            # Nobody called ``setup_hessian``: claim nothing about anything.
             self._hess_tag = HessianTag(
-                structure=Full,
-                property=Symmetric,
-                definite_on=None,
-                flat_on=None,
-                leaves=None,
+                structure=MatrixStructure.FULL,
+                property=MatrixProperty.SYMMETRIC,
+                flat_on=mask_claim_none(init_params),
+                definite_on=mask_claim_none(init_params),
             )
 
         self._build_cache()
@@ -162,7 +157,7 @@ class Newton:
 
         # Resolve the linear solver once: Cholesky for positive-definite Hessians,
         # otherwise a robust least-squares solve that tolerates rank deficiency.
-        if self._hess_tag.property is PositiveDefinite:
+        if self._hess_tag.property is MatrixProperty.POSITIVE_DEFINITE:
             self._linear_solver = lx.Cholesky()
             self._operator_tags = lx.positive_semidefinite_tag
         else:
@@ -194,7 +189,7 @@ class Newton:
         ).value
 
     def _newton_direction(self, grad, H):
-        if self._hess_tag.structure is BlockDiagonal:
+        if self._hess_tag.structure is MatrixStructure.BLOCK_DIAGONAL:
             return jax.vmap(
                 self._solve,
                 in_axes=(self._hess_tag.batch_axes, 0),
