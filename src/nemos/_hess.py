@@ -178,7 +178,8 @@ def normalize(tag: HessianTag | None) -> NormalizedHessianTag | None:
 
     if flat_on == tag.leaves:
         # every block vanishes, so the matrix is zero
-        structure, sign = Diagonal, PositiveSemiDefinite
+        sign = NegativeSemiDefinite if is_negative_signed(tag) else PositiveSemiDefinite
+        structure = Diagonal
         definite_on = frozenset()
     elif not (is_positive_signed(tag) or is_negative_signed(tag)):
         # with no sign for the whole matrix, definite_on carries no sign either
