@@ -28,20 +28,6 @@ class NegativeDefinite(MatrixProperty):
     pass
 
 
-PROPERTY_IMPLIES: dict[type, set[type]] = {
-    PositiveDefinite: {PositiveSemiDefinite, Symmetric},
-    PositiveSemiDefinite: {Symmetric},
-    NegativeDefinite: {NegativeSemiDefinite, Symmetric},
-    NegativeSemiDefinite: {Symmetric},
-    Symmetric: set(),  # assume at least C2 (symmetric is floor)
-}
-
-
-def _expand_property(p) -> set[type]:
-    cls = p if isinstance(p, type) else type(p)
-    return {cls} | PROPERTY_IMPLIES.get(cls, set())
-
-
 # --- Structures ---
 
 
@@ -96,14 +82,12 @@ class HessianTag:
     - ``leaves``: every leaf id the tag speaks about. ``flat_on`` and ``definite_on`` are
       subsets of it, and comparing against it is how the algebra recognizes a claim that
       reaches the whole matrix.
-    - ``dim``: the dimensionality of the hessian; hessian is of shape (dim, dim).
 
     ``None`` means the tag says nothing about single parameters.
     """
 
     structure: type
     property: type
-    dim: int
     leaves: frozenset
     batch_axes: Any = None
     flat_on: frozenset | None = None
@@ -116,7 +100,6 @@ class NormalizedHessianTag:
 
     structure: type
     property: type
-    dim: int
     leaves: frozenset
     batch_axes: Any
     flat_on: frozenset
@@ -211,7 +194,6 @@ def normalize(tag: HessianTag | None) -> NormalizedHessianTag | None:
     return NormalizedHessianTag(
         structure=structure,
         property=sign,
-        dim=tag.dim,
         leaves=tag.leaves,
         batch_axes=tag.batch_axes,
         flat_on=flat_on,
@@ -259,7 +241,6 @@ def combine_hessian_tags(
     return HessianTag(
         structure=combine_structure(t1.structure, t2.structure),
         property=combine_property(t1, t2, definite_on),
-        dim=t1.dim,
         leaves=t1.leaves,
         batch_axes=t1.batch_axes,
         flat_on=t1.flat_on.intersection(t2.flat_on),
