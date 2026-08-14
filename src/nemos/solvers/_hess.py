@@ -81,18 +81,17 @@ _WEAKENED_PROPERTY: dict[type, type] = {
 
 
 def weaken_property(p) -> type:
-    """Weakest property still guaranteed once some directions of ``H`` carry no curvature.
+    """Docstring with jargon.
 
-    Models what happens to a definiteness claim when the matrix it describes is padded
-    with zero rows and columns, or scaled by zero: a term that is definite on the block
-    it acts upon and flat elsewhere, such as a ridge penalty that does not reach the
-    intercept. Zeros add directions of no curvature and cannot add negative curvature,
-    so the sign survives and only strictness is lost:
+    A term can curve on the parameters it acts on and be zero on the rest, like a ridge
+    penalty that skips the intercept. Padding a matrix with zeros, or multiplying it by
+    zero, only adds directions with no curvature at all; it never turns curvature
+    negative. So the sign stays and the strictness goes:
 
-    - ``PositiveDefinite -> PositiveSemiDefinite``.
-    - ``NegativeDefinite -> Symmetric``, the lattice having no negative-semidefinite
-      property to weaken into.
-    - a property claiming no strict definiteness has nothing to give up and is returned
+    - positive definite becomes positive semidefinite,
+    - negative definite becomes symmetric, there being no negative semidefinite property
+      to fall back on,
+    - a claim that was not strict in the first place has nothing to lose and comes back
       unchanged.
     """
     cls = p if isinstance(p, type) else type(p)
@@ -136,26 +135,91 @@ def combine_structure(s1, s2) -> type:
 
 @dataclass(frozen=True)
 class HessianTag:
+    """Structure and definiteness of a Hessian, with optional detail per parameter.
+
+    ``flat_on`` and ``definite_on`` describe single parts of the parameter tree rather
+    than the whole matrix. Both are sets of leaf ids, taken with ``id()`` on the leaves
+    of the parameters. ``combine_hessian_tags`` reads them to tell whether the sum of two
+    Hessians is positive definite even when neither one is. They say different things:
+
+    - ``flat_on``: the term has no curvature at all on these parameters, and is positive
+      definite on all the others. A ridge penalty that skips the intercept says this,
+      because the penalty does not depend on the intercept, so its second derivative
+      there is zero.
+    - ``definite_on``: the term curves on these parameters, and nothing is claimed about
+      the rest. A GLM loss says this about its intercept, where the curvature is the sum
+      of the per-sample weights and so is positive.
+
+    ``None`` means the tag says nothing about single parameters.
+    """
+
     structure: type
     property: type
     batch_axes: Any = None
+    flat_on: frozenset | None = None
+    definite_on: frozenset | None = None
+
+
+def _certifies_definite(flat_side: HessianTag, other: HessianTag) -> bool:
+    """Whether the sum of two positive semidefinite Hessians is positive definite.
+
+    In words: one term is flat only where the other one curves.
+
+    ``flat_side`` has no curvature on ``flat_on`` and curves everywhere else, so those
+    parameters are the only directions it is flat in. If ``other`` curves on those same
+    parameters, then no direction is flat for both terms. A sum of two positive
+    semidefinite matrices is singular only along directions that are flat in both, so the
+    sum is positive definite.
+
+    Both halves are needed. Two terms that each curve on one block, but are exactly zero
+    nowhere, can still add up to something singular: ``A = B = [[1, 1], [1, 1]]`` are
+    both positive semidefinite, the first curves on the second coordinate and the second
+    on the first, and the sum ``[[2, 2], [2, 2]]`` is singular.
+    """
+    if flat_side.flat_on is None:
+        return False
+    curved_by_other = other.definite_on or frozenset()
+    return flat_side.flat_on.issubset(curved_by_other)
+
+
+def _union(s1: frozenset | None, s2: frozenset | None) -> frozenset | None:
+    if s1 is None and s2 is None:
+        return None
+    return (s1 or frozenset()).union(s2 or frozenset())
 
 
 def combine_hessian_tags(
     t1: HessianTag | None, t2: HessianTag | None
 ) -> HessianTag | None:
-    """Combine tags assuming additivity.
+    """Structure and definiteness of the sum of two Hessians.
 
     Valid when the total objective is a sum of two functions (e.g. loss + regularizer),
     since the Hessian of a sum is the sum of the Hessians.
+
+    Two positive semidefinite terms normally add up to a positive semidefinite one, but
+    the sum is positive definite when one term is flat only where the other curves; see
+    ``_certifies_definite``. What the two tags say about single parameters carries over to
+    the sum: there is no curvature only where neither term has any, and a parameter one
+    term curves on keeps curving once the other is added to it.
 
     The batch_axes are taken from t1, which will typically be the model tag.
     """
     if t1 is None or t2 is None:
         return None
     prop = combine_property(t1.property, t2.property)
+    if prop is PositiveSemiDefinite and (
+        _certifies_definite(t1, t2) or _certifies_definite(t2, t1)
+    ):
+        prop = PositiveDefinite
+    flat_on = (
+        None
+        if t1.flat_on is None or t2.flat_on is None
+        else t1.flat_on.intersection(t2.flat_on)
+    )
     return HessianTag(
         structure=combine_structure(t1.structure, t2.structure),
         property=prop,
         batch_axes=t1.batch_axes,
+        flat_on=flat_on,
+        definite_on=_union(t1.definite_on, t2.definite_on),
     )
