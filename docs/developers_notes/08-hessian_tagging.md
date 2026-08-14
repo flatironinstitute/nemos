@@ -266,7 +266,7 @@ Under these five, the rule given below returns a property that is true of the su
 
 One thing is deliberately out of scope. These are statements in exact arithmetic, and a claim true of $\nabla^2 \mathcal{L}(\beta)$ can still fail in floating point, as it does when the per-sample curvatures of a saturated Bernoulli GLM underflow and $\sum_t w_t(\beta)$ becomes exactly zero. No tag prevents that, and none is meant to; guarding against it belongs to how the solver accepts a step.
 
-## The tag
+## Tag definition
 
 :::{admonition} Definition (tag, satisfaction)
 :class: note
@@ -500,7 +500,7 @@ and if $\sigma = {\succ}\,0$ then $\{ \operatorname{null}(H) : H \models t \} = 
 
 The two cases must be kept apart. For $\sigma = {\succ}\,0$ the subspace family on the right can be strictly larger than what is achievable: with two leaves, $t = ({\succ}\,0, \varnothing, \{1\})$ admits $L = V_{\{2\}}$ into the family, while every $H \models t$ is non-singular.
 
-### The closed form
+### Optimal closed form combination rule
 
 :::{admonition} Theorem 2 (the best rule)
 :class: important
