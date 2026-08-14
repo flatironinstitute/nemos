@@ -214,20 +214,20 @@ def test_newton_glm_instantiate_solver(regularizer_name, glm_class):
 
 
 def _freeze_first_coef_leaf(model, params):
-    """Build a ``_fix_params`` spec pinning the first ``coef`` leaf to its true value.
+    """Build a ``fix_params`` spec pinning the first ``coef`` leaf to its true value.
 
     Freezing a coefficient leaf rather than the intercept is what exercises the
     ``coef`` block of the Hessian: the intercept is a single row, so dropping it
     leaves the interesting block untouched.
     """
     leaves, treedef = jax.tree_util.tree_flatten(params.coef)
-    # cast the pinned leaf: ``fit`` casts its inputs, so an un-cast spec would be
-    # compared against a fitted leaf of a different dtype
     spec = jax.tree_util.tree_unflatten(
-        treedef, [jnp.asarray(leaves[0])] + [None] * (len(leaves) - 1)
+        treedef, [leaves[0]] + [None] * (len(leaves) - 1)
     )
-    model._fix_params = GLMParams(spec, None)
-    return spec
+    model.fix_params = (spec, None)
+    # read the spec back: the setter validates and casts it, so this is the value
+    # the frozen leaf is actually pinned to
+    return model.fix_params[0]
 
 
 @pytest.mark.requires_x64
@@ -295,16 +295,7 @@ def test_newton_leaves_frozen_params_untouched(
         )
     else:
         pinned = _freeze_first_coef_leaf(frozen_model, true_params)
-        # the spec decides which leaves the solver skips, not what they are worth: a
-        # frozen leaf is held at whatever the initialization put there. The intercept
-        # is filled from the spec at init time, a coef leaf is not, so the pinned value
-        # is handed in through ``init_params`` for the fitted leaf to be comparable.
-        zeros = jax.tree_util.tree_map(jnp.zeros_like, true_params.coef)
-        init_params = (
-            eqx.combine(pinned, zeros),
-            jnp.zeros_like(true_params.intercept),
-        )
-        frozen_model.fit(X, y, init_params=init_params)
+        frozen_model.fit(X, y)
         fitted = jax.tree_util.tree_leaves(frozen_model.coef_)[0]
         np.testing.assert_array_equal(fitted, jax.tree_util.tree_leaves(pinned)[0])
 
@@ -387,7 +378,7 @@ def test_population_glm_hess_fn_drops_frozen_leaves(freeze, request):
         assert hess.intercept is None
         assert all(row.intercept is None for row in hess.coef.values())
     else:
-        pinned = sorted(model._fix_params.coef)[0]
+        pinned = sorted(model.fix_params[0])[0]
         assert active.coef[pinned] is None
         assert hess.coef[pinned] is None
         # the frozen leaf is dropped as a column too, not just as a row

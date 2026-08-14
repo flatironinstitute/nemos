@@ -156,6 +156,8 @@ filterwarnings = [
     'ignore:Tolerance of -?\d\.\d+e-\d\d reached:RuntimeWarning',
     # mpl must be non-interctive for testing otherwise doctests will freeze
     'ignore:FigureCanvasAgg is non-interactive, and thus cannot be shown:UserWarning',
+    # expected whenever a test pins every parameter; `pytest.warns` still sees it
+    'ignore:Every parameter is fixed:UserWarning',
 ]
 markers = [
   "solver_related: tests that interact with solvers",

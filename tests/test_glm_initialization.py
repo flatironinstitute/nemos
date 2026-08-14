@@ -35,7 +35,9 @@ from nemos.inverse_link_function_utils import exp as nmo_exp
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_invert_non_linearity(non_linearity, output_y):
     inv_y = initialize_intercept_matching_mean_rate(
-        inverse_link_function=non_linearity, y=output_y
+        inverse_link_function=non_linearity,
+        X=np.zeros((output_y.shape[0], 1)),
+        y=output_y,
     )
     assert jnp.allclose(non_linearity(inv_y), jnp.mean(output_y, axis=0), rtol=10**-5)
 
@@ -81,7 +83,9 @@ def test_initialization_error_nan_input(non_linearity, expectation):
     output_y = np.full((10, 2), np.nan)
     with expectation:
         initialize_intercept_matching_mean_rate(
-            inverse_link_function=non_linearity, y=output_y
+            inverse_link_function=non_linearity,
+            X=np.zeros((output_y.shape[0], 1)),
+            y=output_y,
         )
 
 
@@ -98,7 +102,9 @@ def test_initialization_error_non_invertible():
                 "ignore", category=RuntimeWarning, message="Tolerance of"
             )
             initialize_intercept_matching_mean_rate(
-                inverse_link_function=inv_link, y=output_y
+                inverse_link_function=inv_link,
+                X=np.zeros((output_y.shape[0], 1)),
+                y=output_y,
             )
 
 
@@ -106,7 +112,9 @@ def test_initialization_error_logistic_all_one_output():
     output_y = np.ones(10)
     with pytest.raises(ValueError, match="has non-finite values"):
         initialize_intercept_matching_mean_rate(
-            inverse_link_function=jax.lax.logistic, y=output_y
+            inverse_link_function=jax.lax.logistic,
+            X=np.zeros((output_y.shape[0], 1)),
+            y=output_y,
         )
 
 
@@ -173,6 +181,7 @@ def _make_y(n=4000, n_neurons=None, seed=1):
 )
 @pytest.mark.parametrize("as_dict", [False, True])
 @pytest.mark.parametrize("n_neurons", [None, 2])
+@pytest.mark.requires_x64
 def test_constant_coef_satisfies_normal_equation(design, as_dict, n_neurons):
     """The constant is the least-squares minimizer, i.e. it satisfies the
     (eps-regularized) normal equation ``c (Σs² + eps) = η* (Σs + eps)``."""
@@ -210,7 +219,7 @@ def test_constant_coef_satisfies_normal_equation(design, as_dict, n_neurons):
         assert jnp.allclose(c, jnp.broadcast_to(const, c.shape), rtol=1e-5)
 
     # normal-equation identity, verified independently of the closed-form impl
-    eta = initialize_intercept_matching_mean_rate(nmo_exp, y)  # (n_out,)
+    eta = initialize_intercept_matching_mean_rate(nmo_exp, X, y)  # (n_out,)
     s = _row_sum(X)
     eps = jnp.finfo(s.dtype).eps
     lhs = jnp.atleast_1d(const) * (jnp.sum(s**2) + eps)
@@ -221,14 +230,12 @@ def test_constant_coef_satisfies_normal_equation(design, as_dict, n_neurons):
 @pytest.mark.parametrize("design", ["all_zero"], indirect=True)
 def test_constant_coef_all_zero_design_equals_target(design):
     """With an all-zero design no constant can inject an offset; the eps
-    stabilization returns c = η* and stays finite (no NaN)."""
+    stabilization returns c = 1 and stays finite (no NaN)."""
     y = _make_y()
     coef = initialize_constant_coef_matching_mean_rate(
         nmo_exp, design, y, jnp.empty((3,))
     )
-    eta = initialize_intercept_matching_mean_rate(nmo_exp, y)
-    assert jnp.all(jnp.isfinite(coef))
-    assert jnp.allclose(coef, eta)
+    assert jnp.allclose(coef, 1)
 
 
 @pytest.mark.parametrize("design", ["centered"], indirect=True)

@@ -6,7 +6,7 @@ from typing import Any, Callable, Dict, Literal, Optional, Tuple, Union
 import jax
 import jax.numpy as jnp
 from jax.typing import DTypeLike
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, NDArray
 
 from .. import validation
 from ..base_validator import RegressorValidator
@@ -16,12 +16,12 @@ from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMParams, GLMUserParams
 
 
-def to_glm_params(user_params: GLMUserParams) -> GLMParams:
+def to_glm_params[LeafT](user_params: GLMUserParams[LeafT]) -> GLMParams[LeafT]:
     """Map from GLMUserParams to GLMParams."""
     return GLMParams(*user_params)
 
 
-def from_glm_params(params: GLMParams) -> GLMUserParams:
+def from_glm_params[LeafT](params: GLMParams[LeafT]) -> GLMUserParams[LeafT]:
     """Map from GLMParams to GLMUserParams."""
     return params.coef, params.intercept
 
@@ -69,7 +69,9 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         ("validate_intercept_shape", None),
     )
 
-    def validate_intercept_shape(self, params: GLMParams, **kwargs):
+    def validate_intercept_shape(
+        self, params: GLMParams[jnp.ndarray | NDArray], **kwargs
+    ):
         """
         Perform GLM-specific parameter validation.
 
@@ -99,12 +101,24 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
             )
         return params
 
+    def additional_validation_param_specs(
+        self, params: GLMParams[jnp.ndarray | NDArray], **kwargs
+    ) -> GLMParams[jnp.ndarray | NDArray]:
+        """Add the GLM intercept-shape check to a partial parameter specification.
+
+        The intercept is optional in a spec (``None`` when left learnable), so the
+        shape check only runs when an intercept is actually fixed.
+        """
+        if params.intercept is not None:
+            self.validate_intercept_shape(params)
+        return params
+
     def check_array_dimensions(
         self,
-        params: GLMUserParams,
+        params: GLMUserParams[jnp.ndarray | NDArray],
         err_msg: Optional[str] = None,
         err_message_format: str = None,
-    ) -> GLMUserParams:
+    ) -> GLMUserParams[jnp.ndarray | NDArray]:
         """
         Check array dimensions with custom error formatting for GLM parameters.
 
@@ -165,7 +179,7 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
 
     def validate_consistency(
         self,
-        params: GLMParams,
+        params: GLMParams[jnp.ndarray | NDArray],
         X: Optional[DESIGN_INPUT_TYPE] = None,
         y: Optional[jnp.ndarray] = None,
     ):
@@ -261,7 +275,7 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
     def feature_mask_consistency(
         self,
         feature_mask: Union[dict[str, jnp.ndarray], jnp.ndarray] | None,
-        params: GLMParams,
+        params: GLMParams[jnp.ndarray | NDArray],
     ):
         """Check that feature_mask mirrors the structure and the shape of ``params.coef``."""
         if feature_mask is None:
@@ -300,7 +314,7 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         """
         return coef.shape
 
-    def get_empty_params(self, X, y) -> GLMParams:
+    def get_empty_params(self, X, y) -> GLMParams[jnp.ndarray]:
         """Return the param shape given the input data."""
         empty_coef = jax.tree_util.tree_map(lambda x: jnp.empty((x.shape[1],)), X)
         empty_intercept = jnp.empty((1,))
@@ -346,7 +360,7 @@ class PopulationGLMValidator(GLMValidator):
 
     def validate_consistency(
         self,
-        params: GLMParams,
+        params: GLMParams[jnp.ndarray | NDArray],
         X: Optional[DESIGN_INPUT_TYPE] = None,
         y: Optional[jnp.ndarray] = None,
     ):
@@ -371,7 +385,18 @@ class PopulationGLMValidator(GLMValidator):
                 f"y has {jax.tree_util.tree_map(lambda x: x.shape[1], y)} neurons instead!",
             )
 
-    def get_empty_params(self, X, y) -> GLMParams:
+    def additional_validation_param_specs(
+        self, params: GLMParams[jnp.ndarray | NDArray], **kwargs
+    ) -> GLMParams[jnp.ndarray | NDArray]:
+        """No setter-time intercept-shape check for population GLM.
+
+        The intercept has shape ``(n_neurons,)`` and ``n_neurons`` is only known once
+        ``y`` is available, so the exact shape is validated by ``validate_consistency``
+        at fit time. ``check_array_dimensions`` still enforces the intercept ndim.
+        """
+        return params
+
+    def get_empty_params(self, X, y) -> GLMParams[jnp.ndarray]:
         """Return the param shape given the input data."""
         n_neurons = y.shape[1]
         empty_coef = jax.tree_util.tree_map(
@@ -434,10 +459,10 @@ class ClassifierGLMValidator(GLMValidator):
 
     def validate_n_classes_shape(
         self,
-        params: GLMUserParams,
+        params: GLMUserParams[jnp.ndarray | NDArray],
         intercept_err_format: str = None,
         **kwargs,
-    ) -> GLMUserParams:
+    ) -> GLMUserParams[jnp.ndarray | NDArray]:
         """
         Validate that coef and intercept last dimensions match n_classes.
 
@@ -475,9 +500,28 @@ class ClassifierGLMValidator(GLMValidator):
 
         return params
 
+    def additional_validation_param_specs(
+        self, params: GLMParams[jnp.ndarray | NDArray], **kwargs
+    ) -> GLMParams[jnp.ndarray | NDArray]:
+        """Check that a fixed intercept's class dimension matches ``n_classes``.
+
+        The last axis of the intercept is ``n_classes`` (known from ``extra_params``),
+        so it can be checked at setter time. For the population classifier the neuron
+        axis is left to ``validate_consistency`` at fit time. ``check_array_dimensions``
+        already enforces the intercept ndim.
+        """
+        if params.intercept is not None:
+            n_classes = self.extra_params["n_classes"]
+            if params.intercept.shape[-1] != n_classes:
+                raise ValueError(
+                    f"intercept last dimension must be n_classes = {n_classes}. "
+                    f"Got intercept with shape {params.intercept.shape}."
+                )
+        return params
+
     def validate_consistency(
         self,
-        params: GLMParams,
+        params: GLMParams[jnp.ndarray | NDArray],
         X: Optional[DESIGN_INPUT_TYPE] = None,
         y: Optional[jnp.ndarray] = None,
     ):
@@ -538,7 +582,7 @@ class ClassifierGLMValidator(GLMValidator):
             y_int = y
         return y_int
 
-    def get_empty_params(self, X, y) -> GLMParams:
+    def get_empty_params(self, X, y) -> GLMParams[jnp.ndarray]:
         """Return the param shape given the input data."""
         n_classes = self.extra_params["n_classes"]
         empty_coef = jax.tree_util.tree_map(
@@ -588,7 +632,7 @@ class PopulationClassifierGLMValidator(ClassifierGLMValidator):
 
     def validate_consistency(
         self,
-        params: GLMParams,
+        params: GLMParams[jnp.ndarray | NDArray],
         X: Optional[DESIGN_INPUT_TYPE] = None,
         y: Optional[jnp.ndarray] = None,
     ):
@@ -614,7 +658,7 @@ class PopulationClassifierGLMValidator(ClassifierGLMValidator):
                 f"y has {jax.tree_util.tree_map(lambda x: x.shape[1], y)} neurons instead!",
             )
 
-    def get_empty_params(self, X, y) -> GLMParams:
+    def get_empty_params(self, X, y) -> GLMParams[jnp.ndarray]:
         """Return the param shape given the input data."""
         n_neurons = y.shape[1]
         n_classes = self.extra_params["n_classes"]

@@ -156,7 +156,11 @@ VALID_PAIRS = [
     {"true_intercept", "rec_intercept"},
     {"true_trans", "rec_trans"},
     {"n_classes", "n_passes"},
+    {"fix_params", "fit_params"},
+    {"active_coef", "active_cols"},
     {"true_intercept", "fit_intercept"},
+    {"frozen_intercept", "rec_intercept"},
+    {"frozen_intercept", "true_intercept"},
 ]
 
 

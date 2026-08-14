@@ -116,8 +116,34 @@ def scalar_root_find_elementwise(
     return jnp.array([opt.root for opt in opts])
 
 
+def compute_frozen_linear_predictor(X, frozen_coef, frozen_intercept):
+    """Linear predictor from the frozen parameters.
+
+    A frozen coefficient leaf contributes its ``X @ coef`` term; a free (``None``) leaf
+    contributes a broadcastable ``[0.]``. ``frozen_intercept`` is added when present.
+    """
+    intercept = 0.0 if frozen_intercept is None else frozen_intercept
+    return (
+        jax.tree.reduce(
+            jnp.add,
+            jax.tree.map(
+                lambda x1, x2: (
+                    jnp.matmul(x1, x2) if x2 is not None else jnp.array([0.0])
+                ),
+                X,
+                frozen_coef,
+            ),
+        )
+        + intercept
+    )
+
+
 def initialize_intercept_matching_mean_rate(
-    inverse_link_function: Callable, y: jnp.ndarray
+    inverse_link_function: Callable,
+    X: Union[Pytree, jnp.ndarray],
+    y: jnp.ndarray,
+    frozen_coef: Optional[Union[Pytree, jnp.ndarray]] = None,
+    frozen_intercept: Optional[jnp.ndarray] = None,
 ) -> jnp.ndarray:
     """
     Compute the initial intercept term for a regression models.
@@ -131,9 +157,13 @@ def initialize_intercept_matching_mean_rate(
     inverse_link_function:
         The inverse link function of the model, linking the mean to the linear combination of the covariates in
         a GLM.
+    X:
+        The predictors.
     y:
         The neural activity, shape either (num_sample,) for single variable regressors as `GLM`
          or (n_sample, n_neurons) for multi-variable regressors, such as `PopulaitonGLM`.
+    frozen_coef:
+        The frozen parameters.
 
     Returns
     -------
@@ -142,12 +172,20 @@ def initialize_intercept_matching_mean_rate(
 
     """
     y = jnp.asarray(y, float)
+    # expand tree to match structure
+    if frozen_coef is None:
+        frozen_coef = jax.tree_util.tree_map(lambda x: None, X)
+
     # return inverse if analytical solution is available
     analytical_inv = get_inverse_function(inverse_link_function)
 
+    # compute the linear predictor from the frozen tree
+    frozen_lin_pred = compute_frozen_linear_predictor(X, frozen_coef, frozen_intercept)
+    mean_frozen = jnp.nanmean(frozen_lin_pred, axis=0)
+
     means = jnp.atleast_1d(jnp.nanmean(y, axis=0))
     if analytical_inv:
-        out = analytical_inv(means)
+        out = analytical_inv(means) - mean_frozen
         if jnp.any(jnp.isnan(out)):
             raise ValueError(
                 "Failed to initialize the model intercept as the inverse of the firing rate for "
@@ -162,7 +200,7 @@ def initialize_intercept_matching_mean_rate(
         return inverse_link_function(x) - mean_x
 
     try:
-        out = scalar_root_find_elementwise(func, means, means)
+        out = scalar_root_find_elementwise(func, means, means) - mean_frozen
     except ValueError:
         raise ValueError(
             "Failed to initialize the model intercept as the inverse of the firing rate for the"
@@ -180,6 +218,8 @@ def initialize_constant_coef_matching_mean_rate(
     X: Union[Pytree, jnp.ndarray],
     y: jnp.ndarray,
     empty_coef: Union[Pytree, jnp.ndarray],
+    frozen_coef: Optional[Union[Pytree, jnp.ndarray]] = None,
+    frozen_intercept: Optional[jnp.ndarray] = None,
     eps: Optional[float] = None,
 ) -> Union[Pytree, jnp.ndarray]:
     r"""
@@ -218,6 +258,8 @@ def initialize_constant_coef_matching_mean_rate(
     empty_coef :
         A pytree matching the target coefficient structure and shapes (e.g. as returned
         by the validator's ``get_empty_params``). Used only for its leaf shapes.
+    frozen_coef :
+        Pytree including the fixed valued model coefficients.
     eps :
         Stabilization added to both numerator and denominator. Defaults to the machine
         epsilon of the row-sum dtype, which only intervenes when the design row-sums are
@@ -242,17 +284,42 @@ def initialize_constant_coef_matching_mean_rate(
     :math:`\varepsilon` terms added for numerical stability). The problem is degenerate
     only when :math:`s \equiv 0`, in which case no constant coefficient can inject an
     offset and the :math:`\varepsilon` stabilization keeps :math:`c` finite.
+
+    When some coefficients are frozen, their contribution is subtracted from the target
+    per sample (:math:`\eta^\star_t = \eta^\star - \sum_j X_{tj}\,\beta^{\text{frozen}}_j`)
+    and the frozen features are excluded from :math:`s_t`; for multi-output models the
+    projection is computed independently for each output.
     """
-    # the linear-predictor target a free intercept would supply, shape (n_out,)
-    eta_target = initialize_intercept_matching_mean_rate(inverse_link_function, y)
+    if frozen_coef is None:
+        frozen_coef = jax.tree_util.tree_map(lambda x: None, X)
+    # the linear-predictor target a free intercept would supply, shape (*out,)
+    eta_target = initialize_intercept_matching_mean_rate(inverse_link_function, X, y)
 
-    # row-sum of the design across all features of all leaves, shape (n_samples,)
-    row_sum = sum(jnp.nansum(leaf, axis=1) for leaf in jax.tree_util.tree_leaves(X))
+    # coef is (n_features, *out): out is () for GLM, (n_out,) for population/classifier
+    # GLM, (n_neurons, n_classes) for the population classifier. The frozen predictor is
+    # therefore (n_samples, *out), or *out alone for a frozen intercept. The GLM matmul
+    # drops its trailing size-1 output axis, so restore it before subtracting eta_target.
+    frozen_lin_pred = compute_frozen_linear_predictor(X, frozen_coef, frozen_intercept)
+    if eta_target.shape == (1,) and frozen_lin_pred.ndim == 1:
+        frozen_lin_pred = frozen_lin_pred[:, None]
+    residual = eta_target[None, ...] - frozen_lin_pred
 
+    # row-sum of the design across all active features of all leaves, shape (n_samples,)
+    row_sum = jax.tree.map(
+        lambda x1, x2: jnp.nansum(x1, axis=1) if x2 is None else jnp.array(0.0),
+        X,
+        frozen_coef,
+    )
+    row_sum = jax.tree.reduce(jnp.add, row_sum)
     if eps is None:
         eps = jnp.finfo(row_sum.dtype).eps
-
-    scale = (jnp.sum(row_sum) + eps) / (jnp.sum(row_sum**2) + eps)
-    const = eta_target * scale  # (n_out,)
-
-    return jax.tree_util.tree_map(lambda leaf: jnp.full_like(leaf, const), empty_coef)
+    # per-output least-squares projection: weight each sample's residual by its row-sum
+    # (broadcast across the output axes) and sum over samples. Result shape ``*out``.
+    weight = row_sum.reshape(row_sum.shape + (1,) * eta_target.ndim)
+    const = (jnp.sum(weight * residual, axis=0) + eps) / (jnp.sum(row_sum**2) + eps)
+    return jax.tree_util.tree_map(
+        lambda leaf1, leaf2: jnp.full_like(leaf1, const) if leaf2 is None else leaf2,
+        empty_coef,
+        frozen_coef,
+        is_leaf=lambda x: x is None,
+    )
