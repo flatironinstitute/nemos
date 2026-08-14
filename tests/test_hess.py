@@ -194,8 +194,9 @@ def definite_sets(t1, t2):
     ],
 )
 def test_sign_of_each_property(prop, positive, negative, tree):
-    """Check which sign each property has: definite and semidefinite share one, and
-    ``SYMMETRIC`` has none.
+    """Check which sign each property has.
+
+    Definite and semidefinite share one, and ``SYMMETRIC`` has none.
     """
     t = tag(tree, prop=prop)
     assert is_positive_signed(t) is positive

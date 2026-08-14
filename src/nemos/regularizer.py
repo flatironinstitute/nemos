@@ -389,8 +389,13 @@ class Regularizer(Base, abc.ABC):
                 Defaults to a scalar strength of 1.0.
             - scalar (Python number or 0-D array)
                 Preserved as-is.
-            - array-like or PyTree
-                Converted leaf-wise to JAX arrays.
+            - PyTree of the above
+                Each leaf is converted individually.
+            - array-like (array, list or tuple)
+                Treated as a single leaf and converted to a `jnp.ndarray`. A list is
+                therefore an array here, not a container: the "one strength per
+                regularizable subtree" list that `_validate_strength_structure` accepts
+                cannot reach it through this method.
 
         Returns
         -------
@@ -457,6 +462,12 @@ class Regularizer(Base, abc.ABC):
                 Must match the structure of the regularizable subtrees. Each leaf
                 may be a scalar, 0-D array, or an array matching the corresponding
                 parameter leaf shape.
+            - list, one entry per regularizable subtree
+                Each entry is any of the forms above, applied to its own subtree. Only
+                reachable internally: `_validate_strength` classifies a list as array-like,
+                so a strength set on a model never arrives here in this form. It matters
+                only for a parameter class with more than one regularizable subtree, of
+                which there are none yet.
 
         Returns
         -------
