@@ -1,5 +1,6 @@
 """Newton-based optimization solvers."""
 
+import math
 from typing import Any, Callable, Optional
 
 import equinox as eqx
@@ -36,22 +37,29 @@ class NewtonState(eqx.Module):
 NewtonStepResult = tuple[Params, NewtonState]
 
 
-def _add_diagonal_damping(H, tau):
+def _compute_diagonal_shift(H, shift_const):
+    leaves_with_paths = jax.tree_util.tree_leaves_with_path(H)
+    diag_maxes = [
+        jnp.max(jnp.abs(jnp.diagonal(leaf, axis1=-2, axis2=-1)))
+        for path, leaf in leaves_with_paths
+        if (n := len(path)) % 2 == 0 and path[: n // 2] == path[n // 2 :]
+    ]
+    max_diag = jax.tree_util.tree_reduce(jnp.maximum, diag_maxes)
+    eps = max(jnp.finfo(leaf.dtype).eps for leaf in jax.tree.leaves(H))
+    return shift_const * jnp.where(max_diag > 0, max_diag, 1.0) * eps**0.5
+
+
+def _add_diagonal_shift(H, tau):
     def damp(path, h):
         n = len(path)
-
-        # A Hessian leaf path is:
-        #   (path_to_row_parameter, path_to_col_parameter)
-        #
-        # So a self-block has identical first and second halves.
-        if n % 2 == 0 and path[: n // 2] == path[n // 2 :]:
-            return h + tau * jnp.eye(
-                h.shape[0],
-                h.shape[1],
-                dtype=h.dtype,
-            )
-
-        return h
+        if n % 2 != 0 or path[: n // 2] != path[n // 2 :]:
+            return h
+        size = math.prod(h.shape[: h.ndim // 2]) if h.ndim > 0 else 1
+        return (
+            h + tau
+            if h.ndim == 0
+            else h + tau * jnp.eye(size, dtype=h.dtype).reshape(h.shape)
+        )
 
     return jax.tree.map_with_path(damp, H)
 
@@ -67,6 +75,7 @@ class NewtonCholesky:
         jit: bool = True,
         maxiter: int = DEFAULT_MAX_STEPS,
         tol: float = DEFAULT_ATOL,
+        shift_const: float = 1.0,
     ):
         if init_params is None:
             raise ValueError(
@@ -111,7 +120,7 @@ class NewtonCholesky:
         self._linear_solver = lx.Cholesky()
         self._operator_tags = lx.positive_semidefinite_tag
         self._shift_fn: Callable | None = None
-        self._shift_const: float = 0.0
+        self._shift_const: float = shift_const
 
     def setup_hessian(
         self,
@@ -187,23 +196,10 @@ class NewtonCholesky:
 
         # Resolve the shift and convergence policies
         if self._hess_tag.property is PositiveDefinite:
-            self._shift_fn = lambda H: jnp.zeros((), H.dtype)
+            self._shift_fn = lambda H: jnp.zeros((), jax.tree.leaves(H)[0].dtype)
             self._converged_fn = lambda lambda_sq, gnorm: 0.5 * lambda_sq <= self.tol
         else:
-            self._shift_fn = lambda H: (
-                self._shift_const
-                * max(leaf.shape[-1] for leaf in jax.tree.leaves(H))
-                * max(jnp.finfo(leaf.dtype).eps for leaf in jax.tree.leaves(H))
-                * jax.tree_util.tree_reduce(
-                    jnp.maximum,
-                    jax.tree.map(
-                        lambda leaf: jnp.max(
-                            jnp.abs(jnp.diagonal(leaf, axis1=-2, axis2=-1))
-                        ),
-                        H,
-                    ),
-                )
-            )
+            self._shift_fn = lambda H: _compute_diagonal_shift(H, self._shift_const)
             self._converged_fn = lambda lambda_sq, gnorm: gnorm <= self.tol
 
         return NewtonState(
@@ -221,7 +217,7 @@ class NewtonCholesky:
 
     def _solve(self, grad, H):
         tau = self._shift_fn(H)
-        H_mod = _add_diagonal_damping(H, tau)
+        H_mod = _add_diagonal_shift(H, tau)
 
         operator = lx.PyTreeLinearOperator(
             H_mod,

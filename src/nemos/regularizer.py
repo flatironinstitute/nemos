@@ -15,7 +15,12 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from nemos.solvers._hess import Diagonal, General, HessianTag, PositiveDefinite
+from nemos.solvers._hess import (
+    Diagonal,
+    HessianTag,
+    PositiveDefinite,
+    PositiveSemiDefinite,
+)
 
 from . import tree_utils
 from .base_class import Base
@@ -205,7 +210,7 @@ class Regularizer(Base, abc.ABC):
             all_regularized = True
         if all_regularized:
             return self._hess_tag
-        return HessianTag(self._hess_tag.structure, General)
+        return HessianTag(self._hess_tag.structure, PositiveSemiDefinite)
 
     @property
     def allowed_solvers(self) -> Tuple[str]:
