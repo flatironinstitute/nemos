@@ -15,6 +15,14 @@ from sklearn.utils import InputTags, TargetTags
 
 from .. import observation_models as obs
 from .. import tree_utils, validation
+from .._hess import (
+    BlockDiagonal,
+    Full,
+    HessianTag,
+    PositiveDefinite,
+    PositiveSemiDefinite,
+    Symmetric,
+)
 from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor, strip_metadata
 from ..batching import DataLoader, _PreprocessedDataLoader, is_data_loader
@@ -29,14 +37,6 @@ from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers import WrappedProxSVRG, WrappedSVRG, list_stochastic_solvers
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
-from ..solvers._hess import (
-    BlockDiagonal,
-    Full,
-    HessianTag,
-    PositiveDefinite,
-    PositiveSemiDefinite,
-    Symmetric,
-)
 from ..type_casting import cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, SolverState, StepResult
 from ..utils import _elementwise_derivative, format_repr
@@ -326,10 +326,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
     _invalid_observation_types = (obs.CategoricalObservations,)
     _validator_class = GLMValidator
-    # The unregularized GLM loss Hessian (Fisher information) is positive
-    # semidefinite; a strictly positive-definite regularizer (e.g. Ridge) promotes
-    # it to positive definite via ``combine_hessian_tags``.
-    _hess_tag: HessianTag = HessianTag(structure=Full, property=PositiveSemiDefinite)
+
     # default until the instance sets it; read during ``__init__`` before assignment
     # (e.g. when solver-kwargs validation resolves the default solver).
     _fit_intercept: bool = True
@@ -346,6 +343,16 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         ):
             return "Newton"
         return super()._resolve_default_solver()
+
+    @property
+    def _hess_tag(self) -> HessianTag:
+        # The unregularized GLM loss Hessian (Fisher information) is positive
+        # semidefinite; a strictly positive-definite regularizer (e.g. Ridge) promotes
+        # it to positive definite via ``combine_hessian_tags``.
+        _hess_tag: HessianTag = HessianTag(
+            structure=Full, property=PositiveSemiDefinite
+        )
+        return _hess_tag
 
     def _resolve_hess_property(self) -> type:
         """Resolve the hessian property.
@@ -2001,6 +2008,9 @@ class PopulationGLM(GLM):
         structure=BlockDiagonal,
         property=PositiveSemiDefinite,
         batch_axes=GLMParams(1, 0),
+        leaves=None,
+        flat_on=None,
+        definite_on=None,
     )
 
     def __init__(

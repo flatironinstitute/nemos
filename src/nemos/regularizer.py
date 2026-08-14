@@ -16,6 +16,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from . import tree_utils
+from ._hess import Diagonal, HessianTag, PositiveDefinite, Symmetric
 from .base_class import Base
 from .proximal_operator import (
     compute_normalization,
@@ -26,7 +27,6 @@ from .proximal_operator import (
     prox_none,
     prox_ridge,
 )
-from .solvers._hess import Diagonal, General, HessianTag, PositiveDefinite
 from .tree_utils import pytree_map_and_reduce
 from .type_casting import _is_scalar_or_0d
 from .typing import ProximalOperator
@@ -204,7 +204,7 @@ class Regularizer(Base, abc.ABC):
             all_regularized = True
         if all_regularized:
             return self._hess_tag
-        return HessianTag(self._hess_tag.structure, General)
+        return HessianTag(self._hess_tag.structure, Symmetric)
 
     @property
     def allowed_solvers(self) -> Tuple[str]:
@@ -572,7 +572,13 @@ class Ridge(Regularizer):
     _default_solver = "LBFGS"
 
     _proximal_operator = staticmethod(prox_ridge)
-    _hess_tag = HessianTag(structure=Diagonal, property=PositiveDefinite)
+    _hess_tag = HessianTag(
+        structure=Diagonal,
+        property=PositiveDefinite,
+        definite_on=None,
+        flat_on=None,
+        leaves=None,
+    )
 
     def _penalty_on_subtree(self, subtree, strength: Any, **kwargs) -> jnp.ndarray:
         """

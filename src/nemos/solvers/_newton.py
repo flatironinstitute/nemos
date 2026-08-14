@@ -9,16 +9,16 @@ import lineax as lx
 import optax
 
 from .. import tree_utils
-from ..typing import Params
-from ._abstract_solver import OptimizationInfo
-from ._hess import (
+from .._hess import (
     BlockDiagonal,
     Full,
-    General,
     HessianTag,
     PositiveDefinite,
+    Symmetric,
     combine_hessian_tags,
 )
+from ..typing import Params
+from ._abstract_solver import OptimizationInfo
 
 DEFAULT_ATOL = 1e-4
 DEFAULT_MAX_STEPS = 100
@@ -149,7 +149,13 @@ class Newton:
 
     def init_state(self, init_params, *args):
         if self._hess_tag is None:
-            self._hess_tag = HessianTag(structure=Full, property=General)
+            self._hess_tag = HessianTag(
+                structure=Full,
+                property=Symmetric,
+                definite_on=None,
+                flat_on=None,
+                leaves=None,
+            )
 
         self._build_cache()
         ls_state = self._line_search.init(init_params)

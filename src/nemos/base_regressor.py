@@ -17,12 +17,12 @@ import numpy as np
 from numpy.typing import NDArray
 
 from . import solvers, tree_utils, utils
+from ._hess import HessianTag
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
-from .solvers._hess import HessianTag
 from .solvers._newton import Newton
 from .type_casting import cast_to_jax, is_numpy_array_like
 from .typing import (
