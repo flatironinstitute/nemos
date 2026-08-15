@@ -39,14 +39,15 @@ NewtonStepResult = tuple[Params, NewtonState]
 
 def _compute_diagonal_shift(H, shift_const):
     leaves_with_paths = jax.tree_util.tree_leaves_with_path(H)
-    diag_maxes = [
-        jnp.max(jnp.abs(jnp.diagonal(leaf, axis1=-2, axis2=-1)))
+    contributions = [
+        leaf.shape[-1]
+        * jnp.finfo(leaf.dtype).eps
+        * jnp.max(jnp.diagonal(leaf, axis1=-2, axis2=-1))
         for path, leaf in leaves_with_paths
         if (n := len(path)) % 2 == 0 and path[: n // 2] == path[n // 2 :]
     ]
-    max_diag = jax.tree_util.tree_reduce(jnp.maximum, diag_maxes)
-    eps = max(jnp.finfo(leaf.dtype).eps for leaf in jax.tree.leaves(H))
-    return shift_const * jnp.where(max_diag > 0, max_diag, 1.0) * eps**0.5
+    max_contribution = jax.tree_util.tree_reduce(jnp.maximum, contributions)
+    return shift_const * max_contribution
 
 
 def _add_diagonal_shift(H, tau):
