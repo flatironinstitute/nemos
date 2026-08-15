@@ -1108,7 +1108,7 @@ class TestGLM:
         ],
     )
     @pytest.mark.parametrize(
-        "model_class, fit_state_attrs",
+        "model_class, fit_state_attrs, fix_params",
         [
             (
                 nmo.glm.GLM,
@@ -1121,6 +1121,9 @@ class TestGLM:
                     "dof_resid_": 3,
                     "aux_": None,
                 },
+                # coef pinned, intercept left learnable: a spec with both an array and a
+                # ``None`` leaf, the latter being the fragile half of the round-trip
+                (jnp.ones((3,)), None),
             ),
             (
                 nmo.glm.PopulationGLM,
@@ -1131,6 +1134,7 @@ class TestGLM:
                     "dof_resid_": 3,
                     "aux_": None,
                 },
+                (jnp.ones((3, 1)), None),
             ),
             (
                 nmo.glm.ClassifierGLM,
@@ -1142,6 +1146,7 @@ class TestGLM:
                     "aux_": None,
                     "classes_": np.array([2, 3]),
                 },
+                (jnp.ones((3, 2)), None),
             ),
             (
                 nmo.glm.ClassifierPopulationGLM,
@@ -1153,6 +1158,7 @@ class TestGLM:
                     "aux_": None,
                     "classes_": np.array([2, 3]),
                 },
+                (jnp.ones((3, 1, 2)), None),
             ),
         ],
     )
@@ -1161,6 +1167,7 @@ class TestGLM:
         regularizer,
         obs_model,
         solver_name,
+        fix_params,
         tmp_path,
         glm_class_type,
         fit_state_attrs,
@@ -1186,6 +1193,7 @@ class TestGLM:
             regularizer=regularizer,
             regularizer_strength=2.0,
             solver_kwargs={"tol": 10**-6},
+            fix_params=fix_params,
         )
         clean_kwargs = dict(
             (k, p) for k, p in kwargs.items() if k in model_class._get_param_names()
@@ -1231,6 +1239,20 @@ class TestGLM:
                 assert np.allclose(
                     np.array(init_val), np.array(load_val)
                 ), f"{key} array mismatch"
+            elif isinstance(init_val, tuple):
+                # e.g. ``fix_params``: compare leafwise, keeping ``None`` a leaf so a
+                # dropped one cannot pass as an empty pytree node
+                is_none = lambda leaf: leaf is None
+                init_leaves = jax.tree_util.tree_leaves(init_val, is_leaf=is_none)
+                load_leaves = jax.tree_util.tree_leaves(load_val, is_leaf=is_none)
+                assert len(init_leaves) == len(
+                    load_leaves
+                ), f"{key} structure mismatch: {init_val} != {load_val}"
+                for init_leaf, load_leaf in zip(init_leaves, load_leaves):
+                    if init_leaf is None:
+                        assert load_leaf is None, f"{key} lost a None leaf"
+                    else:
+                        np.testing.assert_allclose(load_leaf, init_leaf)
             elif isinstance(init_val, Callable):
                 assert _get_name(init_val) == _get_name(
                     load_val
@@ -3449,16 +3471,33 @@ def test_estimate_dof_resid_feature_mask(
         (nmo.regularizer.Ridge(), _DOF_MASK_COUNT),
     ],
 )
-@pytest.mark.parametrize("fit_intercept", [True, False])
+@pytest.mark.parametrize(
+    "fit_intercept, init_intercept, warn_match",
+    [
+        (True, "pinned_value", None),
+        # a frozen intercept handed the value it is pinned at discards nothing
+        (False, "pinned_value", None),
+        # handed anything else, the value is dropped and the user is told
+        (False, "other_value", "the provided intercept is ignored"),
+    ],
+)
 @pytest.mark.requires_x64
 def test_dof_resid_after_fit_feature_mask(
-    reg, dof_per_neuron, fit_intercept, request, patch_optimizer_run
+    reg,
+    dof_per_neuron,
+    fit_intercept,
+    init_intercept,
+    warn_match,
+    request,
+    patch_optimizer_run,
+    recwarn,
 ):
     """fit stores the per-neuron DOF of the masked model.
 
     The solver is a no-op returning ``init_params``, so the fitted coefficients are the
     injected ones and the DOF is fully determined. With ``fit_intercept=False`` the
-    intercept is frozen out of the partition and costs no DOF.
+    intercept is frozen out of the partition and costs no DOF, whatever intercept the
+    caller passed in.
     """
     _, _, model, _, _ = request.getfixturevalue(
         "population_poissonGLM_model_instantiation"
@@ -3474,18 +3513,18 @@ def test_dof_resid_after_fit_feature_mask(
 
     X = _set_masked_state(model, False, as_pytree=False)
     # hand the sparse state to fit as the starting point, leaving the model unfitted
-    init_params = (model.coef_, model.intercept_)
+    offset = 1.0 if init_intercept == "other_value" else 0.0
+    intercept = model.intercept_ + offset
+    init_params = (model.coef_, intercept)
     model.coef_, model.intercept_ = None, None
     y = np.ones((X.shape[0], _DOF_N_NEURONS))
 
-    # the injected init_params carry an intercept, which a frozen intercept discards
-    warns_ignored_intercept = (
-        does_not_raise()
-        if fit_intercept
-        else pytest.warns(UserWarning, match="the provided intercept is ignored")
-    )
-    with warns_ignored_intercept:
+    if warn_match is None:
         model.fit(X, y, init_params=init_params)
+        assert not [w for w in recwarn if issubclass(w.category, UserWarning)]
+    else:
+        with pytest.warns(UserWarning, match=warn_match):
+            model.fit(X, y, init_params=init_params)
 
     intercept_dof = 1 if fit_intercept else 0
     np.testing.assert_allclose(

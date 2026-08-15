@@ -64,6 +64,7 @@ DEFAULT_OBS_SHAPE = {
 HARD_CODED_GET_PARAMS_KEYS = {
     "GLM": {
         "fit_intercept",
+        "fix_params",
         "inverse_link_function",
         "observation_model",
         "regularizer",
@@ -73,6 +74,7 @@ HARD_CODED_GET_PARAMS_KEYS = {
     },
     "ClassifierGLM": {
         "fit_intercept",
+        "fix_params",
         "inverse_link_function",
         "n_classes",
         "regularizer",
@@ -81,7 +83,9 @@ HARD_CODED_GET_PARAMS_KEYS = {
         "solver_name",
     },
     "ClassifierPopulationGLM": {
+        "feature_mask",
         "fit_intercept",
+        "fix_params",
         "inverse_link_function",
         "n_classes",
         "regularizer",
@@ -90,14 +94,15 @@ HARD_CODED_GET_PARAMS_KEYS = {
         "solver_name",
     },
     "PopulationGLM": {
+        "feature_mask",
         "fit_intercept",
+        "fix_params",
         "inverse_link_function",
         "observation_model",
         "regularizer",
         "regularizer_strength",
         "solver_kwargs",
         "solver_name",
-        "feature_mask",
     },
     "GLMHMM": {
         "dirichlet_initial_proba",

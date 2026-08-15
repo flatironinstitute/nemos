@@ -127,12 +127,15 @@ class OptimistixAdapter(SolverAdapter[OptimistixAdapterState]):
 
         self.config = OptimistixConfig(maxiter=maxiter, **user_args)
 
+        # ``fun_with_aux`` is packed because optimistix requires ``fn(y, args)``; ``fun``
+        # is the model-facing loss and stays ``fun(params, *args)``, as in every other
+        # adapter. Only ``fun_with_aux`` is handed to optimistix.
         if has_aux:
             self.fun_with_aux = pack_args(loss_fn)
-            self.fun = drop_aux(self.fun_with_aux)
+            self.fun = drop_aux(loss_fn)
         else:
-            self.fun = pack_args(loss_fn)
-            self.fun_with_aux = wrap_aux(self.fun)
+            self.fun = loss_fn
+            self.fun_with_aux = wrap_aux(pack_args(loss_fn))
 
         # make custom adjustments such as adding a derived "while_loop_kind" parameter for FISTA
         solver_init_kwargs = self.adjust_solver_init_kwargs(solver_init_kwargs)
