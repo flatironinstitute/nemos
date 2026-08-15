@@ -9,6 +9,8 @@ import pytest
 import nemos as nmo
 from nemos.glm.params import GLMParams
 from nemos.proximal_operator import prox_lasso, prox_none, prox_ridge
+from nemos.solvers._abstract_solver import AbstractSolver
+from nemos.solvers._no_op import NoOpSolver
 from nemos.solvers._svrg import SVRG, ProxSVRG, SVRGState
 from nemos.tree_utils import (
     pytree_map_and_reduce,
@@ -943,3 +945,20 @@ def test_jaxopt_adapter_rejects_none_stepsize(request, solver_name):
             has_aux=False,
             stepsize=None,
         )
+
+
+def test_no_op_solver_covers_the_solver_interface():
+    """``NoOpSolver`` replaces any configured solver, so it must implement all of it.
+
+    The model reaches for solver methods after initialization — ``stochastic_run`` is one
+    — and a missing one only shows up as an ``AttributeError`` mid-fit. Comparing the
+    public surface catches that when the interface grows, e.g. a Hessian mixin.
+    """
+    expected = {
+        name
+        for name in dir(AbstractSolver)
+        if not name.startswith("_") and callable(getattr(AbstractSolver, name, None))
+    }
+
+    missing = sorted(name for name in expected if not hasattr(NoOpSolver, name))
+    assert missing == []
