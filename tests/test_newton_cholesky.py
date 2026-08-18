@@ -1,55 +1,97 @@
 import jax
 import jax.numpy as jnp
+from contextlib import nullcontext as does_not_raise
 import numpy as np
 import pytest
 
 from nemos.regularizer import UnRegularized
+from nemos.solvers._hess import (
+    Full,
+    General,
+    HessianTag,
+    PositiveDefinite,
+    PositiveSemiDefinite,
+)
 from nemos.solvers._newton import (
     NewtonCholesky,
     _add_diagonal_shift,
     _compute_diagonal_shift,
 )
 
-# Helpers
+
+N = 8
+
+_PD_TAG = HessianTag(structure=Full, property=PositiveDefinite)
+_PSD_TAG = HessianTag(structure=Full, property=PositiveSemiDefinite)
+
+
+def _dtype_tol(dtype, scale=1.0, rtol_factor=100.0):
+    """Tolerance proportional to machine precision."""
+    eps = float(jnp.finfo(dtype).eps)
+    return rtol_factor * eps * max(1.0, float(scale))
 
 
 def _make_pd_problem(n, dtype, rng=None):
-    """Return (A, b, x_star) for a strongly convex quadratic f = 0.5 x'Ax - b'x."""
+    """Return a well-conditioned PD quadratic and its analytic optimum."""
     if rng is None:
         rng = np.random.default_rng(0)
-    M = rng.standard_normal((n, n)).astype(dtype)
-    A = (M @ M.T + n * np.eye(n, dtype=dtype)).astype(dtype)
-    b = rng.standard_normal(n).astype(dtype)
+
+    # QR gives an orthogonal matrix, so we can prescribe the condition number.
+    Q, _ = np.linalg.qr(rng.standard_normal((n, n)))
+    eigvals = np.linspace(1.0, 5.0, n)
+
+    A = Q @ np.diag(eigvals) @ Q.T
+    b = rng.standard_normal(n)
     x_star = np.linalg.solve(A, b)
-    return jnp.array(A), jnp.array(b), jnp.array(x_star)
+
+    return (
+        jnp.asarray(A, dtype=dtype),
+        jnp.asarray(b, dtype=dtype),
+        jnp.asarray(x_star, dtype=dtype),
+    )
 
 
-def _make_psd_singular_problem(n, rank, dtype, rng=None):
-    """Return (A, b, x_min_norm) with rank-deficient A ⪰ 0 and b ∈ range(A).
-
-    x_min_norm = A† b is the minimum-norm minimizer (i.e. the solution with
-    zero null-space component, reached when x0 = 0).
-    """
+def _make_psd_problem(n, dtype, rng=None):
     if rng is None:
         rng = np.random.default_rng(1)
-    V = rng.standard_normal((n, rank)).astype(dtype)
-    s = rng.uniform(0.5, 2.0, rank).astype(dtype)
-    A = (V * s) @ V.T  # rank-deficient PSD
-    # b in range(A): pick a random coefficient vector in R^rank
-    c = rng.standard_normal(rank).astype(dtype)
-    b = V @ (s * c)  # = A @ (V c / s … unnormalized, but b = A w for w = V c/s)
-    # minimum-norm solution: A† b = V diag(1/s) V' b  (Moore-Penrose)
-    x_min_norm = V @ (c / s * s)  # = V @ c  (simplifies)
-    # double-check: A @ x_min_norm ≈ b
-    return jnp.array(A), jnp.array(b), jnp.array(x_min_norm)
+
+    eigvals = np.linspace(1.0, 5.0, n - 2)
+
+    A = np.diag(np.concatenate([eigvals, np.zeros(2)]))
+
+    coeffs = rng.standard_normal(n - 2)
+
+    b = np.concatenate([coeffs, np.zeros(2)])
+
+    x_star = np.concatenate(
+        [
+            coeffs / eigvals,
+            np.zeros(2),
+        ]
+    )
+
+    x0_null = np.zeros(n)
+    x0_null[-2:] = [1.5, -0.75]
+
+    x0 = x0_null.copy()
+
+    Q_null = np.eye(n)[:, -2:]
+
+    return (
+        jnp.asarray(A, dtype=dtype),
+        jnp.asarray(b, dtype=dtype),
+        jnp.asarray(x_star, dtype=dtype),
+        jnp.asarray(x0, dtype=dtype),
+        jnp.asarray(x0_null, dtype=dtype),
+        jnp.asarray(Q_null, dtype=dtype),
+    )
 
 
 def _quadratic_loss_and_hessian(A, b):
-    """Return (loss_fn, hess_fn) for f(x) = 0.5 x'Ax - b'x."""
+    """f(x) = 1/2 x'Ax - b'x."""
 
     def loss(params, *args):
-        x = params
-        return 0.5 * jnp.dot(x, A @ x) - jnp.dot(b, x)
+        return _quadratic_loss(params, *args)
 
     def hess(params, *args):
         return A
@@ -57,21 +99,27 @@ def _quadratic_loss_and_hessian(A, b):
     return loss, hess
 
 
-def _make_newton_cholesky_solver(loss_fn, hess_fn, hess_tag, init_params, **kwargs):
-    """Convenience wrapper that wires up a NewtonCholesky solver."""
+def _quadratic_loss(A, b):
+    """Quadratic loss for autodiff-Hessian tests."""
+
+    def loss(params, *args):
+        return 0.5 * jnp.dot(params, A @ params) - jnp.dot(b, params)
+
+    return loss
+
+
+def _make_solver(loss_fn, hess_fn, hess_tag, init_params, **kwargs):
+    """Wire up a NewtonCholesky solver with sensible defaults for tests."""
     solver = NewtonCholesky(
         loss_fn,
         regularizer=UnRegularized(),
         regularizer_strength=0.0,
         has_aux=False,
         init_params=init_params,
-        jit=False,  # easier debugging in tests
+        jit=False,
         **kwargs,
     )
-    solver.setup_hessian(
-        hess_fn=hess_fn,
-        hess_tag=hess_tag,
-    )
+    solver.setup_hessian(hess_fn=hess_fn, hess_tag=hess_tag)
     return solver
 
 
@@ -81,10 +129,15 @@ def _dense_H():
 
 
 def _pytree_H():
-    """Two-parameter pytree Hessian; dominant block is ("w","w") with max_diag=100, n=2."""
     return {
-        "w": {"w": jnp.diag(jnp.array([100.0, 50.0])), "b": jnp.zeros((2, 1))},
-        "b": {"w": jnp.zeros((1, 2)), "b": jnp.diag(jnp.array([1.0]))},
+        "w": {
+            "w": jnp.diag(jnp.array([100.0, 50.0])),
+            "b": jnp.zeros((2, 2)),  # square, but NOT a diagonal block
+        },
+        "b": {
+            "w": jnp.zeros((2, 2)),  # square, but NOT a diagonal block
+            "b": jnp.diag(jnp.array([1.0, 1.0])),
+        },
     }
 
 
@@ -153,26 +206,422 @@ class TestAddDiagonalShift:
     """Unit tests for the _add_diagonal_shift helper."""
 
     @pytest.mark.parametrize("H_factory, n, max_diag", _H_CASES)
-    def test_adds_to_diagonal_only(self, H_factory, n, max_diag):
-        """Off-diagonal entries must not change."""
+    def test_diagonal_blocks_increase_by_tau(self, H_factory, n, max_diag):
+        """Diagonal Hessian blocks have tau added to their diagonal."""
         H = H_factory()
-        tau = 0.5
+        tau = 3.7
         H_mod = _add_diagonal_shift(H, tau)
-        # For each on-diagonal leaf, diagonal increases by tau; off-diagonal unchanged.
-        orig_leaves = jax.tree.leaves(H)
-        mod_leaves = jax.tree.leaves(H_mod)
-        for orig, mod in zip(orig_leaves, mod_leaves):
-            if orig.ndim == 2 and orig.shape[0] == orig.shape[1]:
-                np.testing.assert_allclose(jnp.diagonal(mod), jnp.diagonal(orig) + tau)
-                mask = ~jnp.eye(orig.shape[0], dtype=bool)
-                np.testing.assert_allclose(mod[mask], orig[mask])
-            else:
-                # cross / rectangular leaf: unchanged entirely
-                np.testing.assert_allclose(mod, orig)
+
+        original = dict(jax.tree_util.tree_leaves_with_path(H))
+        modified = dict(jax.tree_util.tree_leaves_with_path(H_mod))
+
+        for path, h in original.items():
+            if len(path) % 2 == 0 and path[: len(path) // 2] == path[len(path) // 2 :]:
+                np.testing.assert_allclose(
+                    jnp.diagonal(modified[path]),
+                    jnp.diagonal(h) + tau,
+                    err_msg=f"Diagonal block {path} was not shifted.",
+                )
+
+    @pytest.mark.parametrize("H_factory, n, max_diag", _H_CASES)
+    def test_off_diagonal_blocks_unchanged(self, H_factory, n, max_diag):
+        """Off-diagonal Hessian blocks are completely unchanged."""
+        H = H_factory()
+        tau = 5.0
+        H_mod = _add_diagonal_shift(H, tau)
+
+        original = dict(jax.tree_util.tree_leaves_with_path(H))
+        modified = dict(jax.tree_util.tree_leaves_with_path(H_mod))
+
+        for path, h in original.items():
+            is_diagonal = (
+                len(path) % 2 == 0 and path[: len(path) // 2] == path[len(path) // 2 :]
+            )
+
+            if not is_diagonal:
+                np.testing.assert_array_equal(
+                    modified[path],
+                    h,
+                    err_msg=f"Off-diagonal block {path} was modified.",
+                )
 
     @pytest.mark.parametrize("H_factory, n, max_diag", _H_CASES)
     def test_zero_shift_is_identity_op(self, H_factory, n, max_diag):
-        """A zero shift must leave every leaf unchanged."""
+        """A zero shift leaves the entire Hessian unchanged."""
         H = H_factory()
         H_mod = _add_diagonal_shift(H, 0.0)
-        jax.tree.map(lambda orig, mod: np.testing.assert_allclose(mod, orig), H, H_mod)
+
+        for original, modified in zip(
+            jax.tree.leaves(H),
+            jax.tree.leaves(H_mod),
+        ):
+            np.testing.assert_array_equal(
+                modified,
+                original,
+                err_msg="Hessian changed with tau=0.",
+            )
+
+    @pytest.mark.parametrize("H_factory, n, max_diag", _H_CASES)
+    def test_pytree_structure_preserved(self, H_factory, n, max_diag):
+        """The Hessian pytree structure is preserved."""
+        H = H_factory()
+        H_mod = _add_diagonal_shift(H, 1.0)
+
+        assert jax.tree_util.tree_structure(H_mod) == jax.tree_util.tree_structure(H)
+
+    @pytest.mark.parametrize("H_factory, n, max_diag", _H_CASES)
+    def test_shapes_preserved(self, H_factory, n, max_diag):
+        """Every Hessian leaf retains its original shape."""
+        H = H_factory()
+        H_mod = _add_diagonal_shift(H, 7.0)
+
+        for original, modified in zip(
+            jax.tree.leaves(H),
+            jax.tree.leaves(H_mod),
+        ):
+            assert modified.shape == original.shape
+
+    @pytest.mark.parametrize("H_factory, n, max_diag", _H_CASES)
+    def test_dtypes_preserved(self, H_factory, n, max_diag):
+        """Every Hessian leaf retains its original dtype."""
+        H = H_factory()
+        H_mod = _add_diagonal_shift(H, 1.0)
+
+        for original, modified in zip(
+            jax.tree.leaves(H),
+            jax.tree.leaves(H_mod),
+        ):
+            assert modified.dtype == original.dtype
+
+
+@pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
+@pytest.mark.requires_x64
+def test_pd_quadratic_one_step(dtype):
+    """Newton-Cholesky solves a PD quadratic exactly in one Newton step."""
+    A, b, x_star = _make_pd_problem(6, dtype)
+
+    loss, hess = _quadratic_loss_and_hessian(A, b)
+    x0 = jnp.zeros_like(x_star)
+
+    tol = _dtype_tol(dtype, np.linalg.norm(np.asarray(x_star)))
+
+    solver = _make_solver(
+        loss,
+        hess,
+        _PD_TAG,
+        x0,
+        tol=tol,
+        shift_const=0.0,
+    )
+
+    x_opt, state, _ = solver.run(x0)
+
+    assert bool(state.stats.converged)
+    assert not bool(state.diverged)
+    assert state.stats.num_steps == 1
+
+    np.testing.assert_allclose(
+        x_opt,
+        x_star,
+        atol=tol,
+        rtol=0.0,
+    )
+
+    residual = A @ x_opt - b
+    np.testing.assert_allclose(
+        residual,
+        0.0,
+        atol=tol,
+        rtol=0.0,
+    )
+
+    # At the optimum the Newton decrement should vanish.
+    assert float(state.newton_decrement) <= tol
+
+
+@pytest.mark.requires_x64
+def test_run_converges_on_pd_quadratic():
+    """Solver must converge to the exact minimiser of a strongly convex quadratic."""
+    A, b, x_star = _make_pd_problem(N, np.float64)
+    loss, hess = _quadratic_loss_and_hessian(A, b)
+    x0 = jnp.zeros(N)
+    solver = _make_solver(loss, hess, _PD_TAG, x0)
+
+    x_opt, state, _ = solver.run(x0)
+
+    assert bool(state.stats.converged), "Solver did not converge on a PD quadratic."
+    assert state.stats.num_steps == 1, (
+        "Solver did not converge in 1 step on a PD quadratic."
+    )
+    np.testing.assert_allclose(
+        x_opt,
+        x_star,
+        atol=1e-6,
+        err_msg="Solver solution does not match analytic solution.",
+    )
+
+
+@pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
+@pytest.mark.requires_x64
+def test_pd_quadratic_one_step_autodiff(dtype):
+    """Newton-Cholesky solves a PD quadratic using an autodiff Hessian."""
+    A, b, x_star = _make_pd_problem(6, dtype)
+
+    loss = _quadratic_loss(A, b)
+    x0 = jnp.zeros_like(x_star)
+
+    tol = _dtype_tol(dtype, np.linalg.norm(np.asarray(x_star)))
+
+    solver = _make_solver(
+        loss,
+        None,
+        _PD_TAG,
+        x0,
+        tol=tol,
+        shift_const=0.0,
+    )
+
+    x_opt, state, _ = solver.run(x0)
+
+    assert bool(state.stats.converged)
+    assert state.stats.num_steps == 1
+
+    np.testing.assert_allclose(
+        x_opt,
+        x_star,
+        atol=tol,
+        rtol=0.0,
+    )
+
+
+@pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
+@pytest.mark.requires_x64
+def test_psd_singular_quadratic_preserves_null_space(dtype):
+    """Newton-Cholesky converges to a true minimizer while preserving x0's null-space component."""
+    A, b, x_star, x0, x0_null, Q_null = _make_psd_problem(6, dtype)
+
+    loss, hess = _quadratic_loss_and_hessian(A, b)
+
+    tol = _dtype_tol(
+        dtype,
+        np.linalg.norm(np.asarray(b)),
+        rtol_factor=500,
+    )
+
+    solver = _make_solver(
+        loss,
+        hess,
+        _PSD_TAG,
+        x0,
+        shift_const=1.0,
+        maxiter=100,
+        tol=tol,
+    )
+
+    x_opt, state, _ = solver.run(x0)
+
+    # The solver must actually converge
+    assert bool(state.stats.converged)
+    assert not bool(state.diverged)
+
+    # No numerical failure
+    assert bool(jnp.all(jnp.isfinite(x_opt)))
+
+    # The final point must satisfy the original first-order condition
+    residual = A @ x_opt - b
+    np.testing.assert_allclose(
+        residual,
+        0.0,
+        atol=tol,
+        rtol=0.0,
+    )
+
+    initial_null = Q_null.T @ x0
+    final_null = Q_null.T @ x_opt
+
+    np.testing.assert_allclose(
+        final_null,
+        initial_null,
+        atol=tol,
+        rtol=0.0,
+    )
+
+    expected = x_star + x0_null
+
+    np.testing.assert_allclose(
+        x_opt,
+        expected,
+        atol=tol,
+        rtol=0.0,
+    )
+
+
+@pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
+@pytest.mark.requires_x64
+def test_psd_singular_quadratic_preserves_null_space_autodiff(dtype):
+    """Newton-Cholesky converges to a true minimizer while preserving x0's null-space component, using autodiff."""
+    A, b, x_star, x0, x0_null, Q_null = _make_psd_problem(6, dtype)
+
+    loss, hess = _quadratic_loss_and_hessian(A, b)
+
+    tol = _dtype_tol(
+        dtype,
+        np.linalg.norm(np.asarray(b)),
+        rtol_factor=500,
+    )
+
+    solver = _make_solver(
+        loss,
+        None,
+        _PSD_TAG,
+        x0,
+        shift_const=1.0,
+        maxiter=100,
+        tol=tol,
+    )
+
+    x_opt, state, _ = solver.run(x0)
+
+    # The solver must converge
+    assert bool(state.stats.converged)
+    assert not bool(state.diverged)
+
+    # No numerical failure
+    assert bool(jnp.all(jnp.isfinite(x_opt)))
+
+    # The final point must satisfy the original first-order condition
+    residual = A @ x_opt - b
+    np.testing.assert_allclose(
+        residual,
+        0.0,
+        atol=tol,
+        rtol=0.0,
+    )
+
+    initial_null = Q_null.T @ x0
+    final_null = Q_null.T @ x_opt
+
+    np.testing.assert_allclose(
+        final_null,
+        initial_null,
+        atol=tol,
+        rtol=0.0,
+    )
+
+    expected = x_star + x0_null
+
+    np.testing.assert_allclose(
+        x_opt,
+        expected,
+        atol=tol,
+        rtol=0.0,
+    )
+
+
+@pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
+@pytest.mark.parametrize("scale", [1e-6, 1.0, 1e6])
+@pytest.mark.requires_x64
+def test_pd_quadratic_scale_equivariance(dtype, scale):
+    A, b, x_star = _make_pd_problem(6, dtype)
+
+    x0 = jnp.zeros_like(x_star)
+    tol = _dtype_tol(dtype, np.linalg.norm(np.asarray(x_star)))
+
+    loss, hess = _quadratic_loss_and_hessian(
+        scale * A,
+        scale * b,
+    )
+
+    solver = _make_solver(
+        loss,
+        None,
+        _PD_TAG,
+        x0,
+        tol=tol,
+        shift_const=0.0,
+    )
+
+    x_opt, state, _ = solver.run(x0)
+
+    assert bool(state.stats.converged)
+    assert state.stats.num_steps == 1.0
+
+    np.testing.assert_allclose(
+        x_opt,
+        x_star,
+        atol=tol,
+        rtol=0.0,
+    )
+
+
+@pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
+@pytest.mark.parametrize("scale", [1e-6, 1.0, 1e6])
+@pytest.mark.requires_x64
+def test_psd_quadratic_scale_equivariance(dtype, scale):
+    A, b, x_star, x0, x0_null, Q_null = _make_psd_problem(6, dtype)
+
+    loss = _quadratic_loss(scale * A, scale * b)
+
+    solver = _make_solver(
+        loss,
+        None,
+        _PSD_TAG,
+        x0,
+        shift_const=1.0,
+        maxiter=1000,
+    )
+
+    x_opt, state, _ = solver.run(x0)
+
+    assert bool(state.stats.converged)
+    assert not bool(state.diverged)
+    assert bool(jnp.all(jnp.isfinite(x_opt)))
+
+    expected = x_star + x0_null
+
+    tol = _dtype_tol(
+        dtype,
+        np.linalg.norm(np.asarray(expected)),
+        rtol_factor=1000,
+    )
+
+    np.testing.assert_allclose(
+        x_opt,
+        expected,
+        atol=tol,
+        rtol=0.0,
+    )
+
+
+@pytest.mark.parametrize(
+    "property_, expectation",
+    [
+        pytest.param(
+            PositiveDefinite,
+            does_not_raise(),
+            id="positive-definite",
+        ),
+        pytest.param(
+            PositiveSemiDefinite,
+            does_not_raise(),
+            id="positive-semi-definite",
+        ),
+        pytest.param(
+            General,
+            pytest.raises(ValueError, match="positive"),
+            id="general",
+        ),
+    ],
+)
+def test_hessian_property_gating(property_, expectation):
+    A, b, _ = _make_pd_problem(4, jnp.float64)
+
+    loss, hess = _quadratic_loss_and_hessian(A, b)
+
+    with expectation:
+        _make_solver(
+            loss,
+            hess,
+            HessianTag(structure=Full, property=property_),
+            jnp.zeros(4),
+        )
