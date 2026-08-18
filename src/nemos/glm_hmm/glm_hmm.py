@@ -1485,6 +1485,7 @@ class GLMHMM(
         session_starts: jnp.ndarray,
         *args,
         n_samples: Optional[int] = None,
+        safe: bool = True,
         **kwargs,
     ) -> StepResult:
         """Run a single EM iteration on the GLM-HMM.
@@ -1524,6 +1525,9 @@ class GLMHMM(
         n_samples :
             Total sample count to use when estimating the residual degrees of
             freedom. Defaults to ``X.shape[0]``.
+        safe :
+            If ``True``, perform input validation and consistency checks. If
+            ``False``, skip validation for speed (caller must ensure inputs are valid).
 
         Returns
         -------
@@ -1551,13 +1555,20 @@ class GLMHMM(
         >>> opt_state = model.initialize_optimizer_and_state(init_params, X, y, session_starts=session_starts)
         >>> new_params, new_state = model.update(init_params, opt_state, X, y, session_starts)
         """
-        # find non-nans
-        X, y, session_starts = tree_utils.drop_nans(X, y, session_starts)
-        # ensure boolean and first sample is a session start
-        session_starts = jnp.array(session_starts, dtype=bool).at[0].set(True)
-
-        # grab the data
-        data = X.data if isinstance(X, FeaturePytree) else X
+        if safe is True:
+            # validate inputs and session boundaries
+            session_starts = self._validator.validate_and_cast_inputs(
+                X, y, session_starts=session_starts
+            )
+            # drop nans and pull pytree data
+            data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
+        else:
+            # find non-nans
+            X, y, session_starts = tree_utils.drop_nans(X, y, session_starts)
+            # ensure boolean and first sample is a session start
+            session_starts = jnp.array(session_starts, dtype=bool).at[0].set(True)
+            # grab the data
+            data = X.data if isinstance(X, FeaturePytree) else X
 
         # wrap into model params (assumes init was done via
         # `initialize_optimizer_and_state` so the EM step function is in place)

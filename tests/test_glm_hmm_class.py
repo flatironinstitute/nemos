@@ -944,7 +944,7 @@ class TestValidationSequence:
         # spy again after the setup calls, where no validation is expected
         order = _spy_call_order(monkeypatch, GLMHMMValidator, *VALIDATION_SEQUENCE)
         model.update(init_params, opt_state, X, y, session_starts)
-        assert order == []
+        assert order == VALIDATION_SEQUENCE
 
     @pytest.mark.parametrize(
         "method_name", ["score", "smooth_proba", "filter_proba", "decode_state"]
@@ -1615,7 +1615,21 @@ class TestUpdate:
         assert len(params) == 5
         assert all(v is not None for v in model._get_fit_state().values())
 
-    def test_update_calls_validate_inputs(self, glm_hmm_data, monkeypatch):
+    def test_update_safe_calls_validate_inputs(self, glm_hmm_data, monkeypatch):
+        """update() forwards X and y to GLMHMMValidator.validate_inputs exactly zero times."""
+        d = glm_hmm_data
+        model = GLMHMM(n_states=d["n_states"], solver_kwargs={"maxiter": 1})
+        init_params, opt_state = self._prepare(model, d["X"], d["y"])
+
+        calls = _spy_calls(monkeypatch, GLMHMMValidator, "validate_inputs")
+        model.update(init_params, opt_state, d["X"], d["y"], d["session_starts"])
+
+        assert len(calls) == 1
+        _, kwargs = calls[0]
+        assert kwargs["X"] is d["X"]
+        assert kwargs["y"] is d["y"]
+
+    def test_update_unsafe_no_calls_validate_inputs(self, glm_hmm_data, monkeypatch):
         """update() forwards X and y to GLMHMMValidator.validate_inputs exactly zero times."""
         d = glm_hmm_data
         model = GLMHMM(n_states=d["n_states"], solver_kwargs={"maxiter": 1})
