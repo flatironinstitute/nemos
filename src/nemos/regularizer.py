@@ -21,6 +21,8 @@ from ._hess import (
     LeafClaim,
     MatrixProperty,
     MatrixStructure,
+    mask_claim_all,
+    mask_claim_none,
     mask_of_claim,
 )
 from .base_class import Base
@@ -615,6 +617,23 @@ class UnRegularized(Regularizer):
 
     def _validate_strength(self, strength: Any):
         return None
+
+    def _resolve_hess_tag(self, params: Any, strength: Any) -> HessianTag:
+        """Describe the penalty's Hessian, which is the zero matrix.
+
+        The penalty is identically zero, so its second derivative vanishes on every leaf.
+        That makes this tag the neutral element of :func:`~nemos._hess.combine_hessian_tags`:
+        combining it with the model's tag returns the model's claims unchanged, promoted to
+        a definite one when they cover the whole tree. A regularizer that says nothing about
+        its curvature returns ``None`` instead, which is a different statement and combines
+        to ``None``.
+        """
+        return HessianTag(
+            structure=MatrixStructure.DIAGONAL,
+            property=MatrixProperty.POSITIVE_SEMI_DEFINITE,
+            flat_on=mask_claim_all(params),
+            definite_on=mask_claim_none(params),
+        )
 
 
 class Ridge(Regularizer):
