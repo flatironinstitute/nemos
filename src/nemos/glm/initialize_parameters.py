@@ -33,10 +33,22 @@ def _log_softmax_inv(x):
     return log_x - jnp.mean(log_x, axis=-1, keepdims=True)
 
 
+def _softplus_inv(x):
+    """Inverse of softplus.
+
+    ``log(exp(x) - 1)`` is accurate at neither end in float32: the subtraction
+    cancels the leading digits of the result for the small rates that dominate
+    spike counts, and ``exp`` overflows to infinity above ``x = 88``. Adding
+    ``x`` back to ``log(1 - exp(-x))`` avoids both, and ``expm1`` keeps that
+    second factor accurate as ``x`` approaches zero.
+    """
+    return x + jnp.log(-jnp.expm1(-x))
+
+
 # dictionary of known inverse link functions.
 INVERSE_FUNCS = {
     exp: jnp.log,
-    softplus: lambda x: jnp.log(jnp.exp(x) - 1.0),
+    softplus: _softplus_inv,
     logistic: jax.scipy.special.logit,
     norm_cdf: jax.scipy.stats.norm.ppf,
     one_over_x: one_over_x,
@@ -47,7 +59,7 @@ INVERSE_FUNCS = {
 # Name-based lookup (for after pickling/copying)
 INVERSE_FUNCS_BY_SIMPLE_NAME = {
     "exp": jnp.log,
-    "softplus": lambda x: jnp.log(jnp.exp(x) - 1.0),
+    "softplus": _softplus_inv,
     "logistic": jax.scipy.special.logit,
     "norm_cdf": jax.scipy.stats.norm.ppf,
     "one_over_x": one_over_x,
