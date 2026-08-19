@@ -1321,9 +1321,14 @@ class NegativeBinomialObservations(Observations):
         predicted_rate = jnp.clip(
             predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
         )
-        factor = 1 / (self.scale * predicted_rate + 1)
+        # in terms of z = scale * mu, the two terms of the log-likelihood above are
+        # y * log(z / (z + 1)) and -log1p(z) / scale. The equivalent form built on
+        # 1 / (z + 1) cancels the leading digits of z once the rate is small enough
+        # that z + 1 rounds to 1, so keep the log1p form.
+        scaled_rate = self.scale * predicted_rate
+        log1p_rate = jnp.log1p(scaled_rate)
         return -aggregate_sample_scores(
-            y * jnp.log(1 - factor) + jnp.log(factor) / self.scale
+            y * (jnp.log(scaled_rate) - log1p_rate) - log1p_rate / self.scale
         )
 
     def log_likelihood(
