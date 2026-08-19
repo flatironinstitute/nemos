@@ -1672,7 +1672,9 @@ class TestUpdate:
         init_params, opt_state = self._prepare(model, d["X"], d["y"])
 
         calls = _spy_calls(monkeypatch, GLMHMMValidator, "validate_inputs")
-        model.update(init_params, opt_state, d["X"], d["y"], d["session_starts"], safe=False)
+        model.update(
+            init_params, opt_state, d["X"], d["y"], d["session_starts"], safe=False
+        )
 
         assert len(calls) == 0
 
