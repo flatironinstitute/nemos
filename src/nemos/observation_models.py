@@ -1321,11 +1321,7 @@ class NegativeBinomialObservations(Observations):
         predicted_rate = jnp.clip(
             predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
         )
-        # with z = scale * mu, the two ratios of the log-likelihood above are
-        # mu / (r + mu) = z / (z + 1) and r / (r + mu) = 1 / (z + 1). Both are
-        # written as log1p, which stays accurate over the whole range of z; forming
-        # the ratios first instead cancels the leading digits of z as soon as
-        # z + 1 rounds to 1.
+        # robust log1p forms of log(mu / (r + mu)) and log(r / (r + mu)).
         scaled_rate = self.scale * predicted_rate
         log_ratio_mu = -jnp.log1p(1 / scaled_rate)
         log_ratio_r = -jnp.log1p(scaled_rate)
