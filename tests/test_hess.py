@@ -880,7 +880,9 @@ def test_a_definite_verdict_means_the_sum_is_nonsingular(first, second):
         combined = combine_hessian_tags(t1, t2)
         positive, zero, negative = eigenvalue_counts(m1 + m2)
         if combined.property is PD:
-            assert zero == 0 and negative == 0, f"claimed definite, spectrum {(positive, zero, negative)}"
+            assert (
+                zero == 0 and negative == 0
+            ), f"claimed definite, spectrum {(positive, zero, negative)}"
         assert negative == 0, "two semidefinite terms cannot sum to an indefinite one"
 
 
@@ -959,11 +961,13 @@ def test_leaves_flat_in_both_terms_are_flat_and_claimed_in_the_sum(first, second
         flat_in_sum = np.abs(block(m1 + m2, (leaf,))).max() < TOL
         if leaf in claimed(t1.flat_on) & claimed(t2.flat_on):
             assert flat_in_sum, f"{leaf} is flat in both terms but not in the sum"
-            assert leaf in claimed(combined.flat_on), f"{leaf} was flat, and not claimed"
+            assert leaf in claimed(
+                combined.flat_on
+            ), f"{leaf} was flat, and not claimed"
         else:
-            assert leaf not in claimed(combined.flat_on), (
-                f"{leaf} claimed flat, but only one of the two terms is flat on it"
-            )
+            assert leaf not in claimed(
+                combined.flat_on
+            ), f"{leaf} claimed flat, but only one of the two terms is flat on it"
 
 
 # --- combine_structure and the assembled tag ---
