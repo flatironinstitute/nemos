@@ -34,14 +34,7 @@ def _log_softmax_inv(x):
 
 
 def _softplus_inv(x):
-    """Inverse of softplus.
-
-    ``log(exp(x) - 1)`` is accurate at neither end in float32: the subtraction
-    cancels the leading digits of the result for the small rates that dominate
-    spike counts, and ``exp`` overflows to infinity above ``x = 88``. Adding
-    ``x`` back to ``log(1 - exp(-x))`` avoids both, and ``expm1`` keeps that
-    second factor accurate as ``x`` approaches zero.
-    """
+    """Robust inverse of softplus, for small rates and above the exp overflow."""
     return x + jnp.log(-jnp.expm1(-x))
 
 
