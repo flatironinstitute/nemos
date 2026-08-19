@@ -1484,7 +1484,6 @@ class GLMHMM(
         y: jnp.ndarray,
         *args,
         session_starts: Optional[jnp.ndarray] = None,
-
         n_samples: Optional[int] = None,
         safe: bool = True,
         **kwargs,
@@ -1502,9 +1501,10 @@ class GLMHMM(
         :meth:`initialize_optimizer_and_state` must be called first so that the EM
         step function and initial ``opt_state`` are available.
 
-        **Important**: Unlike :meth:`fit`, this method requires the user to provide
-        ``session_starts`` explicitly as a boolean array. You can validate this variable
-        by passing it as a keyword argument to `initialize_optimizer_and_state`.
+        **Important**: If using ``safe=False`` to skip validation while providing a
+        custom ``session_starts``, it must be formatted as a boolean  array of shape
+        ``(n_time_bins,)``. You can validate this variable by passing it as a keyword
+        argument to ``initialize_optimizer_and_state``.
 
         Parameters
         ----------
@@ -1521,8 +1521,15 @@ class GLMHMM(
         y :
             Observations, shape ``(n_time_bins,)`` or ``(n_time_bins, n_neurons)``.
         session_starts :
-            A boolean array of shape ``(n_time_bins,)`` with ``True`` at each
-            session start.
+            Optional session boundaries. Accepts:
+
+            - a boolean array of shape ``(n_time_bins,)`` with ``True`` at each
+              session start,
+            - an integer array of session-start indices,
+            - a pynapple ``IntervalSet`` (requires ``X`` or ``y`` to be a
+              pynapple object to supply timestamps).
+
+            If ``None``, the entire input is treated as a single session.
         n_samples :
             Total sample count to use when estimating the residual degrees of
             freedom. Defaults to ``X.shape[0]``.
