@@ -1561,7 +1561,7 @@ class GLMHMM(
         >>> model = nmo.glm_hmm.GLMHMM(n_states=2)
         >>> init_params = model.initialize_params(X, y)
         >>> opt_state = model.initialize_optimizer_and_state(init_params, X, y, session_starts=session_starts)
-        >>> new_params, new_state = model.update(init_params, opt_state, X, y, session_starts)
+        >>> new_params, new_state = model.update(init_params, opt_state, X, y, session_starts=session_starts)
         """
         if safe is True:
             # validate inputs and session boundaries
@@ -1571,6 +1571,8 @@ class GLMHMM(
             # drop nans and pull pytree data
             data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
         else:
+            if session_starts is None:
+                session_starts = jnp.zeros(y.shape[0], dtype=bool).at[0].set(True)
             # find non-nans
             X, y, session_starts = tree_utils.drop_nans(X, y, session_starts)
             # ensure boolean and first sample is a session start

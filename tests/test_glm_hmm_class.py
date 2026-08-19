@@ -1658,7 +1658,7 @@ class TestUpdate:
         init_params, opt_state = self._prepare(model, d["X"], d["y"])
 
         calls = _spy_calls(monkeypatch, GLMHMMValidator, "validate_inputs")
-        model.update(init_params, opt_state, d["X"], d["y"], d["session_starts"])
+        model.update(init_params, opt_state, d["X"], d["y"], session_starts=d["session_starts"])
 
         assert len(calls) == 1
         _, kwargs = calls[0]
@@ -1673,10 +1673,33 @@ class TestUpdate:
 
         calls = _spy_calls(monkeypatch, GLMHMMValidator, "validate_inputs")
         model.update(
-            init_params, opt_state, d["X"], d["y"], d["session_starts"], safe=False
+            init_params, opt_state, d["X"], d["y"], sesison_starts=d["session_starts"], safe=False
         )
 
         assert len(calls) == 0
+
+    @pytest.mark.parametrize("safe", [True, False])
+    def test_update_default_session_starts(self, safe, glm_hmm_data, monkeypatch):
+        """With no session_starts, update() builds a single-session indicator array."""
+        d = glm_hmm_data
+        n = d["X"].shape[0]
+        model = GLMHMM(n_states=d["n_states"], solver_kwargs={"maxiter": 1})
+        init_params, opt_state = self._prepare(model, d["X"], d["y"])
+
+        captured = {}
+        real_update = model._optimizer_update
+
+        def capturing(params, state, data, y, *, session_starts, **kwargs):
+            captured["session_starts"] = session_starts
+            return real_update(
+                params, state, data, y, session_starts=session_starts, **kwargs
+            )
+
+        monkeypatch.setattr(model, "_optimizer_update", capturing)
+        model.update(init_params, opt_state, d["X"], d["y"], safe=safe)
+
+        session_starts = captured["session_starts"]
+        assert np.array_equal(session_starts, jnp.zeros(n, dtype=bool).at[0].set(True))
 
     def test_update_forces_first_bin_new_session(self, glm_hmm_data, monkeypatch):
         """update() marks the first sample as a session start before the EM step,
@@ -1803,7 +1826,7 @@ class TestUpdate:
 
         calls = _spy_calls(monkeypatch, model, "_optimizer_update")
         with expectation:
-            model.update(init_params, opt_state, X_nan, d["y"], session_starts)
+            model.update(init_params, opt_state, X_nan, d["y"], session_starts=session_starts)
 
         if expected_second_start is not None:
             data, passed_starts = calls[0][0][2], calls[0][1]["session_starts"]
