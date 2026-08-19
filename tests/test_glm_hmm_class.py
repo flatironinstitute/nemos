@@ -1658,7 +1658,9 @@ class TestUpdate:
         init_params, opt_state = self._prepare(model, d["X"], d["y"])
 
         calls = _spy_calls(monkeypatch, GLMHMMValidator, "validate_inputs")
-        model.update(init_params, opt_state, d["X"], d["y"], session_starts=d["session_starts"])
+        model.update(
+            init_params, opt_state, d["X"], d["y"], session_starts=d["session_starts"]
+        )
 
         assert len(calls) == 1
         _, kwargs = calls[0]
@@ -1673,7 +1675,12 @@ class TestUpdate:
 
         calls = _spy_calls(monkeypatch, GLMHMMValidator, "validate_inputs")
         model.update(
-            init_params, opt_state, d["X"], d["y"], sesison_starts=d["session_starts"], safe=False
+            init_params,
+            opt_state,
+            d["X"],
+            d["y"],
+            sesison_starts=d["session_starts"],
+            safe=False,
         )
 
         assert len(calls) == 0
@@ -1826,7 +1833,9 @@ class TestUpdate:
 
         calls = _spy_calls(monkeypatch, model, "_optimizer_update")
         with expectation:
-            model.update(init_params, opt_state, X_nan, d["y"], session_starts=session_starts)
+            model.update(
+                init_params, opt_state, X_nan, d["y"], session_starts=session_starts
+            )
 
         if expected_second_start is not None:
             data, passed_starts = calls[0][0][2], calls[0][1]["session_starts"]
