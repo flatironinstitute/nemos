@@ -27,7 +27,7 @@ from nemos.solvers._hess import (
     PositiveDefinite,
     PositiveSemiDefinite,
 )
-from nemos.solvers._newton import NewtonCholesky, NewtonState
+from nemos.solvers._newton_cholesky import NewtonCholesky, NewtonState
 from nemos.tree_utils import pytree_map_and_reduce
 
 # Import every submodule so all BaseRegressor subclasses are registered before the
@@ -920,7 +920,7 @@ def test_newton_solver_type_after_fit(request, model_instantiation_type):
     X, y, model, _, _ = request.getfixturevalue(model_instantiation_type)
     model.regularizer = "Ridge"
     model.fit(X, y)
-    from nemos.solvers._newton import NewtonCholesky
+    from nemos.solvers._newton_cholesky import NewtonCholesky
 
     assert isinstance(model._solver, NewtonCholesky)
 

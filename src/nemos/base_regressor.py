@@ -22,7 +22,7 @@ from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
 from .solvers._hess import HessianTag
-from .solvers._newton import NewtonCholesky
+from .solvers._newton_cholesky import NewtonCholesky
 from .type_casting import cast_to_jax, is_numpy_array_like
 from .typing import (
     DESIGN_INPUT_TYPE,

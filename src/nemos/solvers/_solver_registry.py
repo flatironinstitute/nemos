@@ -6,7 +6,7 @@ from typing import Type
 
 from ._abstract_solver import SolverProtocol
 from ._fista import OptimistixFISTA, OptimistixNAG
-from ._newton import NewtonCholesky
+from ._newton_cholesky import NewtonCholesky
 from ._optax_optimistix_solvers import (
     OptimistixOptaxGradientDescent,
     OptimistixOptaxLBFGS,

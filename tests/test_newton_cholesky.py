@@ -1,6 +1,7 @@
+from contextlib import nullcontext as does_not_raise
+
 import jax
 import jax.numpy as jnp
-from contextlib import nullcontext as does_not_raise
 import numpy as np
 import pytest
 
@@ -12,12 +13,11 @@ from nemos.solvers._hess import (
     PositiveDefinite,
     PositiveSemiDefinite,
 )
-from nemos.solvers._newton import (
+from nemos.solvers._newton_cholesky import (
     NewtonCholesky,
     _add_diagonal_shift,
     _compute_diagonal_shift,
 )
-
 
 N = 8
 
@@ -350,9 +350,9 @@ def test_run_converges_on_pd_quadratic():
     x_opt, state, _ = solver.run(x0)
 
     assert bool(state.stats.converged), "Solver did not converge on a PD quadratic."
-    assert state.stats.num_steps == 1, (
-        "Solver did not converge in 1 step on a PD quadratic."
-    )
+    assert (
+        state.stats.num_steps == 1
+    ), "Solver did not converge in 1 step on a PD quadratic."
     np.testing.assert_allclose(
         x_opt,
         x_star,
@@ -568,7 +568,7 @@ def test_psd_quadratic_scale_equivariance(dtype, scale):
         _PSD_TAG,
         x0,
         shift_const=1.0,
-        maxiter=1000,
+        maxiter=100,
     )
 
     x_opt, state, _ = solver.run(x0)

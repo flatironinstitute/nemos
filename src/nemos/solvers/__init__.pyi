@@ -18,7 +18,7 @@ from ._jaxopt_solvers import (
     JaxoptNonlinearCG,
     JaxoptProximalGradient,
 )
-from ._newton import NewtonCholesky
+from ._newton_cholesky import NewtonCholesky
 from ._optax_optimistix_solvers import (
     OptimistixOptaxGradientDescent,
     OptimistixOptaxLBFGS,
