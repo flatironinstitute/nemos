@@ -94,8 +94,7 @@ class Newton:
         hess_tag: HessianTag | None = None,
         reg_tag: HessianTag | None = None,
     ):
-        tag = hess_tag if reg_tag is None else combine_hessian_tags(hess_tag, reg_tag)
-        self._hess_tag = tag
+        self._hess_tag = combine_hessian_tags(hess_tag, reg_tag)
         self._hessian = self._penalize_hessian(hess_fn, hess_tag)
 
     def _penalize_hessian(self, hess_fn, model_tag):
