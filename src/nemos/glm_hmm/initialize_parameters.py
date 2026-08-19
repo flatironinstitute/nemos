@@ -105,7 +105,7 @@ def random_glm_params_init(
         X,
     )
     # mean-rate
-    intercept = initialize_intercept_matching_mean_rate(inverse_link_function, y)
+    intercept = initialize_intercept_matching_mean_rate(inverse_link_function, X, y)
     intercept = jnp.tile(intercept[:, jnp.newaxis], (1, n_states))
     if is_one_dim:
         coef = jax.tree_util.tree_map(lambda x: jnp.squeeze(x, axis=1), coef)

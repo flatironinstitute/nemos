@@ -346,7 +346,9 @@ class TestPoissonObservations:
         # Validate custom link function
         expected_output = jnp.sqrt(test_value)
         result = initialize_intercept_matching_mean_rate(
-            model.observation_model.inverse_link_function, test_value
+            model.observation_model.inverse_link_function,
+            jnp.zeros((test_value.shape[0], 1)),
+            test_value,
         )
 
         assert np.allclose(
@@ -1145,6 +1147,32 @@ def test_nemos_model_pass_check(observation):
             "GLM validator logic allows more flexibility."
         )
     nmo.observation_models.check_observation_model(obs, force_checks=True)
+
+
+@pytest.mark.parametrize(
+    "invalid_model",
+    [
+        1,
+        None,
+        "Poisson",
+        jnp.array([1.0, 2.0]),
+        nmo.regularizer.Ridge(),
+    ],
+)
+def test_not_an_observation_model(invalid_model):
+    """Test that objects implementing none of the required methods are reported as such."""
+    with pytest.raises(ValueError, match="Invalid observation model"):
+        nmo.observation_models.check_observation_model(invalid_model)
+
+
+def test_not_an_observation_model_message():
+    """Test that the error message lists the available models and links the docs."""
+    with pytest.raises(ValueError) as excinfo:
+        nmo.observation_models.check_observation_model(1)
+    message = str(excinfo.value)
+    assert "Invalid observation model: 1" in message
+    assert all(model in message for model in AVAILABLE_OBSERVATION_MODELS)
+    assert "https://nemos.readthedocs.io" in message
 
 
 @pytest.mark.parametrize(

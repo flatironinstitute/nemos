@@ -1599,8 +1599,13 @@ class GLMHMM(
         init_params: ModelParamsT,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
+        frozen_params: Optional[ModelParamsT] = None,
     ) -> SolverState:
-        """Initialize the optimizer and state of the model."""
+        """Initialize the optimizer and state of the model.
+
+        ``frozen_params`` is accepted for signature compatibility with the base
+        entry points but ignored: the GLM-HMM does not support parameter freezing.
+        """
         # glm params m-step setup
         is_population = y.ndim > 1
         m_step_update = prepare_mstep_update_fn(

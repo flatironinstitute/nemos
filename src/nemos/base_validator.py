@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Callable, Generic, List, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from numpy.typing import DTypeLike
 
 if TYPE_CHECKING:
@@ -199,6 +200,8 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         for par, exp_dim in zip(
             self.wrap_user_params(params), self.expected_param_dims
         ):
+            if par is None:
+                continue
             dim_match = pytree_map_and_reduce(lambda x: x.ndim == exp_dim, all, par)
             is_empty = pytree_map_and_reduce(lambda x: x.size == 0, all, par)
             if not dim_match or is_empty:
@@ -294,6 +297,81 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
             )
 
         return validated_params
+
+    def validate_param_specs(
+        self, params: Optional[UserProvidedParamsT]
+    ) -> ModelParamsT:
+        """
+        Validate a partial ("fix") parameter specification and cast to model params.
+
+        Unlike ``validate_and_cast_params``, ``None`` leaves are allowed: they mark
+        parameters that will be learned rather than fixed. A top-level ``None`` expands
+        to a model-params object with ``None`` for every parameter.
+
+        The structural, type, and dimensionality checks are shared across all
+        regressors; model-specific checks are added by overriding
+        ``additional_validation_param_specs``.
+
+        Parameters
+        ----------
+        params : UserProvidedParamsT or None
+            Partial parameter specification (arrays and/or ``None`` leaves), or
+            ``None`` to leave every parameter learnable.
+
+        Returns
+        -------
+        ModelParamsT
+            The validated specification as a model-parameter object.
+
+        Raises
+        ------
+        ValueError, TypeError
+            If any validation step fails.
+        """
+        if params is None:
+            return self.to_model_params([None] * len(self.expected_param_dims))
+
+        self.check_user_params_structure(params)
+        self.check_partial_params_specs_type(params)
+        params = self.convert_to_jax_arrays(params)
+        # reuse the ``check_array_dimensions`` kwargs configured for this validator
+        dim_kwargs = next(
+            (
+                kwargs
+                for name, kwargs in self.params_validation_sequence
+                if name == "check_array_dimensions"
+            ),
+            None,
+        )
+        self.check_array_dimensions(params, **(dim_kwargs or {}))
+        params = self.to_model_params(params)
+        return self.additional_validation_param_specs(params)
+
+    def additional_validation_param_specs(
+        self, params: ModelParamsT, **kwargs
+    ) -> ModelParamsT:
+        """
+        Additional validation for parameter specs.
+
+        Hook for model-specific validation of a partial parameter specification.
+
+        Called at the end of ``validate_param_specs`` on the cast model-parameter
+        object. The base implementation is a no-op; subclasses override it to add
+        checks that must tolerate ``None`` (unset) parameters.
+
+        Parameters
+        ----------
+        params : ModelParamsT
+            The cast model-parameter object (leaves may be ``None``).
+        **kwargs
+            Additional keyword arguments (unused in the base implementation).
+
+        Returns
+        -------
+        ModelParamsT
+            The validated parameters, unchanged by the base implementation.
+        """
+        return params
 
     def validate_inputs(
         self,
@@ -418,3 +496,29 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
     def get_empty_params(self, X, y) -> ModelParamsT:
         """Return the param shape given the input data."""
         pass
+
+    @staticmethod
+    def check_partial_params_specs_type(params: UserProvidedParamsT):
+        """Check parameter specs typing.
+
+        Flatten tree and check types of all non-None leaves.
+
+        Raises
+        ------
+        ValueError:
+            If parameter specs leaves have type other than array or None.
+        """
+        valid = all(
+            isinstance(p, (np.ndarray, jnp.ndarray))
+            for p in jax.tree_util.tree_leaves(params)
+        )
+        if not valid:
+            invalid_types = [
+                type(p)
+                for p in jax.tree_util.tree_leaves(params)
+                if not isinstance(p, (np.ndarray, jnp.ndarray))
+            ]
+            raise TypeError(
+                "Invalid parameter specification found. Parameters can be jax arrays, "
+                f"numpy arrays or None.\nFound invalid types: {invalid_types}"
+            )

@@ -581,7 +581,7 @@ class ComplexParam(Base):
             nmo.glm.GLM(inverse_link_function=deepcopy(jax.numpy.exp)),
             None,
             [],
-            "GLM(observation_model=PoissonObservations(), inverse_link_function=<PjitFunction>, regularizer=UnRegularized(), solver_name='LBFGS')",
+            "GLM(observation_model=PoissonObservations(), inverse_link_function=<PjitFunction>, regularizer=UnRegularized(), fit_intercept=True, solver_name='LBFGS')",
         ),
     ],
 )
@@ -667,6 +667,8 @@ def test_inspect_npz(tmp_path, model_class, monkeypatch, capsys):
     if hasattr(model_class, "feature_mask") or model_class == nmo.glm.PopulationGLM:
         lines.append("feature_mask           : None")
 
+    lines.append("fit_intercept          : True")
+    lines.append("fix_params             : (None, None)")
     lines += [
         "inverse_link_function  : jax.numpy.exp",
         "observation_model      : {'class': 'nemos.observation_models.PoissonObservations'}",

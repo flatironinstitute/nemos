@@ -67,6 +67,7 @@ dev = [
     "h5py",                         # For testing lazy array loading from HDF5 files
     "fsspec",
     "tqdm",
+    "pyyaml",                       # Parses notebook front matter in scripts/check_notebook_metadata.py
 ]
 docs = [
     "pynapple>=0.11",               # Required for nap.compute_event_triggered_average(...) in a tutorial
@@ -97,6 +98,7 @@ docs = [
     "patsy",
     "tqdm",
     "formulaic",                    # Design matrix constuction package, used in a doc note
+    "one-api"
 ]
 examples = [
     "scikit-learn",
@@ -154,10 +156,17 @@ filterwarnings = [
     'ignore:Tolerance of -?\d\.\d+e-\d\d reached:RuntimeWarning',
     # mpl must be non-interctive for testing otherwise doctests will freeze
     'ignore:FigureCanvasAgg is non-interactive, and thus cannot be shown:UserWarning',
+    # expected whenever a test pins every parameter; `pytest.warns` still sees it
+    'ignore:Every parameter is fixed:UserWarning',
 ]
 markers = [
   "solver_related: tests that interact with solvers",
   "requires_x64: mark test as requiring JAX float64 precision",
+  # Coverage guards: compare what the package registers/discovers against what the test
+  # parametrizations cover, so an uncovered component fails instead of passing silently.
+  # No fitting, so the whole set runs in about a second -- run it BEFORE writing tests
+  # (`pytest -m metatest -q`). Never exclude it from a run.
+  "metatest: coverage guard asserting the test suite covers every registered component",
 ]
 # -s: no capture from pytest (prints will show)
 addopts = ["-s", "--strict-markers"]
@@ -186,3 +195,16 @@ ignore = ["D202"]  # this conflicts with black
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
+
+
+[tool.jupytext]
+# Keep the writer's local jupytext version out of the myst-nb markdown notebooks,
+# so saving one from Jupyter Lab does not stamp it into the front matter and add
+# an unrelated change to the diff.
+#
+# The kernel display name is the other field Jupyter Lab rewrites, but it cannot
+# be filtered the same way: `kernelspec.display_name` is a required property of
+# the nbformat schema, so a notebook without it fails validation and jupytext can
+# no longer read the file. scripts/check_notebook_metadata.py enforces that one
+# instead.
+notebook_metadata_filter = "-jupytext.text_representation.jupytext_version"
