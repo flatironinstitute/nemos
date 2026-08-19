@@ -1004,3 +1004,49 @@ def test_combined_tag_carries_the_structure_and_the_first_batch_axes(s1, s2, tre
     assert GENERALITY[combined.structure] == max(GENERALITY[s1], GENERALITY[s2])
     assert combined.batch_axes == "model axes"
     assert combine_hessian_tags(right, left).batch_axes == "penalty axes"
+
+
+def zero_tag(tree):
+    """Build the tag of the zero matrix over ``tree``: flat on every leaf, definite on none.
+
+    This is what ``UnRegularized`` declares, since its penalty is identically zero.
+    """
+    return tag(
+        tree, prop=PSD, structure=MatrixStructure.DIAGONAL, flat_on=mask(tree, tree)
+    )
+
+
+def test_the_zero_tag_leaves_the_other_tag_alone(tree):
+    """Check adding a term that is zero everywhere changes none of the other tag's claims.
+
+    An unregularized model is exactly this case: the sum is the loss alone, so the combined
+    tag has to say what the loss's own normalized tag says and nothing weaker. A weaker
+    answer costs the Newton step its Cholesky whenever the loss is definite by itself.
+
+    The zero matrix is both positive and negative semidefinite and a tag carries one sign,
+    so this holds for every term that is not negatively signed; the other case is below.
+    """
+    zero = zero_tag(tree)
+    for t in realizable_tags(tree):
+        if is_negative_signed(t):
+            continue
+        expected = normalize(t)
+        combined = combine_hessian_tags(t, zero)
+        assert combined.property is expected.property
+        assert combined.structure is expected.structure
+        assert combined.flat_on == expected.flat_on
+        assert combined.definite_on == expected.definite_on
+
+
+def test_the_zero_tag_is_not_neutral_for_a_negative_term(tree):
+    """Check a negatively signed term loses its claims against the zero tag.
+
+    The sign the zero tag declares is positive, so the pair is not same-signed and
+    ``combine_definite_on`` keeps nothing. Every in-tree loss is minimized and so positively
+    signed, which is why the choice costs nothing; this pins it as a choice rather than an
+    oversight.
+    """
+    negative = tag(tree, prop=NSD, definite_on=mask(tree, tree))
+    combined = combine_hessian_tags(negative, zero_tag(tree))
+    assert combined.property is SYM
+    assert combined.definite_on == mask(tree)
