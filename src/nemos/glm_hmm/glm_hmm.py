@@ -1482,8 +1482,9 @@ class GLMHMM(
         opt_state: NamedTuple,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        session_starts: jnp.ndarray,
         *args,
+        session_starts: Optional[jnp.ndarray] = None,
+
         n_samples: Optional[int] = None,
         safe: bool = True,
         **kwargs,
