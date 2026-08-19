@@ -190,7 +190,7 @@ class Regularizer(Base, abc.ABC):
 
     # What this penalty's Hessian looks like, as far as the class can say. ``None`` for a
     # penalty whose curvature is not described at all, in which case no tag is produced and
-    # the solver goes by the model's tag alone. The per-leaf kind is what the penalty
+    # the solver claims nothing about the sum either. The per-leaf kind is what the penalty
     # contributes on the leaves it acts on, i.e. where the strength is strictly positive.
     _hess_property: MatrixProperty | None = None
     _hess_structure: MatrixStructure = MatrixStructure.FULL
@@ -559,7 +559,10 @@ class Regularizer(Base, abc.ABC):
         """Return a function computing the second derivative of the regularizer penalty.
 
         ``None`` when the regularizer describes no curvature (``_hess_property is None``):
-        its penalty is either identically zero or has no second derivative.
+        its penalty is either identically zero, so adding it would change nothing, or has no
+        second derivative at all. ``UnRegularized`` is the zero case: it returns ``None``
+        here and still resolves a tag in :meth:`_resolve_hess_tag`, since there is no matrix
+        to add but the zero matrix can be described.
 
         Parameters
         ----------
