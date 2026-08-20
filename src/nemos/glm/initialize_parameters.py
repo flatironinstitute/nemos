@@ -33,10 +33,15 @@ def _log_softmax_inv(x):
     return log_x - jnp.mean(log_x, axis=-1, keepdims=True)
 
 
+def _softplus_inv(x):
+    """Robust inverse of softplus, for small rates and above the exp overflow."""
+    return x + jnp.log(-jnp.expm1(-x))
+
+
 # dictionary of known inverse link functions.
 INVERSE_FUNCS = {
     exp: jnp.log,
-    softplus: lambda x: jnp.log(jnp.exp(x) - 1.0),
+    softplus: _softplus_inv,
     logistic: jax.scipy.special.logit,
     norm_cdf: jax.scipy.stats.norm.ppf,
     one_over_x: one_over_x,
@@ -47,7 +52,7 @@ INVERSE_FUNCS = {
 # Name-based lookup (for after pickling/copying)
 INVERSE_FUNCS_BY_SIMPLE_NAME = {
     "exp": jnp.log,
-    "softplus": lambda x: jnp.log(jnp.exp(x) - 1.0),
+    "softplus": _softplus_inv,
     "logistic": jax.scipy.special.logit,
     "norm_cdf": jax.scipy.stats.norm.ppf,
     "one_over_x": one_over_x,
