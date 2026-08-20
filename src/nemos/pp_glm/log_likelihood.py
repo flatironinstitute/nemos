@@ -1,3 +1,5 @@
+"""PP-GLM core log-likelihood computation."""
+
 from functools import partial
 from typing import Callable, Dict, Union
 
@@ -6,8 +8,8 @@ import jax.numpy as jnp
 from pynapple import IntervalSet
 
 from . import utils
+from .data import MCSamplePPGLM, PredictorsPPGLM, SpikesPPGLM
 from .params import GLMParams, PPGLMParamsWithKey
-from .data import PredictorsPPGLM, SpikesPPGLM, MCSamplePPGLM
 
 jax.config.update("jax_enable_x64", True)
 
@@ -54,8 +56,7 @@ def _draw_mc_sample(
     M_grid,
 ) -> MCSamplePPGLM:
     """
-    Draw stratified sample time points for Monte Carlo estimate
-    of the conditional intensity function.
+    Draw stratified sample time points for Monte Carlo estimate of the conditional intensity function.
 
     Adds uniform random jitter to the deterministic M_grid, then finds
     the corresponding indices into the event time array X.
@@ -159,8 +160,7 @@ def _scan_fn_mc_est(
     max_window: int,
 ):
     """
-    Scan body for accumulating firing rates at Monte Carlo sample points to compute
-    an estimate of the firing rate integral over the recording time.
+    Scan body for computing an estimate of the firing rate integral over the recording time.
 
     Intended to be partially applied over the static arguments before passing
     to jax.lax.scan via _log_likelihood_scan.
@@ -222,21 +222,20 @@ def _log_likelihood_scan(
     eval_function,
 ) -> jnp.ndarray:
     """
-    Compute the sum of log-firing rates (or firing rates) at a set of time points
-    using parallelized JAX scans over batches of events.
+    Compute the sum of log-firing rates (or firing rates) at a set of time points.
 
-    Iterates over time_points in y, selects the recent history events form X, evaluates
-    the linear combination of predictors via lam_tilde_function, and accumulates the (log-)firing
-    rates. Padding added by reshape_input_for_scan is subtracted out at the end.
+    Uses parallelized JAX scans over batches of events. Iterates over time_points in y, selects
+    the recent history events form X, evaluates the linear combination of predictors via lam_tilde_function,
+    and accumulates the (log-)firing rates. Padding added by reshape_input_for_scan is subtracted out at the end.
 
     Parameters
     ----------
     X :
         Preprocessed predictors with fields ``times`` (event timestamps) and ``predictor_ids``.
     eval_pts :
-        Observed spike time series with fields ``times`` (spike timestamps), ``neuron_ids``(postsynaptic neuron indices),
-        and ``timestamp_idx`` (indices into event times) or MC sample points with fields ``times`` (sampled timestamps) and
-        ``timestamp_idx``.
+        Observed spike time series with fields ``times`` (spike timestamps), ``neuron_ids``
+        (postsynaptic neuron indices), and ``timestamp_idx`` (indices into event times) or MC sample points
+        with fields ``times`` (sampled timestamps) and ``timestamp_idx``.
     params :
         GLMParams containing the basis coefficients and bias terms.
     scan_function :
@@ -248,7 +247,6 @@ def _log_likelihood_scan(
         Scalar sum of log-firing rates (or firing rates) over all eval points,
         with padding contribution subtracted.
     """
-
     weights, bias = params.coef, params.intercept
     weights = utils.reshape_coef_for_scan(weights, n_basis_funcs)
 
@@ -292,8 +290,7 @@ def _negative_log_likelihood(
     eval_function: Callable,
 ) -> jnp.ndarray:
     r"""
-    Compute the Poisson point process negative log-likelihood with a Monte Carlo
-    estimate of the conditional intensity function (CIF).
+    Compute the Poisson point process negative log-likelihood with a Monte Carlo estimate of the CIF integral.
 
     Evaluates:
 
@@ -337,7 +334,6 @@ def _negative_log_likelihood(
     :
         Scalar negative log-likelihood.
     """
-
     log_lambda_y = _log_likelihood_scan(
         X,
         y,
@@ -403,7 +399,6 @@ def _compute_loss(
     :
         The model negative log-likelihood. Shape (1,).
     """
-
     key = params_with_key.random_key.astype(jnp.uint32)
 
     new_key, _ = jax.random.split(key)

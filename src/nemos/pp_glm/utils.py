@@ -1,3 +1,5 @@
+"""PP-GLM core log-likelihood computation."""
+
 from functools import partial
 from typing import List, Optional, Tuple, Union
 
@@ -6,10 +8,10 @@ import jax.numpy as jnp
 import pynapple as nap
 from numpy.typing import ArrayLike
 
-from .data import PredictorsPPGLM, SpikesPPGLM, MCSamplePPGLM
+from .data import MCSamplePPGLM, PredictorsPPGLM, SpikesPPGLM
 
 
-### SCAN UTILS
+# SCAN UTILS
 @partial(jax.jit, static_argnums=2)
 def slice_array(array: jnp.ndarray, i: int, window_size: int):
     """
@@ -34,8 +36,7 @@ def slice_array(array: jnp.ndarray, i: int, window_size: int):
 
 def reshape_coef_for_scan(weights: jnp.ndarray, n_basis_funcs: int):
     """
-    Reshape weight array into (n_predictors, n_basis_funcs, n_neurons)
-    format expected by the scan loop.
+    Reshape weight array into (n_predictors, n_basis_funcs, n_neurons) format expected by the scan loop.
 
     Parameters
     ----------
@@ -64,8 +65,7 @@ def reshape_coef_for_scan(weights: jnp.ndarray, n_basis_funcs: int):
 @partial(jax.jit, static_argnums=1)
 def reshape_input_for_scan(data: SpikesPPGLM | MCSamplePPGLM, scan_size: int):
     """
-    Reshape time series into scan inputs of equal size. Pad the last input with copies of
-    the last time point if needed.
+    Reshape time series into scan inputs of equal size. Pad the last input with copies of the last time point if needed.
 
     Parameters
     ----------
@@ -98,8 +98,7 @@ def reshape_input_for_scan(data: SpikesPPGLM | MCSamplePPGLM, scan_size: int):
 
 def build_mc_sampling_grid(recording_time: nap.IntervalSet, M_samples: int):
     """
-    Build a stratified sampling grid of bin midpoints for Monte Carlo integration
-    of the conditional intensity function over the recording.
+    Build a stratified sampling grid for Monte Carlo integration.
 
     Subdivides each recording epoch into equal-width bins proportionally to its
     length and ensures the total grid size equals M_samples exactly.
@@ -130,7 +129,7 @@ def build_mc_sampling_grid(recording_time: nap.IntervalSet, M_samples: int):
     )
 
 
-### DATA PREPROCESSING UTILS
+# DATA PREPROCESSING UTILS
 @jax.jit
 def compute_max_window_size(
     bounds: Union[ArrayLike, List, Tuple],
@@ -138,8 +137,7 @@ def compute_max_window_size(
     event_times: jnp.ndarray,
 ):
     """
-    Pre-compute the maximum number of events that fall within the history window
-    across all reference spike times.
+    Pre-compute the maximum number of events that fall within the history window across all reference spike times.
 
     Parameters
     ----------
@@ -170,8 +168,7 @@ def adjust_indices_and_spike_times(
     y: Optional[SpikesPPGLM] = None,
 ) -> tuple[PredictorsPPGLM, Optional[SpikesPPGLM]]:
     """
-    Add padding to the events array so that history window selection near
-    the start of the recording never goes out of bounds.
+    Add padding to the events array so that the history window scan over never goes out of bounds.
 
     Adds max_window out-of-bound dummy events before the real event times
     and shifts indexing of y spikes to account for this offset (if provided).
@@ -196,7 +193,9 @@ def adjust_indices_and_spike_times(
     """
     shifted_X = PredictorsPPGLM(
         times=jnp.concatenate([jnp.full(max_window, -history_window - 1), X.times]),
-        predictor_ids=jnp.concatenate([jnp.zeros(max_window, dtype=jnp.int32), X.predictor_ids]),
+        predictor_ids=jnp.concatenate(
+            [jnp.zeros(max_window, dtype=jnp.int32), X.predictor_ids]
+        ),
     )
 
     shifted_y = None
