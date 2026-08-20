@@ -1207,6 +1207,27 @@ def test_linear_solver_follows_the_resolved_tag(
     _assert_linear_solver(_installed_newton(model, X, y), expected_cls)
 
 
+@pytest.mark.parametrize(
+    "fixture_name, regularizer_name, expected_cls", _LINEAR_SOLVER_CASES
+)
+def test_fit_resolves_the_same_linear_solver(
+    request, fixture_name, regularizer_name, expected_cls
+):
+    """``fit`` reaches the same linear solver as ``initialize_optimizer_and_state``.
+
+    The two differ only by ``_optimize_solver_params``, which sets solver kwargs and leaves
+    the tag alone.
+    """
+    X, y, model, *_ = request.getfixturevalue(fixture_name)
+    model.regularizer = regularizer_name
+    model.regularizer_strength = None if regularizer_name == "UnRegularized" else 0.1
+    model.solver_name = "Newton"
+
+    model.fit(X, y)
+
+    _assert_linear_solver(model._solver, expected_cls)
+
+
 @pytest.mark.requires_x64
 def test_newton_without_hessian_tag_uses_auto_linear_solver(linear_regression):
     """With no tag set, ``init_state`` falls back to one that claims nothing."""

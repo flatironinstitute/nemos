@@ -2017,6 +2017,22 @@ class TestHessianTag:
         expected = signed_property if convexity_preserving else MatrixProperty.SYMMETRIC
         assert model._solver._hess_tag.property is expected
 
+    def test_tag_follows_a_regularizer_change(self, poissonGLM_model_instantiation):
+        """Changing the regularizer drops the solver, so the next tag is the new one's."""
+        X, y, model, true_params, _ = poissonGLM_model_instantiation
+        self._configure(model, true_params, "none", "Ridge", exp)
+        params = model.initialize_params(X, y)
+
+        model.initialize_optimizer_and_state(params, X, y)
+        assert model._solver._hess_tag.property is MatrixProperty.POSITIVE_DEFINITE
+
+        model.regularizer = "UnRegularized"
+        model.regularizer_strength = None
+        model.initialize_optimizer_and_state(params, X, y)
+        assert (
+            model._solver._hess_tag.property is MatrixProperty.POSITIVE_SEMI_DEFINITE
+        )
+
     def test_zero_strength_claims_nothing(self, poissonGLM_model_instantiation):
         """A Ridge strength of zero curves no leaf, leaving the same tag as no penalty."""
         X, y, model, true_params, _ = poissonGLM_model_instantiation
