@@ -1915,12 +1915,14 @@ class TestHessianTag:
         ("intercept", "Ridge", MatrixProperty.POSITIVE_DEFINITE),
     ]
 
-    def _configure(self, model, true_params, freeze, regularizer_name, link):
+    def _configure(
+        self, model, true_params, freeze, regularizer_name, link, strength=0.1
+    ):
         """Pin the leaves named by ``freeze`` at their true values, and set up Newton."""
         model.inverse_link_function = link
         model.regularizer = regularizer_name
         model.regularizer_strength = (
-            None if regularizer_name == "UnRegularized" else 0.1
+            None if regularizer_name == "UnRegularized" else strength
         )
         model.solver_name = "Newton"
         if freeze == "coef_leaf":
@@ -2014,6 +2016,17 @@ class TestHessianTag:
 
         expected = signed_property if convexity_preserving else MatrixProperty.SYMMETRIC
         assert model._solver._hess_tag.property is expected
+
+    def test_zero_strength_claims_nothing(self, poissonGLM_model_instantiation):
+        """A Ridge strength of zero curves no leaf, leaving the same tag as no penalty."""
+        X, y, model, true_params, _ = poissonGLM_model_instantiation
+        self._configure(model, true_params, "none", "Ridge", exp, strength=0.0)
+
+        model.initialize_optimizer_and_state(model.initialize_params(X, y), X, y)
+
+        assert (
+            model._solver._hess_tag.property is MatrixProperty.POSITIVE_SEMI_DEFINITE
+        )
 
     @pytest.mark.parametrize("regularizer_name", ["UnRegularized", "Ridge"])
     def test_no_tag_when_every_parameter_is_pinned(
