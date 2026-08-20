@@ -874,6 +874,7 @@ class BaseRegressor(
         init_params: UserProvidedParamsT,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
+        **kwargs,
     ) -> SolverState:
         """Initialize the optimization routine and its state for running fit and update.
 
@@ -882,17 +883,19 @@ class BaseRegressor(
 
         Parameters
         ----------
-        X
+        init_params :
+            Initial parameter tuple of (coefficients, intercept).
+        X :
             Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
-        y
+        y :
             Target data, array of shape ``(n_time_bins,)`` for single neuron models or
             ``(n_time_bins, n_neurons)`` for population models.
-        init_params
-            Initial parameter tuple of (coefficients, intercept).
+        kwargs :
+            Additional keyword arguments for validation.
 
         Returns
         -------
-        state
+        state :
             Initial solver state.
 
         Raises
@@ -900,7 +903,7 @@ class BaseRegressor(
         ValueError
             If inputs or parameters have incompatible shapes or invalid values.
         """
-        self._validator.validate_inputs(X, y)
+        self._validator.validate_inputs(X=X, y=y, **kwargs)
         init_params = self._normalize_user_params(init_params, X, y)
         init_params = self._validator.validate_and_cast_params(init_params)
         self._validator.validate_consistency(init_params, X=X, y=y)

@@ -164,3 +164,4 @@ docs/api/generated/*
 
 # Benchmarking results copied from ceph
 benchmarking_results/
+/docs/generated
