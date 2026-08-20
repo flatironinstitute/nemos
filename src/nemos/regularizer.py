@@ -212,12 +212,9 @@ class Regularizer(Base, abc.ABC):
             then acts on the whole leaf; ``LeafClaim.FLAT`` when every entry is zero, since
             the penalty then has no curvature there at all; ``LeafClaim.UNCLAIMED`` when the
             entries are mixed, because the block is then neither zero nor definite and no
-            leaf-level claim describes it. A strength that is not concrete — a tracer, under
-            ``jit`` — also yields ``LeafClaim.UNCLAIMED``: the comparison has no answer at
-            the time the tag is read, and a claim we cannot check is one we do not make.
+            leaf-level claim describes it. Negative entries do not arise:
+            :meth:`_validate_strength` rejects them.
         """
-        if tree_utils.is_traced(strength_leaf):
-            return LeafClaim.UNCLAIMED
         strength_leaf = jnp.asarray(strength_leaf)
         if jnp.all(strength_leaf > 0):
             return self._hess_leaf_kind
@@ -379,9 +376,9 @@ class Regularizer(Base, abc.ABC):
     def _penalty_on_subtree(self, subtree, **kwargs) -> jnp.ndarray:
         pass
 
-    def _validate_strength(self, strength: Any):
+    def _convert_strength(self, strength: Any):
         """
-        Validate regularizer strength type.
+        Convert regularizer strength type.
 
         Parameters
         ----------
@@ -408,7 +405,7 @@ class Regularizer(Base, abc.ABC):
 
         Raises
         ------
-        ValueError
+        TypeError
             If conversion of array-like leaves to JAX arrays fails.
         """
         if strength is None:
@@ -436,6 +433,46 @@ class Regularizer(Base, abc.ABC):
             raise TypeError(
                 f"Could not convert regularizer strength to floats: {strength}"
             ) from e
+
+    def _validate_strength(self, strength: Any):
+        """
+        Convert a regularizer strength and check that it is non-negative.
+
+        A negative strength makes the penalty concave, which the regularizer classes have no
+        way to declare: they carry a positive semidefinite penalty Hessian, and a negative
+        entry would make that claim false. Zero is allowed, and spares the parameters the
+        strength applies to.
+
+        Parameters
+        ----------
+        strength : Any
+            Regularizer strength, in any of the forms :meth:`_convert_strength` accepts.
+
+        Returns
+        -------
+        Any
+            The converted strength, unchanged.
+
+        Raises
+        ------
+        TypeError
+            If conversion of array-like leaves to JAX arrays fails.
+        ValueError
+            If any entry of any leaf is negative. The reported path is the one inside the
+            strength as the user passed it; which parameters it will be matched against is
+            not known until :meth:`_validate_strength_structure`.
+        """
+        strength = self._convert_strength(strength)
+
+        def check_sign(path, leaf):
+            if jnp.any(jnp.asarray(leaf) < 0):
+                location = f" at {jax.tree_util.keystr(path)}" if path else ""
+                raise ValueError(
+                    f"Regularizer strength must be non-negative, got {leaf}{location}."
+                )
+            return leaf
+
+        return jax.tree_util.tree_map_with_path(check_sign, strength)
 
     def _validate_strength_structure(self, params: Any, strength: Any):
         """
@@ -833,7 +870,9 @@ class ElasticNet(Regularizer):
             strength, ratio = strength, 0.5
 
         strength = super()._validate_strength(strength)
-        ratio = super()._validate_strength(ratio)
+        # only converted, not sign checked: the ratio is not a strength, and ``check_ratio``
+        # below is the stricter statement about it
+        ratio = self._convert_strength(ratio)
 
         def check_ratio(r):
             if jnp.any((r <= 0) | (r > 1)):
