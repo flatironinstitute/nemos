@@ -13,7 +13,11 @@ import optax
 import pytest
 
 import nemos as nmo
-from conftest import all_subclasses, initialize_feature_mask_for_population_glm
+from conftest import (
+    all_subclasses,
+    freeze_first_coef_leaf,
+    initialize_feature_mask_for_population_glm,
+)
 from nemos._hess import (
     MatrixProperty,
     MatrixStructure,
@@ -221,23 +225,6 @@ def test_newton_glm_instantiate_solver(regularizer_name, glm_class):
     assert isinstance(solver, Newton)
 
 
-def _freeze_first_coef_leaf(model, params):
-    """Build a ``fix_params`` spec pinning the first ``coef`` leaf to its true value.
-
-    Freezing a coefficient leaf rather than the intercept is what exercises the
-    ``coef`` block of the Hessian: the intercept is a single row, so dropping it
-    leaves the interesting block untouched.
-    """
-    leaves, treedef = jax.tree_util.tree_flatten(params.coef)
-    spec = jax.tree_util.tree_unflatten(
-        treedef, [leaves[0]] + [None] * (len(leaves) - 1)
-    )
-    model.fix_params = (spec, None)
-    # read the spec back: the setter validates and casts it, so this is the value
-    # the frozen leaf is actually pinned to
-    return model.fix_params[0]
-
-
 @pytest.mark.requires_x64
 @pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
 @pytest.mark.parametrize(
@@ -266,7 +253,7 @@ def test_newton_matches_first_order_solver_with_frozen_params(
         if freeze == "intercept":
             m.fit_intercept = False
         else:
-            _freeze_first_coef_leaf(m, true_params)
+            freeze_first_coef_leaf(m, true_params)
         return m
 
     newton = build("Newton").fit(X, y)
@@ -302,7 +289,7 @@ def test_newton_leaves_frozen_params_untouched(
             frozen_model.intercept_, np.zeros_like(true_params.intercept)
         )
     else:
-        pinned = _freeze_first_coef_leaf(frozen_model, true_params)
+        pinned = freeze_first_coef_leaf(frozen_model, true_params)
         frozen_model.fit(X, y)
         fitted = jax.tree_util.tree_leaves(frozen_model.coef_)[0]
         np.testing.assert_array_equal(fitted, jax.tree_util.tree_leaves(pinned)[0])
@@ -353,7 +340,7 @@ def test_newton_population_glm_feature_mask_with_frozen_params(
         if freeze == "intercept":
             m.fit_intercept = False
         else:
-            _freeze_first_coef_leaf(m, true_params)
+            freeze_first_coef_leaf(m, true_params)
         return m
 
     newton = build("Newton").fit(X, y)
@@ -375,7 +362,7 @@ def test_population_glm_hess_fn_drops_frozen_leaves(freeze, request):
     if freeze == "intercept":
         model.fit_intercept = False
     else:
-        _freeze_first_coef_leaf(model, true_params)
+        freeze_first_coef_leaf(model, true_params)
 
     params = model._model_specific_initialization(X, y)
     active, frozen = model._partition_active(params)
@@ -1133,6 +1120,115 @@ def test_non_smooth_penalties_resolve_no_tag(regularizer_name):
     regularizer = getattr(nmo.regularizer, regularizer_name)()
     params = _init_params_for(GLM)
     assert regularizer._resolve_hess_tag(params, 0.1) is None
+
+
+def _installed_newton(model, X, y):
+    """Return the model's ``Newton``, after ``init_state`` picked the linear solver."""
+    model.initialize_optimizer_and_state(model.initialize_params(X, y), X, y)
+    return model._solver
+
+
+def _assert_linear_solver(solver, expected_cls):
+    """Assert the linear solver Newton picked, and the operator tags that go with it."""
+    assert isinstance(solver._linear_solver, expected_cls)
+    if expected_cls is lx.Cholesky:
+        assert (
+            solver._operator_tags == lx.positive_semidefinite_tag
+        ), f"Expected ``positive_semidefinite_tag`` for Cholesky solver. Got ``{solver._operator_tags}`` instead!"
+    else:
+        assert solver._operator_tags == ()
+        assert (
+            solver._linear_solver.well_posed is False
+        ), "Solver is well posed but shouldn't for the given tag."
+
+
+_LINEAR_SOLVER_CASES = [
+    pytest.param(fixture_name, regularizer_name, expected_cls, id=test_id)
+    for fixture_name, regularizer_name, expected_cls, test_id in [
+        ("poissonGLM_model_instantiation", "Ridge", lx.Cholesky, "GLM-Ridge"),
+        (
+            "population_poissonGLM_model_instantiation",
+            "Ridge",
+            lx.Cholesky,
+            "PopulationGLM-Ridge",
+        ),
+        (
+            "classifierGLM_model_instantiation",
+            "Ridge",
+            lx.AutoLinearSolver,
+            "ClassifierGLM-Ridge",
+        ),
+        (
+            "population_classifierGLM_model_instantiation",
+            "Ridge",
+            lx.AutoLinearSolver,
+            "ClassifierPopulationGLM-Ridge",
+        ),
+        (
+            "poissonGLM_model_instantiation",
+            "UnRegularized",
+            lx.AutoLinearSolver,
+            "GLM-UnRegularized",
+        ),
+        (
+            "population_poissonGLM_model_instantiation",
+            "UnRegularized",
+            lx.AutoLinearSolver,
+            "PopulationGLM-UnRegularized",
+        ),
+        (
+            "classifierGLM_model_instantiation",
+            "UnRegularized",
+            lx.AutoLinearSolver,
+            "ClassifierGLM-UnRegularized",
+        ),
+        (
+            "population_classifierGLM_model_instantiation",
+            "UnRegularized",
+            lx.AutoLinearSolver,
+            "ClassifierPopulationGLM-UnRegularized",
+        ),
+    ]
+]
+
+
+@pytest.mark.parametrize(
+    "fixture_name, regularizer_name, expected_cls", _LINEAR_SOLVER_CASES
+)
+def test_linear_solver_follows_the_resolved_tag(
+    request, fixture_name, regularizer_name, expected_cls
+):
+    """A definite tag selects ``lx.Cholesky``, a weaker one ``lx.AutoLinearSolver``."""
+    X, y, model, *_ = request.getfixturevalue(fixture_name)
+    model.regularizer = regularizer_name
+    model.regularizer_strength = None if regularizer_name == "UnRegularized" else 0.1
+    model.solver_name = "Newton"
+
+    _assert_linear_solver(_installed_newton(model, X, y), expected_cls)
+
+
+@pytest.mark.requires_x64
+def test_newton_without_hessian_tag_uses_auto_linear_solver(linear_regression):
+    """With no tag set, ``init_state`` falls back to one that claims nothing."""
+    X, y, _, params, loss = linear_regression
+
+    param_init = jax.tree_util.tree_map(np.zeros_like, params)
+    newton = Newton(
+        loss,
+        regularizer=UnRegularized(),
+        regularizer_strength=0.0,
+        has_aux=False,
+        init_params=param_init,
+    )
+    assert newton._hess_tag is None
+
+    newton.init_state(param_init, X, y)
+
+    assert newton._hess_tag.property is MatrixProperty.SYMMETRIC
+    assert newton._hess_tag.structure is MatrixStructure.FULL
+    assert not any(jax.tree_util.tree_leaves(newton._hess_tag.flat_on))
+    assert not any(jax.tree_util.tree_leaves(newton._hess_tag.definite_on))
+    _assert_linear_solver(newton, lx.AutoLinearSolver)
 
 
 @pytest.mark.parametrize(
