@@ -146,6 +146,48 @@ def test_ridge_certifies_the_leaves_its_penalty_reaches(
     )
 
 
+@pytest.mark.parametrize(
+    "strength, flat_on, definite_on",
+    [
+        pytest.param(
+            0.1,
+            GLMParams(coef=False, intercept=True),
+            GLMParams(coef=True, intercept=False),
+            id="positive-scalar",
+        ),
+        pytest.param(
+            jnp.array([1.0, 2.0, 3.0]),
+            GLMParams(coef=False, intercept=True),
+            GLMParams(coef=True, intercept=False),
+            id="positive-array",
+        ),
+        pytest.param(
+            0.0,
+            GLMParams(coef=True, intercept=True),
+            GLMParams(coef=False, intercept=False),
+            id="zero-scalar",
+        ),
+        pytest.param(
+            jnp.array([1.0, 0.0, 2.0]),
+            GLMParams(coef=False, intercept=True),
+            GLMParams(coef=False, intercept=False),
+            id="array-with-a-zero",
+        ),
+    ],
+)
+def test_ridge_claims_follow_the_strength(strength, flat_on, definite_on):
+    """A strictly positive strength curves the leaf, a zero one flattens it, a mix of the
+    two claims nothing."""
+    params = _dummy_instance(GLMParams)
+    tag = Ridge()._resolve_hess_tag(params, strength)
+    assert tag == HessianTag(
+        structure=MatrixStructure.DIAGONAL,
+        property=MatrixProperty.POSITIVE_SEMI_DEFINITE,
+        flat_on=flat_on,
+        definite_on=definite_on,
+    )
+
+
 def test_unregularized_resolves_the_zero_tag():
     """An unregularized penalty is identically zero: flat on every leaf, definite on none.
 
