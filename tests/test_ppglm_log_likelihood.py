@@ -7,7 +7,7 @@ from pynapple import IntervalSet
 from nemos.basis import RaisedCosineLogEval
 from nemos.glm.validation import to_glm_params
 from nemos.pp_glm import log_likelihood, utils
-from nemos.pp_glm.data import PredictorsPPGLM, SpikesPPGLM, MCSamplePPGLM
+from nemos.pp_glm.data import MCSamplePPGLM, PredictorsPPGLM, SpikesPPGLM
 from nemos.pp_glm.validation import to_pp_glm_params_with_key
 
 
@@ -60,8 +60,7 @@ def create_dataset(
     spike_ids = np.random.choice(np.arange(n_neurons), n_spikes)
 
     X = PredictorsPPGLM(
-        times=jnp.asarray(spike_times),
-        predictor_ids=jnp.asarray(spike_ids, dtype=int)
+        times=jnp.asarray(spike_times), predictor_ids=jnp.asarray(spike_ids, dtype=int)
     )
 
     y = SpikesPPGLM(
@@ -119,8 +118,7 @@ def create_dataset_single_spike(
     spike_ids = jnp.array([0]).astype(int)
 
     X = PredictorsPPGLM(
-        times=jnp.asarray(spike_times),
-        predictor_ids=jnp.asarray(spike_ids, dtype=int)
+        times=jnp.asarray(spike_times), predictor_ids=jnp.asarray(spike_ids, dtype=int)
     )
 
     y = SpikesPPGLM(
@@ -182,7 +180,9 @@ class TestUtils:
     def test_reshape_input_for_scan(self):
         """Test that reshaping works properly and that padding length and value are correct"""
         # when divisible, padding length is 0
-        times = MCSamplePPGLM(times=jnp.ones(8), timestamp_idx=jnp.arange(8).astype(int))
+        times = MCSamplePPGLM(
+            times=jnp.ones(8), timestamp_idx=jnp.arange(8).astype(int)
+        )
 
         reshaped, pad_val, pad_len = utils.reshape_input_for_scan(times, scan_size=2)
         jax.tree_util.tree_map(
@@ -194,7 +194,9 @@ class TestUtils:
         assert pad_len == 0
 
         # when not divisible, padding fills to next multiple
-        times = MCSamplePPGLM(times=jnp.ones(9), timestamp_idx=jnp.arange(9).astype(int))
+        times = MCSamplePPGLM(
+            times=jnp.ones(9), timestamp_idx=jnp.arange(9).astype(int)
+        )
         reshaped, pad_val, pad_len = utils.reshape_input_for_scan(times, scan_size=2)
         jax.tree_util.tree_map(
             lambda arr: np.testing.assert_array_equal(
@@ -205,7 +207,9 @@ class TestUtils:
         assert pad_len == 1
 
         # test that padding is the last value and that it's consistent
-        times = MCSamplePPGLM(times=jnp.ones(4), timestamp_idx=jnp.arange(4).astype(int))
+        times = MCSamplePPGLM(
+            times=jnp.ones(4), timestamp_idx=jnp.arange(4).astype(int)
+        )
         reshaped, pad_val, pad_len = utils.reshape_input_for_scan(times, scan_size=3)
         # check padding is filled with last value
         jax.tree_util.tree_map(
@@ -405,7 +409,7 @@ class TestLogLikelihood:
         max_window = dataset["max_window"]
         eval_function = dataset["eval_function"]
 
-        ## first ll term
+        # first ll term
         # jax lax scan + vmap for a single postsynaptic neuron
         log_lam_y_scan = log_likelihood._log_likelihood_scan(
             X,
@@ -441,7 +445,7 @@ class TestLogLikelihood:
 
         np.testing.assert_almost_equal(log_lam_y_scan, log_lam_y_loop)
 
-        ## second ll term
+        # second ll term
         # uses the same random key as _negative_log_likelihood below
         mc_samples = log_likelihood._draw_mc_sample(
             X,
@@ -481,7 +485,7 @@ class TestLogLikelihood:
 
         np.testing.assert_almost_equal(mc_est_scan, mc_est_loop)
 
-        ## full nll computation
+        # full nll computation
         loss_scan = log_likelihood._negative_log_likelihood(
             params_with_key.params,
             X,
