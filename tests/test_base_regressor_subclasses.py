@@ -15,8 +15,7 @@ from numba import njit
 import nemos as nmo
 
 # Import helpers from conftest
-from conftest import MockRegressor, is_population_model
-from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
+from conftest import OBSERVATION_PER_MODEL, MockRegressor, is_population_model
 from nemos.glm.validation import (
     ClassifierGLMValidator,
     GLMValidator,
@@ -120,14 +119,6 @@ HARD_CODED_GET_PARAMS_KEYS = {
         "solver_name",
         "tol",
     },
-}
-
-OBSERVATION_PER_MODEL = {
-    "GLM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
-    "ClassifierGLM": ["Categorical"],
-    "ClassifierPopulationGLM": ["Categorical"],
-    "PopulationGLM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
-    "GLMHMM": ["Bernoulli"],
 }
 
 MODEL_WITH_LINK_FUNCTION_REGISTRY = {
