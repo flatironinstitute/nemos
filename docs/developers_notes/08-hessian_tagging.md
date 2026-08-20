@@ -5,7 +5,7 @@
 
 A Newton step solves `H d = -g`, and how that linear system is best solved depends on what is known about `H` beforehand. A Cholesky factorization is the cheapest option but needs a positive definite matrix and fails on a singular one. A pseudo-inverse handles a singular matrix but costs more. A diagonal Hessian can be solved in time linear in the number of parameters. And if `H` has no sign guarantee at all, `-H^{-1} g` need not even point downhill, in which case a Newton step is the wrong thing to take and a first-order or quasi-Newton solver is a better choice.
 
-None of this can be read off the matrix at run time without paying for the very factorization the choice is meant to avoid, and under `jit` a failed Cholesky cannot be caught and retried. So the information is carried alongside the Hessian instead, as a [`HessianTag`](nemos.solvers._hess.HessianTag) that each model and each regularizer declares about the term it contributes. The tags are combined when the terms are added, and the result picks the linear solver.
+Checking any of this at run time means factorizing the matrix, which costs as much as the Newton solve itself. Under `jit` a failed Cholesky cannot be caught and retried either. So the information is carried alongside the Hessian instead, as a [`HessianTag`](nemos._hess.HessianTag) that each model and each regularizer declares about the term it contributes. The tags are combined when the terms are added, and the result picks the linear solver.
 
 What the tag has to distinguish follows from what the decisions turn on:
 
@@ -17,12 +17,12 @@ What the tag has to distinguish follows from what the decisions turn on:
 | one factorization per neuron | whether `H` is block diagonal, one block per neuron                               |
 
 
-This note derives a tagging system that requires only structural properties of a (symmetric) hessian matrices and a decision rule that assigns a coherent sign (none, PSD or PD) to the sum of the hessians based exclusively on their tags. The discussion will proceed as follows:
+This note derives a tagging system that requires only structural properties of a symmetric hessian matrix, and a decision rule that assigns a coherent sign (none, PSD or PD) to the sum of the hessians based exclusively on their tags. The discussion will proceed as follows:
 
-1. We will proof that no tag-based rule can be complete: the sum of two matrices with identical spectrum can differ in sign.
-2. We will propose a sound tagging system based on: - the guaranteed sign of the hessian (example: a GLM with canonical link is guaranteed PSD) - the largest PD principal block of the hessian (could be empty or the whole hessian) - the largest flat principal block. Here blocks corresponding to union of parameter leaves.
+1. We will prove that no tag-based rule can be complete: the sum of two matrices with identical spectrum can differ in sign.
+2. We will propose a sound tagging system based on: the guaranteed sign of the hessian (example: a GLM with canonical link is guaranteed PSD); the largest PD principal block of the hessian (could be empty or the whole hessian); the largest flat principal block. Here a block corresponds to a union of parameter leaves.
 3. We will derive an optimal, sound rule for the chosen tagging system.
-4. We will discuss why the proposed tagging system has the desired granularity (leaf based), and why any finer tags  would require (at least for GLMs) computationally heavy characterizations of the design matrix.
+4. We will discuss why the proposed tagging system has the desired granularity (leaf based), and why any finer tag would require (at least for GLMs) computationally heavy characterizations of the design matrix.
 
 ## Problem Setting: combining two Hessians
 
@@ -159,11 +159,11 @@ A complete $R$ would satisfy $R(\tau(A), \tau(B)) = \sigma(A + B) = {\succ}\,0$ 
 
 The hypothesis $N \ge 2$ is sharp. For $N = 1$ every $H = (h)$ has $\tau(H)$ recording $\operatorname{spec} H[S] = (h)$ on the leaf holding that coordinate, so $\tau$ is injective and $R\big(\tau(h_1), \tau(h_2)\big) = \sigma(h_1 + h_2)$ is a well defined complete rule.
 
-The two configurations differ only in the relative position of the two null spaces, $\operatorname{span}\{u\}$ against $\operatorname{span}\{v\}$, and no description built from sets of leaves records that. Recovering it means locating null spaces, which is spectral information and costs the factorization the description exists to avoid.
+The two configurations differ only in the relative position of the two null spaces, $\operatorname{span}\{u\}$ against $\operatorname{span}\{v\}$, and no description built from sets of leaves records that. Recovering it means locating null spaces. That is spectral information, and computing it costs a factorization of the same order as the Newton solve.
 
-What Theorem 1 rules out is a complete rule: no map from two descriptions to a sign returns $\sigma(H_1 + H_2)$ in every case. A sound rule remains available, one whose answer is always true of the sum and sometimes weaker than the truth. The rest of this note constructs one that reads only structural properties of the two terms and holds at every $\beta$.
+What Theorem 1 rules out is a complete rule: no map from two descriptions to a sign returns $\sigma(H_1 + H_2)$ in every case. A sound rule is still possible. Its answer is always true of the sum, and sometimes weaker than the truth. The rest of this note builds one that reads only structural properties of the two terms and holds at every $\beta$.
 
-The two ways of being wrong differ in cost. Declining to certify a matrix that is definite gives a slower linear solve. Certifying one that is not gives a wrong step or a NaN, silently and under `jit`.
+The two mistakes do not cost the same. Refusing to certify a matrix that is definite only makes the linear solve slower. Certifying one that is not gives a wrong step or a NaN, silently and under `jit`.
 
 ## Assumptions the tagging system rests on
 
@@ -254,7 +254,7 @@ $$H = \begin{pmatrix} 0 & 1 \\ 1 & 0 \end{pmatrix},$$
 
 which is symmetric with eigenvalues $\pm 1$, so $H \not\succeq 0$. Its block on the first leaf vanishes, $H[\{1\}] = 0$, so that leaf is flat and $V_F = \operatorname{span}\{e_1\}$. But $H e_1 = e_2 \neq 0$, so $e_1 \notin \operatorname{null}(H)$ and $V_F \not\subseteq \operatorname{null}(H)$.
 
-So a tag is never wrong about the null space, and is strictly weaker than the truth whenever the null space cuts across a leaf.
+So a tag never claims more about the null space than is true. It is weaker than the truth when the null space cuts across a leaf.
 
 That is what a mixed strength array does. Ridge has one term per coordinate, $p_\lambda(\beta) = \tfrac{1}{2}\sum_j \lambda_j \beta_j^2$ with $\nabla^2 p_\lambda = \operatorname{diag}(\lambda)$, so a leaf's block is zero when every $\lambda_j$ on it is zero, positive definite when every $\lambda_j$ is strictly positive, and singular without being zero when they are mixed. Take coefficients on one leaf of three with $\lambda = (0, 2, 0)$ and an unpenalized intercept: $\operatorname{null}(\nabla^2 p_\lambda)$ has dimension three, while the only leaf that can be recorded as flat is the intercept, so $V_F$ has dimension one. The containment is strict, and no set of leaves names the missing directions. A uniformly positive array behaves exactly like a positive scalar, and a negative one is excluded by Assumption 3, so the mixed case is the only one where anything is lost.
 
@@ -283,7 +283,7 @@ A tag is *realizable* if $H \models t$ for some $H$, and *covering* if $F \cup D
 
 :::
 
-A tag is declared, not computed. Many matrices satisfy the same tag, and one matrix satisfies many tags — `none` with $F = D = \varnothing$ is satisfied by everything — so the field $\sigma$ need not be the strongest true sign, and $F, D$ need not be the largest sets available. Under-claiming is always permitted; that is what makes a tag something a model can declare without inspecting its own Hessian.
+A tag is declared by the object that contributes the term; nothing computes it from the matrix. Many matrices satisfy the same tag, and one matrix satisfies many tags: `none` with $F = D = \varnothing$ is satisfied by everything. So the field $\sigma$ need not be the strongest true sign, and $F, D$ need not be the largest sets available. Under-claiming is always allowed, which is why a model can declare a tag without inspecting its own Hessian.
 
 :::{admonition} Proposition 2 (satisfaction is determined by the block spectra)
 :class: important
@@ -309,7 +309,7 @@ Each right-hand side depends on $H$ only through $\tau(H)$, so equal description
 
 So a tag is a coarsening of $\tau$: whatever $\tau$ cannot separate, no tag separates either. In particular the two matrices $A$ and $B$ built in the proof of Theorem 1 satisfy exactly the same tags, while $A + B \succ 0$ and $A + A$ is singular. Any tagging scheme that assigns tags on the basis of block spectra therefore inherits the ceiling: it hands the same pair of tags to two configurations whose sums differ in sign.
 
-What the three fields are for, in terms of the null space that Theorem 1 identified as the thing at issue. $\sigma$ answers the first two rows of the decision table on its own. $F$ bounds the null space from below, $V_F \subseteq \operatorname{null}(H)$ when $H \succeq 0$, which is Proposition 1. $D$ bounds it from the other side, $V_D \cap \operatorname{null}(H) = \{0\}$. Separately each is only a bound; a covering tag turns them into an equality.
+Here is what the three fields do, stated in terms of the null space that Theorem 1 showed to be the difficulty. $\sigma$ answers the first two rows of the decision table by itself. $F$ bounds the null space from below: $V_F \subseteq \operatorname{null}(H)$ when $H \succeq 0$, which is Proposition 1. $D$ bounds it from above: $V_D \cap \operatorname{null}(H) = \{0\}$. Each is only a bound on its own. A covering tag turns the pair into an equality.
 
 :::{admonition} Corollary 1 (a covering tag pins the null space)
 :class: important
@@ -413,13 +413,13 @@ As $v$ ranges over the non-zero vectors of $V_D$, its restriction $v[D]$ ranges 
 
 :::
 
-Two consequences. A realizable covering tag has $F$ and $D$ partitioning the leaves, being disjoint and covering.
+Two consequences. In a realizable covering tag, $F$ and $D$ partition the leaves: condition (i) makes them disjoint, and covering means their union is everything.
 
 And nothing constrains $D$ against $\sigma$. Take $t = ({\succeq}\,0, \varnothing, \{1, \dots, n\})$. It is realizable, since $I \models t$. It is also covering, so Corollary 1 applies to every $H \models t$ and gives $\operatorname{null}(H) = V_\varnothing = \{0\}$; together with $H \succeq 0$ that makes $H$ positive definite. So $t$ is satisfied by exactly the positive definite matrices while claiming only ${\succeq}\,0$. That is under-claiming, not inconsistency — a tag states what its declarer is prepared to guarantee, not the strongest truth available.
 
 ## Normalizing a tag
 
-Two tags with the same satisfying set are interchangeable: $R^*$ is defined by quantifying over the matrices that satisfy each argument, so it cannot tell them apart. Two declarations are weaker than they need to be, and both can be strengthened without changing what they describe.
+Two tags with the same satisfying set are interchangeable, because $R^*$ is defined by quantifying over the matrices that satisfy each argument and so cannot tell them apart. Two kinds of declaration are weaker than they need to be, and each can be strengthened without changing the matrices it describes.
 
 :::{admonition} Definition (normalization)
 :class: note
@@ -462,7 +462,7 @@ The third branch sets $\mathrm{nf}(t) = t$ and needs no argument. The statement 
 
 :::
 
-Both rewrites strengthen an under-claiming declaration using a fact the tag already implies, which is what makes them free. A model may declare `none` and be handed a positive definite matrix by the normalizer, on the strength of its own $D$.
+Both rewrites replace an under-claiming declaration with a stronger one that the tag already implies, so neither adds information the tag did not have. A model may declare `none` and get a positive definite tag back from the normalizer, because of its own $D$.
 
 ## Combining two tags: the rule, and why it is sound
 
@@ -591,7 +591,7 @@ No coupling between leaves means $H[S] = \bigoplus_{i \in S} H[\{i\}]$ for every
 
 :::
 
-So for any term satisfying Assumption 2, the single set $D$ can be taken to be the greatest element of $\mathcal{D}(H)$, and it then carries exactly as much as the family. This is not a statement about the regularizers nemos has today. Any penalty that is a strength-weighted sum over leaves has the property, whatever its shape otherwise, and the refinement would buy nothing for it.
+So for any term satisfying Assumption 2, the single set $D$ can be taken to be the greatest element of $\mathcal{D}(H)$, and it then carries exactly as much as the family. This holds for more than the regularizers nemos has today: any penalty that is a strength-weighted sum over leaves has the property, whatever its shape, so the refinement would buy nothing for it.
 
 ### For a model the refinement is possible, and is what we are avoiding
 
@@ -613,7 +613,7 @@ Nor could the information arrive from elsewhere. A model receives $X$ as an arra
 
 What remains derivable before looking at any array is exactly what the class-level tag carries: the Hessian is positive semidefinite, from convexity of the link, and it is definite on the intercept, because $\mathbf{1}^\top W \mathbf{1} = \sum_t w_t(\beta) > 0$ is a sum of non-negative terms and needs no factorization. Every other entry of $\mathcal{D}$ is a rank question about the data.
 
-So the refinement is real mathematics and the wrong trade here: lossless for penalties by Proposition 6, and for models purchasable only at the price the whole system exists to avoid.
+The refinement is sound mathematics, and this note does not adopt it. For penalties, Proposition 6 shows the single set already carries everything the family carries, so a finer tag would say no more. For models, the extra information can only be obtained by computing a factorization, which is $O(d^3)$, the same order as the Newton solve the tag selects a method for.
 
 ### The ridge-penalized GLM, end to end
 
@@ -639,3 +639,26 @@ Say $H$ is *block diagonal with respect to a partition $\mathcal{P}$ of the coor
 Two cases are easy, because the diagonal partition refines every other: diagonal plus diagonal is diagonal, and diagonal plus block diagonal is block diagonal with the same partition. The third is not. With $\mathcal{P}_1 = \{\{1,2\},\{3,4\}\}$ and $\mathcal{P}_2 = \{\{1\},\{2,3\},\{4\}\}$ the join is the single block $\{1,2,3,4\}$: the sum is tridiagonal and has no non-trivial block structure at all.
 
 In nemos the case that arises is narrower. Block structure only ever comes from vmapping over a batch axis, so the partition is that axis by construction and is the same for the model term and the penalty term: $\mathcal{P}_1 = \mathcal{P}_2$, and the join is that partition again. Under that hypothesis the ordering `Diagonal` $<$ `BlockDiagonal` $<$ `Full`, combined by taking the larger, is correct. Without it, two block diagonal terms can sum to something the ordering would call `BlockDiagonal` and that is in fact `Full`.
+
+## Where each piece lives
+
+Everything in the table is in `src/nemos/_hess.py` unless another module is named.
+
+| in this note | in the code |
+| --- | --- |
+| $\sigma \in \Sigma$ | `MatrixProperty`, where $\text{none}$ is spelled `SYMMETRIC` |
+| $F$, $D$ | `HessianTag.flat_on`, `HessianTag.definite_on`: trees shaped like the parameters holding one boolean per leaf, so a set of leaves is a mask and the set operations of the combination rule are `tree_map` |
+| the per-leaf verdict the two sets are read off | `LeafClaim.FLAT`, `LeafClaim.DEFINITE`, `LeafClaim.UNCLAIMED`, one per leaf, split into the two masks by `mask_of_claim` |
+| $\sigma_\ell$ | `BaseRegressor._resolve_hess_property`, overridden by `GLM` to look the inverse link up in the observation model's convexity-preserving list |
+| $D_\ell$ | `BaseRegressor._hess_leaf_claims`, where `GLM` claims the intercept and the classifiers claim nothing |
+| $t_p$ | `Regularizer._resolve_hess_tag`, with `_leaf_claim` turning the strength on one leaf into that leaf's claim |
+| the normalizing map | `normalize` |
+| $R^*$ | `combine_hessian_tags`, which is `combine_property` applied over `combine_definite_on` |
+| the structure ordering | `MatrixStructure`, an `IntEnum` whose value is how general the structure is, so "take the larger" is `max` |
+| the decision the tag is for | `Newton.init_state` in `nemos/solvers/_newton.py`: `POSITIVE_DEFINITE` selects `lx.Cholesky` and tags the operator semidefinite, anything weaker selects `lx.AutoLinearSolver(well_posed=False)` |
+
+The tag is built when the solver is set up, in `BaseRegressor._instantiate_solver`, against the parameters actually being fitted. A parameter held fixed is `None` in that tree, and every `tree_map` above drops it together with whatever was claimed about it. A claim about a pinned leaf therefore disappears with the leaf; it does not become an unclaimed leaf.
+
+Two places where the code carries more than the derivation above needs. `MatrixProperty` also has `NEGATIVE_SEMI_DEFINITE` and `NEGATIVE_DEFINITE`, handled by the $-H$ symmetry the definition of $\Sigma$ already invokes; no loss or penalty in the package declares one. And a leaf carries `UNCLAIMED` rather than being absent from both masks, which is the same statement as lying in neither $F$ nor $D$, with the enum making it impossible to claim a leaf both flat and definite.
+
+Assumption 3 is enforced rather than assumed: `Regularizer._validate_strength` rejects a negative strength leaf by leaf, so `_leaf_claim` only ever compares non-negative entries.
