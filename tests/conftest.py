@@ -33,7 +33,13 @@ import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
 from nemos.base_regressor import BaseRegressor
 from nemos.base_validator import RegressorValidator
-from nemos.basis import AdditiveBasis, Category, CustomBasis, MultiplicativeBasis, Zero
+from nemos.basis import (
+    AdditiveBasis,
+    Category,
+    CustomBasis,
+    MultiplicativeBasis,
+    Zero,
+)
 from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import (
     AtomicBasisMixin,
@@ -320,6 +326,32 @@ DEFAULT_KWARGS = {
     "categories": 4,
 }
 
+# Per-class overrides, for signatures the shared table cannot express. Applied on top of
+# DEFAULT_KWARGS and then filtered to the names the class accepts.
+CLASS_DEFAULT_KWARGS = {
+    # bounds is mandatory here but optional for nine other classes, so it cannot be shared.
+    # lengthscale/eps are picked for a small derived width (5 features, matching
+    # n_basis_funcs elsewhere) rather than for the approximation accuracy TestFourierGP wants.
+    "FourierGP": {
+        "bounds": (0.0, 1.0),
+        "lengthscale": 1.0,
+        "eps": 0.3,
+        "variance": 1.0,
+    },
+}
+
+
+def default_kwargs_for(basis_cls, **overrides) -> dict:
+    """Constructor arguments for any basis: shared table, class overrides, then filtered."""
+    kwargs = {
+        **DEFAULT_KWARGS,
+        **CLASS_DEFAULT_KWARGS.get(basis_cls.__name__, {}),
+        **overrides,
+    }
+    accepted = set(basis_cls._get_param_names())
+    return {k: v for k, v in kwargs.items() if k in accepted}
+
+
 # shut-off conversion warnings
 nap.nap_config.suppress_conversion_warnings = True
 
@@ -454,6 +486,9 @@ class CombinedBasis(BasisFuncsTesting):
         # Merge with provided  extra kwargs
         kwargs = {**default_kwargs, **kwargs}
 
+        # per-class overrides for signatures the shared table cannot express
+        kwargs = {**CLASS_DEFAULT_KWARGS.get(basis_class.__name__, {}), **kwargs}
+
         if basis_class == AdditiveBasis:
             kwargs_mspline = inspect_utils.trim_kwargs(
                 basis.MSplineEval, kwargs, class_specific_params
@@ -492,7 +527,8 @@ def is_eval_basis(basis_cls) -> bool:
     The mixin is the criterion: it is what actually gives the class its ``Eval`` behaviour,
     so it classifies correctly regardless of naming. The name suffix is kept as a fallback
     for classes that implement the behaviour without the mixin, such as test doubles.
-    ``Zero`` and ``Category`` need no special case -- both carry ``EvalBasisMixin``.
+    ``Zero``, ``Category`` and ``FourierGP`` need no special case -- all carry
+    ``EvalBasisMixin``.
     """
     return issubclass(basis_cls, EvalBasisMixin) or basis_cls.__name__.endswith("Eval")
 
