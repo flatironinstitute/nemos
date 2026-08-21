@@ -27,7 +27,7 @@ from nemos.solvers._hess import (
     PositiveDefinite,
     PositiveSemiDefinite,
 )
-from nemos.solvers._newton_cholesky import NewtonCholesky, NewtonState
+from nemos.solvers._newton import Newton, NewtonState
 from nemos.tree_utils import pytree_map_and_reduce
 
 # Import every submodule so all BaseRegressor subclasses are registered before the
@@ -40,13 +40,13 @@ pytestmark = pytest.mark.solver_related
 
 
 def _newton_regularizers():
-    """Auto-discover every regularizer that advertises NewtonCholesky as an allowed solver.
+    """Auto-discover every regularizer that advertises Newton as an allowed solver.
 
     The block-diagonal Hessian equals the full Hessian's diagonal blocks only if the
     penalty is additive (so the Hessian factorizes into loss + penalty terms). Additivity
     is currently baked into ``Regularizer.penalized_loss``; parametrizing over the
-    discovered set means a future NewtonCholesky-eligible regularizer that breaks additivity is
-    caught here instead of silently mis-regularizing the NewtonCholesky step.
+    discovered set means a future Newton-eligible regularizer that breaks additivity is
+    caught here instead of silently mis-regularizing the Newton step.
     """
 
     return sorted(
@@ -54,7 +54,7 @@ def _newton_regularizers():
             cls
             for cls in all_subclasses(Regularizer)
             if cls.__module__.startswith("nemos")
-            and "NewtonCholesky" in getattr(cls, "_allowed_solvers", ())
+            and "Newton" in getattr(cls, "_allowed_solvers", ())
         ),
         key=lambda cls: cls.__name__,
     )
@@ -146,7 +146,7 @@ def test_newton_linear_or_ridge_regression(request, regr_setup):
     X, y, _, params, loss = request.getfixturevalue(regr_setup)
 
     param_init = jax.tree_util.tree_map(np.zeros_like, params)
-    newton_params, state, _ = NewtonCholesky(
+    newton_params, state, _ = Newton(
         loss,
         regularizer=UnRegularized(),
         regularizer_strength=0.0,
@@ -176,7 +176,7 @@ def test_newton_init_state_default(request, regr_setup, regularizer):
     X, y, _, params, loss = request.getfixturevalue(regr_setup)
 
     param_init = jax.tree_util.tree_map(np.zeros_like, params)
-    newton = NewtonCholesky(
+    newton = Newton(
         loss,
         regularizer=regularizer,
         regularizer_strength=0.5,
@@ -202,14 +202,14 @@ def test_newton_init_state_default(request, regr_setup, regularizer):
 def test_newton_glm_instantiate_solver(regularizer_name, glm_class):
     glm = glm_class(
         regularizer=regularizer_name,
-        solver_name="NewtonCholesky",
+        solver_name="Newton",
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
     )
     solver = glm._instantiate_solver(glm._compute_loss, np.zeros(1))
 
     # currently glm._solver is a Wrapped(Prox)SVRG
-    assert glm.solver_name == "NewtonCholesky"
-    assert isinstance(solver, NewtonCholesky)
+    assert glm.solver_name == "Newton"
+    assert isinstance(solver, Newton)
 
 
 @pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
@@ -231,7 +231,7 @@ def test_newton_glm_passes_solver_kwargs(regularizer_name, glm_class):
 
     glm = glm_class(
         regularizer=regularizer_name,
-        solver_name="NewtonCholesky",
+        solver_name="Newton",
         solver_kwargs=solver_kwargs,
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
     )
@@ -254,7 +254,7 @@ def test_newton_glm_initialize_state(glm_class, regularizer_name, linear_regress
 
     glm = glm_class(
         regularizer=reg,
-        solver_name="NewtonCholesky",
+        solver_name="Newton",
         inverse_link_function=jax.nn.softplus,
         observation_model=nmo.observation_models.PoissonObservations(),
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
@@ -278,12 +278,12 @@ def test_newton_glm_initialize_state(glm_class, regularizer_name, linear_regress
 @pytest.mark.parametrize("regularizer_cls", _newton_regularizers())
 @pytest.mark.parametrize("structure", ["", "_pytree"])
 def test_newton_glm_converges(request, regularizer_cls, structure):
-    """NewtonCholesky-fitted GLM should converge and return finite parameters."""
+    """Newton-fitted GLM should converge and return finite parameters."""
     X, y, model, _, _ = request.getfixturevalue(
         "poissonGLM_model_instantiation" + structure
     )
     model.regularizer = regularizer_cls()
-    model.solver_name = "NewtonCholesky"
+    model.solver_name = "Newton"
     model.regularizer_strength = 1e-3
     model = model.fit(X, y)
 
@@ -296,7 +296,7 @@ def test_newton_glm_converges(request, regularizer_cls, structure):
 @pytest.mark.parametrize("regularizer_cls", _newton_regularizers())
 @pytest.mark.parametrize("feature_mask", [True, False])
 def test_newton_population_glm_converges(request, regularizer_cls, feature_mask):
-    """NewtonCholesky-fitted PopulationGLM should converge and return finite parameters."""
+    """Newton-fitted PopulationGLM should converge and return finite parameters."""
     X, y, model, params, _ = request.getfixturevalue(
         "population_poissonGLM_model_instantiation"
     )
@@ -318,7 +318,7 @@ def test_newton_population_glm_converges(request, regularizer_cls, feature_mask)
 @pytest.mark.requires_x64
 @pytest.mark.parametrize("feature_mask", [True, False])
 def test_newton_population_glm_matches_full_autodiff(request, feature_mask):
-    """NewtonCholesky-fitted PopulationGLM should match a full autodiff model that does not vmap over subproblems."""
+    """Newton-fitted PopulationGLM should match a full autodiff model that does not vmap over subproblems."""
     X, y, model, params, _ = request.getfixturevalue(
         "population_poissonGLM_model_instantiation"
     )
@@ -361,7 +361,7 @@ def test_every_block_diagonal_model_has_fixtures():
 def test_newton_block_diagonal_matches_full_autodiff_update(
     request, fixture_name, feature_mask, make_strength
 ):
-    """One NewtonCholesky update() on the block Hessian must match a full autodiff model.
+    """One Newton update() on the block Hessian must match a full autodiff model.
 
     Runs for every model declaring a block-diagonal Hessian, in both ``coef`` layouts and
     under a scalar and a per-neuron strength. The block path vmaps the regularizer's penalty
@@ -370,7 +370,7 @@ def test_newton_block_diagonal_matches_full_autodiff_update(
     """
     X, y, model, params, _ = request.getfixturevalue(fixture_name)
     model.regularizer = "Ridge"
-    model.solver_name = "NewtonCholesky"
+    model.solver_name = "Newton"
     model.regularizer_strength = make_strength(params.coef)
     if feature_mask:
         model._feature_mask = initialize_feature_mask_for_population_glm(
@@ -413,8 +413,8 @@ def test_newton_population_glm_block_hessian_matches_full(
     full autodiff Hessian, and the full Hessian should be block-diagonal across neurons.
 
     Both Hessians are rendered as dense matrices (per neuron) via a flatten/unflatten of
-    the parameter pytree, so the comparison is on the actual matrices the NewtonCholesky solve
-    consumes. Parametrized over every NewtonCholesky-eligible regularizer: the block/full match
+    the parameter pytree, so the comparison is on the actual matrices the Newton solve
+    consumes. Parametrized over every Newton-eligible regularizer: the block/full match
     holds only for additive penalties, so a non-additive one would fail here.
     """
     X, y, model, params, _ = request.getfixturevalue(
@@ -422,7 +422,7 @@ def test_newton_population_glm_block_hessian_matches_full(
     )
     model.regularizer = regularizer_cls()
     model.regularizer_strength = None if regularizer_cls is UnRegularized else 0.1
-    model.solver_name = "NewtonCholesky"
+    model.solver_name = "Newton"
     if feature_mask:
         model._feature_mask = initialize_feature_mask_for_population_glm(
             X, y.shape[1], coef=params.coef
@@ -496,7 +496,7 @@ def test_newton_population_glm_block_hessian_matches_full(
 @pytest.mark.parametrize("regularizer_cls", _newton_regularizers())
 @pytest.mark.parametrize("structure", ["", "_pytree"])
 def test_newton_classifier_glm_converges(request, regularizer_cls, structure):
-    """NewtonCholesky-fitted ClassifierGLM should converge and return finite parameters."""
+    """Newton-fitted ClassifierGLM should converge and return finite parameters."""
     X, y, model, _, _ = request.getfixturevalue(
         "classifierGLM_model_instantiation" + structure
     )
@@ -515,7 +515,7 @@ def test_newton_classifier_glm_converges(request, regularizer_cls, structure):
 def test_newton_classifier_population_glm_converges(
     request, regularizer_cls, feature_mask
 ):
-    """NewtonCholesky-fitted ClassifierPopulationGLM should converge and return finite parameters."""
+    """Newton-fitted ClassifierPopulationGLM should converge and return finite parameters."""
     X, y, model, params, _ = request.getfixturevalue(
         "population_classifierGLM_model_instantiation"
     )
@@ -535,7 +535,7 @@ def test_newton_classifier_population_glm_converges(
 @pytest.mark.requires_x64
 @pytest.mark.parametrize("feature_mask", [True, False])
 def test_newton_population_classifier_glm_matches_full_autodiff(request, feature_mask):
-    """NewtonCholesky-fitted ClassifierPopulationGLM should match a full autodiff model that does not vmap over subproblems."""
+    """Newton-fitted ClassifierPopulationGLM should match a full autodiff model that does not vmap over subproblems."""
     X, y, model, params, _ = request.getfixturevalue(
         "population_classifierGLM_model_instantiation"
     )
@@ -565,17 +565,17 @@ def test_newton_population_classifier_glm_block_hessian_matches_full(
     full autodiff Hessian, and the full Hessian should be block-diagonal across neurons.
 
     Both Hessians are rendered as dense matrices (per neuron) via a flatten/unflatten of
-    the parameter pytree, so the comparison is on the actual matrices the NewtonCholesky solve
-    consumes. Parametrized over every NewtonCholesky-eligible regularizer: the block/full match
+    the parameter pytree, so the comparison is on the actual matrices the Newton solve
+    consumes. Parametrized over every Newton-eligible regularizer: the block/full match
     holds only for additive penalties, so a non-additive one would fail here.
 
     Notes
     -----
-    A relevant failure mode is if a **non-additive** regularizer is introduced, NewtonCholesky
+    A relevant failure mode is if a **non-additive** regularizer is introduced, Newton
     is allowed for it, and the hessian is block-diagonal tagged.
-    NewtonCholesky assumes the additivity of the penalty when creating the hessian with a tree-add.
+    Newton assumes the additivity of the penalty when creating the hessian with a tree-add.
     The eventual bugfixes will be two:
-    1. Disallow NewtonCholesky for the regularizer,
+    1. Disallow Newton for the regularizer,
     2. Do not assume a block diagonal hessian. The full path just uses plain jax.hess(loss).
     """
     X, y, model, params, _ = request.getfixturevalue(
@@ -583,7 +583,7 @@ def test_newton_population_classifier_glm_block_hessian_matches_full(
     )
     model.regularizer = regularizer_cls()
     model.regularizer_strength = None if regularizer_cls is UnRegularized else 0.1
-    model.solver_name = "NewtonCholesky"
+    model.solver_name = "Newton"
     if feature_mask:
         model._feature_mask = initialize_feature_mask_for_population_glm(
             X, y.shape[1], coef=params.coef
@@ -683,7 +683,7 @@ def test_newton_unbatched_model_hessian_includes_penalty(request, regularizer_cl
         observation_model=model.observation_model,
         regularizer=regularizer_cls(),
         regularizer_strength=0.1,
-        solver_name="NewtonCholesky",
+        solver_name="Newton",
     )
 
     p0 = model.initialize_params(X, y)
@@ -883,27 +883,27 @@ def test_hess_property_override_non_ridge(regularizer_name):
     "glm_class", [GLM, PopulationGLM, ClassifierGLM, ClassifierPopulationGLM]
 )
 def test_default_solver_is_newton_for_ridge(glm_class):
-    """Ridge-penalized GLM should default to NewtonCholesky solver."""
+    """Ridge-penalized GLM should default to Newton solver."""
     model = glm_class(regularizer="Ridge", regularizer_strength=0.1)
-    assert model.solver_name == "NewtonCholesky"
+    assert model.solver_name == "Newton"
 
 
 @pytest.mark.parametrize(
     "glm_class", [GLM, PopulationGLM, ClassifierGLM, ClassifierPopulationGLM]
 )
 def test_default_solver_is_not_newton_for_unregularized(glm_class):
-    """Unregularized GLM should NOT default to NewtonCholesky."""
+    """Unregularized GLM should NOT default to Newton."""
     model = glm_class(regularizer="UnRegularized")
-    assert model.solver_name != "NewtonCholesky"
+    assert model.solver_name != "Newton"
 
 
 @pytest.mark.parametrize(
     "glm_class", [GLM, PopulationGLM, ClassifierGLM, ClassifierPopulationGLM]
 )
 def test_solver_name_respected_when_explicitly_set(glm_class):
-    """Explicitly setting solver_name='NewtonCholesky' should be respected."""
-    model = glm_class(regularizer="UnRegularized", solver_name="NewtonCholesky")
-    assert model.solver_name == "NewtonCholesky"
+    """Explicitly setting solver_name='Newton' should be respected."""
+    model = glm_class(regularizer="UnRegularized", solver_name="Newton")
+    assert model.solver_name == "Newton"
 
 
 @pytest.mark.parametrize(
@@ -916,13 +916,13 @@ def test_solver_name_respected_when_explicitly_set(glm_class):
     ],
 )
 def test_newton_solver_type_after_fit(request, model_instantiation_type):
-    """After fit(), model._solver should be a NewtonCholesky instance."""
+    """After fit(), model._solver should be a Newton instance."""
     X, y, model, _, _ = request.getfixturevalue(model_instantiation_type)
     model.regularizer = "Ridge"
     model.fit(X, y)
-    from nemos.solvers._newton_cholesky import NewtonCholesky
+    from nemos.solvers._newton import Newton
 
-    assert isinstance(model._solver, NewtonCholesky)
+    assert isinstance(model._solver, Newton)
 
 
 @pytest.mark.parametrize(
@@ -977,6 +977,6 @@ def test_newton_invalid_kwarg_raises(glm_class):
         glm_class(
             regularizer="Ridge",
             regularizer_strength=0.1,
-            solver_name="NewtonCholesky",
+            solver_name="Newton",
             solver_kwargs={"totally_fake_kwarg": 99},
         )

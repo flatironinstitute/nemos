@@ -13,11 +13,7 @@ from nemos.solvers._hess import (
     PositiveDefinite,
     PositiveSemiDefinite,
 )
-from nemos.solvers._newton_cholesky import (
-    NewtonCholesky,
-    _add_diagonal_shift,
-    _compute_diagonal_shift,
-)
+from nemos.solvers._newton import Newton, _add_diagonal_shift, _compute_diagonal_shift
 
 N = 8
 
@@ -91,7 +87,7 @@ def _quadratic_loss_and_hessian(A, b):
     """f(x) = 1/2 x'Ax - b'x."""
 
     def loss(params, *args):
-        return _quadratic_loss(params, *args)
+        return _quadratic_loss(A, b)(params, *args)
 
     def hess(params, *args):
         return A
@@ -109,8 +105,8 @@ def _quadratic_loss(A, b):
 
 
 def _make_solver(loss_fn, hess_fn, hess_tag, init_params, **kwargs):
-    """Wire up a NewtonCholesky solver with sensible defaults for tests."""
-    solver = NewtonCholesky(
+    """Wire up a Newton solver with sensible defaults for tests."""
+    solver = Newton(
         loss_fn,
         regularizer=UnRegularized(),
         regularizer_strength=0.0,
@@ -350,9 +346,9 @@ def test_run_converges_on_pd_quadratic():
     x_opt, state, _ = solver.run(x0)
 
     assert bool(state.stats.converged), "Solver did not converge on a PD quadratic."
-    assert (
-        state.stats.num_steps == 1
-    ), "Solver did not converge in 1 step on a PD quadratic."
+    assert state.stats.num_steps == 1, (
+        "Solver did not converge in 1 step on a PD quadratic."
+    )
     np.testing.assert_allclose(
         x_opt,
         x_star,

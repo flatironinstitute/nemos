@@ -65,7 +65,7 @@ def _add_diagonal_shift(H, tau):
     return jax.tree.map_with_path(damp, H)
 
 
-class NewtonCholesky:
+class Newton:
     def __init__(
         self,
         unregularized_loss: Callable,
@@ -136,7 +136,7 @@ class NewtonCholesky:
             PositiveSemiDefinite,
         ):
             raise ValueError(
-                "NewtonCholesky requires a positive (semi)definite Hessian; use the Newton solver for the general case."
+                "Newton requires a positive (semi)definite Hessian; use the Newton solver for the general case."
             )
         if property_override is not None and tag is not None:
             tag = HessianTag(
@@ -204,7 +204,7 @@ class NewtonCholesky:
             self._converged_fn = lambda lambda_sq, gnorm: gnorm <= self.tol
 
         return NewtonState(
-            grad_norm=jnp.inf,
+            grad_norm=-jnp.inf,
             newton_decrement=jnp.array(0.0),
             diverged=jnp.array(False),
             stats=OptimizationInfo(

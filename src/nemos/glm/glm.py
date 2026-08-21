@@ -143,21 +143,21 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
     +===============+==================+================================+
     | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS,  |
     |               |                  | NonlinearCG, ProximalGradient, |
-    |               |                  | NewtonCholesky                 |
+    |               |                  |                                |
     +---------------+------------------+--------------------------------+
-    | Ridge         | NewtonCholesky   | GradientDescent, BFGS, LBFGS,  |
+    | Ridge         | Newton           | GradientDescent, BFGS, LBFGS,  |
     |               |                  | NonlinearCG, ProximalGradient, |
-    |               |                  | NewtonCholesky                 |
+    |               |                  |                                |
     +---------------+------------------+--------------------------------+
     | Lasso         | ProximalGradient | ProximalGradient               |
     +---------------+------------------+--------------------------------+
     | GroupLasso    | ProximalGradient | ProximalGradient               |
     +---------------+------------------+--------------------------------+
 
-    The default solver for ``Ridge`` is ``NewtonCholesky``: the ridge penalty makes the Hessian positive
+    The default solver for ``Ridge`` is ``Newton``: the ridge penalty makes the Hessian positive
     definite, so each step is a stable Cholesky solve that converges in a handful of iterations at the
-    feature counts typical of neural GLMs. ``NewtonCholesky`` is also available for ``UnRegularized`` problems
-    but is not the default there, since the unpenalized Hessian can be singular. A NewtonCholesky step solves a
+    feature counts typical of neural GLMs. ``Newton`` is also available for ``UnRegularized`` problems
+    but is not the default there, since the unpenalized Hessian can be singular. A Newton step solves a
     Hessian system, costing ``O(d**2)`` memory and ``O(d**3)`` compute in the number of features ``d``,
     so for models with many features ``LBFGS`` is preferable: it is memory-light and more robust on
     noisy objective landscapes. Switch solver by passing ``solver_name=...`` at initialization.
@@ -326,14 +326,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
     _hess_tag: HessianTag = HessianTag(structure=Full, property=PositiveSemiDefinite)
 
     def _resolve_default_solver(self) -> str:
-        # NewtonCholesky is the default for Ridge: the ridge penalty makes the penalized
-        # Hessian positive definite, so the Cholesky-based NewtonCholesky step is stable.
+        # Newton is the default for Ridge: the ridge penalty makes the penalized
+        # Hessian positive definite, so the Cholesky-based Newton step is stable.
         # For other regularizers (e.g. UnRegularized, whose Hessian can be only
         # positive semidefinite) defer to the regularizer's own default.
         if isinstance(self.regularizer, Ridge) and (
-            "NewtonCholesky" in self.regularizer.allowed_solvers
+            "Newton" in self.regularizer.allowed_solvers
         ):
-            return "NewtonCholesky"
+            return "Newton"
         return super()._resolve_default_solver()
 
     def _hess_property_override(self) -> type | None:
@@ -1663,21 +1663,21 @@ class PopulationGLM(GLM):
     +===============+==================+================================+
     | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS,  |
     |               |                  | NonlinearCG, ProximalGradient, |
-    |               |                  | NewtonCholesky                 |
+    |               |                  | Newton                 |
     +---------------+------------------+--------------------------------+
-    | Ridge         | NewtonCholesky   | GradientDescent, BFGS, LBFGS,  |
+    | Ridge         | Newton           | GradientDescent, BFGS, LBFGS,  |
     |               |                  | NonlinearCG, ProximalGradient, |
-    |               |                  | NewtonCholesky                 |
+    |               |                  | Newton                 |
     +---------------+------------------+--------------------------------+
     | Lasso         | ProximalGradient | ProximalGradient               |
     +---------------+------------------+--------------------------------+
     | GroupLasso    | ProximalGradient | ProximalGradient               |
     +---------------+------------------+--------------------------------+
 
-    The default solver for ``Ridge`` is ``NewtonCholesky``: the ridge penalty makes the Hessian positive
+    The default solver for ``Ridge`` is ``Newton``: the ridge penalty makes the Hessian positive
     definite, so each step is a stable Cholesky solve that converges in a handful of iterations at the
-    feature counts typical of neural GLMs. ``NewtonCholesky`` is also available for ``UnRegularized`` problems
-    but is not the default there, since the unpenalized Hessian can be singular. A NewtonCholesky step solves a
+    feature counts typical of neural GLMs. ``Newton`` is also available for ``UnRegularized`` problems
+    but is not the default there, since the unpenalized Hessian can be singular. A Newton step solves a
     Hessian system, costing ``O(d**2)`` memory and ``O(d**3)`` compute in the number of features ``d``,
     so for models with many features ``LBFGS`` is preferable: it is memory-light and more robust on
     noisy objective landscapes. Switch solver by passing ``solver_name=...`` at initialization.

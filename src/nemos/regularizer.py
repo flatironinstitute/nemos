@@ -542,7 +542,7 @@ class UnRegularized(Regularizer):
         "ProximalGradient",
         "SVRG",
         "ProxSVRG",
-        "NewtonCholesky",
+        "Newton",
     )
 
     _default_solver = "LBFGS"
@@ -572,7 +572,7 @@ class Ridge(Regularizer):
         "ProximalGradient",
         "SVRG",
         "ProxSVRG",
-        "NewtonCholesky",
+        "Newton",
     )
 
     _default_solver = "LBFGS"

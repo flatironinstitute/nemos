@@ -1793,7 +1793,7 @@ class TestGLMObservationModel:
         Fixture for test_repr_out
         """
         # These repr models are all UnRegularized, whose default solver is LBFGS
-        # (GLMs only override the default to NewtonCholesky for Ridge).
+        # (GLMs only override the default to Newton for Ridge).
         default_solver_name = nmo.solvers.get_solver(
             nmo.regularizer.UnRegularized().default_solver
         ).algo_name
@@ -4559,7 +4559,7 @@ def test_glm_public_api_matches_subclasses():
         "population_classifierGLM",
     ],
 )
-@pytest.mark.parametrize("solver_name", [None, "LBFGS", "NewtonCholesky"])
+@pytest.mark.parametrize("solver_name", [None, "LBFGS", "Newton"])
 def test_glm_set_solver_name_invalidates(solver_name, model_instantiation, request):
     X, y, model, params, state = request.getfixturevalue(
         model_instantiation + "_model_instantiation"
@@ -4589,7 +4589,7 @@ def test_glm_set_solver_name_invalidates(solver_name, model_instantiation, reque
         "population_classifierGLM",
     ],
 )
-@pytest.mark.parametrize("solver_name", [None, "LBFGS", "NewtonCholesky"])
+@pytest.mark.parametrize("solver_name", [None, "LBFGS", "Newton"])
 def test_glm_set_solver_name_recovers(solver_name, model_instantiation, request):
     X, y, model, params, _ = request.getfixturevalue(
         model_instantiation + "_model_instantiation"
