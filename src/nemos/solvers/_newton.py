@@ -32,6 +32,7 @@ class NewtonState(eqx.Module):
     grad_norm: jax.Array
     stats: OptimizationInfo
     ls_state: Optional[Any] = None
+    lambda_sq: Optional[Any] = None
     # Previous accepted step, for solvers whose convergence test is Cauchy rather than
     # gradient based. Initialized to inf so the first iteration never counts as converged.
     y_diff: Optional[Any] = None
@@ -215,6 +216,7 @@ class Newton:
                 reached_max_steps=jnp.array(False),
             ),
             ls_state=ls_state,
+            lambda_sq=jnp.array(0.0),
             # inf so a Cauchy criterion cannot fire before the first step is taken
             y_diff=jax.tree.map(lambda x: jnp.full_like(x, jnp.inf), init_params),
         )
@@ -341,6 +343,7 @@ class Newton:
                 reached_max_steps=new_iter >= self.maxiter,
             ),
             ls_state=new_ls_state,
+            lambda_sq=lambda_sq,
             y_diff=tree_utils.tree_sub(new_params, params),
         )
         return new_params, new_state, aux
