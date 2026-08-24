@@ -87,12 +87,12 @@ class Observations(Base, abc.ABC):
         r"""Compute the observation model negative log-likelihood.
 
         This computes the negative log-likelihood of the predicted rates
-        for the observed neural activity up to a constant.
+        for the observed data up to a constant.
 
         Parameters
         ----------
         y :
-            The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons)..
+            The observations to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons)..
         predicted_rate :
             The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons)..
 
@@ -114,12 +114,12 @@ class Observations(Base, abc.ABC):
         r"""Compute the observation model log-likelihood.
 
         This computes the log-likelihood of the predicted rates
-        for the observed neural activity including the normalization constant
+        for the observed data including the normalization constant
 
         Parameters
         ----------
         y :
-            The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+            The observations to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
         predicted_rate :
             The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
         scale :
@@ -144,12 +144,12 @@ class Observations(Base, abc.ABC):
         r"""Compute the observation model likelihood.
 
         This computes the likelihood of the predicted rates
-        for the observed neural activity including the normalization constant.
+        for the observed data including the normalization constant.
 
         Parameters
         ----------
         y :
-            The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+            The observations to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
         predicted_rate :
             The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
         scale :
@@ -198,7 +198,7 @@ class Observations(Base, abc.ABC):
     @abc.abstractmethod
     def deviance(
         self,
-        spike_counts: jnp.ndarray,
+        observations: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
     ):
@@ -206,8 +206,8 @@ class Observations(Base, abc.ABC):
 
         Parameters
         ----------
-        spike_counts:
-            The spike counts. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
+        observations:
+            The observations. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
         predicted_rate:
             The predicted firing rates. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
         scale:
@@ -274,9 +274,9 @@ class Observations(Base, abc.ABC):
         Parameters
         ----------
         y:
-            The neural activity. Expected shape: ``(n_time_bins, )``
+            The observations. Expected shape: ``(n_time_bins, )``
         predicted_rate:
-            The mean neural activity. Expected shape: ``(n_time_bins, )``
+            The predicted mean. Expected shape: ``(n_time_bins, )``
         score_type:
             The pseudo-:math:`R^2` type.
         scale:
@@ -351,9 +351,9 @@ class Observations(Base, abc.ABC):
         Parameters
         ----------
         y:
-            The neural activity. Expected shape: ``(n_time_bins, )``.
+            The observations. Expected shape: ``(n_time_bins, )``.
         predicted_rate:
-            The mean neural activity. Expected shape: ``(n_time_bins, )``
+            The predicted mean. Expected shape: ``(n_time_bins, )``
 
         Returns
         -------
@@ -385,9 +385,9 @@ class Observations(Base, abc.ABC):
         Parameters
         ----------
         y:
-            The neural activity. Expected shape: (n_time_bins, ), or (n_time_bins, n_neurons).
+            The observations. Expected shape: (n_time_bins, ), or (n_time_bins, n_neurons).
         predicted_rate:
-            The mean neural activity. Expected shape: (n_time_bins, ), or (n_time_bins, n_neurons).
+            The predicted mean. Expected shape: (n_time_bins, ), or (n_time_bins, n_neurons).
         scale:
             The scale parameter of the model.
 
@@ -415,9 +415,9 @@ class PoissonObservations(Observations):
     """
     Model observations as Poisson random variables.
 
-    The PoissonObservations is designed to model the observed spike counts based on a Poisson distribution
-    with a given rate. It provides methods for computing the negative log-likelihood, generating samples,
-    and computing the residual deviance for the given spike count data.
+    The PoissonObservations is designed to model count observations, such as neural spike counts, based on
+    a Poisson distribution with a given rate. It provides methods for computing the negative log-likelihood,
+    generating samples, and computing the residual deviance for the given count data.
 
     Notes
     -----
@@ -460,12 +460,12 @@ class PoissonObservations(Observations):
         r"""Compute the Poisson negative log-likelihood.
 
         This computes the Poisson negative log-likelihood of the predicted rates
-        for the observed spike counts up to a constant.
+        for the observed counts up to a constant.
 
         Parameters
         ----------
         y :
-            The target spikes to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+            The observations to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
         predicted_rate :
             The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
 
@@ -510,12 +510,12 @@ class PoissonObservations(Observations):
         r"""Compute the Poisson negative log-likelihood.
 
         This computes the Poisson negative log-likelihood of the predicted rates
-        for the observed spike counts up to a constant.
+        for the observed counts up to a constant.
 
         Parameters
         ----------
         y :
-            The target spikes to compare against. Shape ``(n_time_bins, )``, or ``(n_time_bins, n_neurons)``.
+            The observations to compare against. Shape ``(n_time_bins, )``, or ``(n_time_bins, n_neurons)``.
         predicted_rate :
             The predicted rate of the current model. Shape ``(n_time_bins, )``, or ``(n_time_bins, n_neurons)``.
         scale :
@@ -582,7 +582,7 @@ class PoissonObservations(Observations):
 
     def deviance(
         self,
-        spike_counts: jnp.ndarray,
+        observations: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
@@ -590,8 +590,8 @@ class PoissonObservations(Observations):
 
         Parameters
         ----------
-        spike_counts:
-            The spike counts. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
+        observations:
+            The observations. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
         predicted_rate:
             The predicted firing rates. Shape ``(n_time_bins, )``  or ``(n_time_bins, n_neurons)`` for
             population models.
@@ -620,9 +620,9 @@ class PoissonObservations(Observations):
         """
         # this takes care of 0s in the log
         ratio = jnp.clip(
-            spike_counts / predicted_rate, jnp.finfo(predicted_rate.dtype).eps, jnp.inf
+            observations / predicted_rate, jnp.finfo(predicted_rate.dtype).eps, jnp.inf
         )
-        deviance = 2 * (spike_counts * jnp.log(ratio) - (spike_counts - predicted_rate))
+        deviance = 2 * (observations * jnp.log(ratio) - (observations - predicted_rate))
         return deviance
 
     def estimate_scale(
@@ -647,7 +647,7 @@ class PoissonObservations(Observations):
         Parameters
         ----------
         y :
-            Observed spike counts.
+            The observations.
         predicted_rate :
             The predicted rate values. This is not used in the Poisson model for estimating scale,
             but is retained for compatibility with the abstract method signature.
@@ -661,9 +661,9 @@ class GammaObservations(Observations):
     """
     Model observations as Gamma random variables.
 
-    The GammaObservations is designed to model the observed spike counts based on a Gamma distribution
-    with a given rate. It provides methods for computing the negative log-likelihood, generating samples,
-    and computing the residual deviance for the given spike count data.
+    The GammaObservations is designed to model positive continuous observations, such as calcium
+    fluorescence traces, based on a Gamma distribution with a given rate. It provides methods for computing
+    the negative log-likelihood, generating samples, and computing the residual deviance for the given data.
 
     Notes
     -----
@@ -708,12 +708,12 @@ class GammaObservations(Observations):
         r"""Compute the Gamma negative log-likelihood.
 
         This computes the Gamma negative log-likelihood of the predicted rates
-        for the observed neural activity up to a constant.
+        for the observed data up to a constant.
 
         Parameters
         ----------
         y :
-            The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+            The observations to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
         predicted_rate :
             The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
         aggregate_sample_scores :
@@ -742,12 +742,12 @@ class GammaObservations(Observations):
         r"""Compute the Gamma negative log-likelihood.
 
         This computes the Gamma negative log-likelihood of the predicted rates
-        for the observed neural activity including the normalization constant.
+        for the observed data including the normalization constant.
 
         Parameters
         ----------
         y :
-            The target activity to compare against. Shape (n_time_bins, ) or (n_time_bins, n_neurons).
+            The observations to compare against. Shape (n_time_bins, ) or (n_time_bins, n_neurons).
         predicted_rate :
             The predicted rate of the current model. Shape (n_time_bins, ) or (n_time_bins, n_neurons).
         scale :
@@ -797,7 +797,7 @@ class GammaObservations(Observations):
 
     def deviance(
         self,
-        neural_activity: jnp.ndarray,
+        observations: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
@@ -805,8 +805,8 @@ class GammaObservations(Observations):
 
         Parameters
         ----------
-        neural_activity:
-            The spike coun activity. Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
+        observations:
+            The observations. Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
         predicted_rate:
             The predicted firing rates. Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
         scale:
@@ -833,9 +833,9 @@ class GammaObservations(Observations):
         log-likelihood. Lower values of deviance indicate a better fit.
 
         """
-        y_mu = jnp.clip(neural_activity / predicted_rate, min=jnp.finfo(float).eps)
+        y_mu = jnp.clip(observations / predicted_rate, min=jnp.finfo(float).eps)
         resid_dev = 2 * (
-            -jnp.log(y_mu) + (neural_activity - predicted_rate) / predicted_rate
+            -jnp.log(y_mu) + (observations - predicted_rate) / predicted_rate
         )
         return resid_dev / scale
 
@@ -860,7 +860,7 @@ class GammaObservations(Observations):
         Parameters
         ----------
         y :
-            Observed neural activity.
+            The observations.
         predicted_rate :
             The predicted rate values.
         dof_resid :
@@ -1109,7 +1109,7 @@ class BernoulliObservations(Observations):
         Parameters
         ----------
         y :
-            Observed spike counts.
+            The observations.
         predicted_rate :
             The predicted rate values (success probabilities). This is not used in the Bernoulli model for estimating
             scale, but is retained for compatibility with the abstract method signature.
@@ -1130,12 +1130,12 @@ class BernoulliObservations(Observations):
         r"""Compute the Binomial model likelihood.
 
         This computes the likelihood of the predicted rates
-        for the observed neural activity including the normalization constant.
+        for the observed data including the normalization constant.
 
         Parameters
         ----------
         y :
-            The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+            The observations to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
         predicted_rate :
             The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
         scale :
@@ -1321,10 +1321,11 @@ class NegativeBinomialObservations(Observations):
         predicted_rate = jnp.clip(
             predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
         )
-        factor = 1 / (self.scale * predicted_rate + 1)
-        return -aggregate_sample_scores(
-            y * jnp.log(1 - factor) + jnp.log(factor) / self.scale
-        )
+        # robust log1p forms of log(mu / (r + mu)) and log(r / (r + mu)).
+        scaled_rate = self.scale * predicted_rate
+        log_ratio_mu = -jnp.log1p(1 / scaled_rate)
+        log_ratio_r = -jnp.log1p(scaled_rate)
+        return -aggregate_sample_scores(y * log_ratio_mu + log_ratio_r / self.scale)
 
     def log_likelihood(
         self,
@@ -1489,7 +1490,7 @@ class NegativeBinomialObservations(Observations):
         Parameters
         ----------
         y :
-            Observed spike counts.
+            The observations.
         predicted_rate :
             The predicted mean of the distribution.
         dof_resid :
@@ -1511,7 +1512,7 @@ class GaussianObservations(Observations):
 
     The GaussianObservations is designed to model data based on a Gaussian distribution
     with a given mean (predicted rate) and variance (scale). It provides methods for computing the negative
-    log-likelihood, generating samples, and computing the residual deviance for the given spike count data.
+    log-likelihood, generating samples, and computing the residual deviance for the given data.
 
     Notes
     -----
@@ -1557,12 +1558,12 @@ class GaussianObservations(Observations):
         r"""Compute the Gaussian negative log-likelihood.
 
         This computes the Gaussian negative log-likelihood of the predicted rates
-        for the observed neural activity up to a constant.
+        for the observed data up to a constant.
 
         Parameters
         ----------
         y :
-            The target activity to compare against. Shape ``(n_time_bins, )``, or ``(n_time_bins, n_neurons)``.
+            The observations to compare against. Shape ``(n_time_bins, )``, or ``(n_time_bins, n_neurons)``.
         predicted_rate :
             The predicted rate of the current model. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)``.
         aggregate_sample_scores :
@@ -1586,7 +1587,7 @@ class GaussianObservations(Observations):
         r"""Compute the Gaussian negative log-likelihood.
 
         Compute the Gaussian log-likelihood of the predicted rates
-        for the observed neural activity up to a constant.
+        for the observed data up to a constant.
 
         The formula for the Gaussian log-likelihood is given by:
 
@@ -1599,7 +1600,7 @@ class GaussianObservations(Observations):
         Parameters
         ----------
         y :
-            The target activity to compare against. Shape ``(n_time_bins, )``, or ``(n_time_bins, n_neurons)``.
+            The observations to compare against. Shape ``(n_time_bins, )``, or ``(n_time_bins, n_neurons)``.
         predicted_rate :
             The predicted rate of the current model. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)``.
         scale :
@@ -1653,7 +1654,7 @@ class GaussianObservations(Observations):
 
     def deviance(
         self,
-        neural_activity: jnp.ndarray,
+        observations: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
@@ -1661,8 +1662,8 @@ class GaussianObservations(Observations):
 
         Parameters
         ----------
-        neural_activity:
-            The spike count activity. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
+        observations:
+            The observations. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
         predicted_rate:
             The predicted firing rates. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
         scale:
@@ -1685,7 +1686,7 @@ class GaussianObservations(Observations):
         the scale (variance) of the model. Lower values of deviance indicate a better fit.
 
         """
-        resid_dev = jnp.power(neural_activity - predicted_rate, 2)
+        resid_dev = jnp.power(observations - predicted_rate, 2)
         return resid_dev / scale
 
     def estimate_scale(
@@ -1712,7 +1713,7 @@ class GaussianObservations(Observations):
         Parameters
         ----------
         y :
-            Observed spike counts.
+            The observations.
         predicted_rate :
             The predicted rate values.
         dof_resid :

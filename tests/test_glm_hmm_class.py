@@ -1,5 +1,6 @@
 """Tests for GLMHMM.fit and related fit-path validation."""
 
+import inspect
 import math
 import warnings
 from contextlib import nullcontext as does_not_raise
@@ -232,6 +233,7 @@ def glm_hmm_data():
     n, k, s = 100, 2, 3
     X = np.ones((n, k))
     y = np.zeros(n)
+    session_starts = jnp.zeros(n, dtype=bool).at[0].set(True)
     y[rng.choice(n, n // 3, replace=False)] = 1.0
     coef = jnp.zeros((k, s))
     intercept = jnp.zeros((s,))
@@ -241,9 +243,45 @@ def glm_hmm_data():
     return dict(
         X=X,
         y=y,
+        session_starts=session_starts,
         init_params=(coef, intercept, scale, init_prob, trans_prob),
         n_states=s,
     )
+
+
+class TestFitInterceptDeferred:
+    """Parameter freezing (``fit_intercept``) is not extended to GLM-HMM; the base
+    signature change (``frozen_params``) must stay compatible and inert."""
+
+    def test_fit_intercept_not_exposed(self, glm_hmm_data):
+        """GLM-HMM does not expose ``fit_intercept`` (freezing is deferred)."""
+        model = GLMHMM(n_states=glm_hmm_data["n_states"], observation_model="Bernoulli")
+        assert "fit_intercept" not in model.get_params()
+        assert not hasattr(model, "fit_intercept")
+
+    def test_initialize_optimizer_accepts_frozen_params(self):
+        """``_initialize_optimizer_and_state`` accepts ``frozen_params`` for signature
+        compatibility with the base entry points."""
+        sig = inspect.signature(GLMHMM._initialize_optimizer_and_state)
+        assert "frozen_params" in sig.parameters
+
+    def test_frozen_params_is_ignored(self, glm_hmm_data):
+        """Passing a non-None ``frozen_params`` yields the same optimizer state as
+        passing None: the GLM-HMM ignores it."""
+        model = GLMHMM(n_states=glm_hmm_data["n_states"], observation_model="Bernoulli")
+        X, y = glm_hmm_data["X"], glm_hmm_data["y"]
+        casted = model._validator.validate_and_cast_params(glm_hmm_data["init_params"])
+
+        state_none = model._initialize_optimizer_and_state(
+            casted, X, y, frozen_params=None
+        )
+        state_frozen = model._initialize_optimizer_and_state(
+            casted, X, y, frozen_params="ignored-sentinel"
+        )
+
+        assert isinstance(state_none, EMState) and isinstance(state_frozen, EMState)
+        assert state_none.iterations == state_frozen.iterations == 0
+        assert bool(state_none.converged) is bool(state_frozen.converged) is False
 
 
 def _spy_instantiate_solver(monkeypatch):
@@ -628,6 +666,7 @@ class TestSolverConfiguration:
         rng = np.random.default_rng(0)
         X = {"p1": rng.standard_normal((n, 2)), "p2": rng.standard_normal((n, 3))}
         y = y_factory(n)
+        session_starts = jnp.zeros(y.shape[0], dtype=bool).at[0].set(True)
 
         captured = {}
         real_initialize_mask = nmo.regularizer.GroupLasso.initialize_mask
@@ -652,7 +691,7 @@ class TestSolverConfiguration:
         opt_state = model.initialize_optimizer_and_state(init_params, X, y)
         params = init_params
         for _ in range(3):
-            params, opt_state = model.update(params, opt_state, X, y)
+            params, opt_state = model.update(params, opt_state, X, y, session_starts)
 
         assert model.coef_ is not None
         assert "mask" in captured
@@ -925,18 +964,22 @@ class TestValidationSequence:
 
     def test_update(self, glm_hmm_data, patch_optimizer_update, monkeypatch):
         patch_optimizer_update(GLMHMM)
-        X, y, init_params = (
+        X, y, session_starts, init_params = (
             glm_hmm_data["X"],
             glm_hmm_data["y"],
+            glm_hmm_data["session_starts"],
             glm_hmm_data["init_params"],
         )
         model = GLMHMM(n_states=glm_hmm_data["n_states"])
-        opt_state = model.initialize_optimizer_and_state(init_params, X, y)
 
-        # spy after the setup calls, so that only update() is recorded
+        # spy before initialize_optimizer_and_state, where validate_inputs is called
         order = _spy_call_order(monkeypatch, GLMHMMValidator, *VALIDATION_SEQUENCE)
-        model.update(init_params, opt_state, X, y)
+        opt_state = model.initialize_optimizer_and_state(init_params, X, y)
+        assert order == ["validate_inputs"]
 
+        # spy again after the setup calls, where no validation is expected
+        order = _spy_call_order(monkeypatch, GLMHMMValidator, *VALIDATION_SEQUENCE)
+        model.update(init_params, opt_state, X, y, session_starts)
         assert order == VALIDATION_SEQUENCE
 
     @pytest.mark.parametrize(
@@ -1027,13 +1070,12 @@ class TestSimulate:
         model = GLMHMM(n_states=glm_hmm_data["n_states"])
         model.fit(X, glm_hmm_data["y"], init_params=glm_hmm_data["init_params"])
 
-        session_starts = jnp.zeros(n, dtype=bool).at[0].set(True)
         mock_vapi = MagicMock(
             return_value=(
                 model._get_model_params(),
                 jnp.asarray(X),
                 None,
-                session_starts,
+                glm_hmm_data["session_starts"],
             )
         )
         monkeypatch.setattr(GLMHMM, "_validate_and_prepare_inputs", mock_vapi)
@@ -1537,6 +1579,7 @@ class TestUpdateFitEquivalence:
         n, k, s = 80, 3, 2
         X = rng.standard_normal((n, k))
         y = rng.binomial(1, 0.4, size=n)
+        session_starts = jnp.zeros(n, dtype=bool).at[0].set(True)
 
         # shared init params so both paths start from exactly the same point
         seed = jax.random.PRNGKey(7)
@@ -1564,7 +1607,9 @@ class TestUpdateFitEquivalence:
         opt_state = model_update.initialize_optimizer_and_state(init_params, X, y)
         params = init_params
         for _ in range(n_steps):
-            params, opt_state = model_update.update(params, opt_state, X, y)
+            params, opt_state = model_update.update(
+                params, opt_state, X, y, session_starts
+            )
 
         np.testing.assert_allclose(model_fit.coef_, model_update.coef_)
         np.testing.assert_allclose(model_fit.intercept_, model_update.intercept_)
@@ -1599,24 +1644,69 @@ class TestUpdate:
         model = GLMHMM(n_states=d["n_states"], solver_kwargs={"maxiter": 1})
         init_params, opt_state = self._prepare(model, d["X"], d["y"])
 
-        params, _ = model.update(init_params, opt_state, d["X"], d["y"])
+        params, _ = model.update(
+            init_params, opt_state, d["X"], d["y"], d["session_starts"]
+        )
 
         assert len(params) == 5
         assert all(v is not None for v in model._get_fit_state().values())
 
-    def test_update_calls_validate_inputs(self, glm_hmm_data, monkeypatch):
-        """update() forwards X and y to GLMHMMValidator.validate_inputs exactly once."""
+    def test_update_safe_calls_validate_inputs(self, glm_hmm_data, monkeypatch):
+        """update() forwards X and y to GLMHMMValidator.validate_inputs exactly zero times."""
         d = glm_hmm_data
         model = GLMHMM(n_states=d["n_states"], solver_kwargs={"maxiter": 1})
         init_params, opt_state = self._prepare(model, d["X"], d["y"])
 
         calls = _spy_calls(monkeypatch, GLMHMMValidator, "validate_inputs")
-        model.update(init_params, opt_state, d["X"], d["y"])
+        model.update(
+            init_params, opt_state, d["X"], d["y"], session_starts=d["session_starts"]
+        )
 
         assert len(calls) == 1
         _, kwargs = calls[0]
         assert kwargs["X"] is d["X"]
         assert kwargs["y"] is d["y"]
+
+    def test_update_unsafe_no_calls_validate_inputs(self, glm_hmm_data, monkeypatch):
+        """update() forwards X and y to GLMHMMValidator.validate_inputs exactly zero times."""
+        d = glm_hmm_data
+        model = GLMHMM(n_states=d["n_states"], solver_kwargs={"maxiter": 1})
+        init_params, opt_state = self._prepare(model, d["X"], d["y"])
+
+        calls = _spy_calls(monkeypatch, GLMHMMValidator, "validate_inputs")
+        model.update(
+            init_params,
+            opt_state,
+            d["X"],
+            d["y"],
+            sesison_starts=d["session_starts"],
+            safe=False,
+        )
+
+        assert len(calls) == 0
+
+    @pytest.mark.parametrize("safe", [True, False])
+    def test_update_default_session_starts(self, safe, glm_hmm_data, monkeypatch):
+        """With no session_starts, update() builds a single-session indicator array."""
+        d = glm_hmm_data
+        n = d["X"].shape[0]
+        model = GLMHMM(n_states=d["n_states"], solver_kwargs={"maxiter": 1})
+        init_params, opt_state = self._prepare(model, d["X"], d["y"])
+
+        captured = {}
+        real_update = model._optimizer_update
+
+        def capturing(params, state, data, y, *, session_starts, **kwargs):
+            captured["session_starts"] = session_starts
+            return real_update(
+                params, state, data, y, session_starts=session_starts, **kwargs
+            )
+
+        monkeypatch.setattr(model, "_optimizer_update", capturing)
+        model.update(init_params, opt_state, d["X"], d["y"], safe=safe)
+
+        session_starts = captured["session_starts"]
+        assert np.array_equal(session_starts, jnp.zeros(n, dtype=bool).at[0].set(True))
 
     def test_update_forces_first_bin_new_session(self, glm_hmm_data, monkeypatch):
         """update() marks the first sample as a session start before the EM step,
@@ -1685,6 +1775,74 @@ class TestUpdate:
         assert (
             bool(captured["session_starts"][second_session_row - n_leading_nan]) is True
         )
+
+    # a boundary far enough from the edges
+    SECOND_SESSION_ROW = 30
+
+    @pytest.mark.parametrize(
+        "nan_rows, expected_second_start, expectation",
+        [
+            # NaN before either boundary: the marker on it moves to the next valid
+            # sample, and every later row shifts left by one
+            (0, SECOND_SESSION_ROW - 1, does_not_raise()),
+            # NaN on the last row of the first session, i.e. a trailing border
+            (SECOND_SESSION_ROW - 1, SECOND_SESSION_ROW - 1, does_not_raise()),
+            # NaN on the boundary row itself: the marker must move to the next valid
+            # sample rather than be dropped along with the row it sits on
+            (SECOND_SESSION_ROW, SECOND_SESSION_ROW, does_not_raise()),
+            # NaN strictly inside the second session: dropping it would splice bins
+            # that are not adjacent in time
+            (
+                SECOND_SESSION_ROW + 10,
+                None,
+                pytest.raises(ValueError, match="requires continuous time-series data"),
+            ),
+            # no valid sample left to run the EM step on
+            (
+                slice(None),
+                None,
+                pytest.raises(ValueError, match="At least a NaN or an Inf"),
+            ),
+        ],
+    )
+    def test_update_nan_placement_preserves_session_structure(
+        self,
+        nan_rows,
+        expected_second_start,
+        expectation,
+        glm_hmm_data,
+        monkeypatch,
+    ):
+        """update() hands the EM step the session partition fit() would hand it.
+
+        Each NaN placement is a distinct behaviour of the preamble: a NaN at a session
+        border is dropped and the boundary re-indexed, a NaN inside a session is
+        refused because dropping it would make two non-adjacent bins consecutive, and
+        an all-NaN input leaves nothing to iterate on.
+        """
+        d = glm_hmm_data
+        n = d["X"].shape[0]
+        model = GLMHMM(n_states=d["n_states"], solver_kwargs={"maxiter": 1})
+        init_params, opt_state = self._prepare(model, d["X"], d["y"])
+
+        X_nan = d["X"].copy().astype(float)
+        X_nan[nan_rows] = np.nan
+        session_starts = np.zeros(n, dtype=bool)
+        session_starts[0] = True
+        session_starts[self.SECOND_SESSION_ROW] = True
+
+        calls = _spy_calls(monkeypatch, model, "_optimizer_update")
+        with expectation:
+            model.update(
+                init_params, opt_state, X_nan, d["y"], session_starts=session_starts
+            )
+
+        if expected_second_start is not None:
+            data, passed_starts = calls[0][0][2], calls[0][1]["session_starts"]
+            assert data.shape[0] == n - 1
+            np.testing.assert_array_equal(
+                np.flatnonzero(np.asarray(passed_starts)), [0, expected_second_start]
+            )
 
 
 # ---------------------------------------------------------------------------

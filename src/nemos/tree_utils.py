@@ -233,6 +233,47 @@ def tree_take(data, i, axis=1, is_leaf=None):
     )
 
 
+def tree_broadcast_prefix(prefix: Any, full: Any) -> Any:
+    """Expand a prefix-spelled pytree to one entry per leaf of ``full``.
+
+    A prefix tree names a whole subtree with a single value, the way ``jax.vmap``
+    accepts ``in_axes=GLMParams(1, 0)`` for parameters whose ``coef`` is itself a
+    pytree. That spelling is only usable where JAX does the broadcasting; operations
+    that pair the tree leaf-by-leaf (``equinox.partition`` against a per-leaf filter
+    spec, for instance) need it expanded first, otherwise they fail on the structure
+    mismatch.
+
+    Parameters
+    ----------
+    prefix :
+        Pytree whose leaves each stand for a subtree of ``full``.
+    full :
+        Pytree giving the structure to expand to. Must extend ``prefix``.
+
+    Returns
+    -------
+    :
+        A pytree with the structure of ``full``, where every leaf carries the value
+        of the ``prefix`` leaf that covers it.
+
+    Examples
+    --------
+    >>> from nemos.tree_utils import tree_broadcast_prefix
+    >>> tree_broadcast_prefix({"a": 1, "b": 0}, {"a": {"x": None, "y": None}, "b": None})
+    {'a': {'x': None, 'y': None}, 'b': None}
+    """
+    treedef = jax.tree_util.tree_structure(prefix)
+    return jax.tree_util.tree_unflatten(
+        treedef,
+        [
+            jax.tree_util.tree_map(lambda _: value, subtree)
+            for value, subtree in zip(
+                jax.tree_util.tree_leaves(prefix), treedef.flatten_up_to(full)
+            )
+        ],
+    )
+
+
 # The following functions are adapted from jaxopt.tree_utils
 
 tree_add = partial(jax.tree_util.tree_map, operator.add)
