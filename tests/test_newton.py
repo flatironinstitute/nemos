@@ -357,7 +357,13 @@ def test_every_block_diagonal_model_has_fixtures():
 @pytest.mark.requires_x64
 @_STRENGTHS
 @pytest.mark.parametrize("feature_mask", [True, False])
-@pytest.mark.parametrize("fixture_name", _BLOCK_MODEL_CASES)
+@pytest.mark.parametrize(
+    "fixture_name",
+    (
+        "population_poissonGLM_model_instantiation",
+        "population_poissonGLM_model_instantiation_pytree",
+    ),
+)
 def test_newton_block_diagonal_matches_full_autodiff_update(
     request, fixture_name, feature_mask, make_strength
 ):
@@ -744,9 +750,9 @@ def test_solver_invalidated_after_strength_change(request, model_instantiation_t
     assert model._solver is not None
 
     model.regularizer_strength = 0.5
-    assert (
-        model._solver is None
-    ), "_solver must be None after regularizer_strength change."
+    assert model._solver is None, (
+        "_solver must be None after regularizer_strength change."
+    )
 
 
 @pytest.mark.parametrize(
