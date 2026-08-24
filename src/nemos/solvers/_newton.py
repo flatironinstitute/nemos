@@ -8,6 +8,7 @@ import jax
 import jax.numpy as jnp
 import lineax as lx
 import optax
+from optimistix._misc import cauchy_termination
 
 from .. import tree_utils
 from ..typing import Params
@@ -23,15 +24,17 @@ from ._hess import (
 )
 
 DEFAULT_ATOL = 1e-4
+DEFAULT_RTOL = 0.0
 DEFAULT_MAX_STEPS = 100
 
 
 class NewtonState(eqx.Module):
     grad_norm: jax.Array
-    newton_decrement: jax.Array
-    diverged: jax.numpy.ndarray
     stats: OptimizationInfo
     ls_state: Optional[Any] = None
+    # Previous accepted step, for solvers whose convergence test is Cauchy rather than
+    # gradient based. Initialized to inf so the first iteration never counts as converged.
+    y_diff: Optional[Any] = None
 
 
 NewtonStepResult = tuple[Params, NewtonState]
@@ -76,6 +79,7 @@ class Newton:
         jit: bool = True,
         maxiter: int = DEFAULT_MAX_STEPS,
         tol: float = DEFAULT_ATOL,
+        rtol: float = DEFAULT_RTOL,
         shift_const: float = 1.0,
     ):
         if init_params is None:
@@ -88,6 +92,7 @@ class Newton:
         self.jit = jit
         self.maxiter = maxiter
         self.tol = tol
+        self.rtol = rtol
 
         # kept so setup_hessian can ask the regularizer for its penalty Hessian
         self._regularizer = regularizer
@@ -198,15 +203,11 @@ class Newton:
         # Resolve the shift and convergence policies
         if self._hess_tag.property is PositiveDefinite:
             self._shift_fn = lambda H: jnp.zeros((), jax.tree.leaves(H)[0].dtype)
-            self._converged_fn = lambda lambda_sq, gnorm: 0.5 * lambda_sq <= self.tol
         else:
             self._shift_fn = lambda H: _compute_diagonal_shift(H, self._shift_const)
-            self._converged_fn = lambda lambda_sq, gnorm: gnorm <= self.tol
 
         return NewtonState(
-            grad_norm=-jnp.inf,
-            newton_decrement=jnp.array(0.0),
-            diverged=jnp.array(False),
+            grad_norm=jnp.inf,
             stats=OptimizationInfo(
                 function_val=jnp.nan,
                 num_steps=jnp.array(0),
@@ -214,6 +215,8 @@ class Newton:
                 reached_max_steps=jnp.array(False),
             ),
             ls_state=ls_state,
+            # inf so a Cauchy criterion cannot fire before the first step is taken
+            y_diff=jax.tree.map(lambda x: jnp.full_like(x, jnp.inf), init_params),
         )
 
     def _solve(self, grad, H):
@@ -272,6 +275,25 @@ class Newton:
 
         return new_params, new_ls_state
 
+    def _converged(self, params, state, grad, fval):
+        """Cauchy criterion on the accepted step, as :class:`~nemos.solvers._fista.FISTA` uses.
+
+        A gradient-based test is unusable here: this solver differentiates the smooth
+        part only, so its gradient does not vanish at the optimum of a composite
+        objective, and any residual built from it inherits the curvature scale -- on
+        badly conditioned data it never falls below ``tol`` even once the iterate has
+        stopped moving.
+        """
+        return cauchy_termination(
+            self.rtol,
+            self.tol,
+            lx.internal.two_norm,
+            params,
+            state.y_diff,
+            fval,
+            fval - state.stats.function_val,
+        )
+
     def update(
         self,
         params,
@@ -283,7 +305,7 @@ class Newton:
         step, lambda_sq = self._newton_direction(grad, H, self._hess_tag)
 
         gnorm = jnp.sqrt(lx.internal.tree_dot(grad, grad))
-        converged = self._converged_fn(lambda_sq, gnorm)
+        converged = self._converged(params, state, grad, fval)
 
         def do_step(_):
             return self._apply(
@@ -305,11 +327,6 @@ class Newton:
             None,
         )
 
-        new_params_flat = jax.tree.leaves(new_params)
-        diverged = ~jnp.all(
-            jnp.isfinite(jnp.concatenate([x.ravel() for x in new_params_flat]))
-        )
-
         new_iter = jnp.where(
             converged,
             state.stats.num_steps,
@@ -317,8 +334,6 @@ class Newton:
         )
         new_state = NewtonState(
             grad_norm=gnorm,
-            newton_decrement=jnp.sqrt(lambda_sq),
-            diverged=diverged,
             stats=OptimizationInfo(
                 function_val=fval,
                 num_steps=new_iter,
@@ -326,6 +341,7 @@ class Newton:
                 reached_max_steps=new_iter >= self.maxiter,
             ),
             ls_state=new_ls_state,
+            y_diff=tree_utils.tree_sub(new_params, params),
         )
         return new_params, new_state, aux
 
@@ -339,11 +355,7 @@ class Newton:
 
         def cond(carry):
             p, s = carry
-            return (
-                (~s.stats.converged)
-                & (~s.diverged)
-                & (s.stats.num_steps < self.maxiter)
-            )
+            return (~s.stats.converged) & (s.stats.num_steps < self.maxiter)
 
         def body(carry):
             p, s = carry
