@@ -43,15 +43,34 @@ NewtonStepResult = tuple[Params, NewtonState]
 
 def _compute_diagonal_shift(H, shift_const):
     leaves_with_paths = jax.tree_util.tree_leaves_with_path(H)
-    contributions = [
-        leaf.shape[-1]
-        * jnp.finfo(leaf.dtype).eps
-        * jnp.max(jnp.diagonal(leaf, axis1=-2, axis2=-1))
-        for path, leaf in leaves_with_paths
-        if (n := len(path)) % 2 == 0 and path[: n // 2] == path[n // 2 :]
-    ]
-    max_contribution = jax.tree_util.tree_reduce(jnp.maximum, contributions)
-    return shift_const * max_contribution
+
+    contributions = []
+    for path, leaf in leaves_with_paths:
+        # select diagonal blocks: (param, param)
+        n = len(path)
+        if n % 2 != 0 or path[: n // 2] != path[n // 2 :]:
+            continue
+        if leaf is None:
+            continue
+
+        arr = jnp.asarray(leaf)
+        # Only fix the problematic 0-D case; do not alter 1-D/2-D behaviour.
+        if arr.ndim == 0:
+            arr = arr.reshape(1, 1)
+
+        contrib = (
+            arr.shape[-1]
+            * jnp.finfo(arr.dtype).eps
+            * jnp.max(jnp.diagonal(arr, axis1=-2, axis2=-1))
+        )
+        contributions.append(contrib)
+
+    if contributions:
+        max_contribution = jax.tree_util.tree_reduce(jnp.maximum, contributions)
+        return shift_const * max_contribution
+    else:
+        # Fallback if no diagonal blocks survive (unlikely in practice).
+        return jnp.asarray(shift_const)
 
 
 def _add_diagonal_shift(H, tau):

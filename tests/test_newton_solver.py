@@ -4,8 +4,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+import optax
 
-from nemos.regularizer import UnRegularized
+from nemos.regularizer import UnRegularized, Ridge
 from nemos.solvers._hess import (
     Full,
     General,
@@ -13,7 +14,14 @@ from nemos.solvers._hess import (
     PositiveDefinite,
     PositiveSemiDefinite,
 )
-from nemos.solvers._newton import Newton, _add_diagonal_shift, _compute_diagonal_shift
+from nemos.solvers._abstract_solver import OptimizationInfo
+from nemos.solvers._newton import (
+    Newton,
+    _add_diagonal_shift,
+    _compute_diagonal_shift,
+    NewtonState,
+)
+from nemos.tree_utils import pytree_map_and_reduce
 
 N = 8
 
@@ -342,9 +350,9 @@ def test_run_converges_on_pd_quadratic():
     x_opt, state, _ = solver.run(x0)
 
     assert bool(state.stats.converged), "Solver did not converge on a PD quadratic."
-    assert (
-        state.stats.num_steps == 2
-    ), "Solver did not converge in 2 step on a PD quadratic."
+    assert state.stats.num_steps == 2, (
+        "Solver did not converge in 2 step on a PD quadratic."
+    )
     np.testing.assert_allclose(
         x_opt,
         x_star,
@@ -453,7 +461,7 @@ def test_psd_singular_quadratic_preserves_null_space_autodiff(dtype):
     """Newton-Cholesky converges to a true minimizer while preserving x0's null-space component, using autodiff."""
     A, b, x_star, x0, x0_null, Q_null = _make_psd_problem(6, dtype)
 
-    loss, hess = _quadratic_loss_and_hessian(A, b)
+    loss, _ = _quadratic_loss_and_hessian(A, b)
 
     tol = _dtype_tol(
         dtype,
@@ -614,3 +622,68 @@ def test_hessian_property_gating(property_, expectation):
             HessianTag(structure=Full, property=property_),
             jnp.zeros(4),
         )
+
+
+@pytest.mark.parametrize(
+    "regr_setup",
+    [
+        "linear_regression",
+        "ridge_regression",
+        "linear_regression_tree",
+        "ridge_regression_tree",
+    ],
+)
+@pytest.mark.requires_x64
+def test_newton_linear_or_ridge_regression(request, regr_setup):
+    X, y, _, params, loss = request.getfixturevalue(regr_setup)
+
+    param_init = jax.tree_util.tree_map(np.zeros_like, params)
+    newton_params, state, _ = Newton(
+        loss,
+        regularizer=UnRegularized(),
+        regularizer_strength=0.0,
+        has_aux=False,
+        tol=10**-12,
+        init_params=param_init,
+    ).run(param_init, X, y)
+    assert pytree_map_and_reduce(
+        lambda a, b: np.allclose(a, b, atol=10**-5, rtol=0.0),
+        all,
+        params,
+        newton_params,
+    )
+
+
+@pytest.mark.parametrize(
+    "regr_setup, regularizer",
+    [
+        ("linear_regression", UnRegularized()),
+        ("ridge_regression", Ridge()),
+        ("linear_regression_tree", UnRegularized()),
+        ("ridge_regression_tree", Ridge()),
+    ],
+)
+@pytest.mark.requires_x64
+def test_newton_init_state_default(request, regr_setup, regularizer):
+    X, y, _, params, loss = request.getfixturevalue(regr_setup)
+
+    param_init = jax.tree_util.tree_map(np.zeros_like, params)
+    newton = Newton(
+        loss,
+        regularizer=regularizer,
+        regularizer_strength=0.5,
+        has_aux=True,
+        tol=10**-12,
+        init_params=param_init,
+    )
+    state = newton.init_state(param_init, X, y)
+
+    assert isinstance(state, NewtonState)
+    assert state.grad_norm == jnp.array(jnp.inf)
+    assert isinstance(state.stats, OptimizationInfo)
+    assert state.stats.num_steps == 0
+    assert state.stats.converged == jnp.array(False)
+    assert jnp.isnan(state.stats.function_val)
+    assert state.stats.converged == jnp.array(False)
+    assert state.stats.reached_max_steps == jnp.array(False)
+    assert isinstance(state.ls_state, optax.ScaleByBacktrackingLinesearchState)

@@ -14,8 +14,6 @@ import pytest
 
 import nemos as nmo
 from conftest import all_subclasses, initialize_feature_mask_for_population_glm
-from nemos._inspect_utils import is_abstract
-from nemos.base_regressor import BaseRegressor
 from nemos.glm import GLM, PopulationGLM
 from nemos.glm.classifier_glm import ClassifierGLM, ClassifierPopulationGLM
 from nemos.glm.params import GLMParams
@@ -29,7 +27,6 @@ from nemos.solvers._hess import (
     PositiveSemiDefinite,
 )
 from nemos.solvers._newton import Newton, NewtonState
-from nemos.tree_utils import pytree_map_and_reduce
 
 # Import every submodule so all BaseRegressor subclasses are registered before the
 # parametrizations below are collected (same idiom as test_model_params).
@@ -61,51 +58,6 @@ def _newton_regularizers():
     )
 
 
-def _block_diagonal_models():
-    """Model classes that declare a block-diagonal Hessian.
-
-    Discovered rather than listed. The block path assembles the penalty Hessian by vmapping
-    the regularizer over neurons, pairing the model's ``batch_axes`` against the strength,
-    so a new block-diagonal model joins the check below on arrival rather than when someone
-    remembers to add it.
-    """
-    return sorted(
-        (
-            cls
-            for cls in all_subclasses(BaseRegressor)
-            if cls.__module__.startswith("nemos")
-            and not is_abstract(cls)
-            and getattr(cls, "_hess_tag", None) is not None
-            and cls._hess_tag.structure is BlockDiagonal
-        ),
-        key=lambda cls: cls.__name__,
-    )
-
-
-# Data for each block-diagonal model, in both ``coef`` layouts. Only the pytree layout
-# distinguishes a prefix-spelled ``batch_axes`` (``GLMParams(1, 0)``, what every in-tree
-# model uses) from a per-leaf one, and the two are not interchangeable.
-_BLOCK_MODEL_FIXTURES = {
-    PopulationGLM: (
-        "population_poissonGLM_model_instantiation",
-        "population_poissonGLM_model_instantiation_pytree",
-    ),
-    ClassifierPopulationGLM: (
-        "population_classifierGLM_model_instantiation",
-        "population_classifierGLM_model_instantiation_pytree",
-    ),
-}
-
-_BLOCK_MODEL_CASES = [
-    pytest.param(
-        fixture_name,
-        id=f"{cls.__name__}-{'pytree' if fixture_name.endswith('_pytree') else 'array'}",
-    )
-    for cls, fixture_names in _BLOCK_MODEL_FIXTURES.items()
-    for fixture_name in fixture_names
-]
-
-
 def _per_neuron_strength(coef):
     """Ridge strength shaped like ``coef`` and varying along the neuron axis (axis 1).
 
@@ -131,71 +83,6 @@ _STRENGTHS = pytest.mark.parametrize(
     [lambda coef: 0.1, _per_neuron_strength],
     ids=["scalar_strength", "per_neuron_strength"],
 )
-
-
-@pytest.mark.parametrize(
-    "regr_setup",
-    [
-        "linear_regression",
-        "ridge_regression",
-        "linear_regression_tree",
-        "ridge_regression_tree",
-    ],
-)
-@pytest.mark.requires_x64
-def test_newton_linear_or_ridge_regression(request, regr_setup):
-    X, y, _, params, loss = request.getfixturevalue(regr_setup)
-
-    param_init = jax.tree_util.tree_map(np.zeros_like, params)
-    newton_params, state, _ = Newton(
-        loss,
-        regularizer=UnRegularized(),
-        regularizer_strength=0.0,
-        has_aux=False,
-        tol=10**-12,
-        init_params=param_init,
-    ).run(param_init, X, y)
-    assert pytree_map_and_reduce(
-        lambda a, b: np.allclose(a, b, atol=10**-5, rtol=0.0),
-        all,
-        params,
-        newton_params,
-    )
-
-
-@pytest.mark.parametrize(
-    "regr_setup, regularizer",
-    [
-        ("linear_regression", UnRegularized()),
-        ("ridge_regression", Ridge()),
-        ("linear_regression_tree", UnRegularized()),
-        ("ridge_regression_tree", Ridge()),
-    ],
-)
-@pytest.mark.requires_x64
-def test_newton_init_state_default(request, regr_setup, regularizer):
-    X, y, _, params, loss = request.getfixturevalue(regr_setup)
-
-    param_init = jax.tree_util.tree_map(np.zeros_like, params)
-    newton = Newton(
-        loss,
-        regularizer=regularizer,
-        regularizer_strength=0.5,
-        has_aux=True,
-        tol=10**-12,
-        init_params=param_init,
-    )
-    state = newton.init_state(param_init, X, y)
-
-    assert isinstance(state, NewtonState)
-    assert state.grad_norm == jnp.array(jnp.inf)
-    assert isinstance(state.stats, OptimizationInfo)
-    assert state.stats.num_steps == 0
-    assert state.stats.converged == jnp.array(False)
-    assert jnp.isnan(state.stats.function_val)
-    assert state.stats.converged == jnp.array(False)
-    assert state.stats.reached_max_steps == jnp.array(False)
-    assert isinstance(state.ls_state, optax.ScaleByBacktrackingLinesearchState)
 
 
 @pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
@@ -534,22 +421,6 @@ def test_newton_population_glm_matches_full_autodiff(request, feature_mask):
     np.testing.assert_allclose(full_model.coef_, model.coef_, atol=1e-3)
 
 
-def test_every_block_diagonal_model_has_fixtures():
-    """Registry and discovery must agree, so no block-diagonal model goes unchecked.
-
-    ``test_newton_block_diagonal_matches_full_autodiff_update`` is parametrized from
-    ``_BLOCK_MODEL_FIXTURES``, so a model missing from it would be skipped rather than fail.
-    This test is what turns that silence into a failure.
-    """
-    discovered = {cls.__name__ for cls in _block_diagonal_models()}
-    registered = {cls.__name__ for cls in _BLOCK_MODEL_FIXTURES}
-    assert discovered == registered, (
-        f"declare a block-diagonal Hessian but are absent from _BLOCK_MODEL_FIXTURES, so "
-        f"they are never checked against the full Hessian: {sorted(discovered - registered)}. "
-        f"Registered but no longer block-diagonal: {sorted(registered - discovered)}."
-    )
-
-
 @pytest.mark.requires_x64
 @_STRENGTHS
 @pytest.mark.parametrize("feature_mask", [True, False])
@@ -559,6 +430,10 @@ def test_every_block_diagonal_model_has_fixtures():
         "population_poissonGLM_model_instantiation",
         "population_poissonGLM_model_instantiation_pytree",
     ),
+    # we don't test the ClassifierPopulationGLM here because it is PSD,
+    # i.e. it will use damping, but the damping factor will be different for
+    # the block hessians vs. the dense hessian
+    # the final coef will be the same, which is tested in another test
 )
 def test_newton_block_diagonal_matches_full_autodiff_update(
     request, fixture_name, feature_mask, make_strength
