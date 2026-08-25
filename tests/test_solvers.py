@@ -327,6 +327,7 @@ def test_svrg_glm_update(
     assert state.solver_state.iter_num == 1
 
 
+@pytest.mark.requires_x64
 @pytest.mark.parametrize(
     "regularizer_name, solver_name, mask",
     [
