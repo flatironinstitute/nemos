@@ -3,6 +3,7 @@
 from typing import Any, Callable, ClassVar, Optional
 
 import jax
+import jax.numpy as jnp
 import lineax as lx
 
 from .. import tree_utils
@@ -12,6 +13,8 @@ from .._hess import (
     General,
     HessianTag,
     PositiveDefinite,
+    PositiveSemiDefinite,
+    _compute_diagonal_shift,
     combine_hessian_tags,
 )
 
@@ -130,11 +133,16 @@ class HessianMixin:
         if self._hess_tag is None:
             self._hess_tag = HessianTag(structure=Full, property=General)
 
-        if self._hess_tag.property is PositiveDefinite:
+        if self._hess_tag.property in [PositiveDefinite, PositiveSemiDefinite]:
             self._linear_solver = lx.Cholesky()
             self._operator_tags = lx.positive_semidefinite_tag
+            if self._hess_tag.property is PositiveDefinite:
+                self._shift_fn = lambda H: jnp.zeros((), jax.tree.leaves(H)[0].dtype)
+            else:
+                self._shift_fn = lambda H: _compute_diagonal_shift(H, self._shift_const)
         else:
             self._linear_solver = lx.AutoLinearSolver(well_posed=False)
+            self._shift_fn = lambda H: jnp.zeros((), jax.tree.leaves(H)[0].dtype)
             self._operator_tags = ()
 
     def _block_apply(self, fn, grad, H, other) -> Any:

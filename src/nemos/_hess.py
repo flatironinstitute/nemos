@@ -1,5 +1,9 @@
+import math
 from dataclasses import dataclass
 from typing import Any
+
+import jax
+import jax.numpy as jnp
 
 # --- Properties ---
 
@@ -134,3 +138,50 @@ def combine_hessian_tags(
         property=prop,
         batch_axes=t1.batch_axes,
     )
+
+
+def _compute_diagonal_shift(H, shift_const):
+    leaves_with_paths = jax.tree_util.tree_leaves_with_path(H)
+
+    contributions = []
+    for path, leaf in leaves_with_paths:
+        # select diagonal blocks: (param, param)
+        n = len(path)
+        if n % 2 != 0 or path[: n // 2] != path[n // 2 :]:
+            continue
+        if leaf is None:
+            continue
+
+        arr = jnp.asarray(leaf)
+        # Only fix the problematic 0-D case; do not alter 1-D/2-D behaviour.
+        if arr.ndim == 0:
+            arr = arr.reshape(1, 1)
+
+        contrib = (
+            arr.shape[-1]
+            * jnp.finfo(arr.dtype).eps
+            * jnp.max(jnp.diagonal(arr, axis1=-2, axis2=-1))
+        )
+        contributions.append(contrib)
+
+    if contributions:
+        max_contribution = jax.tree_util.tree_reduce(jnp.maximum, contributions)
+        return shift_const * max_contribution
+    else:
+        # Fallback if no diagonal blocks survive (unlikely in practice).
+        return jnp.asarray(shift_const)
+
+
+def _add_diagonal_shift(H, tau):
+    def damp(path, h):
+        n = len(path)
+        if n % 2 != 0 or path[: n // 2] != path[n // 2 :]:
+            return h
+        size = math.prod(h.shape[: h.ndim // 2]) if h.ndim > 0 else 1
+        return (
+            h + tau
+            if h.ndim == 0
+            else h + tau * jnp.eye(size, dtype=h.dtype).reshape(h.shape)
+        )
+
+    return jax.tree.map_with_path(damp, H)

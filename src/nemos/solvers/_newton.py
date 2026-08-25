@@ -1,6 +1,5 @@
 """Newton-based optimization solvers."""
 
-import math
 from typing import Any, Callable, ClassVar, Optional
 
 import equinox as eqx
@@ -11,18 +10,13 @@ import optax
 import optimistix as optx
 from optimistix._misc import cauchy_termination
 
+from nemos._hess import _add_diagonal_shift
+from nemos.solvers._hessian_mixins import HessianMixin
+
 from .. import tree_utils
 from ..typing import Params
 from ._abstract_solver import OptimizationInfo
 from ._fista import FISTA
-from ._hess import (
-    BlockDiagonal,
-    HessianTag,
-    PositiveDefinite,
-    PositiveSemiDefinite,
-    combine_hessian_tags,
-)
-from ._hessian_mixins import HessianMixin
 
 DEFAULT_ATOL = 1e-4
 DEFAULT_RTOL = 0.0
@@ -33,60 +27,12 @@ class NewtonState(eqx.Module):
     grad_norm: jax.Array
     stats: OptimizationInfo
     ls_state: Optional[Any] = None
-    lambda_sq: Optional[Any] = None
     # Previous accepted step, for solvers whose convergence test is Cauchy rather than
     # gradient based. Initialized to inf so the first iteration never counts as converged.
     y_diff: Optional[Any] = None
 
 
 NewtonStepResult = tuple[Params, NewtonState]
-
-
-def _compute_diagonal_shift(H, shift_const):
-    leaves_with_paths = jax.tree_util.tree_leaves_with_path(H)
-
-    contributions = []
-    for path, leaf in leaves_with_paths:
-        # select diagonal blocks: (param, param)
-        n = len(path)
-        if n % 2 != 0 or path[: n // 2] != path[n // 2 :]:
-            continue
-        if leaf is None:
-            continue
-
-        arr = jnp.asarray(leaf)
-        # Only fix the problematic 0-D case; do not alter 1-D/2-D behaviour.
-        if arr.ndim == 0:
-            arr = arr.reshape(1, 1)
-
-        contrib = (
-            arr.shape[-1]
-            * jnp.finfo(arr.dtype).eps
-            * jnp.max(jnp.diagonal(arr, axis1=-2, axis2=-1))
-        )
-        contributions.append(contrib)
-
-    if contributions:
-        max_contribution = jax.tree_util.tree_reduce(jnp.maximum, contributions)
-        return shift_const * max_contribution
-    else:
-        # Fallback if no diagonal blocks survive (unlikely in practice).
-        return jnp.asarray(shift_const)
-
-
-def _add_diagonal_shift(H, tau):
-    def damp(path, h):
-        n = len(path)
-        if n % 2 != 0 or path[: n // 2] != path[n // 2 :]:
-            return h
-        size = math.prod(h.shape[: h.ndim // 2]) if h.ndim > 0 else 1
-        return (
-            h + tau
-            if h.ndim == 0
-            else h + tau * jnp.eye(size, dtype=h.dtype).reshape(h.shape)
-        )
-
-    return jax.tree.map_with_path(damp, H)
 
 
 class Newton(HessianMixin):
@@ -149,64 +95,8 @@ class Newton(HessianMixin):
         self._hessian: Callable | None = None
 
         self._linear_solver = lx.Cholesky()
-        self._operator_tags = lx.positive_semidefinite_tag
         self._shift_fn: Callable | None = None
         self._shift_const: float = shift_const
-
-    def setup_hessian(
-        self,
-        hess_fn: Callable | None = None,
-        hess_tag: HessianTag | None = None,
-        reg_tag: HessianTag | None = None,
-        property_override: Optional[type] = None,
-    ):
-        tag = hess_tag if reg_tag is None else combine_hessian_tags(hess_tag, reg_tag)
-        if tag is not None and tag.property not in (
-            PositiveDefinite,
-            PositiveSemiDefinite,
-        ):
-            raise ValueError(
-                "Newton requires a positive (semi)definite Hessian; use the Newton solver for the general case."
-            )
-        if property_override is not None and tag is not None:
-            tag = HessianTag(
-                tag.structure, property_override, batch_axes=tag.batch_axes
-            )
-        self._hess_tag = tag
-        self._hessian = self._penalize_hessian(hess_fn, hess_tag)
-
-    def _penalize_hessian(self, hess_fn, model_tag):
-        """Add the regularizer's penalty Hessian to the model's likelihood Hessian.
-
-        Models supply the second derivative of the likelihood alone. Adding the penalty's
-        is valid because ``Regularizer.penalized_loss`` returns ``loss + penalty``, and the
-        second derivative of a sum is the sum of the second derivatives.
-
-        ``None`` passes through: without a model-supplied Hessian, ``_build_cache``
-        autodiffs ``self.fun``, which is the penalized loss and already carries the penalty.
-
-        The batching comes from ``model_tag`` rather than the combined tag, because whether
-        the Hessian is assembled one block per neuron is a property of the model.
-        """
-        if hess_fn is None:
-            return None
-
-        batch_axes = (
-            model_tag.batch_axes
-            if model_tag is not None and model_tag.structure is BlockDiagonal
-            else None
-        )
-        penalty_hess_fn = self._regularizer._get_hess_fn(
-            self._init_params, self._regularizer_strength, batch_axes=batch_axes
-        )
-        if penalty_hess_fn is None:
-            # the regularizer declares no curvature, so the likelihood term is the whole
-            return hess_fn
-
-        def penalized_hessian(params, *args):
-            return tree_utils.tree_add(hess_fn(params, *args), penalty_hess_fn(params))
-
-        return penalized_hessian
 
     def _build_cache(self):
         if self._gradient is None:
@@ -223,12 +113,6 @@ class Newton(HessianMixin):
         self._resolve_linear_solver()
         ls_state = self._line_search.init(init_params)
 
-        # Resolve the shift and convergence policies
-        if self._hess_tag.property is PositiveDefinite:
-            self._shift_fn = lambda H: jnp.zeros((), jax.tree.leaves(H)[0].dtype)
-        else:
-            self._shift_fn = lambda H: _compute_diagonal_shift(H, self._shift_const)
-
         return NewtonState(
             grad_norm=jnp.inf,
             stats=OptimizationInfo(
@@ -238,7 +122,6 @@ class Newton(HessianMixin):
                 reached_max_steps=jnp.array(False),
             ),
             ls_state=ls_state,
-            lambda_sq=jnp.array(0.0),
             # inf so a Cauchy criterion cannot fire before the first step is taken
             y_diff=jax.tree.map(lambda x: jnp.full_like(x, jnp.inf), init_params),
         )
@@ -262,10 +145,7 @@ class Newton(HessianMixin):
             jax.tree.map(lambda x: -x, grad),
             self._linear_solver,
         ).value
-        lambda_sq = -sum(
-            jnp.vdot(g, s) for g, s in zip(jax.tree.leaves(grad), jax.tree.leaves(step))
-        )
-        return step, lambda_sq
+        return step
 
     def _newton_direction(self, grad, H, params):
         return self._block_apply(self._solve, grad, H, params)

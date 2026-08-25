@@ -16,6 +16,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from . import tree_utils
+from ._hess import Diagonal, HessianTag, PositiveDefinite, PositiveSemiDefinite
 from .base_class import Base
 from .proximal_operator import (
     compute_normalization,
@@ -25,12 +26,6 @@ from .proximal_operator import (
     prox_lasso,
     prox_none,
     prox_ridge,
-)
-from .solvers._hess import (
-    Diagonal,
-    HessianTag,
-    PositiveDefinite,
-    PositiveSemiDefinite,
 )
 from .tree_utils import pytree_map_and_reduce
 from .type_casting import _is_scalar_or_0d

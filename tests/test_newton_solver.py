@@ -1,26 +1,20 @@
-from contextlib import nullcontext as does_not_raise
-
 import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
 import pytest
 
-from nemos.regularizer import Ridge, UnRegularized
-from nemos.solvers._abstract_solver import OptimizationInfo
-from nemos.solvers._hess import (
+from nemos._hess import (
     Full,
-    General,
     HessianTag,
     PositiveDefinite,
     PositiveSemiDefinite,
-)
-from nemos.solvers._newton import (
-    Newton,
-    NewtonState,
     _add_diagonal_shift,
     _compute_diagonal_shift,
 )
+from nemos.regularizer import Ridge, UnRegularized
+from nemos.solvers._abstract_solver import OptimizationInfo
+from nemos.solvers._newton import Newton, NewtonState
 from nemos.tree_utils import pytree_map_and_reduce
 
 N = 8
@@ -350,9 +344,9 @@ def test_run_converges_on_pd_quadratic():
     x_opt, state, _ = solver.run(x0)
 
     assert bool(state.stats.converged), "Solver did not converge on a PD quadratic."
-    assert (
-        state.stats.num_steps == 2
-    ), "Solver did not converge in 2 step on a PD quadratic."
+    assert state.stats.num_steps == 2, (
+        "Solver did not converge in 2 step on a PD quadratic."
+    )
     np.testing.assert_allclose(
         x_opt,
         x_star,
@@ -588,40 +582,6 @@ def test_psd_quadratic_scale_equivariance(dtype, scale):
         atol=tol,
         rtol=0.0,
     )
-
-
-@pytest.mark.parametrize(
-    "property_, expectation",
-    [
-        pytest.param(
-            PositiveDefinite,
-            does_not_raise(),
-            id="positive-definite",
-        ),
-        pytest.param(
-            PositiveSemiDefinite,
-            does_not_raise(),
-            id="positive-semi-definite",
-        ),
-        pytest.param(
-            General,
-            pytest.raises(ValueError, match="positive"),
-            id="general",
-        ),
-    ],
-)
-def test_hessian_property_gating(property_, expectation):
-    A, b, _ = _make_pd_problem(4, jnp.float64)
-
-    loss, hess = _quadratic_loss_and_hessian(A, b)
-
-    with expectation:
-        _make_solver(
-            loss,
-            hess,
-            HessianTag(structure=Full, property=property_),
-            jnp.zeros(4),
-        )
 
 
 @pytest.mark.parametrize(
