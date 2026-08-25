@@ -328,7 +328,7 @@ def list_available_algorithms() -> list[str]:
     -------
     >>> import nemos as nmo
     >>> nmo.solvers.list_available_algorithms()
-    ['GradientDescent', 'ProximalGradient', 'LBFGS', 'BFGS', 'NonlinearCG', 'SVRG', 'ProxSVRG', 'Newton']
+    ['GradientDescent', 'ProximalGradient', 'LBFGS', 'BFGS', 'NonlinearCG', 'SVRG', 'ProxSVRG', 'Newton', 'ProxNewton']
     """
     return list(_registry.keys())
 
