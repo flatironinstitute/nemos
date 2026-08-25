@@ -14,13 +14,6 @@ import pytest
 
 import nemos as nmo
 from conftest import all_subclasses, initialize_feature_mask_for_population_glm
-from nemos._inspect_utils import is_abstract
-from nemos.base_regressor import BaseRegressor
-from nemos.glm import GLM, PopulationGLM
-from nemos.glm.classifier_glm import ClassifierGLM, ClassifierPopulationGLM
-from nemos.glm.params import GLMParams
-from nemos.regularizer import Lasso, Regularizer, Ridge, UnRegularized
-from nemos.solvers._abstract_solver import OptimizationInfo
 from nemos._hess import (
     BlockDiagonal,
     Full,
@@ -28,6 +21,13 @@ from nemos._hess import (
     PositiveDefinite,
     PositiveSemiDefinite,
 )
+from nemos._inspect_utils import is_abstract
+from nemos.base_regressor import BaseRegressor
+from nemos.glm import GLM, PopulationGLM
+from nemos.glm.classifier_glm import ClassifierGLM, ClassifierPopulationGLM
+from nemos.glm.params import GLMParams
+from nemos.regularizer import Lasso, Regularizer, Ridge, UnRegularized
+from nemos.solvers._abstract_solver import OptimizationInfo
 from nemos.solvers._newton import Newton, NewtonState, ProximalNewton
 
 # Import every submodule so all BaseRegressor subclasses are registered before the
@@ -976,9 +976,9 @@ def test_solver_invalidated_after_strength_change(request, model_instantiation_t
     assert model._solver is not None
 
     model.regularizer_strength = 0.5
-    assert model._solver is None, (
-        "_solver must be None after regularizer_strength change."
-    )
+    assert (
+        model._solver is None
+    ), "_solver must be None after regularizer_strength change."
 
 
 @pytest.mark.parametrize(
@@ -1337,9 +1337,9 @@ def test_prox_newton_singular_hessian_converges(request):
     hess = (2.0 / n) * X.T @ X
     eigvals = np.linalg.eigvalsh(hess)
     assert eigvals.min() > -1e-10, "Hessian must be positive semidefinite"
-    assert eigvals.min() < 1e-10, (
-        "Hessian must be singular for this test to mean anything"
-    )
+    assert (
+        eigvals.min() < 1e-10
+    ), "Hessian must be singular for this test to mean anything"
 
     # grad f orthogonal to ker H: the condition that bounds the subproblem below
     grad = -(2.0 / n) * X.T @ (y - X @ np.asarray(params))

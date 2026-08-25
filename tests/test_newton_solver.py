@@ -344,9 +344,9 @@ def test_run_converges_on_pd_quadratic():
     x_opt, state, _ = solver.run(x0)
 
     assert bool(state.stats.converged), "Solver did not converge on a PD quadratic."
-    assert state.stats.num_steps == 2, (
-        "Solver did not converge in 2 step on a PD quadratic."
-    )
+    assert (
+        state.stats.num_steps == 2
+    ), "Solver did not converge in 2 step on a PD quadratic."
     np.testing.assert_allclose(
         x_opt,
         x_star,
