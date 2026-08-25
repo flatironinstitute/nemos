@@ -10,10 +10,9 @@ import optax
 import optimistix as optx
 from optimistix._misc import cauchy_termination
 
-from nemos._hess import _add_diagonal_shift
-from nemos.solvers._hessian_mixins import HessianMixin
-
 from .. import tree_utils
+from .._hess import _add_diagonal_shift
+from ..solvers._hessian_mixins import HessianMixin
 from ..typing import Params
 from ._abstract_solver import OptimizationInfo
 from ._fista import FISTA
