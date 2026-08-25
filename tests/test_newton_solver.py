@@ -3,10 +3,11 @@ from contextlib import nullcontext as does_not_raise
 import jax
 import jax.numpy as jnp
 import numpy as np
-import pytest
 import optax
+import pytest
 
-from nemos.regularizer import UnRegularized, Ridge
+from nemos.regularizer import Ridge, UnRegularized
+from nemos.solvers._abstract_solver import OptimizationInfo
 from nemos.solvers._hess import (
     Full,
     General,
@@ -14,12 +15,11 @@ from nemos.solvers._hess import (
     PositiveDefinite,
     PositiveSemiDefinite,
 )
-from nemos.solvers._abstract_solver import OptimizationInfo
 from nemos.solvers._newton import (
     Newton,
+    NewtonState,
     _add_diagonal_shift,
     _compute_diagonal_shift,
-    NewtonState,
 )
 from nemos.tree_utils import pytree_map_and_reduce
 
@@ -350,9 +350,9 @@ def test_run_converges_on_pd_quadratic():
     x_opt, state, _ = solver.run(x0)
 
     assert bool(state.stats.converged), "Solver did not converge on a PD quadratic."
-    assert state.stats.num_steps == 2, (
-        "Solver did not converge in 2 step on a PD quadratic."
-    )
+    assert (
+        state.stats.num_steps == 2
+    ), "Solver did not converge in 2 step on a PD quadratic."
     np.testing.assert_allclose(
         x_opt,
         x_star,

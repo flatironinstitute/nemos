@@ -12,9 +12,9 @@ from numpy.typing import ArrayLike, NDArray
 
 from .. import observation_models as obs
 from .. import tree_utils
+from .._hess import BlockDiagonal, Full, HessianTag, PositiveSemiDefinite
 from ..label_encoder import LabelEncoder
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
-from ..solvers._hess import BlockDiagonal, Full, HessianTag, PositiveSemiDefinite
 from ..type_casting import is_numpy_array_like, support_pynapple
 from ..typing import (
     DESIGN_INPUT_TYPE,

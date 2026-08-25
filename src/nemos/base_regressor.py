@@ -23,7 +23,6 @@ from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
 from .solvers._hess import HessianTag
-from .solvers._newton import Newton
 from .solvers._no_op import NoOpSolver
 from .type_casting import cast_to_jax, is_numpy_array_like
 from .typing import (
@@ -78,12 +77,17 @@ class BaseRegressor(
     are expected to provide specific implementations of the abstract methods defined here.
     Below is a table listing the default and available solvers for each regularizer.
 
-    | Regularizer   | Default Solver   | Available Solvers                                           |
-    | ------------- | ---------------- | ----------------------------------------------------------- |
-    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
-    | Ridge         | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
-    | Lasso         | ProximalGradient | ProximalGradient                                            |
-    | GroupLasso    | ProximalGradient | ProximalGradient                                            |
+    | Regularizer   | Default Solver   | Available Solvers                                     |
+    | ------------- | ---------------- | ----------------------------------------------------- |
+    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG,            |
+    |               |                  | ProximalGradient, SVRG, ProxSVRG, Newton,             |
+    |               |                  | ProximalNewton                                        |
+    | Ridge         | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG,            |
+    |               |                  | ProximalGradient, SVRG, ProxSVRG, Newton,             |
+    |               |                  | ProximalNewton                                        |
+    | Lasso         | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |
+    | ElasticNet    | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |
+    | GroupLasso    | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |
 
     Parameters
     ----------
@@ -559,7 +563,10 @@ class BaseRegressor(
             **solver_kwargs,
         )
 
-        if isinstance(solver, Newton):
+        # Offer the analytic Hessian to any solver declaring it can use curvature,
+        # the same way ``_supports_stochastic`` declares stochastic support. ``getattr``
+        # covers duck-typed custom solvers that subclass nothing.
+        if getattr(solver, "_uses_hessian", False):
             solver.setup_hessian(
                 self._get_hess_fn(frozen=frozen_params),
                 self._hess_tag,

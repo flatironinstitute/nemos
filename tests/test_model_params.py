@@ -21,11 +21,11 @@ import pytest
 
 import nemos
 from conftest import all_subclasses
+from nemos._hess import Diagonal, General, HessianTag, PositiveDefinite
 from nemos._inspect_utils import is_abstract
 from nemos.glm.params import GLMParams
 from nemos.params import ModelParams
 from nemos.regularizer import Ridge, UnRegularized
-from nemos.solvers._hess import Diagonal, General, HessianTag, PositiveDefinite
 
 # Import every submodule so all ModelParams subclasses are registered before the
 # parametrizations below are collected (same idiom as test_hmm_validator).
