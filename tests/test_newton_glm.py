@@ -697,7 +697,6 @@ def test_newton_population_glm_block_hessian_matches_full(
             )
 
 
-@pytest.mark.requires_x64
 @pytest.mark.parametrize("solver_name, regularizer_cls", _solver_regularizer_cases())
 @pytest.mark.parametrize("structure", ["", "_pytree"])
 def test_newton_classifier_glm_converges(
@@ -976,9 +975,9 @@ def test_solver_invalidated_after_strength_change(request, model_instantiation_t
     assert model._solver is not None
 
     model.regularizer_strength = 0.5
-    assert (
-        model._solver is None
-    ), "_solver must be None after regularizer_strength change."
+    assert model._solver is None, (
+        "_solver must be None after regularizer_strength change."
+    )
 
 
 @pytest.mark.parametrize(
@@ -1337,9 +1336,9 @@ def test_prox_newton_singular_hessian_converges(request):
     hess = (2.0 / n) * X.T @ X
     eigvals = np.linalg.eigvalsh(hess)
     assert eigvals.min() > -1e-10, "Hessian must be positive semidefinite"
-    assert (
-        eigvals.min() < 1e-10
-    ), "Hessian must be singular for this test to mean anything"
+    assert eigvals.min() < 1e-10, (
+        "Hessian must be singular for this test to mean anything"
+    )
 
     # grad f orthogonal to ker H: the condition that bounds the subproblem below
     grad = -(2.0 / n) * X.T @ (y - X @ np.asarray(params))

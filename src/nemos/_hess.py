@@ -1,9 +1,5 @@
-import math
 from dataclasses import dataclass
 from typing import Any
-
-import jax
-import jax.numpy as jnp
 
 # --- Properties ---
 
@@ -138,43 +134,3 @@ def combine_hessian_tags(
         property=prop,
         batch_axes=t1.batch_axes,
     )
-
-
-def _is_diagonal_block(path):
-    n = len(path)
-    if n % 2 != 0:
-        return False
-    half = n // 2
-    return all(
-        isinstance(a, type(b)) and a == b for a, b in zip(path[:half], path[half:])
-    )
-
-
-def _as_matrix(arr):
-    """Reshape a mirrored-shape array to (..., m, m)."""
-    half = arr.ndim // 2
-    m = math.prod(arr.shape[:half])
-    return arr.reshape(m, m)
-
-
-def _compute_diagonal_shift(H, shift_const):
-    contributions = [
-        math.prod(leaf.shape[: leaf.ndim // 2])
-        * jnp.finfo(leaf.dtype).eps
-        * jnp.max(jnp.diag(_as_matrix(leaf)))
-        for path, leaf in jax.tree_util.tree_leaves_with_path(H)
-        if _is_diagonal_block(path) and leaf is not None
-    ]
-    if not contributions:
-        return jnp.asarray(shift_const)
-    return shift_const * jax.tree_util.tree_reduce(jnp.maximum, contributions)
-
-
-def _add_diagonal_shift(H, tau):
-    def damp(path, h):
-        if not _is_diagonal_block(path):
-            return h
-        m = math.prod(h.shape[: h.ndim // 2]) if h.ndim > 0 else 1
-        return h + tau * jnp.eye(m, dtype=h.dtype).reshape(h.shape)
-
-    return jax.tree.map_with_path(damp, H)

@@ -14,9 +14,14 @@ from .._hess import (
     HessianTag,
     PositiveDefinite,
     PositiveSemiDefinite,
-    _compute_diagonal_shift,
     combine_hessian_tags,
 )
+
+
+def _compute_diagonal_shift(H, shift_const):
+    diag = jnp.diag(H)
+    m = H.shape[0]
+    return shift_const * m * jnp.finfo(H.dtype).eps * jnp.max(diag)
 
 
 class HessianMixin:
@@ -136,10 +141,10 @@ class HessianMixin:
         if self._hess_tag.property in [PositiveDefinite, PositiveSemiDefinite]:
             self._linear_solver = lx.Cholesky()
             self._operator_tags = lx.positive_semidefinite_tag
-            if self._hess_tag.property is PositiveDefinite:
-                self._shift_fn = lambda H: jnp.zeros((), jax.tree.leaves(H)[0].dtype)
-            else:
-                self._shift_fn = lambda H: _compute_diagonal_shift(H, self._shift_const)
+            if self._hess_tag.property is PositiveSemiDefinite:
+                self._shift_fn = lambda operator: _compute_diagonal_shift(
+                    operator.as_matrix(), self._shift_const
+                )
         else:
             self._linear_solver = lx.AutoLinearSolver(well_posed=False)
             self._shift_fn = lambda H: jnp.zeros((), jax.tree.leaves(H)[0].dtype)

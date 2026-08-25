@@ -4,14 +4,7 @@ import numpy as np
 import optax
 import pytest
 
-from nemos._hess import (
-    Full,
-    HessianTag,
-    PositiveDefinite,
-    PositiveSemiDefinite,
-    _add_diagonal_shift,
-    _compute_diagonal_shift,
-)
+from nemos._hess import Full, HessianTag, PositiveDefinite, PositiveSemiDefinite
 from nemos.regularizer import Ridge, UnRegularized
 from nemos.solvers._abstract_solver import OptimizationInfo
 from nemos.solvers._newton import Newton, NewtonState
@@ -121,177 +114,6 @@ def _make_solver(loss_fn, hess_fn, hess_tag, init_params, **kwargs):
     return solver
 
 
-def _dense_H():
-    """3x3 diagonal matrix with max diagonal entry 100."""
-    return jnp.diag(jnp.array([1.0, 10.0, 100.0]))
-
-
-def _pytree_H():
-    return {
-        "w": {
-            "w": jnp.diag(jnp.array([100.0, 50.0])),
-            "b": jnp.zeros((2, 2)),  # square, but NOT a diagonal block
-        },
-        "b": {
-            "w": jnp.zeros((2, 2)),  # square, but NOT a diagonal block
-            "b": jnp.diag(jnp.array([1.0, 1.0])),
-        },
-    }
-
-
-_H_CASES = [
-    pytest.param(_dense_H, 3, 100.0, id="dense"),
-    pytest.param(_pytree_H, 2, 100.0, id="pytree"),
-]
-
-
-class TestComputeDiagonalShift:
-    """Unit tests for the _compute_diagonal_shift helper."""
-
-    @pytest.mark.parametrize("H_factory, n, max_diag", _H_CASES)
-    def test_exact_formula(self, H_factory, n, max_diag):
-        """Tau must equal shift_const * n * eps * max_diag."""
-        H = H_factory()
-        shift_const = 2.0
-        tau = _compute_diagonal_shift(H, shift_const)
-        eps = float(jnp.finfo(jax.tree.leaves(H)[0].dtype).eps)
-        expected = shift_const * n * eps * max_diag
-        np.testing.assert_allclose(tau, expected)
-
-    @pytest.mark.parametrize("H_factory, n, max_diag", _H_CASES)
-    def test_shift_const_is_linear_multiplier(self, H_factory, n, max_diag):
-        """Doubling shift_const must exactly double tau."""
-        H = H_factory()
-        tau1 = _compute_diagonal_shift(H, 1.0)
-        tau2 = _compute_diagonal_shift(H, 2.0)
-        np.testing.assert_allclose(tau2, 2.0 * tau1)
-
-    @pytest.mark.requires_x64
-    @pytest.mark.parametrize("H_factory, n, max_diag", _H_CASES)
-    def test_uses_dtype_eps(self, H_factory, n, max_diag):
-        """Tau tracks the eps of the actual leaf dtype."""
-        H = H_factory()
-        # cast all leaves to float32 / float64
-        H32 = jax.tree.map(lambda x: x.astype(jnp.float32), H)
-        H64 = jax.tree.map(lambda x: x.astype(jnp.float64), H)
-        tau32 = _compute_diagonal_shift(H32, 1.0)
-        tau64 = _compute_diagonal_shift(H64, 1.0)
-        assert tau64 < tau32, "float64 shift should be smaller than float32 shift."
-
-    @pytest.mark.parametrize("H_factory, n, max_diag", _H_CASES)
-    def test_off_diagonal_entries_ignored(self, H_factory, n, max_diag):
-        """Changing off-diagonal values must not affect tau."""
-        H = H_factory()
-
-        def perturb_off_diagonal(h):
-            """Add 1e6 to every off-diagonal entry of a 2-D leaf."""
-            if h.ndim == 2:
-                return h + 1e6 * (1 - jnp.eye(*h.shape, dtype=h.dtype))
-            return h
-
-        H_perturbed = jax.tree.map(perturb_off_diagonal, H)
-
-        tau_orig = _compute_diagonal_shift(H, 1.0)
-        tau_pert = _compute_diagonal_shift(H_perturbed, 1.0)
-        np.testing.assert_allclose(
-            tau_pert,
-            tau_orig,
-            err_msg="Off-diagonal perturbation changed tau.",
-        )
-
-
-class TestAddDiagonalShift:
-    """Unit tests for the _add_diagonal_shift helper."""
-
-    @pytest.mark.parametrize("H_factory, n, max_diag", _H_CASES)
-    def test_diagonal_blocks_increase_by_tau(self, H_factory, n, max_diag):
-        """Diagonal Hessian blocks have tau added to their diagonal."""
-        H = H_factory()
-        tau = 3.7
-        H_mod = _add_diagonal_shift(H, tau)
-
-        original = dict(jax.tree_util.tree_leaves_with_path(H))
-        modified = dict(jax.tree_util.tree_leaves_with_path(H_mod))
-
-        for path, h in original.items():
-            if len(path) % 2 == 0 and path[: len(path) // 2] == path[len(path) // 2 :]:
-                np.testing.assert_allclose(
-                    jnp.diagonal(modified[path]),
-                    jnp.diagonal(h) + tau,
-                    err_msg=f"Diagonal block {path} was not shifted.",
-                )
-
-    @pytest.mark.parametrize("H_factory, n, max_diag", _H_CASES)
-    def test_off_diagonal_blocks_unchanged(self, H_factory, n, max_diag):
-        """Off-diagonal Hessian blocks are completely unchanged."""
-        H = H_factory()
-        tau = 5.0
-        H_mod = _add_diagonal_shift(H, tau)
-
-        original = dict(jax.tree_util.tree_leaves_with_path(H))
-        modified = dict(jax.tree_util.tree_leaves_with_path(H_mod))
-
-        for path, h in original.items():
-            is_diagonal = (
-                len(path) % 2 == 0 and path[: len(path) // 2] == path[len(path) // 2 :]
-            )
-
-            if not is_diagonal:
-                np.testing.assert_array_equal(
-                    modified[path],
-                    h,
-                    err_msg=f"Off-diagonal block {path} was modified.",
-                )
-
-    @pytest.mark.parametrize("H_factory, n, max_diag", _H_CASES)
-    def test_zero_shift_is_identity_op(self, H_factory, n, max_diag):
-        """A zero shift leaves the entire Hessian unchanged."""
-        H = H_factory()
-        H_mod = _add_diagonal_shift(H, 0.0)
-
-        for original, modified in zip(
-            jax.tree.leaves(H),
-            jax.tree.leaves(H_mod),
-        ):
-            np.testing.assert_array_equal(
-                modified,
-                original,
-                err_msg="Hessian changed with tau=0.",
-            )
-
-    @pytest.mark.parametrize("H_factory, n, max_diag", _H_CASES)
-    def test_pytree_structure_preserved(self, H_factory, n, max_diag):
-        """The Hessian pytree structure is preserved."""
-        H = H_factory()
-        H_mod = _add_diagonal_shift(H, 1.0)
-
-        assert jax.tree_util.tree_structure(H_mod) == jax.tree_util.tree_structure(H)
-
-    @pytest.mark.parametrize("H_factory, n, max_diag", _H_CASES)
-    def test_shapes_preserved(self, H_factory, n, max_diag):
-        """Every Hessian leaf retains its original shape."""
-        H = H_factory()
-        H_mod = _add_diagonal_shift(H, 7.0)
-
-        for original, modified in zip(
-            jax.tree.leaves(H),
-            jax.tree.leaves(H_mod),
-        ):
-            assert modified.shape == original.shape
-
-    @pytest.mark.parametrize("H_factory, n, max_diag", _H_CASES)
-    def test_dtypes_preserved(self, H_factory, n, max_diag):
-        """Every Hessian leaf retains its original dtype."""
-        H = H_factory()
-        H_mod = _add_diagonal_shift(H, 1.0)
-
-        for original, modified in zip(
-            jax.tree.leaves(H),
-            jax.tree.leaves(H_mod),
-        ):
-            assert modified.dtype == original.dtype
-
-
 @pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
 @pytest.mark.requires_x64
 def test_pd_quadratic_convergence(dtype):
@@ -344,9 +166,9 @@ def test_run_converges_on_pd_quadratic():
     x_opt, state, _ = solver.run(x0)
 
     assert bool(state.stats.converged), "Solver did not converge on a PD quadratic."
-    assert (
-        state.stats.num_steps == 2
-    ), "Solver did not converge in 2 step on a PD quadratic."
+    assert state.stats.num_steps == 2, (
+        "Solver did not converge in 2 step on a PD quadratic."
+    )
     np.testing.assert_allclose(
         x_opt,
         x_star,

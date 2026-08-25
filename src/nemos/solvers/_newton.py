@@ -11,7 +11,6 @@ import optimistix as optx
 from optimistix._misc import cauchy_termination
 
 from .. import tree_utils
-from .._hess import _add_diagonal_shift
 from ..solvers._hessian_mixins import HessianMixin
 from ..typing import Params
 from ._abstract_solver import OptimizationInfo
@@ -94,7 +93,7 @@ class Newton(HessianMixin):
         self._hessian: Callable | None = None
 
         self._linear_solver = lx.Cholesky()
-        self._shift_fn: Callable | None = None
+        self._shift_fn: Callable | None = lambda _: 0.0
         self._shift_const: float = shift_const
 
     def _build_cache(self):
@@ -131,16 +130,12 @@ class Newton(HessianMixin):
         # ``params + d``, not at ``d``.
         del params
 
-        tau = self._shift_fn(H)
-        H_mod = _add_diagonal_shift(H, tau)
-
-        operator = lx.PyTreeLinearOperator(
-            H_mod,
-            jax.eval_shape(lambda: grad),
-            tags=self._operator_tags,
+        operator = lx.PyTreeLinearOperator(H, jax.eval_shape(lambda: grad))
+        shift = self._shift_fn(operator) * lx.DiagonalLinearOperator(
+            jax.tree.map(jnp.ones_like, grad)
         )
         step = lx.linear_solve(
-            operator,
+            lx.TaggedLinearOperator(operator + shift, tags=self._operator_tags),
             jax.tree.map(lambda x: -x, grad),
             self._linear_solver,
         ).value
