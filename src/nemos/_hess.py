@@ -140,48 +140,41 @@ def combine_hessian_tags(
     )
 
 
+def _is_diagonal_block(path):
+    n = len(path)
+    if n % 2 != 0:
+        return False
+    half = n // 2
+    return all(
+        isinstance(a, type(b)) and a == b for a, b in zip(path[:half], path[half:])
+    )
+
+
+def _as_matrix(arr):
+    """Reshape a mirrored-shape array to (..., m, m)."""
+    half = arr.ndim // 2
+    m = math.prod(arr.shape[:half])
+    return arr.reshape(m, m)
+
+
 def _compute_diagonal_shift(H, shift_const):
-    leaves_with_paths = jax.tree_util.tree_leaves_with_path(H)
-
-    contributions = []
-    for path, leaf in leaves_with_paths:
-        # select diagonal blocks: (param, param)
-        n = len(path)
-        if n % 2 != 0 or path[: n // 2] != path[n // 2 :]:
-            continue
-        if leaf is None:
-            continue
-
-        arr = jnp.asarray(leaf)
-        # Only fix the problematic 0-D case; do not alter 1-D/2-D behaviour.
-        if arr.ndim == 0:
-            arr = arr.reshape(1, 1)
-
-        contrib = (
-            arr.shape[-1]
-            * jnp.finfo(arr.dtype).eps
-            * jnp.max(jnp.diagonal(arr, axis1=-2, axis2=-1))
-        )
-        contributions.append(contrib)
-
-    if contributions:
-        max_contribution = jax.tree_util.tree_reduce(jnp.maximum, contributions)
-        return shift_const * max_contribution
-    else:
-        # Fallback if no diagonal blocks survive (unlikely in practice).
+    contributions = [
+        math.prod(leaf.shape[: leaf.ndim // 2])
+        * jnp.finfo(leaf.dtype).eps
+        * jnp.max(jnp.diag(_as_matrix(leaf)))
+        for path, leaf in jax.tree_util.tree_leaves_with_path(H)
+        if _is_diagonal_block(path) and leaf is not None
+    ]
+    if not contributions:
         return jnp.asarray(shift_const)
+    return shift_const * jax.tree_util.tree_reduce(jnp.maximum, contributions)
 
 
 def _add_diagonal_shift(H, tau):
     def damp(path, h):
-        n = len(path)
-        if n % 2 != 0 or path[: n // 2] != path[n // 2 :]:
+        if not _is_diagonal_block(path):
             return h
-        size = math.prod(h.shape[: h.ndim // 2]) if h.ndim > 0 else 1
-        return (
-            h + tau
-            if h.ndim == 0
-            else h + tau * jnp.eye(size, dtype=h.dtype).reshape(h.shape)
-        )
+        m = math.prod(h.shape[: h.ndim // 2]) if h.ndim > 0 else 1
+        return h + tau * jnp.eye(m, dtype=h.dtype).reshape(h.shape)
 
     return jax.tree.map_with_path(damp, H)

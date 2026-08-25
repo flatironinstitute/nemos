@@ -21,7 +21,7 @@ from nemos.glm.classifier_glm import ClassifierGLM, ClassifierPopulationGLM
 from nemos.glm.params import GLMParams
 from nemos.regularizer import Lasso, Regularizer, Ridge, UnRegularized
 from nemos.solvers._abstract_solver import OptimizationInfo
-from nemos.solvers._hess import (
+from nemos._hess import (
     BlockDiagonal,
     Full,
     HessianTag,
@@ -178,6 +178,7 @@ _STRENGTHS = pytest.mark.parametrize(
 )
 
 
+@_SOLVERS
 @pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
 @pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
 def test_newton_glm_instantiate_solver(regularizer_name, glm_class, solver_name):
@@ -481,7 +482,6 @@ def test_newton_glm_converges(request, solver_name, regularizer_cls, structure):
         "poissonGLM_model_instantiation" + structure
     )
     model.regularizer = regularizer_cls()
-    model.solver_name = "Newton"
     model.regularizer_strength = 1e-3
     model.solver_name = solver_name
     model = model.fit(X, y)
