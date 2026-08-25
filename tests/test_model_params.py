@@ -21,7 +21,12 @@ import pytest
 
 import nemos
 from conftest import all_subclasses
-from nemos._hess import Diagonal, General, HessianTag, PositiveDefinite
+from nemos._hess import (
+    Diagonal,
+    HessianTag,
+    PositiveDefinite,
+    PositiveSemiDefinite,
+)
 from nemos._inspect_utils import is_abstract
 from nemos.glm.params import GLMParams
 from nemos.params import ModelParams
@@ -116,7 +121,7 @@ class _FullyCoveredParams(ModelParams):
         pytest.param(
             _FullyCoveredParams, PositiveDefinite, id="full-coverage-keeps-tag"
         ),
-        pytest.param(GLMParams, General, id="partial-coverage-downgrades"),
+        pytest.param(GLMParams, PositiveSemiDefinite, id="partial-coverage-downgrades"),
     ],
 )
 def test_resolve_hess_tag_coverage(params_cls, expected_property):
