@@ -35,10 +35,6 @@ from nemos.solvers._newton import Newton, NewtonState, ProximalNewton
 for _, _modname, _ in pkgutil.walk_packages(nmo.__path__, prefix="nemos."):
     importlib.import_module(_modname)
 
-# Register every test here as solver-related
-pytestmark = pytest.mark.solver_related
-
-
 # The two second-order solvers. Everything ``Newton`` converges to, ``ProximalNewton``
 # converges to as well: they differ in how the penalty is reached (a proximal operator
 # rather than the penalized loss) and in the convergence test, not in the optimum. So the
