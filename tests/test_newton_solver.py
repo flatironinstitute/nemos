@@ -166,9 +166,9 @@ def test_run_converges_on_pd_quadratic():
     x_opt, state, _ = solver.run(x0)
 
     assert bool(state.stats.converged), "Solver did not converge on a PD quadratic."
-    assert (
-        state.stats.num_steps == 2
-    ), "Solver did not converge in 2 step on a PD quadratic."
+    assert state.stats.num_steps == 2, (
+        "Solver did not converge in 2 step on a PD quadratic."
+    )
     np.testing.assert_allclose(
         x_opt,
         x_star,
@@ -332,9 +332,9 @@ def test_psd_singular_quadratic_preserves_null_space_autodiff(dtype):
     )
 
 
+@pytest.mark.requires_x64
 @pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
 @pytest.mark.parametrize("scale", [1e-6, 1.0, 1e6])
-@pytest.mark.requires_x64
 def test_pd_quadratic_scale_equivariance(dtype, scale):
     A, b, x_star = _make_pd_problem(6, dtype)
 
@@ -368,9 +368,9 @@ def test_pd_quadratic_scale_equivariance(dtype, scale):
     )
 
 
+@pytest.mark.requires_x64
 @pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
 @pytest.mark.parametrize("scale", [1e-6, 1.0, 1e6])
-@pytest.mark.requires_x64
 def test_psd_quadratic_scale_equivariance(dtype, scale):
     A, b, x_star, x0, x0_null, Q_null = _make_psd_problem(6, dtype)
 
