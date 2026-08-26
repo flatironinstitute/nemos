@@ -388,13 +388,11 @@ def test_maxiter_is_respected(
     solver_class_name = str(nmo.solvers.get_solver(solver_name).implementation)
 
     use_jaxopt_tol = False
-    if backend == "jaxopt":
+
+    if backend == "jaxopt" and "jaxopt" in solver_class_name.lower():
         use_jaxopt_tol = True
 
-    if "jaxopt" in solver_class_name.lower():
-        use_jaxopt_tol = True
-
-    if "optimistix" in solver_class_name.lower():
+    if backend == "optimistix" in solver_class_name.lower():
         use_jaxopt_tol = False
 
     tol = -1.0 if use_jaxopt_tol else 0.0
