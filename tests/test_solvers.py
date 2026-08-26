@@ -386,17 +386,14 @@ def test_maxiter_is_respected(
     backend = os.getenv("NEMOS_SOLVER_BACKEND")
     solver_class_name = str(nmo.solvers.get_solver(solver_name).implementation)
 
-    use_jaxopt_tol = False
-    if backend == "jaxopt":
-        use_jaxopt_tol = True
-
-    if "jaxopt" in solver_class_name.lower():
-        use_jaxopt_tol = True
-
-    if "optimistix" in solver_class_name.lower():
-        use_jaxopt_tol = False
-
-    tol = -1.0 if use_jaxopt_tol else 0.0
+    if backend == "jaxopt" or "jaxopt" in solver_class_name.lower():
+        tol = -1.0
+    elif backend == "optimistix" or "optimistix" in solver_class_name.lower():
+        tol = 0.0
+    elif backend == "nemos":
+        tol = 0.0
+    else:
+        tol = 0.0
     solver_kwargs = {"maxiter": maxiter, "tol": tol}
 
     # only pass mask if it's not None
