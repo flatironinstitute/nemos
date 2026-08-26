@@ -219,6 +219,16 @@ variable_selection_zero_basis.md
 
 :::{grid-item-card}
 
+```{toctree}
+:maxdepth: 2
+
+approximate_loo.md
+```
+
+:::
+
+:::{grid-item-card}
+
 <figure>
 <a href="variable_selection_group_lasso.html">
 <img src="../_static/thumbnails/how_to_guide/variable_selection_group_lasso.svg" style="height: 100px", alt="Variable selection."/>

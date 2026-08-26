@@ -892,6 +892,53 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             )
         return score
 
+    def approximate_loo(self, X: DESIGN_INPUT_TYPE, y: ArrayLike):
+        r"""Approximate leave-one-out cross-validation from a single fit.
+
+        Convenience wrapper around :func:`nemos.model_selection.approximate_loo`. It
+        estimates the per-observation leave-one-out (LOO) predicted mean, log-likelihood,
+        and deviance from the full-data fit plus one ``O(p^2)`` correction per
+        observation, instead of refitting the model ``n`` times. See
+        :func:`nemos.model_selection.approximate_loo` for the method, math, references
+        (Pregibon 1981; Rad & Maleki 2020), and limitations.
+
+        Parameters
+        ----------
+        X :
+            The design matrix used to fit this model, shape ``(n_samples, n_features)``
+            (or a pytree of such arrays).
+        y :
+            The observations used to fit this model, shape ``(n_samples,)`` for
+            :class:`GLM` or ``(n_samples, n_neurons)`` for :class:`PopulationGLM`.
+
+        Returns
+        -------
+        :
+            A :class:`~nemos.model_selection.ApproximateLOO` named tuple with the
+            per-observation approximate LOO ``predicted_mean``, ``linear_predictor``,
+            ``log_likelihood``, ``deviance``, and ``leverage``.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> rng = np.random.default_rng(0)
+        >>> X = rng.normal(size=(100, 3))
+        >>> y = rng.poisson(np.exp(X @ np.array([0.2, -0.1, 0.3]) - 0.5)).astype(float)
+        >>> model = nmo.glm.GLM().fit(X, y)
+        >>> loo = model.approximate_loo(X, y)
+        >>> approx_loo_log_likelihood = loo.log_likelihood.mean()
+
+        See Also
+        --------
+        :func:`nemos.model_selection.approximate_loo`
+            The underlying function, with full documentation and references.
+        """
+        # local import to avoid a circular import (model_selection imports from glm)
+        from ..model_selection import approximate_loo
+
+        return approximate_loo(self, X, y)
+
     def _model_specific_initialization(
         self,
         X: DESIGN_INPUT_TYPE,
