@@ -155,22 +155,28 @@ class Newton(HessianMixin):
         return fval, grad, lambda p: self.fun(p, *args)
 
     def _converged(self, params, state, grad, fval):
-        """Cauchy criterion on the accepted step, as :class:`~nemos.solvers._fista.FISTA` uses.
-
-        A gradient-based test is unusable here: this solver differentiates the smooth
-        part only, so its gradient does not vanish at the optimum of a composite
-        objective, and any residual built from it inherits the curvature scale -- on
-        badly conditioned data it never falls below ``tol`` even once the iterate has
-        stopped moving.
-        """
+        """Cauchy criterion on the accepted step and relative function decrease."""
+        f_old = state.stats.function_val
+        # Compute a scale-normalised f_diff to avoid catastrophic cancellation
+        # when |fval| is large (e.g. at scale=1e6 in float32 both f values are
+        # ~1e12 and their raw difference loses all significant bits).
+        # We divide by max(|f_old|, atol) so the result is already relative;
+        # cauchy_termination then checks |f_diff| < atol + rtol * |f|, and we
+        # pass f=1.0 so that scale is just atol -- matching the intent.
+        denom = jnp.maximum(jnp.abs(f_old), self.tol)
+        f_diff_rel = jnp.where(
+            jnp.isfinite(f_old),
+            jnp.abs(fval - f_old) / denom,
+            jnp.inf,
+        )
         return cauchy_termination(
             self.rtol,
             self.tol,
             lx.internal.two_norm,
             params,
             state.y_diff,
-            fval,
-            fval - state.stats.function_val,
+            jnp.ones(()),  # f_scale = atol + rtol*1 = atol, matching f_diff_rel
+            f_diff_rel,
         )
 
     def _apply_or_reject(
