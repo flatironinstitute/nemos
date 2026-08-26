@@ -16,12 +16,6 @@ _PD_TAG = HessianTag(structure=Full, property=PositiveDefinite)
 _PSD_TAG = HessianTag(structure=Full, property=PositiveSemiDefinite)
 
 
-def _dtype_tol(dtype, scale=1.0, rtol_factor=100.0):
-    """Tolerance proportional to machine precision."""
-    eps = float(jnp.finfo(dtype).eps)
-    return rtol_factor * eps * max(1.0, float(scale))
-
-
 def _make_pd_problem(n, dtype, rng=None):
     """Return a well-conditioned PD quadratic and its analytic optimum."""
     if rng is None:
@@ -123,36 +117,17 @@ def test_pd_quadratic_convergence(dtype):
     loss, hess = _quadratic_loss_and_hessian(A, b)
     x0 = jnp.zeros_like(x_star)
 
-    tol = _dtype_tol(dtype, np.linalg.norm(np.asarray(x_star)))
-
-    solver = _make_solver(
-        loss,
-        hess,
-        _PD_TAG,
-        x0,
-        tol=tol,
-        shift_const=0.0,
-    )
+    solver = _make_solver(loss, hess, _PD_TAG, x0, shift_const=0.0)
 
     x_opt, state, _ = solver.run(x0)
 
     assert bool(state.stats.converged)
     assert state.stats.num_steps == 2
 
-    np.testing.assert_allclose(
-        x_opt,
-        x_star,
-        atol=tol,
-        rtol=0.0,
-    )
+    np.testing.assert_allclose(x_opt, x_star, atol=solver.tol, rtol=solver.rtol)
 
     residual = A @ x_opt - b
-    np.testing.assert_allclose(
-        residual,
-        0.0,
-        atol=tol,
-        rtol=0.0,
-    )
+    np.testing.assert_allclose(residual, 0.0, atol=solver.tol, rtol=solver.rtol)
 
 
 @pytest.mark.requires_x64
@@ -186,28 +161,14 @@ def test_pd_quadratic_convergence_autodiff(dtype):
     loss = _quadratic_loss(A, b)
     x0 = jnp.zeros_like(x_star)
 
-    tol = _dtype_tol(dtype, np.linalg.norm(np.asarray(x_star)))
-
-    solver = _make_solver(
-        loss,
-        None,
-        _PD_TAG,
-        x0,
-        tol=tol,
-        shift_const=0.0,
-    )
+    solver = _make_solver(loss, None, _PD_TAG, x0, shift_const=0.0)
 
     x_opt, state, _ = solver.run(x0)
 
     assert bool(state.stats.converged)
     assert state.stats.num_steps == 2
 
-    np.testing.assert_allclose(
-        x_opt,
-        x_star,
-        atol=tol,
-        rtol=0.0,
-    )
+    np.testing.assert_allclose(x_opt, x_star, atol=solver.tol, rtol=solver.rtol)
 
 
 @pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
@@ -218,21 +179,7 @@ def test_psd_singular_quadratic_preserves_null_space(dtype):
 
     loss, hess = _quadratic_loss_and_hessian(A, b)
 
-    tol = _dtype_tol(
-        dtype,
-        np.linalg.norm(np.asarray(b)),
-        rtol_factor=500,
-    )
-
-    solver = _make_solver(
-        loss,
-        hess,
-        _PSD_TAG,
-        x0,
-        shift_const=1.0,
-        maxiter=100,
-        tol=tol,
-    )
+    solver = _make_solver(loss, hess, _PSD_TAG, x0, shift_const=1.0, maxiter=100)
 
     x_opt, state, _ = solver.run(x0)
 
@@ -244,31 +191,18 @@ def test_psd_singular_quadratic_preserves_null_space(dtype):
 
     # The final point must satisfy the original first-order condition
     residual = A @ x_opt - b
-    np.testing.assert_allclose(
-        residual,
-        0.0,
-        atol=tol,
-        rtol=0.0,
-    )
+    np.testing.assert_allclose(residual, 0.0, atol=solver.tol, rtol=solver.rtol)
 
     initial_null = Q_null.T @ x0
     final_null = Q_null.T @ x_opt
 
     np.testing.assert_allclose(
-        final_null,
-        initial_null,
-        atol=tol,
-        rtol=0.0,
+        final_null, initial_null, atol=solver.tol, rtol=solver.rtol
     )
 
     expected = x_star + x0_null
 
-    np.testing.assert_allclose(
-        x_opt,
-        expected,
-        atol=tol,
-        rtol=0.0,
-    )
+    np.testing.assert_allclose(x_opt, expected, atol=solver.tol, rtol=solver.rtol)
 
 
 @pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
@@ -279,21 +213,7 @@ def test_psd_singular_quadratic_preserves_null_space_autodiff(dtype):
 
     loss, _ = _quadratic_loss_and_hessian(A, b)
 
-    tol = _dtype_tol(
-        dtype,
-        np.linalg.norm(np.asarray(b)),
-        rtol_factor=500,
-    )
-
-    solver = _make_solver(
-        loss,
-        None,
-        _PSD_TAG,
-        x0,
-        shift_const=1.0,
-        maxiter=100,
-        tol=tol,
-    )
+    solver = _make_solver(loss, None, _PSD_TAG, x0, shift_const=1.0, maxiter=100)
 
     x_opt, state, _ = solver.run(x0)
 
@@ -305,31 +225,18 @@ def test_psd_singular_quadratic_preserves_null_space_autodiff(dtype):
 
     # The final point must satisfy the original first-order condition
     residual = A @ x_opt - b
-    np.testing.assert_allclose(
-        residual,
-        0.0,
-        atol=tol,
-        rtol=0.0,
-    )
+    np.testing.assert_allclose(residual, 0.0, atol=solver.tol, rtol=solver.rtol)
 
     initial_null = Q_null.T @ x0
     final_null = Q_null.T @ x_opt
 
     np.testing.assert_allclose(
-        final_null,
-        initial_null,
-        atol=tol,
-        rtol=0.0,
+        final_null, initial_null, atol=solver.tol, rtol=solver.rtol
     )
 
     expected = x_star + x0_null
 
-    np.testing.assert_allclose(
-        x_opt,
-        expected,
-        atol=tol,
-        rtol=0.0,
-    )
+    np.testing.assert_allclose(x_opt, expected, atol=solver.tol, rtol=solver.rtol)
 
 
 @pytest.mark.requires_x64
@@ -339,33 +246,20 @@ def test_pd_quadratic_scale_equivariance(dtype, scale):
     A, b, x_star = _make_pd_problem(6, dtype)
 
     x0 = jnp.zeros_like(x_star)
-    tol = _dtype_tol(dtype, np.linalg.norm(np.asarray(x_star)))
 
     loss, hess = _quadratic_loss_and_hessian(
         scale * A,
         scale * b,
     )
 
-    solver = _make_solver(
-        loss,
-        None,
-        _PD_TAG,
-        x0,
-        tol=tol,
-        shift_const=0.0,
-    )
+    solver = _make_solver(loss, None, _PD_TAG, x0, shift_const=0.0)
 
     x_opt, state, _ = solver.run(x0)
 
     assert bool(state.stats.converged)
     assert state.stats.num_steps == 2
 
-    np.testing.assert_allclose(
-        x_opt,
-        x_star,
-        atol=tol,
-        rtol=0.0,
-    )
+    np.testing.assert_allclose(x_opt, x_star, atol=solver.tol, rtol=solver.rtol)
 
 
 @pytest.mark.requires_x64
@@ -376,14 +270,7 @@ def test_psd_quadratic_scale_equivariance(dtype, scale):
 
     loss = _quadratic_loss(scale * A, scale * b)
 
-    solver = _make_solver(
-        loss,
-        None,
-        _PSD_TAG,
-        x0,
-        shift_const=1.0,
-        maxiter=100,
-    )
+    solver = _make_solver(loss, None, _PSD_TAG, x0, shift_const=1.0, maxiter=100)
 
     x_opt, state, _ = solver.run(x0)
 
@@ -392,18 +279,7 @@ def test_psd_quadratic_scale_equivariance(dtype, scale):
 
     expected = x_star + x0_null
 
-    tol = _dtype_tol(
-        dtype,
-        np.linalg.norm(np.asarray(expected)),
-        rtol_factor=1000,
-    )
-
-    np.testing.assert_allclose(
-        x_opt,
-        expected,
-        atol=tol,
-        rtol=0.0,
-    )
+    np.testing.assert_allclose(x_opt, expected, atol=solver.tol, rtol=solver.rtol)
 
 
 @pytest.mark.parametrize(

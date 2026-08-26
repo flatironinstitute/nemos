@@ -155,28 +155,23 @@ class Newton(HessianMixin):
         return fval, grad, lambda p: self.fun(p, *args)
 
     def _converged(self, params, state, grad, fval):
-        """Cauchy criterion on the accepted step and relative function decrease."""
-        f_old = state.stats.function_val
-        # Compute a scale-normalised f_diff to avoid catastrophic cancellation
-        # when |fval| is large (e.g. at scale=1e6 in float32 both f values are
-        # ~1e12 and their raw difference loses all significant bits).
-        # We divide by max(|f_old|, atol) so the result is already relative;
-        # cauchy_termination then checks |f_diff| < atol + rtol * |f|, and we
-        # pass f=1.0 so that scale is just atol -- matching the intent.
-        denom = jnp.maximum(jnp.abs(f_old), self.tol)
-        f_diff_rel = jnp.where(
-            jnp.isfinite(f_old),
-            jnp.abs(fval - f_old) / denom,
-            jnp.inf,
-        )
+        """Check convergence via a Cauchy criterion on the accepted step size.
+
+        We rely solely on the step-norm arm of :func:`~optimistix.cauchy_termination`
+        and suppress its function-value arm by passing ``f_diff=0``.  The f-diff arm
+        would check ``|f(x_new) - f(x_old)| < atol``, which is an absolute threshold
+        that fails under catastrophic cancellation when the objective is large.  The
+        step-norm criterion ``‖Δx‖ < atol + rtol * ‖x‖`` is scale-invariant provided
+        ``rtol > 0``, so callers should prefer setting ``rtol`` over ``tol`` alone.
+        """
         return cauchy_termination(
             self.rtol,
             self.tol,
             lx.internal.two_norm,
             params,
             state.y_diff,
-            jnp.ones(()),  # f_scale = atol + rtol*1 = atol, matching f_diff_rel
-            f_diff_rel,
+            fval,
+            jnp.zeros(()),
         )
 
     def _apply_or_reject(
