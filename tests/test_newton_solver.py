@@ -4,7 +4,15 @@ import numpy as np
 import optax
 import pytest
 
-from nemos._hess import Full, HessianTag, PositiveDefinite, PositiveSemiDefinite
+from nemos._hess import (
+    Full,
+    General,
+    HessianTag,
+    NegativeDefinite,
+    PositiveDefinite,
+    PositiveSemiDefinite,
+    Symmetric,
+)
 from nemos.regularizer import Ridge, UnRegularized
 from nemos.solvers._abstract_solver import OptimizationInfo
 from nemos.solvers._newton import Newton, NewtonState
@@ -14,6 +22,9 @@ N = 8
 
 _PD_TAG = HessianTag(structure=Full, property=PositiveDefinite)
 _PSD_TAG = HessianTag(structure=Full, property=PositiveSemiDefinite)
+_GENERAL_TAG = HessianTag(structure=Full, property=General)
+_SYMMETRIC_TAG = HessianTag(structure=Full, property=Symmetric)
+_ND_TAG = HessianTag(structure=Full, property=NegativeDefinite)
 
 
 def _make_pd_problem(n, dtype, rng=None):
@@ -141,9 +152,9 @@ def test_run_converges_on_pd_quadratic():
     x_opt, state, _ = solver.run(x0)
 
     assert bool(state.stats.converged), "Solver did not converge on a PD quadratic."
-    assert (
-        state.stats.num_steps == 2
-    ), "Solver did not converge in 2 step on a PD quadratic."
+    assert state.stats.num_steps == 2, (
+        "Solver did not converge in 2 step on a PD quadratic."
+    )
     np.testing.assert_allclose(
         x_opt,
         x_star,

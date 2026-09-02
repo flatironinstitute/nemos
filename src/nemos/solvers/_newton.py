@@ -125,21 +125,30 @@ class Newton(HessianMixin):
         )
 
     def _solve(self, grad, H, params):
-        # ``params`` is unused for the smooth step, which depends only on the local
-        # quadratic. Proximal subclasses need it: their penalty is evaluated at
-        # ``params + d``, not at ``d``.
         del params
 
         operator = lx.PyTreeLinearOperator(H, jax.eval_shape(lambda: grad))
+
+        # General (possibly indefinite) Hessian: eigenvalue modification
+        # N&W eq. 3.43: decompose H = Q Λ Qᵀ, floor |λᵢ| to δ, solve analytically.
+        # One jnp.linalg.eigh call — no Python loop, jit/vmap-clean, always descent.
+        if self._linear_solver is None:
+            g_flat, unravel = jax.flatten_util.ravel_pytree(grad)
+            H_dense = operator.as_matrix()  # (n, n)
+            eigvals, Q = jnp.linalg.eigh(H_dense)  # real, ascending
+            lam_mod = jnp.maximum(jnp.abs(eigvals), self._delta)  # N&W 3.43
+            d_flat = Q @ ((1.0 / lam_mod) * (Q.T @ (-g_flat)))
+            return unravel(d_flat)
+
+        # Positive (semi)definite: Cholesky with optional diagonal shift
         shift = self._shift_fn(operator) * lx.DiagonalLinearOperator(
             jax.tree.map(jnp.ones_like, grad)
         )
-        step = lx.linear_solve(
+        return lx.linear_solve(
             lx.TaggedLinearOperator(operator + shift, tags=self._operator_tags),
             jax.tree.map(lambda x: -x, grad),
             self._linear_solver,
         ).value
-        return step
 
     def _newton_direction(self, grad, H, params):
         return self._block_apply(self._solve, grad, H, params)

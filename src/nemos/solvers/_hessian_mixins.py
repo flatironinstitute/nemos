@@ -12,8 +12,10 @@ from .._hess import (
     Full,
     General,
     HessianTag,
+    NegativeDefinite,
     PositiveDefinite,
     PositiveSemiDefinite,
+    Symmetric,
     combine_hessian_tags,
 )
 
@@ -145,10 +147,16 @@ class HessianMixin:
                 self._shift_fn = lambda operator: _compute_diagonal_shift(
                     operator.as_matrix(), self._shift_const
                 )
-        else:
-            self._linear_solver = lx.AutoLinearSolver(well_posed=False)
-            self._shift_fn = lambda H: jnp.zeros((), jax.tree.leaves(H)[0].dtype)
+        elif self._hess_tag.property in [General, Symmetric, NegativeDefinite]:
+            # General (possibly indefinite): eigenvalue modification, N&W eq. 3.43.
+            # _shift_fn is unused in this branch but kept for API consistency.
+            self._linear_solver = None
             self._operator_tags = ()
+            self._delta: float = 1e-6  # eigenvalue floor
+        else:
+            raise ValueError(
+                f"Hessian is of unknown structure: {self._hess_tag.property}"
+            )
 
     def _block_apply(self, fn, grad, H, other) -> Any:
         """Apply ``fn(grad, H, other)`` once per Hessian block.
