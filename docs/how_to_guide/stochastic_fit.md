@@ -84,7 +84,7 @@ spike_trains = data["spike_trains"]
 ```
 
 :::{note}
-See also: the [convolutional basis](../../background/basis/plot_01_1D_basis_function.md) and [1D convolution](../../background/plot_03_1D_convolution.md) background pages, and the [head-direction tutorial](../../tutorials/plot_02_head_direction.md) for a full worked example of fitting a population GLM on spike history.
+See also: the [convolutional basis](../user_guide/basis/one_dimensional.md) and [1D convolution](../user_guide/basis/convolution.md) background pages, and the [head-direction tutorial](../tutorials/plot_02_head_direction.md) for a full worked example of fitting a population GLM on spike history.
 :::
 
 +++

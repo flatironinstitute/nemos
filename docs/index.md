@@ -10,7 +10,7 @@
 :hidden:
 
 Quickstart <quickstart>
-Background <background/README>
+User Guide <user_guide/README>
 How-To Guide <how_to_guide/README>
 Tutorials <tutorials/README>
 API Reference <api/index>
@@ -62,13 +62,13 @@ New to NeMoS? Get the ball rolling with our quickstart.
 
 :::
 
-:::{grid-item-card} <span class="iconify" data-icon="mdi:book-open-variant-outline"></span> &nbsp; **Background**
-:link: background/README.html
-:link-alt: Background
+:::{grid-item-card} <span class="iconify" data-icon="mdi:book-open-variant-outline"></span> &nbsp; **User Guide**
+:link: user_guide/README.html
+:link-alt: User Guide
 
 ---
 
-Refresh your theoretical knowledge before diving into data analysis with our notes.
+Tour the package one concept at a time, from the theory behind the models to the classes that implement them.
 
 :::
 
