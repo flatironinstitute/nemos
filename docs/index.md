@@ -9,14 +9,12 @@
 :maxdepth: 2
 :hidden:
 
-Quickstart <quickstart>
+Getting Started <getting_started>
 User Guide <user_guide/README>
-How-To Guide <how_to_guide/README>
+How-To <how_to_guide/README>
 Tutorials <tutorials/README>
 API Reference <api/index>
 Benchmarking <benchmarking>
-Install <installation>
-Getting Help <getting_help>
 Citation Guide <citation>
 For Developers <developers_notes/README>
 ```
@@ -37,28 +35,18 @@ We provide:
 
 ::::{grid} 1 2 3 3
 
-:::{grid-item-card} <span class="iconify" data-icon="mdi:hammer-wrench"></span> &nbsp; **Installation Instructions**
-:link: installation.html
-:link-alt: Install
+:::{grid-item-card} <span class="iconify" data-icon="mdi:clock-fast"></span> &nbsp; **Getting Started**
+:link: getting_started.html
+:link-alt: Getting Started
 ---
 
-Run the following `pip` command in your virtual environment.
+Install NeMoS and fit a first model with our quickstart.
 
 ```{code-block}
 
 pip install nemos
 
 ```
-
-:::
-
-:::{grid-item-card} <span class="iconify" data-icon="mdi:clock-fast"></span> &nbsp; **Getting Started**
-:link: quickstart.html
-:link-alt: Quickstart
-
----
-
-New to NeMoS? Get the ball rolling with our quickstart.
 
 :::
 
