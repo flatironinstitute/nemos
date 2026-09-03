@@ -10,42 +10,9 @@ NeMoS provides some functionality to make fitting GLMs this way easier:
 - Monitoring and convergence criteria using callbacks.
 - Straightforward customization through custom data loaders and callbacks.
 
-::::{grid} 1 2 2 2
+The recipes live in the how-to guide:
 
-:::{grid-item-card}
-
-```{toctree}
-:maxdepth: 2
-
-stochastic_fit.md
-```
-:::
-
-:::{grid-item-card}
-
-```{toctree}
-:maxdepth: 2
-
-custom_dataloader.md
-```
-:::
-
-:::{grid-item-card}
-
-```{toctree}
-:maxdepth: 2
-
-custom_callbacks_and_termination.md
-```
-:::
-
-:::{grid-item-card}
-
-```{toctree}
-:maxdepth: 2
-
-manual_batching_loop.md
-```
-:::
-
-::::
+- [Stochastic optimization basics](../../how_to_guide/stochastic_fit.md)
+- [Creating a custom `DataLoader`](../../how_to_guide/custom_dataloader.md)
+- [Stopping on convergence and custom callbacks](../../how_to_guide/custom_callbacks_and_termination.md)
+- [Manual update loop for more control](../../how_to_guide/manual_batching_loop.md)
