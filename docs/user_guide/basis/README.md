@@ -104,7 +104,7 @@
        <p>
          <span class="label">[1]</span>
          The Fourier basis follows a slightly different API compared to all other bases.
-         See <a class="reference internal" href="ndimensional_foureir_basis.html">documentation page</a>.
+         See <a class="reference internal" href="fourier.html">documentation page</a>.
          <a href="#fnref-basis-1" class="footnote-backref" role="doc-backlink">↩</a>
        </p>
      </aside>
@@ -143,7 +143,7 @@ NeMoS provides a variety of basis functions (see the [table](table_basis) above)
 
 ## Learn More
 
-::::{grid} 1 2 2 2
+::::{grid} 1 2 3 3
 
 :::{grid-item-card}
 
@@ -157,7 +157,7 @@ NeMoS provides a variety of basis functions (see the [table](table_basis) above)
 ```{toctree}
 :maxdepth: 2
 
-plot_01_1D_basis_function.md
+one_dimensional.md
 ```
 :::
 
@@ -173,7 +173,20 @@ plot_01_1D_basis_function.md
 ```{toctree}
 :maxdepth: 2
 
-plot_02_ND_basis_function.md
+composing.md
+```
+:::
+
+:::{grid-item-card}
+
+<figure>
+<img src="../../_static/thumbnails/user_guide/convolution.svg" style="height: 100px", alt="One-Dimensional Convolutions."/>
+</figure>
+
+```{toctree}
+:maxdepth: 2
+
+convolution.md
 ```
 :::
 
@@ -189,7 +202,41 @@ plot_02_ND_basis_function.md
 ```{toctree}
 :maxdepth: 2
 
-ndimensional_foureir_basis.md
+fourier.md
+```
+:::
+
+:::{grid-item-card}
+
+```{toctree}
+:maxdepth: 2
+
+composite_bases.md
+```
+:::
+
+:::{grid-item-card}
+
+```{eval-rst}
+
+.. plot:: scripts/glm_predictors.py plot_categorical_var_design_matrix
+   :show-source-link: False
+   :height: 100px
+```
+
+```{toctree}
+:maxdepth: 2
+
+categorical.md
+```
+:::
+
+:::{grid-item-card}
+
+```{toctree}
+:maxdepth: 2
+
+categorical_identifiability.md
 ```
 :::
 

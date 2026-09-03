@@ -157,17 +157,17 @@ import os
 
 root = os.environ.get("READTHEDOCS_OUTPUT")
 if root:
-   path = Path(root) / "html/_static/thumbnails/background"
+   path = Path(root) / "html/_static/thumbnails/user_guide"
 # if local store in ../_build/html/...
 else:
-   path = Path("../_build/html/_static/thumbnails/background")
+   path = Path("../../_build/html/_static/thumbnails/user_guide")
 
 # make sure the folder exists if run from build
-if root or Path("../assets/stylesheets").exists():
+if root or Path("../../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)
 
 if path.exists():
-  fig.savefig(path / "plot_03_1D_convolution.svg")
+  fig.savefig(path / "convolution.svg")
 ```
 
 ## Convolve using [`Basis.compute_features`](nemos.basis._basis.Basis.compute_features)
