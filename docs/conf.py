@@ -132,14 +132,14 @@ html_theme_options = {
     ],
     "show_prev_next": True,
     "header_links_before_dropdown": 6,
-    "navigation_depth": 3,
+    "navigation_depth": 4,
     "logo": {
       "image_light": "_static/NeMoS_Logo_CMYK_Full.svg",
       "image_dark": "_static/NeMoS_Logo_CMYK_White.svg",
    },
     "secondary_sidebar_items": {
         "[!a]?[!p]?[!i]**": ["page-toc", "sourcelink"],
-        "background/basis/README": [],
+        "user_guide/basis/README": [],
     },
 }
 
@@ -148,7 +148,6 @@ html_sidebars = {
     "installation":[],
     "quickstart": [],
     "benchmarking": [],
-    "background/README": [],
     "how_to_guide/README": [],
     "tutorials/README": [],
     "**": ["search-field.html", "sidebar-nav-bs.html"],
@@ -187,7 +186,7 @@ if exclude_tutorials:
     _docs_root = Path(__file__).parent
     nb_execution_excludepatterns = [
         path.relative_to(_docs_root).as_posix()
-        for root in ("tutorials", "how_to_guide", "background")
+        for root in ("tutorials", "how_to_guide", "user_guide")
         for path in sorted((_docs_root / root).rglob("*.md"))
     ]
 
@@ -261,7 +260,7 @@ for api_rst in api_order:
 # notebook. We inject the admonition just after the jupytext frontmatter so all
 # runnable tutorials/how-to/background pages get a download link automatically,
 # without editing the source files.
-_NB_DOC_ROOTS = ("tutorials/", "how_to_guide/", "background/")
+_NB_DOC_ROOTS = ("tutorials/", "how_to_guide/", "user_guide/")
 
 
 def add_download_admonition(app, docname, source):
