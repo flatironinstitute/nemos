@@ -11,7 +11,13 @@ kernelspec:
 ---
 
 (categorical_design_matrices)=
-# Design Matrices Construction
+# Categorical Predictors
+
+Capturing the effect of stimulus identity, behavioral choices, etc., are all common examples of model designs requiring the encoding of categorical predictors. In this section we will explore how to construct such designs with NeMoS `Category` basis.
+
+We [also cover specialized NeMoS-compatible packages](complex-designs) which elegantly handle complex schemes involving multiple categorical predictors and diverse encoding methods. These packages transparently resolve a well-known identifiability issue: designs with multiple categorical predictors can result in non-identifiable models that yield multiple equivalent solutions.
+
+We expand on the issue of identifiability in a dedicated [technical note](categorical_identifiability.md) for readers who want to explore the problem in greater depth.
 
 There are two main supported uses for Category in nemos: using the category as a standalone predictor / main effect, and multiplying it by a continuous basis to estimate category-specific tuning curves. We'll show both below.
 

@@ -198,4 +198,4 @@ For SVRG-based solvers, `stochastic_run` in the wrappers dispatches to a `run_st
 
 ### Manual batching
 
-For more control over the optimization process, you can still use the manual batching approach with `initialize_optimizer_and_state` and `update` as shown in the [batching how-to guide](../how_to_guide/batching/manual_batching_loop.md). This approach is useful when you need custom logic between batches or want to implement learning rate schedules.
+For more control over the optimization process, you can still use the manual batching approach with `initialize_optimizer_and_state` and `update` as shown in the [batching how-to guide](../how_to_guide/manual_batching_loop.md). This approach is useful when you need custom logic between batches or want to implement learning rate schedules.

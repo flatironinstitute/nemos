@@ -310,7 +310,7 @@ The four combinations of previous choice and previous outcome give:
 
 Win-stay lose-shift reflects the interaction between past choice and outcome: $WSLS_t = c_{t-1} \cdot r_{t-1}$. If a choice was rewarded on the previous trial, the predictor signals to "stay" (repeat that choice); if it was not rewarded, it signals to "switch" to the other alternative.
 
-To capture an interaction between variables, we can use a [multiplicative basis object](../background/basis/plot_02_ND_basis_function.md), which in this case performs an element-wise multiplication. We create a lagged reward basis and multiply it with the lagged choice basis.
+To capture an interaction between variables, we can use a [multiplicative basis object](../user_guide/basis/composing.md), which in this case performs an element-wise multiplication. We create a lagged reward basis and multiply it with the lagged choice basis.
 
 ```{code-cell} ipython3
 # Create lagged reward basis
