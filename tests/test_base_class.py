@@ -1,13 +1,16 @@
 from contextlib import nullcontext as does_not_raise
+from types import SimpleNamespace
 from typing import Union
 from unittest.mock import MagicMock, patch
 
 import jax.numpy as jnp
+import numpy as np
 import pytest
 from numpy.typing import NDArray
 
 from nemos.base_class import Base
 from nemos.base_regressor import BaseRegressor
+from nemos.glm import PopulationGLM
 from nemos.regularizer import Lasso, Ridge
 
 
@@ -263,3 +266,88 @@ class TestInstantiateSolverOverrides:
         actual_kwargs = mock_solver_cls.call_args.kwargs
         for k, v in expected.items():
             assert actual_kwargs[k] == v
+
+
+def test_repr_mimebundle_unfitted(mock_regressor):
+    """Test the mimebundle HTML representation for an unfitted model."""
+    bundle = mock_regressor._repr_mimebundle_()
+    assert "text/html" in bundle
+    html = bundle["text/html"]
+
+    assert 'Model State: <span style="color: #dc3545;">Unfitted</span>' in html
+    assert "Neurons:</strong>" not in html
+    assert "Features:</strong>" not in html
+    assert "Converged:</strong>" not in html
+
+
+@pytest.mark.requires_x64
+def test_repr_mimebundle_fitted():
+    """Test the mimebundle HTML representation for an actual fitted model."""
+
+    np.random.seed(123)
+    n_samples, n_features, n_neurons = 100, 3, 2
+    X = np.random.normal(size=(n_samples, n_features))
+    y = np.random.poisson(lam=np.exp(np.random.normal(size=(n_samples, n_neurons))))
+
+    model = PopulationGLM(regularizer="Ridge", regularizer_strength=0.1)
+    model.fit(X, y)
+
+    bundle = model._repr_mimebundle_()
+    assert "text/html" in bundle
+    html = bundle["text/html"]
+
+    assert 'Model State: <span style="color: #28a745;">Fitted</span>' in html
+    assert f"Neurons:</strong> {n_neurons}" in html
+    assert f"Features:</strong> {n_features}" in html
+    assert 'Converged:</strong> <span style="color: #28a745;">Yes</span>' in html
+
+
+@pytest.mark.parametrize(
+    "solver_state, expected_color, expected_text",
+    [
+        # built-in style solver state: ``stats.converged``
+        (SimpleNamespace(stats=SimpleNamespace(converged=True)), "#28a745", "Yes"),
+        (SimpleNamespace(stats=SimpleNamespace(converged=False)), "#dc3545", "No"),
+        # custom solver exposing a ``converged`` flag directly (e.g. the scipy
+        # adapter in the custom-solvers how-to guide)
+        (SimpleNamespace(iter_num=5, converged=True), "#28a745", "Yes"),
+        (SimpleNamespace(iter_num=5, converged=False), "#dc3545", "No"),
+        # custom solver with no convergence information at all -> "Unknown"
+        (SimpleNamespace(iter_num=5), "#6c757d", "Unknown"),
+        # no solver state at all (e.g. a model loaded from disk) -> "Unknown"
+        (None, "#6c757d", "Unknown"),
+    ],
+)
+def test_repr_mimebundle_convergence_status(
+    solver_state, expected_color, expected_text
+):
+    """Convergence status borrows ``GLM.fit``'s detection logic.
+
+    ``stats.converged`` is preferred, falling back to a ``converged`` flag
+    exposed directly by custom solvers, and reporting ``Unknown`` when no
+    convergence information is available (rather than raising on a missing
+    ``stats`` attribute).
+    """
+    np.random.seed(123)
+    n_samples, n_features, n_neurons = 100, 3, 2
+    X = np.random.normal(size=(n_samples, n_features))
+    y = np.random.poisson(lam=np.exp(np.random.normal(size=(n_samples, n_neurons))))
+
+    model = PopulationGLM(regularizer="Ridge", regularizer_strength=0.1)
+    model.fit(X, y)
+
+    # override the real solver state with the custom one under test
+    model.solver_state_ = solver_state
+
+    bundle = model._repr_mimebundle_()
+    assert "text/html" in bundle
+    html = bundle["text/html"]
+
+    # the model is still fitted and the other diagnostics show up
+    assert 'Model State: <span style="color: #28a745;">Fitted</span>' in html
+    assert f"Neurons:</strong> {n_neurons}" in html
+    assert f"Features:</strong> {n_features}" in html
+    assert (
+        f'Converged:</strong> <span style="color: {expected_color};">'
+        f"{expected_text}</span>" in html
+    )

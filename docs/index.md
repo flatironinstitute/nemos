@@ -9,12 +9,13 @@
 :maxdepth: 2
 :hidden:
 
-Install <installation>
 Quickstart <quickstart>
 Background <background/README>
 How-To Guide <how_to_guide/README>
 Tutorials <tutorials/README>
 API Reference <api/index>
+Benchmarking <benchmarking>
+Install <installation>
 Getting Help <getting_help>
 Citation Guide <citation>
 For Developers <developers_notes/README>

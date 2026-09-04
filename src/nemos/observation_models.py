@@ -1321,10 +1321,11 @@ class NegativeBinomialObservations(Observations):
         predicted_rate = jnp.clip(
             predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
         )
-        factor = 1 / (self.scale * predicted_rate + 1)
-        return -aggregate_sample_scores(
-            y * jnp.log(1 - factor) + jnp.log(factor) / self.scale
-        )
+        # robust log1p forms of log(mu / (r + mu)) and log(r / (r + mu)).
+        scaled_rate = self.scale * predicted_rate
+        log_ratio_mu = -jnp.log1p(1 / scaled_rate)
+        log_ratio_r = -jnp.log1p(scaled_rate)
+        return -aggregate_sample_scores(y * log_ratio_mu + log_ratio_r / self.scale)
 
     def log_likelihood(
         self,
@@ -1747,6 +1748,9 @@ def check_observation_model(observation_model, force_checks=False):
 
     Raises
     ------
+    ValueError
+        If the `observation_model` implements none of the required attributes, i.e. it is
+        not an observation model at all.
     AttributeError
         If the `observation_model` does not have one of the required attributes.
 
@@ -1856,6 +1860,21 @@ def check_observation_model(observation_model, force_checks=False):
                     "test_preserve_shape": False,
                 },
             }
+        )
+
+    # An object implementing none of the required attributes is not an observation model
+    # at all, most likely the wrong type was passed. Report that directly instead of
+    # complaining about the first missing attribute, which is confusing.
+    if checks and not any(hasattr(observation_model, attr) for attr in checks):
+        # local import, ``_observation_model_builder`` imports from this module
+        from ._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
+
+        raise ValueError(
+            f"Invalid observation model: {observation_model}. The observation model must be one of "
+            f'{AVAILABLE_OBSERVATION_MODELS}, provided either as a string (for example "Poisson") '
+            "or as an instance (for example PoissonObservations()), or a custom object "
+            "implementing the nemos observation model interface, see "
+            "https://nemos.readthedocs.io/en/latest/api/observation_models.html for details."
         )
 
     # Perform checks for each attribute

@@ -1206,3 +1206,177 @@ def plot_basis_filter(basis, model, current_history_duration_sec=0.2):
     axes[3].axhline(0, c="k", linestyle="--")
     axes[3].set(title="Learned linear filter", xlabel="Time (sec)")
     return fig
+
+
+def plot_loss_history(loss_history: list[tuple], ax=None):
+    """
+    Plot ``loss_history`` per batch, marking pass boundaries.
+
+    Used for stochastic optimization notebooks.
+
+    Params
+    ------
+    loss_history :
+        Loss history of a ``TestLossLogger``.
+    ax :
+        Axes to plot on.
+        If None (default), a new figure is created.
+
+    Returns
+    -------
+    ax :
+        Axes with the plot.
+    """
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    batch_end_losses = [
+        (i, t) for i, t in enumerate(loss_history) if t[0] == "batch_end"
+    ]
+    train_begin_losses = [
+        (i, t) for i, t in enumerate(loss_history) if t[0] == "train_begin"
+    ]
+
+    pass_end_losses = []
+    for i in range(len(batch_end_losses) - 1):
+        curr_idx, curr_tup = batch_end_losses[i]
+        next_idx, next_tup = batch_end_losses[i + 1]
+        if curr_tup[1] is None or next_tup[1] is None:
+            continue
+        if next_tup[1] - curr_tup[1] == 1:
+            pass_end_losses.append((curr_idx, curr_tup))
+
+    if batch_end_losses:
+        ax.plot(
+            [t[0] for t in batch_end_losses],
+            [t[1][3] for t in batch_end_losses],
+            label="Loss per batch",
+            alpha=0.7,
+        )
+    if train_begin_losses:
+        ax.scatter(
+            [t[0] for t in train_begin_losses],
+            [t[1][3] for t in train_begin_losses],
+            label="Loss at training start",
+        )
+    if pass_end_losses:
+        ax.scatter(
+            [t[0] for t in pass_end_losses],
+            [t[1][3] for t in pass_end_losses],
+            label="Loss at pass boundaries",
+            zorder=100,
+        )
+
+    ax.set_xlabel("Log index (~batch index)")
+    ax.set_ylabel("Loss value")
+
+    ax.legend()
+    sns.despine(ax=ax)
+
+    return ax
+
+
+def plot_batching_schematic():
+    """
+    Sketch how a batch is built from a chunk plus a left context window.
+
+    Illustrative and not to scale: shows one recording interval split into equal
+    chunks, and the batch for the second chunk formed by prepending a context
+    window that supplies the convolution history and is then dropped.
+
+    Used for the custom data loader notebook.
+
+    Returns
+    -------
+    fig :
+        The schematic figure.
+    """
+    n_bins, chunk, window = 30, 10, 3
+    h = 0.8
+    c_bin, c_ctx, c_batch = "#eef2f7", "#f4c98a", "#9db8ee"
+
+    fig, ax = plt.subplots(figsize=(9, 3.6))
+
+    # top: one recording interval split into equal chunks (the second is highlighted)
+    y = 3.6
+    for i in range(n_bins):
+        ax.add_patch(
+            Rectangle((i, y), 1, h, facecolor=c_bin, edgecolor="white", lw=0.6)
+        )
+    for c in range(0, n_bins + 1, chunk):
+        ax.plot([c, c], [y - 0.05, y + h + 0.05], color="#475569", lw=1.6)
+    for k in range(n_bins // chunk):
+        ax.text(
+            k * chunk + chunk / 2,
+            y + h + 0.14,
+            f"chunk {k + 1}",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+    ax.add_patch(
+        Rectangle((chunk, y), chunk, h, facecolor="none", edgecolor="#1d4ed8", lw=2.2)
+    )
+    ax.text(
+        n_bins / 2,
+        y - 0.34,
+        "one recording interval, split into equal chunks",
+        ha="center",
+        va="top",
+        fontsize=10,
+        color="#334155",
+    )
+
+    # bottom: the batch for chunk 2, drawn beneath it (context spills into the previous chunk)
+    yb = 0.55
+    start, end = chunk, 2 * chunk
+    ctx0 = start - window
+    for i in range(ctx0, start):
+        ax.add_patch(
+            Rectangle(
+                (i, yb), 1, h, facecolor=c_ctx, edgecolor="white", lw=0.6, hatch="///"
+            )
+        )
+    for i in range(start, end):
+        ax.add_patch(
+            Rectangle((i, yb), 1, h, facecolor=c_batch, edgecolor="white", lw=0.6)
+        )
+    ax.text(
+        (ctx0 + start) / 2,
+        yb - 0.32,
+        "context\n(window_size bins,\ndropped)",
+        ha="center",
+        va="top",
+        fontsize=8.5,
+        color="#8a5a12",
+    )
+    ax.text(
+        (start + end) / 2,
+        yb - 0.32,
+        "batch = chunk 2\n(valid history)",
+        ha="center",
+        va="top",
+        fontsize=9,
+        color="#1d4ed8",
+    )
+    ax.annotate(
+        "",
+        xy=(start, yb + h + 0.35),
+        xytext=(ctx0, yb + h + 0.35),
+        arrowprops=dict(arrowstyle="<->", color="#475569", lw=1.4),
+    )
+    ax.text(
+        (ctx0 + start) / 2,
+        yb + h + 0.46,
+        "convolution window for the first batch bin",
+        ha="center",
+        va="bottom",
+        fontsize=8,
+        color="#334155",
+    )
+
+    ax.set_xlim(-1.5, n_bins + 1.5)
+    ax.set_ylim(-1.1, y + h + 0.9)
+    ax.axis("off")
+
+    return fig
