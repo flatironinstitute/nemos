@@ -5,7 +5,7 @@
 
 A Newton step solves `H d = -g`, and how that linear system is best solved depends on what is known about `H` beforehand. A Cholesky factorization is the cheapest option but needs a positive definite matrix and fails on a singular one. A pseudo-inverse handles a singular matrix but costs more. A diagonal Hessian can be solved in time linear in the number of parameters. And if `H` has no sign guarantee at all, `-H^{-1} g` need not even point downhill, in which case a Newton step is the wrong thing to take and a first-order or quasi-Newton solver is a better choice.
 
-Checking any of this at run time means factorizing the matrix, which costs as much as the Newton solve itself. Under `jit` a failed Cholesky cannot be caught and retried either. So the information is carried alongside the Hessian instead, as a [`HessianTag`](nemos._hess.HessianTag) that each model and each regularizer declares about the term it contributes. The tags are combined when the terms are added, and the result picks the linear solver.
+Checking any of this at run time means factorizing the matrix, which costs as much as the Newton solve itself. Under `jit` a failed Cholesky cannot be caught and retried either. So the information is carried alongside the Hessian instead, as a `HessianTag` that each model and each regularizer declares about the term it contributes. The tags are combined when the terms are added, and the result picks the linear solver.
 
 What the tag has to distinguish follows from what the decisions turn on:
 
