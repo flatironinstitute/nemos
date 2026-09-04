@@ -274,7 +274,8 @@ def test_leaf_sets_over_different_trees_do_not_combine(tree):
     returns a claim about neither of them.
     """
     wider = normalized_tag(tree, flat_on=mask(tuple(tree) + ("z",)))
-    with pytest.raises(ValueError, match="key mismatch"):
+    # jax reworded this error, so both wordings are accepted.
+    with pytest.raises(ValueError, match="key mismatch|pytree structure error"):
         is_covering(wider)
 
 
