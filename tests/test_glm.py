@@ -2029,9 +2029,7 @@ class TestHessianTag:
         model.regularizer = "UnRegularized"
         model.regularizer_strength = None
         model.initialize_optimizer_and_state(params, X, y)
-        assert (
-            model._solver._hess_tag.property is MatrixProperty.POSITIVE_SEMI_DEFINITE
-        )
+        assert model._solver._hess_tag.property is MatrixProperty.POSITIVE_SEMI_DEFINITE
 
     def test_zero_strength_claims_nothing(self, poissonGLM_model_instantiation):
         """A Ridge strength of zero curves no leaf, leaving the same tag as no penalty."""
@@ -2040,9 +2038,7 @@ class TestHessianTag:
 
         model.initialize_optimizer_and_state(model.initialize_params(X, y), X, y)
 
-        assert (
-            model._solver._hess_tag.property is MatrixProperty.POSITIVE_SEMI_DEFINITE
-        )
+        assert model._solver._hess_tag.property is MatrixProperty.POSITIVE_SEMI_DEFINITE
 
     @pytest.mark.parametrize("regularizer_name", ["UnRegularized", "Ridge"])
     def test_no_tag_when_every_parameter_is_pinned(
