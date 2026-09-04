@@ -291,6 +291,13 @@ def test_change_regularizer_reset_strength(
         (1.0, does_not_raise()),
         (jnp.array(1.0), does_not_raise()),
         (np.array(0.5), does_not_raise()),
+        (0.0, does_not_raise()),
+        (
+            -1.0,
+            pytest.raises(
+                ValueError, match="Regularizer strength must be non-negative"
+            ),
+        ),
         (
             "bah",
             pytest.raises(
@@ -412,6 +419,23 @@ def test_validate_strength_single_input(regularizer, strength, expectation):
                 and result.shape == (2, 2)
                 and jnp.allclose(result, jnp.array([[0.1, 0.2], [0.3, 0.4]]))
             ),
+        ),
+        # 1-D array with a negative entry
+        (
+            jnp.array([1.0, -0.5]),
+            pytest.raises(
+                ValueError, match="Regularizer strength must be non-negative"
+            ),
+            lambda result: True,
+        ),
+        # Nested dict with a negative leaf: the message names its path
+        (
+            {"a": {"x": 0.3, "y": -2.0}},
+            pytest.raises(
+                ValueError,
+                match=r"must be non-negative, got -2.0 at \['a'\]\['y'\]",
+            ),
+            lambda result: True,
         ),
         # Dict with string leaf
         (

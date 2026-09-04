@@ -11,6 +11,7 @@ import nemos as nmo
 from nemos.batching import ArrayDataLoader
 from nemos.callbacks import Callback
 from nemos.glm.params import GLMParams
+from nemos.solvers._abstract_solver import AbstractSolver
 from nemos.solvers._no_op import NoOpSolver
 from nemos.tree_utils import tree_broadcast_prefix
 
@@ -418,6 +419,23 @@ class TestEveryParameterFixed:
             )
 
         assert callback.calls == ["on_train_begin", "on_train_end"]
+
+
+def test_no_op_solver_covers_the_solver_interface():
+    """``NoOpSolver`` replaces any configured solver, so it must implement all of it.
+
+    The model reaches for solver methods after initialization — ``stochastic_run`` is one
+    — and a missing one only shows up as an ``AttributeError`` mid-fit. Comparing the
+    public surface catches that when the interface grows, e.g. a Hessian mixin.
+    """
+    expected = {
+        name
+        for name in dir(AbstractSolver)
+        if not name.startswith("_") and callable(getattr(AbstractSolver, name, None))
+    }
+
+    missing = sorted(name for name in expected if not hasattr(NoOpSolver, name))
+    assert missing == []
 
 
 def _solver_grad_norm(model, active, X, y):

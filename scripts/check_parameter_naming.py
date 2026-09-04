@@ -161,6 +161,7 @@ VALID_PAIRS = [
     {"true_intercept", "fit_intercept"},
     {"frozen_intercept", "rec_intercept"},
     {"frozen_intercept", "true_intercept"},
+    {"claim", "claims"},
 ]
 
 

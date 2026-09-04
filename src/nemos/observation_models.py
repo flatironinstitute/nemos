@@ -9,7 +9,14 @@ from numpy.typing import NDArray
 
 from . import utils
 from .base_class import Base
-from .inverse_link_function_utils import exp, identity, log_softmax, logistic
+from .inverse_link_function_utils import (
+    exp,
+    expit,
+    identity,
+    log_softmax,
+    logistic,
+    softplus,
+)
 
 __all__ = [
     "PoissonObservations",
@@ -44,6 +51,9 @@ class Observations(Base, abc.ABC):
     :class:`~nemos.observation_models.BernoulliObservations`
         A specific implementation of an observation model using the Bernoulli distribution.
     """
+
+    # list link functions that we know preserve convexity of GLM
+    glm_convexity_preserving_links = ()
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -442,6 +452,8 @@ class PoissonObservations(Observations):
 
     """
 
+    glm_convexity_preserving_links = (exp, softplus)
+
     def __init__(self):
         super().__init__()
         self.scale = 1.0
@@ -688,6 +700,8 @@ class GammaObservations(Observations):
 
     """
 
+    glm_convexity_preserving_links = (exp, utils.one_over_x)
+
     def __init__(
         self,
     ):
@@ -912,6 +926,8 @@ class BernoulliObservations(Observations):
     BernoulliObservations()
 
     """
+
+    glm_convexity_preserving_links = (logistic, expit)
 
     def __init__(self):
         super().__init__()
@@ -1264,6 +1280,9 @@ class NegativeBinomialObservations(Observations):
 
     """
 
+    # NOTE: softplus makes the problem non-convex!
+    glm_convexity_preserving_links = (exp,)
+
     def __init__(
         self,
         scale=1.0,
@@ -1536,6 +1555,8 @@ class GaussianObservations(Observations):
     GaussianObservations()
 
     """
+
+    glm_convexity_preserving_links = (identity,)
 
     def __init__(
         self,
@@ -1929,6 +1950,8 @@ class CategoricalObservations(Observations):
     CategoricalObservations()
 
     """
+
+    glm_convexity_preserving_links = (log_softmax,)
 
     def __init__(self):
         super().__init__()
