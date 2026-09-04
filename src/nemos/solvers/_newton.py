@@ -111,17 +111,21 @@ class Newton(HessianMixin):
         self._resolve_linear_solver()
         ls_state = self._line_search.init(init_params)
 
+        fval_shape = jax.eval_shape(self.fun, init_params, *args)
+        scalar_dtype = fval_shape.dtype
         return NewtonState(
-            grad_norm=jnp.inf,
+            grad_norm=jnp.asarray(jnp.inf, dtype=scalar_dtype),
             stats=OptimizationInfo(
-                function_val=jnp.nan,
+                function_val=jnp.asarray(jnp.nan, dtype=scalar_dtype),
                 num_steps=jnp.array(0),
                 converged=jnp.array(False),
                 reached_max_steps=jnp.array(False),
             ),
             ls_state=ls_state,
-            # inf so a Cauchy criterion cannot fire before the first step is taken
-            y_diff=jax.tree.map(lambda x: jnp.full_like(x, jnp.inf), init_params),
+            y_diff=jax.tree.map(
+                lambda x: jnp.full_like(x, jnp.inf),
+                init_params,
+            ),
         )
 
     def _solve(self, grad, H, params):
