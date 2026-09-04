@@ -1,26 +1,23 @@
 """Newton-based optimization solvers."""
 
-from typing import Any, Callable, Optional
+from typing import Any, Callable, ClassVar, Optional
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 import lineax as lx
 import optax
+import optimistix as optx
+from optimistix._misc import cauchy_termination
 
 from .. import tree_utils
+from ..solvers._hessian_mixins import HessianMixin
 from ..typing import Params
 from ._abstract_solver import OptimizationInfo
-from ._hess import (
-    BlockDiagonal,
-    Full,
-    General,
-    HessianTag,
-    PositiveDefinite,
-    combine_hessian_tags,
-)
+from ._fista import FISTA
 
 DEFAULT_ATOL = 1e-4
+DEFAULT_RTOL = 0.0
 DEFAULT_MAX_STEPS = 100
 
 
@@ -28,12 +25,15 @@ class NewtonState(eqx.Module):
     grad_norm: jax.Array
     stats: OptimizationInfo
     ls_state: Optional[Any] = None
+    # Previous accepted step, for solvers whose convergence test is Cauchy rather than
+    # gradient based. Initialized to inf so the first iteration never counts as converged.
+    y_diff: Optional[Any] = None
 
 
 NewtonStepResult = tuple[Params, NewtonState]
 
 
-class Newton:
+class Newton(HessianMixin):
     def __init__(
         self,
         unregularized_loss: Callable,
@@ -44,6 +44,8 @@ class Newton:
         jit: bool = True,
         maxiter: int = DEFAULT_MAX_STEPS,
         tol: float = DEFAULT_ATOL,
+        rtol: float = DEFAULT_RTOL,
+        shift_const: float = 1.0,
     ):
         if init_params is None:
             raise ValueError(
@@ -55,17 +57,24 @@ class Newton:
         self.jit = jit
         self.maxiter = maxiter
         self.tol = tol
+        self.rtol = rtol
 
-        # kept so setup_hessian can ask the regularizer for its penalty Hessian
-        self._regularizer = regularizer
-        self._regularizer_strength = regularizer_strength
-        self._init_params = init_params
+        self._init_hessian(regularizer, regularizer_strength, init_params)
 
-        loss_fn = regularizer.penalized_loss(
-            unregularized_loss,
-            params=init_params,
-            strength=regularizer_strength,
-        )
+        # A proximal solver differentiates the smooth part only and carries the penalty
+        # in its proximal operator, so it must not be handed the penalized loss.
+        if self._proximal:
+            loss_fn = unregularized_loss
+            self.prox = regularizer.get_proximal_operator(
+                params=init_params, strength=regularizer_strength
+            )
+        else:
+            loss_fn = regularizer.penalized_loss(
+                unregularized_loss,
+                params=init_params,
+                strength=regularizer_strength,
+            )
+            self.prox = None
 
         # split scalar vs aux
         if has_aux:
@@ -75,8 +84,6 @@ class Newton:
             self.fun = loss_fn
             self.fun_with_aux = lambda p, *a: (loss_fn(p, *a), None)
 
-        self._hess_tag: HessianTag | None = None
-
         self._line_search = optax.scale_by_backtracking_linesearch(
             max_backtracking_steps=30
         )
@@ -85,57 +92,9 @@ class Newton:
         self._gradient: Callable | None = None
         self._hessian: Callable | None = None
 
-        # Linear solver + operator tags, resolved once from the Hessian tag in init_state
-        self._linear_solver = lx.AutoLinearSolver(well_posed=False)
-        self._operator_tags = ()
-
-    def setup_hessian(
-        self,
-        hess_fn: Callable | None = None,
-        hess_tag: HessianTag | None = None,
-        reg_tag: HessianTag | None = None,
-        property_override: Optional[type] = None,
-    ):
-        tag = hess_tag if reg_tag is None else combine_hessian_tags(hess_tag, reg_tag)
-        if property_override is not None and tag is not None:
-            tag = HessianTag(
-                tag.structure, property_override, batch_axes=tag.batch_axes
-            )
-        self._hess_tag = tag
-        self._hessian = self._penalize_hessian(hess_fn, hess_tag)
-
-    def _penalize_hessian(self, hess_fn, model_tag):
-        """Add the regularizer's penalty Hessian to the model's likelihood Hessian.
-
-        Models supply the second derivative of the likelihood alone. Adding the penalty's
-        is valid because ``Regularizer.penalized_loss`` returns ``loss + penalty``, and the
-        second derivative of a sum is the sum of the second derivatives.
-
-        ``None`` passes through: without a model-supplied Hessian, ``_build_cache``
-        autodiffs ``self.fun``, which is the penalized loss and already carries the penalty.
-
-        The batching comes from ``model_tag`` rather than the combined tag, because whether
-        the Hessian is assembled one block per neuron is a property of the model.
-        """
-        if hess_fn is None:
-            return None
-
-        batch_axes = (
-            model_tag.batch_axes
-            if model_tag is not None and model_tag.structure is BlockDiagonal
-            else None
-        )
-        penalty_hess_fn = self._regularizer._get_hess_fn(
-            self._init_params, self._regularizer_strength, batch_axes=batch_axes
-        )
-        if penalty_hess_fn is None:
-            # the regularizer declares no curvature, so the likelihood term is the whole
-            return hess_fn
-
-        def penalized_hessian(params, *args):
-            return tree_utils.tree_add(hess_fn(params, *args), penalty_hess_fn(params))
-
-        return penalized_hessian
+        self._linear_solver = lx.Cholesky()
+        self._shift_fn: Callable | None = lambda _: 0.0
+        self._shift_const: float = shift_const
 
     def _build_cache(self):
         if self._gradient is None:
@@ -148,54 +107,85 @@ class Newton:
             self._hessian = jax.hessian(self.fun)
 
     def init_state(self, init_params, *args):
-        if self._hess_tag is None:
-            self._hess_tag = HessianTag(structure=Full, property=General)
-
         self._build_cache()
+        self._resolve_linear_solver()
         ls_state = self._line_search.init(init_params)
 
-        # Resolve the linear solver once: Cholesky for positive-definite Hessians,
-        # otherwise a robust least-squares solve that tolerates rank deficiency.
-        if self._hess_tag.property is PositiveDefinite:
-            self._linear_solver = lx.Cholesky()
-            self._operator_tags = lx.positive_semidefinite_tag
-        else:
-            self._linear_solver = lx.AutoLinearSolver(well_posed=False)
-            self._operator_tags = ()
-
+        fval_shape = jax.eval_shape(self.fun, init_params, *args)
+        scalar_dtype = fval_shape.dtype
         return NewtonState(
-            grad_norm=jnp.inf,
+            grad_norm=jnp.asarray(jnp.inf, dtype=scalar_dtype),
             stats=OptimizationInfo(
-                function_val=jnp.nan,
+                function_val=jnp.asarray(jnp.nan, dtype=scalar_dtype),
                 num_steps=jnp.array(0),
                 converged=jnp.array(False),
                 reached_max_steps=jnp.array(False),
             ),
             ls_state=ls_state,
+            y_diff=jax.tree.map(
+                lambda x: jnp.full_like(x, jnp.inf),
+                init_params,
+            ),
         )
 
-    def _solve(self, grad, H):
-        operator = lx.PyTreeLinearOperator(
-            H,
-            jax.eval_shape(lambda: grad),
-            tags=self._operator_tags,
-        )
+    def _solve(self, grad, H, params):
+        del params
 
+        operator = lx.PyTreeLinearOperator(H, jax.eval_shape(lambda: grad))
+
+        # General (possibly indefinite) Hessian: eigenvalue modification
+        # N&W eq. 3.43: decompose H = Q Λ Qᵀ, floor |λᵢ| to δ, solve analytically.
+        # One jnp.linalg.eigh call — no Python loop, jit/vmap-clean, always descent.
+        if self._linear_solver is None:
+            g_flat, unravel = jax.flatten_util.ravel_pytree(grad)
+            H_dense = operator.as_matrix()  # (n, n)
+            eigvals, Q = jnp.linalg.eigh(H_dense)  # real, ascending
+            lam_mod = jnp.maximum(jnp.abs(eigvals), self._delta)  # N&W 3.43
+            d_flat = Q @ ((1.0 / lam_mod) * (Q.T @ (-g_flat)))
+            return unravel(d_flat)
+
+        # Positive (semi)definite: Cholesky with optional diagonal shift
+        shift = self._shift_fn(operator) * lx.DiagonalLinearOperator(
+            jax.tree.map(jnp.ones_like, grad)
+        )
         return lx.linear_solve(
-            operator,
+            lx.TaggedLinearOperator(operator + shift, tags=self._operator_tags),
             jax.tree.map(lambda x: -x, grad),
             self._linear_solver,
         ).value
 
-    def _newton_direction(self, grad, H):
-        if self._hess_tag.structure is BlockDiagonal:
-            return jax.vmap(
-                self._solve,
-                in_axes=(self._hess_tag.batch_axes, 0),
-                out_axes=self._hess_tag.batch_axes,
-            )(grad, H)
-        else:
-            return self._solve(grad, H)
+    def _newton_direction(self, grad, H, params):
+        return self._block_apply(self._solve, grad, H, params)
+
+    def _line_search_inputs(self, params, step, grad, fval, *args):
+        """Value, slope and objective handed to ``self._line_search``.
+
+        ``optax``'s backtracking search forms the slope as ``vdot(updates, grad)``; the
+        vector is an argument it never differentiates, so a composite subclass can
+        supply a slope accounting for its nonsmooth term without a bespoke search.
+        """
+        del params, step
+        return fval, grad, lambda p: self.fun(p, *args)
+
+    def _converged(self, params, state, grad, fval):
+        """Check convergence via a Cauchy criterion on the accepted step size.
+
+        We rely solely on the step-norm arm of :func:`~optimistix.cauchy_termination`
+        and suppress its function-value arm by passing ``f_diff=0``.  The f-diff arm
+        would check ``|f(x_new) - f(x_old)| < atol``, which is an absolute threshold
+        that fails under catastrophic cancellation when the objective is large.  The
+        step-norm criterion ``‖Δx‖ < atol + rtol * ‖x‖`` is scale-invariant provided
+        ``rtol > 0``, so callers should prefer setting ``rtol`` over ``tol`` alone.
+        """
+        return cauchy_termination(
+            self.rtol,
+            self.tol,
+            lx.internal.two_norm,
+            params,
+            state.y_diff,
+            fval,
+            jnp.zeros(()),
+        )
 
     def _apply_or_reject(
         self,
@@ -207,16 +197,19 @@ class Newton:
         *args,
     ):
         """Accept or reject step based on descent condition and line search."""
-        descent = lx.internal.tree_dot(grad, step)
+        value, slope, value_fn = self._line_search_inputs(
+            params, step, grad, fval, *args
+        )
+        descent = lx.internal.tree_dot(slope, step)
 
         def accept(_):
             updates, new_ls_state = self._line_search.update(
                 step,
                 state.ls_state,
                 params,
-                value=fval,
-                grad=grad,
-                value_fn=lambda p: self.fun(p, *args),
+                value=value,
+                grad=slope,
+                value_fn=value_fn,
             )
 
             new_params = jax.tree_util.tree_map(
@@ -242,11 +235,11 @@ class Newton:
 
         (fval, aux), grad = self._gradient(params, *args)
         gnorm = jnp.sqrt(lx.internal.tree_dot(grad, grad))
-        converged = gnorm <= self.tol
+        converged = self._converged(params, state, grad, fval)
 
         def step(_):
             H = self._hessian(params, *args)
-            step = self._newton_direction(grad, H)
+            step = self._newton_direction(grad, H, params)
 
             new_params, new_ls_state = self._apply_or_reject(
                 params,
@@ -284,6 +277,7 @@ class Newton:
                 reached_max_steps=new_iter >= self.maxiter,
             ),
             ls_state=new_ls_state,
+            y_diff=tree_utils.tree_sub(new_params, params),
         )
 
         return new_params, new_state, aux
@@ -328,7 +322,7 @@ class Newton:
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
-        return {"maxiter", "tol", "autodiff", "jit"}
+        return {"maxiter", "tol", "rtol", "jit"}
 
     def _get_optim_info(
         self,
@@ -336,3 +330,177 @@ class Newton:
         **kwargs,
     ) -> OptimizationInfo:
         return state.stats
+
+
+class ProximalNewton(Newton):
+    r"""Proximal Newton solver for composite objectives.
+
+    Minimizes :math:`f(\beta) + P(\beta)` with :math:`f` the smooth loss and :math:`P`
+    a penalty reached through its proximal operator. Each iteration builds the quadratic
+    model of :math:`f` and solves
+
+    .. math::
+        \min_d \; \nabla f^\top d + \tfrac{1}{2} d^\top H d + P(\beta + d)
+
+    with :class:`~nemos.solvers._fista.FISTA`, then backtracks on the composite
+    objective. This is the scheme ``glmnet`` [1]_ uses, with FISTA in place of
+    coordinate descent for the inner problem; see [2]_ for the general method.
+
+    Well-posedness of the subproblem needs two conditions:
+
+    - :math:`H \succeq 0`, making it convex. Definiteness is only needed to invert
+      :math:`H`, and here :math:`H` is only multiplied (:meth:`_hvp_block`).
+    - :math:`\nabla f` restricted to :math:`\ker H` dominated by the growth of :math:`P`,
+      making it bounded below. This constrains the quadratic model at the current iterate,
+      not :math:`f`: a loss bounded below still has an unbounded model wherever :math:`H`
+      is singular and the gradient has a component in :math:`\ker H`.
+
+    A singular :math:`H` is therefore not by itself a problem, and no :math:`\ell_2` term
+    is needed to supply the missing curvature. An indefinite :math:`H` is unsupported: the
+    subproblem is unbounded below, so no solver has a minimum to find.
+
+    Parameters
+    ----------
+    tol, rtol :
+        Absolute and relative tolerances of the outer Cauchy criterion on the accepted
+        step. Unlike :class:`Newton`, which tests ``||grad|| <= tol``, both are read
+        here: see :meth:`_converged`.
+    inner_iter :
+        Maximum FISTA steps on the subproblem. The subproblem uses the assembled
+        Hessian block and touches no data, so these steps are cheap.
+    inner_atol, inner_rtol :
+        Tolerances for the subproblem, acting as the forcing sequence of the inexact
+        proximal Newton method.
+
+    References
+    ----------
+    .. [1] Friedman, J., Hastie, T., & Tibshirani, R. (2010).
+        "Regularization Paths for Generalized Linear Models via Coordinate Descent."
+        *Journal of Statistical Software*, 33(1), 1-22.
+        https://doi.org/10.18637/jss.v033.i01
+    .. [2] Lee, J. D., Sun, Y., & Saunders, M. A. (2014).
+        "Proximal Newton-type methods for minimizing composite functions."
+        *SIAM Journal on Optimization*, 24(3), 1420-1443.
+        https://doi.org/10.1137/130921428
+    """
+
+    _proximal: ClassVar[bool] = True
+
+    def __init__(
+        self,
+        unregularized_loss: Callable,
+        regularizer,
+        regularizer_strength: float | None,
+        has_aux: bool,
+        init_params: Params | None = None,
+        jit: bool = True,
+        maxiter: int = DEFAULT_MAX_STEPS,
+        tol: float = DEFAULT_ATOL,
+        rtol: float = DEFAULT_RTOL,
+        inner_iter: int = 100,
+        inner_atol: float = 1e-8,
+        inner_rtol: float = 1e-8,
+    ):
+        super().__init__(
+            unregularized_loss,
+            regularizer,
+            regularizer_strength,
+            has_aux,
+            init_params=init_params,
+            jit=jit,
+            maxiter=maxiter,
+            tol=tol,
+            rtol=rtol,
+        )
+        # the penalty alone, for the composite line search. self.fun is the smooth
+        # loss here, so the composite objective is self.fun + self._penalty, which is
+        # exactly what ``regularizer.penalized_loss`` builds from the same accessor.
+        self._penalty = regularizer.penalty_fn(
+            params=init_params, strength=regularizer_strength
+        )
+
+        self.inner_iter = inner_iter
+        self.inner_atol = inner_atol
+        self.inner_rtol = inner_rtol
+
+        # The subproblem is solved for the new parameters, so the prox is the
+        # regularizer's own and the solver does not depend on the current iterate:
+        # build it once rather than per outer iteration.
+        self._inner_solver = FISTA(
+            atol=inner_atol,
+            rtol=inner_rtol,
+            norm=lx.internal.two_norm,
+            prox=self.prox,
+            while_loop_kind="lax",
+        )
+
+    def _hvp_block(self, grad, H, d):
+        """Hessian-vector product for a single block."""
+        del grad
+        return lx.PyTreeLinearOperator(
+            H, jax.eval_shape(lambda: d), tags=self._operator_tags
+        ).mv(d)
+
+    def _newton_direction(self, grad, H, params):
+        r"""Minimize :math:`\nabla f^\top (z - \beta) + \frac12 (z - \beta)^\top H (z - \beta) + P(z)`.
+
+        Solving for the new parameters :math:`z` rather than the step keeps the penalty
+        where it is defined, so ``self.prox`` applies unchanged and the inner solver does
+        not depend on the current iterate.
+
+        The proximal operator carries metadata defined on the whole parameter tree --
+        ``GroupLasso``'s mask, or a per-feature strength -- so the subproblem is solved
+        on the full tree and only the Hessian-vector product is split per block. That
+        keeps every regularizer usable without slicing each one's penalty metadata.
+        """
+
+        def quadratic(z, _):
+            step = tree_utils.tree_sub(z, params)
+            hvp = self._block_apply(self._hvp_block, grad, H, step)
+            return lx.internal.tree_dot(grad, step) + 0.5 * lx.internal.tree_dot(
+                step, hvp
+            )
+
+        new_params = optx.minimise(
+            quadratic,
+            self._inner_solver,
+            y0=params,
+            max_steps=self.inner_iter,
+            throw=False,
+        ).value
+        # ``_apply_or_reject`` scales and adds the result, so return the step
+        return tree_utils.tree_sub(new_params, params)
+
+    def _line_search_inputs(self, params, step, grad, fval, *args):
+        r"""Feed the composite objective and its slope to the inherited line search.
+
+        Tseng & Yun (2009) require the sufficient-decrease slope of a composite
+        objective to be
+
+        .. math::
+            \Delta = \nabla f^\top d + P(\beta + d) - P(\beta),
+
+        the :math:`P` difference being what makes :math:`\Delta < 0` a descent
+        certificate when :math:`F` is nonsmooth. Since the search only ever forms
+        ``vdot(step, slope)``, adding the penalty difference along ``step`` reproduces
+        :math:`\Delta` exactly, and the stock Armijo search then applies unchanged.
+        """
+        penalty = self._penalty(params)
+        penalty_diff = self._penalty(tree_utils.tree_add(params, step)) - penalty
+        sq_norm = lx.internal.tree_dot(step, step)
+        slope = tree_utils.tree_add_scalar_mul(
+            grad, jnp.where(sq_norm > 0.0, penalty_diff / sq_norm, 0.0), step
+        )
+        return (
+            fval + penalty,
+            slope,
+            lambda p: self.fun(p, *args) + self._penalty(p),
+        )
+
+    @classmethod
+    def get_accepted_arguments(cls) -> set[str]:
+        return super().get_accepted_arguments() | {
+            "inner_iter",
+            "inner_atol",
+            "inner_rtol",
+        }

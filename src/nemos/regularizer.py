@@ -16,6 +16,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from . import tree_utils
+from ._hess import Diagonal, HessianTag, PositiveDefinite, PositiveSemiDefinite
 from .base_class import Base
 from .proximal_operator import (
     compute_normalization,
@@ -26,7 +27,6 @@ from .proximal_operator import (
     prox_none,
     prox_ridge,
 )
-from .solvers._hess import Diagonal, General, HessianTag, PositiveDefinite
 from .tree_utils import pytree_map_and_reduce
 from .type_casting import _is_scalar_or_0d
 from .typing import ProximalOperator
@@ -204,7 +204,7 @@ class Regularizer(Base, abc.ABC):
             all_regularized = True
         if all_regularized:
             return self._hess_tag
-        return HessianTag(self._hess_tag.structure, General)
+        return HessianTag(self._hess_tag.structure, PositiveSemiDefinite)
 
     @property
     def allowed_solvers(self) -> Tuple[str]:
@@ -287,14 +287,51 @@ class Regularizer(Base, abc.ABC):
 
         return prox_op
 
+    def penalty_fn(self, params: Any, strength: Any) -> Callable:
+        r"""Return a function evaluating the penalty alone, given the parameters.
+
+        The penalty depends on the parameters only: the strength, and any other
+        ingredient the penalty needs (``GroupLasso``'s mask), are resolved once here by
+        ``_get_filter_kwargs``. ``_penalization`` then applies ``_penalty_on_subtree``
+        to each of ``params.regularizable_subtrees()``, which is what leaves the
+        intercept unpenalized.
+
+        Most callers want ``loss + penalty`` and should use ``penalized_loss``, which is
+        written in terms of this method so the two cannot disagree. This accessor is for
+        solvers needing the penalty on its own: a proximal solver differentiates the
+        smooth loss and reaches the penalty through its proximal operator, so it has to
+        evaluate :math:`P` without :math:`f` -- see
+        ``ProximalNewton._line_search_inputs``, whose sufficient-decrease slope is built
+        from :math:`P(\\beta + d) - P(\\beta)`.
+
+        Parameters
+        ----------
+        params:
+            Full, unsliced parameters. Used to expand the strength and to build any
+            mask, so the shape checks see the shapes the user passed.
+        strength:
+            The strength as the user set it.
+
+        Returns
+        -------
+        :
+            A function mapping a parameter tree to the scalar penalty.
+        """
+        filter_kwargs = self._get_filter_kwargs(strength=strength, params=params)
+
+        def _penalty(params: Any) -> jnp.ndarray:
+            return self._penalization(params, filter_kwargs=filter_kwargs)
+
+        return _penalty
+
     def penalized_loss(self, loss: Callable, params: Any, strength: Any) -> Callable:
         """Return a function for calculating the penalized loss."""
 
-        filter_kwargs = self._get_filter_kwargs(strength=strength, params=params)
+        penalty_fn = self.penalty_fn(params=params, strength=strength)
 
         def _penalized_loss(params, *args, **kwargs):
             result = loss(params, *args, **kwargs)
-            penalty = self._penalization(params, filter_kwargs=filter_kwargs)
+            penalty = penalty_fn(params)
             if isinstance(result, tuple):
                 self._check_loss_output_tuple(result)
                 loss_value, aux = result
@@ -537,6 +574,7 @@ class UnRegularized(Regularizer):
         "SVRG",
         "ProxSVRG",
         "Newton",
+        "ProximalNewton",
     )
 
     _default_solver = "LBFGS"
@@ -567,6 +605,7 @@ class Ridge(Regularizer):
         "SVRG",
         "ProxSVRG",
         "Newton",
+        "ProximalNewton",
     )
 
     _default_solver = "LBFGS"
@@ -613,6 +652,7 @@ class Lasso(Regularizer):
     _allowed_solvers = (
         "ProximalGradient",
         "ProxSVRG",
+        "ProximalNewton",
     )
 
     _default_solver = "ProximalGradient"
@@ -678,6 +718,7 @@ class ElasticNet(Regularizer):
     _allowed_solvers = (
         "ProximalGradient",
         "ProxSVRG",
+        "ProximalNewton",
     )
 
     _default_solver = "ProximalGradient"
@@ -836,6 +877,7 @@ class GroupLasso(Regularizer):
     _allowed_solvers = (
         "ProximalGradient",
         "ProxSVRG",
+        "ProximalNewton",
     )
 
     _default_solver = "ProximalGradient"

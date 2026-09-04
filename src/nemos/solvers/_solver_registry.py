@@ -6,7 +6,7 @@ from typing import Type
 
 from ._abstract_solver import SolverProtocol
 from ._fista import OptimistixFISTA, OptimistixNAG
-from ._newton import Newton
+from ._newton import Newton, ProximalNewton
 from ._optax_optimistix_solvers import (
     OptimistixOptaxGradientDescent,
     OptimistixOptaxLBFGS,
@@ -328,7 +328,7 @@ def list_available_algorithms() -> list[str]:
     -------
     >>> import nemos as nmo
     >>> nmo.solvers.list_available_algorithms()
-    ['GradientDescent', 'ProximalGradient', 'LBFGS', 'BFGS', 'NonlinearCG', 'SVRG', 'ProxSVRG', 'Newton']
+    ['GradientDescent', 'ProximalGradient', ..., 'ProximalNewton']
     """
     return list(_registry.keys())
 
@@ -396,6 +396,7 @@ register("NonlinearCG", OptimistixNonlinearCG, "optimistix", default=True)
 register("SVRG", WrappedSVRG, "nemos", default=True)
 register("ProxSVRG", WrappedProxSVRG, "nemos", default=True)
 register("Newton", Newton, "nemos", default=True)
+register("ProximalNewton", ProximalNewton, "nemos", default=True)
 register(
     "GradientDescent", OptimistixOptaxGradientDescent, "optax+optimistix", default=False
 )
