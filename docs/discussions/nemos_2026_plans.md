@@ -38,7 +38,8 @@
 - Regularization: Ridge, Lasso, GroupLasso, ElasticNet
 
 **Open question on observations:**
-1. [ ] Do we need to have a least-square solver for Linear Gaussian with Ridge or UnRegularized (and smoothing penalty when we have it)?
+1. [x] Do we need to have a least-square solver for Linear Gaussian with Ridge or UnRegularized (and smoothing penalty when we have it)?
+   - Yes, `Newton` is enough. 2 iterations instead of one should be good enough.
 2. [ ] Do we want to optimize the scale parameter jointly for NegativeBinomial? If so, what interface?
 
 ### Near completion:
@@ -59,12 +60,12 @@
 **Current status**: Class designed, needs review and merge
 
 **Remaining work**:
-- Review and merge class design
-- Documentation:
-  - Reproduce Fig 2 from Ashwood paper
-  - Background note on initialization
-  - How-to guide on customizing initialization
-- Improve initialization: add k-means initialization
+[x] Review and merge class design
+[ ] Documentation:
+  [x] Reproduce Fig 2 from Ashwood paper
+  [ ] Background note on initialization
+  [ ] How-to guide on customizing initialization
+[x] Improve initialization: add k-means initialization~ Done PR #461 + #552 (Edoardo & Sarah)
 
 **Discussion items:**
 - [ x ] **Priority**: Essential for publication / Nice to have / Post-publication?
@@ -91,10 +92,10 @@ Current contract until end of the month. Start with the germa
 
 **Requirements**:
 - Smoothing penalty (2 kinds):
-  1. Difference-based penalty
-  2. Derivative-based penalty
-- Basis derivative computation
-- Integration with existing regularization framework
+  [x] Difference-based penalty -> Done
+  [ ] Derivative-based penalty
+[ ] Basis derivative computation -> Done for BSpline & CyclicBspline
+[ ] Integration with existing regularization framework
 
 **Discussion items:**
 - [ x ] **Priority**: Essential for publication / Nice to have / Post-publication?
@@ -130,7 +131,7 @@ Current contract until end of the month. Start with the germa
 
 ---
 
-### 4. Categorical Observation
+### 4. Categorical Observation -> Done
 
 **Added value:**
 - Multiple choice / multi-class modeling
@@ -148,7 +149,7 @@ Current contract until end of the month. Start with the germa
 
 ## Infrastructure & Performance Features
 
-### 5. Batched Optimization Support
+### 5. Batched Optimization Support -> Done
 
 **Proposed**: Add `fit_iterator` method for batch processing
 
@@ -159,21 +160,21 @@ Current contract until end of the month. Start with the germa
 
 
 **Discussion items:**
-- [ ] **Priority**: Essential for publication / Nice to have / Post-publication?
+- [x] **Priority**: Essential for publication / Nice to have / Post-publication?
   - Nice to have
-- [ ] **Value proposition**: Does this enable new use cases or is it primarily convenience?
-- [ ] **Timeline**: Completion date if included? 3 weeks
-- [ ] **Ownership**: Who implements this? Bence
-- [ ] **Scope question**: Is this critical for the types of datasets we'll showcase in the paper? no
+-  **Value proposition**: Does this enable new use cases or is it primarily convenience?
+-  **Timeline**: Completion date if included? 3 weeks
+-  **Ownership**: Who implements this? Bence
+-  **Scope question**: Is this critical for the types of datasets we'll showcase in the paper? no
 
 ---
 
 ### 6. Basis System Improvements
 
 **Proposed improvements**:
-- Allow JIT compilation of `compute_features`
-- Convert BSpline to JAX (currently uses scipy) Needed
-- Implement derivative methods for basis (needed for PGAM)
+[x] Allow JIT compilation of `compute_features`
+[x] Convert BSpline to JAX (currently uses scipy) Needed
+[ ] Implement derivative methods for basis (needed for PGAM)
 
 **Added value:**
 - Performance: JIT compilation efficiency
@@ -196,8 +197,8 @@ Current contract until end of the month. Start with the germa
 ### 7. Regularization
 
 **Proposed improvements**:
-- Allow pytree regularizer as an alternative to a single scalar regularizer strength.
-- Smoothing penalization
+[x] Allow pytree regularizer as an alternative to a single scalar regularizer strength. Done in PR #433
+[ ] Smoothing penalization: Easy to extend, see [JPillow tutorial](https://balzaniedoardo.github.io/nemos_glm_tutorials/tutorials/Sfn-2016-tutorial-GLMs/03_04_regularization.html#nemos-advanced-l2-smoothing) with nemos, maybe just in the docs??
 
 **Added value:**
 - Flexible penalization
@@ -211,7 +212,7 @@ Current contract until end of the month. Start with the germa
 - [ ] **Status**: Is the transition essentially complete or is work remaining? pytree almost done
 - [ ] **Ownership**: Who handles remaining transition work? Wolf
 
-### 8. Solver Maintenance
+### 8. Solver Maintenance -> Done
 
 **Added value:**
 - Maintainability: no need to patch jaxopt port
@@ -221,11 +222,11 @@ Current contract until end of the month. Start with the germa
 **Proposed**: Drop jaxopt completely (tests randomly failing)
 
 **Discussion items:**
-- [ ] **Priority**: Essential / Can wait?
+- [x] **Priority**: Essential / Can wait?
   - Essential
-- [ ] **Timeline**: When should this be completed? pr open.
-- [ ] **Status**: Is the transition essentially complete or is work remaining? Zoom linesearch...
-- [ ] **Ownership**: Who handles remaining transition work? Bence
+- [x] **Timeline**: When should this be completed? completed
+- [x] **Status**: Is the transition essentially complete or is work remaining? Zoom linesearch...
+- [x] **Ownership**: Who handles remaining transition work? Bence
 
 ---
 
