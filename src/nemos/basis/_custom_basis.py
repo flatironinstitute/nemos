@@ -13,15 +13,13 @@ from numbers import Number
 from typing import TYPE_CHECKING, Callable, Iterable, List, Optional, Tuple
 
 import jax.numpy as jnp
+import lazy_loader as lazy
 import numpy as np
-import pynapple as nap
 from numpy.typing import ArrayLike, NDArray
-from pynapple import Tsd, TsdFrame, TsdTensor
-
-from nemos.typing import FeatureMatrix
 
 from ..base_class import Base
 from ..type_casting import support_pynapple
+from ..typing import FeatureMatrix
 from ..utils import format_repr
 from . import AdditiveBasis, MultiplicativeBasis
 from ._basis_mixin import BasisMixin, BasisTransformerMixin, set_input_shape_state
@@ -39,7 +37,13 @@ from ._composition_utils import (
     set_input_shape,
 )
 
+# Lazy load pynapple to improve import times
+nap = lazy.load("pynapple")
+
 if TYPE_CHECKING:
+    import pynapple as nap  # noqa: F811
+    from pynapple import Tsd, TsdFrame, TsdTensor
+
     from . import TransformerBasis
 
 
@@ -158,6 +162,31 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         restriction exists because after multiplication, ``basis.compute_features``
         does not distinguish between real and imaginary components, which would lead
         to incorrect outputs.
+    bounds :
+        Interval ``(low, high)`` outside which samples are replaced by ``fill_value``; ``None`` (default)
+        applies no filling. Unlike the ``Eval`` bases, ``bounds`` here does not define or rescale the
+        domain, it only masks out-of-range samples.
+    fill_value :
+        Value assigned to samples falling outside ``bounds``. Defaults to ``jnp.nan``.
+
+    Notes
+    -----
+    ``CustomBasis`` does not derive any state from the data: each function in ``self.funcs`` is applied
+    to the raw input, and ``bounds`` only controls which samples are replaced by ``fill_value`` when they
+    fall outside the given interval. The transformation is therefore identical across inputs whenever each
+    output row depends only on the corresponding input row.
+
+    .. warning::
+
+        Functions that normalize by a quantity computed from the input are unsafe here, because that
+        quantity — and so the transformation — changes from one input to the next, whereas across
+        cross-validation folds it must stay identical.
+
+        Thus, you should precompute any such quantity once (e.g. on the training set) and pass it in
+        as a constant, so the output depends only on each sample. When z-scoring, for example, this
+        means precomputing the centering and scaling instead of recomputing them from each input:
+        replace ``lambda x: (x - x.mean()) / x.std()`` with ``lambda x: (x - mean) / std``, where ``mean``
+        and ``std`` are fixed. See Examples below for an example of this.
 
     Examples
     --------
@@ -187,6 +216,23 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
     >>> X = add.compute_features(samples, samples)
     >>> X.shape
     (50, 20)
+
+    **Use CustomBasis as Transformer**
+
+    Whether a ``CustomBasis`` is safe as a transformer depends on the functions you pass. A
+    sample-wise function transforms a given row the same way regardless of the other rows:
+
+    >>> x = np.array([1.0, 2.0, 3.0])
+    >>> safe = nmo.basis.CustomBasis([lambda x: x ** 2])
+    >>> np.array_equal(safe.compute_features(x)[0], safe.compute_features(x[:1])[0])
+    True
+
+    A data-dependent function (here, centering by the input mean) transforms the same row
+    differently depending on the rest of the input, so it is unsafe across cross-validation folds:
+
+    >>> unsafe = nmo.basis.CustomBasis([lambda x: x - x.mean()])
+    >>> np.array_equal(unsafe.compute_features(x)[0], unsafe.compute_features(x[:1])[0])
+    False
     """
 
     _allow_inputs_of_different_shape = False
@@ -200,6 +246,8 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         pynapple_support: bool = True,
         label: Optional[str] = None,
         is_complex: bool = False,
+        bounds: Optional[Tuple[float, float]] = None,
+        fill_value: float = jnp.nan,
     ):
         self._pynapple_support = bool(pynapple_support)
         self.funcs = funcs
@@ -212,11 +260,13 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
 
         self._input_shape_product = None
 
-        self._n_input_dimensionality = infer_input_dimensionality(self)
+        self._n_inputs = infer_input_dimensionality(self)
         self._n_basis_funcs = len(self.funcs)
 
         self.basis_kwargs = basis_kwargs
         self._is_complex = bool(is_complex)
+        self.bounds = bounds
+        self.fill_value = fill_value
         super().__init__(label=label)
 
     @property
@@ -244,9 +294,9 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         if not all(isinstance(f, Callable) for f in val):
             raise ValueError("User must provide an iterable of callable.")
 
-        if hasattr(self, "_n_input_dimensionality"):
+        if hasattr(self, "_n_inputs"):
             inp_dim = sum(count_positional_and_var_args(f)[0] for f in val)
-            if inp_dim != self._n_input_dimensionality:
+            if inp_dim != self._n_inputs:
                 raise ValueError(
                     "The number of input time series required by the CustomBasis must be consistent. "
                     "Redefine a CustomBasis for a different number of inputs."
@@ -308,6 +358,27 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
             )
         self._basis_kwargs = basis_kwargs
 
+    @support_pynapple(conv_type="jax")
+    def _apply_fill_value(self, *xi: ArrayLike, out: NDArray) -> NDArray:
+        """Apply fill value to out-of-bounds samples."""
+        # Compute mask for out-of-bounds samples
+        to_fill = jnp.any(
+            jnp.stack(
+                [
+                    jnp.any(
+                        (jnp.reshape(x, (x.shape[0], -1)) < self.bounds[0])
+                        | (jnp.reshape(x, (x.shape[0], -1)) > self.bounds[1]),
+                        axis=1,
+                    )
+                    for x in xi
+                ]
+            ),
+            axis=0,
+        )
+        # Reshape to_fill to broadcast correctly: (n_samples,) -> (n_samples, 1, 1, ...)
+        to_fill_broadcast = to_fill.reshape(to_fill.shape[0], *([1] * (out.ndim - 1)))
+        return jnp.where(to_fill_broadcast, self.fill_value, out)
+
     def compute_features(
         self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor
     ) -> FeatureMatrix:
@@ -337,6 +408,10 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         :
             The resulting design matrix, with one row per sample and one column per output feature.
 
+        Notes
+        -----
+        See the class docstring for when the transformation is safe to use as a transformer.
+
         Examples
         --------
         >>> import nemos as nmo
@@ -359,9 +434,24 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
             )
         _check_unique_shapes(xi, basis=self)
         set_input_shape(self, *xi)
+
+        if len(xi[0]) == 0:
+            # no samples
+            if self._pynapple_support:
+                conv_type = "numpy" if nap.nap_config.backend == "numba" else "jax"
+                apply_func = support_pynapple(conv_type)(
+                    lambda *x: np.zeros((0, self.n_output_features))
+                )
+                return apply_func(*xi)
+            else:
+                return jnp.zeros((0, self.n_output_features))
+
         design_matrix = self.evaluate(
             *xi
         )  # (n_samples, *n_output_shape, n_vec_dim, n_basis)
+        # Apply fill_value to out-of-bounds samples
+        if self.bounds is not None:
+            design_matrix = self._apply_fill_value(*xi, out=design_matrix)
         # return a model design
         return design_matrix.reshape((xi[0].shape[0], -1))
 
@@ -431,7 +521,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         return stacked
 
     @set_input_shape_state(states=("_input_shape_product", "_input_shape_", "_label"))
-    def __sklearn_clone__(self) -> "CustomBasis":
+    def __sklearn_clone__(self) -> CustomBasis:
         """Clone the basis while preserving attributes related to input shapes.
 
         This method ensures that input shape attributes (e.g., `_input_shape_product`,
@@ -466,7 +556,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
 
     @staticmethod
     def _reshape_concatenated_arrays(
-        array: NDArray, bas: "CustomBasis", axis: int
+        array: NDArray, bas: CustomBasis, axis: int
     ) -> NDArray:
         # reshape the arrays to match input shapes
         shape = list(array.shape)
@@ -510,7 +600,11 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         return raise_basis_to_power(self, exponent)
 
     def __repr__(self, n=0):
-        rep = format_repr(self, multiline=True)
+        if self.bounds is None:
+            kwargs = dict(exclude_keys=["fill_value"])
+        else:
+            kwargs = {}
+        rep = format_repr(self, **kwargs, multiline=True)
         tab = "    "
         return rep.replace("\n", f"\n{tab * n}")
 
@@ -624,7 +718,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         )
         return self
 
-    def to_transformer(self) -> "TransformerBasis":
+    def to_transformer(self) -> TransformerBasis:
         """
         Turn the Basis into a TransformerBasis for use with scikit-learn.
 
@@ -681,10 +775,10 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         """
         input_shape = self._input_shape_
         if input_shape is None:
-            if self._n_input_dimensionality == 1:
+            if self._n_inputs == 1:
                 return None
             else:
-                return [None] * self._n_input_dimensionality
-        if self._n_input_dimensionality == 1:
+                return [None] * self._n_inputs
+        if self._n_inputs == 1:
             return input_shape[0]
-        return input_shape * self._n_input_dimensionality
+        return input_shape * self._n_inputs

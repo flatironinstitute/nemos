@@ -8,17 +8,16 @@ dynamic = ["version"]
 authors = [{name = "nemos authors"}]
 description = "NEural MOdelS, a statistical modeling framework for neuroscience."
 readme = "README.md"
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.12,<3.15"
 keywords = ["neuroscience", "Poisson-GLM"]
 license = { file = "LICENSE" }
 classifiers = [
     "Intended Audience :: Science/Research",
     "Natural Language :: English",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13"
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14"
 ]
 
 # Define dependencies for the project
@@ -27,10 +26,11 @@ dependencies = [
     "numpy>1.20",                   # Numerical computing library
     "scipy>=1.10",                  # Scientific computing library
     "typing_extensions>=4.6",       # Typing extensions for Python
-    'pynapple>=0.10.1',               # On this version, changed tuning curve API
+    'pynapple>=0.10.1',             # On this version, changed tuning curve API
     "scikit-learn",                 # BaseEstimator and Tags inheritance
     "optimistix>=0.0.11",
     "optax>=0.2.5",
+    "lazy_loader>=0.4",             # Lazy loading for improved import times
 ]
 
 
@@ -59,13 +59,18 @@ dev = [
     "scikit-learn",                 # Testing compatibility with CV & pipelines
     "matplotlib>=3.7",              # Needed by doctest to run docstrings examples
     "pooch",                        # Required by doctest for fetch module
-    "dandi",                        # Required by doctest for fetch module
     "seaborn",                      # Required by doctest for _documentation_utils module
     "myst-nb",                      # Test myst_nb utils for glue
     "hmmlearn",                     # Test algorithmic implementations of HMM
     "tox-uv",                       # Run tox with uv for faster installs
+    "zarr",                         # For testing lazy array loading from zarr files
+    "h5py",                         # For testing lazy array loading from HDF5 files
+    "fsspec",
+    "tqdm",
+    "pyyaml",                       # Parses notebook front matter in scripts/check_notebook_metadata.py
 ]
 docs = [
+    "pynapple>=0.11",               # Required for nap.compute_event_triggered_average(...) in a tutorial
     "numpydoc",
     "sphinx",
     "pydata-sphinx-theme",
@@ -92,6 +97,8 @@ docs = [
     "ipykernel",
     "patsy",
     "tqdm",
+    "formulaic",                    # Design matrix constuction package, used in a doc note
+    "one-api"
 ]
 examples = [
     "scikit-learn",
@@ -109,7 +116,7 @@ jaxopt = [
 
 
 [tool.black]
-target-version = ['py310', 'py311', 'py312']
+target-version = ['py312', 'py313', 'py314']
 skip-string-normalization = false
 exclude = '''
 (
@@ -149,10 +156,17 @@ filterwarnings = [
     'ignore:Tolerance of -?\d\.\d+e-\d\d reached:RuntimeWarning',
     # mpl must be non-interctive for testing otherwise doctests will freeze
     'ignore:FigureCanvasAgg is non-interactive, and thus cannot be shown:UserWarning',
+    # expected whenever a test pins every parameter; `pytest.warns` still sees it
+    'ignore:Every parameter is fixed:UserWarning',
 ]
 markers = [
   "solver_related: tests that interact with solvers",
   "requires_x64: mark test as requiring JAX float64 precision",
+  # Coverage guards: compare what the package registers/discovers against what the test
+  # parametrizations cover, so an uncovered component fails instead of passing silently.
+  # No fitting, so the whole set runs in about a second -- run it BEFORE writing tests
+  # (`pytest -m metatest -q`). Never exclude it from a run.
+  "metatest: coverage guard asserting the test suite covers every registered component",
 ]
 # -s: no capture from pytest (prints will show)
 addopts = ["-s", "--strict-markers"]
@@ -181,3 +195,16 @@ ignore = ["D202"]  # this conflicts with black
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
+
+
+[tool.jupytext]
+# Keep the writer's local jupytext version out of the myst-nb markdown notebooks,
+# so saving one from Jupyter Lab does not stamp it into the front matter and add
+# an unrelated change to the diff.
+#
+# The kernel display name is the other field Jupyter Lab rewrites, but it cannot
+# be filtered the same way: `kernelspec.display_name` is a required property of
+# the nbformat schema, so a notebook without it fails validation and jupytext can
+# no longer read the file. scripts/check_notebook_metadata.py enforces that one
+# instead.
+notebook_metadata_filter = "-jupytext.text_representation.jupytext_version"

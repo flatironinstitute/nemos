@@ -1,4 +1,3 @@
-import inspect
 import os
 from contextlib import nullcontext as does_not_raise
 
@@ -9,12 +8,29 @@ import pytest
 
 import nemos as nmo
 from nemos.glm.params import GLMParams
-from nemos.proximal_operator import prox_none, prox_ridge
+from nemos.proximal_operator import prox_lasso, prox_none, prox_ridge
+from nemos.solvers._abstract_solver import AbstractSolver
+from nemos.solvers._no_op import NoOpSolver
 from nemos.solvers._svrg import SVRG, ProxSVRG, SVRGState
-from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
+from nemos.tree_utils import (
+    pytree_map_and_reduce,
+    tree_full_like,
+    tree_l2_norm,
+    tree_slice,
+    tree_sub,
+)
 
 # Register every test here as solver-related
 pytestmark = pytest.mark.solver_related
+
+
+def _get_group_lasso_mask(X, y):
+    n_features = X.shape[1]
+    n_neurons = (y.shape[1],) if y.ndim > 1 else ()
+    gl_mask = np.zeros((2, n_features, *n_neurons))
+    gl_mask[0, :1] = True
+    gl_mask[1, 1:] = True
+    return gl_mask
 
 
 @pytest.mark.parametrize(
@@ -139,12 +155,11 @@ def test_svrg_glm_instantiate_solver(regularizer_name, solver_class, mask):
         solver_name=solver_name,
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
     )
-    glm._instantiate_solver(glm._compute_loss, np.zeros(1))
+    solver = glm._instantiate_solver(glm._compute_loss, np.zeros(1))
 
     # currently glm._solver is a Wrapped(Prox)SVRG
-    solver = glm._solver._solver
     assert glm.solver_name == solver_name
-    assert isinstance(solver, solver_class)
+    assert isinstance(solver._solver, solver_class)
 
 
 @pytest.mark.parametrize(
@@ -175,10 +190,9 @@ def test_svrg_glm_passes_solver_kwargs(regularizer_name, solver_name, mask, glm_
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
         **kwargs,
     )
-    glm._instantiate_solver(glm._compute_loss, np.zeros(1))
+    solver = glm._instantiate_solver(glm._compute_loss, np.zeros(1))
 
     # currently glm._solver is a Wrapped(Prox)SVRG
-    solver = glm._solver._solver
     assert solver.stepsize == solver_kwargs["stepsize"]
     assert solver.maxiter == solver_kwargs["maxiter"]
 
@@ -211,7 +225,8 @@ def test_svrg_glm_initialize_state(
 
     reg_cls = getattr(nmo.regularizer, regularizer_name)
     if regularizer_name == "GroupLasso":
-        reg = reg_cls(mask=mask)
+        gl_mask = _get_group_lasso_mask(X, y)
+        reg = reg_cls(mask=gl_mask)
     else:
         reg = reg_cls()
 
@@ -230,18 +245,22 @@ def test_svrg_glm_initialize_state(
     )
 
     init_params = glm.initialize_params(X, y)
-    state = glm.initialize_solver_and_state(X, y, init_params)
+    state = glm.initialize_optimizer_and_state(init_params, X, y)
 
     assert pytree_map_and_reduce(
         lambda a, b: np.array_equal(a, b),
         all,
-        state.reference_point,
+        state.solver_state.reference_point,
         GLMParams(*init_params),
     )
 
-    for f in (glm._solver_init_state, glm._solver_update, glm._solver_run):
+    for f in (
+        glm._optimizer_init_state,
+        glm._optimizer_update,
+        glm._optimizer_run,
+    ):
         assert isinstance(f.__self__._solver, solver_class)
-    assert isinstance(state, SVRGState)
+    assert isinstance(state.solver_state, SVRGState)
 
 
 @pytest.mark.parametrize(
@@ -274,7 +293,8 @@ def test_svrg_glm_update(
         kwargs["feature_mask"] = mask.coef if mask is not None else None
     reg_cls = getattr(nmo.regularizer, regularizer_name)
     if regularizer_name == "GroupLasso":
-        reg = reg_cls(mask=mask)
+        gl_mask = _get_group_lasso_mask(X, y)
+        reg = reg_cls(mask=gl_mask)
     else:
         reg = reg_cls()
 
@@ -288,20 +308,23 @@ def test_svrg_glm_update(
     )
 
     init_params = glm.initialize_params(X, y)
-    state = glm.initialize_solver_and_state(X, y, init_params)
+    state = glm.initialize_optimizer_and_state(init_params, X, y)
 
     loss_gradient = jax.jit(jax.grad(glm._solver_loss_fun))
 
     # initialize full gradient at the anchor point
-    state = state._replace(
-        full_grad_at_reference_point=loss_gradient(
-            glm._validator.to_model_params(init_params), X, y
+    state = type(state)(
+        solver_state=state.solver_state._replace(
+            full_grad_at_reference_point=loss_gradient(
+                glm._validator.to_model_params(init_params), X, y
+            )
         ),
+        stats=state.stats,
     )
 
     params, state = glm.update(init_params, state, X, y)
 
-    assert state.iter_num == 1
+    assert state.solver_state.iter_num == 1
 
 
 @pytest.mark.parametrize(
@@ -335,6 +358,8 @@ def test_svrg_glm_update(
         ("Ridge", "GradientDescent", None),
         ("Ridge", "SVRG", None),
         ("UnRegularized", "SVRG", None),
+        ("Ridge", "Newton", None),
+        ("UnRegularized", "Newton", None),
     ],
 )
 @pytest.mark.parametrize(
@@ -359,10 +384,10 @@ def test_maxiter_is_respected(
     # set the tolerance such that the solvers never hit their convergence criterion
     # and run until maxiter is reached
     backend = os.getenv("NEMOS_SOLVER_BACKEND")
-    solver_class_name = str(nmo.solvers._solver_registry.solver_registry[solver_name])
+    solver_class_name = str(nmo.solvers.get_solver(solver_name).implementation)
 
     use_jaxopt_tol = False
-    if backend is not None and backend == "jaxopt":
+    if backend == "jaxopt":
         use_jaxopt_tol = True
 
     if "jaxopt" in solver_class_name.lower():
@@ -406,16 +431,16 @@ def test_maxiter_is_respected(
     solver = glm._solver
     assert solver.maxiter == maxiter
 
-    assert solver.get_optim_info(glm.solver_state_).num_steps == maxiter
+    assert glm.solver_state_.stats.num_steps == maxiter
 
 
 @pytest.mark.parametrize(
-    "regularizer_name, solver_class, mask",
+    "regularizer_name, solver_class",
     [
-        ("Lasso", ProxSVRG, None),
-        ("GroupLasso", ProxSVRG, np.array([0, 1, 0]).reshape(-1, 1).astype(float)),
-        ("Ridge", SVRG, None),
-        ("UnRegularized", SVRG, None),
+        ("Lasso", ProxSVRG),
+        ("GroupLasso", ProxSVRG),
+        ("Ridge", SVRG),
+        ("UnRegularized", SVRG),
     ],
 )
 @pytest.mark.parametrize(
@@ -423,7 +448,7 @@ def test_maxiter_is_respected(
     [nmo.glm.GLM, nmo.glm.PopulationGLM],
 )
 def test_svrg_glm_update_needs_full_grad_at_reference_point(
-    glm_class, regularizer_name, solver_class, mask, linear_regression
+    glm_class, regularizer_name, solver_class, linear_regression
 ):
     X, y, _, _, loss = linear_regression
     if glm_class.__name__ == "PopulationGLM":
@@ -432,7 +457,8 @@ def test_svrg_glm_update_needs_full_grad_at_reference_point(
     # only pass mask if it's not None
     reg_cls = getattr(nmo.regularizer, regularizer_name)
     if regularizer_name == "GroupLasso":
-        reg = reg_cls(mask=mask)
+        gl_mask = _get_group_lasso_mask(X, y)
+        reg = reg_cls(mask=gl_mask)
     else:
         reg = reg_cls()
     kwargs = dict(
@@ -443,7 +469,7 @@ def test_svrg_glm_update_needs_full_grad_at_reference_point(
         regularizer_strength=None if regularizer_name == "UnRegularized" else 0.1,
     )
 
-    if mask is not None and glm_class == nmo.glm.PopulationGLM:
+    if glm_class == nmo.glm.PopulationGLM:
         kwargs["feature_mask"] = np.array([0, 1, 0]).reshape(-1, 1).astype(float)
 
     glm = glm_class(**kwargs)
@@ -453,7 +479,7 @@ def test_svrg_glm_update_needs_full_grad_at_reference_point(
         match=r"Full gradient at the anchor point \(state\.full_grad_at_reference_point\) has to be set",
     ):
         params = glm.initialize_params(X, y)
-        state = glm.initialize_solver_and_state(X, y, params)
+        state = glm.initialize_optimizer_and_state(params, X, y)
         glm.update(params, state, X, y)
 
 
@@ -485,9 +511,7 @@ def test_svrg_update_converges(request, regr_setup, stepsize):
     state = solver.init_state(params, X, y)
 
     for _ in range(maxiter):
-        state = state._replace(
-            full_grad_at_reference_point=loss_grad(params, X, y),
-        )
+        state = state._replace(full_grad_at_reference_point=loss_grad(params, X, y))
 
         prev_params = params
         for _ in range(m):
@@ -496,9 +520,7 @@ def test_svrg_update_converges(request, regr_setup, stepsize):
             xi, yi = tree_slice(X, ind), y[ind]
             params, state = solver.update(params, state, xi, yi)
 
-        state = state._replace(
-            reference_point=params,
-        )
+        state = state._replace(reference_point=params)
 
         _error = tree_l2_norm(tree_sub(params, prev_params)) / tree_l2_norm(prev_params)
         if _error < tol:
@@ -524,9 +546,9 @@ def test_svrg_update_converges(request, regr_setup, stepsize):
     "prox, prox_lambda",
     [
         (prox_none, None),
-        (prox_ridge, 0.1),
         (prox_none, 0.1),
-        (nmo.proximal_operator.prox_lasso, 0.1),
+        (prox_ridge, 0.1),
+        (prox_lasso, 0.1),
     ],
 )
 def test_svrg_xk_update_step(request, regr_setup, to_tuple, prox, prox_lambda):
@@ -545,6 +567,11 @@ def test_svrg_xk_update_step(request, regr_setup, to_tuple, prox, prox_lambda):
 
     stepsize = 1e-2
     loss_gradient = jax.jit(jax.grad(loss))
+
+    def prox_op(params, hyperparams, scaling=1.0):
+        return prox(params, prox_lambda, scaling)
+
+    prox_lambda = tree_full_like(true_params, prox_lambda)
 
     # set the initial parameters to zero and
     # set the anchor point to a random value that's not just zeros
@@ -605,15 +632,15 @@ def test_svrg_xk_update_step(request, regr_setup, to_tuple, prox, prox_lambda):
     else:
         raise TypeError
 
-    next_xk = prox(next_xk, prox_lambda, scaling=stepsize)
+    next_xk = prox_op(next_xk, {}, scaling=stepsize)
 
     if prox_lambda is None:
         assert prox == prox_none
         solver = SVRG(loss)
     else:
-        solver = ProxSVRG(loss, prox)
+        solver = ProxSVRG(loss, prox_op)
     svrg_next_xk, _ = solver._inner_loop_param_update_step(
-        init_param, xs, df_xs, stepsize, prox_lambda, xi, yi
+        init_param, xs, df_xs, stepsize, {}, xi, yi
     )
 
     assert pytree_map_and_reduce(
@@ -656,16 +683,16 @@ def test_svrg_wrong_shapes(shapes, expected_context):
 
 def test_all_solvers_accept_tol_and_not_atol():
     """All solvers should accept tol and not accept atol."""
-    for solver_class in nmo.solvers._solver_registry.solver_registry.values():
-        assert "tol" in solver_class.get_accepted_arguments()
-        assert "atol" not in solver_class.get_accepted_arguments()
+    for spec in nmo.solvers.list_available_solvers():
+        assert "tol" in spec.implementation.get_accepted_arguments()
+        assert "atol" not in spec.implementation.get_accepted_arguments()
 
 
 def test_all_solvers_accept_maxiter_and_not_max_steps():
     """All solvers should accept maxiter and not accept max_steps."""
-    for solver_class in nmo.solvers._solver_registry.solver_registry.values():
-        assert "maxiter" in solver_class.get_accepted_arguments()
-        assert "max_steps" not in solver_class.get_accepted_arguments()
+    for spec in nmo.solvers.list_available_solvers():
+        assert "maxiter" in spec.implementation.get_accepted_arguments()
+        assert "max_steps" not in spec.implementation.get_accepted_arguments()
 
 
 @pytest.mark.requires_x64
@@ -695,9 +722,9 @@ def test_all_solvers_use_aux_in_run(request, aux_gen_fn):
 
     param_init = jax.tree_util.tree_map(np.zeros_like, true_params)
 
-    for solver_name in nmo.solvers.list_available_solvers():
+    for spec in nmo.solvers.list_available_solvers():
         run_loss = TestAux(loss)
-        solver_class = nmo.solvers.solver_registry[solver_name]
+        solver_class = spec.implementation
 
         # test solver.run
         solver = solver_class(
@@ -705,6 +732,7 @@ def test_all_solvers_use_aux_in_run(request, aux_gen_fn):
             regularizer=nmo.regularizer.UnRegularized(),
             regularizer_strength=None,
             has_aux=True,
+            init_params=param_init,
         )
         run_params, run_state, run_aux = solver.run(param_init, X, y)
 
@@ -742,21 +770,25 @@ def test_all_solvers_use_aux_in_update(request, aux_gen_fn):
 
     param_init = jax.tree_util.tree_map(np.zeros_like, true_params)
 
-    for solver_name in nmo.solvers.list_available_solvers():
+    for spec in nmo.solvers.list_available_solvers():
         update_loss = TestAux(loss)
-        solver_class = nmo.solvers.solver_registry[solver_name]
+        solver_class = spec.implementation
         solver = solver_class(
             unregularized_loss=update_loss,
             regularizer=nmo.regularizer.UnRegularized(),
             regularizer_strength=None,
             has_aux=True,
+            init_params=param_init,
         )
         init_state = solver.init_state(param_init, X, y)
 
-        if "svrg" in solver_name.lower():
+        if "svrg" in spec.algo_name.lower():
             full_grad, full_aux = jax.grad(update_loss, has_aux=True)(param_init, X, y)
-            init_state = init_state._replace(
-                full_grad_at_reference_point=full_grad,
+            init_state = type(init_state)(
+                solver_state=init_state.solver_state._replace(
+                    full_grad_at_reference_point=full_grad
+                ),
+                stats=init_state.stats,
             )
 
         update_params, update_state, update_aux = solver.update(
@@ -776,14 +808,15 @@ def test_all_solvers_work_without_aux(request):
     jax.config.update("jax_enable_x64", True)
     X, y, _, true_params, loss = request.getfixturevalue("linear_regression")
 
-    for solver_name in nmo.solvers.list_available_solvers():
-        solver_class = nmo.solvers.solver_registry[solver_name]
+    for spec in nmo.solvers.list_available_solvers():
+        solver_class = spec.implementation
 
         param_init = jax.tree_util.tree_map(np.zeros_like, true_params)
         solver = solver_class(
             unregularized_loss=loss,
             regularizer=nmo.regularizer.UnRegularized(),
             regularizer_strength=None,
+            init_params=param_init,
             has_aux=False,
             tol=1e-12,
         )
@@ -840,3 +873,92 @@ def test_optimistix_solvers_default_maxiter(request, solver_class, expected_maxi
     )
 
     assert solver.maxiter == expected_maxiter
+
+
+@pytest.mark.requires_x64
+@pytest.mark.parametrize(
+    "solver_class",
+    [
+        nmo.solvers.OptimistixNAG,
+        nmo.solvers.OptimistixFISTA,
+        nmo.solvers.OptimistixOptaxGradientDescent,
+        pytest.param(
+            getattr(nmo.solvers, "JaxoptGradientDescent", None),
+            marks=pytest.mark.skipif(
+                not nmo.solvers.JAXOPT_AVAILABLE, reason="jaxopt not available"
+            ),
+        ),
+        pytest.param(
+            getattr(nmo.solvers, "JaxoptProximalGradient", None),
+            marks=pytest.mark.skipif(
+                not nmo.solvers.JAXOPT_AVAILABLE, reason="jaxopt not available"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("stepsize", [None, 0.01])
+def test_solvers_converge_with_and_without_stepsize(request, solver_class, stepsize):
+    """Test that solvers converge on linear regression with and without explicit stepsize."""
+    X, y, _, true_params, loss = request.getfixturevalue("linear_regression")
+
+    # all these solvers use linesearch when stepsize <= 0, but None is clearer
+    # so handle it here for jaxopt solvers instead
+    if "jaxopt" in solver_class.__name__.lower() and stepsize is None:
+        stepsize = -1.0
+
+    param_init = jax.tree_util.tree_map(np.zeros_like, true_params)
+    solver = solver_class(
+        unregularized_loss=loss,
+        regularizer=nmo.regularizer.UnRegularized(),
+        regularizer_strength=None,
+        has_aux=False,
+        tol=1e-12,
+        stepsize=stepsize,
+        maxiter=10_000,
+        acceleration=False,
+    )
+    params, state, _ = solver.run(param_init, X, y)
+
+    assert np.allclose(true_params, params, atol=1e-5)
+
+
+@pytest.mark.skipif(not nmo.solvers.JAXOPT_AVAILABLE, reason="jaxopt not available")
+@pytest.mark.parametrize(
+    "solver_name",
+    [
+        "JaxoptGradientDescent",
+        "JaxoptProximalGradient",
+        "JaxoptBFGS",
+        "JaxoptLBFGS",
+        "JaxoptNonlinearCG",
+    ],
+)
+def test_jaxopt_adapter_rejects_none_stepsize(request, solver_name):
+    """jaxopt adapters reject stepsize=None at construction with a clear error."""
+    _, _, _, _, loss = request.getfixturevalue("linear_regression")
+    solver_class = getattr(nmo.solvers, solver_name)
+    with pytest.raises(ValueError, match="stepsize must be a number"):
+        solver_class(
+            unregularized_loss=loss,
+            regularizer=nmo.regularizer.UnRegularized(),
+            regularizer_strength=None,
+            has_aux=False,
+            stepsize=None,
+        )
+
+
+def test_no_op_solver_covers_the_solver_interface():
+    """``NoOpSolver`` replaces any configured solver, so it must implement all of it.
+
+    The model reaches for solver methods after initialization — ``stochastic_run`` is one
+    — and a missing one only shows up as an ``AttributeError`` mid-fit. Comparing the
+    public surface catches that when the interface grows, e.g. a Hessian mixin.
+    """
+    expected = {
+        name
+        for name in dir(AbstractSolver)
+        if not name.startswith("_") and callable(getattr(AbstractSolver, name, None))
+    }
+
+    missing = sorted(name for name in expected if not hasattr(NoOpSolver, name))
+    assert missing == []

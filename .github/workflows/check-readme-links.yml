@@ -1,0 +1,23 @@
+name: check-readme-links
+
+permissions: {}
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: 0 0 * * 1     # weekly, Mondays 00:00 UTC
+
+jobs:
+  full-readme-link-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install markdown-link-check
+        run: npm install -g markdown-link-check
+
+      - name: Check all external links, including NeMoS docs pages
+        run: ./scripts/check_markdown_links.sh full

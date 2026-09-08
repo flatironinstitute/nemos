@@ -51,11 +51,11 @@ Public attributes are stored as properties:
 - `regularizer_strength`: A float quantifying the amount of regularization.
 - `solver_name`: One of the supported solvers in the solver registry, currently "GradientDescent", "BFGS", "LBFGS", "ProximalGradient", "SVRG", and "NonlinearCG".
 - `solver_kwargs`: Extra keyword arguments to be passed at solver initialization.
-- `solver_init_state`, `solver_update`, `solver_run`: Read-only property with a partially evaluated `solver.init_state`, `solver.update` and, `solver.run` methods. The partial evaluation guarantees a consistent API for all solvers.
+- `optimizer_init_state`, `optimizer_update`, `optimizer_run`: Read-only property with a partially evaluated `solver.init_state`, `solver.update` and, `solver.run` methods. The partial evaluation guarantees a consistent API for all solvers.
 
-When implementing a new subclass of `BaseRegressor`, the only attributes you must interact directly with are those that operate on the solver, i.e. `solver_init_state`, `solver_update`, `solver_run`.
+When implementing a new subclass of `BaseRegressor`, the only attributes you must interact directly with are those that operate on the solver, i.e. `optimizer_init_state`, `optimizer_update`, `optimizer_run`.
 
-Typically, in `YourRegressor` you will call `self.solver_init_state` at the parameter initialization step, `self.solver_run` in [`fit`](nemos.glm.GLM.fit), and `self.solver_update` in [`update`](nemos.glm.GLM.update).
+Typically, in `YourRegressor` you will call `self.optimizer_init_state` at the parameter initialization step, `self.optimizer_run` in [`fit`](nemos.glm.GLM.fit), and `self.optimizer_update` in [`update`](nemos.glm.GLM.update).
 
 :::{admonition} Solvers
 :class: note
@@ -96,6 +96,9 @@ When devising a new model subclass based on the `BaseRegressor` abstract class, 
 - **Should not** overwrite the `get_params` and `set_params` methods, inherited from `Base`.
 - **May** introduce auxiliary methods for added utility.
 - **May** re-implement the `__sklearn_tags__` method to add metadata that is relevant to the specific estimator implemented. See the [`scikit-learn` documentation](https://scikit-learn.org/stable/modules/generated/sklearn.utils.Tags.html#sklearn.utils.Tags) for the available tagging options.
+- **May** certify something about the curvature of its loss, by overriding `_resolve_hess_property` (the sign), `_definite_on` (the leaves whose block is definite), `_hess_structure` and `_hess_batch_axes`. Every default certifies nothing, so a subclass that overrides none of them still gets a correct tag and a solver that assumes the least about the Hessian. See [Hessian tagging](08-hessian_tagging.md).
+
+TODO: the tag has no hook for a loss that is *flat* on a leaf, because no model here has one. Two situations would need it, and they are worth settling before a subclass runs into either: a parameter the loss never references, which only the penalty curves on, and a Lagrange multiplier, whose diagonal block is structurally zero. The second also needs the tag to stay unsigned, since a flat claim implies nothing about the null space of an indefinite matrix.
 
 :::{admonition} Tags
 :class: note

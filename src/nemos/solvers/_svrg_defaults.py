@@ -177,7 +177,7 @@ def glm_softplus_poisson_l_max_and_l(
     # takes care of population glm (see bound found on overleaf)
     y = jnp.max(y, axis=tuple(range(1, y.ndim)))
 
-    # concatenate all data (if X is FeaturePytree)
+    # concatenate all data if X is a pytree
     if isinstance(X, (pytrees.FeaturePytree, dict)):
         X = jnp.hstack(jax.tree_util.tree_leaves(X))
 

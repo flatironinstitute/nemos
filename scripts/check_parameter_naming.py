@@ -116,7 +116,52 @@ VALID_PAIRS = [
             r=2,
         )
     ),
+    {"features", "n_features"},
+    {"first_n_params", "fit_params"},
+    {"test_ridge_with_aux", "test_ridge_without_aux"},
     {"classes", "n_classes"},
+    {"method_name", "method_names"},
+    {"arg_name", "arg_num"},
+    {"arg_name", "algo_name"},
+    {"arg_name", "attr_name"},
+    {"arg_name", "var_name"},
+    {"n_features", "features"},
+    {"n_outputs", "output"},
+    {"callback", "callbacks"},
+    {"initial_proba_init", "initial_proba_init_kwargs"},
+    {"transition_proba_init", "transition_proba_init_kwargs"},
+    {"initial_proba_init_kwargs", "transition_proba_init_kwargs"},
+    {"is_nan", "is_nap"},
+    {"dirichlet_initial_proba", "dirichlet_transition_proba"},
+    {"glm_params_init", "glm_params_init_kwargs"},
+    {"scale_init_kwargs", "solver_init_kwargs"},
+    {"hmm_initialization_funcs", "model_initialization_funcs"},
+    {"random_key_pair", "random_key"},
+    {"tag", "tags"},
+    {"x_flat", "g_flat"},
+    {"func", "_func"},
+    {"funcs", "_func"},
+    {"fval", "val"},
+    {"params_neu", "param_name"},
+    {"params_i", "params"},
+    {"params_i", "params_dict"},
+    {"params_tree", "parameter_tree"},
+    {"leaf", "x_leaf"},
+    {"event", "events"},
+    {"X_test", "y_test"},
+    {"basis_coeff", "basis_col"},
+    # glm-hmm doc utils: trial counts and true/recovered parameter pairs
+    {"trials", "n_trials"},
+    {"true_coef", "rec_coef"},
+    {"true_intercept", "rec_intercept"},
+    {"true_trans", "rec_trans"},
+    {"n_classes", "n_passes"},
+    {"fix_params", "fit_params"},
+    {"active_coef", "active_cols"},
+    {"true_intercept", "fit_intercept"},
+    {"frozen_intercept", "rec_intercept"},
+    {"frozen_intercept", "true_intercept"},
+    {"claim", "claims"},
 ]
 
 
@@ -172,7 +217,6 @@ def handle_matches(
             "info": [(current_parameter, current_path)],
         }
     else:
-
         # if there is an invalid match, then add to existing result entry
         for k, v in results.items():
             # Otherwise, add the parameter to any existing groups where it has a match
@@ -196,7 +240,6 @@ def extract_parameters_from_ast(
     unique_param_names: set,
     similarity_cutoff: float,
 ):
-
     class ParamVisitor(ast.NodeVisitor):
         def __init__(self):
             self.class_name = None

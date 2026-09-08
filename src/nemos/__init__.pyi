@@ -1,0 +1,46 @@
+"""Stubs."""
+
+from . import (
+    basis,
+    batching,
+    callbacks,
+    convolve,
+    exceptions,
+    fetch,
+    glm,
+    glm_hmm,
+    identifiability_constraints,
+    observation_models,
+    pytrees,
+    regularizer,
+    simulation,
+    solvers,
+    styles,
+    tree_utils,
+    type_casting,
+    utils,
+)
+from .io.io import inspect_npz, load_model
+
+__all__ = [
+    "basis",
+    "batching",
+    "callbacks",
+    "convolve",
+    "exceptions",
+    "fetch",
+    "glm",
+    "glm_hmm",
+    "identifiability_constraints",
+    "observation_models",
+    "pytrees",
+    "regularizer",
+    "simulation",
+    "solvers",
+    "styles",
+    "tree_utils",
+    "type_casting",
+    "utils",
+    "inspect_npz",
+    "load_model",
+]

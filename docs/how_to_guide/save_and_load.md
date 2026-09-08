@@ -4,9 +4,8 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.4
 kernelspec:
-  display_name: Python 3
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
@@ -21,10 +20,10 @@ In nemos, you can save a model by calling the {py:meth}`~nemos.glm.GLM.save_para
 ```{code-cell}
 import nemos as nmo
 
-# define a ridge regularized glm, with a Gradient descent solver
+# define a ridge regularized glm, with LBFGS solver
 model = nmo.glm.GLM(
     regularizer="Ridge",
-    solver_name="GradientDescent"
+    solver_name="LBFGS"
 )
 
 # save

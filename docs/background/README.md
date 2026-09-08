@@ -50,6 +50,15 @@ basis/README.md
 
 :::{grid-item-card}
 
+```{toctree}
+:maxdepth: 2
+
+plot_07_glm_pytree.md
+```
+:::
+
+:::{grid-item-card}
+
 <figure>
 <img src="../_static/thumbnails/background/plot_03_1D_convolution.svg" style="height: 100px", alt="One-Dimensional Convolutions."/>
 </figure>

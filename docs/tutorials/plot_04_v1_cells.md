@@ -4,7 +4,6 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.4
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -16,6 +15,9 @@ kernelspec:
 
 %matplotlib inline
 import warnings
+import jax
+
+jax.config.update("jax_enable_x64", True)
 
 # Ignore the first specific warning
 warnings.filterwarnings(
@@ -138,8 +140,8 @@ time around it. (it takes some time for info to travel through the eye/LGN to
 V1). Pynapple makes this easy:
 
 ```{code-cell} ipython3
-sta = nap.compute_event_trigger_average(spikes, stimulus, binsize=0.025,
-                                        windowsize=(-0.15, 0.0))
+sta = nap.compute_event_triggered_average(stimulus, spikes, binsize=0.025,
+                                        window=(-0.15, 0.0))
 ```
 
 sta is a [`TsdTensor`](https://pynapple.org/generated/pynapple.TsdTensor.html), which gives us the 2d receptive field at each of the

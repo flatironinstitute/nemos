@@ -7,17 +7,25 @@ import copy
 import inspect
 import re
 from collections import OrderedDict
-from contextlib import contextmanager
 from functools import wraps
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Generator, Literal, Optional, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Generator,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+)
 
 import jax
+import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..convolve import create_convolutional_predictor
+from ..type_casting import support_pynapple
 from ..utils import _get_terminal_size, format_repr
 from ._composition_utils import (
     _composite_basis_setter_logic,
@@ -27,12 +35,16 @@ from ._composition_utils import (
     get_input_shape,
     infer_input_dimensionality,
     is_basis_like,
+    is_shallow_construction,
     label_setter,
     set_input_shape,
+    shallow_construction,
 )
 from ._transformer_basis import TransformerBasis
 
 if TYPE_CHECKING:
+    from pynapple import Tsd, TsdFrame, TsdTensor
+
     from ._basis import Basis
 
 
@@ -127,6 +139,8 @@ def remap_parameters(method):
 
 class BasisMixin:
     _allow_inputs_of_different_shape = True
+    _convert_to_float = True
+    _is_discrete = False
 
     def __init__(self, label: Optional[str] = None):
         if not hasattr(self, "_input_shape_"):
@@ -139,11 +153,25 @@ class BasisMixin:
         # a permanent property of a basis, defined at composite basis init
         self._parent: Optional["BasisMixin"] = None
 
+    def __getattr__(self, name):
+        if name == "bounds" and self._is_discrete:
+            raise AttributeError(f"{self.__class__.__name__} has no bounds.")
+        super().__getattribute__(name)
+
+    def __setattr__(self, name, value):
+        if name == "bounds" and self._is_discrete:
+            raise AttributeError(f"{self.__class__.__name__} has no bounds.")
+        super().__setattr__(name, value)
+
     def __repr__(self):
-        return format_repr(self)
+        bounds = getattr(self, "bounds", None)
+        if bounds is None:
+            kwargs = dict(exclude_keys=["fill_value"])
+        else:
+            kwargs = {}
+        return format_repr(self, **kwargs)
 
     def __getitem__(self, index: str) -> Basis:
-
         if isinstance(index, (int, slice)):
             string = "Slicing" if isinstance(index, slice) else "Indexing with integer"
             raise IndexError(
@@ -456,7 +484,7 @@ class AtomicBasisMixin(BasisMixin):
         klass = self.__class__(**self.get_params())
         return klass
 
-    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray) -> BasisMixin:
+    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> BasisMixin:
         """
         Set the expected input shape for the basis object.
 
@@ -492,14 +520,14 @@ class AtomicBasisMixin(BasisMixin):
         is not set in this method, then ``compute_features`` (equivalent to ``fit_transform``) will break.
 
         """
-        return super().set_input_shape(xi)
+        return super().set_input_shape(*xi)
 
 
 class EvalBasisMixin:
-    """Mixin class for evaluational basis."""
+    """Mixin providing the evaluation lifecycle shared by all evaluational bases.
 
-    def __init__(self, bounds: Optional[Tuple[float, float]] = None):
-        self.bounds = bounds
+    Bounds storage and out-of-bounds fill handling live in :class:`BoundedEvalBasisMixin`.
+    """
 
     def _compute_features(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor):
         """Evaluate basis at sample points.
@@ -552,7 +580,7 @@ class EvalBasisMixin:
         self.set_input_shape(*xi)
         return self
 
-    def _set_input_independent_states(self) -> "EvalBasisMixin":
+    def _set_input_independent_states(self) -> EvalBasisMixin:
         """
         Compute all the basis states that do not depend on the input.
 
@@ -567,10 +595,139 @@ class EvalBasisMixin:
         """
         return self
 
+
+class BoundedEvalBasisMixin(EvalBasisMixin):
+    """Evaluational basis with a bounded domain and out-of-bounds fill handling."""
+
+    # Whether to fill out-of-bounds samples with fill_value.
+    # Set to False for bases defined over the entire real line (e.g., Fourier).
+    _apply_bounds_fill = True
+
+    # Whether ``bounds=None`` makes the basis derive its domain from the input data
+    # (e.g. via ``min_max_rescale_samples``). Set to True on the rescaling base classes;
+    # the transformer safety gate requires explicit ``bounds`` for these.
+    _bounds_define_domain = True
+
+    def __init__(
+        self, bounds: Optional[Tuple[float, float]] = None, fill_value: float = jnp.nan
+    ):
+        if not getattr(self, "_is_discrete", False):
+            self.bounds = bounds
+        self.fill_value = fill_value
+
+    def _compute_features(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor):
+        """Evaluate basis at sample points.
+
+        The basis is evaluated at the locations specified in the inputs. For example,
+        ``compute_features(np.array([0, .5]))`` would return the array:
+
+        .. code-block:: text
+
+           b_1(0) ... b_n(0)
+           b_1(.5) ... b_n(.5)
+
+        where ``b_i`` is the i-th basis.
+
+        Parameters
+        ----------
+        *xi:
+            The input samples over which to apply the basis transformation. The samples can be passed
+            as multiple arguments, each representing a different dimension for multivariate inputs.
+
+        Returns
+        -------
+        :
+            A matrix with the transformed features.
+
+        Notes
+        -----
+        When ``bounds`` is ``None``, the domain of the basis is taken from the min and max of
+        the input ``xi``. Calling this method on inputs with different ranges therefore yields
+        different transformations, even for the same basis object: you get the same basis
+        *functions*, but the domain is re-fit to each input. Set ``bounds`` explicitly to fix the
+        domain and obtain an identical transformation across inputs (required when the basis is
+        used as a transformer, e.g. inside a cross-validation loop).
+
+        """
+        out = self.evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
+        if (
+            self._apply_bounds_fill
+            and (not self._is_discrete)
+            and self.bounds is not None
+        ):
+            out = self._apply_fill_value(*xi, out=out)
+        return np.reshape(out, (out.shape[0], -1))
+
+    @support_pynapple(conv_type="jax")
+    def _apply_fill_value(self, *xi: ArrayLike, out: NDArray) -> jax.Array:
+        """Apply fill value to out-of-bounds samples."""
+        to_fill = jnp.any(
+            jnp.stack(
+                [
+                    jnp.any(
+                        (jnp.reshape(x, (x.shape[0], -1)) < lo)
+                        | (jnp.reshape(x, (x.shape[0], -1)) > hi),
+                        axis=1,
+                    )
+                    for x, (lo, hi) in zip(xi, self._get_bounds_per_dim(), strict=True)
+                ]
+            ),
+            axis=0,
+        )
+        to_fill_broadcast = to_fill.reshape(to_fill.shape[0], *([1] * (out.ndim - 1)))
+        return jnp.where(to_fill_broadcast, self.fill_value, out)
+
     @property
-    def bounds(self):
-        """Range of values covered by the basis."""
+    def bounds(self) -> List[Tuple[float, float]] | Tuple[float, float] | None:
+        """Returns bounds, as provided.
+
+        Notes
+        -----
+        For some bases, ``bounds`` defines the domain over which the basis is constructed. When it is
+        left unset, that domain is inferred from the range of the input instead, so it can change from
+        one call to the next.
+
+        A basis of this kind can be used as a transformer only if ``bounds`` is set explicitly. Fixing
+        the bounds keeps the domain constant across calls, for instance across cross-validation folds.
+
+        """
         return self._bounds
+
+    def _get_bounds_per_dim(self) -> List[Tuple[float, float]]:
+        """Return bounds,  broadcast to one pair per input dimension."""
+        if self._bounds is None or isinstance(self._bounds[0], (int, float)):
+            return [self._bounds] * self._n_inputs
+        return list(self._bounds)
+
+    @bounds.setter
+    def bounds(self, values):
+        if values is None:
+            self._bounds = None
+            return
+
+        if isinstance(values, np.ndarray):
+            values = values.tolist()
+
+        if not isinstance(values, (list, tuple)):
+            raise TypeError(
+                f"Invalid bounds ``{values}`` provided, "
+                "bounds should be one or multiple tuples of 2 floats, "
+                "matching the inputs of the basis.\n"
+            )
+
+        # Validate: single (lo, hi) pair or one per dimension
+        if len(values) == 2 and all(not isinstance(v, (list, tuple)) for v in values):
+            # Single pair
+            self._bounds = self._format_bounds(values)
+        else:
+            # One pair per dimension
+            if len(values) != self._n_inputs:
+                raise ValueError(
+                    f"Invalid bounds ``{values}`` provided, "
+                    "bounds should be one or multiple tuples of 2 floats, "
+                    "matching the inputs of the basis.\n"
+                )
+            self._bounds = tuple(self._format_bounds(v) for v in values)
 
     @staticmethod
     def _format_bounds(values: Any) -> Tuple[Any, Exception | None]:
@@ -602,19 +759,6 @@ class EvalBasisMixin:
             )
 
         return values
-
-    @bounds.setter
-    def bounds(self, values: Union[None, Tuple[float, float]]):
-        """Setter for bounds."""
-        if values is None:
-            self._bounds = None
-            return
-        values = self._format_bounds(values)
-        if values is not None and len(values) != 2:
-            raise ValueError(
-                f"The provided `bounds` must be of length two. Length {len(values)} provided instead!"
-            )
-        self._bounds = values
 
 
 class ConvBasisMixin:
@@ -690,7 +834,7 @@ class ConvBasisMixin:
         """
         return self._set_kernel()
 
-    def _set_kernel(self) -> "ConvBasisMixin":
+    def _set_kernel(self) -> ConvBasisMixin:
         """
         Prepare or compute the convolutional kernel for the basis functions.
 
@@ -807,6 +951,12 @@ class BasisTransformerMixin:
         """
         Turn the Basis into a TransformerBasis for use with scikit-learn.
 
+        .. attention::
+
+            Any ``Eval`` basis composing the transformer must have its ``bounds`` set, so its domain is
+            fixed rather than re-inferred on each cross-validation fold. Otherwise
+            ``fit``/``transform``/``fit_transform`` raise a ``RuntimeError``.
+
         Examples
         --------
         Jointly cross-validating basis and GLM parameters with scikit-learn.
@@ -816,7 +966,7 @@ class BasisTransformerMixin:
         >>> from sklearn.model_selection import GridSearchCV
         >>> # load some data
         >>> X, y = np.random.normal(size=(30, 1)), np.random.poisson(size=30)
-        >>> basis = nmo.basis.RaisedCosineLinearEval(10).set_input_shape(1).to_transformer()
+        >>> basis = nmo.basis.RaisedCosineLinearEval(10, bounds=(X.min(), X.max())).set_input_shape(1).to_transformer()
         >>> glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=1.)
         >>> pipeline = Pipeline([("basis", basis), ("glm", glm)])
         >>> param_grid = dict(
@@ -840,13 +990,11 @@ class CompositeBasisMixin(BasisMixin):
     (AdditiveBasis and MultiplicativeBasis).
     """
 
-    _shallow_copy: bool = False
-
     def __init__(
         self, basis1: BasisMixin, basis2: BasisMixin, label: Optional[str] = None
     ):
         # number of input arrays that the basis receives
-        self._n_input_dimensionality = infer_input_dimensionality(
+        self._n_inputs = infer_input_dimensionality(
             basis1
         ) + infer_input_dimensionality(basis2)
 
@@ -861,7 +1009,7 @@ class CompositeBasisMixin(BasisMixin):
         # deep copy to avoid changes directly to the 1d basis to be reflected
         # in the composite basis.
 
-        if not self.__class__._shallow_copy:
+        if not is_shallow_construction():
             basis1 = copy.deepcopy(basis1)
             basis2 = copy.deepcopy(basis2)
 
@@ -925,6 +1073,17 @@ class CompositeBasisMixin(BasisMixin):
             basis = _composite_basis_setter_logic(basis, self._basis2)
         self._basis2 = basis
         self._input_shape_update()
+
+    @property
+    def bounds(self):
+        def _format(b):
+            if not isinstance(b, list):
+                b = [b]
+            return b
+
+        return _format(getattr(self.basis1, "bounds", None)) + _format(
+            getattr(self.basis2, "bounds", None)
+        )
 
     @property
     def _has_default_label(self):
@@ -1060,16 +1219,6 @@ class CompositeBasisMixin(BasisMixin):
         if hasattr(self.basis2, "_set_input_independent_states"):
             self.basis2._set_input_independent_states()
 
-    @contextmanager
-    def _set_shallow_copy(self, value):
-        """Context manager for setting the shallow copy flag in a thread safe way."""
-        old_value = self.__class__._shallow_copy
-        self.__class__._shallow_copy = value
-        try:
-            yield
-        finally:
-            self.__class__._shallow_copy = old_value
-
     @set_input_shape_state(states=("_input_shape_product", "_label"))
     def __sklearn_clone__(self) -> Basis:
         """Clone the basis while preserving attributes related to input shapes.
@@ -1082,10 +1231,11 @@ class CompositeBasisMixin(BasisMixin):
 
         Notes
         -----
-        The ``_shallow_copy`` attribute is set to True in the context, forcing a shallow copy, at
-        before the klass definition, and reset to False after cloning.
+        The construction runs inside a :func:`shallow_construction` context, so the
+        freshly cloned components are stored by reference instead of being deep-copied
+        again.
         """
-        with self._set_shallow_copy(True):
+        with shallow_construction():
             # clone recursively
             basis1 = self.basis1.__sklearn_clone__()
             basis2 = self.basis2.__sklearn_clone__()
@@ -1120,10 +1270,13 @@ class CompositeBasisMixin(BasisMixin):
         if n < rows:
             rep = (
                 start_str + f"{self.__class__.__name__}"
-                f"(\n{n*tab}basis1={basis1},\n{n*tab}basis2={basis2},\n{(n-1)*tab})"
+                f"(\n{n * tab}basis1={basis1},\n{n * tab}basis2={basis2},\n{(n - 1) * tab})"
             )
         elif n == rows:
-            rep = start_str + f"{self.__class__.__name__}(\n{n*tab}...\n{(n-1)*tab})"
+            rep = (
+                start_str
+                + f"{self.__class__.__name__}(\n{n * tab}...\n{(n - 1) * tab})"
+            )
         else:
             rep = None
         return rep

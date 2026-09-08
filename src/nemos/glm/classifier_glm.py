@@ -4,26 +4,26 @@
 from __future__ import annotations
 
 from numbers import Number
-from typing import Callable, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from .. import observation_models as obs
 from .. import tree_utils
+from .._hess import LeafClaim, MatrixStructure, claim_nothing
+from ..label_encoder import LabelEncoder
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..type_casting import is_numpy_array_like, support_pynapple
 from ..typing import (
     DESIGN_INPUT_TYPE,
-    RegularizerStrength,
     SolverState,
     StepResult,
     UserProvidedParamsT,
 )
-from .glm import GLM, PopulationGLM
-from .params import GLMUserParams
+from .glm import GLM, PopulationGLM, _active_columns
+from .params import GLMParams, GLMUserParams
 from .validation import (
     ClassifierGLMValidator,
     PopulationClassifierGLMValidator,
@@ -38,11 +38,30 @@ class ClassifierMixin:
     # observation model inferred
     _invalid_observation_types = ()
 
-    def _check_classes_is_set(self, method_name: str, y=None):
-        if self._classes_ is None:
-            raise RuntimeError(
-                f"Classes are not set. Must call ``set_classes`` before calling ``{method_name}``."
-            )
+    def _hess_leaf_claims(
+        self, params: GLMParams[jnp.ndarray], active_spec: GLMParams[bool]
+    ) -> GLMParams[LeafClaim]:
+        """Certify nothing, unlike the plain GLM this inherits from.
+
+        Adding the same constant to every class's intercept leaves the softmax
+        probabilities unchanged, so the intercept block is singular along that direction
+        rather than definite.
+
+        Parameters
+        ----------
+        params :
+            The parameters being fitted.
+        active_spec :
+            The filter spec ``params`` was partitioned with. Unused: nothing is certified
+            whether or not a leaf is being fitted.
+
+        Returns
+        -------
+        :
+            A tree shaped like ``params`` carrying ``LeafClaim.UNCLAIMED``
+            everywhere.
+        """
+        return claim_nothing(params)
 
     def set_classes(self, y: ArrayLike) -> ClassifierMixin:
         """
@@ -65,7 +84,7 @@ class ClassifierMixin:
 
         Notes
         -----
-        :meth:`fit` and :meth:`initialize_solver_and_state` call ``set_classes`` internally,
+        :meth:`fit` and :meth:`initialize_optimizer_and_state` call ``set_classes`` internally,
         making sure that the ``classes_`` attribute matches the provided input.
         If you are fitting in batches by calling :meth:`update`, make sure that the ``classes_``
         are correctly set by calling ``set_classes`` before starting the :meth:`update` loop.
@@ -89,7 +108,7 @@ class ClassifierMixin:
 
         Without ``set_classes``, initialization fails if batch lacks all classes:
 
-        >>> _ = model.initialize_solver_and_state(X_batch1, y_batch1, init_params=None)
+        >>> init_params = model.initialize_params(X_batch1, y_batch1)
         Traceback (most recent call last):
         RuntimeError: Classes are not set. Must call ``set_classes`` before calling...
 
@@ -98,77 +117,27 @@ class ClassifierMixin:
         >>> model.set_classes(y_all_classes)
         ClassifierGLM(...)
         >>> init_params = model.initialize_params(X_batch1, y_batch1)
-        >>> state = model.initialize_solver_and_state(X_batch1, y_batch1, init_params)
+        >>> state = model.initialize_optimizer_and_state(init_params, X_batch1, y_batch1)
 
         Now batches with any subset of classes work with :meth:`update`:
 
         >>> result = model.update(init_params, state, X_batch1, y_batch1)
 
         """
-        # note that we must use NumPy, Jax does not allow non-numeric types
-        classes = np.unique(y)
-        n_unique = len(classes)
-
-        # Validation
-        if n_unique > self.n_classes:
-            raise ValueError(
-                f"Found {n_unique} unique class labels in y, but n_classes={self.n_classes}. "
-                f"Increase n_classes or check your data."
-            )
-        elif n_unique < self.n_classes:
-            raise ValueError(
-                f"Found only {n_unique} unique class labels in y, but n_classes={self.n_classes}. "
-                f"To correctly set the ``classes_`` attribute, provide an array containing all the "
-                f"unique class labels.",
-            )
-
-        # Always store the actual classes array
-        self._classes_ = classes
-
-        # Check if classes are the default [0, 1, ..., n_classes-1]
-        # If so, we can skip encoding/decoding for performance
-        is_default = np.array_equal(classes, np.arange(self.n_classes))
-        self._skip_encoding = is_default
-
-        # Create dict lookup only when needed (non-default classes)
-        self._class_to_index_ = (
-            None if is_default else {label: i for i, label in enumerate(classes)}
-        )
+        self._label_encoder.set_classes(y)
         return self
-
-    def _encode_labels(self, y: ArrayLike) -> NDArray[int]:
-        """Convert user-provided class labels to internal indices [0, n_classes-1]."""
-        if self._skip_encoding:
-            return y
-        # use dict lookup instead of `np.searchsorted`
-        # this approach will fail for label mismatches
-        try:
-            y = np.asarray(y)
-            original_shape = y.shape
-            y = np.fromiter(
-                (self._class_to_index_[label] for label in y.ravel()),
-                dtype=int,
-                count=y.size,
-            ).reshape(original_shape)
-        except KeyError as e:
-            unq_labels = np.unique(y)
-            valid = list(self._class_to_index_.keys())
-            invalid = [lab for lab in unq_labels if lab not in valid]
-            raise ValueError(
-                f"Unrecognized label(s) {invalid}. " f"Valid labels are {valid}."
-            ) from e
-        return y
-
-    def _decode_labels(self, indices: NDArray[int]) -> NDArray:
-        """Convert internal indices [0, n_classes-1] back to user-provided class labels."""
-        if self._skip_encoding:
-            return indices
-        return self._classes_[indices]
 
     @property
     def classes_(self) -> NDArray | None:
         """Class labels, or None if not set."""
-        return self._classes_
+        return self._label_encoder.classes_
+
+    @classes_.setter
+    def classes_(self, value: NDArray | None) -> None:
+        if value is not None:
+            self._label_encoder.set_classes(value)
+        else:
+            self._label_encoder.reset()
 
     def compute_loss(
         self,
@@ -204,18 +173,19 @@ class ClassifierMixin:
 
         Raises
         ------
+        RuntimeError
+            If ``classes_`` has not been set.
         ValueError
-            If ``classes_`` has not been set, or if inputs/parameters have
-            incompatible shapes or invalid values.
+            If inputs or parameters have incompatible shapes or invalid values.
         """
-        self._check_classes_is_set("compute_loss")
-        y = self._encode_labels(y)
+        self._label_encoder.check_classes_is_set("compute_loss")
+        y = self._label_encoder.encode(y)
         return super().compute_loss(params, X, y, *args, **kwargs)
 
     @property
     def n_classes(self):
         """Number of classes."""
-        return self._n_classes
+        return self._label_encoder.n_classes
 
     @n_classes.setter
     def n_classes(self, value: int):
@@ -227,19 +197,17 @@ class ClassifierMixin:
             raise ValueError(
                 "The number of classes must be an integer greater than or equal to 2."
             )
-        self._n_classes = int(value)
+
+        self._label_encoder = LabelEncoder(int(value))
+
         # reset validator.
         self._validator = self._validator_class(
             extra_params=self._get_validator_extra_params()
         )
-        # reset classes cache
-        self._classes_ = None
-        self._skip_encoding = False
-        self._class_to_index_ = None
 
     def _get_validator_extra_params(self) -> dict:
         """Get validator extra parameters."""
-        return {"n_classes": self._n_classes}
+        return {"n_classes": self._label_encoder.n_classes}
 
     def _preprocess_inputs(
         self,
@@ -251,7 +219,7 @@ class ClassifierMixin:
         X, y = super()._preprocess_inputs(X, y=y, drop_nans=drop_nans)
         if y is not None:
             y = self._validator.check_and_cast_y_to_integer(y)
-            y = jax.nn.one_hot(y, self._n_classes)
+            y = jax.nn.one_hot(y, self._label_encoder.n_classes)
         return X, y
 
     # Note: necessary double decorator. The super().predict is decorated as well,
@@ -267,7 +235,7 @@ class ClassifierMixin:
         ----------
         X :
             The input samples. Can be an array of shape ``(n_samples, n_features)``
-            or a ``FeaturePytree`` with arrays as leaves.
+            or a pytree of arrays of the same shape.
 
         Returns
         -------
@@ -291,9 +259,9 @@ class ClassifierMixin:
         # and calls predict.
         # One could assume default labels 0,...,n-1
         # but requiring to be explicit is safer
-        self._check_classes_is_set("predict")
+        self._label_encoder.check_classes_is_set("predict")
         log_proba = super().predict(X)
-        return self._decode_labels(jnp.argmax(log_proba, axis=-1))
+        return self._label_encoder.decode(jnp.argmax(log_proba, axis=-1))
 
     def predict_proba(
         self,
@@ -307,7 +275,7 @@ class ClassifierMixin:
         ----------
         X :
             The input samples. Can be an array of shape ``(n_samples, n_features)``
-            or a ``FeaturePytree`` with arrays as leaves.
+            or a pytree of arrays of the same shape.
         return_type :
             The format of the returned probabilities. If ``"log-proba"``, returns
             log-probabilities. If ``"proba"``, returns probabilities. Defaults to
@@ -336,7 +304,7 @@ class ClassifierMixin:
         # but requiring to be explicit makes the mapping between
         # the class labels and the probability index less ambiguous:
         #   `log_proba[:, i]` is the log-proba of class `self.classes_[i]`
-        self._check_classes_is_set("predict_proba")
+        self._label_encoder.check_classes_is_set("predict_proba")
         # log-proba for categorical, proba for Bernoulli
         log_proba = super().predict(X)
         if return_type == "log-proba":
@@ -382,10 +350,16 @@ class ClassifierMixin:
                     f"Type {type(n_samples)} provided instead!"
                 )
 
-        n_features = sum(x.shape[1] for x in x_leaf)
         # Effective degrees of freedom is n_classes - 1 due to probability simplex constraint
-        n_m1_classes = self._n_classes - 1
+        n_m1_classes = self._label_encoder.n_classes - 1
         params = self._get_model_params()
+
+        # The intercept consumes ``n_m1_classes`` degrees of freedom when estimated;
+        # a frozen intercept (``fit_intercept=False``) is None in the active tree and
+        # consumes none.
+        active, _ = self._partition_active(params)
+        intercept_dof = 0 if active.intercept is None else n_m1_classes
+        active_cols = _active_columns(x_leaf, active.coef)
 
         # Infer n_neurons from coef shape:
         # ClassifierGLM: coef is (n_features, n_classes) -> n_neurons = 1
@@ -402,22 +376,19 @@ class ClassifierMixin:
             resid_dof = tree_utils.pytree_map_and_reduce(
                 lambda x: ~jnp.isclose(x, jnp.zeros_like(x)),
                 lambda x: sum([jnp.sum(i, axis=(0, -1)) for i in x]),
-                params.coef,
+                active.coef,
             )
-            return jnp.atleast_1d(n_samples - resid_dof - n_m1_classes)
+            return jnp.atleast_1d(n_samples - resid_dof - intercept_dof)
 
-        elif isinstance(self.regularizer, Ridge):
+        # each estimated feature costs one coefficient per free class
+        design = jnp.concatenate(x_leaf, axis=1)
+        if isinstance(self.regularizer, Ridge):
             # For Ridge, use total parameters
-            return (n_samples - n_m1_classes * n_features - n_m1_classes) * jnp.ones(
-                n_neurons
-            )
-
+            n_est = self._n_estimated_features(active_cols)
         else:
             # For UnRegularized, use the rank
-            rank = jnp.linalg.matrix_rank(jnp.concatenate(x_leaf, axis=1))
-            return (n_samples - rank * n_m1_classes - n_m1_classes) * jnp.ones(
-                n_neurons
-            )
+            n_est = self._design_rank(design, active_cols)
+        return (n_samples - n_est * n_m1_classes - intercept_dof) * jnp.ones(n_neurons)
 
     def simulate(
         self,
@@ -433,8 +404,8 @@ class ClassifierMixin:
             A JAX random key used to generate the simulated responses.
         feedforward_input :
             The input samples used to generate the responses. Can be an array of
-            shape ``(n_samples, n_features)`` or a ``FeaturePytree`` with arrays
-            as leaves.
+            shape ``(n_samples, n_features)`` or a pytree of arrays of the same
+            shape.
 
         Returns
         -------
@@ -447,7 +418,7 @@ class ClassifierMixin:
 
         Raises
         ------
-        ValueError
+        RuntimeError
             If ``classes_`` has not been set. Call :meth:`set_classes` or :meth:`fit`
             before calling this method.
 
@@ -464,17 +435,17 @@ class ClassifierMixin:
         >>> simulated_y.shape
         (4,)
         """
-        self._check_classes_is_set("simulate")
+        self._label_encoder.check_classes_is_set("simulate")
         y, log_prob = super().simulate(random_key, feedforward_input)
         argmax = support_pynapple(conv_type="jax")(lambda x: jnp.argmax(x, axis=-1))
-        y = self._decode_labels(argmax(y))
+        y = self._label_encoder.decode(argmax(y))
         return y, log_prob
 
-    def initialize_solver_and_state(
+    def initialize_optimizer_and_state(
         self,
+        init_params: UserProvidedParamsT,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        init_params: UserProvidedParamsT,
     ) -> SolverState:
         """Initialize the solver and its state for running fit and update.
 
@@ -483,13 +454,13 @@ class ClassifierMixin:
 
         Parameters
         ----------
+        init_params
+            Initial parameter tuple of (coefficients, intercept).
         X
             Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
         y
             Target labels, array of shape ``(n_time_bins,)`` for single neuron/subject models or
             ``(n_time_bins, n_neurons)`` for population models.
-        init_params
-            Initial parameter tuple of (coefficients, intercept).
 
         Returns
         -------
@@ -501,9 +472,9 @@ class ClassifierMixin:
         ValueError
             If inputs or parameters have incompatible shapes or invalid values.
         """
-        self._check_classes_is_set("initialize_solver_and_state")
-        y = self._encode_labels(y)
-        return super().initialize_solver_and_state(X, y, init_params)
+        self._label_encoder.check_classes_is_set("initialize_optimizer_and_state")
+        y = self._label_encoder.encode(y)
+        return super().initialize_optimizer_and_state(init_params, X, y)
 
     def initialize_params(
         self,
@@ -521,14 +492,19 @@ class ClassifierMixin:
         X :
             Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
         y :
-            Class labels as integers, array of shape ``(n_time_bins,)`` for single neuron
-            models or ``(n_time_bins, n_neurons)`` for population models. Values should be
-            in the range ``[0, n_classes - 1]``.
+            Class labels, array of shape ``(n_time_bins,)`` for single neuron
+            models or ``(n_time_bins, n_neurons)`` for population models. Labels
+            must be a subset of ``classes_``.
 
         Returns
         -------
         :
             Initial parameter tuple of (coefficients, intercept).
+
+        Notes
+        -----
+        All labels in ``y`` must be present in ``classes_``. Passing labels not
+        in ``classes_`` will raise an error.
 
         Examples
         --------
@@ -543,15 +519,15 @@ class ClassifierMixin:
         >>> coef.shape
         (2, 2)
         """
-        self._check_classes_is_set("initialize_params")
-        y = self._encode_labels(y)
+        self._label_encoder.check_classes_is_set("initialize_params")
+        y = self._label_encoder.encode(y)
         y = self._validator.check_and_cast_y_to_integer(y)
         y = jax.nn.one_hot(y, self.n_classes)
         return super().initialize_params(X, y)
 
     def update(
         self,
-        params: GLMUserParams,
+        params: GLMUserParams[jnp.ndarray | NDArray],
         opt_state: SolverState,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
@@ -579,7 +555,7 @@ class ClassifierMixin:
             optimization algorithm to continue from the current state.
         X :
             The predictors used in the model fitting process. Shape ``(n_time_bins, n_features)``
-            or a ``FeaturePytree``.
+            or a pytree of arrays of the same shape.
         y :
             Class labels, array of shape ``(n_time_bins,)`` for single neuron
             models or ``(n_time_bins, n_neurons)`` for population models. Labels must
@@ -609,14 +585,14 @@ class ClassifierMixin:
         >>> model.set_classes(y)
         ClassifierGLM(...)
         >>> params = model.initialize_params(X, y)
-        >>> opt_state = model.initialize_solver_and_state(X, y, params)
+        >>> opt_state = model.initialize_optimizer_and_state(params, X, y)
         >>> new_params, new_state = model.update(params, opt_state, X, y)
         """
-        self._check_classes_is_set("update")
-        y = self._encode_labels(y)
+        self._label_encoder.check_classes_is_set("update")
         # note: do not check and cast here. Risky but the performance of
         # the update has priority.
-        y = jax.nn.one_hot(jnp.asarray(y, dtype=int), self._n_classes)
+        y = self._label_encoder.encode(y, safe=False)
+        y = jax.nn.one_hot(y, self.n_classes)
         return super().update(
             params, opt_state, X, y, *args, n_samples=n_samples, **kwargs
         )
@@ -644,6 +620,16 @@ class ClassifierGLM(ClassifierMixin, GLM):
         will result in non-identifiable coefficients, see note below.
     regularizer_strength
         The strength of the regularization.
+    fit_intercept
+        When True (default), an intercept term is fit. When False, only the coefficients are fit.
+        An intercept pinned through ``fix_params`` takes precedence over this flag.
+    fix_params :
+        Parameters to hold fixed during fitting, as a ``(coef, intercept)`` tuple with
+        ``coef`` of shape ``(n_features, n_classes)`` and ``intercept`` of shape
+        ``(n_classes,)``. An array pins that parameter at the value provided, ``None``
+        leaves it to be learned. When ``X`` is a pytree, ``coef`` mirrors its structure,
+        its leaves have shape ``(n_features_in_leaf, n_classes)``, and each leaf is
+        pinned or learned on its own. Defaults to ``None``, which learns every parameter.
     solver_name
         The solver to use for optimization.
     solver_kwargs
@@ -687,7 +673,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
 
     **Setting Class Labels**
 
-    The :meth:`fit` and :meth:`initialize_solver_and_state` methods automatically infer
+    The :meth:`fit` and :meth:`initialize_optimizer_and_state` methods automatically infer
     class labels from the provided ``y``. If you set ``coef_`` and ``intercept_`` manually,
     you must call :meth:`set_classes` before using :meth:`predict`, :meth:`predict_proba`,
     :meth:`simulate`, :meth:`score`, or :meth:`compute_loss`.
@@ -699,15 +685,81 @@ class ClassifierGLM(ClassifierMixin, GLM):
 
     Examples
     --------
+    **Fit a ClassifierGLM**
+
+    Basic binary classification:
+
     >>> import jax.numpy as jnp
+    >>> import numpy as np
     >>> import nemos as nmo
-    >>> # Binary classification with integer labels (most efficient)
     >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
     >>> y = jnp.array([0, 0, 1, 1])
-    >>> model = nmo.glm.ClassifierGLM(n_classes=2)
-    >>> model = model.fit(X, y)
-    >>> predictions = model.predict(X)  # Returns class labels
-    >>> probabilities = model.predict_proba(X, return_type="proba")
+    >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y)
+    >>> model.coef_.shape
+    (2, 2)
+
+    **Predict Class Labels**
+
+    Get predicted class labels:
+
+    >>> predictions = model.predict(X)
+    >>> predictions.shape
+    (4,)
+
+    **Predict Class Probabilities**
+
+    Get class probabilities or log-probabilities:
+
+    >>> proba = model.predict_proba(X, return_type="proba")
+    >>> proba.shape
+    (4, 2)
+    >>> log_proba = model.predict_proba(X, return_type="log-proba")
+    >>> log_proba.shape
+    (4, 2)
+
+    **Use String Labels**
+
+    Class labels can be strings or any hashable type:
+
+    >>> y_str = np.array(["cat", "cat", "dog", "dog"])
+    >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y_str)
+    >>> model.classes_
+    array(['cat', 'dog'], dtype='<U3')
+    >>> model.predict(X)  # doctest: +NORMALIZE_WHITESPACE
+    array(['cat', 'cat', 'dog', 'dog'], dtype='<U3')
+
+    **Multi-class Classification**
+
+    Classify into more than two classes:
+
+    >>> X = jnp.array([[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]])
+    >>> y = jnp.array([0, 0, 1, 1, 2, 2])
+    >>> model = nmo.glm.ClassifierGLM(n_classes=3).fit(X, y)
+    >>> model.coef_.shape
+    (2, 3)
+
+    **Use Regularization**
+
+    Change regularization strength:
+
+    >>> model = nmo.glm.ClassifierGLM(
+    ...     n_classes=2,
+    ...     regularizer="Ridge",
+    ...     regularizer_strength=0.5
+    ... )
+    >>> model.regularizer
+    Ridge()
+
+    **Use a Pytree of arrays as Input**
+
+    Features can be passed as any JAX pytree of 2-D arrays; the fitted
+    ``coef_`` will share the same pytree structure:
+
+    >>> X_dict = {"feature_1": X[:, :1], "feature_2": X[:, 1:]}
+    >>> model = nmo.glm.ClassifierGLM(n_classes=3).fit(X_dict, y)
+    >>> # The coefficient structure matches the input
+    >>> type(model.coef_)
+    <class 'dict'>
     """
 
     _validator_class = ClassifierGLMValidator
@@ -717,7 +769,9 @@ class ClassifierGLM(ClassifierMixin, GLM):
         n_classes: Optional[int] = 2,
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
-        regularizer_strength: Optional[RegularizerStrength] = None,
+        regularizer_strength: Any = None,
+        fit_intercept: bool = True,
+        fix_params: Optional[GLMUserParams[jnp.ndarray | NDArray | None]] = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
     ):
@@ -730,18 +784,17 @@ class ClassifierGLM(ClassifierMixin, GLM):
             inverse_link_function=inverse_link_function,
             regularizer=regularizer,
             regularizer_strength=regularizer_strength,
+            fit_intercept=fit_intercept,
+            fix_params=fix_params,
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
         )
-        self._classes_ = None
-        self._class_to_index_ = None
-        self._skip_encoding = False
 
     def fit(
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
-        init_params: Optional[GLMUserParams] = None,
+        init_params: Optional[GLMUserParams[jnp.ndarray | NDArray]] = None,
     ):
         """
         Fit the model to training data.
@@ -749,12 +802,11 @@ class ClassifierGLM(ClassifierMixin, GLM):
         Parameters
         ----------
         X
-            Training input samples of shape ``(n_samples, n_features)`` or FeaturePytree.
+            Training input samples of shape ``(n_samples, n_features)`` or a pytree of arrays of the same shape.
         y
-            Target class labels of shape ``(n_samples,)``. Values should be in
-            ``[0, n_classes - 1]``. Float arrays with integer values are
-            accepted and converted automatically, but integer arrays are
-            recommended for best performance.
+            Target class labels of shape ``(n_samples,)``. Labels can be any hashable
+            type (integers, strings, etc.). Float arrays with integer values are
+            accepted and converted automatically.
         init_params
             Initial parameter values as tuple of ``(coef, intercept)``. If None,
             parameters are initialized automatically.
@@ -763,6 +815,11 @@ class ClassifierGLM(ClassifierMixin, GLM):
         -------
         :
             The fitted model.
+
+        Notes
+        -----
+        ``fit`` calls :meth:`set_classes` internally, so ``classes_`` is always
+        consistent with the labels in ``y``.
 
         Examples
         --------
@@ -776,7 +833,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         (2, 2)
         """
         self.set_classes(y)
-        y = self._encode_labels(y)
+        y = self._label_encoder.encode(y)
         return super().fit(X, y, init_params)
 
     def score(
@@ -794,12 +851,10 @@ class ClassifierGLM(ClassifierMixin, GLM):
         Parameters
         ----------
         X
-            Test input samples of shape ``(n_samples, n_features)`` or FeaturePytree.
+            Test input samples of shape ``(n_samples, n_features)`` or a pytree of arrays of the same shape.
         y
-            True class labels of shape ``(n_samples,)``. Values should be in
-            ``[0, n_classes - 1]``. Float arrays with integer values are
-            accepted and converted automatically, but integer arrays are
-            recommended for best performance.
+            True class labels of shape ``(n_samples,)``. Labels must be a subset
+            of ``classes_``.
         score_type
             The type of score to compute.
         aggregate_sample_scores
@@ -809,6 +864,11 @@ class ClassifierGLM(ClassifierMixin, GLM):
         -------
         :
             The computed score.
+
+        Notes
+        -----
+        All labels in ``y`` must be present in ``classes_``. Passing labels not
+        in ``classes_`` will raise an error.
 
         Examples
         --------
@@ -822,8 +882,8 @@ class ClassifierGLM(ClassifierMixin, GLM):
         # check if classes are not set, aka user set the coef and intercept
         # manually, raise otherwise there may be ambiguity in interpreting
         # the labels.
-        self._check_classes_is_set("score")
-        y = self._encode_labels(y)
+        self._label_encoder.check_classes_is_set("score")
+        y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
 
 
@@ -850,6 +910,17 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         will result in non-identifiable coefficients, see note below.
     regularizer_strength
         The strength of the regularization.
+    fit_intercept
+        When True (default), an intercept term is fit. When False, only the coefficients are fit.
+        An intercept pinned through ``fix_params`` takes precedence over this flag.
+    fix_params :
+        Parameters to hold fixed during fitting, as a ``(coef, intercept)`` tuple with
+        ``coef`` of shape ``(n_features, n_neurons, n_classes)`` and ``intercept`` of
+        shape ``(n_neurons, n_classes)``. An array pins that parameter at the value
+        provided, ``None`` leaves it to be learned. When ``X`` is a pytree, ``coef``
+        mirrors its structure, its leaves have shape
+        ``(n_features_in_leaf, n_neurons, n_classes)``, and each leaf is pinned or
+        learned on its own. Defaults to ``None``, which learns every parameter.
     solver_name
         The solver to use for optimization.
     solver_kwargs
@@ -896,7 +967,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
     **Setting Class Labels**
 
-    The :meth:`fit` and :meth:`initialize_solver_and_state` methods automatically infer
+    The :meth:`fit` and :meth:`initialize_optimizer_and_state` methods automatically infer
     class labels from the provided ``y``. If you set ``coef_`` and ``intercept_`` manually,
     you must call :meth:`set_classes` before using :meth:`predict`, :meth:`predict_proba`,
     :meth:`simulate`, :meth:`score`, or :meth:`compute_loss`.
@@ -908,24 +979,95 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
     Examples
     --------
+    **Fit a ClassifierPopulationGLM**
+
+    Basic multi-class classification for multi-subjects
+
     >>> import jax.numpy as jnp
+    >>> import numpy as np
     >>> import nemos as nmo
-    >>> # Multi-class classification for 2 neurons (integer labels, most efficient)
     >>> X = jnp.array([[1., 2.], [2., 3.], [3., 4.], [4., 5.], [5., 6.], [6., 7.]])
     >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
-    >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3)
-    >>> model = model.fit(X, y)
-    >>> predictions = model.predict(X)  # Returns class labels, shape (n_samples, n_neurons)
+    >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X, y)
+    >>> model.coef_.shape
+    (2, 2, 3)
+
+    **Predict Class Labels**
+
+    Get predicted class labels for each subject:
+
+    >>> predictions = model.predict(X)
+    >>> predictions.shape
+    (6, 2)
+
+    **Predict Class Probabilities**
+
+    Get class probabilities for each subject:
+
+    >>> proba = model.predict_proba(X, return_type="proba")
+    >>> proba.shape
+    (6, 2, 3)
+
+    **Use String Labels**
+
+    Class labels can be strings or any hashable type:
+
+    >>> y_str = np.array([["a", "a"], ["a", "b"], ["b", "a"], ["b", "c"], ["c", "b"], ["c", "c"]])
+    >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X, y_str)
+    >>> model.classes_
+    array(['a', 'b', 'c'], dtype='<U1')
+    >>> model.predict(X).shape
+    (6, 2)
+
+    **Use a Feature Mask**
+
+    Specify which features predict each neuron:
+
+    >>> feature_mask = jnp.array([[1, 0], [1, 1]])
+    >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
+    >>> model = nmo.glm.ClassifierPopulationGLM(
+    ...     n_classes=3,
+    ...     feature_mask=feature_mask
+    ... ).fit(X, y)
+    >>> model.coef_
+    Array(...)
+
+    **Use Regularization**
+
+    Change regularization strength:
+
+    >>> model = nmo.glm.ClassifierPopulationGLM(
+    ...     n_classes=3,
+    ...     regularizer="Ridge",
+    ...     regularizer_strength=0.5
+    ... )
+    >>> model.regularizer
+    Ridge()
+
+    **Use a Pytree of arrays as Input**
+
+    Features can be passed as any JAX pytree of 2-D arrays; the fitted
+    ``coef_`` will share the same pytree structure:
+
+    >>> X_dict = {"feature_1": X[:, :1], "feature_2": X[:, 1:]}
+    >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X_dict, y)
+    >>> type(model.coef_)
+    <class 'dict'>
     """
 
     _validator_class = PopulationClassifierGLMValidator
+    # One block per neuron, as in ``PopulationGLM``.
+    _hess_structure = MatrixStructure.BLOCK_DIAGONAL
+    _hess_batch_axes = GLMParams(1, 0)
 
     def __init__(
         self,
         n_classes: Optional[int] = 2,
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
-        regularizer_strength: Optional[RegularizerStrength] = None,
+        regularizer_strength: Any = None,
+        fit_intercept: bool = True,
+        fix_params: Optional[GLMUserParams[jnp.ndarray | NDArray | None]] = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
         feature_mask: Optional[jnp.ndarray] = None,
@@ -939,13 +1081,12 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
             inverse_link_function=inverse_link_function,
             regularizer=regularizer,
             regularizer_strength=regularizer_strength,
+            fit_intercept=fit_intercept,
+            fix_params=fix_params,
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
             feature_mask=feature_mask,
         )
-        self._classes_ = None
-        self._class_to_index_ = None
-        self._skip_encoding = False
 
     @property
     def feature_mask(self) -> Union[jnp.ndarray, dict[str, jnp.ndarray]]:
@@ -958,7 +1099,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
           Each entry ``[i, j, k]`` indicates whether the weight for feature ``i``,
           neuron ``j``, and category ``k`` is used (1 = used, 0 = masked).
 
-        - **Dict/FeaturePytree input**: A dict with keys matching ``coef_``.
+        - **Pytree input**: A pytree matching the ``coef_`` structure.
           Each leaf array has the same shape as the corresponding coefficient leaf
           ``(n_features_per_key, n_neurons, n_classes)``.
 
@@ -985,7 +1126,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
-        init_params: Optional[GLMUserParams] = None,
+        init_params: Optional[GLMUserParams[jnp.ndarray | NDArray]] = None,
     ):
         """
         Fit the model to training data.
@@ -993,12 +1134,11 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         Parameters
         ----------
         X
-            Training input samples of shape ``(n_samples, n_features)`` or FeaturePytree.
+            Training input samples of shape ``(n_samples, n_features)`` or a pytree of arrays of the same shape.
         y
-            Target class labels of shape ``(n_samples, n_neurons)``. Values should be in
-            ``[0, n_classes - 1]``. Float arrays with integer values are
-            accepted and converted automatically, but integer arrays are
-            recommended for best performance.
+            Target class labels of shape ``(n_samples, n_neurons)``. Labels can be
+            any hashable type (integers, strings, etc.). Float arrays with integer
+            values are accepted and converted automatically.
         init_params
             Initial parameter values as tuple of ``(coef, intercept)``. If None,
             parameters are initialized automatically.
@@ -1007,6 +1147,11 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         -------
         :
             The fitted model.
+
+        Notes
+        -----
+        ``fit`` calls :meth:`set_classes` internally, so ``classes_`` is always
+        consistent with the labels in ``y``.
 
         Examples
         --------
@@ -1020,7 +1165,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         (2, 2, 3)
         """
         self.set_classes(y)
-        y = self._encode_labels(y)
+        y = self._label_encoder.encode(y)
         return super().fit(X, y, init_params)
 
     def score(
@@ -1038,12 +1183,10 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         Parameters
         ----------
         X
-            Test input samples of shape ``(n_samples, n_features)`` or FeaturePytree.
+            Test input samples of shape ``(n_samples, n_features)`` or a pytree of arrays of the same shape.
         y
-            True class labels of shape ``(n_samples, n_neurons)``. Values should be in
-            ``[0, n_classes - 1]``. Float arrays with integer values are
-            accepted and converted automatically, but integer arrays are
-            recommended for best performance.
+            True class labels of shape ``(n_samples, n_neurons)``. Labels must
+            be a subset of ``classes_``.
         score_type
             The type of score to compute.
         aggregate_sample_scores
@@ -1054,6 +1197,11 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         :
             The computed score.
 
+        Notes
+        -----
+        All labels in ``y`` must be present in ``classes_``. Passing labels not
+        in ``classes_`` will raise an error.
+
         Examples
         --------
         >>> import jax.numpy as jnp
@@ -1063,6 +1211,6 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X, y)
         >>> score = model.score(X, y)
         """
-        self._check_classes_is_set("score")
-        y = self._encode_labels(y)
+        self._label_encoder.check_classes_is_set("score")
+        y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)

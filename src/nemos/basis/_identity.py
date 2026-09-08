@@ -1,10 +1,14 @@
-from typing import Optional, Tuple
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import jax.numpy as jnp
 import numpy as np
 from numpy._typing import ArrayLike
 from numpy.typing import NDArray
-from pynapple import Tsd, TsdFrame, TsdTensor
+
+if TYPE_CHECKING:
+    from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
@@ -34,11 +38,11 @@ class IdentityBasis(AtomicBasisMixin, Basis):
         n_basis_funcs: int,
         label: Optional[str] = None,
     ) -> None:
+        self._n_inputs = 1
         AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
         Basis.__init__(
             self,
         )
-        self._n_input_dimensionality = 1
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
@@ -60,10 +64,18 @@ class IdentityBasis(AtomicBasisMixin, Basis):
             The samples with an extra axis, the n_basis_funcs axis which is = 1.
 
         """
-        vmin = jnp.nanmin(sample_pts, axis=0) if self.bounds is None else self.bounds[0]
-        vmax = jnp.nanmax(sample_pts, axis=0) if self.bounds is None else self.bounds[1]
+        if self.bounds is None:
+            vmin = jnp.nanmin(sample_pts, axis=0)
+            vmax = jnp.nanmax(sample_pts, axis=0)
+        elif isinstance(self.bounds[0], (tuple, list)):
+            vmin = jnp.asarray([b[0] for b in self.bounds])
+            vmax = jnp.asarray([b[1] for b in self.bounds])
+        else:
+            vmin, vmax = self.bounds[0], self.bounds[1]
         sample_pts = jnp.where(
-            (sample_pts < vmin) | (sample_pts > vmax), jnp.nan, sample_pts
+            (sample_pts < vmin) | (sample_pts > vmax),
+            getattr(self, "fill_value", jnp.nan),
+            sample_pts,
         )
         return sample_pts[..., np.newaxis]
 
@@ -117,11 +129,11 @@ class HistoryBasis(AtomicBasisMixin, Basis):
         n_basis_funcs: int,
         label: Optional[str] = None,
     ) -> None:
+        self._n_inputs = 1
         AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
         Basis.__init__(
             self,
         )
-        self._n_input_dimensionality = 1
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
@@ -144,7 +156,9 @@ class HistoryBasis(AtomicBasisMixin, Basis):
             Identity matrix of shape ``(*samples.shape, n_basis_funcs)``.
 
         """
-        sample_pts = jnp.squeeze(jnp.asarray(sample_pts))
+        # allow only array with one non-trivial axis: (n_samples,1,1,1,1,...) are ok.
+        squeeze = tuple([k + 1 for (k, s) in enumerate(sample_pts.shape[1:]) if s == 1])
+        sample_pts = jnp.squeeze(jnp.asarray(sample_pts), axis=squeeze)
         if sample_pts.ndim != 1:
             raise ValueError("`evaluate` for HistoryBasis allows 1D input only.")
         # this is called by set kernel.

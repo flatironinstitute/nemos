@@ -13,6 +13,7 @@
 05-observation_models.md
 06-regularizer.md
 07-solvers.md
+08-hessian_tagging.md
 ```
 
 ## Introduction
@@ -42,6 +43,26 @@ The Developer Notes are divided into sections, each focusing on a different modu
 - **Must**: This denotes a requirement. Any method or function that fails to meet the requirement will not be merged.
 - **Should**: This denotes a suggestion. Reasons should be provided if a suggestion is not followed.
 - **May**: This denotes an option that, if implemented, could enhance the user/developer experience but can be overlooked if deemed unnecessary.
+
+## Development Tips
+
+### Debugging Lazy Imports
+
+NeMoS uses lazy loading ([SPEC-0001](https://scientific-python.org/specs/spec-0001/)) to reduce import time. This means import errors in submodules only surface when the submodule is first accessed, not at `import nemos`.
+
+To catch import errors early during development or testing, set the `EAGER_IMPORT` environment variable:
+
+```bash
+EAGER_IMPORT=1 python -c "import nemos"
+```
+
+or
+
+```bash
+EAGER_IMPORT=1 pytest tests/
+```
+
+This disables lazy loading, causing all submodules to load immediately and any import errors to surface right away.
 
 ## Interact with us
 

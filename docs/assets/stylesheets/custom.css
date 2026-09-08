@@ -120,3 +120,25 @@ table.table-center{
 #table-basis th:nth-child(5), #table-basis td:nth-child(5) {
     width: 10%;
 }
+
+/* Predictor summary tables (Input | Definition | Interpretation).
+   Give the Definition column enough room for its formulas, which are
+   inline math and get broken mid-expression when the column is too narrow. */
+.predictor-table table {
+    table-layout: fixed;
+    width: 100%;
+    /* on narrow viewports let the wrapper scroll instead of squeezing the formulas */
+    min-width: 44rem;
+}
+
+.predictor-table th:nth-child(1), .predictor-table td:nth-child(1) {
+    width: 20%;
+}
+
+.predictor-table th:nth-child(2), .predictor-table td:nth-child(2) {
+    width: 54%;
+}
+
+.predictor-table th:nth-child(3), .predictor-table td:nth-child(3) {
+    width: 26%;
+}

@@ -1,19 +1,24 @@
 """Solvers wrapping Optax solvers with Optimistix for use with NeMoS."""
 
+from __future__ import annotations
+
 import abc
 import inspect
-from typing import Any, Callable, ClassVar
+from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 import optax
 import optimistix as optx
 
-from ..regularizer import Regularizer
-from ..typing import Params, Pytree
 from ._optimistix_adapter import (
     DEFAULT_ATOL,
     DEFAULT_RTOL,
     OptimistixAdapter,
 )
+from ._stochastic_mixins import OptimistixStochasticSolverMixin
+
+if TYPE_CHECKING:
+    from ..regularizer import Regularizer
+    from ..typing import Params, Pytree
 
 
 class AbstractOptimistixOptaxSolver(OptimistixAdapter, abc.ABC):
@@ -86,10 +91,12 @@ def _make_rate_scaler(
         if linesearch_kwargs:
             raise ValueError("Only provide stepsize or linesearch_kwargs.")
 
-        return optax.scale_by_learning_rate(stepsize)
+        return optax.scale_by_learning_rate(stepsize, flip_sign=False)
 
 
-class OptimistixOptaxGradientDescent(AbstractOptimistixOptaxSolver):
+class OptimistixOptaxGradientDescent(
+    OptimistixStochasticSolverMixin, AbstractOptimistixOptaxSolver
+):
     """
     Gradient descent implementation combining Optax and Optimistix.
 
@@ -141,6 +148,11 @@ class OptimistixOptaxGradientDescent(AbstractOptimistixOptaxSolver):
         )
         solver_init_kwargs["optim"] = _sgd
 
+        self._acceleration = acceleration
+        self._momentum = momentum
+        self._stepsize = stepsize
+        self._linesearch_kwargs = linesearch_kwargs
+
         super().__init__(
             unregularized_loss,
             regularizer,
@@ -169,6 +181,22 @@ class OptimistixOptaxGradientDescent(AbstractOptimistixOptaxSolver):
             Note that this only has an effect if `momentum` is used as well.
             """)
         return inspect.cleandoc(note + "\n" + accel_nesterov)
+
+    @property
+    def acceleration(self):
+        return self._acceleration
+
+    @property
+    def momentum(self):
+        return self._momentum
+
+    @property
+    def stepsize(self):
+        return self._stepsize
+
+    @property
+    def linesearch_kwargs(self):
+        return self._linesearch_kwargs
 
 
 class OptimistixOptaxLBFGS(AbstractOptimistixOptaxSolver):
@@ -216,6 +244,10 @@ class OptimistixOptaxLBFGS(AbstractOptimistixOptaxSolver):
             scale_init_precond=scale_init_precond,
         )
 
+        self._stepsize = stepsize
+        self._memory_size = memory_size
+        self._scale_init_precond = scale_init_precond
+
         super().__init__(
             unregularized_loss,
             regularizer,
@@ -227,6 +259,18 @@ class OptimistixOptaxLBFGS(AbstractOptimistixOptaxSolver):
             maxiter=maxiter,
             **solver_init_kwargs,
         )
+
+    @property
+    def stepsize(self):
+        return self._stepsize
+
+    @property
+    def memory_size(self):
+        return self._memory_size
+
+    @property
+    def scale_init_precond(self):
+        return self._scale_init_precond
 
 
 # fix optax.lbfgs doctest failing due to x64 being set in pytest

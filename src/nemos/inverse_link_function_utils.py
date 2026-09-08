@@ -1,5 +1,7 @@
 """Validation and construction of inverse link functions."""
 
+from __future__ import annotations
+
 import functools
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -62,12 +64,13 @@ LINK_NAME_TO_FUNC = {
     "jax._src.nn.functions.log_softmax": log_softmax,
     "jax._src.numpy.ufuncs.exp": exp,
     "jax._src.scipy.special.expit": expit,
-    "jax._src.scipy.stats.norm.cdf": jax.scipy.stats.norm.cdf,
+    "jax._src.scipy.stats.norm.cdf": norm_cdf,
+    "jax._src.scipy.stats.norm.norm_cdf": norm_cdf,
     "jax.lax.logistic": logistic,
     "jax._src.scipy.special.logistic": logistic,
     "jax.nn.softplus": softplus,
     "jax.nn.log_softmax": log_softmax,
-    "jax.numpy.exp": jnp.exp,
+    "jax.numpy.exp": exp,
     "jax.scipy.special.expit": expit,
     "jax.scipy.stats.norm.cdf": norm_cdf,
     "logistic": logistic,
@@ -80,10 +83,12 @@ LINK_NAME_TO_FUNC = {
     "nemos.inverse_link_function_utils.log_softmax": log_softmax,
     "nemos.utils.one_over_x": one_over_x,
     "norm.cdf": norm_cdf,
+    "norm_cdf": norm_cdf,
     "one_over_x": one_over_x,
     "softplus": softplus,
     "log_softmax": log_softmax,
-    "identity": lambda x: x,
+    "identity": identity,
+    "nemos.inverse_link_function_utils.identity": identity,
 }
 
 
@@ -171,7 +176,7 @@ def check_inverse_link_function(inverse_link_function: Callable):
 
 
 def resolve_inverse_link_function(
-    inverse_link_function: Any, observation_model: "Observations"
+    inverse_link_function: Any, observation_model: Observations
 ) -> Callable:
     """
     Validate and resolve an inverse link function specification.

@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import abc
-from typing import Optional, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from pynapple import Tsd, TsdFrame, TsdTensor
+
+if TYPE_CHECKING:
+    from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
@@ -54,11 +56,11 @@ class RaisedCosineBasisLinear(AtomicBasisMixin, Basis, abc.ABC):
         width: float = 2.0,
         label: Optional[str] = "RaisedCosineBasisLinear",
     ) -> None:
+        self._n_inputs = 1
         AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
         Basis.__init__(
             self,
         )
-        self._n_input_dimensionality = 1
         self._check_width(width)
         self._width = width
         # for these linear raised-cosine basis functions,
@@ -129,7 +131,8 @@ class RaisedCosineBasisLinear(AtomicBasisMixin, Basis, abc.ABC):
             # additive_basis = basis1 + basis2
             # additive_basis.evaluate(*([x] * 2)) would modify both inputs
             sample_pts, _ = min_max_rescale_samples(
-                jnp.copy(sample_pts), getattr(self, "bounds", None)
+                jnp.copy(sample_pts),
+                getattr(self, "bounds", None),
             )
 
         peaks = self._compute_peaks()
@@ -246,6 +249,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
         enforce_decay_to_zero: bool = True,
         label: Optional[str] = "RaisedCosineBasisLog",
     ) -> None:
+        self._n_inputs = 1
         super().__init__(
             n_basis_funcs,
             width=width,
@@ -302,14 +306,16 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
         # rescale to [0,1]
         # copy is necessary to avoid unwanted rescaling in additive/multiplicative basis.
         sample_pts, _ = min_max_rescale_samples(
-            jnp.copy(sample_pts), getattr(self, "bounds", None)
+            jnp.copy(sample_pts),
+            getattr(self, "bounds", None),
         )
         # This log-stretching of the sample axis has the following effect:
         # - as the time_scaling tends to 0, the points will be linearly spaced across the whole domain.
         # - as the time_scaling tends to inf, basis will be small and dense around 0 and
         # progressively larger and less dense towards 1.
-        log_spaced_pts = jnp.log(self.time_scaling * sample_pts + 1) / jnp.log(
-            self.time_scaling + 1
+        # log1p is robust for the samples near 0, where the basis elements are densest.
+        log_spaced_pts = jnp.log1p(self.time_scaling * sample_pts) / jnp.log1p(
+            self.time_scaling
         )
         return log_spaced_pts
 

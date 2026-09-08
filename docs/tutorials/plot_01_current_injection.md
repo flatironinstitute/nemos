@@ -4,7 +4,6 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.18.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -16,6 +15,9 @@ kernelspec:
 
 %matplotlib inline
 import warnings
+import jax
+
+jax.config.update("jax_enable_x64", True)
 
 warnings.filterwarnings(
     "ignore",
@@ -546,7 +548,10 @@ behave!
 ```{code-cell} ipython3
 # Initialize the model, specifying the solver. we'll accept the defaults
 # for everything else.
-model = nmo.glm.GLM(solver_name="LBFGS")
+model = nmo.glm.GLM(
+    solver_name="LBFGS",
+    solver_kwargs={"tol": 1e-12, "maxiter": 1000}
+)
 ```
 
 Now that we've initialized our model with the optimization parameters, we can
@@ -845,7 +850,10 @@ We'll initialize and create the GLM object in the same way as before, only chang
 the design matrix we pass to the model:
 
 ```{code-cell} ipython3
-history_model = nmo.glm.GLM(solver_name="LBFGS")
+history_model = nmo.glm.GLM(
+    solver_name="LBFGS",
+    solver_kwargs={"tol": 1e-12, "maxiter": 1000},
+)
 history_model.fit(current_history, count)
 ```
 

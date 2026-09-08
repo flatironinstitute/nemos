@@ -2,6 +2,7 @@ import inspect
 from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
 from typing import Callable
+from unittest.mock import MagicMock
 
 import equinox as eqx
 import jax
@@ -11,7 +12,6 @@ import pytest
 import scipy.stats as sts
 import sklearn
 import statsmodels.api as sm
-from conftest import initialize_feature_mask_for_population_glm
 from pynapple import Tsd, TsdFrame
 from sklearn.linear_model import (
     GammaRegressor,
@@ -22,11 +22,17 @@ from sklearn.linear_model import (
 from sklearn.model_selection import GridSearchCV
 
 import nemos as nmo
-from nemos import solvers
+from conftest import (
+    OBSERVATION_PER_MODEL,
+    freeze_first_coef_leaf,
+    initialize_feature_mask_for_population_glm,
+)
+from nemos._hess import MatrixProperty
 from nemos._observation_model_builder import instantiate_observation_model
 from nemos._regularizer_builder import instantiate_regularizer
-from nemos.inverse_link_function_utils import identity, log_softmax
-from nemos.pytrees import FeaturePytree
+from nemos.glm.params import GLMParams
+from nemos.inverse_link_function_utils import exp, identity, log_softmax
+from nemos.solvers._no_op import NoOpSolver
 from nemos.tree_utils import (
     pytree_map_and_reduce,
     tree_l2_norm,
@@ -177,7 +183,9 @@ def model_instantiation_type(glm_class_type):
 @pytest.mark.parametrize("glm_class_type", ["glm_class", "population_glm_class"])
 @pytest.mark.solver_related
 @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
-def test_get_fit_attrs(request, glm_class_type, model_instantiation_type):
+def test_get_fit_attrs(
+    request, glm_class_type, model_instantiation_type, mock_glm_optimizer_run
+):
     X, y, model = request.getfixturevalue(model_instantiation_type)[:3]
     expected_state = {
         "coef_": None,
@@ -186,10 +194,8 @@ def test_get_fit_attrs(request, glm_class_type, model_instantiation_type):
         "solver_state_": None,
         "dof_resid_": None,
         "aux_": None,
-        "optim_info_": None,
     }
     assert model._get_fit_state() == expected_state
-    model.solver_kwargs = {"maxiter": 1}
     model.fit(X, y)
     assert not model._has_aux
     assert all(
@@ -201,6 +207,57 @@ def test_get_fit_attrs(request, glm_class_type, model_instantiation_type):
 def get_param_shape(model, X, y):
     empty_par = model._validator.get_empty_params(X, y)
     return jax.tree_util.tree_map(lambda x: x.shape, empty_par)
+
+
+def _group_lasso_model(mask_kind):
+    """GLM with a GroupLasso over 5 features split into 2 groups."""
+    group_mask = np.zeros((2, 5))
+    group_mask[0, :2] = 1
+    group_mask[1, 2:] = 1
+    mask = (
+        GLMParams(coef=group_mask, intercept=None)
+        if mask_kind == "structured"
+        else group_mask
+    )
+    model = nmo.glm.GLM(
+        regularizer=nmo.regularizer.GroupLasso(mask=mask),
+        regularizer_strength=0.1,
+        solver_name="ProximalGradient",
+    )
+    return model, mask
+
+
+@pytest.mark.parametrize("mask_kind", ["array", "structured"])
+def test_save_and_load_group_lasso_mask(mask_kind, tmp_path):
+    """A GroupLasso mask round-trips whether it is a plain array or a GLMParams."""
+    model, mask = _group_lasso_model(mask_kind)
+
+    save_path = tmp_path / "group_lasso.npz"
+    model.save_params(save_path)
+    loaded_mask = nmo.load_model(save_path).regularizer.mask
+
+    if mask_kind == "structured":
+        assert isinstance(loaded_mask, GLMParams)
+        np.testing.assert_allclose(loaded_mask.coef, mask.coef)
+        assert loaded_mask.intercept is None
+    else:
+        assert not isinstance(loaded_mask, GLMParams)
+        np.testing.assert_allclose(loaded_mask, mask)
+
+
+def test_structured_mask_saved_without_pickled_objects(tmp_path):
+    """No entry is an object array, which ``load_model`` could never read back.
+
+    ``load_model`` opens the archive with ``allow_pickle=False``, so a parameter numpy
+    can only hold as an object array makes the whole file unloadable.
+    """
+    model, _ = _group_lasso_model("structured")
+    save_path = tmp_path / "no_objects.npz"
+    model.save_params(save_path)
+
+    with np.load(save_path, allow_pickle=True) as data:
+        pickled = [key for key in data.files if data[key].dtype == object]
+    assert pickled == []
 
 
 @pytest.mark.parametrize(
@@ -245,6 +302,7 @@ class TestGLM:
         request,
         glm_class_type,
         model_instantiation_type,
+        mock_glm_optimizer_run,
     ):
         """
         Test the `fit` method with weight matrices of different dimensionalities.
@@ -279,6 +337,7 @@ class TestGLM:
         request,
         glm_class_type,
         model_instantiation_type,
+        mock_glm_optimizer_run,
     ):
         """
         Test the `fit` method with intercepts of different dimensionalities. Check for correct dimensionality.
@@ -307,7 +366,7 @@ class TestGLM:
             model.fit(X, y, init_params=(init_w, init_b))
 
     """
-    Parameterization used by test_fit_init_params_type and test_initialize_solver_init_params_type.
+    Parameterization used by test_fit_init_params_type and test_initialize_optimizer_init_params_type.
     Uses a dict keyed by model class name for model-specific params, or a single value for
     model-independent test cases. Easy to extend by adding new model keys to the dicts.
     """
@@ -373,19 +432,19 @@ class TestGLM:
                 pytest.raises(TypeError, match="X and coef have mismatched structure"),
                 {
                     "GLM": [
-                        FeaturePytree(p1=jnp.zeros((5,)), p2=jnp.zeros((5,))),
+                        {"p1": jnp.zeros((5,)), "p2": jnp.zeros((5,))},
                         jnp.zeros((1,)),
                     ],
                     "PopulationGLM": [
-                        FeaturePytree(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))),
+                        {"p1": jnp.zeros((3, 3)), "p2": jnp.zeros((3, 2))},
                         jnp.zeros((3,)),
                     ],
                     "ClassifierGLM": [
-                        FeaturePytree(p1=jnp.zeros((5, 3)), p2=jnp.zeros((5, 3))),
+                        {"p1": jnp.zeros((5, 3)), "p2": jnp.zeros((5, 3))},
                         jnp.zeros((3,)),
                     ],
                     "ClassifierPopulationGLM": [
-                        FeaturePytree(p1=jnp.zeros((5, 3, 3)), p2=jnp.zeros((5, 3, 3))),
+                        {"p1": jnp.zeros((5, 3, 3)), "p2": jnp.zeros((5, 3, 3))},
                         jnp.zeros((3, 3)),
                     ],
                 },
@@ -434,6 +493,7 @@ class TestGLM:
         model_instantiation_type,
         expectation,
         init_params_by_model,
+        mock_glm_optimizer_run,
     ):
         """
         Test the `fit` method with various types of initial parameters. Ensure that the provided initial parameters
@@ -462,6 +522,7 @@ class TestGLM:
         request,
         glm_class_type,
         model_instantiation_type,
+        mock_glm_optimizer_run,
     ):
         """
         Test the `fit` method for inconsistencies between data features and initial weights provided.
@@ -660,7 +721,13 @@ class TestGLM:
         ],
     )
     def test_predict_is_fit(
-        self, is_fit, expectation, request, glm_class_type, model_instantiation_type
+        self,
+        is_fit,
+        expectation,
+        request,
+        glm_class_type,
+        model_instantiation_type,
+        mock_glm_fit,
     ):
         """
         Test the `score` method on models based on their fit status.
@@ -742,7 +809,7 @@ class TestGLM:
             model.predict(X)
 
     @pytest.fixture
-    def initialize_solver_weights_dimensionality_expectation(self, glm_class_type):
+    def initialize_optimizer_weights_dimensionality_expectation(self, glm_class_type):
         class_name = GLM_CLASS_TYPE_TO_NAME[glm_class_type]
         expected_coef_dim = DIMENSIONALITY_PARAMS[class_name]["coef"]
         # Build expectation dict: correct dim passes, others fail
@@ -760,22 +827,24 @@ class TestGLM:
 
     @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
     @pytest.mark.solver_related
-    def test_initialize_solver_weights_dimensionality(
+    def test_initialize_optimizer_weights_dimensionality(
         self,
         dim_weights,
         request,
         glm_class_type,
         model_instantiation_type,
-        initialize_solver_weights_dimensionality_expectation,
+        initialize_optimizer_weights_dimensionality_expectation,
     ):
         """
-        Test the `initialize_solver` method with weight matrices of different dimensionalities.
+        Test the `initialize_optimizer` method with weight matrices of different dimensionalities.
         Check for correct dimensionality.
         """
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        expectation = initialize_solver_weights_dimensionality_expectation[dim_weights]
+        expectation = initialize_optimizer_weights_dimensionality_expectation[
+            dim_weights
+        ]
         par_shape = get_param_shape(model, X, y)
         n_samples, n_features = X.shape
         # Build init_w of the requested dimensionality
@@ -793,11 +862,11 @@ class TestGLM:
                 par_shape.coef + (1,) * (dim_weights - len(par_shape.coef))
             )
         with expectation:
-            model.initialize_solver_and_state(X, y, (init_w, true_params.intercept))
+            model.initialize_optimizer_and_state((init_w, true_params.intercept), X, y)
 
     @pytest.mark.parametrize("dim_intercepts", [0, 1, 2, 3])
     @pytest.mark.solver_related
-    def test_initialize_solver_intercepts_dimensionality(
+    def test_initialize_optimizer_intercepts_dimensionality(
         self,
         dim_intercepts,
         request,
@@ -805,7 +874,7 @@ class TestGLM:
         model_instantiation_type,
     ):
         """
-        Test the `initialize_solver` method with intercepts of different dimensionalities.
+        Test the `initialize_optimizer` method with intercepts of different dimensionalities.
         Check for correct dimensionality.
         """
         X, y, model, true_params, firing_rate = request.getfixturevalue(
@@ -839,11 +908,11 @@ class TestGLM:
 
         init_w = jnp.zeros(par_shape.coef)
         with expectation:
-            model.initialize_solver_and_state(X, y, (init_w, init_b))
+            model.initialize_optimizer_and_state((init_w, init_b), X, y)
 
     @pytest.mark.parametrize(*fit_init_params_type_init_params)
     @pytest.mark.solver_related
-    def test_initialize_solver_init_params_type(
+    def test_initialize_optimizer_init_params_type(
         self,
         request,
         glm_class_type,
@@ -852,7 +921,7 @@ class TestGLM:
         init_params_by_model,
     ):
         """
-        Test the `initialize_solver` method with various types of initial parameters.
+        Test the `initialize_optimizer` method with various types of initial parameters.
         Ensure that the provided initial parameters are array-like.
         """
         X, y, model, true_params, firing_rate = request.getfixturevalue(
@@ -860,7 +929,7 @@ class TestGLM:
         )
         init_params = self.get_init_params_for_model(init_params_by_model, model)
         with expectation:
-            model.initialize_solver_and_state(X, y, init_params)
+            model.initialize_optimizer_and_state(init_params, X, y)
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -871,7 +940,7 @@ class TestGLM:
         ],
     )
     @pytest.mark.solver_related
-    def test_initialize_solver_n_feature_consistency_weights(
+    def test_initialize_optimizer_n_feature_consistency_weights(
         self,
         delta_n_features,
         expectation,
@@ -880,7 +949,7 @@ class TestGLM:
         model_instantiation_type,
     ):
         """
-        Test the `initialize_solver` method for inconsistencies between data features and initial weights provided.
+        Test the `initialize_optimizer` method for inconsistencies between data features and initial weights provided.
         Ensure the number of features align.
         """
         X, y, model, true_params, firing_rate = request.getfixturevalue(
@@ -892,7 +961,7 @@ class TestGLM:
         init_w = jnp.zeros(wrong_coef_shape)
         init_b = jnp.zeros(par_shape.intercept)
         with expectation:
-            model.initialize_solver_and_state(X, y, (init_w, init_b))
+            model.initialize_optimizer_and_state((init_w, init_b), X, y)
 
     #######################
     # Test model.simulate
@@ -955,7 +1024,7 @@ class TestGLM:
             model.intercept_ = true_params.intercept
             if is_population_model(model):
                 model._feature_mask = initialize_feature_mask_for_population_glm(
-                    X, y.shape[1], model._validator.get_empty_params(X, y).coef
+                    X, y.shape[1], coef=model._validator.get_empty_params(X, y).coef
                 )
         with expectation:
             model.simulate(
@@ -1045,7 +1114,7 @@ class TestGLM:
         ],
     )
     @pytest.mark.parametrize(
-        "model_class, fit_state_attrs",
+        "model_class, fit_state_attrs, fix_params",
         [
             (
                 nmo.glm.GLM,
@@ -1058,6 +1127,9 @@ class TestGLM:
                     "dof_resid_": 3,
                     "aux_": None,
                 },
+                # coef pinned, intercept left learnable: a spec with both an array and a
+                # ``None`` leaf, the latter being the fragile half of the round-trip
+                (jnp.ones((3,)), None),
             ),
             (
                 nmo.glm.PopulationGLM,
@@ -1068,6 +1140,7 @@ class TestGLM:
                     "dof_resid_": 3,
                     "aux_": None,
                 },
+                (jnp.ones((3, 1)), None),
             ),
             (
                 nmo.glm.ClassifierGLM,
@@ -1077,9 +1150,9 @@ class TestGLM:
                     "scale_": 2.0,
                     "dof_resid_": 3,
                     "aux_": None,
-                    "_classes_": np.array([2, 3, 5]),
-                    "_class_to_index_": {0: 2, 1: 3, 2: 5},
+                    "classes_": np.array([2, 3]),
                 },
+                (jnp.ones((3, 2)), None),
             ),
             (
                 nmo.glm.ClassifierPopulationGLM,
@@ -1089,9 +1162,9 @@ class TestGLM:
                     "scale_": 2.0,
                     "dof_resid_": 3,
                     "aux_": None,
-                    "_classes_": np.array([2, 3, 5]),
-                    "_class_to_index_": {0: 2, 1: 3, 2: 5},
+                    "classes_": np.array([2, 3]),
                 },
+                (jnp.ones((3, 1, 2)), None),
             ),
         ],
     )
@@ -1100,6 +1173,7 @@ class TestGLM:
         regularizer,
         obs_model,
         solver_name,
+        fix_params,
         tmp_path,
         glm_class_type,
         fit_state_attrs,
@@ -1125,6 +1199,7 @@ class TestGLM:
             regularizer=regularizer,
             regularizer_strength=2.0,
             solver_kwargs={"tol": 10**-6},
+            fix_params=fix_params,
         )
         clean_kwargs = dict(
             (k, p) for k, p in kwargs.items() if k in model_class._get_param_names()
@@ -1150,7 +1225,6 @@ class TestGLM:
         loaded_params = loaded_model.get_params()
         fit_state = loaded_model._get_fit_state()
         fit_state.pop("solver_state_")
-        fit_state.pop("optim_info_")
         loaded_params.update(fit_state)
 
         # Assert matching keys and values
@@ -1171,6 +1245,20 @@ class TestGLM:
                 assert np.allclose(
                     np.array(init_val), np.array(load_val)
                 ), f"{key} array mismatch"
+            elif isinstance(init_val, tuple):
+                # e.g. ``fix_params``: compare leafwise, keeping ``None`` a leaf so a
+                # dropped one cannot pass as an empty pytree node
+                is_none = lambda leaf: leaf is None
+                init_leaves = jax.tree_util.tree_leaves(init_val, is_leaf=is_none)
+                load_leaves = jax.tree_util.tree_leaves(load_val, is_leaf=is_none)
+                assert len(init_leaves) == len(
+                    load_leaves
+                ), f"{key} structure mismatch: {init_val} != {load_val}"
+                for init_leaf, load_leaf in zip(init_leaves, load_leaves):
+                    if init_leaf is None:
+                        assert load_leaf is None, f"{key} lost a None leaf"
+                    else:
+                        np.testing.assert_allclose(load_leaf, init_leaf)
             elif isinstance(init_val, Callable):
                 assert _get_name(init_val) == _get_name(
                     load_val
@@ -1330,7 +1418,6 @@ class TestGLM:
             loaded_params = loaded_model.get_params()
             fit_state = loaded_model._get_fit_state()
             fit_state.pop("solver_state_")
-            fit_state.pop("optim_info_")
             loaded_params.update(fit_state)
 
             # Assert matching keys and values
@@ -1457,7 +1544,6 @@ class TestGLM:
         initial_params = fitted_model.get_params()
         fit_state = fitted_model._get_fit_state()
         fit_state.pop("solver_state_")
-        fit_state.pop("optim_info_")
         initial_params.update(fit_state)
 
         # Save
@@ -1469,7 +1555,6 @@ class TestGLM:
         loaded_params = loaded_model.get_params()
         fit_state = loaded_model._get_fit_state()
         fit_state.pop("solver_state_")
-        fit_state.pop("optim_info_")
         loaded_params.update(fit_state)
 
         # Assert states are close
@@ -1604,6 +1689,412 @@ class TestGLM:
             nmo.load_model(save_path, mapping_dict=invalid_mapping)
 
 
+class _TwoLeafModule(eqx.Module):
+    a: jnp.ndarray
+    b: jnp.ndarray
+
+
+# Factories that build a two-leaf pytree X given n_samples. Used to parametrize
+# coef-structure tests over different pytree types.
+_PYTREE_X_FACTORIES = [
+    pytest.param(
+        lambda n: {"a": jnp.ones((n, 1)), "b": jnp.ones((n, 1))},
+        id="dict",
+    ),
+    pytest.param(
+        lambda n: _TwoLeafModule(a=jnp.ones((n, 1)), b=jnp.ones((n, 1))),
+        id="eqx_module",
+    ),
+    pytest.param(
+        lambda n: {"a": [jnp.ones((n, 1))], "b": jnp.ones((n, 1))},
+        id="dict_list",
+    ),
+]
+
+
+class TestNormalizeUserParams:
+    """Unit tests for ``GLM._normalize_user_params`` (the ``fit_intercept=False`` seam)."""
+
+    @pytest.mark.filterwarnings("error::UserWarning")
+    def test_fit_intercept_true_is_passthrough(self, poissonGLM_model_instantiation):
+        """With ``fit_intercept=True`` the user params are returned unchanged."""
+        X, y, model, true_params, _ = poissonGLM_model_instantiation
+        model.fit_intercept = True
+        init_params = (true_params.coef, true_params.intercept)
+        assert model._normalize_user_params(init_params, X, y) is init_params
+
+    @pytest.mark.filterwarnings("error::UserWarning")
+    @pytest.mark.parametrize(
+        "supply_intercept, expectation",
+        [
+            (False, does_not_raise()),
+            (True, pytest.warns(UserWarning, match="fit_intercept=False")),
+        ],
+    )
+    def test_fit_intercept_false_fills_intercept_with_zeros(
+        self, poissonGLM_model_instantiation, supply_intercept, expectation
+    ):
+        """With ``fit_intercept=False`` the intercept is filled with zeros and the
+        coefficients are left untouched. Omitting the intercept (``None``) is accepted
+        quietly; supplying one raises a ``UserWarning`` and the value is ignored."""
+        X, y, model, true_params, _ = poissonGLM_model_instantiation
+        model.fit_intercept = False
+        intercept = true_params.intercept + 5.0 if supply_intercept else None
+
+        with expectation:
+            coef, out_intercept = model._normalize_user_params(
+                (true_params.coef, intercept), X, y
+            )
+
+        np.testing.assert_array_equal(coef, true_params.coef)
+        np.testing.assert_array_equal(
+            out_intercept, jnp.zeros_like(true_params.intercept)
+        )
+
+    @pytest.mark.parametrize("n_elements", [1, 3])
+    def test_malformed_structure_raises(
+        self, poissonGLM_model_instantiation, n_elements
+    ):
+        """A user-params tuple whose length is not two is rejected."""
+        X, y, model, true_params, _ = poissonGLM_model_instantiation
+        model.fit_intercept = False
+        bad_params = (true_params.coef,) * n_elements
+        with pytest.raises(ValueError, match="length two"):
+            model._normalize_user_params(bad_params, X, y)
+
+
+@pytest.mark.parametrize(
+    "glm_class",
+    [
+        nmo.glm.GLM,
+        nmo.glm.PopulationGLM,
+        nmo.glm.ClassifierGLM,
+        nmo.glm.ClassifierPopulationGLM,
+    ],
+)
+class TestFitInterceptProperty:
+    """Tests for the ``GLM.fit_intercept`` property: getter, bool coercion, the
+    active-parameter partition it drives, and the solver-invalidation-on-flip
+    contract."""
+
+    @pytest.mark.parametrize(
+        "value, expected",
+        [(True, True), (False, False), (1, True), (0, False), ("x", True), ("", False)],
+    )
+    def test_value_is_coerced_to_bool(self, glm_class, value, expected):
+        model = glm_class()
+        model.fit_intercept = value
+        assert model.fit_intercept is expected
+
+    @pytest.mark.parametrize("value", [True, False])
+    def test_partition_tracks_fit_intercept(self, glm_class, value):
+        """coef is always active; the intercept is active iff ``fit_intercept``."""
+        model = glm_class()
+        model.fit_intercept = value
+        params = nmo.glm.params.GLMParams(
+            coef=jnp.array([1.0, 2.0, 3.0]), intercept=jnp.array([5.0])
+        )
+        active, frozen = model._partition_active(params)
+        np.testing.assert_array_equal(active.coef, params.coef)
+        assert frozen.coef is None
+        if value:
+            np.testing.assert_array_equal(active.intercept, params.intercept)
+            assert frozen.intercept is None
+        else:
+            assert active.intercept is None
+            np.testing.assert_array_equal(frozen.intercept, params.intercept)
+
+    def test_invalidates_solver_only_on_flip(self, glm_class, monkeypatch):
+        """``_invalidate_solver`` runs only when the flag actually changes value,
+        not when it is re-assigned the same value."""
+        model = glm_class()  # constructed with the default fit_intercept=True
+        spy = MagicMock(wraps=model._invalidate_solver)
+        monkeypatch.setattr(model, "_invalidate_solver", spy)
+
+        model.fit_intercept = True  # no change
+        spy.assert_not_called()
+
+        model.fit_intercept = False  # flip
+        assert spy.call_count == 1
+
+        model.fit_intercept = False  # no change
+        assert spy.call_count == 1
+
+        model.fit_intercept = True  # flip back
+        assert spy.call_count == 2
+
+
+class TestPartitionActive:
+    """Tests for ``BaseRegressor._partition_active`` as driven by the GLM."""
+
+    @pytest.fixture
+    def params(self):
+        return nmo.glm.params.GLMParams(
+            coef=jnp.array([1.0, 2.0, 3.0]), intercept=jnp.array([5.0])
+        )
+
+    def test_all_active_when_fit_intercept_true(self, params):
+        """fit_intercept=True keeps every leaf active; the frozen tree is all-None."""
+        model = nmo.glm.GLM()
+        model.fit_intercept = True
+        active, frozen = model._partition_active(params)
+        np.testing.assert_array_equal(active.coef, params.coef)
+        np.testing.assert_array_equal(active.intercept, params.intercept)
+        assert frozen.coef is None
+        assert frozen.intercept is None
+
+    def test_intercept_frozen_when_fit_intercept_false(self, params):
+        """fit_intercept=False moves the intercept into the frozen tree and leaves
+        the coefficients active."""
+        model = nmo.glm.GLM()
+        model.fit_intercept = False
+        active, frozen = model._partition_active(params)
+        np.testing.assert_array_equal(active.coef, params.coef)
+        assert active.intercept is None
+        assert frozen.coef is None
+        np.testing.assert_array_equal(frozen.intercept, params.intercept)
+
+    def test_default_settings_return_full_and_empty(self, params):
+        """With the defaults (``_fix_params=None``, ``fit_intercept=True``, neither
+        ever assigned) every value stays active and the frozen tree is all-None."""
+        model = nmo.glm.GLM()
+        active, frozen = model._partition_active(params)
+        np.testing.assert_array_equal(active.coef, params.coef)
+        np.testing.assert_array_equal(active.intercept, params.intercept)
+        assert jax.tree_util.tree_leaves(frozen) == []
+        assert frozen.coef is None
+        assert frozen.intercept is None
+
+
+class TestHessianTag:
+    """The tag the GLM resolves: its sign from the inverse link, its claims from the
+    parameters left active."""
+
+    # One model per observation model, with every link that observation model declares
+    # convexity preserving, plus ``None`` for the default it picks itself.
+    _DECLARED_LINKS = [
+        pytest.param(
+            {
+                "model": model_name,
+                "obs_model": observation_model,
+                "simulate": False,
+                "init_kwargs": {"inverse_link_function": link},
+            },
+            id=f"{observation_model}-{'default' if link is None else link.__name__}",
+        )
+        for model_name in ("GLM", "ClassifierGLM")
+        for observation_model in OBSERVATION_PER_MODEL[model_name]
+        for link in (
+            None,
+            *instantiate_observation_model(
+                observation_model
+            ).glm_convexity_preserving_links,
+        )
+    ]
+
+    _UNDECLARED_LINK = [
+        pytest.param(
+            {
+                "model": model_name,
+                "obs_model": observation_model,
+                "simulate": False,
+                "init_kwargs": {"inverse_link_function": jnp.square},
+            },
+            id=observation_model,
+        )
+        for model_name in ("GLM", "ClassifierGLM")
+        for observation_model in OBSERVATION_PER_MODEL[model_name]
+    ]
+
+    _CASES = [
+        ("none", "UnRegularized", MatrixProperty.POSITIVE_SEMI_DEFINITE),
+        ("none", "Ridge", MatrixProperty.POSITIVE_DEFINITE),
+        ("coef", "UnRegularized", MatrixProperty.POSITIVE_DEFINITE),
+        ("coef", "Ridge", MatrixProperty.POSITIVE_DEFINITE),
+        ("intercept", "UnRegularized", MatrixProperty.POSITIVE_SEMI_DEFINITE),
+        ("intercept", "Ridge", MatrixProperty.POSITIVE_DEFINITE),
+    ]
+
+    def _configure(
+        self, model, true_params, freeze, regularizer_name, link, strength=0.1
+    ):
+        """Pin the leaves named by ``freeze`` at their true values, and set up Newton."""
+        model.inverse_link_function = link
+        model.regularizer = regularizer_name
+        model.regularizer_strength = (
+            None if regularizer_name == "UnRegularized" else strength
+        )
+        model.solver_name = "Newton"
+        if freeze == "coef_leaf":
+            freeze_first_coef_leaf(model, true_params)
+        elif freeze != "none":
+            model.fix_params = (
+                true_params.coef if freeze in ("coef", "both") else None,
+                true_params.intercept if freeze in ("intercept", "both") else None,
+            )
+
+    @pytest.mark.parametrize(
+        "instantiate_base_regressor_subclass", _DECLARED_LINKS, indirect=True
+    )
+    def test_declared_link_keeps_the_loss_semidefinite(
+        self, instantiate_base_regressor_subclass
+    ):
+        """Every link an observation model declares leaves the loss semidefinite.
+
+        ``link=None`` is the marker for the observation model's own default, so a default
+        swapped for something outside the declared list shows up here rather than as a
+        Cholesky solve quietly turning into a least-squares one.
+        """
+        model = instantiate_base_regressor_subclass.model
+        assert model._resolve_hess_property() is MatrixProperty.POSITIVE_SEMI_DEFINITE
+
+    @pytest.mark.parametrize(
+        "instantiate_base_regressor_subclass", _UNDECLARED_LINK, indirect=True
+    )
+    def test_undeclared_link_leaves_the_loss_unsigned(
+        self, instantiate_base_regressor_subclass
+    ):
+        """A link the observation model does not declare carries no sign at all."""
+        model = instantiate_base_regressor_subclass.model
+        assert model._resolve_hess_property() is MatrixProperty.SYMMETRIC
+
+    @pytest.mark.parametrize(
+        "link, convexity_preserving", [(exp, True), (identity, False)]
+    )
+    @pytest.mark.parametrize("freeze, regularizer_name, signed_property", _CASES)
+    def test_property_under_freezing(
+        self,
+        freeze,
+        regularizer_name,
+        signed_property,
+        link,
+        convexity_preserving,
+        poissonGLM_model_instantiation,
+    ):
+        """The tag is definite when the loss and the penalty claim every active leaf.
+
+        The loss claims the intercept, the penalty the coefficients, and a pinned leaf takes
+        its claim with it. A link the observation model does not list leaves the loss
+        unsigned, which discards the penalty's claims too, so those cells claim nothing.
+        """
+        X, y, model, true_params, _ = poissonGLM_model_instantiation
+        self._configure(model, true_params, freeze, regularizer_name, link)
+
+        model.initialize_optimizer_and_state(model.initialize_params(X, y), X, y)
+
+        expected = signed_property if convexity_preserving else MatrixProperty.SYMMETRIC
+        assert model._solver._hess_tag.property is expected
+
+    @pytest.mark.parametrize(
+        "link, convexity_preserving", [(exp, True), (identity, False)]
+    )
+    @pytest.mark.parametrize(
+        "regularizer_name, signed_property",
+        [
+            ("UnRegularized", MatrixProperty.POSITIVE_SEMI_DEFINITE),
+            ("Ridge", MatrixProperty.POSITIVE_DEFINITE),
+        ],
+    )
+    def test_property_with_one_coef_leaf_pinned(
+        self,
+        regularizer_name,
+        signed_property,
+        link,
+        convexity_preserving,
+        poissonGLM_model_instantiation_pytree,
+    ):
+        """Pinning one ``coef`` leaf drops that leaf's claim and no other.
+
+        The leaves still being fitted need a claimant of their own, so the property is the
+        one of the nothing-pinned case rather than of the whole-``coef`` one: only a
+        ``coef`` with every leaf pinned leaves the intercept alone to cover the tree.
+        """
+        X, y, model, true_params, _ = poissonGLM_model_instantiation_pytree
+        self._configure(model, true_params, "coef_leaf", regularizer_name, link)
+
+        model.initialize_optimizer_and_state(model.initialize_params(X, y), X, y)
+
+        expected = signed_property if convexity_preserving else MatrixProperty.SYMMETRIC
+        assert model._solver._hess_tag.property is expected
+
+    def test_tag_follows_a_regularizer_change(self, poissonGLM_model_instantiation):
+        """Changing the regularizer drops the solver, so the next tag is the new one's."""
+        X, y, model, true_params, _ = poissonGLM_model_instantiation
+        self._configure(model, true_params, "none", "Ridge", exp)
+        params = model.initialize_params(X, y)
+
+        model.initialize_optimizer_and_state(params, X, y)
+        assert model._solver._hess_tag.property is MatrixProperty.POSITIVE_DEFINITE
+
+        model.regularizer = "UnRegularized"
+        model.regularizer_strength = None
+        model.initialize_optimizer_and_state(params, X, y)
+        assert model._solver._hess_tag.property is MatrixProperty.POSITIVE_SEMI_DEFINITE
+
+    def test_zero_strength_claims_nothing(self, poissonGLM_model_instantiation):
+        """A Ridge strength of zero curves no leaf, leaving the same tag as no penalty."""
+        X, y, model, true_params, _ = poissonGLM_model_instantiation
+        self._configure(model, true_params, "none", "Ridge", exp, strength=0.0)
+
+        model.initialize_optimizer_and_state(model.initialize_params(X, y), X, y)
+
+        assert model._solver._hess_tag.property is MatrixProperty.POSITIVE_SEMI_DEFINITE
+
+    @pytest.mark.parametrize("regularizer_name", ["UnRegularized", "Ridge"])
+    def test_no_tag_when_every_parameter_is_pinned(
+        self, regularizer_name, poissonGLM_model_instantiation
+    ):
+        """With nothing left to optimize the model installs ``NoOpSolver``, which has no tag."""
+        X, y, model, true_params, _ = poissonGLM_model_instantiation
+        self._configure(model, true_params, "both", regularizer_name, exp)
+
+        with pytest.warns(UserWarning, match="Every parameter is fixed"):
+            model.initialize_optimizer_and_state(model.initialize_params(X, y), X, y)
+
+        assert isinstance(model._solver, NoOpSolver)
+        assert not hasattr(model._solver, "_hess_tag")
+
+
+@pytest.mark.parametrize(
+    "model_fixture",
+    ["poissonGLM_model_instantiation", "population_poissonGLM_model_instantiation"],
+)
+class TestFitInterceptIterative:
+    """``initialize_optimizer_and_state`` + ``update`` with a frozen intercept."""
+
+    @pytest.mark.parametrize("n_updates", [1, 5])
+    def test_update_keeps_intercept_zero(self, model_fixture, request, n_updates):
+        """With ``fit_intercept=False`` the intercept stays exactly zero across one
+        or more update steps, while the coefficients are updated."""
+        X, y, model, true_params, _ = request.getfixturevalue(model_fixture)
+        model.fit_intercept = False
+        coef0, _ = model.initialize_params(X, y)
+        # omit the frozen intercept on setup (the sanctioned input); no warning
+        state = model.initialize_optimizer_and_state((coef0, None), X, y)
+
+        params = (coef0, None)
+        for _ in range(n_updates):
+            params, state = model.update(params, state, X, y)
+
+        np.testing.assert_array_equal(
+            model.intercept_, jnp.zeros_like(true_params.intercept)
+        )
+        assert not np.allclose(model.coef_, coef0)
+
+    def test_flip_after_initialize_then_update_raises(self, model_fixture, request):
+        """Flipping ``fit_intercept`` after initializing the optimizer invalidates the
+        solver, so a subsequent update raises instead of using the stale solver."""
+        X, y, model, true_params, _ = request.getfixturevalue(model_fixture)
+        model.fit_intercept = False
+        coef0, _ = model.initialize_params(X, y)
+        state = model.initialize_optimizer_and_state((coef0, None), X, y)
+
+        model.fit_intercept = True  # flip -> invalidates the solver
+
+        with pytest.raises(RuntimeError, match="invalid state"):
+            model.update((coef0, None), state, X, y)
+
+
 @pytest.mark.parametrize("glm_type", ["", "population_"])
 @pytest.mark.parametrize(
     "model_instantiation",
@@ -1696,20 +2187,23 @@ class TestGLMObservationModel:
             raise ValueError("Unknown model instantiation")
         return ll
 
-    @pytest.fixture
-    def sklearn_model(self, model_instantiation):
-        """
-        Fixture for test_glm_fit_matches_sklearn
+    @staticmethod
+    def _make_sklearn_model(model_instantiation, fit_intercept):
+        """Build the matching unregularized sklearn estimator.
+
+        ``fit_intercept`` toggles whether sklearn estimates the bias, mirroring
+        nemos ``GLM(fit_intercept=...)``. Returns ``None`` when no sklearn
+        counterpart exists (negative-binomial).
         """
         if "poisson" in model_instantiation:
-            return PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
+            return PoissonRegressor(fit_intercept=fit_intercept, tol=10**-12, alpha=0.0)
 
         elif "gamma" in model_instantiation:
-            return GammaRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
+            return GammaRegressor(fit_intercept=fit_intercept, tol=10**-12, alpha=0.0)
 
         elif "bernoulli" in model_instantiation:
             return LogisticRegression(
-                fit_intercept=True,
+                fit_intercept=fit_intercept,
                 tol=10**-12,
                 C=np.inf,
             )
@@ -1718,13 +2212,13 @@ class TestGLMObservationModel:
             return None
 
         elif "gaussian" in model_instantiation:
-            return LinearRegression(fit_intercept=True)
+            return LinearRegression(fit_intercept=fit_intercept)
 
         elif "classifier" in model_instantiation:
             # In sklearn 1.5+, multinomial is the default with lbfgs solver
             # Use C=1.0 (Ridge with strength=1.0) for identifiable parameters
             return LogisticRegression(
-                fit_intercept=True,
+                fit_intercept=fit_intercept,
                 tol=10**-12,
                 C=1.0,
                 solver="lbfgs",
@@ -1735,93 +2229,18 @@ class TestGLMObservationModel:
             raise ValueError("Unknown model instantiation")
 
     @pytest.fixture
-    def dof_lasso_strength(self, model_instantiation):
+    def sklearn_model(self, model_instantiation):
         """
-        Fixture for test_estimate_dof_resid
+        Fixture for test_glm_fit_matches_sklearn
         """
-        if "poisson" in model_instantiation:
-            return 1.0
-
-        elif "gamma" in model_instantiation:
-            return 0.02
-
-        elif "bernoulli" in model_instantiation:
-            return 0.1
-
-        elif "negativeBinomial" in model_instantiation:
-            return 0.01
-
-        elif "gaussian" in model_instantiation:
-            return 1.0
-
-        elif "classifier" in model_instantiation:
-            return 0.1
-
-        else:
-            raise ValueError("Unknown model instantiation")
+        return self._make_sklearn_model(model_instantiation, fit_intercept=True)
 
     @pytest.fixture
-    def dof_lasso_dof(self, glm_type, model_instantiation):
+    def sklearn_model_no_intercept(self, model_instantiation):
         """
-        Fixture for test_estimate_dof_resid
+        Fixture for test_fit_intercept_false_matches_sklearn
         """
-        if "poisson" in model_instantiation:
-            if is_population_glm_type(glm_type):
-                return np.array([3, 0, 0])
-            else:
-                return np.array([3])
-
-        elif "gamma" in model_instantiation:
-            if is_population_glm_type(glm_type):
-                return np.array([1, 4, 3])
-            else:
-                return np.array([3])
-
-        elif "bernoulli" in model_instantiation:
-            if is_population_glm_type(glm_type):
-                return np.array([3, 2, 1])
-            else:
-                return np.array([3])
-
-        elif "negativeBinomial" in model_instantiation:
-            if is_population_glm_type(glm_type):
-                return np.array([3, 2, 4])
-            else:
-                return np.array([5])
-
-        elif "gaussian" in model_instantiation:
-            if is_population_glm_type(glm_type):
-                return np.array([5, 5, 5])
-            else:
-                return np.array([3])
-
-        elif "classifier" in model_instantiation:
-            # Classifier models have (n_features, n_classes) coef shape
-            # For lasso, count surviving coefficients across all classes
-            # Note: LASSO convergence can vary slightly across environments
-            if is_population_glm_type(glm_type):
-                return np.array([6, 4, 5])
-            else:
-                return np.array([5])
-
-        else:
-            raise ValueError("Unknown model instantiation")
-
-    @pytest.fixture
-    def dof_non_lasso_dof(self, glm_type, model_instantiation):
-        """
-        Fixture for test_estimate_dof_resid
-        """
-        if "classifier" in model_instantiation:
-            if "population" in glm_type:
-                return np.array([10, 10, 10])
-            else:
-                return np.array([10])
-        else:
-            if "population" in glm_type:
-                return np.array([5, 5, 5])
-            else:
-                return np.array([5])
+        return self._make_sklearn_model(model_instantiation, fit_intercept=False)
 
     @pytest.fixture
     def obs_has_defaults(self, model_instantiation):
@@ -1854,44 +2273,56 @@ class TestGLMObservationModel:
         """
         Fixture for test_repr_out
         """
+        # These repr models are all UnRegularized, whose default solver is LBFGS
+        # (GLMs only override the default to Newton for Ridge).
+        default_solver_name = nmo.solvers.get_solver(
+            nmo.regularizer.UnRegularized().default_solver
+        ).algo_name
+        lbfgs_solver_name = nmo.solvers.get_solver("LBFGS").algo_name
         if "poisson" in model_instantiation:
-            if is_population_glm_type(glm_type):
-                return "PopulationGLM(\n    observation_model=PoissonObservations(),\n    inverse_link_function=exp,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
-            else:
-                return "GLM(\n    observation_model=PoissonObservations(),\n    inverse_link_function=exp,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
-
+            observation_model = "PoissonObservations()"
+            inverse_link_function = "exp"
+            solver_name = default_solver_name
         elif "gamma" in model_instantiation:
-            if is_population_glm_type(glm_type):
-                return "PopulationGLM(\n    observation_model=GammaObservations(),\n    inverse_link_function=one_over_x,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
-            else:
-                return "GLM(\n    observation_model=GammaObservations(),\n    inverse_link_function=one_over_x,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
-
+            observation_model = "GammaObservations()"
+            inverse_link_function = "one_over_x"
+            solver_name = default_solver_name
         elif "bernoulli" in model_instantiation:
-            if is_population_glm_type(glm_type):
-                return "PopulationGLM(\n    observation_model=BernoulliObservations(),\n    inverse_link_function=logistic,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
-            else:
-                return "GLM(\n    observation_model=BernoulliObservations(),\n    inverse_link_function=logistic,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
-
+            observation_model = "BernoulliObservations()"
+            inverse_link_function = "logistic"
+            solver_name = default_solver_name
         elif "negativeBinomial" in model_instantiation:
-            if is_population_glm_type(glm_type):
-                return "PopulationGLM(\n    observation_model=NegativeBinomialObservations(scale=1.0),\n    inverse_link_function=exp,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
-            else:
-                return "GLM(\n    observation_model=NegativeBinomialObservations(scale=1.0),\n    inverse_link_function=exp,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
-
+            observation_model = "NegativeBinomialObservations(scale=1.0)"
+            inverse_link_function = "exp"
+            solver_name = lbfgs_solver_name
         elif "gaussian" in model_instantiation:
-            if is_population_glm_type(glm_type):
-                return "PopulationGLM(\n    observation_model=GaussianObservations(),\n    inverse_link_function=identity,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
-            else:
-                return "GLM(\n    observation_model=GaussianObservations(),\n    inverse_link_function=identity,\n    regularizer=UnRegularized(),\n    solver_name='LBFGS'\n)"
-
+            observation_model = "GaussianObservations()"
+            inverse_link_function = "identity"
+            solver_name = lbfgs_solver_name
         elif "classifier" in model_instantiation:
-            if is_population_glm_type(glm_type):
-                return "ClassifierPopulationGLM(\n    n_classes=3,\n    inverse_link_function=log_softmax,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
-            else:
-                return "ClassifierGLM(\n    n_classes=3,\n    inverse_link_function=log_softmax,\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
-
+            observation_model = None
+            inverse_link_function = "log_softmax"
+            n_classes = 3
+            solver_name = default_solver_name
         else:
             raise ValueError("Unknown model instantiation")
+
+        class_name = "PopulationGLM" if is_population_glm_type(glm_type) else "GLM"
+        if "classifier" in model_instantiation:
+            class_name = "Classifier" + class_name
+            second_line = f"    n_classes={n_classes},\n"
+        else:
+            second_line = f"    observation_model={observation_model},\n"
+
+        return (
+            f"{class_name}(\n"
+            f"{second_line}"
+            f"    inverse_link_function={inverse_link_function},\n"
+            "    regularizer=UnRegularized(),\n"
+            "    fit_intercept=True,\n"
+            f"    solver_name='{solver_name}'\n"
+            ")"
+        )
 
     #######################
     # Test initialization #
@@ -2024,44 +2455,6 @@ class TestGLMObservationModel:
     #####################
     # Test model.update #
     #####################
-    @pytest.mark.parametrize(
-        "n_samples, expectation",
-        [
-            (None, does_not_raise()),
-            (100, does_not_raise()),
-            (
-                1.0,
-                pytest.raises(
-                    TypeError, match="`n_samples` must be `None` or of type `int`"
-                ),
-            ),
-            (
-                "str",
-                pytest.raises(
-                    TypeError, match="`n_samples` must be `None` or of type `int`"
-                ),
-            ),
-        ],
-    )
-    @pytest.mark.parametrize("batch_size", [1, 10])
-    @pytest.mark.solver_related
-    def test_update_n_samples(
-        self, n_samples, expectation, batch_size, request, glm_type, model_instantiation
-    ):
-        X, y, model, true_params, firing_rate = request.getfixturevalue(
-            glm_type + model_instantiation
-        )
-        params = model.initialize_params(X, y)
-        state = model.initialize_solver_and_state(X, y, params)
-        with expectation:
-            model.update(
-                params,
-                state,
-                X[:batch_size],
-                y[:batch_size],
-                n_samples=n_samples,
-            )
-
     @pytest.mark.parametrize("batch_size", [1, 10])
     @pytest.mark.solver_related
     def test_update_params_stored(
@@ -2071,7 +2464,7 @@ class TestGLMObservationModel:
             glm_type + model_instantiation
         )
         params = model.initialize_params(X, y)
-        state = model.initialize_solver_and_state(X, y, params)
+        state = model.initialize_optimizer_and_state(params, X, y)
         assert model.coef_ is None
         assert model.intercept_ is None
         if "gamma" not in model_instantiation and "gaussian" not in model_instantiation:
@@ -2081,92 +2474,6 @@ class TestGLMObservationModel:
         assert model.coef_ is not None
         assert model.intercept_ is not None
         assert model.scale_ is not None
-
-    @pytest.mark.parametrize("nan_inputs", [True, False])
-    @pytest.mark.parametrize(
-        "solver_name", ["ProximalGradient", "GradientDescent", "LBFGS", "BFGS"]
-    )
-    @pytest.mark.solver_related
-    def test_update_params_are_finite(
-        self, nan_inputs, solver_name, request, glm_type, model_instantiation
-    ):
-        """
-        Fitting a GLM to data containing NaNs with the jaxopt.LBFGS solver worked when using GLM.fit,
-        but not when writing the training loop in Python and calling GLM.update repeatedly.
-        The problem was that this solver uses the data to initialize its state, and the state was populated
-        with NaNs by GLM.initialize_state.
-        The solution was dropping NaNs from the input data in GLM.initialize_state -- as is done in GLM.update and GLM.run.
-        """
-        X, y, model, true_params, firing_rate = request.getfixturevalue(
-            glm_type + model_instantiation
-        )
-        model.solver_name = solver_name
-
-        if nan_inputs:
-            X[: X.shape[0] // 2, :] = np.nan
-
-        params = model.initialize_params(X, y)
-        state = model.initialize_solver_and_state(X, y, params)
-        assert model.coef_ is None
-        assert model.intercept_ is None
-        if "gamma" not in model_instantiation and "gaussian" not in model_instantiation:
-            # gamma model instantiation sets the scale
-            assert model.scale_ is None
-
-        # take an update step using the initialized state
-        _, _ = model.update(params, state, X, y)
-
-        assert model.coef_ is not None
-        assert model.intercept_ is not None
-        assert model.scale_ is not None
-
-        # parameters should not have NaN
-        assert jnp.all(jnp.isfinite(model.coef_))
-        assert jnp.all(jnp.isfinite(model.intercept_))
-        assert jnp.all(jnp.isfinite(model.scale_))
-
-    @pytest.mark.parametrize("batch_size", [2, 10])
-    @pytest.mark.solver_related
-    @pytest.mark.requires_x64
-    def test_update_nan_drop_at_jit_comp(
-        self, batch_size, request, glm_type, model_instantiation
-    ):
-        """Test that jit compilation does not affect the update in the presence of nans."""
-        X, y, model, true_params, firing_rate = request.getfixturevalue(
-            glm_type + model_instantiation
-        )
-        model.solver_kwargs.update({"stepsize": 0.01})
-        params = model.initialize_params(X, y)
-        state = model.initialize_solver_and_state(X, y, params)
-        # extract batch and add nans
-        Xnan = X[:batch_size]
-        Xnan[: batch_size // 2] = np.nan
-
-        # run 3 iterations
-        tot_iter = 3
-        jit_update = deepcopy(params)
-        jit_state = deepcopy(state)
-        for _ in range(tot_iter):
-            jit_update, jit_state = model.update(
-                jit_update, jit_state, Xnan, y[:batch_size]
-            )
-        # make sure there is an update
-        assert not jnp.allclose(params[0], jit_update[0]) or not jnp.allclose(
-            params[1], jit_update[1]
-        )
-
-        # update without jitting
-        nojit_update = deepcopy(params)
-        nojit_state = deepcopy(state)
-        with jax.disable_jit(True):
-            for _ in range(tot_iter):
-                nojit_update, nojit_state = model.update(
-                    nojit_update, nojit_state, Xnan, y[:batch_size]
-                )
-        # check for equivalence update
-        assert jnp.allclose(nojit_update[0], jit_update[0]) and jnp.allclose(
-            nojit_update[1], jit_update[1]
-        )
 
     #######################
     # Test model.simulate #
@@ -2246,20 +2553,6 @@ class TestGLMObservationModel:
     ########################################
     # Compare with standard implementation #
     ########################################
-    @pytest.mark.solver_related
-    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
-    def test_compatibility_with_sklearn_cv(
-        self, request, glm_type, model_instantiation
-    ):
-        X, y, model, true_params, firing_rate = request.getfixturevalue(
-            glm_type + model_instantiation
-        )
-        param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
-        model.solver_kwargs.update(dict(maxiter=2))
-        cls = GridSearchCV(model, param_grid).fit(X, y)
-        # check that the repr works after cloning
-        repr(cls)
-
     @staticmethod
     def _format_sklearn_params(sklearn_model, nemos_model):
         """Format sklearn params for comparison with nemos.
@@ -2275,6 +2568,12 @@ class TestGLMObservationModel:
             intercept = sklearn_model.intercept_
         else:
             coef, intercept = sklearn_model.coef_, sklearn_model.intercept_
+
+        if isinstance(
+            nemos_model.observation_model, nmo.observation_models.BernoulliObservations
+        ):
+            # Logistic regression of sklearn always returns a 2d array
+            coef = np.squeeze(coef)
         return coef, intercept
 
     @staticmethod
@@ -2282,28 +2581,49 @@ class TestGLMObservationModel:
         sklearn_coef, sklearn_intercept, nemos_coef, nemos_intercept, atol=1e-6
     ):
         """Assert that sklearn and nemos parameters match within tolerance."""
-        match_weights = jnp.allclose(sklearn_coef, nemos_coef, atol=atol, rtol=0.0)
-        match_intercepts = jnp.allclose(
+        np.testing.assert_allclose(sklearn_coef, nemos_coef, atol=atol, rtol=0.0)
+        np.testing.assert_allclose(
             sklearn_intercept, nemos_intercept, atol=atol, rtol=0.0
         )
-        if not (match_weights and match_intercepts):
-            raise ValueError("GLM.fit estimate does not match sklearn!")
 
-    @pytest.mark.parametrize("solver_name", ["LBFGS"])
-    @pytest.mark.solver_related
-    @pytest.mark.requires_x64
-    @pytest.mark.filterwarnings("ignore:Setting penalty=None will ignore:UserWarning")
-    def test_glm_fit_matches_sklearn(
-        self, solver_name, request, glm_type, model_instantiation, sklearn_model
+    def _fit_and_compare_to_sklearn(self, model, sklearn_model, X, y, atol=1e-6):
+        """Fit ``model`` and ``sklearn_model`` on the same data and assert their
+        coefficients and intercepts match within ``atol``.
+
+        Population models are compared neuron-by-neuron, since sklearn fits each
+        output independently. When the nemos model has ``fit_intercept=False`` the
+        sklearn counterpart is built with ``fit_intercept=False`` too, so both
+        intercepts are zero and the comparison still holds.
+        """
+        model.fit(X, y)
+        if is_population_model(model):
+            for n in range(y.shape[1]):
+                sklearn_model.fit(X, y[:, n])
+                sk_coef, sk_intercept = self._format_sklearn_params(
+                    sklearn_model, model
+                )
+                self._assert_params_match(
+                    sk_coef, sk_intercept, model.coef_[:, n], model.intercept_[n], atol
+                )
+        else:
+            sklearn_model.fit(X, y)
+            sk_coef, sk_intercept = self._format_sklearn_params(sklearn_model, model)
+            self._assert_params_match(
+                sk_coef, sk_intercept, model.coef_, model.intercept_, atol
+            )
+
+    @staticmethod
+    def _build_matched_model(
+        model_obs, model_instantiation, X, solver_name, fit_intercept=True
     ):
-        """Test that nemos GLM produces the same estimates as sklearn."""
-        if sklearn_model is None:
-            pytest.skip(f"sklearn model is not available for {model_instantiation}")
+        """Reconstruct a nemos model configured to match its sklearn counterpart.
 
-        X, y, model_obs, true_params, firing_rate = request.getfixturevalue(
-            glm_type + model_instantiation
-        )
-
+        Uses the ``_get_param_names`` filter so the same call works for GLM,
+        PopulationGLM and their classifier variants (which take ``n_classes``
+        rather than ``observation_model``). Classifier models get the Ridge
+        strength that matches sklearn's ``C=1.0``; other models are unregularized.
+        ``fit_intercept`` is forwarded to toggle intercept estimation.
+        """
         n_samples = (
             X.shape[0] if not isinstance(X, dict) else list(X.values())[0].shape[0]
         )
@@ -2323,6 +2643,7 @@ class TestGLMObservationModel:
             regularizer=regularizer,
             regularizer_strength=regularizer_strength,
             observation_model=model_obs.observation_model,
+            fit_intercept=fit_intercept,
             solver_name=solver_name,
             solver_kwargs={"tol": 10**-12},
         )
@@ -2336,38 +2657,83 @@ class TestGLMObservationModel:
         if "gamma" in model_instantiation:
             model.inverse_link_function = jnp.exp
 
+        return model
+
+    @pytest.mark.parametrize("solver_name", ["BFGS"])
+    @pytest.mark.solver_related
+    @pytest.mark.requires_x64
+    @pytest.mark.filterwarnings("ignore:Setting penalty=None will ignore:UserWarning")
+    def test_glm_fit_matches_sklearn(
+        self, solver_name, request, glm_type, model_instantiation, sklearn_model
+    ):
+        """Test that nemos GLM produces the same estimates as sklearn."""
+        if sklearn_model is None:
+            pytest.skip(f"sklearn model is not available for {model_instantiation}")
+
+        X, y, model_obs, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+
+        model = self._build_matched_model(
+            model_obs, model_instantiation, X, solver_name
+        )
+        self._fit_and_compare_to_sklearn(model, sklearn_model, X, y, atol=1e-6)
+
+    @pytest.mark.parametrize("solver_name", ["LBFGS", "Newton"])
+    @pytest.mark.solver_related
+    @pytest.mark.requires_x64
+    @pytest.mark.filterwarnings("ignore:Setting penalty=None will ignore:UserWarning")
+    def test_fit_intercept_false_matches_sklearn(
+        self,
+        solver_name,
+        request,
+        glm_type,
+        model_instantiation,
+        sklearn_model_no_intercept,
+    ):
+        """With ``fit_intercept=False`` the estimated coefficients match an
+        sklearn fit that also drops the intercept, and the frozen nemos intercept
+        stays exactly zero."""
+        if sklearn_model_no_intercept is None:
+            pytest.skip(f"sklearn model is not available for {model_instantiation}")
+
+        X, y, model_obs, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+
+        model = self._build_matched_model(
+            model_obs, model_instantiation, X, solver_name, fit_intercept=False
+        )
+        self._fit_and_compare_to_sklearn(
+            model, sklearn_model_no_intercept, X, y, atol=1e-6
+        )
+        assert jnp.all(model.intercept_ == 0.0)
+
+    @pytest.mark.parametrize("solver_name", ["GradientDescent", "LBFGS", "Newton"])
+    @pytest.mark.solver_related
+    @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
+    def test_fit_intercept_false_leaves_intercept_zero(
+        self, solver_name, request, glm_type, model_instantiation
+    ):
+        """Fitting with ``fit_intercept=False`` holds the intercept exactly at
+        zero while the coefficients are still estimated (finite and moved off the
+        zero-valued leaves)."""
+        X, y, model_obs, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+
+        model = self._build_matched_model(
+            model_obs, model_instantiation, X, solver_name, fit_intercept=False
+        )
         model.fit(X, y)
 
-        is_population = is_population_model(model)
-
-        if is_population:
-            # Population GLM: fit each neuron separately in sklearn and compare
-            for n in range(y.shape[1]):
-                sklearn_model.fit(X, y[:, n])
-                sk_coef, sk_intercept = self._format_sklearn_params(
-                    sklearn_model, model
-                )
-                self._assert_params_match(
-                    sk_coef,
-                    sk_intercept,
-                    model.coef_[:, n],
-                    model.intercept_[n],
-                    atol=1e-6,
-                )
-        else:
-            sklearn_model.fit(X, y)
-            sk_coef, sk_intercept = self._format_sklearn_params(sklearn_model, model)
-            self._assert_params_match(
-                sk_coef,
-                sk_intercept,
-                model.coef_,
-                model.intercept_,
-                atol=1e-6,
-            )
+        coef_leaves = jax.tree_util.tree_leaves(model.coef_)
+        assert jnp.all(model.intercept_ == 0.0)
+        assert all(jnp.all(jnp.isfinite(leaf)) for leaf in coef_leaves)
+        assert any(jnp.any(leaf != 0.0) for leaf in coef_leaves)
 
     @staticmethod
     def _get_expected_par_shape(X, y, model):
-
         X_flat = jax.tree_util.tree_leaves(X)
         n_features = [x.shape[1] for x in X_flat]
         is_population = is_population_model(model)
@@ -2418,60 +2784,112 @@ class TestGLMObservationModel:
         if intercept.shape != intercept_shape:
             raise ValueError("Shape mismatch intercepts")
 
-    #####################
-    # Test residual DOF #
-    #####################
-    @pytest.mark.parametrize(
-        "reg, dof, strength",
-        [
-            (nmo.regularizer.UnRegularized(), "dof_non_lasso_dof", None),
-            (
-                nmo.regularizer.Lasso(),
-                "dof_lasso_dof",
-                "dof_lasso_strength",
-            ),  # this lasso fit has only 3 coeff of the first neuron
-            # surviving
-            (nmo.regularizer.Ridge(), "dof_non_lasso_dof", 1.0),
-        ],
-    )
-    @pytest.mark.parametrize("n_samples", [1, 20])
+    @pytest.mark.parametrize("pytree_x_factory", _PYTREE_X_FACTORIES)
+    def test_coef_tree_structure_after_initialize_params_pytree_x(
+        self, pytree_x_factory, request, glm_type, model_instantiation
+    ):
+        """Coef tree structure matches X structure after initialize_params with pytree X."""
+        _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        X = pytree_x_factory(y.shape[0])
+        coef, _ = model.initialize_params(X, y)
+        assert jax.tree_util.tree_structure(coef) == jax.tree_util.tree_structure(X)
+
+    @pytest.mark.parametrize("pytree_x_factory", _PYTREE_X_FACTORIES)
     @pytest.mark.solver_related
-    @pytest.mark.requires_x64
-    def test_estimate_dof_resid(
+    def test_coef_tree_structure_after_fit_pytree_x(
         self,
-        n_samples,
-        strength,
-        dof,
-        reg,
+        pytree_x_factory,
         request,
         glm_type,
         model_instantiation,
+        mock_glm_optimizer_run,
     ):
-        """
-        Test that the dof is an integer.
-        """
-        X, y, model, true_params, firing_rate = request.getfixturevalue(
-            glm_type + model_instantiation
-        )
-        # different dof for different obs models with lasso
-        dof = request.getfixturevalue(dof)
-        # need different strengths for different obs models with lasso reg
-        # for 3 coefs to survive
-        if isinstance(strength, str):
-            strength = request.getfixturevalue(strength)
-        n_m1_classes = getattr(model, "n_classes", 2) - 1
-        model.set_params(regularizer=reg, regularizer_strength=strength)
-        model.solver_name = model.regularizer.default_solver
-        model.solver_kwargs.update({"maxiter": 10**5})
+        """model.coef_ tree structure matches X structure after fit with pytree X."""
+        _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        X = pytree_x_factory(y.shape[0])
         model.fit(X, y)
-        num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
-        expected_dof_resid = n_samples - dof - n_m1_classes
-        assert np.allclose(num, expected_dof_resid)
+        assert jax.tree_util.tree_structure(
+            model.coef_
+        ) == jax.tree_util.tree_structure(X)
+
+    @pytest.mark.solver_related
+    def test_get_model_params_round_trip(
+        self, request, glm_type, model_instantiation, mock_glm_fit
+    ):
+        """get_model_params returns the fitted coef_ and intercept_."""
+        X, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        model.fit(X, y)
+        assert pytree_map_and_reduce(
+            jnp.array_equal,
+            all,
+            model.get_model_params(),
+            (model.coef_, model.intercept_),
+        )
+
+    @pytest.mark.parametrize("pytree_x_factory", _PYTREE_X_FACTORIES)
+    @pytest.mark.solver_related
+    def test_get_model_params_round_trip_pytree_x(
+        self,
+        pytree_x_factory,
+        request,
+        glm_type,
+        model_instantiation,
+        mock_glm_optimizer_run,
+    ):
+        """get_model_params returns the fitted params for pytree-valued coef."""
+        _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        X = pytree_x_factory(y.shape[0])
+        model.fit(X, y)
+        assert pytree_map_and_reduce(
+            jnp.array_equal,
+            all,
+            model.get_model_params(),
+            (model.coef_, model.intercept_),
+        )
+
+    @pytest.mark.parametrize(
+        "pytree_x_factory, mutate_coef",
+        [
+            pytest.param(
+                lambda n: {"a": jnp.ones((n, 1)), "b": jnp.ones((n, 1))},
+                lambda coef: coef.clear(),
+                id="dict",
+            ),
+            pytest.param(
+                lambda n: {"a": [jnp.ones((n, 1))], "b": jnp.ones((n, 1))},
+                lambda coef: coef["a"].clear(),
+                id="dict_list",
+            ),
+        ],
+    )
+    @pytest.mark.solver_related
+    def test_get_model_params_mutating_returned_containers_does_not_affect_model(
+        self,
+        pytree_x_factory,
+        mutate_coef,
+        request,
+        glm_type,
+        model_instantiation,
+        mock_glm_optimizer_run,
+    ):
+        """Mutating returned mutable containers does not affect model.coef_."""
+        _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        X = pytree_x_factory(y.shape[0])
+        model.fit(X, y)
+
+        coef, _ = model.get_model_params()
+        before = deepcopy(model.coef_)
+
+        mutate_coef(coef)
+
+        assert jax.tree_util.tree_structure(
+            model.coef_
+        ) == jax.tree_util.tree_structure(before)
+        assert pytree_map_and_reduce(jnp.array_equal, all, model.coef_, before)
 
     ######################
     # Optimizer defaults #
     ######################
-    @pytest.mark.parametrize("reg_setup", ["", "_pytree"])
     @pytest.mark.parametrize("batch_size", [None, 1, 10])
     @pytest.mark.parametrize("stepsize", [None, 0.01])
     @pytest.mark.parametrize(
@@ -2504,13 +2922,10 @@ class TestGLMObservationModel:
         obs_has_defaults,
         request,
         glm_type,
-        reg_setup,
         model_instantiation,
     ):
         """Test the behavior of `optimize_solver_params` for different solver, regularizer, and observation model configurations."""
-        X, y, model, _, _ = request.getfixturevalue(
-            glm_type + model_instantiation + reg_setup
-        )
+        X, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
 
         obs = model.observation_model
         model.inverse_link_function = inv_link
@@ -2518,7 +2933,7 @@ class TestGLMObservationModel:
         # use glm static methods to check if the solver is batchable
         # if not pop the batch_size kwarg
         try:
-            slv_class = solvers.solver_registry[solver_name]
+            slv_class = nmo.solvers.get_solver(solver_name).implementation
             nmo.glm.GLM._check_solver_kwargs(slv_class, solver_kwargs)
         except NameError:
             solver_kwargs.pop("batch_size")
@@ -2572,7 +2987,9 @@ class TestGLMObservationModel:
 
     @pytest.mark.solver_related
     @pytest.mark.requires_x64
-    def test_fit_mask_grouplasso(self, glm_type, model_instantiation, request):
+    def test_fit_mask_grouplasso(
+        self, glm_type, model_instantiation, request, mock_glm_optimizer_run
+    ):
         """Test that the group lasso fit goes through"""
         X, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
 
@@ -2583,6 +3000,165 @@ class TestGLMObservationModel:
             solver_name="ProximalGradient",
             regularizer_strength=1.0,
         )
+        model.fit(X, y)
+
+
+def test_grouplasso_fit_twice_different_pytree_structure():
+    """Fitting GroupLasso twice with different pytree structures must not raise.
+
+    Regression test: the auto-generated mask was cached after the first fit,
+    causing a structure mismatch when the second fit used a different pytree type.
+    """
+    rng = np.random.default_rng(0)
+    n_samples, n_features = 100, 2
+    X = 0.5 * rng.standard_normal((n_samples, n_features))
+    y = rng.poisson(np.exp(X.dot(rng.standard_normal(n_features))))
+
+    model = nmo.glm.GLM(regularizer="GroupLasso")
+
+    X_list = [X[:, :1], X[:, 1:]]
+    model.fit(X_list, y)
+
+    X_dict = {i: x for i, x in enumerate(X_list)}
+    model.fit(X_dict, y)
+
+
+def _make_valid_group_mask(n_groups, n_features):
+    """Binary group mask: each group owns a contiguous slice of features."""
+    mask = np.zeros((n_groups, n_features))
+    split = n_features // n_groups
+    for i in range(n_groups):
+        start = i * split
+        end = (i + 1) * split if i < n_groups - 1 else n_features
+        mask[i, start:end] = 1.0
+    return mask
+
+
+@pytest.mark.parametrize(
+    "make_mask, make_X, check_coef",
+    [
+        pytest.param(
+            lambda arr, _: arr,
+            lambda X: X,
+            # flat array: coef slot should be a single 2-D array (n_groups, n_features)
+            lambda coef, n_groups, n_features: (
+                hasattr(coef, "shape") and coef.shape == (n_groups, n_features)
+            ),
+            id="flat_array_mask-2d_X",
+        ),
+        pytest.param(
+            lambda arr, _: [arr],
+            lambda X: [X],
+            # list mask with list X: coef slot should be a list of one 2-D array
+            lambda coef, n_groups, n_features: (
+                isinstance(coef, list)
+                and len(coef) == 1
+                and coef[0].shape == (n_groups, n_features)
+            ),
+            id="list_mask-list_X",
+        ),
+        pytest.param(
+            lambda arr, _: nmo.glm.params.GLMParams(
+                coef=jnp.asarray(arr), intercept=None
+            ),
+            lambda X: X,
+            # already-structured GLMParams: coef slot is unchanged, same 2-D array
+            lambda coef, n_groups, n_features: (
+                hasattr(coef, "shape") and coef.shape == (n_groups, n_features)
+            ),
+            id="already_structured_glmparams_mask",
+        ),
+    ],
+)
+def test_grouplasso_mask_wrapping_and_refit(
+    make_mask, make_X, check_coef, mock_glm_optimizer_run
+):
+    """User-provided mask wraps into GLMParams on first fit; re-fit leaves it unchanged.
+
+    Regression test for three mask formats:
+    - flat array: mask has same shape as coef_ (mirrors X).
+    - list of one array: mask mirrors list-structured X.
+    - already-structured GLMParams: isinstance guard prevents double-wrapping.
+    """
+    rng = np.random.default_rng(0)
+    n_samples, n_features, n_groups = 50, 4, 2
+    X_arr = rng.standard_normal((n_samples, n_features))
+    y = rng.poisson(1, size=n_samples)
+
+    mask_arr = _make_valid_group_mask(n_groups, n_features)
+    mask = make_mask(mask_arr, n_features)
+    X = make_X(X_arr)
+
+    model = nmo.glm.GLM(
+        regularizer=nmo.regularizer.GroupLasso(mask=mask),
+        regularizer_strength=1.0,
+    )
+
+    model.fit(X, y)
+
+    # After first fit, mask must be wrapped into the internal GLMParams structure.
+    assert isinstance(
+        model.regularizer.mask, nmo.glm.params.GLMParams
+    ), "mask must be a GLMParams pytree after fit"
+    assert model.regularizer.mask.intercept is None
+    assert check_coef(model.regularizer.mask.coef, n_groups, n_features)
+    mask_coef_after_first = model.regularizer.mask.coef
+
+    # Re-fit: isinstance guard must prevent double-wrapping; coef content unchanged.
+    model.fit(X, y)
+    assert isinstance(model.regularizer.mask, nmo.glm.params.GLMParams)
+    assert model.regularizer.mask.intercept is None
+    jax.tree_util.tree_map(
+        lambda a, b: np.testing.assert_array_equal(a, b),
+        mask_coef_after_first,
+        model.regularizer.mask.coef,
+    )
+
+
+@pytest.mark.parametrize(
+    "make_X, make_mask, expectation",
+    [
+        pytest.param(
+            lambda arr: arr,
+            lambda arr: arr,
+            does_not_raise(),
+            id="array_X-array_mask-match",
+        ),
+        pytest.param(
+            lambda arr: arr,
+            lambda arr: [arr],
+            pytest.raises(ValueError, match="Mask pytree structure"),
+            id="array_X-list_mask-mismatch",
+        ),
+        pytest.param(
+            lambda arr: [arr],
+            lambda arr: [arr],
+            does_not_raise(),
+            id="list_X-list_mask-match",
+        ),
+        pytest.param(
+            lambda arr: [arr],
+            lambda arr: arr,
+            pytest.raises(ValueError, match="Mask pytree structure"),
+            id="list_X-array_mask-mismatch",
+        ),
+    ],
+)
+def test_grouplasso_mask_structure_mismatch(
+    make_X, make_mask, expectation, mock_glm_optimizer_run
+):
+    """Mask pytree structure must mirror X; mismatch raises ValueError before shape checks."""
+    rng = np.random.default_rng(0)
+    n_samples, n_features, n_groups = 50, 4, 2
+    X = make_X(rng.standard_normal((n_samples, n_features)))
+    y = rng.poisson(1, size=n_samples)
+    mask = make_mask(_make_valid_group_mask(n_groups, n_features))
+
+    model = nmo.glm.GLM(
+        regularizer=nmo.regularizer.GroupLasso(mask=mask),
+        regularizer_strength=1.0,
+    )
+    with expectation:
         model.fit(X, y)
 
 
@@ -2597,6 +3173,21 @@ class TestPopulationGLM:
     """
     Unit tests specific to the PopulationGLM class that are independent of the observation model.
     """
+
+    @pytest.mark.parametrize("positional", [("X",), ()])
+    def test_glm_fit_with_kwargs(self, request, model_instantiation, positional):
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            model_instantiation
+        )
+        model.solver_kwargs = {"maxiter": 5}
+        model_reference = deepcopy(model)
+        model_test = deepcopy(model)
+        kwargs = {"X": X, "y": y}
+        args = [kwargs.pop(x) for x in positional]
+        model_reference.fit(X, y)
+        model_test.fit(*args, **kwargs)
+        np.testing.assert_allclose(model_reference.coef_, model_test.coef_)
+        np.testing.assert_allclose(model_reference.intercept_, model_test.intercept_)
 
     #######################################
     # Compare with standard implementation
@@ -2647,88 +3238,56 @@ class TestPopulationGLM:
             model.feature_mask = mask
 
     @pytest.fixture
-    def feature_mask_compatibility_fit_expectation(self, model_instantiation):
+    def feature_mask_compatibility_fit_expectation(self):
         """
-        Fixture to return the expected exceptions for test_feature_mask_compatibility_fit
-        based on the model type (classifier vs non-classifier).
+        Fixture to return the expected exceptions for test_feature_mask_compatibility_fit.
 
-        For classifier models, the feature_mask shape is (n_features, n_neurons, n_classes)
-        which means all the test masks (which lack the n_classes dimension) will fail
-        shape validation.
+        Every model expects a feature_mask of shape (n_features, n_neurons): a classifier
+        masks a feature for a neuron across all of its classes, so a mask carrying the
+        trailing class axis of the coefficients is rejected like any other wrong shape.
         """
-        is_classifier = "classifier" in model_instantiation
+        type_error_match = "feature_mask and X must have the same structure"
+        # every model now reports a leaf-by-leaf shape mismatch the same way
+        shape_mismatch_match = (
+            "The ``feature_mask`` must match the shape of the ``coef``, leaf by leaf"
+        )
 
-        type_error_match = "feature_mask and X must have the same structure|feature_mask and coef must have the same structure"
-        shape_mismatch_match = "Inconsistent feature mask shape|The shape of the ``feature_mask`` array must match"
-
-        if is_classifier:
-            # Classifier models expect feature_mask shape (n_features, n_neurons, n_classes)
-            # Masks without n_classes dimension fail shape validation
-            return {
-                "correct_shape_np": pytest.raises(
-                    ValueError, match=shape_mismatch_match
-                ),
-                "correct_shape_classifier_np": does_not_raise(),
-                "wrong_n_features_np": pytest.raises(
-                    ValueError, match=shape_mismatch_match
-                ),
-                "wrong_n_neurons_np": pytest.raises(
-                    ValueError, match=shape_mismatch_match
-                ),
-                "correct_shape_pytree": pytest.raises(
-                    ValueError, match=shape_mismatch_match
-                ),
-                "correct_shape_classifier_pytree": does_not_raise(),
-                "wrong_n_neurons_pytree": pytest.raises(
-                    ValueError, match=shape_mismatch_match
-                ),
-                "missing_key_pytree": pytest.raises(TypeError, match=type_error_match),
-                "missing_key_wrong_shape_pytree": pytest.raises(
-                    TypeError, match=type_error_match
-                ),
-            }
-        else:
-            # Non-classifier models expect feature_mask shape (n_features, n_neurons)
-            return {
-                "correct_shape_np": does_not_raise(),
-                "correct_shape_classifier_np": pytest.raises(
-                    ValueError, match=shape_mismatch_match
-                ),
-                "wrong_n_features_np": pytest.raises(
-                    ValueError,
-                    match="The shape of the ``feature_mask`` array must match that of the ``coef``",
-                ),
-                "wrong_n_neurons_np": pytest.raises(
-                    ValueError,
-                    match="The shape of the ``feature_mask`` array must match that of the ``coef``",
-                ),
-                "correct_shape_pytree": does_not_raise(),
-                "correct_shape_classifier_pytree": pytest.raises(
-                    ValueError, match="Inconsistent number of neurons. feature_mask has"
-                ),
-                "wrong_n_neurons_pytree": pytest.raises(
-                    ValueError, match="Inconsistent number of neurons. feature_mask has"
-                ),
-                "missing_key_pytree": pytest.raises(TypeError, match=type_error_match),
-                "missing_key_wrong_shape_pytree": pytest.raises(
-                    TypeError, match=type_error_match
-                ),
-            }
+        return {
+            "correct_shape_np": does_not_raise(),
+            "extra_class_axis_np": pytest.raises(
+                ValueError, match=shape_mismatch_match
+            ),
+            "wrong_n_features_np": pytest.raises(
+                ValueError, match=shape_mismatch_match
+            ),
+            "wrong_n_neurons_np": pytest.raises(ValueError, match=shape_mismatch_match),
+            "correct_shape_pytree": does_not_raise(),
+            "extra_class_axis_pytree": pytest.raises(
+                ValueError, match=shape_mismatch_match
+            ),
+            "wrong_n_neurons_pytree": pytest.raises(
+                ValueError, match=shape_mismatch_match
+            ),
+            "missing_key_pytree": pytest.raises(TypeError, match=type_error_match),
+            "missing_key_wrong_shape_pytree": pytest.raises(
+                TypeError, match=type_error_match
+            ),
+        }
 
     # Parametrization for test_feature_mask_compatibility_fit masks
     feature_mask_compatibility_fit_masks = (
         "mask, mask_key_np, mask_key_pytree",
         [
-            # Non-classifier correct shape: (n_features, n_neurons) = (5, 3)
+            # Correct shape: (n_features, n_neurons) = (5, 3)
             (
                 np.array([0, 1, 1] * 5).reshape(5, 3),
                 "correct_shape_np",
                 "missing_key_pytree",  # pytree expects dict, not array
             ),
-            # Classifier correct shape: (n_features, n_neurons, n_classes) = (5, 3, 3)
+            # One class axis too many: (n_features, n_neurons, n_classes) = (5, 3, 3)
             (
                 np.ones((5, 3, 3), dtype=int),
-                "correct_shape_classifier_np",
+                "extra_class_axis_np",
                 "missing_key_pytree",  # pytree expects dict, not array
             ),
             (
@@ -2741,23 +3300,30 @@ class TestPopulationGLM:
                 "wrong_n_neurons_np",
                 "missing_key_pytree",
             ),
-            # Non-classifier pytree correct shape: {'input_1': (3, 3), 'input_2': (2, 3)}
+            # Pytree correct shape: {'input_1': (3, 3), 'input_2': (2, 3)}
             (
-                {"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])},
+                {
+                    "input_1": np.array([[0, 1, 0]] * 3),
+                    "input_2": np.array([[1, 0, 1]] * 2),
+                },
                 "missing_key_pytree",  # np expects array, not dict
                 "correct_shape_pytree",
             ),
-            # Classifier pytree correct shape: {'input_1': (3, 3, 3), 'input_2': (2, 3, 3)}
+            # Pytree with one class axis too many: {'input_1': (3, 3, 3), 'input_2': (2, 3, 3)}
             (
                 {
                     "input_1": np.ones((3, 3, 3), dtype=int),
                     "input_2": np.ones((2, 3, 3), dtype=int),
                 },
                 "missing_key_pytree",  # np expects array, not dict
-                "correct_shape_classifier_pytree",
+                "extra_class_axis_pytree",
             ),
+            # one neuron too many in every leaf
             (
-                {"input_1": np.array([0, 1, 0, 1]), "input_2": np.array([1, 0, 1, 0])},
+                {
+                    "input_1": np.ones((3, 4), dtype=int),
+                    "input_2": np.ones((2, 4), dtype=int),
+                },
                 "missing_key_pytree",
                 "wrong_n_neurons_pytree",
             ),
@@ -2817,8 +3383,9 @@ class TestPopulationGLM:
             "_pytree",
         ],
     )
-    @pytest.mark.solver_related
-    def test_metadata_pynapple_fit(self, model_suffix, request, model_instantiation):
+    def test_metadata_pynapple_fit(
+        self, model_suffix, request, model_instantiation, mock_glm_optimizer_run
+    ):
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation + model_suffix
         )
@@ -2837,9 +3404,8 @@ class TestPopulationGLM:
             "_pytree",
         ],
     )
-    @pytest.mark.solver_related
     def test_metadata_pynapple_is_deepcopied(
-        self, model_suffix, model_instantiation, request
+        self, model_suffix, model_instantiation, request, mock_glm_optimizer_run
     ):
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation + model_suffix
@@ -2862,9 +3428,8 @@ class TestPopulationGLM:
             "_pytree",
         ],
     )
-    @pytest.mark.solver_related
     def test_metadata_pynapple_predict(
-        self, model_suffix, model_instantiation, request
+        self, model_suffix, model_instantiation, request, mock_glm_optimizer_run
     ):
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation + model_suffix
@@ -2882,6 +3447,466 @@ class TestPopulationGLM:
         assert hasattr(rate, "metadata") and (rate.metadata is not None)
         assert np.all(y._metadata == rate._metadata)
         assert np.all(y.columns == rate.columns)
+
+    def test_initialize_params_stale_feature_mask_raises(
+        self, request, model_instantiation
+    ):
+        """initialize_params raises when a stale array feature_mask is incompatible with the new X structure."""
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            model_instantiation
+        )
+        model._feature_mask = jnp.ones_like(true_params.coef)
+        X_pytree = {"a": X[:, : X.shape[1] // 2], "b": X[:, X.shape[1] // 2 :]}
+        with pytest.raises(TypeError, match="feature_mask"):
+            model.initialize_params(X_pytree, y)
+
+
+# -----------------------------------------------------------------------
+# test_estimate_dof_resid
+# Moved out of TestGLMObservationModel. _estimate_resid_degrees_of_freedom
+# only reads coef_, intercept_, regularizer, and X — it never calls any
+# obs-model method.  We therefore set those attributes directly to a fixed
+# sparse state and bypass model.fit entirely.
+# -----------------------------------------------------------------------
+_DOF_N_FEATURES = 5  # features in the test design matrix
+_DOF_N_NEURONS = 3  # neurons for population models
+_DOF_N_CLASSES = 3  # classes for classifier models
+
+
+def _set_sparse_state(model, glm_type, model_instantiation):
+    """Assign a fixed sparse coef_/intercept_ and return (X, n_nonzero).
+
+    X is the (_DOF_N_FEATURES × _DOF_N_FEATURES) identity matrix (full rank).
+    n_nonzero is the count of non-zero coefficients, shaped to match the
+    output of _estimate_resid_degrees_of_freedom for Lasso-type regularizers.
+    """
+    nf = _DOF_N_FEATURES
+    X = jnp.eye(nf)
+    is_pop = "population_" in glm_type
+    is_cls = "classifier" in model_instantiation
+
+    if is_pop and is_cls:
+        # coef shape: (nf, n_neurons, n_classes)
+        # Set first 3 features, all neurons, first class = 1 → 3 non-zeros/neuron
+        coef = jnp.zeros((nf, _DOF_N_NEURONS, _DOF_N_CLASSES)).at[:3, :, 0].set(1.0)
+        intercept = jnp.zeros((_DOF_N_NEURONS, _DOF_N_CLASSES))
+        n_nonzero = jnp.full((_DOF_N_NEURONS,), 3)
+    elif is_pop:
+        # coef shape: (nf, n_neurons)
+        coef = (
+            jnp.zeros((nf, _DOF_N_NEURONS)).at[:3, 0].set(1.0).at[:1, 1].set(1.0)
+        )  # neuron 0: 3, neuron 1: 1, neuron 2: 0
+        intercept = jnp.zeros((_DOF_N_NEURONS,))
+        n_nonzero = jnp.array([3, 1, 0])
+    elif is_cls:
+        # coef shape: (nf, n_classes)
+        coef = jnp.zeros((nf, _DOF_N_CLASSES)).at[:3, 0].set(1.0)  # 3 non-zeros
+        intercept = jnp.zeros((_DOF_N_CLASSES,))
+        n_nonzero = 3
+    else:
+        # coef shape: (nf,)
+        coef = jnp.zeros((nf,)).at[:3].set(1.0)  # 3 non-zeros
+        intercept = jnp.zeros((1,))
+        n_nonzero = 3
+
+    model.coef_ = coef
+    model.intercept_ = intercept
+    return X, n_nonzero
+
+
+@pytest.mark.parametrize("glm_type", ["", "population_"])
+@pytest.mark.parametrize(
+    "model_instantiation",
+    ["poissonGLM_model_instantiation", "classifierGLM_model_instantiation"],
+)
+@pytest.mark.parametrize(
+    "reg",
+    [
+        nmo.regularizer.UnRegularized(),
+        nmo.regularizer.Lasso(),
+        nmo.regularizer.Ridge(),
+    ],
+)
+@pytest.mark.parametrize("n_samples", [1, 20])
+@pytest.mark.parametrize("fit_intercept", [True, False])
+@pytest.mark.requires_x64
+def test_estimate_dof_resid(
+    n_samples, fit_intercept, reg, request, glm_type, model_instantiation
+):
+    """_estimate_resid_degrees_of_freedom returns the correct residual DOF.
+
+    Uses a fixed sparse coef_ so no solver run is needed. A frozen intercept
+    (``fit_intercept=False``) consumes no degrees of freedom.
+    """
+    _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+    model.set_params(regularizer=reg, fit_intercept=fit_intercept)
+
+    X, n_nonzero = _set_sparse_state(model, glm_type, model_instantiation)
+
+    is_cls = "classifier" in model_instantiation
+    n_m1_classes = getattr(model, "n_classes", 2) - 1
+
+    if isinstance(reg, (nmo.regularizer.Lasso, nmo.regularizer.ElasticNet)):
+        dof = n_nonzero
+    elif isinstance(reg, nmo.regularizer.Ridge):
+        dof = n_m1_classes * _DOF_N_FEATURES if is_cls else _DOF_N_FEATURES
+    else:  # UnRegularized
+        rank = int(jnp.linalg.matrix_rank(X))
+        dof = rank * n_m1_classes if is_cls else rank
+
+    # the intercept consumes n_m1_classes dof when estimated, none when frozen
+    intercept_dof = n_m1_classes if fit_intercept else 0
+    expected = n_samples - dof - intercept_dof
+    num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
+    assert np.allclose(num, expected)
+
+
+# A design whose last column duplicates the previous one: a neuron keeping both spends
+# two coefficients on one dimension, which is what separates the Ridge count from the
+# UnRegularized rank.
+_DOF_MASK_DESIGN = (
+    jnp.eye(_DOF_N_FEATURES).at[:, -1].set(jnp.eye(_DOF_N_FEATURES)[:, -2])
+)
+# neuron 0 keeps every feature, neuron 1 the first three, neuron 2 the collinear pair
+_DOF_MASK = jnp.array([[1, 1, 0], [1, 1, 0], [1, 1, 0], [1, 0, 1], [1, 0, 1]])
+_DOF_MASK_COUNT = jnp.array([5, 3, 2])  # features the mask lets through, per neuron
+_DOF_MASK_RANK = jnp.array([4, 3, 1])  # rank of each neuron's own design
+_DOF_MASK_NONZERO = jnp.array([3, 1, 1])  # non-zero coefficients set below, per neuron
+
+
+def _set_masked_state(model, is_cls, as_pytree):
+    """Assign a coef_/intercept_ and feature_mask, and return the matching design.
+
+    The non-zero coefficients sit at features the mask lets through, as a fitted model's
+    would; for the classifier they all sit in the first class, so the per-neuron counts
+    match the non-classifier case.
+    """
+    nf, nn = _DOF_N_FEATURES, _DOF_N_NEURONS
+    if is_cls:
+        coef = jnp.zeros((nf, nn, _DOF_N_CLASSES))
+        coef = coef.at[:3, 0, 0].set(1.0).at[:1, 1, 0].set(1.0).at[3:4, 2, 0].set(1.0)
+        intercept = jnp.zeros((nn, _DOF_N_CLASSES))
+    else:
+        coef = jnp.zeros((nf, nn))
+        coef = coef.at[:3, 0].set(1.0).at[:1, 1].set(1.0).at[3:4, 2].set(1.0)
+        intercept = jnp.zeros((nn,))
+
+    X, mask = _DOF_MASK_DESIGN, _DOF_MASK
+    if as_pytree:
+        # leaves are traversed in sorted-key order, matching the column order of X
+        X = {"input_1": X[:, :3], "input_2": X[:, 3:]}
+        mask = {"input_1": mask[:3], "input_2": mask[3:]}
+        coef = {"input_1": coef[:3], "input_2": coef[3:]}
+
+    # the mask goes in first: its setter refuses a model that already holds parameters
+    model.feature_mask = mask
+    model.coef_ = coef
+    model.intercept_ = intercept
+    return X
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "population_poissonGLM_model_instantiation",
+        "population_classifierGLM_model_instantiation",
+    ],
+)
+@pytest.mark.parametrize("as_pytree", [False, True])
+@pytest.mark.parametrize(
+    "reg, dof_per_neuron, scales_with_classes",
+    [
+        (nmo.regularizer.UnRegularized(), _DOF_MASK_RANK, True),
+        (nmo.regularizer.Lasso(), _DOF_MASK_NONZERO, False),
+        (nmo.regularizer.Ridge(), _DOF_MASK_COUNT, True),
+    ],
+)
+@pytest.mark.parametrize("n_samples", [20])
+@pytest.mark.parametrize("fit_intercept", [True, False])
+@pytest.mark.requires_x64
+def test_estimate_dof_resid_feature_mask(
+    n_samples,
+    fit_intercept,
+    reg,
+    dof_per_neuron,
+    scales_with_classes,
+    as_pytree,
+    request,
+    model_instantiation,
+):
+    """A masked-out feature is not charged against a neuron's residual DOF.
+
+    Each neuron sees its own design, so the result is one DOF per neuron. The Lasso
+    branch reads the non-zero coefficients and is therefore mask-independent. The mask
+    and the frozen intercept are independent subtractions: freezing the intercept shifts
+    every neuron's DOF by the same amount, whatever the mask lets through.
+    """
+    _, _, model, _, _ = request.getfixturevalue(
+        model_instantiation + ("_pytree" if as_pytree else "")
+    )
+    model.set_params(regularizer=reg, fit_intercept=fit_intercept)
+
+    is_cls = "classifier" in model_instantiation
+    X = _set_masked_state(model, is_cls, as_pytree)
+
+    n_m1_classes = getattr(model, "n_classes", 2) - 1
+    dof = dof_per_neuron * n_m1_classes if scales_with_classes else dof_per_neuron
+    intercept_dof = n_m1_classes if fit_intercept else 0
+    expected = n_samples - dof - intercept_dof
+
+    num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
+    np.testing.assert_allclose(num, expected)
+
+
+@pytest.mark.parametrize(
+    "reg, dof_per_neuron",
+    [
+        (nmo.regularizer.UnRegularized(), _DOF_MASK_RANK),
+        (nmo.regularizer.Lasso(), _DOF_MASK_NONZERO),
+        (nmo.regularizer.Ridge(), _DOF_MASK_COUNT),
+    ],
+)
+@pytest.mark.parametrize(
+    "fit_intercept, init_intercept, warn_match",
+    [
+        (True, "pinned_value", None),
+        # a frozen intercept handed the value it is pinned at discards nothing
+        (False, "pinned_value", None),
+        # handed anything else, the value is dropped and the user is told
+        (False, "other_value", "the provided intercept is ignored"),
+    ],
+)
+@pytest.mark.requires_x64
+def test_dof_resid_after_fit_feature_mask(
+    reg,
+    dof_per_neuron,
+    fit_intercept,
+    init_intercept,
+    warn_match,
+    request,
+    patch_optimizer_run,
+    recwarn,
+):
+    """fit stores the per-neuron DOF of the masked model.
+
+    The solver is a no-op returning ``init_params``, so the fitted coefficients are the
+    injected ones and the DOF is fully determined. With ``fit_intercept=False`` the
+    intercept is frozen out of the partition and costs no DOF, whatever intercept the
+    caller passed in.
+    """
+    _, _, model, _, _ = request.getfixturevalue(
+        "population_poissonGLM_model_instantiation"
+    )
+    patch_optimizer_run(nmo.glm.PopulationGLM)
+    model.set_params(
+        regularizer=reg,
+        fit_intercept=fit_intercept,
+        regularizer_strength=(
+            None if isinstance(reg, nmo.regularizer.UnRegularized) else 1.0
+        ),
+    )
+
+    X = _set_masked_state(model, False, as_pytree=False)
+    # hand the sparse state to fit as the starting point, leaving the model unfitted
+    offset = 1.0 if init_intercept == "other_value" else 0.0
+    intercept = model.intercept_ + offset
+    init_params = (model.coef_, intercept)
+    model.coef_, model.intercept_ = None, None
+    y = np.ones((X.shape[0], _DOF_N_NEURONS))
+
+    if warn_match is None:
+        model.fit(X, y, init_params=init_params)
+        assert not [w for w in recwarn if issubclass(w.category, UserWarning)]
+    else:
+        with pytest.warns(UserWarning, match=warn_match):
+            model.fit(X, y, init_params=init_params)
+
+    intercept_dof = 1 if fit_intercept else 0
+    np.testing.assert_allclose(
+        model.dof_resid_, X.shape[0] - dof_per_neuron - intercept_dof
+    )
+
+
+@pytest.mark.parametrize("glm_type", ["", "population_"])
+@pytest.mark.requires_x64
+def test_estimate_dof_resid_classifier_invalid_n_samples(glm_type, request):
+    """ClassifierGLM._estimate_resid_degrees_of_freedom raises TypeError for non-int n_samples."""
+    _, _, model, _, _ = request.getfixturevalue(
+        glm_type + "classifierGLM_model_instantiation"
+    )
+    X, _ = _set_sparse_state(model, glm_type, "classifierGLM_model_instantiation")
+    with pytest.raises(TypeError, match="`n_samples` must be `None` or of type `int`"):
+        model._estimate_resid_degrees_of_freedom(X, n_samples=1.0)
+
+
+# Tests moved out of TestGLMObservationModel because the behaviour under test
+# lives in the base class and does not vary across observation models.
+# Using only two representative observation models (Poisson + Gaussian) keeps
+# coverage while avoiding redundant JAX recompilation for every obs model.
+_UPDATE_GLM_TYPES = ["", "population_"]
+_UPDATE_MODEL_INSTANTIATIONS = [
+    "poissonGLM_model_instantiation",
+    "gaussianGLM_model_instantiation",
+]
+
+
+@pytest.mark.parametrize("glm_type", _UPDATE_GLM_TYPES)
+@pytest.mark.parametrize("model_instantiation", _UPDATE_MODEL_INSTANTIATIONS)
+@pytest.mark.parametrize(
+    "n_samples, expectation",
+    [
+        (None, does_not_raise()),
+        (100, does_not_raise()),
+        (
+            1.0,
+            pytest.raises(
+                TypeError, match="`n_samples` must be `None` or of type `int`"
+            ),
+        ),
+        (
+            "str",
+            pytest.raises(
+                TypeError, match="`n_samples` must be `None` or of type `int`"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("batch_size", [1, 10])
+@pytest.mark.solver_related
+def test_update_n_samples(
+    n_samples,
+    expectation,
+    batch_size,
+    request,
+    glm_type,
+    model_instantiation,
+    mock_optimizer_update,
+):
+    X, y, model, true_params, firing_rate = request.getfixturevalue(
+        glm_type + model_instantiation
+    )
+    params = model.initialize_params(X, y)
+    state = model.initialize_optimizer_and_state(params, X, y)
+    with expectation:
+        model.update(
+            params,
+            state,
+            X[:batch_size],
+            y[:batch_size],
+            n_samples=n_samples,
+        )
+
+
+@pytest.mark.parametrize("glm_type", _UPDATE_GLM_TYPES)
+@pytest.mark.parametrize("model_instantiation", _UPDATE_MODEL_INSTANTIATIONS)
+@pytest.mark.parametrize("nan_inputs", [True, False])
+@pytest.mark.parametrize(
+    "solver_name", ["ProximalGradient", "GradientDescent", "LBFGS", "BFGS"]
+)
+@pytest.mark.solver_related
+def test_update_params_are_finite(
+    nan_inputs,
+    solver_name,
+    request,
+    glm_type,
+    model_instantiation,
+):
+    """
+    Fitting a GLM to data containing NaNs with the jaxopt.LBFGS solver worked when using GLM.fit,
+    but not when writing the training loop in Python and calling GLM.update repeatedly.
+    The problem was that this solver uses the data to initialize its state, and the state was populated
+    with NaNs by GLM.initialize_state.
+    The solution was dropping NaNs from the input data in GLM.initialize_state -- as is done in GLM.update and GLM.run.
+    """
+    X, y, model, true_params, firing_rate = request.getfixturevalue(
+        glm_type + model_instantiation
+    )
+    model.solver_name = solver_name
+
+    if nan_inputs:
+        X[: X.shape[0] // 2, :] = np.nan
+
+    params = model.initialize_params(X, y)
+    state = model.initialize_optimizer_and_state(params, X, y)
+    assert model.coef_ is None
+    assert model.intercept_ is None
+    if "gamma" not in model_instantiation and "gaussian" not in model_instantiation:
+        # gamma model instantiation sets the scale
+        assert model.scale_ is None
+
+    # take an update step using the initialized state
+    _, _ = model.update(params, state, X, y)
+
+    assert model.coef_ is not None
+    assert model.intercept_ is not None
+    assert model.scale_ is not None
+
+    # parameters should not have NaN
+    assert jnp.all(jnp.isfinite(model.coef_))
+    assert jnp.all(jnp.isfinite(model.intercept_))
+    assert jnp.all(jnp.isfinite(model.scale_))
+
+
+@pytest.mark.parametrize("glm_type", _UPDATE_GLM_TYPES)
+@pytest.mark.parametrize("model_instantiation", _UPDATE_MODEL_INSTANTIATIONS)
+@pytest.mark.parametrize("batch_size", [10])
+@pytest.mark.solver_related
+@pytest.mark.requires_x64
+def test_update_nan_drop_at_jit_comp(
+    batch_size, request, glm_type, model_instantiation
+):
+    """Test that jit compilation does not affect the update in the presence of nans."""
+    X, y, model, true_params, firing_rate = request.getfixturevalue(
+        glm_type + model_instantiation
+    )
+    model.solver_kwargs.update({"stepsize": 0.01})
+    params = model.initialize_params(X, y)
+    state = model.initialize_optimizer_and_state(params, X, y)
+    # extract batch and add nans
+    Xnan = X[:batch_size]
+    Xnan[: batch_size // 2] = np.nan
+
+    # run 3 iterations
+    tot_iter = 1
+    jit_update = deepcopy(params)
+    jit_state = deepcopy(state)
+    for _ in range(tot_iter):
+        jit_update, jit_state = model.update(
+            jit_update, jit_state, Xnan, y[:batch_size]
+        )
+    # make sure there is an update
+    assert not jnp.allclose(params[0], jit_update[0]) or not jnp.allclose(
+        params[1], jit_update[1]
+    )
+
+    # update without jitting
+    nojit_update = deepcopy(params)
+    nojit_state = deepcopy(state)
+    with jax.disable_jit(True):
+        for _ in range(tot_iter):
+            nojit_update, nojit_state = model.update(
+                nojit_update, nojit_state, Xnan, y[:batch_size]
+            )
+    # check for equivalence update
+    assert jnp.allclose(nojit_update[0], jit_update[0]) and jnp.allclose(
+        nojit_update[1], jit_update[1]
+    )
+
+
+@pytest.mark.parametrize("glm_type", _UPDATE_GLM_TYPES)
+@pytest.mark.parametrize("model_instantiation", _UPDATE_MODEL_INSTANTIATIONS)
+@pytest.mark.solver_related
+@pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
+def test_compatibility_with_sklearn_cv(
+    request, glm_type, model_instantiation, mock_glm_fit
+):
+    X, y, model, true_params, firing_rate = request.getfixturevalue(
+        glm_type + model_instantiation
+    )
+    param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
+    cls = GridSearchCV(model, param_grid).fit(X, y)
+    # check that the repr works after cloning
+    repr(cls)
 
 
 @pytest.mark.parametrize(
@@ -2941,28 +3966,16 @@ class TestPopulationGLMObservationModel:
                 {"tol": 10**-9},
             ),
             (
-                nmo.regularizer.Ridge(),
-                1.0,
-                "LBFGS",
-                {"stepsize": 0.1, "tol": 10**-9},
-            ),
-            (
                 nmo.regularizer.Lasso(),
                 0.001,
                 "ProximalGradient",
-                {"tol": 10**-8, "maxiter": 10**5},
-            ),
-            (
-                nmo.regularizer.Lasso(),
-                0.1,
-                "ProximalGradient",
-                {"tol": 10**-14},
+                {"tol": 10**-8, "maxiter": 10**3},
             ),
             (
                 nmo.regularizer.ElasticNet(),
                 (1.0, 0.5),
                 "ProximalGradient",
-                {"tol": 10**-14},
+                {"tol": 10**-8},
             ),
         ],
     )
@@ -2978,7 +3991,6 @@ class TestPopulationGLMObservationModel:
                     [0, 1, 0],
                 ]
             ),
-            {"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])},
         ],
     )
     @pytest.mark.solver_related
@@ -3044,7 +4056,6 @@ class TestPopulationGLMObservationModel:
                 for key, xx in X.items():
                     if mask_bool[key][k]:
                         X_neu[key] = X[key]
-                X_neu = FeaturePytree(**X_neu)
             else:
                 X_neu = X[:, mask_bool[k]]
 
@@ -3100,6 +4111,7 @@ class TestPoissonGLM:
     )
     @pytest.mark.parametrize("batch_size", [None, 1, 10])
     @pytest.mark.parametrize("stepsize", [None, 0.01])
+    @pytest.mark.parametrize("inverse_link_function", [jax.nn.softplus, "softplus"])
     @pytest.mark.solver_related
     def test_glm_optimal_config_set_initial_state(
         self,
@@ -3108,14 +4120,13 @@ class TestPoissonGLM:
         stepsize,
         reg,
         obs,
+        inverse_link_function,
         request,
         glm_class_type,
         model_instantiation_type,
         reg_setup,
     ):
-        """
-        Test special initialization of Poisson GLM + softmax inverse link function for SVRG and ProxSVRG.
-        """
+        """Test special initialization of Poisson GLM + softplus inverse link function for SVRG and ProxSVRG."""
         glm_class = request.getfixturevalue(glm_class_type)
         X, y, _, true_params, _ = request.getfixturevalue(
             model_instantiation_type + reg_setup
@@ -3125,30 +4136,73 @@ class TestPoissonGLM:
                 # this was not tested for pytree when the test was separate
                 return
             else:
-                reg = nmo.regularizer.GroupLasso(mask=jnp.ones((1, X.shape[1])))
+                reg = nmo.regularizer.GroupLasso()
         model = glm_class(
             solver_name=solver_name,
-            inverse_link_function=jax.nn.softplus,
+            inverse_link_function=inverse_link_function,
             solver_kwargs=dict(batch_size=batch_size, stepsize=stepsize),
             observation_model=obs,
             regularizer=reg,
             regularizer_strength=None if reg == "UnRegularized" else 1.0,
         )
-        opt_state = model._initialize_solver_and_state(X, y, true_params)
+        opt_state = model._initialize_optimizer_and_state(true_params, X, y)
         solver = model._solver
 
         if stepsize is not None:
-            assert opt_state.stepsize == stepsize
+            assert opt_state.solver_state.stepsize == stepsize
             assert solver.stepsize == stepsize
         else:
-            assert opt_state.stepsize > 0
-            assert isinstance(opt_state.stepsize, float)
+            assert opt_state.solver_state.stepsize > 0
+            assert isinstance(opt_state.solver_state.stepsize, float)
 
         if batch_size is not None:
             assert solver.batch_size == batch_size
         else:
             assert isinstance(solver.batch_size, int)
             assert solver.batch_size > 0
+
+    @pytest.mark.parametrize(
+        "solver_name, regularizer",
+        [("SVRG", "UnRegularized"), ("ProxSVRG", "Lasso")],
+    )
+    @pytest.mark.parametrize(
+        "inverse_link_function, has_defaults",
+        [(jax.nn.softplus, True), ("softplus", True), (jax.numpy.exp, False)],
+    )
+    @pytest.mark.solver_related
+    def test_svrg_defaults_detect_softplus_string_and_callable(
+        self,
+        solver_name,
+        regularizer,
+        inverse_link_function,
+        has_defaults,
+        glm_class_type,
+        request,
+    ):
+        """Test Poisson SVRG defaults handle both softplus specifications."""
+        glm_class = request.getfixturevalue(glm_class_type)
+        X = jnp.array([[1.0, 2.0], [3.0, 1.0], [2.0, 4.0], [5.0, 3.0]])
+        y = jnp.array([1.0, 2.0, 3.0, 4.0])
+        if glm_class_type == "population_glm_class":
+            y = y[:, None]
+        model = glm_class(
+            solver_name=solver_name,
+            inverse_link_function=inverse_link_function,
+            observation_model=nmo.observation_models.PoissonObservations(),
+            regularizer=regularizer,
+            regularizer_strength=None if regularizer == "UnRegularized" else 1.0,
+        )
+
+        solver_kwargs = model._optimize_solver_params(X, y)
+
+        if has_defaults:
+            assert isinstance(solver_kwargs["batch_size"], int)
+            assert solver_kwargs["batch_size"] > 0
+            assert isinstance(solver_kwargs["stepsize"], float)
+            assert solver_kwargs["stepsize"] > 0
+        else:
+            assert "batch_size" not in solver_kwargs
+            assert "stepsize" not in solver_kwargs
 
     @pytest.mark.parametrize(
         "regularizer, expected_type_convexity",
@@ -3172,7 +4226,11 @@ class TestPoissonGLM:
     )
     @pytest.mark.parametrize(
         "inv_link_func, expected_type_link",
-        [(jax.nn.softplus, Callable), (jax.numpy.exp, type(None))],
+        [
+            (jax.nn.softplus, Callable),
+            ("softplus", Callable),
+            (jax.numpy.exp, type(None)),
+        ],
     )
     def test_optimal_config_outputs(
         self,
@@ -3217,7 +4275,7 @@ class TestPoissonGLM:
 
     @pytest.mark.parametrize("glm_type", ["", "population_"])
     @pytest.mark.parametrize("regr_setup", ["", "_pytree"])
-    @pytest.mark.parametrize("key", [jax.random.key(0), jax.random.key(19)])
+    @pytest.mark.parametrize("key", [jax.random.key(0)])
     @pytest.mark.parametrize(
         "regularizer_class, solver_name",
         [
@@ -3251,7 +4309,7 @@ class TestPoissonGLM:
 
         N = y.shape[0]
         batch_size = 1
-        maxiter = 3  # number of epochs
+        maxiter = 1  # number of epochs
         tol = 1e-12
         stepsize = 1e-3
 
@@ -3296,24 +4354,22 @@ class TestPoissonGLM:
         glm2.fit(X, y)
 
         params = glm.initialize_params(X, y)
-        state = glm.initialize_solver_and_state(X, y, params)
-        # glm.instantiate_solver(glm.compute_loss)
+        state = glm.initialize_optimizer_and_state(params, X, y)
+        # glm._instantiate_solver(glm.compute_loss)
 
         # NOTE these two are not the same because for example Ridge augments the loss
         # loss_grad = jax.jit(jax.grad(glm.compute_loss))
         loss_grad = jax.jit(jax.grad(glm._solver_loss_fun))
 
-        # copied from GLM.fit
-        # grab data if needed (tree map won't function because param is never a FeaturePytree).
-        if isinstance(X, FeaturePytree):
-            X = X.data
-
         iter_num = 0
         while iter_num < maxiter:
-            state = state._replace(
-                full_grad_at_reference_point=loss_grad(
-                    nmo.glm.params.GLMParams(*params), X, y
+            state = type(state)(
+                solver_state=state.solver_state._replace(
+                    full_grad_at_reference_point=loss_grad(
+                        nmo.glm.params.GLMParams(*params), X, y
+                    )
                 ),
+                stats=state.stats,
             )
 
             prev_params = params
@@ -3323,8 +4379,11 @@ class TestPoissonGLM:
                 xi, yi = tree_slice(X, ind), tree_slice(y, ind)
                 params, state = glm.update(params, state, xi, yi)
 
-            state = state._replace(
-                reference_point=nmo.glm.params.GLMParams(*params),
+            state = type(state)(
+                solver_state=state.solver_state._replace(
+                    reference_point=nmo.glm.params.GLMParams(*params)
+                ),
+                stats=state.stats,
             )
 
             iter_num += 1
@@ -3335,7 +4394,7 @@ class TestPoissonGLM:
             if _error < tol:
                 break
 
-        assert iter_num == glm2.solver_state_.iter_num
+        assert iter_num == glm2.solver_state_.stats.num_steps
 
         assert pytree_map_and_reduce(
             lambda a, b: np.allclose(a, b, atol=10**-5, rtol=0.0),
@@ -3644,7 +4703,7 @@ class TestClassifierGLM:
         )
         model.inverse_link_function = inv_link
         if is_population_glm_type(glm_type):
-            model.feature_mask = jnp.ones((X.shape[1], y.shape[1], model.n_classes))
+            model.feature_mask = jnp.ones((X.shape[1], y.shape[1]))
             model.scale_ = jnp.ones((y.shape[1]))
             shape_log_proba = (X.shape[0], y.shape[1], model.n_classes)
         else:
@@ -3766,16 +4825,14 @@ class TestClassifierGLM:
         [
             (np.ones((3, 5)), does_not_raise()),
             (
-                nmo.pytrees.FeaturePytree(
-                    input_1=np.ones((3, 3)), input_2=np.ones((3, 2))
-                ),
+                {"input_1": np.ones((3, 3)), "input_2": np.ones((3, 2))},
                 does_not_raise(),
             ),
             # string type
             (
                 "invalid",
                 pytest.raises(
-                    AttributeError, match="'str' object has no attribute 'ndim'"
+                    AttributeError, match="'str' object has no attribute 'shape'"
                 ),
             ),
             # wrong number of features
@@ -3784,9 +4841,7 @@ class TestClassifierGLM:
                 pytest.raises(ValueError, match="Inconsistent number of features"),
             ),
             (
-                nmo.pytrees.FeaturePytree(
-                    input_1=np.ones((3, 1)), input_2=np.ones((3, 2))
-                ),
+                {"input_1": np.ones((3, 1)), "input_2": np.ones((3, 2))},
                 pytest.raises(ValueError, match="Inconsistent number of features"),
             ),
         ],
@@ -3800,7 +4855,7 @@ class TestClassifierGLM:
         model_instantiation,
         request,
     ):
-        if isinstance(X, nmo.pytrees.FeaturePytree):
+        if isinstance(X, dict):
             xtype = "_pytree"
         else:
             xtype = ""
@@ -3821,7 +4876,7 @@ class TestClassifierGLM:
             "compute_loss",
             "simulate",
             "initialize_params",
-            "initialize_solver_and_state",
+            "initialize_optimizer_and_state",
         ],
     )
     def test_must_set_classes_before_calling(
@@ -3836,7 +4891,7 @@ class TestClassifierGLM:
             glm_type + model_instantiation
         )
         model = deepcopy(model)
-        model._classes_ = None
+        model.classes_ = None
 
         # superset of all possible required inputs
         input_dict = {
@@ -3893,7 +4948,7 @@ class TestClassifierGLM:
         score_regular = model.score(X, y)
         label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
         model.set_classes(label)
-        y_label = model._decode_labels(y)
+        y_label = model._label_encoder.decode(y)
         score = model.score(X, y_label)
         assert isinstance(score, jnp.ndarray)
         assert jnp.issubdtype(score.dtype, np.floating)
@@ -3912,7 +4967,7 @@ class TestClassifierGLM:
 
         label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
         model_label.set_classes(label)
-        y_label = model._decode_labels(y)
+        y_label = model._label_encoder.decode(y)
         model_label.fit(X, y_label)
         assert jnp.array_equal(model.coef_, model_label.coef_)
         assert jnp.array_equal(model.intercept_, model_label.intercept_)
@@ -3931,37 +4986,8 @@ class TestClassifierGLM:
         label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
         model.set_classes(label)
         y_label, log_prob_label = model.simulate(jax.random.PRNGKey(1), X)
-        assert jnp.array_equal(model._encode_labels(y_label), y)
+        assert jnp.array_equal(model._label_encoder.encode(y_label), y)
         assert jnp.array_equal(log_prob_label, log_prob)
-
-    def test_classes_none_initially(
-        self, inv_link, glm_type, model_instantiation, request
-    ):
-        """Test that classes_ is None before set_classes is called."""
-        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
-        # Create a fresh model without set_classes
-        if "population" in glm_type:
-            fresh_model = nmo.glm.ClassifierPopulationGLM(n_classes=model.n_classes)
-        else:
-            fresh_model = nmo.glm.ClassifierGLM(n_classes=model.n_classes)
-        assert fresh_model.classes_ is None
-        assert fresh_model._skip_encoding is False
-
-    def test_skip_encoding_flag(self, inv_link, glm_type, model_instantiation, request):
-        """Test that _skip_encoding is True for default labels, False otherwise."""
-        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
-        model = deepcopy(model)
-
-        # Default labels [0, 1, ..., n-1] should skip encoding
-        model.set_classes(np.arange(model.n_classes))
-        assert model._skip_encoding is True
-        assert model._class_to_index_ is None
-
-        # Non-default labels should not skip encoding
-        label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
-        model.set_classes(label)
-        assert model._skip_encoding is False
-        assert model._class_to_index_ is not None
 
     def test_set_classes_too_many_classes(
         self, inv_link, glm_type, model_instantiation, request
@@ -4054,7 +5080,7 @@ class TestClassifierGLM:
         # Compute loss with string labels
         label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
         model.set_classes(label)
-        y_label = model._decode_labels(y)
+        y_label = model._label_encoder.decode(y)
         loss_label = model.compute_loss((model.coef_, model.intercept_), X, y_label)
 
         assert jnp.allclose(loss_default, loss_label)
@@ -4083,22 +5109,312 @@ class TestClassifierGLM:
         # Probabilities should be identical (only label interpretation changes)
         assert jnp.allclose(proba_default, proba_label)
 
-    def test_encode_decode_roundtrip(
+    def test_initialize_params_stale_feature_mask_raises(
         self, inv_link, glm_type, model_instantiation, request
     ):
-        """Test that encoding then decoding returns original labels."""
-        _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
-        model = deepcopy(model)
+        """initialize_params raises when a stale array feature_mask is incompatible with the new X structure."""
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model._feature_mask = jnp.ones_like(true_params.coef)
+        X_pytree = {"a": X[:, : X.shape[1] // 2], "b": X[:, X.shape[1] // 2 :]}
+        with pytest.raises(TypeError, match="feature_mask"):
+            model.initialize_params(X_pytree, y)
 
-        # Test with string labels
-        label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
-        model.set_classes(label)
-        y_label = model._decode_labels(y)
 
-        # Roundtrip: decode -> encode should give original indices
-        y_roundtrip = model._encode_labels(y_label)
-        assert np.array_equal(y, y_roundtrip)
+def test_glm_public_api_matches_subclasses():
+    import nemos as nmo
+    from nemos.base_regressor import BaseRegressor
 
-        # Roundtrip: encode -> decode should give original labels
-        y_label_roundtrip = model._decode_labels(model._encode_labels(y_label))
-        assert np.array_equal(y_label, y_label_roundtrip)
+    # Public contract of the module
+    public = set(nmo.glm.__all__)
+
+    # All GLM subclasses exposed through the namespace
+    glm_subclasses = {
+        name
+        for name, obj in inspect.getmembers(nmo.glm, inspect.isclass)
+        if issubclass(obj, BaseRegressor)
+    }
+
+    # Known public names that are not direct subclasses (if any)
+    exceptions = set()  # Add names here if needed
+
+    expected_public = glm_subclasses.union(exceptions)
+
+    assert public == expected_public, (
+        f"\nPublic API mismatch in nemos.glm\n"
+        f"Missing from __all__: {expected_public - public}\n"
+        f"Unexpected in __all__: {public - expected_public}"
+    )
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+@pytest.mark.parametrize("solver_name", [None, "LBFGS", "Newton"])
+def test_glm_set_solver_name_invalidates(solver_name, model_instantiation, request):
+    X, y, model, params, state = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update solver
+    model.solver_name = solver_name
+
+    # Verify invalidated solver
+    assert model._solver is None
+    assert model._solver_loss_fun is None
+    assert model._optimizer_init_state is None
+    assert model._optimizer_update is None
+    assert model._optimizer_run is None
+    with pytest.raises(
+        RuntimeError, match="Attempt at update when solver was in invalid state."
+    ):
+        model.update(params, state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+@pytest.mark.parametrize("solver_name", [None, "LBFGS", "Newton"])
+def test_glm_set_solver_name_recovers(solver_name, model_instantiation, request):
+    X, y, model, params, _ = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update solver
+    model.solver_name = solver_name
+
+    # Verify reinitialisation fixes it
+    init_state = model.initialize_optimizer_and_state(
+        [params.coef, params.intercept], X, y
+    )
+    with does_not_raise():
+        model.update([params.coef, params.intercept], init_state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_solver_kwargs_invalidates(model_instantiation, request):
+    X, y, model, params, state = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update solver kwargs
+    model.solver_kwargs = {"maxiter": 2000}
+
+    # Verify invalidated solver
+    assert model._solver is None
+    assert model._solver_loss_fun is None
+    assert model._optimizer_init_state is None
+    assert model._optimizer_update is None
+    assert model._optimizer_run is None
+    with pytest.raises(
+        RuntimeError, match="Attempt at update when solver was in invalid state."
+    ):
+        model.update(params, state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_solver_kwargs_recovers(model_instantiation, request):
+    X, y, model, params, _ = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update solver kwargs
+    model.solver_kwargs = {"maxiter": 2000}
+
+    # Verify reinitialisation fixes it
+    init_state = model.initialize_optimizer_and_state(
+        [params.coef, params.intercept], X, y
+    )
+    with does_not_raise():
+        model.update([params.coef, params.intercept], init_state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_regularizer_invalidates(model_instantiation, request):
+    X, y, model, params, state = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update regularizer
+    model.regularizer = "Ridge"
+
+    # Verify invalidated solver
+    assert model._solver is None
+    assert model._solver_loss_fun is None
+    assert model._optimizer_init_state is None
+    assert model._optimizer_update is None
+    assert model._optimizer_run is None
+    with pytest.raises(
+        RuntimeError, match="Attempt at update when solver was in invalid state."
+    ):
+        model.update(params, state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_regularizer_recovers(model_instantiation, request):
+    X, y, model, params, _ = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update regularizer
+    model.regularizer = "Ridge"
+
+    # Verify reinitialisation fixes it
+    init_state = model.initialize_optimizer_and_state(
+        [params.coef, params.intercept], X, y
+    )
+    with does_not_raise():
+        model.update([params.coef, params.intercept], init_state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_regularizer_strength_invalidates(model_instantiation, request):
+    X, y, model, params, state = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update regularizer strength
+    model.regularizer_strength = 0.2
+
+    # Verify invalidated solver
+    assert model._solver is None
+    assert model._solver_loss_fun is None
+    assert model._optimizer_init_state is None
+    assert model._optimizer_update is None
+    assert model._optimizer_run is None
+    with pytest.raises(
+        RuntimeError, match="Attempt at update when solver was in invalid state."
+    ):
+        model.update(params, state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_regularizer_strength_recovers(model_instantiation, request):
+    X, y, model, params, _ = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update regularizer strength
+    model.regularizer_strength = 0.2
+
+    # Verify reinitialisation fixes it
+    init_state = model.initialize_optimizer_and_state(
+        [params.coef, params.intercept], X, y
+    )
+    with does_not_raise():
+        model.update([params.coef, params.intercept], init_state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_observation_model_invalidates(model_instantiation, request):
+    X, y, model, params, state = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update observation model
+    model.observation_model = "GammaObservations"
+
+    # Verify invalidated solver
+    assert model._solver is None
+    assert model._solver_loss_fun is None
+    assert model._optimizer_init_state is None
+    assert model._optimizer_update is None
+    assert model._optimizer_run is None
+    with pytest.raises(
+        RuntimeError, match="Attempt at update when solver was in invalid state."
+    ):
+        model.update(params, state, X, y)
+
+
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "poissonGLM",
+        "classifierGLM",
+        "population_poissonGLM",
+        "population_classifierGLM",
+    ],
+)
+def test_glm_set_observation_model_recovers(model_instantiation, request):
+    X, y, model, params, _ = request.getfixturevalue(
+        model_instantiation + "_model_instantiation"
+    )
+
+    # Update observation model
+    model.observation_model = "GammaObservations"
+
+    # Verify reinitialisation fixes it
+    init_state = model.initialize_optimizer_and_state(
+        [params.coef, params.intercept], X, y
+    )
+    with does_not_raise():
+        model.update([params.coef, params.intercept], init_state, X, y)

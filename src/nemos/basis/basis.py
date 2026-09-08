@@ -3,15 +3,18 @@
 # required to get ArrayLike to render correctly
 from __future__ import annotations
 
-from numbers import Number
-from typing import List, Literal, Optional, Sequence, Tuple
+from typing import List, Literal, Optional, Tuple
 
 import jax
 from numpy.typing import ArrayLike, NDArray
 
-from ..type_casting import is_numpy_array_like
 from ..typing import FeatureMatrix
-from ._basis_mixin import AtomicBasisMixin, BasisMixin, ConvBasisMixin, EvalBasisMixin
+from ._basis_mixin import (
+    AtomicBasisMixin,
+    BoundedEvalBasisMixin,
+    ConvBasisMixin,
+    EvalBasisMixin,
+)
 from ._composition_utils import add_docstring
 from ._decaying_exponential import OrthExponentialBasis
 from ._fourier_basis import FourierBasis
@@ -21,7 +24,7 @@ from ._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
 from ._zero_basis import ZeroBasis
 
 
-class BSplineEval(EvalBasisMixin, BSplineBasis):
+class BSplineEval(BoundedEvalBasisMixin, BSplineBasis):
     """
     B-spline 1-dimensional basis functions.
 
@@ -39,6 +42,8 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
+    fill_value :
+        The value to fill when samples are outside the bounds. Default is NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -68,6 +73,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         n_basis_funcs: int,
         order: int = 4,
         bounds: Optional[Tuple[float, float]] = None,
+        fill_value: float = jax.numpy.nan,
         label: Optional[str] = "BSplineEval",
     ):
 
@@ -77,7 +83,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
             order=order,
             label=label,
         )
-        EvalBasisMixin.__init__(self, bounds=bounds)
+        BoundedEvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
 
     @add_docstring("split_by_feature", BSplineBasis)
     def split_by_feature(
@@ -101,7 +107,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         """
         return super().split_by_feature(x, axis=axis)
 
-    @add_docstring("_compute_features", EvalBasisMixin)
+    @add_docstring("_compute_features", BoundedEvalBasisMixin)
     def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
@@ -244,13 +250,13 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         label: Optional[str] = "BSplineConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         BSplineBasis.__init__(
             self,
             n_basis_funcs,
             order=order,
             label=label,
         )
+        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
 
     @add_docstring("split_by_feature", BSplineBasis)
     def split_by_feature(
@@ -365,7 +371,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
-class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
+class CyclicBSplineEval(BoundedEvalBasisMixin, CyclicBSplineBasis):
     """
     B-spline 1-dimensional basis functions for cyclic splines.
 
@@ -381,6 +387,8 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
+    fill_value :
+        The value to fill when samples are outside the bounds. Default is NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -403,15 +411,16 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         n_basis_funcs: int,
         order: int = 4,
         bounds: Optional[Tuple[float, float]] = None,
+        fill_value: float = jax.numpy.nan,
         label: Optional[str] = "CyclicBSplineEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds)
         CyclicBSplineBasis.__init__(
             self,
             n_basis_funcs,
             order=order,
             label=label,
         )
+        BoundedEvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
 
     @add_docstring("split_by_feature", CyclicBSplineBasis)
     def split_by_feature(
@@ -436,7 +445,7 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         # ruff: noqa: D205, D400
         return super().split_by_feature(x, axis=axis)
 
-    @add_docstring("_compute_features", EvalBasisMixin)
+    @add_docstring("_compute_features", BoundedEvalBasisMixin)
     def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
@@ -573,13 +582,13 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         label: Optional[str] = "CyclicBSplineConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         CyclicBSplineBasis.__init__(
             self,
             n_basis_funcs,
             order=order,
             label=label,
         )
+        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
 
     @add_docstring("split_by_feature", CyclicBSplineBasis)
     def split_by_feature(
@@ -696,7 +705,7 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
-class MSplineEval(EvalBasisMixin, MSplineBasis):
+class MSplineEval(BoundedEvalBasisMixin, MSplineBasis):
     r"""
     M-spline basis functions for modeling and data transformation.
 
@@ -723,6 +732,8 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
+    fill_value :
+        The value to fill when samples are outside the bounds. Default is NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -758,15 +769,16 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         n_basis_funcs: int,
         order: int = 4,
         bounds: Optional[Tuple[float, float]] = None,
+        fill_value: float = jax.numpy.nan,
         label: Optional[str] = "MSplineEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds)
         MSplineBasis.__init__(
             self,
             n_basis_funcs,
             order=order,
             label=label,
         )
+        BoundedEvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
 
     @add_docstring("split_by_feature", MSplineBasis)
     def split_by_feature(
@@ -791,7 +803,7 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         # ruff: noqa: D205, D400
         return MSplineBasis.split_by_feature(self, x, axis=axis)
 
-    @add_docstring("_compute_features", EvalBasisMixin)
+    @add_docstring("_compute_features", BoundedEvalBasisMixin)
     def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
@@ -952,13 +964,13 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         label: Optional[str] = "MSplineConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         MSplineBasis.__init__(
             self,
             n_basis_funcs,
             order=order,
             label=label,
         )
+        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
 
     @add_docstring("split_by_feature", MSplineBasis)
     def split_by_feature(
@@ -1074,7 +1086,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
-class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
+class RaisedCosineLinearEval(BoundedEvalBasisMixin, RaisedCosineBasisLinear):
     """
     Represent linearly-spaced raised cosine basis functions.
 
@@ -1091,6 +1103,8 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
+    fill_value :
+        The value to fill when samples are outside the bounds. Default is NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -1120,15 +1134,16 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         n_basis_funcs: int,
         width: float = 2.0,
         bounds: Optional[Tuple[float, float]] = None,
+        fill_value: float = jax.numpy.nan,
         label: Optional[str] = "RaisedCosineLinearEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds)
         RaisedCosineBasisLinear.__init__(
             self,
             n_basis_funcs,
             width=width,
             label=label,
         )
+        BoundedEvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
 
     @add_docstring("evaluate_on_grid", RaisedCosineBasisLinear)
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -1169,7 +1184,7 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
-    @add_docstring("_compute_features", EvalBasisMixin)
+    @add_docstring("_compute_features", BoundedEvalBasisMixin)
     def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
@@ -1292,13 +1307,13 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         label: Optional[str] = "RaisedCosineLinearConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         RaisedCosineBasisLinear.__init__(
             self,
             n_basis_funcs,
             width=width,
             label=label,
         )
+        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
 
     @add_docstring("evaluate_on_grid", RaisedCosineBasisLinear)
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -1410,7 +1425,7 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
-class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
+class RaisedCosineLogEval(BoundedEvalBasisMixin, RaisedCosineBasisLog):
     """Represent log-spaced raised cosine basis functions.
 
     Similar to ``RaisedCosineLinearEval`` but the basis functions are log-spaced.
@@ -1431,6 +1446,12 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         If set to True, the algorithm first constructs a basis with ``n_basis_funcs + ceil(width)`` elements
         and subsequently trims off the extra basis elements. This ensures that the final basis element
         decays to 0.
+    bounds :
+        The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bounds, the basis will return NaN.
+    fill_value :
+        The value to fill when samples are outside the bounds. Default is NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -1462,9 +1483,9 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         time_scaling: float = None,
         enforce_decay_to_zero: bool = True,
         bounds: Optional[Tuple[float, float]] = None,
+        fill_value: float = jax.numpy.nan,
         label: Optional[str] = "RaisedCosineLogEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds)
         RaisedCosineBasisLog.__init__(
             self,
             n_basis_funcs,
@@ -1473,6 +1494,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
             enforce_decay_to_zero=enforce_decay_to_zero,
             label=label,
         )
+        BoundedEvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
 
     @add_docstring("evaluate_on_grid", RaisedCosineBasisLog)
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -1514,7 +1536,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
-    @add_docstring("_compute_features", EvalBasisMixin)
+    @add_docstring("_compute_features", BoundedEvalBasisMixin)
     def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
@@ -1647,7 +1669,6 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         label: Optional[str] = "RaisedCosineLogConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         RaisedCosineBasisLog.__init__(
             self,
             n_basis_funcs,
@@ -1656,6 +1677,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
             enforce_decay_to_zero=enforce_decay_to_zero,
             label=label,
         )
+        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
 
     @add_docstring("evaluate_on_grid", RaisedCosineBasisLog)
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -1767,7 +1789,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         return AtomicBasisMixin.set_input_shape(self, xi)
 
 
-class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
+class OrthExponentialEval(BoundedEvalBasisMixin, OrthExponentialBasis):
     """Set of 1D basis decaying exponential functions numerically orthogonalized.
 
     Parameters
@@ -1780,6 +1802,8 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
+    fill_value :
+        The value to fill when samples are outside the bounds. Default is NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -1807,15 +1831,16 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         n_basis_funcs: int,
         decay_rates: NDArray,
         bounds: Optional[Tuple[float, float]] = None,
+        fill_value: float = jax.numpy.nan,
         label: Optional[str] = "OrthExponentialEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds)
         OrthExponentialBasis.__init__(
             self,
             n_basis_funcs,
             decay_rates=decay_rates,
             label=label,
         )
+        BoundedEvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
 
     @add_docstring("evaluate_on_grid", OrthExponentialBasis)
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -1858,7 +1883,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
-    @add_docstring("_compute_features", EvalBasisMixin)
+    @add_docstring("_compute_features", BoundedEvalBasisMixin)
     def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
@@ -1977,13 +2002,13 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         label: Optional[str] = "OrthExponentialConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         OrthExponentialBasis.__init__(
             self,
             n_basis_funcs,
             decay_rates=decay_rates,
             label=label,
         )
+        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         # re-check window size because n_basis_funcs is not set yet when the
         # property setter runs the first check.
         self._check_window_size(self.window_size)
@@ -2116,7 +2141,7 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
             )
 
 
-class IdentityEval(EvalBasisMixin, IdentityBasis):
+class IdentityEval(BoundedEvalBasisMixin, IdentityBasis):
     """
     Identity basis function.
 
@@ -2130,22 +2155,33 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
+    fill_value :
+        The value to fill when samples are outside the bounds. Default is NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     """
 
+    # ``IdentityBasis.evaluate`` already masks out-of-bounds samples, so the mixin must
+    # not apply ``fill_value`` a second time in ``_compute_features``.
+    _apply_bounds_fill = False
+
+    # For this basis, bounds are not using to rescale, therefore they do not define the
+    # basis domain.
+    _bounds_define_domain = False
+
     def __init__(
         self,
         bounds: Optional[Tuple[float, float]] = None,
+        fill_value: float = jax.numpy.nan,
         label: Optional[str] = "IdentityEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds)
         IdentityBasis.__init__(
             self,
             n_basis_funcs=1,
             label=label,
         )
+        BoundedEvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
 
     @add_docstring("evaluate_on_grid", IdentityBasis)
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -2184,7 +2220,7 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         # ruff: noqa: D205, D400
         return super().evaluate(sample_pts)
 
-    @add_docstring("_compute_features", EvalBasisMixin)
+    @add_docstring("_compute_features", BoundedEvalBasisMixin)
     def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
@@ -2299,24 +2335,10 @@ class Zero(EvalBasisMixin, ZeroBasis):
         self,
         label: Optional[str] = "Zero",
     ):
-        self._initialized = False
-        EvalBasisMixin.__init__(self, bounds=None)
         ZeroBasis.__init__(
             self,
             label=label,
         )
-
-    @property
-    def bounds(self):
-        """Bounds are not applicable for Zero basis (always returns None)."""
-        return None
-
-    @bounds.setter
-    def bounds(self, value):
-        """Zero basis does not use bounds."""
-        if self._initialized:
-            raise AttributeError("Zero basis does not use bounds.")
-        self._initialized = True
 
     @add_docstring("evaluate_on_grid", ZeroBasis)
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -2451,12 +2473,12 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         label: Optional[str] = "HistoryConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         HistoryBasis.__init__(
             self,
             n_basis_funcs=window_size,
             label=label,
         )
+        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
 
     @add_docstring("evaluate_on_grid", HistoryBasis)
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -2580,7 +2602,7 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         self._n_basis_funcs = window_size
 
 
-class FourierEval(EvalBasisMixin, FourierBasis):
+class FourierEval(BoundedEvalBasisMixin, FourierBasis):
     """
     N-dimensional Fourier basis for feature expansion.
 
@@ -2618,11 +2640,14 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         Dimensionality of the basis. Default is 1.
 
     bounds :
-        Domain bounds for each dimension.
+        Period bounds for each dimension. Unlike other basis classes where bounds define
+        a valid domain (with out-of-bounds samples filled with NaN), for the Fourier basis
+        the bounds define the period of the basis functions. Samples outside these bounds
+        are still valid and will be evaluated using the periodic nature of the basis.
 
         * :class:`tuple`: ``(low, high)`` of floats: applies to all dimensions.
         * :class:`list` of :class:`tuple`: ``[(low, high), ...]``, one tuple per dimension, length must match ``ndim``.
-        * :class:`None <NoneType>`: the domain is inferred from the input data (maximum to minimum values).
+        * :class:`None <NoneType>`: the period is inferred from the input data (minimum to maximum values).
 
         In all cases, ``low`` must be strictly less than ``high``, and values must be convertible to floats.
 
@@ -2637,13 +2662,15 @@ class FourierEval(EvalBasisMixin, FourierBasis):
           for NeMoS GLMs, which already include an intercept term by default, making an
           additional intercept in the design matrix redundant.
 
-        * Array-like of integers {0, 1} or booleans: Selects frequencies to
-          keep (1/True) or exclude (0/False). Shape must match the number of
-          available frequencies for each dimension.
+        * Array-like of integers {0, 1} or booleans: A 1D mask with one entry
+          per column of ``masked_frequencies``, keeping (1/True) or dropping
+          (0/False) that frequency combination. At construction it filters the
+          combinations left by the default ``"no-intercept"`` selection; print
+          ``masked_frequencies`` to see the combinations in column order.
 
-        * :class:`~typing.Callable`: A function applied to each frequency index (one index
-          per dimension), returning a single boolean or {0, 1} indicating whether
-          to keep that frequency.
+        * :class:`~typing.Callable`: A function applied to each retained frequency
+          combination (one scalar per dimension, signed), returning a single
+          boolean or {0, 1} indicating whether to keep that frequency.
 
         * :class:`None <NoneType>`: All frequencies are kept.
 
@@ -2685,27 +2712,30 @@ class FourierEval(EvalBasisMixin, FourierBasis):
     **2D: unmasked grid of frequency pairs**
 
     >>> fourier_2d = FourierEval(n_freq, ndim=2)
-    >>> # (5*5 frequency pairs) * 2 (cos+sin) - 1 (no sine at DC) = 49
+    >>> # half-space of the 5x5 grid has 41 pairs (incl. DC); DC dropped -> 40; *2
     >>> fourier_2d.n_basis_funcs
-    48
+    80
     >>> x, y = rng.normal(size=(2, 6))
     >>> X = fourier_2d.compute_features(x, y)
     >>> X.shape
-    (6, 48)
+    (6, 80)
 
     **2D: masking with an array (drop 3 pairs)**
 
-    >>> mask = np.ones((5, 5))
-    >>> # drop 3 frequency pairs, including DC term (0,0)
-    >>> mask[[0, 0, 1], [0, 1, 2]] = 0
+    >>> # one mask entry per retained pair: the default "no-intercept"
+    >>> # selection drops the DC and leaves 40 pairs
+    >>> fourier_2d.masked_frequencies.shape
+    (2, 40)
+    >>> mask = np.ones(40)
+    >>> mask[:3] = 0  # drop the first 3 pairs
     >>> fourier_2d_masked = FourierEval(
     ...     n_freq,
     ...     ndim=2,
     ...     frequency_mask=mask
     ... )
-    >>> # (5*5-3 frequency pairs) * 2 (cos+sin) = 44
+    >>> # (40 pairs - 3 dropped) * 2 (cos+sin) = 74
     >>> fourier_2d_masked.n_basis_funcs
-    44
+    74
 
     **2D: masking with a callable**
 
@@ -2717,7 +2747,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
     ...     frequency_mask=keep_circle
     ... )
     >>> fourier_2d_funcmask.n_basis_funcs
-    25
+    37
 
     **Explicit frequency specifications**
 
@@ -2727,11 +2757,15 @@ class FourierEval(EvalBasisMixin, FourierBasis):
     ...     frequencies=[np.arange(3), (1, 4)],
     ...     ndim=2
     ... )
-    >>> # (3*3 frequency pairs) * 2 (cos+sin) = 18; no DC term (0, 0)
+    >>> # 15 half-space pairs (no DC, since the y-axis omits 0) -> 2*15 = 30
     >>> fourier_mixed.n_basis_funcs
-    18
+    30
 
     """
+
+    # Fourier basis is defined over the entire real line; bounds specify the period,
+    # not a valid domain. No out-of-bounds filling should be applied.
+    _apply_bounds_fill = False
 
     def __init__(
         self,
@@ -2757,7 +2791,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
             frequency_mask=frequency_mask,
             ndim=ndim,
         )
-        EvalBasisMixin.__init__(self, bounds=bounds)
+        BoundedEvalBasisMixin.__init__(self, bounds=bounds)
 
     @add_docstring("evaluate_on_grid", FourierBasis)
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -2780,7 +2814,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         """
         return super().evaluate_on_grid(*n_samples)
 
-    @add_docstring("_compute_features", EvalBasisMixin)
+    @add_docstring("_compute_features", BoundedEvalBasisMixin)
     def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
@@ -2844,7 +2878,7 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         160
 
         """
-        return BasisMixin.set_input_shape(self, *xi)
+        return super().set_input_shape(*xi)
 
     @add_docstring("evaluate", FourierBasis)
     def evaluate(self, *sample_pts: NDArray) -> NDArray:
@@ -2860,50 +2894,3 @@ class FourierEval(EvalBasisMixin, FourierBasis):
         """
         # ruff: noqa: D205, D400
         return super().evaluate(*sample_pts)
-
-    @property
-    def bounds(self) -> Tuple[Tuple[float, float]] | None:
-        """Bounds.
-
-        Tuple of bounds, one per dimension or None if no bounds are
-        provided.
-        """
-        return self._bounds
-
-    @bounds.setter
-    def bounds(
-        self, values: Tuple[float, float] | Sequence[Tuple[float, float]] | None
-    ):
-        if values is None:
-            self._bounds = None
-            return
-
-        def _is_leaf(x):
-            return isinstance(x, Sequence) and all(
-                isinstance(xi, Number)
-                or xi is None
-                or isinstance(xi, jax.numpy.generic)  # NumPy/JAX numpy scalar types
-                or (is_numpy_array_like(xi)[1] and xi.ndim == 0)  # 0-D arrays
-                for xi in x
-            )
-
-        values = jax.tree_util.tree_leaves(values, is_leaf=_is_leaf)
-
-        if len(values) == 1:
-            values = self._format_bounds(values[0])
-            values = (values,) * self.ndim
-
-        elif len(values) != self.ndim:
-            raise TypeError(
-                f"Invalid bounds ``{values}`` provided. "
-                "When provided, the bounds should be one or multiple tuples containing pair of floats.\n"
-                "If multiple tuples are provided, one must provide a tuple per each dimension"
-                "of the basis. "
-            )
-        else:
-            values = jax.tree_util.tree_map(
-                self._format_bounds, values, is_leaf=_is_leaf
-            )
-            values = tuple(vals for vals in values)
-
-        self._bounds = values

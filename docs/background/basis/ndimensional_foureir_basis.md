@@ -4,7 +4,6 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.4
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -80,7 +79,7 @@ The `compute_features` method of the basis returns a **real** design matrix that
 
 Let the selected frequencies be the sorted set $\mathcal F=\{n_1<\cdots<n_K\}$.
 
-Each frequency contributes a cosine and a sine, so with $K$ frequencies you’d expect $2K$ columns. This is the case when the 0 frequency - DC term - is not included. If the DC term is included, we have that the corresponding sine column is null, since $\sin(0)=0$. For this reason, the column is omitted — giving $2K-1$. In our example $K=5$ and the DC term is included, we therefore we obtain $2*5-1=9$ columns. Summarizing,
+Each frequency contributes a cosine and a sine, so with $K$ frequencies you’d expect $2K$ columns. This is the case when the 0 frequency - DC term - is not included. If the DC term is included, we have that the corresponding sine column is null, since $\sin(0)=0$. For this reason, the column is omitted — giving $2K-1$. In our example $K=5$ and the DC term is included, therefore we obtain $2*5-1=9$ columns. Summarizing,
 
 - $n_1=0$ (with DC):
 
@@ -314,7 +313,7 @@ In other words,
 
 ## Multi-Dimensional Fourier Basis
 
-Fourier bases extend to $D$ dimensions. Let $\mathbf{x}=(x_1,\dots,x_D)$, per-axis periods $\mathbf{P}=(P_1,\dots,P_D)$, and multi-index $\mathbf{n}=(n_1,\dots,n_D)\in\mathbb{N}_0^D$.
+Fourier bases extend to $D$ dimensions. Let $\mathbf{x}=(x_1,\dots,x_D)$, per-axis periods $\mathbf{P}=(P_1,\dots,P_D)$, and multi-index $\mathbf{n}=(n_1,\dots,n_D)$ (the set of multi-indices actually retained is described in [Avoiding redundant frequencies](redundant-fourier-freqs) below).
 
 A $D$-dimensional **basis element** is
 
@@ -327,6 +326,17 @@ $$
 
 For simplicity, in the rest of the session we will focus on a 2D example, but everything holds true for a general D-dimensional basis.
 :::
+
+(redundant-fourier-freqs)=
+### Avoiding redundant frequencies
+
+In one dimension only non-negative frequencies are needed: $a_{-n}$ adds nothing to $a_n$, since the cosine is even and the sine is odd. The same redundancy holds for the multi-index when $D \ge 2$ — $\mathbf{n}$ and $-\mathbf{n}$ give the same cosine and a sign-flipped sine, so their feature pairs are linearly dependent. NeMoS therefore keeps one representative of each $\{\mathbf{n},-\mathbf{n}\}$ pair: the all-zero index (DC), or the index whose **first non-zero coordinate is positive**.
+
+You still pass **non-negative** frequencies per axis; NeMoS mirrors the trailing axes to add their negative frequencies and keeps that half-space. In practice:
+
+- the **leading axis stays non-negative**;
+- on the trailing axes both signs are kept whenever a preceding coordinate is already positive — e.g. $(1, m)$ is kept for $m$ of either sign, because $(1, m)$ and $(1, -m)$ are genuinely different functions;
+- but an index that is zero up to some axis $i$ is kept only if its first non-zero entry is positive — e.g. of $(0, m)$ and $(0, -m)$ only the one with $m>0$ is kept.
 
 ### Definition in NeMoS
 
@@ -345,7 +355,7 @@ print("Pass a list of arrays:\n", FourierEval(frequencies=[np.arange(5), np.aran
 
 ```
 
-The total number of output features is $(5 \cdot 4 - 1)\cdot 2=38$, where we subtracted one since the DC, which corresponds to the pair $\mathbf{n}=\mathbf{0}=(0,0)$, is dropped by default.
+The $y$-axis is mirrored internally to $7$ signed frequencies, so the half-space of this $5\times 4$ grid has $32$ pairs (including the DC). The DC pair $\mathbf{n}=(0,0)$ is dropped by default, leaving $31$ pairs, each contributing a cosine and a sine: $2\cdot 31 = 62$ features.
 
 ```{code-cell} ipython3
 
@@ -356,12 +366,12 @@ All the frequency pairs are stored in the `masked_frequencies` array of shape `(
 
 :::{note}
 
-`masked_frequencies` lists the frequency pairs that are currently active in the basis. If you later restrict the grid of frequencies, this array will update to include only the kept pairs. Details follow in the [frequency selection section](select-fourier-freqs-ndim).
+`masked_frequencies` lists the frequency pairs that are currently active in the basis. If you later mask out some pairs, this array will update to include only the kept ones. Details follow in the [frequency selection section](select-fourier-freqs-ndim).
 :::
 
 ```{code-cell} ipython3
 
-print("first 5 frequency pairs:\n", fourier_2d.masked_frequencies)
+print("frequency pairs:\n", fourier_2d.masked_frequencies)
 print("shape of the `masked_frequencies` array:", fourier_2d.masked_frequencies.shape)
 ```
 
@@ -373,7 +383,7 @@ You can check for the presence of the DC term by assessing if `fourier_2d.masked
 (select-fourier-freqs-ndim)=
 ### Selecting The Frequencies
 
-The `frequencies` argument specifies, **per axis**, which integer frequencies to use. In $D$ dimensions, pass a list of $D$ arrays (one per axis); their Cartesian product defines the grid of multi-indices $\mathbf{n}$ (and thus the basis elements), which are listed in `masked_frequencies`.
+The `frequencies` argument specifies, **per axis**, which **non-negative** integer frequencies to use. NeMoS mirrors the trailing axes to add negative frequencies and keeps the half-space (see [Avoiding redundant frequencies](redundant-fourier-freqs)); the retained multi-indices $\mathbf{n}$ are listed in `masked_frequencies`.
 
 ```{code-cell} ipython3
 
@@ -382,46 +392,45 @@ fourier_2d = FourierEval(frequencies=[np.array([1,2,3]), np.array([4,5])], ndim=
 print(fourier_2d.masked_frequencies)
 ```
 
-In these examples we use pairs $(n,m)$ with $n \in N = \{1,2,3\}$ (x-axis frequencies) and $m \in M = \{4,5\}$ (y-axis frequencies).
+Here you pass $n \in \{1,2,3\}$ and $m \in \{4,5\}$. The $y$-axis is mirrored to $m \in \{-5,-4,4,5\}$. Because every $n \ge 1$ is already positive, the leading coordinate fixes the half-space and **all** sign combinations of $m$ are kept — $3 \times 4 = 12$ pairs $(n,m)$, including the negative $y$-frequencies printed above.
 
-This defines the basis elements $a_{(n,m)}$ for $(n,m) \in \{(1,4),(1,5),(2,4),(2,5),(3,4),(3,5)\}$.
+You can subselect specific pairs by **masking**. The mask can be:
 
-You can subselect specific pairs by **masking** the 2D frequency grid. The mask can be:
-
-1. A boolean array of shape $(|N|, |M|) = (3, 2)$ (rows = $n$, columns = $m$).
-2. A function returning booleans `f(n, m) -> True/False`.
+1. A 1-D boolean array with one entry per retained pair, i.e. per column of `masked_frequencies`.
+2. A function `f(n, m) -> True/False`.
 
 #### Mask With a Boolean Array
 
-**Pairs grid**
-
-|     | m=4  | m=5  |
-|-----|------|------|
-| n=1 | (1,4) | (1,5) |
-| n=2 | (2,4) | (2,5) |
-| n=3 | (3,4) | (3,5) |
-
-**Example mask selecting $(1,4), (2,4), (2,5)$**
-
-|     | m=4 | m=5 |
-|-----|-----|-----|
-| n=1 | 1   | 0   |
-| n=2 | 1   | 1   |
-| n=3 | 0   | 0   |
-
+Entry $i$ of the mask keeps (`True`/1) or drops (`False`/0) the pair `masked_frequencies[:, i]`. The workflow is to inspect `masked_frequencies` and build the mask from its columns, by hand or with vectorized comparisons. For example, let's keep the pairs $(1,4), (2,4), (2,5)$:
 
 ```{code-cell} ipython3
 
-frequency_mask = np.zeros((3,2))
-frequency_mask[:2, 0] = 1
-frequency_mask[1, 1] = 1
+pairs = fourier_2d.masked_frequencies
+frequency_mask = ((pairs[0] == 1) & (pairs[1] == 4)) | ((pairs[0] == 2) & (pairs[1] > 0))
 print("frequency mask")
-print(frequency_mask)
-
+print(frequency_mask.astype(int))
 
 fourier_2d.frequency_mask = frequency_mask
 print("\nmasked frequencies")
 print(fourier_2d.masked_frequencies)
+```
+
+An array mask always filters the **current** `masked_frequencies`: assigning a second array mask filters the already-filtered pairs, and it must have one entry per remaining pair. To start over from the full half-space, reset the mask to `"all"` (or `"no-intercept"`):
+
+```{code-cell} ipython3
+
+fourier_2d.frequency_mask = "all"
+print(fourier_2d.masked_frequencies)
+```
+
+The mask can address the DC pair whenever it is among the current pairs: for example, construct with `frequency_mask="all"` and frequencies that include 0 (as an integer specification like `frequencies=5` does), then assign the array mask.
+
+A mask whose length does not match the number of retained pairs raises an error pointing you back to `masked_frequencies`:
+
+```{code-cell} ipython3
+:tags: [raises-exception]
+
+fourier_2d.frequency_mask = np.ones(5)
 ```
 
 #### Mask With a Callable
@@ -439,8 +448,8 @@ print(fourier_2d.masked_frequencies)
 :::{admonition} More on Masking with Callables
 
 - Write the function as `f(n, m)` for 2D. The first argument maps to `masked_frequencies[0]` (x-axis, $n$), the second to `masked_frequencies[1]` (y-axis, $m$). In $D$ dimensions use `f(n1, ..., nD)` in the same row order as `masked_frequencies`.
-- NeMoS applies the function over the Cartesian product of per-axis frequencies (conceptually `np.meshgrid(..., indexing='ij')`). Treat inputs as NumPy arrays and use elementwise operations.
-- Return a boolean grid of shape `(len(n_values), len(m_values))`: `True` keeps $(n,m)$, `False` drops it. In $D$ dimensions, return a boolean tensor with one axis per dimension. .
+- NeMoS evaluates the function once per half-space combination, passing the frequencies as **scalars** (the signed $\mathbf{n}$, so $m$ may be negative). It must return a single boolean or 0/1 — `True` keeps that $(n,m)$, `False` drops it.
+- Unlike an array mask, a callable is always applied to the **full** half-space (including the DC pair), regardless of the mask currently in place.
 :::
 
 ### Setting the Periodicities

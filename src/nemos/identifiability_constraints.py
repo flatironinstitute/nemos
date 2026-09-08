@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Callable, Tuple
+from typing import TYPE_CHECKING, Callable, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -11,10 +11,12 @@ import numpy as np
 from jax.typing import ArrayLike as JaxArray
 from numpy.typing import NDArray
 
-from .basis._basis import Basis
+from . import validation
 from .tree_utils import get_valid_multitree, tree_slice
 from .type_casting import support_pynapple
-from .validation import _warn_if_not_float64
+
+if TYPE_CHECKING:
+    from .basis._basis import Basis
 
 _WARN_FLOAT32_MESSAGE = (
     "The feature matrix is not of dtype `float64`. Consider converting it to `float64` "
@@ -139,7 +141,7 @@ def _apply_identifiability_constraints(
     Private function that does the actual computation on a single feature_matrix.
     """
     if warn_if_float32:
-        _warn_if_not_float64(feature_matrix, _WARN_FLOAT32_MESSAGE)
+        validation._warn_if_not_float64(feature_matrix, _WARN_FLOAT32_MESSAGE)
 
     shape_sample_axis = feature_matrix.shape[0]
     is_valid = get_valid_multitree(feature_matrix)
@@ -328,7 +330,7 @@ def apply_identifiability_constraints_by_basis_component(
         warn_if_float32=False,
     )
 
-    _warn_if_not_float64(split_by_input_x, _WARN_FLOAT32_MESSAGE)
+    validation._warn_if_not_float64(split_by_input_x, _WARN_FLOAT32_MESSAGE)
 
     constrained_x_and_columns = jax.tree_util.tree_map(
         apply_identifiability, split_by_input_x

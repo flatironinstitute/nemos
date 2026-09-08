@@ -1,11 +1,12 @@
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Tuple
 
 import jax.numpy as jnp
 import numpy as np
-from jax.core import Tracer
 from numpy.typing import ArrayLike, NDArray
 
-from ..tree_utils import has_matching_axis_pytree
+from ..tree_utils import has_matching_axis_pytree, is_traced
 from ._composition_utils import infer_input_dimensionality
 
 if TYPE_CHECKING:
@@ -24,7 +25,7 @@ def _check_zero_samples(
         raise ValueError(err_message)
 
 
-def _check_input_dimensionality(bas: "BasisMixin | Basis", xi: Tuple) -> None:
+def _check_input_dimensionality(bas: BasisMixin | Basis, xi: Tuple) -> None:
     """
     Check that the number of inputs provided by the user matches the number of inputs required.
 
@@ -66,14 +67,15 @@ def _check_samples_consistency(*xi: NDArray) -> None:
 
 
 def _check_transform_input(
-    bas: "BasisMixin | Basis",
+    bas: BasisMixin | Basis,
     *xi: ArrayLike,
 ) -> Tuple[NDArray]:
     # check dimensionality
     _check_input_dimensionality(bas, xi)
 
-    # conversion type
-    if isinstance(xi[0], Tracer):
+    # conversion type: a single traced input forces the jax conversion for all
+    # of them, since numpy cannot convert tracers.
+    if is_traced(xi):
         at_least_1d = jnp.atleast_1d
     else:
         at_least_1d = np.atleast_1d
@@ -83,13 +85,18 @@ def _check_transform_input(
     try:
         # make sure array is at least 1d (so that we succeed when only
         # passed a scalar)
-        xi = tuple(at_least_1d(x).astype(float) for x in xi)
+        xi = tuple(at_least_1d(x) for x in xi)
+        components = (
+            b for b in bas._iterate_over_components() for _ in range(b._n_inputs)
+        )
+        xi = [
+            x.astype(float) if getattr(b, "_convert_to_float", True) else x
+            for b, x in zip(components, xi)
+        ]
+
     # ValueError here surfaces the exception with e.g., `x=np.array["a", "b"])`
     except (TypeError, ValueError):
         raise TypeError("Input samples must be array-like of floats!")
-
-    # check for non-empty samples
-    _check_zero_samples(tuple(len(x) for x in xi))
 
     # checks on input and outputs
     _check_samples_consistency(*xi)

@@ -4,7 +4,7 @@ import lineax as lx
 import optimistix as optx
 from jaxtyping import Array, PyTree, Scalar
 
-from ._optimistix_adapter import OptimistixAdapter
+from ._optimistix_adapter import _OPTX_V_010, OptimistixAdapter
 
 
 def _make_rate_scaler(
@@ -39,7 +39,7 @@ class BFGS(optx.BFGS):
         atol: float,
         norm: Callable[[PyTree], Scalar] = optx.max_norm,
         use_inverse: bool = True,
-        verbose: frozenset[str] = frozenset(),
+        verbose: frozenset[str] | bool | Callable[..., None] | None = None,
         stepsize: float | None = None,
         linesearch_kwargs: dict[str, Any] | None = None,
     ):
@@ -49,6 +49,17 @@ class BFGS(optx.BFGS):
         self.use_inverse = use_inverse
         self.descent = optx.NewtonDescent(linear_solver=lx.Cholesky())
         self.search = _make_rate_scaler(stepsize, linesearch_kwargs)
+
+        if _OPTX_V_010:
+            # >=0.1.0 accepts bool or callable
+            if verbose is None:
+                verbose = False
+            verbose = optx._misc.default_verbose(verbose)
+        else:
+            # < 0.1.0 accepts frozendict
+            if verbose is None:
+                verbose = frozenset()
+
         self.verbose = verbose
 
 

@@ -4,7 +4,6 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.18.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -16,6 +15,9 @@ kernelspec:
 
 %matplotlib inline
 import warnings
+import jax
+
+jax.config.update("jax_enable_x64", True)
 
 # Ignore the first specific warning
 warnings.filterwarnings(
@@ -190,7 +192,6 @@ Different option are possible. With a soft-plus we are assuming an "additive" ef
 
 ```{code-cell} ipython3
 gamma_model = nmo.glm.GLM(
-    solver_kwargs=dict(tol=10**-13),
     regularizer="Ridge",
     regularizer_strength=0.02,
     observation_model="Gamma",
@@ -277,10 +278,9 @@ We can compare the Gamma GLM to a standard Gaussian GLM. Nemos implements Gaussi
 
 ```{code-cell} ipython3
 gaussian_model = nmo.glm.GLM(
-    observation_model="Gaussian",    
+    observation_model="Gaussian",
     regularizer="Ridge",
     regularizer_strength=0.02,
-    solver_kwargs=dict(tol=10**-13),
 )
 
 gaussian_model.fit(Xtrain, Ytrain[:, neu])
@@ -311,9 +311,9 @@ plt.ylabel("Fluorescence")
 plt.show()
 ```
 
-While there is some variability in the fit for both models, one advantage of the gamma distribution is clear: the nonnegativity 
+While there is some variability in the fit for both models, one advantage of the gamma distribution is clear: the nonnegativity
 constraint is followed with the data.
-This is required for using GLMs to predict the firing rate, which must be positive, in response to simulated inputs. 
+This is required for using GLMs to predict the firing rate, which must be positive, in response to simulated inputs.
 See Peyrache et al. 2018[$^{[1]}$](#ref-1) for an example of simulating activity with a GLM.
 
 Another way to compare models is to compute tuning curves. Here we use the function [`compute_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_tuning_curves) from pynapple.

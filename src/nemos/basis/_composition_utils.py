@@ -5,7 +5,11 @@ Collection of functions that transverse the composite basis tree
 with no to minimal re
 """
 
+from __future__ import annotations
+
+import contextvars
 import re
+from contextlib import contextmanager
 from copy import deepcopy
 from functools import wraps
 from typing import TYPE_CHECKING, Any, List, Tuple
@@ -18,6 +22,51 @@ from .._inspect_utils.inspect_utils import count_positional_and_var_args
 if TYPE_CHECKING:
     from ._basis_mixin import AtomicBasisMixin, BasisMixin
     from ._custom_basis import CustomBasis
+
+# Internal, context-local flag asserting that the component bases handed to a
+# composite constructor are ALREADY owned copies that no external reference
+# aliases, so the constructor can skip the defensive ``deepcopy`` of its
+# components. When set, ``CompositeBasisMixin.__init__`` stores the components
+# by reference instead of copying them.
+#
+# This is an internal invariant contract, NOT a user-facing option: enabling it
+# where the invariant does not hold lets mutations on the composite leak back
+# into the operands. It must only ever wrap a construction whose components are
+# freshly cloned/deep-copied (see ``shallow_construction``).
+_shallow_copy = contextvars.ContextVar("_shallow_copy", default=False)
+
+
+def is_shallow_construction() -> bool:
+    """Return True when inside a :func:`shallow_construction` context."""
+    return _shallow_copy.get()
+
+
+@contextmanager
+def shallow_construction(enabled: bool = True):
+    """Assert that composite constructor inputs are already owned copies.
+
+    Assert that composite constructor inputs are already owned copies so the
+    constructor stores them by reference instead of deep-copying.
+
+    Token-based set/reset makes it exception-safe, correctly nested, and isolated
+    per thread / async context. Wrap only the single construction call, never a
+    whole method body, so incidental constructions are not accidentally trusted.
+
+    Parameters
+    ----------
+    enabled :
+        When False, this is a no-op (deep copy runs as usual). Lets a call site
+        assert ownership conditionally.
+    """
+    if not enabled:
+        yield
+        return
+    token = _shallow_copy.set(True)
+    try:
+        yield
+    finally:
+        _shallow_copy.reset(token)
+
 
 __PUBLIC_BASES__ = [
     "IdentityEval",
@@ -39,6 +88,7 @@ __PUBLIC_BASES__ = [
     "AdditiveBasis",
     "MultiplicativeBasis",
     "CustomBasis",
+    "Category",
 ]
 
 
@@ -57,7 +107,7 @@ def add_docstring(method_name, cls):
     return wrapper
 
 
-def _iterate_over_components(basis: "BasisMixin"):
+def _iterate_over_components(basis: BasisMixin):
     components = (
         basis._iterate_over_components()
         if hasattr(basis, "_iterate_over_components")
@@ -66,7 +116,7 @@ def _iterate_over_components(basis: "BasisMixin"):
     yield from components
 
 
-def _get_root(bas: "BasisMixin"):
+def _get_root(bas: BasisMixin):
     """Get the basis root."""
 
     parent = bas
@@ -75,7 +125,7 @@ def _get_root(bas: "BasisMixin"):
     return parent
 
 
-def _has_default_label(bas: "BasisMixin"):
+def _has_default_label(bas: BasisMixin):
     """Check for default label.
 
     The check either use the property (if it is a nemos basis), or the class name
@@ -89,7 +139,7 @@ def _has_default_label(bas: "BasisMixin"):
 
 
 def _recompute_class_default_labels(
-    bas: "BasisMixin",
+    bas: BasisMixin,
 ):
     """
     Recompute all labels matching default for self.
@@ -111,7 +161,7 @@ def _recompute_class_default_labels(
             bas_id += 1
 
 
-def _recompute_all_default_labels(root: "BasisMixin") -> "BasisMixin":
+def _recompute_all_default_labels(root: BasisMixin) -> BasisMixin:
     """Recompute default all labels."""
     updated = []
     for bas in _iterate_over_components(root):
@@ -121,7 +171,7 @@ def _recompute_all_default_labels(root: "BasisMixin") -> "BasisMixin":
     return root
 
 
-def _update_label_from_root(bas: "BasisMixin", class_name: str, class_label: str):
+def _update_label_from_root(bas: BasisMixin, class_name: str, class_label: str):
     """
     Subtract 1 to each matching default label with higher ID then current.
 
@@ -148,7 +198,7 @@ def _update_label_from_root(bas: "BasisMixin", class_name: str, class_label: str
             bas._label = f"{class_name}_{bas_id}" if bas_id else class_name
 
 
-def _composite_basis_setter_logic(new: "BasisMixin", current: "BasisMixin"):
+def _composite_basis_setter_logic(new: BasisMixin, current: BasisMixin):
     """Setter logic for composite basis."""
     # Carry-on label if possible
     if _has_default_label(new) and not _has_default_label(current):
@@ -163,14 +213,14 @@ def _composite_basis_setter_logic(new: "BasisMixin", current: "BasisMixin"):
     # Carry-on input shape info if dimensions match
     for attr in ("_input_shape_product", "_input_shape_"):
         if getattr(new, attr, None) is None and getattr(
-            new, "_n_input_dimensionality", None
-        ) == getattr(current, "_n_input_dimensionality", None):
+            new, "_n_inputs", None
+        ) == getattr(current, "_n_inputs", None):
             setattr(new, attr, getattr(current, attr, None))
     return new
 
 
 def _atomic_basis_label_setter_logic(
-    bas: "AtomicBasisMixin | CustomBasis", new_label: str
+    bas: AtomicBasisMixin | CustomBasis, new_label: str
 ) -> Exception | None:
     """Setter logic for atomic basis."""
     # check default cases
@@ -221,13 +271,13 @@ def _atomic_basis_label_setter_logic(
     return
 
 
-def infer_input_dimensionality(bas: "BasisMixin") -> int:
+def infer_input_dimensionality(bas: BasisMixin) -> int:
     """Infer input dimensionality from compute_features signature.
 
-    If `_n_input_dimensionality` return the attribute, otherwise return
+    If `_n_inputs` return the attribute, otherwise return
     the number of fixed arguments in `compute_features`.
     """
-    n_input_dim = getattr(bas, "_n_input_dimensionality", None)
+    n_input_dim = getattr(bas, "_n_inputs", None)
     if n_input_dim is None:
         # infer from compute_features (facilitate custom basis compatibility).
         # assume compute_features is always implemented.
@@ -246,7 +296,7 @@ def infer_input_dimensionality(bas: "BasisMixin") -> int:
     return n_input_dim
 
 
-def generate_basis_label_pair(bas: "BasisMixin"):
+def generate_basis_label_pair(bas: BasisMixin):
     """Generate all labels and basis in a basis tree."""
     if hasattr(bas, "basis1") and hasattr(bas, "basis2"):
         for label, sub_bas in generate_basis_label_pair(bas.basis1):
@@ -256,7 +306,7 @@ def generate_basis_label_pair(bas: "BasisMixin"):
     yield getattr(bas, "label", bas.__class__.__name__), bas
 
 
-def generate_composite_basis_labels(bas: "BasisMixin", type_label: str) -> str:
+def generate_composite_basis_labels(bas: BasisMixin, type_label: str) -> str:
     """Generate all labels in a basis tree."""
     if hasattr(bas, "basis1") and hasattr(bas, "basis2"):
         if type_label == "all" or bas._label:
@@ -278,7 +328,7 @@ def generate_composite_basis_labels(bas: "BasisMixin", type_label: str) -> str:
             yield getattr(bas, "label", bas.__class__.__name__)
 
 
-def label_setter(bas: "BasisMixin", label: str | None) -> None | ValueError:
+def label_setter(bas: BasisMixin, label: str | None) -> None | ValueError:
     """Label setter logic for any basis."""
     if not hasattr(bas, "basis1") or not hasattr(bas, "basis2"):
         return _atomic_basis_label_setter_logic(bas, label)
@@ -326,8 +376,8 @@ def transform_to_shape(xi):
 
 
 def set_input_shape_atomic(
-    bas: "AtomicBasisMixin | CustomBasis", *xis: int | tuple[int, ...] | NDArray | None
-) -> "AtomicBasisMixin":
+    bas: AtomicBasisMixin | CustomBasis, *xis: int | tuple[int, ...] | NDArray | None
+) -> AtomicBasisMixin:
     """Set input shape attributes for atomic basis."""
     # reset all to none
     if all(xi is None for xi in xis):
@@ -362,7 +412,7 @@ def _have_unique_shapes(inputs: List[NDArray] | List[Tuple]):
     return len(shapes) == 1, shapes, context
 
 
-def _check_unique_shapes(inputs: List[NDArray] | List[Tuple], basis: "BasisMixin"):
+def _check_unique_shapes(inputs: List[NDArray] | List[Tuple], basis: BasisMixin):
     """Check that all inputs have the same shape.
 
     Parameters
@@ -396,13 +446,13 @@ def set_input_shape(bas, *xi):
         else 1
     )
     # get the attribute if available
-    n_input_dim = getattr(bas, "_n_input_dimensionality", n_args)
+    n_input_dim = getattr(bas, "_n_inputs", n_args)
 
     if len(xi) == 1 and xi[0] is None:
         xi = (None,) * n_input_dim
 
     elif len(xi) != n_input_dim:
-        expected_inputs = getattr(bas, "_n_input_dimensionality", 1)
+        expected_inputs = getattr(bas, "_n_inputs", 1)
         raise ValueError(
             f"set_input_shape expects {expected_inputs} input"
             f"{'s' if expected_inputs > 1 else ''}, but {len(xi)} were provided."
@@ -434,7 +484,7 @@ def set_input_shape(bas, *xi):
         if hasattr(bas.basis1, "compute_features")
         else 1
     )
-    n_input_dim_1 = getattr(bas.basis1, "_n_input_dimensionality", n_args_1)
+    n_input_dim_1 = getattr(bas.basis1, "_n_inputs", n_args_1)
 
     out1 = set_input_shape(bas.basis1, *xi[:n_input_dim_1])
     out2 = set_input_shape(bas.basis2, *xi[n_input_dim_1:])
@@ -476,7 +526,7 @@ def list_shapes(basis) -> List[Tuple | None]:
     return [shape for comp in components for shape in unpack_shapes(comp)]
 
 
-def get_input_shape(bas: "BasisMixin") -> List[Tuple | None]:
+def get_input_shape(bas: BasisMixin) -> List[Tuple | None]:
     """Get the input shape of a composite basis.
 
     Get input shape from composition of basis, including user defined ones.
@@ -520,7 +570,7 @@ def is_basis_like(putative_basis: Any, sklearn_compatibility=False) -> bool:
     return is_basis
 
 
-def multiply_basis_by_integer(bas: "BasisMixin", mul: int) -> "BasisMixin":
+def multiply_basis_by_integer(bas: BasisMixin, mul: int) -> BasisMixin:
     """Multiplication by integer logic for bases."""
     if mul <= 0:
         raise ValueError(
@@ -548,14 +598,14 @@ def multiply_basis_by_integer(bas: "BasisMixin", mul: int) -> "BasisMixin":
 
     # parent is set to None at init for add and updated for self.
     add = bas + bas
-    with add._set_shallow_copy(True):
+    with shallow_construction():
         for _ in range(2, mul):
             add += deepcopy(bas)
     _recompute_all_default_labels(add)
     return add
 
 
-def raise_basis_to_power(bas: "BasisMixin", exponent: int) -> "BasisMixin":
+def raise_basis_to_power(bas: BasisMixin, exponent: int) -> BasisMixin:
     """Power of basis by integer."""
     if not isinstance(exponent, int):
         raise TypeError("Basis exponent should be an integer!")
@@ -584,7 +634,7 @@ def raise_basis_to_power(bas: "BasisMixin", exponent: int) -> "BasisMixin":
         return bas
 
     mul = bas * bas
-    with mul._set_shallow_copy(True):
+    with shallow_construction():
         for _ in range(2, exponent):
             mul *= deepcopy(bas)
     _recompute_all_default_labels(mul)

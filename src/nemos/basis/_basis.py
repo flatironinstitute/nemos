@@ -6,15 +6,18 @@ import copy
 import math
 import warnings
 from copy import deepcopy
-from functools import wraps
-from typing import Callable, Generator, Optional, Tuple, Union
+from functools import partial, wraps
+from typing import TYPE_CHECKING, Callable, Generator, List, Optional, Tuple, Union
 
 import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from pynapple import Tsd, TsdFrame, TsdTensor
+
+if TYPE_CHECKING:
+    from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..base_class import Base
+from ..tree_utils import is_traced
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ..utils import row_wise_kron
@@ -35,32 +38,46 @@ from ._composition_utils import (
     promote_to_transformer,
     raise_basis_to_power,
     set_input_shape,
+    shallow_construction,
 )
 
 
-def check_transform_input(func: Callable) -> Callable:
+def check_transform_input(func: Callable | None = None, flat_output=False) -> Callable:
     """Check input before calling basis.
 
     This decorator allows to raise an exception that is more readable
     when the wrong number of input is provided to evaluate.
+
+    Parameters
+    ----------
+    func :
+        The callable being decorated. ``None`` when the decorator is used
+        with arguments (e.g. ``@check_transform_input(flat_output=True)``),
+        in which case a partial is returned and applied to the function in a
+        second call.
+    flat_output :
+        Controls the shape of the zeros returned when the input is empty.
+        Set to ``True`` for ``compute_features``, which flattens all input
+        dimensions into a 2-D matrix ``(n_samples, n_output_features)``.
+        Set to ``False`` (default) for ``evaluate``, which preserves the full
+        input shape and appends the basis dimension, yielding
+        ``(*input_shape, n_basis_funcs)``.
     """
+    if func is None:
+        return partial(check_transform_input, flat_output=flat_output)
 
     @wraps(func)
-    def wrapper(self: Basis, *xi: ArrayLike, **kwargs) -> NDArray:
+    def wrapper(self: Basis, *xi: ArrayLike, **kwargs) -> NDArray | jnp.ndarray:
         xi = self._check_transform_input(*xi)
+        if xi[0].size == 0:
+            # do not evaluate if empty
+            self.setup_basis(*xi)
+            if flat_output:
+                return jnp.zeros((xi[0].shape[0], self.n_output_features))
+            else:
+                shape = xi[0].shape
+                return jnp.zeros((*shape, self.n_basis_funcs))
         return func(self, *xi, **kwargs)  # Call the basis
-
-    return wrapper
-
-
-def check_one_dimensional(func: Callable) -> Callable:
-    """Check if the input is one-dimensional."""
-
-    @wraps(func)
-    def wrapper(self: Basis, *xi: NDArray, **kwargs):
-        if any(x.ndim != 1 for x in xi):
-            raise ValueError("Input sample must be one dimensional!")
-        return func(self, *xi, **kwargs)
 
     return wrapper
 
@@ -92,22 +109,48 @@ def min_max_rescale_samples(
     else:
         nanmin, nanmax, asarray, where = np.nanmin, np.nanmax, np.asarray, np.where
 
-    # if not normalize all array
-    vmin = nanmin(sample_pts, axis=0) if bounds is None else bounds[0]
-    vmax = nanmax(sample_pts, axis=0) if bounds is None else bounds[1]
-    scaling = asarray(vmax - vmin)
-    # do not normalize if samples contain a single value (in which case vmax=vmin)
-    scaling = where(scaling == 0, 1.0, scaling)
-    sample_pts = (
-        where((sample_pts < vmin) | (sample_pts > vmax), np.nan, sample_pts) - vmin
-    ) / scaling
+    if bounds is None:
+        vmin = nanmin(sample_pts, axis=0)
+        vmax = nanmax(sample_pts, axis=0)
+    elif isinstance(bounds[0], (tuple, list)):
+        vmin = asarray([b[0] for b in bounds])
+        vmax = asarray([b[1] for b in bounds])
+    else:
+        vmin, vmax = bounds[0], bounds[1]
 
+    scaling = asarray(vmax - vmin)
+    scaling = where(scaling == 0, 1.0, scaling)
+    sample_pts = (sample_pts - vmin) / scaling
     return sample_pts, scaling
+
+
+def _is_single_bound(bounds) -> bool:
+    """Check if bounds represents a single (min, max) pair vs multiple bounds."""
+    if bounds is None:
+        return True
+    if not isinstance(bounds, (list, tuple)):
+        return False
+    if len(bounds) != 2:
+        return False
+    # Single bound has numeric elements; multiple bounds have tuple/None elements
+    return all(isinstance(b, (int, float, np.number)) or b is None for b in bounds)
+
+
+def _fill_bounds(b):
+    """Fill None values in bound tuples with 0 or 1."""
+    if b is None:
+        return (0, 1)
+    else:
+        lo, hi = b
+        return (
+            0 if lo is None else lo,
+            1 if hi is None else hi,
+        )
 
 
 def get_equi_spaced_samples(
     *n_samples,
-    bounds: Optional[tuple[float, float] | tuple[tuple[float, float]]] = None,
+    bounds: Optional[tuple[float, float] | List[tuple[float, float] | None]] = None,
 ) -> Generator[NDArray]:
     """Get equi-spaced samples for all the input dimensions.
 
@@ -119,22 +162,24 @@ def get_equi_spaced_samples(
     n_samples[0],...,n_samples[n]
         The number of samples in each axis of the grid.
     bounds:
-        The bounds for the linspace, if provided.
+        The bounds for the linspace, if provided. Can be:
+        - None: use (0, 1) for all dimensions
+        - A single tuple (min, max): use for all dimensions
+        - A list/tuple of tuples/None: one per dimension
 
     Returns
     -------
     :
-        A generator yielding numpy arrays of linspaces from 0 to 1 of sizes specified by ``n_samples``.
+        A generator yielding numpy arrays of linspaces from 0 (or specified min)
+        to 1 (or specified max) of sizes specified by ``n_samples``.
     """
-    # handling of defaults when evaluating on a grid
-    # (i.e. when we cannot use max and min of samples)
-    if bounds is None:
-        mn, mx = 0, 1
-    elif all(isinstance(b, tuple) and len(b) == 2 for b in bounds):
-        return (np.linspace(*b, samp) for b, samp in zip(bounds, n_samples))
-    else:
-        mn, mx = bounds
-    return (np.linspace(mn, mx, samp) for samp in n_samples)
+
+    if _is_single_bound(bounds):
+        # bounds is None or a single (min, max) tuple - expand to match n_samples length
+        bounds = [bounds] * len(n_samples)
+    return (
+        np.linspace(*_fill_bounds(b), s) for b, s in zip(bounds, n_samples, strict=True)
+    )
 
 
 class Basis(Base, abc.ABC, BasisTransformerMixin):
@@ -157,7 +202,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
     def __init__(
         self,
     ) -> None:
-        self._n_input_dimensionality = getattr(self, "_n_input_dimensionality", 0)
+        self._n_inputs = getattr(self, "_n_inputs", 0)
 
         # specified only after inputs/input shapes are provided
         self._input_shape_product = getattr(self, "_input_shape_product", None)
@@ -177,7 +222,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             self._n_basis_funcs = orig_n_basis
             raise e
 
-    @check_transform_input
+    @check_transform_input(flat_output=True)
     def compute_features(
         self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor
     ) -> FeatureMatrix:
@@ -568,7 +613,6 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    @check_one_dimensional
     def evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
         Evaluate the basis at the sample points.
@@ -606,11 +650,20 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         >>> out = additive_basis.evaluate(x, y)
 
         """
-        X = np.hstack(
-            (
-                self.basis1.evaluate(*xi[: self.basis1._n_input_dimensionality]),
-                self.basis2.evaluate(*xi[self.basis1._n_input_dimensionality :]),
+        have_same_shape, shapes, _ = _have_unique_shapes(xi)
+        if not have_same_shape:
+            raise ValueError(
+                f"``AdditiveBasis.evaluate`` requires all inputs to have the same shape. "
+                f"Got shapes: {shapes}."
             )
+        # numpy cannot concatenate tracers, jax.numpy handles both
+        concatenate = jnp.concatenate if is_traced(xi) else np.concatenate
+        X = concatenate(
+            (
+                self.basis1.evaluate(*xi[: self.basis1._n_inputs]),
+                self.basis2.evaluate(*xi[self.basis1._n_inputs :]),
+            ),
+            axis=-1,
         )
         return X
 
@@ -654,8 +707,13 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
 
         """
         # the numpy conversion is important, there is some in-place
-        # array modification in basis.
-        hstack_pynapple = support_pynapple(conv_type="numpy")(np.hstack)
+        # array modification in basis. Under a jax transformation the
+        # inputs are tracers, which numpy cannot convert (and which cannot
+        # be modified in-place anyway), so stack them with jax.numpy.
+        if is_traced(xi):
+            hstack_pynapple = jnp.hstack
+        else:
+            hstack_pynapple = support_pynapple(conv_type="numpy")(np.hstack)
         comp_feature_1 = getattr(
             self.basis1, "_compute_features", self.basis1.compute_features
         )
@@ -664,8 +722,8 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         )
         X = hstack_pynapple(
             (
-                comp_feature_1(*xi[: self.basis1._n_input_dimensionality]),
-                comp_feature_2(*xi[self.basis1._n_input_dimensionality :]),
+                comp_feature_1(*xi[: self.basis1._n_inputs]),
+                comp_feature_2(*xi[self.basis1._n_inputs :]),
             ),
         )
         return X
@@ -967,7 +1025,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
                 "Resetting input shape to default (None).",
             )
 
-        with self._set_shallow_copy(not have_unique_shapes):
+        with shallow_construction(not have_unique_shapes):
             CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
         Basis.__init__(self)
 
@@ -1021,13 +1079,15 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         """
         # evaluate preserves the shape of the input arrays
         shape = xi[0].shape
-        x1 = self.basis1.evaluate(*xi[: self.basis1._n_input_dimensionality])
-        x2 = self.basis2.evaluate(*xi[self.basis1._n_input_dimensionality :])
+        x1 = self.basis1.evaluate(*xi[: self.basis1._n_inputs])
+        x2 = self.basis2.evaluate(*xi[self.basis1._n_inputs :])
         # Required in case xi.shape[-1] == 0
         # For example, in a multiplication with Zero basis
         x1_shape = math.prod(x1.shape[:-1])
         x2_shape = math.prod(x2.shape[:-1])
-        X = np.asarray(
+        # numpy cannot convert tracers, jax.numpy handles both
+        asarray = jnp.asarray if is_traced(xi) else np.asarray
+        X = asarray(
             row_wise_kron(
                 x1.reshape(x1_shape, x1.shape[-1]),
                 x2.reshape(x2_shape, x2.shape[-1]),
@@ -1071,8 +1131,8 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         comp_feature_2 = getattr(
             self.basis2, "_compute_features", self.basis2.compute_features
         )
-        x1 = comp_feature_1(*xi[: self.basis1._n_input_dimensionality])
-        x2 = comp_feature_2(*xi[self.basis1._n_input_dimensionality :])
+        x1 = comp_feature_1(*xi[: self.basis1._n_inputs])
+        x2 = comp_feature_2(*xi[self.basis1._n_inputs :])
         # multiplicative basis inputs are of the same shape, checked and
         # set just before the call to this method
         n_samples = x1.shape[0]

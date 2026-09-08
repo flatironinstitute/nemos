@@ -1,11 +1,15 @@
 """Zero basis used for variable selection."""
 
-from typing import Optional, Tuple
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import numpy as np
 from numpy._typing import ArrayLike
 from numpy.typing import NDArray
-from pynapple import Tsd, TsdFrame, TsdTensor
+
+if TYPE_CHECKING:
+    from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
@@ -33,11 +37,11 @@ class ZeroBasis(AtomicBasisMixin, Basis):
         self,
         label: Optional[str] = None,
     ) -> None:
+        self._n_inputs = 1
         AtomicBasisMixin.__init__(self, n_basis_funcs=0, label=label)
         Basis.__init__(
             self,
         )
-        self._n_input_dimensionality = 1
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input

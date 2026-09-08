@@ -9,19 +9,52 @@ The key feature for this module is the `cast_jax` decorator, which automatically
 to JAX arrays and, where applicable, converts outputs back to pynapple TSD objects.
 """
 
+from __future__ import annotations
+
 from functools import wraps
-from typing import Any, Callable, List, Literal, Optional, Tuple, Type, Union
+from numbers import Number
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+)
 
 import jax
 import jax.numpy as jnp
+import lazy_loader as lazy
 import numpy as np
-import pynapple as nap
 from numpy.typing import NDArray
 
 from . import tree_utils
 from .pytrees import FeaturePytree
 
-_NAP_TIME_PRECISION = 10 ** (-nap.nap_config.time_index_precision)
+# Lazy load pynapple to improve import times
+nap = lazy.load("pynapple")
+
+if TYPE_CHECKING:
+    import pynapple as nap  # noqa: F811
+
+# Lazy-computed constant to avoid triggering pynapple import at module load
+_NAP_TIME_PRECISION = None
+
+
+def _get_nap_time_precision():
+    """Get pynapple time precision, computing on first call."""
+    global _NAP_TIME_PRECISION
+    if _NAP_TIME_PRECISION is None:
+        _NAP_TIME_PRECISION = 10 ** (-nap.nap_config.time_index_precision)
+    return _NAP_TIME_PRECISION
+
+
+def _is_scalar_or_0d(x):
+    """Return True if x is a Python number or a 0-D array/array-like."""
+    return isinstance(x, Number) or (hasattr(x, "ndim") and x.ndim == 0)
 
 
 def is_numpy_array_like(obj) -> Tuple[Any, bool]:
@@ -229,7 +262,7 @@ def _check_all_close(arrays: List[NDArray]) -> bool:
             arrays[0],
             x,
             rtol=0,
-            atol=_NAP_TIME_PRECISION,
+            atol=_get_nap_time_precision(),
         )
         for x in arrays[1:]
     )
@@ -289,7 +322,11 @@ def get_time_info(*args, **kwargs):
 
 
 def cast_to_pynapple(
-    array: jnp.ndarray, time: NDArray, time_support: nap.IntervalSet, metadata=None
+    array: jnp.ndarray,
+    time: NDArray,
+    time_support: nap.IntervalSet,
+    columns=None,
+    metadata=None,
 ) -> Union[nap.Tsd, nap.TsdFrame, nap.TsdTensor]:
     """
     Convert an array to a pynapple time series object.
@@ -305,6 +342,8 @@ def cast_to_pynapple(
         Time axis for the pynapple object.
     time_support:
         Time support information for the pynapple object.
+    columns:
+        The column names.
     metadata:
         Pynapple metadata to be re-attached.
 
@@ -320,13 +359,13 @@ def cast_to_pynapple(
     elif array.ndim == 1:
         return nap.Tsd(t=time, d=array, time_support=time_support)
     elif array.ndim == 2:
-        cols = metadata.get("columns", None) if hasattr(metadata, "get") else None
-        metadata = (
-            metadata
-            if hasattr(cols, "__len__") and (len(cols) == array.shape[1])
-            else {}
+        return nap.TsdFrame(
+            t=time,
+            d=array,
+            time_support=time_support,
+            metadata=metadata,
+            columns=columns,
         )
-        return nap.TsdFrame(t=time, d=array, time_support=time_support, **metadata)
     else:
         return nap.TsdTensor(t=time, d=array, time_support=time_support)
 
@@ -428,11 +467,11 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
                     )
                 time, time_support = get_time_info(*args, **kwargs)
 
-                def cast_out(pytree, metadata=None):
-                    # cast back to pynapple
+                def cast_out(pytree, columns=None, metadata=None):
+                    # cast back to pynapple, re-attaching stored columns/metadata
                     return jax.tree_util.tree_map(
                         lambda x: cast_to_pynapple(
-                            x, time, time_support, metadata=metadata
+                            x, time, time_support, columns=columns, metadata=metadata
                         ),
                         pytree,
                     )
@@ -452,31 +491,48 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
                     f"Conversion of type '{conv_type}' not implemented!"
                 )
             # apply function/method
-            res = func(*args, **kwargs)
-            # strip metadata (if args[0] hasattr _metadata)
+            # extract the metadata from self.
             meta = getattr(args[0], "_metadata", None) if args else None
+            col = meta.get("columns", None) if hasattr(meta, "get") else None
+            meta = meta.get("metadata", None) if hasattr(meta, "get") else None
+
+            res = func(*args, **kwargs)
             # revert casting if pynapple
-            return cast_out(res, metadata=meta)
+            return cast_out(res, columns=col, metadata=meta)
 
         return wrapper
 
     return decorator
 
 
-def cast_to_jax(func):
-    """Cast argument to jax."""
+def cast_to_jax(_func=None, *, dtype=float) -> Callable:
+    """Cast argument to jax.
 
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            args, kwargs = jax.tree_util.tree_map(
-                lambda x: jnp_asarray_if(x, dtype=float), (args, kwargs)
-            )
-        except Exception:
-            raise TypeError(
-                "X and y should be array-like object (or trees of array like object) "
-                "with numeric data type!"
-            )
-        return func(*args, **kwargs)
+    Can be used as a plain decorator (``@cast_to_jax``) or as a decorator
+    factory (``@cast_to_jax(dtype=None)``).  The default ``dtype=float``
+    preserves the original behaviour: all array-like inputs are promoted to a
+    floating-point JAX array.  Pass ``dtype=None`` to keep each input's own
+    dtype (useful when some arguments are unsigned-integer keys).
+    """
 
-    return wrapper
+    def decorator(func):
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                args, kwargs = jax.tree_util.tree_map(
+                    lambda x: jnp_asarray_if(x, dtype=dtype), (args, kwargs)
+                )
+            except Exception:
+                raise TypeError(
+                    "X and y should be array-like object (or trees of array like object) "
+                    "with numeric data type!"
+                )
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    if _func is not None:
+        # Used as @cast_to_jax without parentheses
+        return decorator(_func)
+    return decorator

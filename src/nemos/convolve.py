@@ -6,12 +6,13 @@ from __future__ import annotations
 import re
 import warnings
 from functools import partial
-from math import prod
+from math import log2, prod
 from typing import Any, Callable, List, Literal, Optional
 
 import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike, NDArray
+from scipy.fft import next_fast_len
 
 from . import type_casting, utils, validation
 
@@ -26,6 +27,113 @@ _CORR_VEC_BASIS = jax.vmap(partial(jnp.convolve, mode="valid"), (None, 1), 1)
 
 _CORR_VEC = jax.vmap(partial(jnp.convolve, mode="valid"), (1, None), 1)
 _CORR_VEC = jax.vmap(_CORR_VEC, (None, 1), 2)
+
+
+def _fft_valid_conv(basis_col: NDArray, signal: NDArray) -> jnp.ndarray:
+    """Valid-mode 1D convolution of ``signal`` with ``basis_col`` via FFT.
+
+    Reproduces ``jnp.convolve(basis_col, signal, mode="valid")``, but multiplies in the
+    frequency domain. The transform length is padded to the next 5-smooth integer
+    (:func:`scipy.fft.next_fast_len`) rather than the raw ``n_signal + n_kernel - 1``:
+    the latter can land on a large prime and be several times slower, while a 5-smooth
+    length is FFT-friendly at a negligible memory cost (typically < 1%). The length is a
+    pure function of the (static) input shapes, so it is computed at trace time and this
+    stays ``jit``- and GPU-compatible.
+    """
+    n_signal = signal.shape[0]
+    n_kernel = basis_col.shape[0]
+    n_fft = int(next_fast_len(n_signal + n_kernel - 1))
+    full = jnp.fft.irfft(
+        jnp.fft.rfft(signal, n_fft) * jnp.fft.rfft(basis_col, n_fft), n_fft
+    )
+    # "valid" region: only where the two fully overlap.
+    return full[n_kernel - 1 : n_signal]
+
+
+# FFT counterpart of `_CORR_VEC`. The two-level vmap reduces each call to 1D operands (a
+# single basis column and a single input channel), and the input/output axis layout
+# mirrors `_CORR_VEC` exactly, so the batching helpers route to either primitive
+# transparently.
+_CORR_VEC_FFT = jax.vmap(_fft_valid_conv, (1, None), 1)
+_CORR_VEC_FFT = jax.vmap(_CORR_VEC_FFT, (None, 1), 2)
+
+# FFT-based convolution is asymptotically cheaper once the kernel length grows large
+# relative to log2 of the convolution block size. This factor sets that crossover for the
+# CPU heuristic; it is calibrated on the measured direct-vs-FFT crossover of the full
+# pipeline (window ~ 64-128 on CPU, nearly independent of the number of samples).
+_FFT_WINDOW_LOG_FACTOR = 5.0
+
+
+def _array_on_cpu(array: Any) -> bool:
+    """Return whether ``array`` lives on a CPU device.
+
+    Under ``jit`` the array is a tracer with no concrete device and ``.devices()`` raises;
+    in that case we return ``False`` so the caller falls back to the direct path.
+    """
+    try:
+        return all(d.platform == "cpu" for d in array.devices())
+    except Exception:
+        return False
+
+
+def _resolve_use_fft(
+    use_fft: Optional[bool],
+    array: Any,
+    eval_basis: NDArray,
+    batch_size_samples: int,
+) -> bool:
+    """Decide whether to run FFT-based convolution for a single input array.
+
+    ``use_fft=True``/``False`` forces the choice. When ``None``, the heuristic engages
+    only on CPU (comparing kernel length against ``log2`` of the block size); on other
+    devices it returns ``False``, deferring the algorithm choice to XLA.
+
+    The comparison uses ``batch_size_samples`` -- the length each FFT actually operates
+    on -- rather than the full sample-axis length, since with sample batching the FFT is
+    applied per block. The two coincide only when there is no sample batching.
+
+    Note: under ``jit`` the array is a tracer with no concrete device, so it is treated as
+    non-CPU and the direct path is used. To use FFT while tracing, pass an explicit
+    ``use_fft=True``.
+    """
+    if use_fft is not None:
+        return use_fft
+    if not _array_on_cpu(array):
+        return False
+    block_size = min(batch_size_samples, array.shape[0])
+    window_size = eval_basis.shape[0]
+    return window_size > _FFT_WINDOW_LOG_FACTOR * max(1.0, log2(max(block_size, 2)))
+
+
+@partial(jax.jit, static_argnums=(2,))
+def _unbatched_convolve(
+    array: NDArray, eval_basis: NDArray, corr_vec: Callable
+) -> jnp.ndarray:
+    """Convolve the full array in ``"valid"`` mode, without the batching machinery.
+
+    Fast path for the default case where no ``batch_size_*`` is requested: the
+    vectorized primitive is applied to the whole array in one call. A single-batch
+    scan produces the same result at the same runtime cost, but tracing and compiling
+    the batching machinery roughly doubles the compilation time per input shape,
+    which adds up when many shapes are convolved (e.g. pynapple epochs of different
+    lengths).
+
+    Parameters
+    ----------
+    array :
+        Input array, shape ``(n_samples, ...)``; trailing axes are flattened to
+        channels and restored on the output.
+    eval_basis :
+        Basis matrix, shape ``(window_size, n_basis_funcs)``.
+    corr_vec :
+        The vectorized 1D convolution primitive (``_CORR_VEC`` or ``_CORR_VEC_FFT``).
+    """
+    n_samples, *feat_shape = array.shape
+    window_size, n_basis = eval_basis.shape
+    conv = corr_vec(eval_basis, array.reshape(n_samples, -1))
+    # (valid_len, n_basis, n_channels) -> (valid_len, n_channels, n_basis)
+    conv = conv.transpose(0, 2, 1)
+    return conv.reshape(n_samples - window_size + 1, *feat_shape, n_basis)
 
 
 def _reorganize_scan_out(out, axis):
@@ -230,11 +338,22 @@ def _tensor_convolve(
     return conv_output.reshape(n_samples - window_size + 1, *feat_shape, n_basis)
 
 
+@partial(jax.jit, static_argnums=(2, 3, 4))
 def _batch_convolve_over_channels(
-    array: NDArray, eval_basis: NDArray, batch_size_channels: int, batch_size_basis: int
+    array: NDArray,
+    eval_basis: NDArray,
+    batch_size_channels: int,
+    batch_size_basis: int,
+    corr_vec: Callable = _CORR_VEC,
 ):
+    # The jit boundary also guarantees `conv_over_basis` is created once per trace:
+    # `binary_func` is a static argument of the jitted `_batch_binary_func`, so a
+    # fresh closure on every eager call would change its cache key and force a
+    # retrace + recompile each time.
     def conv_over_basis(array_chunk, basis_matrix):
-        return _batch_over_basis_convolve(array_chunk, basis_matrix, batch_size_basis)
+        return _batch_over_basis_convolve(
+            array_chunk, basis_matrix, batch_size_basis, corr_vec
+        )
 
     return _batch_binary_func(
         array, eval_basis, conv_over_basis, batch_size_channels, axis=1
@@ -242,18 +361,128 @@ def _batch_convolve_over_channels(
 
 
 def _batch_over_basis_convolve(
-    array: NDArray, eval_basis: NDArray, batch_size_basis: int
+    array: NDArray,
+    eval_basis: NDArray,
+    batch_size_basis: int,
+    corr_vec: Callable = _CORR_VEC,
 ):
     out = _batch_binary_func(
         eval_basis,
         array,
-        _CORR_VEC,
+        corr_vec,
         batch_size_basis,
         axis=1,
         out_axis=1,
     )
     # move basis axis.
     return out.transpose(0, 2, 1)
+
+
+@partial(jax.jit, static_argnums=(2, 3))
+def _fft_convolve(
+    array: NDArray,
+    eval_basis: NDArray,
+    batch_size_channels: int,
+    batch_size_basis: int,
+):
+    """FFT-based counterpart of :func:`_tensor_convolve`, without sample batching.
+
+    Produces the same ``"valid"`` convolution and output shape as ``_tensor_convolve``,
+    but replaces the direct correlation primitive with an FFT one. The full sample axis
+    is transformed at once (a single FFT), so this variant does not batch over samples;
+    memory is still batched over channels and basis filters. Use
+    :func:`_fft_overlap_save_convolve` when the sample axis must be batched.
+    """
+    n_samples, *feat_shape = array.shape
+
+    array = array.reshape(n_samples, -1)
+    window_size, n_basis = eval_basis.shape
+
+    conv_output = _batch_convolve_over_channels(
+        array, eval_basis, batch_size_channels, batch_size_basis, corr_vec=_CORR_VEC_FFT
+    )
+    return conv_output.reshape(n_samples - window_size + 1, *feat_shape, n_basis)
+
+
+# WORKAROUND (https://github.com/jax-ml/jax/issues/39120): jitting this function is
+# safe only together with the pad-row re-zeroing inside ``conv_batch`` below. XLA:CPU
+# (float32, jax<=0.9.0) miscompiles the pad -> nested-scan -> dynamic_slice
+# composition, reading the zero-pad rows back as uninitialized memory instead of
+# zeros. When the upstream fix ships, delete the marked block in ``conv_batch``;
+# the jit stays.
+@partial(
+    jax.jit,
+    static_argnames=("batch_size_samples", "batch_size_channels", "batch_size_basis"),
+)
+def _fft_overlap_save_convolve(
+    array: NDArray,
+    eval_basis: NDArray,
+    batch_size_samples: int,
+    batch_size_channels: int,
+    batch_size_basis: int,
+):
+    """Overlap-save FFT convolution over a batched sample axis.
+
+    Long inputs are convolved in blocks of ``batch_size_samples`` rather than with a
+    single full-length FFT. Consecutive blocks overlap by ``window_size - 1`` samples,
+    and each block's ``"valid"`` FFT convolution contributes
+    ``batch_size_samples - window_size + 1`` outputs that tile the result contiguously
+    (the overlap-save method). The blocking (pad/step/scan) mirrors
+    :func:`_tensor_convolve` exactly, so the output is identical to the direct path up to
+    floating-point round-off; only the per-block primitive differs (FFT vs. direct).
+
+    This function is used only when the sample axis is actually batched
+    (``batch_size_samples < n_samples``); the non-batched case goes through
+    :func:`_fft_convolve` (a single FFT).
+    """
+    n_samples, *feat_shape = array.shape
+
+    array = array.reshape(n_samples, -1)
+    window_size, n_basis = eval_basis.shape
+    n_features = array.shape[1]
+
+    step = batch_size_samples - window_size + 1
+    n_samples_padded = (
+        ((n_samples - window_size + 1 + step - 1) // step) * step + window_size - 1
+    )
+    n_batches = (n_samples_padded - window_size + 1) // step
+
+    pad_len = n_samples_padded - n_samples
+    array = jnp.pad(array, ((0, pad_len), (0, 0)), constant_values=0.0)
+
+    def conv_batch(concat_conv, batch_idx):
+        start_chunk = batch_idx * step
+        chunk = jax.lax.dynamic_slice(
+            array, (start_chunk, 0), (batch_size_samples, n_features)
+        )
+        # WORKAROUND (https://github.com/jax-ml/jax/issues/39120): under jit the
+        # zero-pad rows of the final block can be read back as garbage (including
+        # NaN); re-zero the statically-known pad rows. ``jnp.where`` is a select,
+        # so NaN garbage is discarded (a multiplicative mask would propagate it).
+        # Delete this block once the upstream fix ships.
+        rows = start_chunk + jnp.arange(batch_size_samples)
+        chunk = jnp.where((rows < n_samples)[:, None], chunk, 0.0)
+        # END WORKAROUND
+        concat_conv = jax.lax.dynamic_update_slice(
+            concat_conv,
+            _batch_convolve_over_channels(
+                chunk,
+                eval_basis,
+                batch_size_channels,
+                batch_size_basis,
+                corr_vec=_CORR_VEC_FFT,
+            ),
+            (start_chunk, 0, 0),
+        )
+        return concat_conv, None
+
+    # initialize output of valid convolution
+    conv_output = jnp.full(
+        (n_samples_padded - window_size + 1, n_features, n_basis), jnp.nan
+    )
+    conv_output, _ = jax.lax.scan(conv_batch, conv_output, jnp.arange(n_batches))
+    conv_output = conv_output[: n_samples - window_size + 1]
+    return conv_output.reshape(n_samples - window_size + 1, *feat_shape, n_basis)
 
 
 def _shift_time_axis_and_convolve(
@@ -263,6 +492,7 @@ def _shift_time_axis_and_convolve(
     batch_size_samples: int,
     batch_size_channels: int,
     batch_size_basis: int,
+    use_fft: Optional[bool] = None,
 ) -> jnp.ndarray:
     """
     Shifts the specified axis to the first position, applies convolution, and then reverses the shift.
@@ -286,6 +516,11 @@ def _shift_time_axis_and_convolve(
         Size of the batches in number of input channels.
     batch_size_basis :
         Size of the batches in number of basis filters.
+    use_fft :
+        Whether to convolve via FFT. If ``None``, the choice is resolved per array by
+        :func:`_resolve_use_fft`. When FFT is used and ``batch_size_samples`` is smaller
+        than the sample-axis length, the convolution is batched over samples via
+        overlap-save (:func:`_fft_overlap_save_convolve`); otherwise a single FFT is used.
 
     Returns
     -------
@@ -296,16 +531,46 @@ def _shift_time_axis_and_convolve(
     Notes
     -----
     This function supports arrays of any dimensionality greater or equal than 1.
+    When no effective memory batching is requested (all batch sizes cover their full
+    axis), the batching machinery is skipped entirely and the whole array is convolved
+    in a single vectorized call (:func:`_unbatched_convolve`).
     """
     # convert axis
     axis = axis if axis >= 0 else array.ndim + axis
     # move time axis to first
     array = jnp.swapaxes(array, 0, axis)
 
+    use_fft = _resolve_use_fft(use_fft, array, eval_basis, batch_size_samples)
+
     # convolve
-    conv = _tensor_convolve(
-        array, eval_basis, batch_size_samples, batch_size_channels, batch_size_basis
-    )
+    if (
+        batch_size_samples >= array.shape[0]
+        and batch_size_channels >= prod(array.shape[1:])
+        and batch_size_basis >= eval_basis.shape[1]
+    ):
+        # no memory batching: convolve the full array in one vectorized call
+        conv = _unbatched_convolve(
+            array, eval_basis, _CORR_VEC_FFT if use_fft else _CORR_VEC
+        )
+    elif use_fft:
+        if batch_size_samples < array.shape[0]:
+            # sample axis is batched: overlap-save FFT over blocks of batch_size_samples
+            conv = _fft_overlap_save_convolve(
+                array,
+                eval_basis,
+                batch_size_samples,
+                batch_size_channels,
+                batch_size_basis,
+            )
+        else:
+            # whole sample axis at once: a single FFT
+            conv = _fft_convolve(
+                array, eval_basis, batch_size_channels, batch_size_basis
+            )
+    else:
+        conv = _tensor_convolve(
+            array, eval_basis, batch_size_samples, batch_size_channels, batch_size_basis
+        )
 
     # reverse transposition
     conv = jnp.swapaxes(conv, axis, 0)
@@ -344,6 +609,7 @@ def _convolve_pad_and_shift(
     predictor_causality: Literal["causal", "acausal", "anti-causal"] = "causal",
     axis: int = 0,
     shift: Optional[bool] = None,
+    use_fft: Optional[bool] = None,
 ) -> jnp.ndarray:
     """
     Create predictor by convolving basis_matrix with time_series.
@@ -381,6 +647,9 @@ def _convolve_pad_and_shift(
         Whether to shift predictor based on causality (only valid if
         `predictor_causality != 'acausal'`). Default is True for `causal` and
         `anti-causal`, False for `acausal`.
+    use_fft :
+        Whether to convolve via FFT. If ``None``, the choice is resolved per array
+        by :func:`_resolve_use_fft`.
 
     Returns
     -------
@@ -395,6 +664,7 @@ def _convolve_pad_and_shift(
         batch_size_samples=batch_size_samples,
         batch_size_channels=batch_size_channels,
         batch_size_basis=batch_size_basis,
+        use_fft=use_fft,
     )
 
     with warnings.catch_warnings(record=True) as warns:
@@ -428,6 +698,7 @@ def create_convolutional_predictor(
     batch_size_samples: Optional[int] = None,
     batch_size_channels: Optional[int] = None,
     batch_size_basis: Optional[int] = None,
+    use_fft: Optional[bool] = None,
 ):
     """
     Create a convolutional predictor by convolving a basis matrix with a time series.
@@ -475,6 +746,16 @@ def create_convolutional_predictor(
         Batch size for the convolution in terms of number of basis kernels.
         If this parameter is set, the convolution will be vectorized over batches
         of kernels. Default vectorizes over all basis kernels.
+    use_fft :
+        Whether to compute the convolution in the frequency domain (real FFTs padded to
+        a 5-smooth length). ``True`` or ``False`` forces the choice, while ``None`` (the
+        default) resolves it per input array with a heuristic that selects FFT for long
+        kernels on CPU and otherwise falls back to the direct convolution
+        (``jnp.convolve``). At jit-compilation time the device is unavailable, so the
+        default direct path is dispatched; set ``use_fft=True`` to force the FFT
+        convolution under jit. When FFT is used and ``batch_size_samples`` is smaller
+        than the sample-axis length, the convolution is batched over samples via
+        overlap-save; otherwise the full axis is transformed at once.
 
     Returns
     -------
@@ -500,6 +781,13 @@ def create_convolutional_predictor(
         Raised if any explicitly provided batch sizes—``batch_size_samples``,
         ``batch_size_channels``, or ``batch_size_basis``—are not positive integers.
         A value of ``None`` is allowed and treated as unspecified.
+
+    Notes
+    -----
+    Under ``jax.jit`` the inputs are tracers with no concrete device, so the automatic
+    backend selection (``use_fft=None``) cannot inspect device placement and falls back
+    to the direct convolution. If you need the FFT path while tracing, do not rely on the
+    auto-detection: pass ``use_fft=True`` explicitly.
 
     """
     # apply checks
@@ -570,6 +858,7 @@ def create_convolutional_predictor(
                 predictor_causality=predictor_causality,
                 axis=axis,
                 shift=shift,
+                use_fft=use_fft,
             )
 
         flat_stack = jax.tree_util.tree_map(
@@ -586,6 +875,7 @@ def create_convolutional_predictor(
             batch_size_channels,
             batch_size_samples,
             batch_size_basis,
+            use_fft=use_fft,
         )
     return jax.tree_util.tree_unflatten(struct, flat_stack)
 
@@ -600,6 +890,7 @@ def _convolve_pynapple(
     batch_size_channels: List[int],
     batch_size_samples: List[int],
     batch_size_basis: int,
+    use_fft: Optional[bool] = None,
 ):
     """
     Convolve a PyTree containing pynapple time series.
@@ -685,6 +976,7 @@ def _convolve_pynapple(
                 predictor_causality=predictor_causality,
                 axis=axis,
                 shift=shift,
+                use_fft=use_fft,
             )
 
     conv = jax.tree_util.tree_map(

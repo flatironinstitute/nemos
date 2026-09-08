@@ -8,16 +8,16 @@ from unittest.mock import patch
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from sklearn.base import clone as sk_clone
+from sklearn.pipeline import Pipeline
+
+import nemos as nmo
 from conftest import (
     CombinedBasis,
     basis_with_add_kwargs,
     list_all_basis_classes,
     list_all_real_basis_classes,
 )
-from sklearn.base import clone as sk_clone
-from sklearn.pipeline import Pipeline
-
-import nemos as nmo
 from nemos import basis
 from nemos._inspect_utils import get_subclass_methods, list_abstract_methods
 from nemos.basis import (
@@ -68,9 +68,7 @@ def test_transformer_has_the_same_public_attributes_as_basis(
     public_attrs_basis = {attr for attr in dir(bas) if not attr.startswith("_")}
     public_attrs_transformerbasis = {
         attr
-        for attr in dir(
-            bas.set_input_shape(*([1] * bas._n_input_dimensionality)).to_transformer()
-        )
+        for attr in dir(bas.set_input_shape(*([1] * bas._n_inputs)).to_transformer())
         if not attr.startswith("_")
     }
 
@@ -86,7 +84,7 @@ def test_transformer_has_the_same_public_attributes_as_basis(
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis],
+    list_all_basis_classes("NonComposite"),
 )
 def test_to_transformer_and_constructor_are_equivalent(
     basis_cls, basis_class_specific_params
@@ -95,7 +93,7 @@ def test_to_transformer_and_constructor_are_equivalent(
     bas = CombinedBasis().instantiate_basis(
         n_basis_funcs, basis_cls, basis_class_specific_params, window_size=10
     )
-    bas.set_input_shape(*([1] * bas._n_input_dimensionality))
+    bas.set_input_shape(*([1] * bas._n_inputs))
     trans_bas_a = bas.to_transformer()
     trans_bas_b = basis.TransformerBasis(bas)
 
@@ -162,11 +160,14 @@ def test_basis_to_transformer_makes_a_copy(
         pytest.skip(f"{basis_cls} n_basis_funcs is not settable.")
 
     bas_a = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
+        5,
+        basis_cls,
+        basis_class_specific_params,
+        window_size=10,
+        ndim=ndim,
+        categories=5,
     )
-    trans_bas_a = bas_a.set_input_shape(
-        *([1] * bas_a._n_input_dimensionality)
-    ).to_transformer()
+    trans_bas_a = bas_a.set_input_shape(*([1] * bas_a._n_inputs)).to_transformer()
 
     # changing an attribute in bas should not change trans_bas
     if basis_cls in [basis.AdditiveBasis, basis.MultiplicativeBasis]:
@@ -177,7 +178,7 @@ def test_basis_to_transformer_makes_a_copy(
         bas_b = CombinedBasis().instantiate_basis(
             5, basis_cls, basis_class_specific_params, window_size=10
         )
-        bas_b.set_input_shape(*([1] * bas_b._n_input_dimensionality))
+        bas_b.set_input_shape(*([1] * bas_b._n_inputs))
         trans_bas_b = bas_b.to_transformer()
         trans_bas_b.basis.basis1.n_basis_funcs = 100
         assert bas_b.basis1.n_basis_funcs == 5
@@ -197,9 +198,7 @@ def test_basis_to_transformer_makes_a_copy(
         bas_b = CombinedBasis().instantiate_basis(
             5, basis_cls, basis_class_specific_params, window_size=10
         )
-        trans_bas_b = bas_b.set_input_shape(
-            *([1] * bas_b._n_input_dimensionality)
-        ).to_transformer()
+        trans_bas_b = bas_b.set_input_shape(*([1] * bas_b._n_inputs)).to_transformer()
         trans_bas_b.frequencies = np.arange(1, 12)
         assert len(trans_bas_b.frequencies) == len(bas_b.frequencies)
         assert all(
@@ -207,6 +206,18 @@ def test_basis_to_transformer_makes_a_copy(
             or np.any(f1 != f2)  # or different content
             for f1, f2 in zip(trans_bas_b.basis.frequencies, bas_b.frequencies)
         )
+
+    elif basis_cls is nmo.basis.Category:
+        bas_a.categories = 10
+        assert trans_bas_a.n_basis_funcs == 5
+
+        # changing an attribute in the transformer basis should not change the original
+        bas_b = CombinedBasis().instantiate_basis(
+            5, basis_cls, basis_class_specific_params, window_size=10, categories=5
+        )
+        trans_bas_b = bas_b.set_input_shape(*([1] * bas_b._n_inputs)).to_transformer()
+        trans_bas_b.categories = 100
+        assert bas_b.n_basis_funcs == 5
 
     else:
         bas_a.n_basis_funcs = 10
@@ -216,9 +227,7 @@ def test_basis_to_transformer_makes_a_copy(
         bas_b = CombinedBasis().instantiate_basis(
             5, basis_cls, basis_class_specific_params, window_size=10
         )
-        trans_bas_b = bas_b.set_input_shape(
-            *([1] * bas_b._n_input_dimensionality)
-        ).to_transformer()
+        trans_bas_b = bas_b.set_input_shape(*([1] * bas_b._n_inputs)).to_transformer()
         trans_bas_b.n_basis_funcs = 100
         assert bas_b.n_basis_funcs == 5
 
@@ -234,9 +243,7 @@ def test_transformerbasis_getattr(
     bas = CombinedBasis().instantiate_basis(
         n_basis_funcs, basis_cls, basis_class_specific_params, window_size=30
     )
-    trans_basis = basis.TransformerBasis(
-        bas.set_input_shape(*([1] * bas._n_input_dimensionality))
-    )
+    trans_basis = basis.TransformerBasis(bas.set_input_shape(*([1] * bas._n_inputs)))
     if basis_cls in [basis.AdditiveBasis, basis.MultiplicativeBasis]:
         for basi in [getattr(trans_basis.basis, attr) for attr in ("basis1", "basis2")]:
             assert basi.n_basis_funcs == bas.basis1.n_basis_funcs
@@ -246,7 +253,7 @@ def test_transformerbasis_getattr(
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis],
+    list_all_basis_classes("NonComposite"),
 )
 @pytest.mark.parametrize("n_basis_funcs_init", [5])
 @pytest.mark.parametrize("n_basis_funcs_new", [6, 10, 20])
@@ -259,9 +266,7 @@ def test_transformerbasis_set_params(
     bas = CombinedBasis().instantiate_basis(
         n_basis_funcs_init, basis_cls, basis_class_specific_params, window_size=10
     )
-    trans_basis = basis.TransformerBasis(
-        bas.set_input_shape(*([1] * bas._n_input_dimensionality))
-    )
+    trans_basis = basis.TransformerBasis(bas.set_input_shape(*([1] * bas._n_inputs)))
     if isinstance(bas, HistoryConv):
         trans_basis.set_params(window_size=n_basis_funcs_new)
         assert trans_basis.window_size == n_basis_funcs_new
@@ -274,6 +279,10 @@ def test_transformerbasis_set_params(
     elif isinstance(bas, FourierBasis):
         trans_basis.set_params(frequencies=np.arange(1, 8))
         assert np.all(trans_basis.frequencies[0] == np.arange(1, 8))
+    elif isinstance(bas, nmo.basis.Category):
+        trans_basis.set_params(categories=n_basis_funcs_new)
+        assert trans_basis.n_basis_funcs == n_basis_funcs_new
+        assert trans_basis.basis.n_basis_funcs == n_basis_funcs_new
     else:
         trans_basis.set_params(n_basis_funcs=n_basis_funcs_new)
         assert trans_basis.n_basis_funcs == n_basis_funcs_new
@@ -282,7 +291,7 @@ def test_transformerbasis_set_params(
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis],
+    list_all_basis_classes("NonComposite"),
 )
 def test_transformerbasis_setattr_basis(basis_cls, basis_class_specific_params):
 
@@ -290,16 +299,14 @@ def test_transformerbasis_setattr_basis(basis_cls, basis_class_specific_params):
     bas = CombinedBasis().instantiate_basis(
         10, basis_cls, basis_class_specific_params, window_size=30
     )
-    trans_bas = basis.TransformerBasis(
-        bas.set_input_shape(*([1] * bas._n_input_dimensionality))
-    )
+    trans_bas = basis.TransformerBasis(bas.set_input_shape(*([1] * bas._n_inputs)))
 
     bas = CombinedBasis().instantiate_basis(
         20, basis_cls, basis_class_specific_params, window_size=30
     )
     nbas = deepcopy(bas.n_basis_funcs)
 
-    trans_bas.basis = bas.set_input_shape(*([1] * bas._n_input_dimensionality))
+    trans_bas.basis = bas.set_input_shape(*([1] * bas._n_inputs))
 
     assert trans_bas.n_basis_funcs == nbas
     assert trans_bas.basis.n_basis_funcs == nbas
@@ -308,7 +315,7 @@ def test_transformerbasis_setattr_basis(basis_cls, basis_class_specific_params):
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis],
+    list_all_basis_classes("NonComposite"),
 )
 def test_transformerbasis_setattr_basis_attribute(
     basis_cls, basis_class_specific_params
@@ -320,9 +327,7 @@ def test_transformerbasis_setattr_basis_attribute(
     bas = CombinedBasis().instantiate_basis(
         10, basis_cls, basis_class_specific_params, window_size=10
     )
-    trans_bas = basis.TransformerBasis(
-        bas.set_input_shape(*([1] * bas._n_input_dimensionality))
-    )
+    trans_bas = basis.TransformerBasis(bas.set_input_shape(*([1] * bas._n_inputs)))
     if basis_cls is nmo.basis.HistoryConv:
         trans_bas.window_size = 20
         assert trans_bas.n_basis_funcs == 20
@@ -335,6 +340,10 @@ def test_transformerbasis_setattr_basis_attribute(
         trans_bas.frequencies = np.arange(1, 8)
         assert np.all(trans_bas.frequencies[0] == np.arange(1, 8))
         assert np.all(trans_bas.basis.frequencies[0] == np.arange(1, 8))
+    elif basis_cls is nmo.basis.Category:
+        trans_bas.categories = 20
+        assert trans_bas.n_basis_funcs == 20
+        assert trans_bas.basis.n_basis_funcs == 20
     else:
         trans_bas.n_basis_funcs = 20
         assert trans_bas.n_basis_funcs == 20
@@ -344,7 +353,7 @@ def test_transformerbasis_setattr_basis_attribute(
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis],
+    list_all_basis_classes("NonComposite"),
 )
 def test_transformerbasis_copy_basis_on_construct(
     basis_cls, basis_class_specific_params
@@ -358,7 +367,7 @@ def test_transformerbasis_copy_basis_on_construct(
         10, basis_cls, basis_class_specific_params, window_size=10
     )
     nbas = deepcopy(orig_bas.n_basis_funcs)
-    orig_bas = orig_bas.set_input_shape(*([1] * orig_bas._n_input_dimensionality))
+    orig_bas = orig_bas.set_input_shape(*([1] * orig_bas._n_inputs))
     trans_bas = basis.TransformerBasis(orig_bas)
     if isinstance(orig_bas, CustomBasis):
         setattr(trans_bas, "basis_kwargs", {"add": 20})
@@ -370,6 +379,12 @@ def test_transformerbasis_copy_basis_on_construct(
         assert np.all(len(orig_bas.frequencies[0]) != len(trans_bas.frequencies[0]))
         assert np.all(trans_bas.frequencies[0] == np.arange(1, 8))
         assert np.all(trans_bas.basis.frequencies[0] == np.arange(1, 8))
+    elif isinstance(orig_bas, nmo.basis.Category):
+        setattr(trans_bas, "categories", 20)
+        assert orig_bas.n_basis_funcs == nbas
+        assert trans_bas.n_basis_funcs == 20
+        assert trans_bas.basis.n_basis_funcs == 20
+        assert isinstance(trans_bas.basis, basis_cls)
     else:
         attr_name = "window_size" if basis_cls is HistoryConv else "n_basis_funcs"
         setattr(trans_bas, attr_name, 20)
@@ -392,9 +407,7 @@ def test_transformerbasis_setattr_illegal_attribute(
     bas = CombinedBasis().instantiate_basis(
         10, basis_cls, basis_class_specific_params, window_size=10
     )
-    trans_bas = basis.TransformerBasis(
-        bas.set_input_shape(*([1] * bas._n_input_dimensionality))
-    )
+    trans_bas = basis.TransformerBasis(bas.set_input_shape(*([1] * bas._n_inputs)))
 
     with pytest.raises(
         ValueError,
@@ -415,13 +428,21 @@ def test_transformerbasis_addition(basis_cls, basis_class_specific_params):
     n_basis_funcs_a = 5
     n_basis_funcs_b = n_basis_funcs_a * 2
     bas_a = CombinedBasis().instantiate_basis(
-        n_basis_funcs_a, basis_cls, basis_class_specific_params, window_size=10
+        n_basis_funcs_a,
+        basis_cls,
+        basis_class_specific_params,
+        window_size=10,
+        categories=n_basis_funcs_a,
     )
-    bas_a.set_input_shape(*([1] * bas_a._n_input_dimensionality))
+    bas_a.set_input_shape(*([1] * bas_a._n_inputs))
     bas_b = CombinedBasis().instantiate_basis(
-        n_basis_funcs_b, basis_cls, basis_class_specific_params, window_size=10
+        n_basis_funcs_b,
+        basis_cls,
+        basis_class_specific_params,
+        window_size=10,
+        categories=n_basis_funcs_b,
     )
-    bas_b.set_input_shape(*([1] * bas_b._n_input_dimensionality))
+    bas_b.set_input_shape(*([1] * bas_b._n_inputs))
     trans_bas_a = basis.TransformerBasis(bas_a)
     trans_bas_b = basis.TransformerBasis(bas_b)
     trans_bas_sum = trans_bas_a + trans_bas_b
@@ -431,10 +452,7 @@ def test_transformerbasis_addition(basis_cls, basis_class_specific_params):
         trans_bas_sum.n_basis_funcs
         == trans_bas_a.n_basis_funcs + trans_bas_b.n_basis_funcs
     )
-    assert (
-        trans_bas_sum._n_input_dimensionality
-        == trans_bas_a._n_input_dimensionality + trans_bas_b._n_input_dimensionality
-    )
+    assert trans_bas_sum._n_inputs == trans_bas_a._n_inputs + trans_bas_b._n_inputs
     if basis_cls not in [basis.AdditiveBasis, basis.MultiplicativeBasis]:
         assert trans_bas_sum.basis1.n_basis_funcs == n_basis_funcs_a
         assert trans_bas_sum.basis2.n_basis_funcs == n_basis_funcs_b
@@ -451,15 +469,11 @@ def test_transformerbasis_multiplication(basis_cls, basis_class_specific_params)
     bas1 = CombinedBasis().instantiate_basis(
         n_basis_funcs_a, basis_cls, basis_class_specific_params, window_size=10
     )
-    trans_bas_a = basis.TransformerBasis(
-        bas1.set_input_shape(*([1] * bas1._n_input_dimensionality))
-    )
+    trans_bas_a = basis.TransformerBasis(bas1.set_input_shape(*([1] * bas1._n_inputs)))
     bas2 = CombinedBasis().instantiate_basis(
         n_basis_funcs_b, basis_cls, basis_class_specific_params, window_size=10
     )
-    trans_bas_b = basis.TransformerBasis(
-        bas2.set_input_shape(*([1] * bas2._n_input_dimensionality))
-    )
+    trans_bas_b = basis.TransformerBasis(bas2.set_input_shape(*([1] * bas2._n_inputs)))
     trans_bas_prod = trans_bas_a * trans_bas_b
     assert isinstance(trans_bas_prod, basis.TransformerBasis)
     assert isinstance(trans_bas_prod.basis, basis.MultiplicativeBasis)
@@ -467,10 +481,7 @@ def test_transformerbasis_multiplication(basis_cls, basis_class_specific_params)
         trans_bas_prod.n_basis_funcs
         == trans_bas_a.n_basis_funcs * trans_bas_b.n_basis_funcs
     )
-    assert (
-        trans_bas_prod._n_input_dimensionality
-        == trans_bas_a._n_input_dimensionality + trans_bas_b._n_input_dimensionality
-    )
+    assert trans_bas_prod._n_inputs == trans_bas_a._n_inputs + trans_bas_b._n_inputs
     if basis_cls not in [basis.AdditiveBasis, basis.MultiplicativeBasis]:
         assert trans_bas_prod.basis1.n_basis_funcs == bas1.n_basis_funcs
         assert trans_bas_prod.basis2.n_basis_funcs == bas2.n_basis_funcs
@@ -495,9 +506,7 @@ def test_transformerbasis_exponentiation(
     bas = CombinedBasis().instantiate_basis(
         5, basis_cls, basis_class_specific_params, window_size=10
     )
-    trans_bas = basis.TransformerBasis(
-        bas.set_input_shape(*([1] * bas._n_input_dimensionality))
-    )
+    trans_bas = basis.TransformerBasis(bas.set_input_shape(*([1] * bas._n_inputs)))
 
     if not isinstance(exponent, int):
         with pytest.raises(error_type, match=error_message):
@@ -514,9 +523,7 @@ def test_transformerbasis_dir(basis_cls, basis_class_specific_params, ndim):
     bas = CombinedBasis().instantiate_basis(
         5, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
     )
-    trans_bas = basis.TransformerBasis(
-        bas.set_input_shape(*([1] * bas._n_input_dimensionality))
-    )
+    trans_bas = basis.TransformerBasis(bas.set_input_shape(*([1] * bas._n_inputs)))
     for attr_name in (
         "fit",
         "transform",
@@ -540,7 +547,7 @@ def test_transformerbasis_sk_clone_kernel_noned(basis_cls, basis_class_specific_
     orig_bas = CombinedBasis().instantiate_basis(
         10, basis_cls, basis_class_specific_params, window_size=20
     )
-    orig_bas.set_input_shape(*([1] * orig_bas._n_input_dimensionality))
+    orig_bas.set_input_shape(*([1] * orig_bas._n_inputs))
     trans_bas = basis.TransformerBasis(orig_bas)
 
     # kernel should be saved in the object after fit
@@ -569,9 +576,7 @@ def test_transformerbasis_pickle(
         n_basis_funcs, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
     )
     # the test that tries cross-validation with n_jobs = 2 already should test this
-    trans_bas = basis.TransformerBasis(
-        bas.set_input_shape(*([1] * bas._n_input_dimensionality))
-    )
+    trans_bas = basis.TransformerBasis(bas.set_input_shape(*([1] * bas._n_inputs)))
     filepath = tmpdir / "transformerbasis.pickle"
     with open(filepath, "wb") as f:
         pickle.dump(trans_bas, f)
@@ -605,19 +610,22 @@ def test_to_transformer_and_set_input(
     basis_cls, inp, set_input, expectation, basis_class_specific_params, ndim
 ):
     bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
+        5,
+        basis_cls,
+        basis_class_specific_params,
+        bounds=(0, 10),
+        window_size=10,
+        ndim=ndim,
     )
     if set_input:
-        bas.set_input_shape(*([inp] * bas._n_input_dimensionality))
+        bas.set_input_shape(*([inp] * bas._n_inputs))
     trans = bas.to_transformer()
     with expectation:
         if set_input:
-            X = np.concatenate(
-                [inp.reshape(inp.shape[0], -1)] * bas._n_input_dimensionality, axis=1
-            )
+            X = np.concatenate([inp.reshape(inp.shape[0], -1)] * bas._n_inputs, axis=1)
         else:
             X = np.concatenate(
-                [inp.reshape(inp.shape[0], -1)[:, :1]] * bas._n_input_dimensionality,
+                [inp.reshape(inp.shape[0], -1)[:, :1]] * bas._n_inputs,
                 axis=1,
             )
         trans.fit(X)
@@ -640,14 +648,15 @@ def test_transformer_fit(
     basis_cls, inp, basis_class_specific_params, expectation, ndim
 ):
     bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
+        5,
+        basis_cls,
+        basis_class_specific_params,
+        bounds=(0, 2),
+        window_size=10,
+        ndim=ndim,
     )
-    transformer = bas.set_input_shape(
-        *([inp] * bas._n_input_dimensionality)
-    ).to_transformer()
-    X = np.concatenate(
-        [inp.reshape(inp.shape[0], -1)] * bas._n_input_dimensionality, axis=1
-    )
+    transformer = bas.set_input_shape(*([inp] * bas._n_inputs)).to_transformer()
+    X = np.concatenate([inp.reshape(inp.shape[0], -1)] * bas._n_inputs, axis=1)
     transformer.fit(X)
     if "Conv" in basis_cls.__name__:
         assert transformer.kernel_ is not None
@@ -667,7 +676,7 @@ def test_transformer_fit(
             )
 
     with expectation:
-        transformer.fit(*([inp] * bas._n_input_dimensionality))
+        transformer.fit(*([inp] * bas._n_inputs))
 
 
 @pytest.mark.parametrize(
@@ -693,11 +702,9 @@ def test_transformer_fit_input_shape_mismatch(
     basis_cls, delta_input, inp, basis_class_specific_params, expectation
 ):
     bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10
+        5, basis_cls, basis_class_specific_params, bounds=(0, 2), window_size=10
     )
-    transformer = bas.set_input_shape(
-        *([inp] * bas._n_input_dimensionality)
-    ).to_transformer()
+    transformer = bas.set_input_shape(*([inp] * bas._n_inputs)).to_transformer()
     X = np.random.randn(10, int(sum(bas._input_shape_product) + delta_input))
     with expectation:
         transformer.fit(X)
@@ -720,19 +727,20 @@ def test_transformer_fit_input_shape_mismatch(
 )
 def test_transformer_transform(basis_cls, inp, basis_class_specific_params, ndim):
     bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10, ndim=ndim
+        5,
+        basis_cls,
+        basis_class_specific_params,
+        bounds=(0, 2),
+        window_size=10,
+        ndim=ndim,
     )
     assert getattr(bas, "ndim", ndim) == ndim
-    transformer = bas.set_input_shape(
-        *([inp] * bas._n_input_dimensionality)
-    ).to_transformer()
-    X = np.concatenate(
-        [inp.reshape(inp.shape[0], -1)] * bas._n_input_dimensionality, axis=1
-    )
+    transformer = bas.set_input_shape(*([inp] * bas._n_inputs)).to_transformer()
+    X = np.concatenate([inp.reshape(inp.shape[0], -1)] * bas._n_inputs, axis=1)
     transformer.fit(X)
 
     out = transformer.transform(X)
-    out2 = bas.compute_features(*([inp] * bas._n_input_dimensionality))
+    out2 = bas.compute_features(*([inp] * bas._n_inputs))
     assert np.array_equal(out, out2, equal_nan=True)
 
 
@@ -753,17 +761,13 @@ def test_transformer_transform(basis_cls, inp, basis_class_specific_params, ndim
 )
 def test_transformer_fit_transform(basis_cls, inp, basis_class_specific_params):
     bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10
+        5, basis_cls, basis_class_specific_params, bounds=(0, 2), window_size=10
     )
-    transformer = bas.set_input_shape(
-        *([inp] * bas._n_input_dimensionality)
-    ).to_transformer()
-    X = np.concatenate(
-        [inp.reshape(inp.shape[0], -1)] * bas._n_input_dimensionality, axis=1
-    )
+    transformer = bas.set_input_shape(*([inp] * bas._n_inputs)).to_transformer()
+    X = np.concatenate([inp.reshape(inp.shape[0], -1)] * bas._n_inputs, axis=1)
 
     out = transformer.fit_transform(X)
-    out2 = bas.compute_features(*([inp] * bas._n_input_dimensionality))
+    out2 = bas.compute_features(*([inp] * bas._n_inputs))
 
     assert np.array_equal(out, out2, equal_nan=True)
 
@@ -791,11 +795,9 @@ def test_transformer_fit_transform_input_shape_mismatch(
     basis_cls, delta_input, inp, basis_class_specific_params, expectation
 ):
     bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10
+        5, basis_cls, basis_class_specific_params, bounds=(0, 2), window_size=10
     )
-    transformer = bas.set_input_shape(
-        *([inp] * bas._n_input_dimensionality)
-    ).to_transformer()
+    transformer = bas.set_input_shape(*([inp] * bas._n_inputs)).to_transformer()
     X = np.random.randn(10, int(sum(bas._input_shape_product) + delta_input))
     with expectation:
         transformer.fit_transform(X)
@@ -818,14 +820,10 @@ def test_transformer_fit_transform_input_struct(
     basis_cls, inp, basis_class_specific_params, expectation
 ):
     bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10
+        5, basis_cls, basis_class_specific_params, bounds=(0, 2), window_size=10
     )
-    transformer = bas.set_input_shape(
-        *([inp] * bas._n_input_dimensionality)
-    ).to_transformer()
-    X = np.concatenate(
-        [inp.reshape(inp.shape[0], -1)] * bas._n_input_dimensionality, axis=1
-    )
+    transformer = bas.set_input_shape(*([inp] * bas._n_inputs)).to_transformer()
+    X = np.concatenate([inp.reshape(inp.shape[0], -1)] * bas._n_inputs, axis=1)
     transformer.fit_transform(X)
 
     if "Conv" in basis_cls.__name__:
@@ -843,7 +841,7 @@ def test_transformer_fit_transform_input_struct(
     ):
         expectation = pytest.raises(ValueError, match="Input mismatch: expected")
     with expectation:
-        transformer.fit(*([inp] * bas._n_input_dimensionality))
+        transformer.fit(*([inp] * bas._n_inputs))
 
 
 @pytest.mark.parametrize(
@@ -855,11 +853,8 @@ def test_transformer_fit_transform_input_struct(
     [
         0.1
         * np.random.randn(
-            100,
+            10,
         ),
-        0.1 * np.random.randn(100, 1),
-        0.1 * np.random.randn(100, 2),
-        0.1 * np.random.randn(100, 1, 2),
     ],
 )
 @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
@@ -873,26 +868,33 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
         cv_attr = "basis_kwargs"
     elif issubclass(basis_cls, FourierBasis):
         cv_attr = "frequencies"
+    elif basis_cls is nmo.basis.Category:
+        cv_attr = "categories"
     else:
         cv_attr = "n_basis_funcs"
     if basis_cls is not CustomBasis:
         bas = CombinedBasis().instantiate_basis(
-            5, basis_cls, basis_class_specific_params, window_size=5
+            5,
+            basis_cls,
+            basis_class_specific_params,
+            window_size=5,
+            categories=5,
+            bounds=(np.nanmin(inp), np.nanmax(inp)),
         )
     else:
         bas = basis_with_add_kwargs(basis_kwargs={"add": 0})
-    transformer = bas.set_input_shape(
-        *([inp] * bas._n_input_dimensionality)
-    ).to_transformer()
+    transformer = bas.set_input_shape(*([inp] * bas._n_inputs)).to_transformer()
     # fit outside pipeline
-    X = bas.compute_features(*([inp] * bas._n_input_dimensionality))
+    X = bas.compute_features(*([inp] * bas._n_inputs))
     log_mu = X.dot(0.005 * np.ones(X.shape[1]))
     y = np.full(X.shape[0], 0)
     y[~np.isnan(log_mu)] = np.random.poisson(
         np.exp(log_mu[~np.isnan(log_mu)] - np.nanmean(log_mu))
     )
+    # make sure that not all vals are the same
+    y[-1] = 1 if y[~np.isnan(log_mu)][0] != 1 else 2
     model = nmo.glm.GLM(
-        regularizer="Ridge", regularizer_strength=0.001, solver_kwargs={"maxiter": 3}
+        regularizer="Ridge", regularizer_strength=0.001, solver_kwargs={"maxiter": 1}
     ).fit(X, y)
 
     # pipeline
@@ -904,14 +906,12 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
                 nmo.glm.GLM(
                     regularizer="Ridge",
                     regularizer_strength=0.001,
-                    solver_kwargs={"maxiter": 3},
+                    solver_kwargs={"maxiter": 1},
                 ),
             ),
         ]
     )
-    x = np.concatenate(
-        [inp.reshape(inp.shape[0], -1)] * bas._n_input_dimensionality, axis=1
-    )
+    x = np.concatenate([inp.reshape(inp.shape[0], -1)] * bas._n_inputs, axis=1)
     pipe.fit(x, y)
     np.testing.assert_allclose(pipe["glm"].coef_, model.coef_)
 
@@ -926,7 +926,7 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
         )  # make sure that the change did not affect bas
         set_param_dict_outside = {f"basis2__{cv_attr}": 4}
         X = bas.set_params(**set_param_dict_outside).compute_features(
-            *([inp] * bas._n_input_dimensionality)
+            *([inp] * bas._n_inputs)
         )
     elif basis_cls is CustomBasis:
         set_param_dict = {
@@ -936,8 +936,12 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
         assert bas.basis_kwargs == {"add": 0}  # check that it is not a shallow copy
         set_param_dict_outside = {f"{cv_attr}": {"add": 1}}
         X = bas.set_params(**set_param_dict_outside).compute_features(
-            *([inp] * bas._n_input_dimensionality)
+            *([inp] * bas._n_inputs)
         )
+    elif basis_cls is nmo.basis.Category:
+        pipe.set_params(**{f"bas__{cv_attr}": 4})
+        assert bas.n_basis_funcs == 5  # make sure that the change did not affect bas
+        X = bas.set_params(categories=4).compute_features(*([inp] * bas._n_inputs))
     else:
         set_param_dict = {
             f"bas__{cv_attr}": 4 if cv_attr != "basis_kwargs" else {"add": 1}
@@ -946,7 +950,7 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
         assert bas.n_basis_funcs == 5  # make sure that the change did not affect bas
         set_param_dict_outside = {f"{cv_attr}": 4}
         X = bas.set_params(**set_param_dict_outside).compute_features(
-            *([inp] * bas._n_input_dimensionality)
+            *([inp] * bas._n_inputs)
         )
     pipe.fit(x, y)
     model.fit(X, y)
@@ -959,7 +963,7 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
 )
 def test_initialization(basis_cls, basis_class_specific_params):
     bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10
+        5, basis_cls, basis_class_specific_params, bounds=(0, 2), window_size=10
     )
     expectation = (
         does_not_raise()
@@ -1103,20 +1107,18 @@ def test_dir_transformer(basis_cls, basis_class_specific_params):
 @pytest.mark.parametrize("method", ["fit", "transform", "fit_transform"])
 def test_check_input(inp, expectation, basis_cls, basis_class_specific_params, method):
     bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10
+        5, basis_cls, basis_class_specific_params, bounds=(0, 2), window_size=10
     )
     # set kernels
     if hasattr(bas, "_set_input_independent_states"):
         bas._set_input_independent_states()
     # set input shape
-    transformer = bas.to_transformer().set_input_shape(
-        *([3] * bas._n_input_dimensionality)
-    )
+    transformer = bas.to_transformer().set_input_shape(*([3] * bas._n_inputs))
     if isinstance(bas, (AdditiveBasis, MultiplicativeBasis)):
         if hasattr(inp, "ndim"):
             ndim = inp.ndim
             inp = np.concatenate(
-                [inp.reshape(inp.shape[0], -1)] * bas._n_input_dimensionality, axis=1
+                [inp.reshape(inp.shape[0], -1)] * bas._n_inputs, axis=1
             )
             if ndim == 3:
                 inp = inp[..., np.newaxis]
@@ -1157,6 +1159,7 @@ def test_check_input(inp, expectation, basis_cls, basis_class_specific_params, m
             basis.MultiplicativeBasis: "Transformer('(MSplineEval * RaisedCosineLinearConv)': MultiplicativeBasis(\n    basis1=MSplineEval(n_basis_funcs=5, order=4),\n    basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n))",
             basis.FourierEval: "Transformer(FourierEval(frequencies=[Array([0., 1., 2.], dtype=float64)], ndim=1, frequency_mask='all'))",
             basis.Zero: "Transformer(Zero())",
+            basis.Category: "Transformer(Category(out_of_category=True))",
         }
     ],
 )
@@ -1165,9 +1168,7 @@ def test_repr_out(basis_cls, basis_class_specific_params, expected_out):
         bas = CombinedBasis().instantiate_basis(
             5, basis_cls, basis_class_specific_params, window_size=10
         )
-        bas = bas.set_input_shape(
-            *([10] * bas._n_input_dimensionality)
-        ).to_transformer()
+        bas = bas.set_input_shape(*([10] * bas._n_inputs)).to_transformer()
         out = expected_out.get(basis_cls, "")
         if out == "":
             raise ValueError(f"Missing test case for {basis_cls}!")
@@ -1194,7 +1195,7 @@ def test_repr_out(basis_cls, basis_class_specific_params, expected_out):
 )
 def test_transformer_init_type(bas, expectation):
     with expectation:
-        out = nmo.basis.TransformerBasis(bas)
+        nmo.basis.TransformerBasis(bas)
 
 
 @pytest.mark.parametrize(
@@ -1319,3 +1320,78 @@ def test_double_transformer():
     assert (
         id(tbas.basis) != id(tbas2.basis) != id(tbas3)
     ), "The basis was shallow copied!"
+
+
+# Behavior buckets for the transformer bounds gate. Hardcoded rather than derived from
+# ``_bounds_define_domain`` so the behavior test does not grade the src flag against itself;
+# ``test_bounds_gating_covers_all_bases`` fails if a new basis is added without being labeled here.
+BOUNDS_GATED_EVAL = [
+    basis.BSplineEval,
+    basis.CyclicBSplineEval,
+    basis.FourierEval,
+    basis.MSplineEval,
+    basis.OrthExponentialEval,
+    basis.RaisedCosineLinearEval,
+    basis.RaisedCosineLogEval,
+]
+
+# Never gated: Conv bases carry no ``bounds``; ``IdentityEval`` does not derive its domain from
+# ``bounds``; ``Category`` is discrete; ``Zero`` and ``CustomBasis`` have no bounds-defined domain.
+BOUNDS_UNGATED_ATOMIC = [
+    basis.BSplineConv,
+    basis.CyclicBSplineConv,
+    basis.HistoryConv,
+    basis.MSplineConv,
+    basis.OrthExponentialConv,
+    basis.RaisedCosineLinearConv,
+    basis.RaisedCosineLogConv,
+    basis.IdentityEval,
+    basis.Category,
+    basis.Zero,
+    basis.CustomBasis,
+]
+
+# Composite bases inherit the gate from their components. ``instantiate_basis`` builds them from an
+# MSplineEval (gated) and a Conv, so unbounded they raise and bounded they pass.
+BOUNDS_COMPOSITE = [basis.AdditiveBasis, basis.MultiplicativeBasis]
+
+
+def test_bounds_gating_covers_all_bases():
+    """Guard the hardcoded behavior lists against drift as bases are added."""
+    labeled = BOUNDS_GATED_EVAL + BOUNDS_UNGATED_ATOMIC + BOUNDS_COMPOSITE
+    assert len(labeled) == len(
+        set(labeled)
+    ), "A basis is labeled in more than one bucket."
+    implemented = set(list_all_basis_classes())
+    assert not implemented - set(
+        labeled
+    ), f"Unlabeled basis classes: {implemented - set(labeled)}"
+    assert (
+        not set(labeled) - implemented
+    ), f"Labeled non-bases: {set(labeled) - implemented}"
+
+
+def _run_bounds_gating(basis_cls, params, bounds, method):
+    bas = CombinedBasis().instantiate_basis(
+        5, basis_cls, params, window_size=10, bounds=bounds
+    )
+    tbas = bas.to_transformer()
+    getattr(tbas, method)(np.stack([np.linspace(0, 1)] * bas._n_inputs, axis=1))
+
+
+@pytest.mark.parametrize("method", ["fit", "transform", "fit_transform"])
+class TestBoundsGating:
+    @pytest.mark.parametrize("basis_cls", BOUNDS_GATED_EVAL + BOUNDS_COMPOSITE)
+    def test_unset_bounds_raises(self, basis_cls, method, basis_class_specific_params):
+        with pytest.raises(RuntimeError, match="bounds"):
+            _run_bounds_gating(basis_cls, basis_class_specific_params, None, method)
+
+    @pytest.mark.parametrize("basis_cls", BOUNDS_GATED_EVAL + BOUNDS_COMPOSITE)
+    def test_set_bounds_passes(self, basis_cls, method, basis_class_specific_params):
+        with does_not_raise():
+            _run_bounds_gating(basis_cls, basis_class_specific_params, (0, 1), method)
+
+    @pytest.mark.parametrize("basis_cls", BOUNDS_UNGATED_ATOMIC)
+    def test_ungated_never_raises(self, basis_cls, method, basis_class_specific_params):
+        with does_not_raise():
+            _run_bounds_gating(basis_cls, basis_class_specific_params, None, method)

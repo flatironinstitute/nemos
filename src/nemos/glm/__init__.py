@@ -1,10 +1,5 @@
 """GLM modeling module."""
 
-from .classifier_glm import ClassifierGLM, ClassifierPopulationGLM
-from .glm import GLM, PopulationGLM
+import lazy_loader as _lazy
 
-__all__ = ["GLM", "PopulationGLM", "ClassifierGLM", "ClassifierPopulationGLM"]
-
-
-def __dir__():
-    return __all__
+__getattr__, __dir__, __all__ = _lazy.attach_stub(__name__, __file__)

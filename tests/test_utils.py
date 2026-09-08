@@ -108,7 +108,6 @@ def test_concatenate_type(arrays, dtype):
 
 
 class TestPadding:
-
     @pytest.mark.parametrize(
         "predictor_causality", ["causal", "acausal", "anti-causal", ""]
     )
@@ -132,20 +131,20 @@ class TestPadding:
     @pytest.mark.parametrize("array", [np.zeros([2, 4, 5])])
     @pytest.mark.parametrize("pad_size", [0.1, -1, 0, 1, 2, 3, 5, 6])
     def test_padding_nan_causal(self, pad_size, array):
-        raise_exception = (not isinstance(pad_size, int)) or (pad_size <= 0)
+        raise_exception = (not isinstance(pad_size, int)) or (pad_size < 0)
         if raise_exception:
             with pytest.raises(
-                ValueError, match="pad_size must be a positive integer!"
+                ValueError, match="pad_size must be a non-negative integer!"
             ):
                 utils.nan_pad(array, pad_size, "anti-causal")
         else:
             padded = utils.nan_pad(array, pad_size, "causal")
-            assert np.isnan(padded[:pad_size]).all(), (
-                "Missing NaNs at the " "beginning of the array!"
-            )
-            assert not np.isnan(padded[pad_size:]).all(), (
-                "Found NaNs at the " "end of the array!"
-            )
+            assert np.isnan(
+                padded[:pad_size]
+            ).all(), "Missing NaNs at the beginning of the array!"
+            assert not np.isnan(
+                padded[pad_size:]
+            ).all(), "Found NaNs at the end of the array!"
             assert (
                 padded.shape[0] == array.shape[0] + pad_size
             ), "Size after padding doesn't match expectation. Should be T + window_size - 1."
@@ -153,10 +152,10 @@ class TestPadding:
     @pytest.mark.parametrize("array", [np.zeros([2, 5, 4])])
     @pytest.mark.parametrize("pad_size", [0, 1, 2, 3, 5, 6])
     def test_padding_nan_anti_causal(self, pad_size, array):
-        raise_exception = (not isinstance(pad_size, int)) or (pad_size <= 0)
+        raise_exception = (not isinstance(pad_size, int)) or (pad_size < 0)
         if raise_exception:
             with pytest.raises(
-                ValueError, match="pad_size must be a positive integer!"
+                ValueError, match="pad_size must be a non-negative integer!"
             ):
                 utils.nan_pad(array, pad_size, "anti-causal")
         else:
@@ -174,10 +173,10 @@ class TestPadding:
     @pytest.mark.parametrize("array", [np.zeros([2, 5, 4])])
     @pytest.mark.parametrize("pad_size", [-1, 0.2, 0, 1, 3, 5])
     def test_padding_nan_acausal(self, pad_size, array):
-        raise_exception = (not isinstance(pad_size, int)) or (pad_size <= 0)
+        raise_exception = (not isinstance(pad_size, int)) or (pad_size < 0)
         if raise_exception:
             with pytest.raises(
-                ValueError, match="pad_size must be a positive integer!"
+                ValueError, match="pad_size must be a non-negative integer!"
             ):
                 utils.nan_pad(array, pad_size, "acausal")
 
@@ -190,9 +189,9 @@ class TestPadding:
                     message="With acausal filter, pad_size should probably be even",
                 )
                 padded = utils.nan_pad(array, pad_size, "acausal")
-            assert np.isnan(padded[:init_nan]).all(), (
-                "Missing NaNs at the " "beginning of the array!"
-            )
+            assert np.isnan(
+                padded[:init_nan]
+            ).all(), "Missing NaNs at the beginning of the array!"
             assert np.isnan(
                 padded[padded.shape[0] - end_nan :]
             ).all(), "Missing NaNs at the end of the array!"
@@ -282,11 +281,15 @@ class TestPadding:
         [
             (
                 -1,
-                pytest.raises(ValueError, match="pad_size must be a positive integer"),
+                pytest.raises(
+                    ValueError, match="pad_size must be a non-negative integer"
+                ),
             ),
             (
                 1.0,
-                pytest.raises(ValueError, match="pad_size must be a positive integer"),
+                pytest.raises(
+                    ValueError, match="pad_size must be a non-negative integer"
+                ),
             ),
             (1, does_not_raise()),
             (2, does_not_raise()),
@@ -328,7 +331,6 @@ class TestPadding:
 
 
 class TestShiftTimeSeries:
-
     @pytest.mark.parametrize(
         "predictor_causality, expectation",
         [
@@ -579,7 +581,7 @@ class ComplexParam(Base):
             nmo.glm.GLM(inverse_link_function=deepcopy(jax.numpy.exp)),
             None,
             [],
-            "GLM(observation_model=PoissonObservations(), inverse_link_function=<PjitFunction>, regularizer=UnRegularized(), solver_name='GradientDescent')",
+            "GLM(observation_model=PoissonObservations(), inverse_link_function=<PjitFunction>, regularizer=UnRegularized(), fit_intercept=True, solver_name='LBFGS')",
         ),
     ],
 )
@@ -592,13 +594,13 @@ def test_repr_multiline():
     bas = nmo.basis.MSplineEval(10, label="mylabel")
     assert (
         utils.format_repr(bas, multiline=True)
-        == "'mylabel': MSplineEval(\n    n_basis_funcs=10,\n    order=4\n)"
+        == "'mylabel': MSplineEval(\n    n_basis_funcs=10,\n    order=4,\n    fill_value=nan\n)"
     )
     # test without label
     bas = nmo.basis.MSplineEval(10)
     assert (
         utils.format_repr(bas, multiline=True)
-        == "MSplineEval(\n    n_basis_funcs=10,\n    order=4\n)"
+        == "MSplineEval(\n    n_basis_funcs=10,\n    order=4,\n    fill_value=nan\n)"
     )
 
 
@@ -631,7 +633,7 @@ def test_inspect_npz(tmp_path, model_class, monkeypatch, capsys):
     monkeypatch.setattr("nemos.base_regressor.get_env_metadata", fake_env_metadata)
     monkeypatch.setattr("nemos.io.io.get_env_metadata", fake_env_metadata)
 
-    file_path = tmp_path / f"test_model.npz"
+    file_path = tmp_path / "test_model.npz"
 
     # Initialize the model with some parameters
     model = model_class(
@@ -665,6 +667,8 @@ def test_inspect_npz(tmp_path, model_class, monkeypatch, capsys):
     if hasattr(model_class, "feature_mask") or model_class == nmo.glm.PopulationGLM:
         lines.append("feature_mask           : None")
 
+    lines.append("fit_intercept          : True")
+    lines.append("fix_params             : (None, None)")
     lines += [
         "inverse_link_function  : jax.numpy.exp",
         "observation_model      : {'class': 'nemos.observation_models.PoissonObservations'}",

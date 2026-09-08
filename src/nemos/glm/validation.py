@@ -6,21 +6,22 @@ from typing import Any, Callable, Dict, Literal, Optional, Tuple, Union
 import jax
 import jax.numpy as jnp
 from jax.typing import DTypeLike
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, NDArray
 
 from .. import validation
+from ..base_validator import RegressorValidator
+from ..pytrees import FeaturePytree
 from ..tree_utils import pytree_map_and_reduce
-from ..typing import DESIGN_INPUT_TYPE, FeaturePytree
-from ..validation import RegressorValidator
+from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMParams, GLMUserParams
 
 
-def to_glm_params(user_params: GLMUserParams) -> GLMParams:
+def to_glm_params[LeafT](user_params: GLMUserParams[LeafT]) -> GLMParams[LeafT]:
     """Map from GLMUserParams to GLMParams."""
     return GLMParams(*user_params)
 
 
-def from_glm_params(params: GLMParams) -> GLMUserParams:
+def from_glm_params[LeafT](params: GLMParams[LeafT]) -> GLMUserParams[LeafT]:
     """Map from GLMParams to GLMUserParams."""
     return params.coef, params.intercept
 
@@ -58,7 +59,7 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
             "check_array_dimensions",
             dict(
                 err_message_format="Invalid parameter dimensionality. coef must be an array "
-                "or nemos.pytree.FeaturePytree with array leafs of shape "
+                "or pytree with array leaves of shape "
                 "(n_features, ). intercept must be of shape (1,)."
                 "\nThe provided coef and intercept have shape ``{}`` and ``{}`` "
                 "instead."
@@ -68,7 +69,9 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         ("validate_intercept_shape", None),
     )
 
-    def validate_intercept_shape(self, params: GLMParams, **kwargs):
+    def validate_intercept_shape(
+        self, params: GLMParams[jnp.ndarray | NDArray], **kwargs
+    ):
         """
         Perform GLM-specific parameter validation.
 
@@ -98,12 +101,24 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
             )
         return params
 
+    def additional_validation_param_specs(
+        self, params: GLMParams[jnp.ndarray | NDArray], **kwargs
+    ) -> GLMParams[jnp.ndarray | NDArray]:
+        """Add the GLM intercept-shape check to a partial parameter specification.
+
+        The intercept is optional in a spec (``None`` when left learnable), so the
+        shape check only runs when an intercept is actually fixed.
+        """
+        if params.intercept is not None:
+            self.validate_intercept_shape(params)
+        return params
+
     def check_array_dimensions(
         self,
-        params: GLMUserParams,
+        params: GLMUserParams[jnp.ndarray | NDArray],
         err_msg: Optional[str] = None,
         err_message_format: str = None,
-    ) -> GLMUserParams:
+    ) -> GLMUserParams[jnp.ndarray | NDArray]:
         """
         Check array dimensions with custom error formatting for GLM parameters.
 
@@ -164,7 +179,7 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
 
     def validate_consistency(
         self,
-        params: GLMParams,
+        params: GLMParams[jnp.ndarray | NDArray],
         X: Optional[DESIGN_INPUT_TYPE] = None,
         y: Optional[jnp.ndarray] = None,
     ):
@@ -186,8 +201,8 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
             else:
                 data = X
                 msg += (
-                    f" X was provided as an array, and coef should be an array too. "
-                    f"The provided coef is of type ``{type(params.coef)}`` instead."
+                    f" X has pytree structure ``{jax.tree_util.tree_structure(X)}``, "
+                    f"but coef has structure ``{jax.tree_util.tree_structure(params.coef)}``."
                 )
 
             validation.check_tree_structure(
@@ -215,8 +230,8 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         Validate and cast a feature mask to JAX arrays.
 
         Validates that the feature mask contains only 0s and 1s, then converts
-        it to JAX arrays with the specified data type. Handles FeaturePytree
-        inputs by extracting the underlying data. Subclasses can extend
+        it to JAX arrays with the specified data type. Handles pytree inputs
+        by extracting the underlying data. Subclasses can extend
         this to add parameter-specific validation (e.g., checking that mask
         shape matches parameter dimensions).
 
@@ -224,7 +239,7 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         ----------
         feature_mask :
             Feature mask indicating which features are used. Must contain only 0s and 1s.
-            If a FeaturePytree, the underlying data dict is extracted.
+            If a pytree, the underlying data dict is extracted.
         data_type :
             Target data type for the mask arrays. Defaults to float.
 
@@ -241,7 +256,7 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         if feature_mask is None:
             return None
 
-        # Extract data from FeaturePytree
+        # Extract data if needed
         if isinstance(feature_mask, FeaturePytree):
             feature_mask = feature_mask.data
 
@@ -260,9 +275,9 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
     def feature_mask_consistency(
         self,
         feature_mask: Union[dict[str, jnp.ndarray], jnp.ndarray] | None,
-        params: GLMParams,
+        params: GLMParams[jnp.ndarray | NDArray],
     ):
-        """Check consistency of feature_mask and params."""
+        """Check that feature_mask mirrors the structure and the shape of ``params.coef``."""
         if feature_mask is None:
             return
         validation.check_tree_structure(
@@ -273,36 +288,33 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
             f"{jax.tree_util.tree_structure(params.coef)} structure instead!",
         )
 
-        if isinstance(params.coef, dict):
-            # Note: in this case, the tree structure matching already takes care of the feature matching.
-            # aka, same dict keys implies same feature masked. All we need to check is the match of
-            # n_neurons.
-            neural_axis = 0
-            n_neurons = (
-                1
-                if self.y_dimensionality == 1
-                else next(iter(params.coef.values())).shape[1]
+        shape_match = pytree_map_and_reduce(
+            lambda fm, coef: fm.shape == self._expected_mask_shape(coef),
+            all,
+            feature_mask,
+            params.coef,
+        )
+        if not shape_match:
+            raise ValueError(
+                "The ``feature_mask`` must match the shape of the ``coef``, leaf by leaf. "
+                f"Expected "
+                f"{jax.tree_util.tree_map(lambda c: self._expected_mask_shape(c), params.coef)}, "
+                f"got {jax.tree_util.tree_map(lambda m: m.shape, feature_mask)} instead. "
+                "A pytree mask holding one entry per neuron is no longer accepted; broadcast "
+                "it to the shape of the coefficients."
             )
-            shape_match = pytree_map_and_reduce(
-                lambda fm: fm.shape == (n_neurons,), all, feature_mask
-            )
-            if not shape_match:
-                raise ValueError(
-                    "Inconsistent number of neurons. "
-                    f"feature_mask has {jax.tree_util.tree_map(lambda m: m.shape[neural_axis], feature_mask)} neurons, "
-                    f"model coefficients have {jax.tree_util.tree_map(lambda x: x.shape[1], params.coef)}  instead!",
-                )
-        else:
-            shape_match = feature_mask.shape == params.coef.shape
-            if not shape_match:
-                raise ValueError(
-                    "The shape of the ``feature_mask`` array must match that of the ``coef``. "
-                    f"The shape of the ``coef`` is ``{params.coef.shape}``, "
-                    f"that of the ``feature_mask`` is ``{feature_mask.shape}`` instead!"
-                )
-        return
 
-    def get_empty_params(self, X, y) -> GLMParams:
+    @staticmethod
+    def _expected_mask_shape(coef: jnp.ndarray) -> tuple[int, ...]:
+        """Shape a ``feature_mask`` leaf must have to mask ``coef``.
+
+        The mask selects features, so it carries one entry per coefficient the model
+        estimates. Subclasses whose coefficients carry an axis the mask does not
+        distinguish (the classes of a classifier) drop that axis here.
+        """
+        return coef.shape
+
+    def get_empty_params(self, X, y) -> GLMParams[jnp.ndarray]:
         """Return the param shape given the input data."""
         empty_coef = jax.tree_util.tree_map(lambda x: jnp.empty((x.shape[1],)), X)
         empty_intercept = jnp.empty((1,))
@@ -337,8 +349,8 @@ class PopulationGLMValidator(GLMValidator):
             "check_array_dimensions",
             dict(
                 err_message_format="Invalid parameter dimensionality. "
-                "coef must be an array or nemos.pytree.FeaturePytree "
-                "with array leafs of shape (n_features, n_neurons). "
+                "coef must be an array or pytree "
+                "with array leaves of shape (n_features, n_neurons). "
                 "intercept must be of shape (n_neurons,)."
                 "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
             ),
@@ -348,7 +360,7 @@ class PopulationGLMValidator(GLMValidator):
 
     def validate_consistency(
         self,
-        params: GLMParams,
+        params: GLMParams[jnp.ndarray | NDArray],
         X: Optional[DESIGN_INPUT_TYPE] = None,
         y: Optional[jnp.ndarray] = None,
     ):
@@ -373,7 +385,18 @@ class PopulationGLMValidator(GLMValidator):
                 f"y has {jax.tree_util.tree_map(lambda x: x.shape[1], y)} neurons instead!",
             )
 
-    def get_empty_params(self, X, y) -> GLMParams:
+    def additional_validation_param_specs(
+        self, params: GLMParams[jnp.ndarray | NDArray], **kwargs
+    ) -> GLMParams[jnp.ndarray | NDArray]:
+        """No setter-time intercept-shape check for population GLM.
+
+        The intercept has shape ``(n_neurons,)`` and ``n_neurons`` is only known once
+        ``y`` is available, so the exact shape is validated by ``validate_consistency``
+        at fit time. ``check_array_dimensions`` still enforces the intercept ndim.
+        """
+        return params
+
+    def get_empty_params(self, X, y) -> GLMParams[jnp.ndarray]:
         """Return the param shape given the input data."""
         n_neurons = y.shape[1]
         empty_coef = jax.tree_util.tree_map(
@@ -399,14 +422,27 @@ class ClassifierGLMValidator(GLMValidator):
     extra_params: Dict[Literal["n_classes"], int] = field(kw_only=True)
     expected_param_dims: Tuple[int] = (2, 1)
     model_class: str = "ClassifierGLM"
+
+    @staticmethod
+    def _expected_mask_shape(coef: jnp.ndarray) -> tuple[int, ...]:
+        """Drop the trailing class axis: a feature is masked for a neuron or not at all.
+
+        Coefficients carry a class axis, but nothing distinguishes the classes when
+        deciding whether a feature reaches a neuron, and a mask free to vary across
+        classes would make the per-neuron residual degrees of freedom ambiguous. The
+        mask is therefore ``(n_features, n_neurons)`` (or ``(n_features,)`` for the
+        single-neuron classifier) and broadcasts over classes at prediction time.
+        """
+        return coef.shape[:-1]
+
     params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
         *RegressorValidator.params_validation_sequence[:2],
         (
             "check_array_dimensions",
             dict(
                 err_message_format="Invalid parameter dimensionality. "
-                "coef must be an array or nemos.pytree.FeaturePytree "
-                "with array leafs of shape (n_features, n_classes). "
+                "coef must be an array or pytree "
+                "with array leaves of shape (n_features, n_classes). "
                 "intercept must be of shape (n_classes,)."
                 "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
             ),
@@ -423,10 +459,10 @@ class ClassifierGLMValidator(GLMValidator):
 
     def validate_n_classes_shape(
         self,
-        params: GLMUserParams,
+        params: GLMUserParams[jnp.ndarray | NDArray],
         intercept_err_format: str = None,
         **kwargs,
-    ) -> GLMUserParams:
+    ) -> GLMUserParams[jnp.ndarray | NDArray]:
         """
         Validate that coef and intercept last dimensions match n_classes.
 
@@ -464,9 +500,28 @@ class ClassifierGLMValidator(GLMValidator):
 
         return params
 
+    def additional_validation_param_specs(
+        self, params: GLMParams[jnp.ndarray | NDArray], **kwargs
+    ) -> GLMParams[jnp.ndarray | NDArray]:
+        """Check that a fixed intercept's class dimension matches ``n_classes``.
+
+        The last axis of the intercept is ``n_classes`` (known from ``extra_params``),
+        so it can be checked at setter time. For the population classifier the neuron
+        axis is left to ``validate_consistency`` at fit time. ``check_array_dimensions``
+        already enforces the intercept ndim.
+        """
+        if params.intercept is not None:
+            n_classes = self.extra_params["n_classes"]
+            if params.intercept.shape[-1] != n_classes:
+                raise ValueError(
+                    f"intercept last dimension must be n_classes = {n_classes}. "
+                    f"Got intercept with shape {params.intercept.shape}."
+                )
+        return params
+
     def validate_consistency(
         self,
-        params: GLMParams,
+        params: GLMParams[jnp.ndarray | NDArray],
         X: Optional[DESIGN_INPUT_TYPE] = None,
         y: Optional[jnp.ndarray] = None,
     ):
@@ -488,8 +543,8 @@ class ClassifierGLMValidator(GLMValidator):
             else:
                 data = X
                 msg += (
-                    f" X was provided as an array, and coef should be an array too. "
-                    f"The coef are of type ``{type(params.coef)}`` instead."
+                    f" X has pytree structure ``{jax.tree_util.tree_structure(X)}``, "
+                    f"but coef has structure ``{jax.tree_util.tree_structure(params.coef)}``."
                 )
 
             validation.check_tree_structure(
@@ -527,44 +582,7 @@ class ClassifierGLMValidator(GLMValidator):
             y_int = y
         return y_int
 
-    def feature_mask_consistency(
-        self,
-        feature_mask: Union[dict[str, jnp.ndarray], jnp.ndarray] | None,
-        params: GLMParams,
-    ):
-        """Check consistency of feature_mask and params for classifier GLM."""
-        if feature_mask is None:
-            return
-        validation.check_tree_structure(
-            params.coef,
-            feature_mask,
-            err_message=f"feature_mask and coef must have the same structure, but feature_mask has structure "
-            f"{jax.tree_util.tree_structure(feature_mask)}, coef is of "
-            f"{jax.tree_util.tree_structure(params.coef)} structure instead!",
-        )
-
-        shape_match = pytree_map_and_reduce(
-            lambda fm, coef: fm.shape == coef.shape,
-            all,
-            feature_mask,
-            params.coef,
-        )
-
-        if not shape_match:
-            if isinstance(params.coef, jnp.ndarray):
-                raise ValueError(
-                    "The shape of the ``feature_mask`` array must match coef shape. "
-                    f"Expected shape ``{params.coef.shape}``, "
-                    f"got ``{feature_mask.shape}`` instead!"
-                )
-            else:
-                raise ValueError(
-                    "Inconsistent feature mask shape. "
-                    f"feature_mask has shapes {jax.tree_util.tree_map(lambda m: m.shape, feature_mask)}, "
-                    f"expected shapes {jax.tree_util.tree_map(lambda c: c.shape, params.coef)}!"
-                )
-
-    def get_empty_params(self, X, y) -> GLMParams:
+    def get_empty_params(self, X, y) -> GLMParams[jnp.ndarray]:
         """Return the param shape given the input data."""
         n_classes = self.extra_params["n_classes"]
         empty_coef = jax.tree_util.tree_map(
@@ -596,8 +614,8 @@ class PopulationClassifierGLMValidator(ClassifierGLMValidator):
             "check_array_dimensions",
             dict(
                 err_message_format="Invalid parameter dimensionality. "
-                "coef must be an array or nemos.pytree.FeaturePytree "
-                "with array leafs of shape (n_features, n_neurons, n_classes). "
+                "coef must be an array or pytree "
+                "with array leaves of shape (n_features, n_neurons, n_classes). "
                 "intercept must be of shape (n_neurons, n_classes)."
                 "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
             ),
@@ -614,7 +632,7 @@ class PopulationClassifierGLMValidator(ClassifierGLMValidator):
 
     def validate_consistency(
         self,
-        params: GLMParams,
+        params: GLMParams[jnp.ndarray | NDArray],
         X: Optional[DESIGN_INPUT_TYPE] = None,
         y: Optional[jnp.ndarray] = None,
     ):
@@ -640,7 +658,7 @@ class PopulationClassifierGLMValidator(ClassifierGLMValidator):
                 f"y has {jax.tree_util.tree_map(lambda x: x.shape[1], y)} neurons instead!",
             )
 
-    def get_empty_params(self, X, y) -> GLMParams:
+    def get_empty_params(self, X, y) -> GLMParams[jnp.ndarray]:
         """Return the param shape given the input data."""
         n_neurons = y.shape[1]
         n_classes = self.extra_params["n_classes"]

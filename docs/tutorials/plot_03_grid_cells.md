@@ -4,7 +4,6 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.4
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -16,6 +15,9 @@ kernelspec:
 
 %matplotlib inline
 import warnings
+import jax
+
+jax.config.update("jax_enable_x64", True)
 
 # Ignore the first specific warning
 warnings.filterwarnings(
@@ -53,7 +55,9 @@ import nemos as nmo
 
 ## Data Streaming
 
-Here we load the data from OSF. The data is a NWB file.
+The data used in this tutorial were used in this publication: Sargolini, Francesca, et al. “Conjunctive representation of position, direction, and velocity in entorhinal cortex.” Science 312.5774 (2006): 758-762. The data can be found on the DANDI Archive in [Dandiset 000582](https://dandiarchive.org/dandiset/000582) with DOI https://doi.org/10.48324/dandi.000582/0.251111.2151.
+
+DANDI allows you to stream data without downloading all the files. In this case the data extracted from the NWB file are stored in the nwb-cache folder.
 
 ```{code-cell} ipython3
 io = nmo.fetch.download_dandi_data(
@@ -210,9 +214,6 @@ Here we will focus on the last neuron (neuron 7) who has a nice grid pattern
 model = nmo.glm.GLM(
     regularizer="Ridge",
     regularizer_strength=0.0001,
-    # lowering the tolerance means that the solution will be closer to the optimum
-    # (at the cost of increasing execution time)
-    solver_kwargs=dict(tol=10**-12),
 )
 ```
 

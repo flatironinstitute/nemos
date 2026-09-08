@@ -1,5 +1,11 @@
 name: ci
 
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 on:
   workflow_dispatch:
   schedule:
@@ -17,111 +23,209 @@ on:
     branches:
       - main
 
+env:
+  CODECOV_OS: ubuntu-latest
+  CODECOV_PY: '3.14'
+
 jobs:
+  prefetch_data:
+    # Download the test datasets from OSF exactly once and publish them as an
+    # artifact. The matrix test jobs then consume the artifact instead of each
+    # hitting OSF, which was triggering 429 (Too Many Requests) rate-limiting.
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 #v6.2.0
+        with:
+          python-version: ${{ env.CODECOV_PY }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 #v7.3.1
+        with:
+          enable-cache: true
+          cache-suffix: "v2"
+
+      - name: Fetch datasets from OSF
+        env:
+          NEMOS_DATA_DIR: ${{ github.workspace }}/nemos-data
+        run: |
+          uv run --with pooch --with tqdm python - <<'PY'
+          from nemos.fetch import fetch_data
+          from nemos.fetch.fetch_data import DOWNLOADABLE_FILES
+
+          # Tests consume only the .npz datasets; the large .nwb files are
+          # docs-only and are intentionally skipped to keep the artifact small.
+          for name in DOWNLOADABLE_FILES:
+              if name.endswith(".npz"):
+                  print(f"fetching {name}")
+                  fetch_data(name)
+          PY
+
+      - name: Upload datasets artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nemos-data
+          path: ${{ github.workspace }}/nemos-data
+          if-no-files-found: error
+          retention-days: 1
+
   tox_tests_not_solver_related:
     if: ${{ !github.event.pull_request.draft }}
+    needs: prefetch_data
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ['3.10', '3.11', '3.12', '3.13']
+        python-version: ['3.12', '3.13', '3.14']
       fail-fast: false
     runs-on: ${{ matrix.os }}
+    env:
+      NEMOS_DATA_DIR: ${{ github.workspace }}/nemos-data
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 #v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 #v7.3.1
         with:
           enable-cache: true
+          cache-suffix: "v2"
+
+      - name: Download datasets artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nemos-data
+          path: ${{ github.workspace }}/nemos-data
 
       - name: Run tox
         run: uvx --with tox-uv tox -e skip_solver_related
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4.0.1
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        if: matrix.os == env.CODECOV_OS && matrix.python-version == env.CODECOV_PY
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6.0.2
+        with:
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   tox_solver_related_jaxopt_backend:
     if: ${{ !github.event.pull_request.draft }}
+    needs: prefetch_data
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ['3.10', '3.11', '3.12', '3.13']
+        python-version: ['3.12', '3.13', '3.14']
+      fail-fast: false
     runs-on: ${{ matrix.os }}
+    env:
+      NEMOS_DATA_DIR: ${{ github.workspace }}/nemos-data
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 #v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 #v7.3.1
         with:
           enable-cache: true
+          cache-suffix: "v2"
+
+      - name: Download datasets artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nemos-data
+          path: ${{ github.workspace }}/nemos-data
 
       - name: Run solver-dependent tests with JAXopt backend
         run: uvx --with tox-uv tox -e backend-jaxopt
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4.0.1
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        if: matrix.os == env.CODECOV_OS && matrix.python-version == env.CODECOV_PY
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6.0.2
+        with:
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   tox_solver_related_optimistix_backend:
     if: ${{ !github.event.pull_request.draft }}
+    needs: prefetch_data
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ['3.10', '3.11', '3.12', '3.13']
+        python-version: ['3.12', '3.13', '3.14']
+      fail-fast: false
     runs-on: ${{ matrix.os }}
+    env:
+      NEMOS_DATA_DIR: ${{ github.workspace }}/nemos-data
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 #v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 #v7.3.1
         with:
           enable-cache: true
+          cache-suffix: "v2"
+
+      - name: Download datasets artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nemos-data
+          path: ${{ github.workspace }}/nemos-data
 
       - name: Run solver-dependent tests with Optimistix backend
         run: uvx --with tox-uv tox -e backend-optimistix
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4.0.1
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        if: matrix.os == env.CODECOV_OS && matrix.python-version == env.CODECOV_PY
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6.0.2
+        with:
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   tox_check:
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 #v6.2.0
         with:
-          python-version: '3.13'
+          python-version: '3.14'
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 #v7.3.1
         with:
           enable-cache: true
+          cache-suffix: "v2"
 
       - name: Run tox
         run: uvx --with tox-uv tox -e check
@@ -130,7 +234,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Check links
         run: ./scripts/prevent_absolute_links_to_docs.sh
@@ -139,7 +245,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Install markdown-link-check
         run: npm install -g markdown-link-check
@@ -150,6 +258,7 @@ jobs:
   check:
     if: ${{ !github.event.pull_request.draft }}
     needs:
+      - prefetch_data
       - tox_tests_not_solver_related
       - prevent_docs_absolute_links
       - tox_check
@@ -158,6 +267,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Decide whether all tests and notebooks succeeded
-        uses: re-actors/alls-green@v1.2.2
+        uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # v1.2.2
         with:
           jobs: ${{ toJSON(needs) }}
