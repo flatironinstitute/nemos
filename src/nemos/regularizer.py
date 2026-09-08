@@ -16,6 +16,15 @@ import jax.numpy as jnp
 import numpy as np
 
 from . import tree_utils
+from ._hess import (
+    HessianTag,
+    LeafClaim,
+    MatrixProperty,
+    MatrixStructure,
+    mask_claim_all,
+    mask_claim_none,
+    mask_of_claim,
+)
 from .base_class import Base
 from .proximal_operator import (
     compute_normalization,
@@ -26,7 +35,6 @@ from .proximal_operator import (
     prox_none,
     prox_ridge,
 )
-from .solvers._hess import Diagonal, General, HessianTag, PositiveDefinite
 from .tree_utils import pytree_map_and_reduce
 from .type_casting import _is_scalar_or_0d
 from .typing import ProximalOperator
@@ -179,32 +187,80 @@ class Regularizer(Base, abc.ABC):
     _allowed_solvers: Tuple[str]
     _default_solver: str
     _proximal_operator: Callable
-    _hess_tag: HessianTag | None = None
 
-    def resolve_hess_tag(self, params: Any) -> HessianTag | None:
-        """Hessian tag of this regularizer's curvature for the given parameters.
+    # What this penalty's Hessian looks like, as far as the class can say. ``None`` for a
+    # penalty whose curvature is not described at all, in which case no tag is produced and
+    # the solver claims nothing about the sum either. The per-leaf kind is what the penalty
+    # contributes on the leaves it acts on, i.e. where the strength is strictly positive.
+    _hess_property: MatrixProperty | None = None
+    _hess_structure: MatrixStructure = MatrixStructure.FULL
+    _hess_leaf_kind: LeafClaim = LeafClaim.UNCLAIMED
 
-        The regularizer's Hessian is positive definite only on the subtrees it
-        penalizes (``params.regularizable_subtrees``); if it does not cover every
-        parameter it offers no global definiteness guarantee, so the property is
-        downgraded to ``General``.
+    def _leaf_claim(self, strength_leaf: Any) -> LeafClaim:
+        """Decide what this penalty certifies about one leaf, given the strength there.
+
+        Parameters
+        ----------
+        strength_leaf :
+            The strength for one parameter leaf: a scalar, or an array with one entry per
+            coefficient in that leaf.
+
+        Returns
+        -------
+        :
+            ``_hess_leaf_kind`` when every entry is strictly positive, since the penalty
+            then acts on the whole leaf; ``LeafClaim.FLAT`` when every entry is zero, since
+            the penalty then has no curvature there at all; ``LeafClaim.UNCLAIMED`` when the
+            entries are mixed, because the block is then neither zero nor definite and no
+            leaf-level claim describes it. Negative entries do not arise:
+            :meth:`_validate_strength` rejects them.
         """
-        if self._hess_tag is None:
+        strength_leaf = jnp.asarray(strength_leaf)
+        if jnp.all(strength_leaf > 0):
+            return self._hess_leaf_kind
+        if jnp.all(strength_leaf == 0):
+            return LeafClaim.FLAT
+        return LeafClaim.UNCLAIMED
+
+    def _resolve_hess_tag(self, params: Any, strength: Any) -> HessianTag | None:
+        """Describe this penalty's Hessian for these parameters and this strength.
+
+        Neither the sign nor the leaf sets can be declared on the class: which leaves the
+        penalty curves on depends on the strength it is given, and which leaves exist at all
+        depends on what is held fixed. Both are read here, from the strength matched to the
+        parameter tree — the same matching :meth:`penalized_loss` does — so a leaf with a
+        zero strength is reported flat and one the penalty never reaches is reported flat
+        too.
+
+        Parameters
+        ----------
+        params :
+            The parameters being fitted.
+        strength :
+            The regularizer strength, in any of the forms
+            :meth:`_validate_strength_structure` accepts.
+
+        Returns
+        -------
+        :
+            The tag, or ``None`` when the class describes no curvature.
+        """
+        if self._hess_property is None:
             return None
-        if hasattr(params, "regularizable_subtrees"):
-            regularized = {
-                id(leaf)
-                for where in params.regularizable_subtrees()
-                for leaf in jax.tree_util.tree_leaves(where(params))
-            }
-            all_regularized = regularized == {
-                id(leaf) for leaf in jax.tree_util.tree_leaves(params)
-            }
-        else:
-            all_regularized = True
-        if all_regularized:
-            return self._hess_tag
-        return HessianTag(self._hess_tag.structure, General)
+        matched = self._validate_strength_structure(params, strength)
+        # Leaves the penalty does not reach have no curvature from it, hence flat; the
+        # regularizable ones are then relabelled from their strength.
+        claims = apply_operator(
+            lambda _, strength: jax.tree_util.tree_map(self._leaf_claim, strength),
+            jax.tree_util.tree_map(lambda _: LeafClaim.FLAT, params),
+            filter_kwargs={"strength": matched},
+        )
+        return HessianTag(
+            structure=self._hess_structure,
+            property=self._hess_property,
+            flat_on=mask_of_claim(claims, LeafClaim.FLAT),
+            definite_on=mask_of_claim(claims, LeafClaim.DEFINITE),
+        )
 
     @property
     def allowed_solvers(self) -> Tuple[str]:
@@ -320,9 +376,9 @@ class Regularizer(Base, abc.ABC):
     def _penalty_on_subtree(self, subtree, **kwargs) -> jnp.ndarray:
         pass
 
-    def _validate_strength(self, strength: Any):
+    def _convert_strength(self, strength: Any):
         """
-        Validate regularizer strength type.
+        Convert regularizer strength type.
 
         Parameters
         ----------
@@ -332,8 +388,13 @@ class Regularizer(Base, abc.ABC):
                 Defaults to a scalar strength of 1.0.
             - scalar (Python number or 0-D array)
                 Preserved as-is.
-            - array-like or PyTree
-                Converted leaf-wise to JAX arrays.
+            - PyTree of the above
+                Each leaf is converted individually.
+            - array-like (array, list or tuple)
+                Treated as a single leaf and converted to a `jnp.ndarray`. A list is
+                therefore an array here, not a container: the "one strength per
+                regularizable subtree" list that `_validate_strength_structure` accepts
+                cannot reach it through this method.
 
         Returns
         -------
@@ -344,7 +405,7 @@ class Regularizer(Base, abc.ABC):
 
         Raises
         ------
-        ValueError
+        TypeError
             If conversion of array-like leaves to JAX arrays fails.
         """
         if strength is None:
@@ -373,6 +434,46 @@ class Regularizer(Base, abc.ABC):
                 f"Could not convert regularizer strength to floats: {strength}"
             ) from e
 
+    def _validate_strength(self, strength: Any):
+        """
+        Convert a regularizer strength and check that it is non-negative.
+
+        A negative strength makes the penalty concave, which the regularizer classes have no
+        way to declare: they carry a positive semidefinite penalty Hessian, and a negative
+        entry would make that claim false. Zero is allowed, and spares the parameters the
+        strength applies to.
+
+        Parameters
+        ----------
+        strength : Any
+            Regularizer strength, in any of the forms :meth:`_convert_strength` accepts.
+
+        Returns
+        -------
+        Any
+            The converted strength, unchanged.
+
+        Raises
+        ------
+        TypeError
+            If conversion of array-like leaves to JAX arrays fails.
+        ValueError
+            If any entry of any leaf is negative. The reported path is the one inside the
+            strength as the user passed it; which parameters it will be matched against is
+            not known until :meth:`_validate_strength_structure`.
+        """
+        strength = self._convert_strength(strength)
+
+        def check_sign(path, leaf):
+            if jnp.any(jnp.asarray(leaf) < 0):
+                location = f" at {jax.tree_util.keystr(path)}" if path else ""
+                raise ValueError(
+                    f"Regularizer strength must be non-negative, got {leaf}{location}."
+                )
+            return leaf
+
+        return jax.tree_util.tree_map_with_path(check_sign, strength)
+
     def _validate_strength_structure(self, params: Any, strength: Any):
         """
         Align and broadcast regularizer strength to match model parameters.
@@ -400,6 +501,12 @@ class Regularizer(Base, abc.ABC):
                 Must match the structure of the regularizable subtrees. Each leaf
                 may be a scalar, 0-D array, or an array matching the corresponding
                 parameter leaf shape.
+            - list, one entry per regularizable subtree
+                Each entry is any of the forms above, applied to its own subtree. Only
+                reachable internally: `_validate_strength` classifies a list as array-like,
+                so a strength set on a model never arrives here in this form. It matters
+                only for a parameter class with more than one regularizable subtree, of
+                which there are none yet.
 
         Returns
         -------
@@ -488,8 +595,11 @@ class Regularizer(Base, abc.ABC):
     ) -> Callable | None:
         """Return a function computing the second derivative of the regularizer penalty.
 
-        ``None`` when the regularizer declares no curvature (``_hess_tag is None``):
-        its penalty is either identically zero or has no second derivative.
+        ``None`` when the regularizer describes no curvature (``_hess_property is None``):
+        its penalty is either identically zero, so adding it would change nothing, or has no
+        second derivative at all. ``UnRegularized`` is the zero case: it returns ``None``
+        here and still resolves a tag in :meth:`_resolve_hess_tag`, since there is no matrix
+        to add but the zero matrix can be described.
 
         Parameters
         ----------
@@ -504,7 +614,7 @@ class Regularizer(Base, abc.ABC):
             batch element, stacked on a leading axis, matching the layout of the
             model's block Hessian.
         """
-        if self._hess_tag is None:
+        if self._hess_property is None:
             return None
 
         filter_kwargs = self._get_filter_kwargs(strength=strength, params=params)
@@ -541,13 +651,29 @@ class UnRegularized(Regularizer):
 
     _default_solver = "LBFGS"
     _proximal_operator = staticmethod(prox_none)
-    _hess_tag = None
 
     def _penalty_on_subtree(self, subtree, **kwargs) -> jnp.ndarray:
         return jnp.array(0.0)
 
     def _validate_strength(self, strength: Any):
         return None
+
+    def _resolve_hess_tag(self, params: Any, strength: Any) -> HessianTag:
+        """Describe the penalty's Hessian, which is the zero matrix.
+
+        The penalty is identically zero, so its second derivative vanishes on every leaf.
+        That makes this tag the neutral element of :func:`~nemos._hess.combine_hessian_tags`:
+        combining it with the model's tag returns the model's claims unchanged, promoted to
+        a definite one when they cover the whole tree. A regularizer that says nothing about
+        its curvature returns ``None`` instead, which is a different statement and combines
+        to ``None``.
+        """
+        return HessianTag(
+            structure=MatrixStructure.DIAGONAL,
+            property=MatrixProperty.POSITIVE_SEMI_DEFINITE,
+            flat_on=mask_claim_all(params),
+            definite_on=mask_claim_none(params),
+        )
 
 
 class Ridge(Regularizer):
@@ -572,7 +698,11 @@ class Ridge(Regularizer):
     _default_solver = "LBFGS"
 
     _proximal_operator = staticmethod(prox_ridge)
-    _hess_tag = HessianTag(structure=Diagonal, property=PositiveDefinite)
+    # ``diag(strength)``: semidefinite for any non-negative strength, and definite on the
+    # leaves where every entry of the strength is strictly positive.
+    _hess_property = MatrixProperty.POSITIVE_SEMI_DEFINITE
+    _hess_structure = MatrixStructure.DIAGONAL
+    _hess_leaf_kind = LeafClaim.DEFINITE
 
     def _penalty_on_subtree(self, subtree, strength: Any, **kwargs) -> jnp.ndarray:
         """
@@ -740,7 +870,9 @@ class ElasticNet(Regularizer):
             strength, ratio = strength, 0.5
 
         strength = super()._validate_strength(strength)
-        ratio = super()._validate_strength(ratio)
+        # only converted, not sign checked: the ratio is not a strength, and ``check_ratio``
+        # below is the stricter statement about it
+        ratio = self._convert_strength(ratio)
 
         def check_ratio(r):
             if jnp.any((r <= 0) | (r > 1)):

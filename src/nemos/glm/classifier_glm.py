@@ -12,9 +12,9 @@ from numpy.typing import ArrayLike, NDArray
 
 from .. import observation_models as obs
 from .. import tree_utils
+from .._hess import LeafClaim, MatrixStructure, claim_nothing
 from ..label_encoder import LabelEncoder
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
-from ..solvers._hess import BlockDiagonal, Full, HessianTag, PositiveSemiDefinite
 from ..type_casting import is_numpy_array_like, support_pynapple
 from ..typing import (
     DESIGN_INPUT_TYPE,
@@ -38,11 +38,30 @@ class ClassifierMixin:
     # observation model inferred
     _invalid_observation_types = ()
 
-    def _hess_property_override(self) -> type | None:
-        # The softmax loss is singular along the (unregularized) uniform intercept
-        # shift, so Ridge does not make the penalized Hessian positive definite. Unlike
-        # a plain GLM, this loss certifies nothing extra -- no override.
-        return None
+    def _hess_leaf_claims(
+        self, params: GLMParams[jnp.ndarray], active_spec: GLMParams[bool]
+    ) -> GLMParams[LeafClaim]:
+        """Certify nothing, unlike the plain GLM this inherits from.
+
+        Adding the same constant to every class's intercept leaves the softmax
+        probabilities unchanged, so the intercept block is singular along that direction
+        rather than definite.
+
+        Parameters
+        ----------
+        params :
+            The parameters being fitted.
+        active_spec :
+            The filter spec ``params`` was partitioned with. Unused: nothing is certified
+            whether or not a leaf is being fitted.
+
+        Returns
+        -------
+        :
+            A tree shaped like ``params`` carrying ``LeafClaim.UNCLAIMED``
+            everywhere.
+        """
+        return claim_nothing(params)
 
     def set_classes(self, y: ArrayLike) -> ClassifierMixin:
         """
@@ -744,7 +763,6 @@ class ClassifierGLM(ClassifierMixin, GLM):
     """
 
     _validator_class = ClassifierGLMValidator
-    _hess_tag: HessianTag = HessianTag(structure=Full, property=PositiveSemiDefinite)
 
     def __init__(
         self,
@@ -1038,11 +1056,9 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     """
 
     _validator_class = PopulationClassifierGLMValidator
-    _hess_tag: HessianTag = HessianTag(
-        structure=BlockDiagonal,
-        property=PositiveSemiDefinite,
-        batch_axes=GLMParams(1, 0),
-    )
+    # One block per neuron, as in ``PopulationGLM``.
+    _hess_structure = MatrixStructure.BLOCK_DIAGONAL
+    _hess_batch_axes = GLMParams(1, 0)
 
     def __init__(
         self,

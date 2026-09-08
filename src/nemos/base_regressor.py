@@ -17,12 +17,20 @@ import numpy as np
 from numpy.typing import NDArray
 
 from . import solvers, tree_utils, utils
+from ._hess import (
+    HessianTag,
+    LeafClaim,
+    MatrixProperty,
+    MatrixStructure,
+    claim_nothing,
+    mask_of_claim,
+)
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
+from .params import ModelParams
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
-from .solvers._hess import HessianTag
 from .solvers._newton import Newton
 from .solvers._no_op import NoOpSolver
 from .type_casting import cast_to_jax, is_numpy_array_like
@@ -113,7 +121,11 @@ class BaseRegressor(
     """
 
     _validator: ValidatorT
-    _hess_tag: HessianTag | None = None
+
+    # Sparsity of the loss Hessian, and which axis of each parameter is the batch when it
+    # is block diagonal. ``MatrixStructure.FULL`` claims nothing: no sparsity to exploit.
+    _hess_structure: MatrixStructure = MatrixStructure.FULL
+    _hess_batch_axes: Any = None
 
     # overwrite this in subclasses if their objective functions return aux
     _has_aux: bool = False
@@ -292,15 +304,91 @@ class BaseRegressor(
             self._solver_spec = spec
         self._invalidate_solver()
 
-    def _hess_property_override(self) -> type | None:
-        """Definiteness the model can certify beyond what coverage inference sees.
+    def _hess_leaf_claims(
+        self, params: ModelParamsT, active_spec: ModelParams[bool]
+    ) -> ModelParams[LeafClaim]:
+        """Say what the loss Hessian certifies about each leaf's own block.
 
-        Defaults to None (use the combined loss+regularizer tag). A subclass returns a
-        matrix-property type when its loss supplies definiteness on the subtrees the
-        regularizer leaves unpenalized (e.g. a GLM whose loss is positive definite on
-        the unregularized intercept, making a Ridge-penalized Hessian positive definite).
+        A claim here is about the loss alone. It has to hold at every parameter value, not
+        only at the optimum, and it has to be justified without inspecting the data — the
+        regularizer's claims are added later, by ``combine_hessian_tags``.
+
+        The default certifies nothing, so a subclass that does not override this still gets
+        a correct tag. A subclass labels a leaf ``LeafClaim.DEFINITE`` only when its
+        block is definite for a reason that survives any design matrix: anything that comes
+        down to the rank of ``X`` costs the factorization the tag exists to avoid. It labels
+        a leaf ``LeafClaim.FLAT`` only when the loss has no curvature there at all,
+        which for a likelihood means it does not use that parameter.
+
+        Parameters
+        ----------
+        params :
+            The parameters being fitted, i.e. the ones left after the fixed ones are
+            partitioned out.
+        active_spec :
+            The filter spec ``params`` was partitioned with, as returned by
+            ``_active_filter_spec``. It is the one unambiguous statement of which leaves
+            are being fitted: a ``None`` leaf in ``params`` means "frozen" in the active
+            half of the partition and "fitted" in the frozen half, so the tree alone cannot
+            be asked.
+
+        Returns
+        -------
+        :
+            A tree shaped like ``params`` carrying one :class:`~nemos._hess.LeafClaim`
+            member per leaf: ``LeafClaim.FLAT``, ``LeafClaim.DEFINITE`` or
+            ``LeafClaim.UNCLAIMED``.
         """
-        return None
+        return claim_nothing(params)
+
+    def _resolve_hess_property(self) -> MatrixProperty:
+        """Give the sign the loss Hessian has at every parameter value.
+
+        The default certifies nothing: an arbitrary loss has an arbitrary Hessian, and a
+        sign claimed here that the matrix does not have sends Newton into a Cholesky
+        factorization of a matrix it cannot factor. A subclass returns something stronger
+        when the shape of its loss says so, e.g. a GLM whose inverse link keeps the
+        likelihood convex has a positive semidefinite Hessian everywhere.
+        """
+        return MatrixProperty.SYMMETRIC
+
+    def _resolve_hess_tag(self, params: ModelParamsT) -> HessianTag:
+        """Describe the loss Hessian at these parameters, leaving the penalty aside.
+
+        The tag is assembled from three overridable pieces, each defaulting to a claim of
+        nothing, so a new model gets a usable tag without implementing anything:
+
+        - ``_hess_structure`` and ``_hess_batch_axes``: the sparsity, ``MatrixStructure.FULL`` by default,
+          and which axis of each parameter is the batch when it is block diagonal.
+        - ``_resolve_hess_property()``: the sign, ``MatrixProperty.SYMMETRIC`` by default.
+        - ``_hess_leaf_claims(params, active_spec)``: what is certified about each leaf's
+          own block, nothing by default.
+
+        It is built against the parameters being fitted rather than declared on the class,
+        because which parameters those are depends on what is held fixed, and a claim about
+        a parameter that is not being fitted describes a block of a matrix that does not
+        exist.
+
+        Parameters
+        ----------
+        params :
+            The parameters being fitted.
+
+        Returns
+        -------
+        :
+            The tag for the loss Hessian, with the two leaf sets read off the per-leaf
+            claims. ``Newton`` combines it with the regularizer's tag to pick a linear
+            solver; see :func:`~nemos._hess.combine_hessian_tags`.
+        """
+        claims = self._hess_leaf_claims(params, self._active_filter_spec())
+        return HessianTag(
+            structure=self._hess_structure,
+            property=self._resolve_hess_property(),
+            batch_axes=self._hess_batch_axes,
+            flat_on=mask_of_claim(claims, LeafClaim.FLAT),
+            definite_on=mask_of_claim(claims, LeafClaim.DEFINITE),
+        )
 
     def _resolve_default_solver(self) -> str:
         """Name of the default solver when the user has not set one.
@@ -397,7 +485,7 @@ class BaseRegressor(
         """
         return eqx.partition(params, self._active_filter_spec())
 
-    def _active_filter_spec(self) -> Any:
+    def _active_filter_spec(self) -> ModelParams[bool]:
         """Boolean filter spec (tree-prefix) marking the actively optimized leaves.
 
         Derived from ``_fix_params`` alone: a leaf is active iff the spec holds
@@ -562,9 +650,8 @@ class BaseRegressor(
         if isinstance(solver, Newton):
             solver.setup_hessian(
                 self._get_hess_fn(frozen=frozen_params),
-                self._hess_tag,
-                regularizer.resolve_hess_tag(init_params),
-                self._hess_property_override(),
+                self._resolve_hess_tag(init_params),
+                regularizer._resolve_hess_tag(init_params, self.regularizer_strength),
             )
 
         # nemos's solvers store a .fun attribute, but it's not necessary for a solver to work.
