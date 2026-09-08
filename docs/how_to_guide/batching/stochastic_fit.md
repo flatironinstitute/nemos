@@ -4,7 +4,6 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.19.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -142,7 +141,7 @@ In a [later section](./custom_dataloader.md) we show how to build a custom datal
 
 To monitor training progress and the optimization's state during the fitting run, NeMoS has a callback system, allowing to execute custom code on the following events:
 - beginning and end of training
-- before and after each epoch
+- before and after each pass over the data
 - before and after each batch
 
 +++
@@ -151,7 +150,7 @@ One of the callbacks included is [`TestLossLogger`](nemos.callbacks.TestLossLogg
 
 Since the dataset is small, we will use all of it for loss logging and evaluate at the beginning of training, then after every batch.
 \
-In practice this would be expensive to do, and you would typically evaluate on a held-out test set every N-th batch or at the end of each epoch.
+In practice this would be expensive to do, and you would typically evaluate on a held-out test set every N-th batch or at the end of each pass.
 
 ```{code-cell} ipython3
 batch_logger = nmo.callbacks.TestLossLogger(
@@ -187,12 +186,12 @@ Other solvers that can be used for stochastic optimization can be listed with [`
 
 We are ready to start the optimization using the GLM's `stochastic_fit` method.
 
-`stochastic_fit` uses `num_epochs` to control the training duration and does not stop on convergence by default. Unless a callback requests a stop, it will run for the full number of epochs.
+`stochastic_fit` uses `n_passes` to control the number of passes over the full dataset and does not stop on convergence by default. Unless a callback requests a stop, it will run for the full number of passes.
 \
 Note that the `max_steps` solver kwarg used in `GLM.fit` is also ignored.
 
 ```{code-cell} ipython3
-glm.stochastic_fit(loader, num_epochs=5, callbacks=batch_logger)
+glm.stochastic_fit(loader, n_passes=5, callbacks=batch_logger)
 ```
 
 ```{code-cell} ipython3
@@ -210,7 +209,7 @@ To continue from where we left off, pass the current parameters as `init_params`
 ```{code-cell} ipython3
 glm.stochastic_fit(
     loader,
-    num_epochs=10,
+    n_passes=10,
     init_params=glm.get_model_params(),
     # using the same callback so the new loss values are appended to the existing history
     callbacks=batch_logger,

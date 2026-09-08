@@ -15,8 +15,7 @@ from numba import njit
 import nemos as nmo
 
 # Import helpers from conftest
-from conftest import MockRegressor, is_population_model
-from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
+from conftest import OBSERVATION_PER_MODEL, MockRegressor, is_population_model
 from nemos.glm.validation import (
     ClassifierGLMValidator,
     GLMValidator,
@@ -65,6 +64,8 @@ DEFAULT_OBS_SHAPE = {
 
 HARD_CODED_GET_PARAMS_KEYS = {
     "GLM": {
+        "fit_intercept",
+        "fix_params",
         "inverse_link_function",
         "observation_model",
         "regularizer",
@@ -73,6 +74,8 @@ HARD_CODED_GET_PARAMS_KEYS = {
         "solver_name",
     },
     "ClassifierGLM": {
+        "fit_intercept",
+        "fix_params",
         "inverse_link_function",
         "n_classes",
         "regularizer",
@@ -81,6 +84,9 @@ HARD_CODED_GET_PARAMS_KEYS = {
         "solver_name",
     },
     "ClassifierPopulationGLM": {
+        "feature_mask",
+        "fit_intercept",
+        "fix_params",
         "inverse_link_function",
         "n_classes",
         "regularizer",
@@ -89,13 +95,15 @@ HARD_CODED_GET_PARAMS_KEYS = {
         "solver_name",
     },
     "PopulationGLM": {
+        "feature_mask",
+        "fit_intercept",
+        "fix_params",
         "inverse_link_function",
         "observation_model",
         "regularizer",
         "regularizer_strength",
         "solver_kwargs",
         "solver_name",
-        "feature_mask",
     },
     "GLMHMM": {
         "dirichlet_initial_proba",
@@ -113,14 +121,6 @@ HARD_CODED_GET_PARAMS_KEYS = {
         "solver_name",
         "tol",
     },
-}
-
-OBSERVATION_PER_MODEL = {
-    "GLM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
-    "ClassifierGLM": ["Categorical"],
-    "ClassifierPopulationGLM": ["Categorical"],
-    "PopulationGLM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
-    "GLMHMM": ["Bernoulli"],
 }
 
 MODEL_WITH_LINK_FUNCTION_REGISTRY = {
@@ -286,8 +286,18 @@ class TestModelVsPytree:
         fixture = instantiate_base_regressor_subclass
         model = fixture.model
         params = model.initialize_params(pytree_x, fixture.y)
-        opt_state = model.initialize_optimizer_and_state(params, pytree_x, fixture.y)
-        model.update(params, opt_state, pytree_x, fixture.y)
+        if issubclass(model.__class__, nmo.glm_hmm.GLMHMM):
+            # GLMHMM requires session_starts to be passed to update
+            session_starts = jnp.zeros(fixture.y.shape[0], dtype=bool).at[0].set(True)
+            opt_state = model.initialize_optimizer_and_state(
+                params, pytree_x, fixture.y, session_starts=session_starts
+            )
+            model.update(params, opt_state, pytree_x, fixture.y, session_starts)
+        else:
+            opt_state = model.initialize_optimizer_and_state(
+                params, pytree_x, fixture.y
+            )
+            model.update(params, opt_state, pytree_x, fixture.y)
 
     @pytest.mark.parametrize(
         "instantiate_base_regressor_subclass, pytree_x",
@@ -1067,15 +1077,15 @@ class TestObservationModel:
             (
                 nmo.regularizer.Regularizer,
                 pytest.raises(
-                    AttributeError,
-                    match="The provided object does not have the required",
+                    ValueError,
+                    match="Invalid observation model",
                 ),
             ),
             (
                 1,
                 pytest.raises(
-                    AttributeError,
-                    match="The provided object does not have the required",
+                    ValueError,
+                    match="Invalid observation model: 1",
                 ),
             ),
         ],

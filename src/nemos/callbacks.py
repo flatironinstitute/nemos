@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import inspect
+from dataclasses import dataclass
 from functools import partial
 from typing import Any, Iterable, Union
 
+import equinox as eqx
 from numpy.typing import ArrayLike
 
 from .typing import DESIGN_INPUT_TYPE
@@ -20,28 +22,31 @@ class StochasticFitSummary:
     ``stochastic_fit`` completes. This summary is runtime state and is not
     serialized by ``save_params()``.
 
+    In machine-learning terminology, a pass over the data is what is usually
+    called an *epoch*; NeMoS says "pass" to avoid clashing with pynapple's
+    recording epochs.
+
     Parameters
     ----------
-    epoch_idx :
-        Final epoch index reached by the training loop.
+    pass_idx :
+        Final pass index reached by the training loop.
     batch_idx :
-        Final batch index reached within the last epoch.
-    num_epochs :
-        Total number of epochs requested for the run.
+        Final batch index reached within the last pass.
+    n_passes :
+        Total number of passes requested for the run.
     should_stop :
         Whether a callback requested early stopping.
     stop_reason :
         Human-readable stop reason, if any.
     """
 
-    epoch_idx: int | None = None
+    pass_idx: int | None = None
     batch_idx: int | None = None
-    num_epochs: int = 0
+    n_passes: int = 0
     should_stop: bool = False
     stop_reason: str = ""
 
 
-@dataclass
 class TrainingContext:
     """
     Mutable context object passed to callbacks during training.
@@ -56,32 +61,61 @@ class TrainingContext:
     solver :
         The solver instance running the optimization.
     params :
-        Current model parameters.
+        Current model parameters. Exposed as a read/write property: the training loop
+        assigns the actively optimized subtree (``ctx.params = ...``), and reading
+        ``ctx.params`` recombines the frozen subtree (see ``frozen``) so callbacks
+        always see the complete parameters.
     state :
         Current solver state.
     aux :
         Auxiliary output from the last batch.
-    epoch_idx :
-        Current epoch index (0-based).
+    pass_idx :
+        Current pass index (0-based).
     batch_idx :
-        Current batch index within the epoch.
-    num_epochs :
-        Total number of epochs requested.
+        Current batch index within the pass.
+    n_passes :
+        Total number of passes requested.
+    frozen :
+        Parameter subtree held fixed during optimization (e.g. a zero intercept when
+        ``fit_intercept=False``). The solver optimizes only the active subtree; this is
+        recombined with it so callbacks always see the complete parameters. ``None``
+        when nothing is frozen.
     """
 
-    model: Any = None
-    solver: Any = None
-    params: Any = None
-    state: Any = None
-    aux: Any = None
-    epoch_idx: int | None = None
-    batch_idx: int | None = None
-    num_epochs: int = 0
+    def __init__(
+        self,
+        model: Any = None,
+        solver: Any = None,
+        params: Any = None,
+        state: Any = None,
+        aux: Any = None,
+        pass_idx: int | None = None,
+        batch_idx: int | None = None,
+        n_passes: int = 0,
+        frozen: Any = None,
+    ):
+        self.model = model
+        self.solver = solver
+        self.state = state
+        self.aux = aux
+        self.pass_idx = pass_idx
+        self.batch_idx = batch_idx
+        self.n_passes = n_passes
+        self.frozen = frozen
+        self._stop_requested = False
+        self._stop_reason = ""
+        self.params = params
 
-    # signals for stopping optimization,
-    # controlled through methods, not included in constructor
-    _stop_requested: bool = field(default=False, init=False, repr=False)
-    _stop_reason: str = field(default="", init=False, repr=False)
+    @property
+    def params(self) -> Any:
+        """Current parameters, with the frozen subtree recombined into the active one."""
+        if self.frozen is None:
+            return self._params
+        return eqx.combine(self._params, self.frozen)
+
+    @params.setter
+    def params(self, value: Any) -> None:
+        self._params = value
 
     def request_stop(self, reason: str = "") -> None:
         """
@@ -108,12 +142,32 @@ class TrainingContext:
     def to_summary(self) -> StochasticFitSummary:
         """Create a post-fit summary from the current training context."""
         return StochasticFitSummary(
-            epoch_idx=self.epoch_idx,
+            pass_idx=self.pass_idx,
             batch_idx=self.batch_idx,
-            num_epochs=self.num_epochs,
+            n_passes=self.n_passes,
             should_stop=self.should_stop,
             stop_reason=self.stop_reason,
         )
+
+    def __repr__(self, N_CHAR_MAX: int = 700) -> str:
+        """Represent this context as a string.
+
+        Simple string representation, similar to that of a dataclass.
+        """
+        cls = self.__class__.__name__
+        parts = []
+        for name in inspect.signature(self.__init__).parameters:
+            value = getattr(self, name)
+            if value is None:
+                continue
+            parts.append(f"{name}={value}")
+        if not parts:
+            return f"{cls}()"
+        single_line = f"{cls}({', '.join(parts)})"
+        if len(single_line) <= N_CHAR_MAX:
+            return single_line
+        body = "".join(f"    {part},\n" for part in parts)
+        return f"{cls}(\n{body})"
 
 
 class Callback:
@@ -131,23 +185,23 @@ class Callback:
         """Run once at the end of training."""
         pass
 
-    def on_epoch_begin(self, ctx: TrainingContext) -> None:
+    def on_pass_begin(self, ctx: TrainingContext) -> None:
         """
-        Run at the start of an epoch.
+        Run at the start of a pass.
 
-        This hook is called after the training loop advances ``ctx.epoch_idx`` and
-        before the first batch of that epoch is processed. It marks the start
-        of epoch-level work from the callback perspective.
+        This hook is called after the training loop advances ``ctx.pass_idx`` and
+        before the first batch of that pass is processed. It marks the start
+        of pass-level work from the callback perspective.
 
-        Solver-specific epoch preparation may still occur after this hook and
+        Solver-specific pass preparation may still occur after this hook and
         before the first batch update. Callbacks should therefore treat this
-        hook as notification that a new epoch is starting, not as a guarantee
-        that all solver-internal epoch setup has already completed.
+        hook as notification that a new pass is starting, not as a guarantee
+        that all solver-internal pass setup has already completed.
         """
         pass
 
-    def on_epoch_end(self, ctx: TrainingContext) -> None:
-        """Run at the end of each epoch."""
+    def on_pass_end(self, ctx: TrainingContext) -> None:
+        """Run at the end of each pass."""
         pass
 
     def on_batch_begin(self, ctx: TrainingContext) -> None:
@@ -182,15 +236,15 @@ class CallbackList(Callback):
         for cb in self._callbacks:
             cb.on_train_end(ctx)
 
-    def on_epoch_begin(self, ctx: TrainingContext) -> None:
-        """Dispatch epoch-begin hook to all callbacks."""
+    def on_pass_begin(self, ctx: TrainingContext) -> None:
+        """Dispatch pass-begin hook to all callbacks."""
         for cb in self._callbacks:
-            cb.on_epoch_begin(ctx)
+            cb.on_pass_begin(ctx)
 
-    def on_epoch_end(self, ctx: TrainingContext) -> None:
-        """Dispatch epoch-end hook to all callbacks."""
+    def on_pass_end(self, ctx: TrainingContext) -> None:
+        """Dispatch pass-end hook to all callbacks."""
         for cb in self._callbacks:
-            cb.on_epoch_end(ctx)
+            cb.on_pass_end(ctx)
 
     def on_batch_begin(self, ctx: TrainingContext) -> None:
         """Dispatch batch-begin hook to all callbacks."""
@@ -208,7 +262,7 @@ class SolverConvergenceCallback(Callback):
     Delegate convergence checking to the solver's built-in criterion.
 
     Calls ``ctx.solver.stochastic_convergence_criterion(...)`` at the end of
-    each epoch and requests a stop if it returns ``True``.
+    each pass and requests a stop if it returns ``True``.
 
     Tracks previous params and state internally so the context doesn't have to.
     """
@@ -217,12 +271,12 @@ class SolverConvergenceCallback(Callback):
         self._prev_params = None
         self._prev_state = None
 
-    def on_epoch_begin(self, ctx: TrainingContext) -> None:
-        """Save current params and state before the epoch runs."""
+    def on_pass_begin(self, ctx: TrainingContext) -> None:
+        """Save current params and state before the pass runs."""
         self._prev_params = ctx.params
         self._prev_state = ctx.state
 
-    def on_epoch_end(self, ctx: TrainingContext) -> None:
+    def on_pass_end(self, ctx: TrainingContext) -> None:
         """Check solver convergence criterion and request stop if met."""
         converged = ctx.solver.stochastic_convergence_criterion(
             ctx.params,
@@ -230,7 +284,7 @@ class SolverConvergenceCallback(Callback):
             ctx.state,
             self._prev_state,
             ctx.aux,
-            ctx.epoch_idx,
+            ctx.pass_idx,
         )
         if converged:
             ctx.request_stop("Satisfied the solver's convergence criterion.")
@@ -251,13 +305,13 @@ class TestLossLogger(Callback):
         Test target (e.g. spike counts).
     events :
         Event name or names at which to log the test score. Each must be one
-        of ``{"train_begin", "train_end", "epoch_begin", "epoch_end",
+        of ``{"train_begin", "train_end", "pass_begin", "pass_end",
         "batch_begin", "batch_end"}``.
 
     Attributes
     ----------
     loss_history :
-        List of ``(event, epoch_idx, batch_idx, test_score)`` tuples, one per
+        List of ``(event, pass_idx, batch_idx, test_score)`` tuples, one per
         logged event, recording which event fired and the training position at
         the time.
     """
@@ -270,8 +324,8 @@ class TestLossLogger(Callback):
         {
             "train_begin",
             "train_end",
-            "epoch_begin",
-            "epoch_end",
+            "pass_begin",
+            "pass_end",
             "batch_begin",
             "batch_end",
         }
@@ -306,7 +360,7 @@ class TestLossLogger(Callback):
             self.X_test,
             self.y_test,
         )
-        self.loss_history.append((event, ctx.epoch_idx, ctx.batch_idx, test_score))
+        self.loss_history.append((event, ctx.pass_idx, ctx.batch_idx, test_score))
 
 
 def _normalize_callbacks(

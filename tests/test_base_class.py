@@ -280,6 +280,7 @@ def test_repr_mimebundle_unfitted(mock_regressor):
     assert "Converged:</strong>" not in html
 
 
+@pytest.mark.requires_x64
 def test_repr_mimebundle_fitted():
     """Test the mimebundle HTML representation for an actual fitted model."""
 

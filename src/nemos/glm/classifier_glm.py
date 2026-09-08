@@ -12,9 +12,9 @@ from numpy.typing import ArrayLike, NDArray
 
 from .. import observation_models as obs
 from .. import tree_utils
+from .._hess import LeafClaim, MatrixStructure, claim_nothing
 from ..label_encoder import LabelEncoder
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
-from ..solvers._hess import BlockDiagonal, Full, HessianTag, PositiveSemiDefinite
 from ..type_casting import is_numpy_array_like, support_pynapple
 from ..typing import (
     DESIGN_INPUT_TYPE,
@@ -22,8 +22,8 @@ from ..typing import (
     StepResult,
     UserProvidedParamsT,
 )
-from .glm import GLM, PopulationGLM
-from .params import GLMUserParams
+from .glm import GLM, PopulationGLM, _active_columns
+from .params import GLMParams, GLMUserParams
 from .validation import (
     ClassifierGLMValidator,
     PopulationClassifierGLMValidator,
@@ -38,11 +38,30 @@ class ClassifierMixin:
     # observation model inferred
     _invalid_observation_types = ()
 
-    def _hess_property_override(self) -> type | None:
-        # The softmax loss is singular along the (unregularized) uniform intercept
-        # shift, so Ridge does not make the penalized Hessian positive definite. Unlike
-        # a plain GLM, this loss certifies nothing extra -- no override.
-        return None
+    def _hess_leaf_claims(
+        self, params: GLMParams[jnp.ndarray], active_spec: GLMParams[bool]
+    ) -> GLMParams[LeafClaim]:
+        """Certify nothing, unlike the plain GLM this inherits from.
+
+        Adding the same constant to every class's intercept leaves the softmax
+        probabilities unchanged, so the intercept block is singular along that direction
+        rather than definite.
+
+        Parameters
+        ----------
+        params :
+            The parameters being fitted.
+        active_spec :
+            The filter spec ``params`` was partitioned with. Unused: nothing is certified
+            whether or not a leaf is being fitted.
+
+        Returns
+        -------
+        :
+            A tree shaped like ``params`` carrying ``LeafClaim.UNCLAIMED``
+            everywhere.
+        """
+        return claim_nothing(params)
 
     def set_classes(self, y: ArrayLike) -> ClassifierMixin:
         """
@@ -492,10 +511,16 @@ class ClassifierGLMMixin(ClassifierMixin):
                     f"Type {type(n_samples)} provided instead!"
                 )
 
-        n_features = sum(x.shape[1] for x in x_leaf)
         # Effective degrees of freedom is n_classes - 1 due to probability simplex constraint
         n_m1_classes = self._label_encoder.n_classes - 1
         params = self._get_model_params()
+
+        # The intercept consumes ``n_m1_classes`` degrees of freedom when estimated;
+        # a frozen intercept (``fit_intercept=False``) is None in the active tree and
+        # consumes none.
+        active, _ = self._partition_active(params)
+        intercept_dof = 0 if active.intercept is None else n_m1_classes
+        active_cols = _active_columns(x_leaf, active.coef)
 
         # Infer n_neurons from coef shape:
         # ClassifierGLM: coef is (n_features, n_classes) -> n_neurons = 1
@@ -512,22 +537,19 @@ class ClassifierGLMMixin(ClassifierMixin):
             resid_dof = tree_utils.pytree_map_and_reduce(
                 lambda x: ~jnp.isclose(x, jnp.zeros_like(x)),
                 lambda x: sum([jnp.sum(i, axis=(0, -1)) for i in x]),
-                params.coef,
+                active.coef,
             )
-            return jnp.atleast_1d(n_samples - resid_dof - n_m1_classes)
+            return jnp.atleast_1d(n_samples - resid_dof - intercept_dof)
 
-        elif isinstance(self.regularizer, Ridge):
+        # each estimated feature costs one coefficient per free class
+        design = jnp.concatenate(x_leaf, axis=1)
+        if isinstance(self.regularizer, Ridge):
             # For Ridge, use total parameters
-            return (n_samples - n_m1_classes * n_features - n_m1_classes) * jnp.ones(
-                n_neurons
-            )
-
+            n_est = self._n_estimated_features(active_cols)
         else:
             # For UnRegularized, use the rank
-            rank = jnp.linalg.matrix_rank(jnp.concatenate(x_leaf, axis=1))
-            return (n_samples - rank * n_m1_classes - n_m1_classes) * jnp.ones(
-                n_neurons
-            )
+            n_est = self._design_rank(design, active_cols)
+        return (n_samples - n_est * n_m1_classes - intercept_dof) * jnp.ones(n_neurons)
 
     def simulate(
         self,
@@ -631,7 +653,7 @@ class ClassifierGLMMixin(ClassifierMixin):
 
     def update(
         self,
-        params: GLMUserParams,
+        params: GLMUserParams[jnp.ndarray | NDArray],
         opt_state: SolverState,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
@@ -724,6 +746,16 @@ class ClassifierGLM(ClassifierGLMMixin, GLM):
         will result in non-identifiable coefficients, see note below.
     regularizer_strength
         The strength of the regularization.
+    fit_intercept
+        When True (default), an intercept term is fit. When False, only the coefficients are fit.
+        An intercept pinned through ``fix_params`` takes precedence over this flag.
+    fix_params :
+        Parameters to hold fixed during fitting, as a ``(coef, intercept)`` tuple with
+        ``coef`` of shape ``(n_features, n_classes)`` and ``intercept`` of shape
+        ``(n_classes,)``. An array pins that parameter at the value provided, ``None``
+        leaves it to be learned. When ``X`` is a pytree, ``coef`` mirrors its structure,
+        its leaves have shape ``(n_features_in_leaf, n_classes)``, and each leaf is
+        pinned or learned on its own. Defaults to ``None``, which learns every parameter.
     solver_name
         The solver to use for optimization.
     solver_kwargs
@@ -857,7 +889,6 @@ class ClassifierGLM(ClassifierGLMMixin, GLM):
     """
 
     _validator_class = ClassifierGLMValidator
-    _hess_tag: HessianTag = HessianTag(structure=Full, property=PositiveSemiDefinite)
 
     def __init__(
         self,
@@ -865,6 +896,8 @@ class ClassifierGLM(ClassifierGLMMixin, GLM):
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Any = None,
+        fit_intercept: bool = True,
+        fix_params: Optional[GLMUserParams[jnp.ndarray | NDArray | None]] = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
     ):
@@ -877,6 +910,8 @@ class ClassifierGLM(ClassifierGLMMixin, GLM):
             inverse_link_function=inverse_link_function,
             regularizer=regularizer,
             regularizer_strength=regularizer_strength,
+            fit_intercept=fit_intercept,
+            fix_params=fix_params,
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
         )
@@ -885,7 +920,7 @@ class ClassifierGLM(ClassifierGLMMixin, GLM):
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
-        init_params: Optional[GLMUserParams] = None,
+        init_params: Optional[GLMUserParams[jnp.ndarray | NDArray]] = None,
     ):
         """
         Fit the model to training data.
@@ -977,9 +1012,6 @@ class ClassifierGLM(ClassifierGLMMixin, GLM):
         y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
 
-    def _get_hess_fn(self, params, autodiff: bool = False) -> Callable | None:
-        return None
-
 
 class ClassifierPopulationGLM(ClassifierGLMMixin, PopulationGLM):
     """
@@ -1004,6 +1036,17 @@ class ClassifierPopulationGLM(ClassifierGLMMixin, PopulationGLM):
         will result in non-identifiable coefficients, see note below.
     regularizer_strength
         The strength of the regularization.
+    fit_intercept
+        When True (default), an intercept term is fit. When False, only the coefficients are fit.
+        An intercept pinned through ``fix_params`` takes precedence over this flag.
+    fix_params :
+        Parameters to hold fixed during fitting, as a ``(coef, intercept)`` tuple with
+        ``coef`` of shape ``(n_features, n_neurons, n_classes)`` and ``intercept`` of
+        shape ``(n_neurons, n_classes)``. An array pins that parameter at the value
+        provided, ``None`` leaves it to be learned. When ``X`` is a pytree, ``coef``
+        mirrors its structure, its leaves have shape
+        ``(n_features_in_leaf, n_neurons, n_classes)``, and each leaf is pinned or
+        learned on its own. Defaults to ``None``, which learns every parameter.
     solver_name
         The solver to use for optimization.
     solver_kwargs
@@ -1106,7 +1149,7 @@ class ClassifierPopulationGLM(ClassifierGLMMixin, PopulationGLM):
 
     Specify which features predict each neuron:
 
-    >>> feature_mask = jnp.array([[[1, 1, 1], [0, 0, 0]], [[1, 1, 1], [1, 1, 1]]])
+    >>> feature_mask = jnp.array([[1, 0], [1, 1]])
     >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
     >>> model = nmo.glm.ClassifierPopulationGLM(
     ...     n_classes=3,
@@ -1139,9 +1182,9 @@ class ClassifierPopulationGLM(ClassifierGLMMixin, PopulationGLM):
     """
 
     _validator_class = PopulationClassifierGLMValidator
-    _hess_tag: HessianTag = HessianTag(
-        structure=BlockDiagonal, property=PositiveSemiDefinite
-    )
+    # One block per neuron, as in ``PopulationGLM``.
+    _hess_structure = MatrixStructure.BLOCK_DIAGONAL
+    _hess_batch_axes = GLMParams(1, 0)
 
     def __init__(
         self,
@@ -1149,6 +1192,8 @@ class ClassifierPopulationGLM(ClassifierGLMMixin, PopulationGLM):
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Any = None,
+        fit_intercept: bool = True,
+        fix_params: Optional[GLMUserParams[jnp.ndarray | NDArray | None]] = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
         feature_mask: Optional[jnp.ndarray] = None,
@@ -1162,6 +1207,8 @@ class ClassifierPopulationGLM(ClassifierGLMMixin, PopulationGLM):
             inverse_link_function=inverse_link_function,
             regularizer=regularizer,
             regularizer_strength=regularizer_strength,
+            fit_intercept=fit_intercept,
+            fix_params=fix_params,
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
             feature_mask=feature_mask,
@@ -1205,7 +1252,7 @@ class ClassifierPopulationGLM(ClassifierGLMMixin, PopulationGLM):
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
-        init_params: Optional[GLMUserParams] = None,
+        init_params: Optional[GLMUserParams[jnp.ndarray | NDArray]] = None,
     ):
         """
         Fit the model to training data.
@@ -1293,6 +1340,3 @@ class ClassifierPopulationGLM(ClassifierGLMMixin, PopulationGLM):
         self._label_encoder.check_classes_is_set("score")
         y = self._label_encoder.encode(y)
         return super().score(X, y, score_type, aggregate_sample_scores)
-
-    def _get_hess_fn(self, params, autodiff: bool = False):
-        return super()._get_hess_fn(params, autodiff=True)

@@ -10,7 +10,10 @@ Note:
 """
 
 import abc
+import importlib
+import inspect
 import os
+import pkgutil
 import re
 from collections import defaultdict, namedtuple
 from copy import deepcopy
@@ -28,12 +31,18 @@ import pytest
 import nemos as nmo
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
+from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
 from nemos.base_regressor import BaseRegressor
 from nemos.base_validator import RegressorValidator
 from nemos.basis import AdditiveBasis, Category, CustomBasis, MultiplicativeBasis, Zero
 from nemos.basis._basis import Basis
-from nemos.basis._basis_mixin import BasisMixin
-from nemos.basis._transformer_basis import TransformerBasis
+from nemos.basis._basis_mixin import (
+    AtomicBasisMixin,
+    BasisMixin,
+    CompositeBasisMixin,
+    ConvBasisMixin,
+    EvalBasisMixin,
+)
 from nemos.glm.params import GLMParams
 from nemos.glm.validation import GLMValidator
 from nemos.glm_hmm.initialize_parameters import random_glm_params_init
@@ -48,6 +57,8 @@ from nemos.hmm.params import HMMParams
 from nemos.hmm.utils import initialize_session_starts
 from nemos.hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
 from nemos.params import ModelParams
+from nemos.regularizer import UnRegularized
+from nemos.solvers import get_solver
 from nemos.tree_utils import tree_full_like
 
 _totals = defaultdict(float)
@@ -103,6 +114,39 @@ def all_subclasses(cls):
 
 
 @pytest.fixture
+def setup_solver():
+    """Factory instantiating a nemos solver directly from an objective.
+
+    Returns a callable ``setup(objective, init_params, ...)`` that builds a solver
+    through the nemos solver registry (``get_solver``), bypassing model plumbing.
+    Useful for exercising a raw objective (e.g. a partition-wrapped ``_compute_loss``)
+    with the maintained solver stack. ``solver.run(init_params, *args)`` returns the
+    usual ``(params, state, aux)`` tuple.
+    """
+
+    def _setup(
+        objective,
+        init_params,
+        tol=1e-12,
+        solver_name="LBFGS",
+        regularizer_strength=0.0,
+        regularizer=None,
+        has_aux=False,
+    ):
+        solver_class = get_solver(solver_name).implementation
+        return solver_class(
+            objective,
+            init_params=init_params,
+            regularizer=UnRegularized() if regularizer is None else regularizer,
+            regularizer_strength=regularizer_strength,
+            has_aux=has_aux,
+            tol=tol,
+        )
+
+    return _setup
+
+
+@pytest.fixture
 def mock_glm_fit(monkeypatch):
     """Replace GLM.fit with a pure-Python no-op that sets coef_/intercept_ from X/y shapes.
 
@@ -154,8 +198,8 @@ def _make_optimizer_run_patch(monkeypatch, model_cls):
     real_init = model_cls._initialize_optimizer_and_state
     noop = _NOOP_OPTIMIZER_RUN.get(model_cls, _DEFAULT_NOOP_OPTIMIZER_RUN)
 
-    def _patched(self, init_params, data, y):
-        result = real_init(self, init_params, data, y)
+    def _patched(self, init_params, data, y, *args, **kwargs):
+        result = real_init(self, init_params, data, y, *args, **kwargs)
         self._optimizer_run = noop
         return result
 
@@ -205,8 +249,8 @@ def _make_optimizer_update_patch(monkeypatch, model_cls):
     real_init = model_cls._initialize_optimizer_and_state
     noop = _NOOP_OPTIMIZER_UPDATE.get(model_cls, _DEFAULT_NOOP_OPTIMIZER_UPDATE)
 
-    def _patched(self, init_params, data, y):
-        result = real_init(self, init_params, data, y)
+    def _patched(self, init_params, data, y, *args, **kwargs):
+        result = real_init(self, init_params, data, y, *args, **kwargs)
         self._optimizer_update = noop
         return result
 
@@ -239,9 +283,7 @@ ModelFixture = namedtuple(
 )
 
 
-def initialize_feature_mask_for_population_glm(
-    X, n_neurons: int, n_classes: int = 0, coef=None
-):
+def initialize_feature_mask_for_population_glm(X, n_neurons: int, coef=None):
     """
     Create a feature mask of ones for PopulationGLM testing.
 
@@ -256,26 +298,40 @@ def initialize_feature_mask_for_population_glm(
         Number of neurons (determines the second dimension of the mask).
         Ignored if coef is provided.
     coef :
-        Optional coefficient array/pytree. If provided, the mask shape will match
-        coef shape exactly (required for ClassifierPopulationGLM).
-    n_classes:
-        Number of classes (determines the second dimension of the mask).
+        Optional coefficient array/pytree. If provided, the mask leaves are shaped like
+        the features-by-neurons block of the coefficients.
 
     Returns
     -------
     :
-        A feature mask with all ones. If coef is provided, returns ones_like(coef).
-        Otherwise, if X is a dict, returns a dict with arrays
-        of shape (n_neurons,) for each key.
-        If X is an array, returns an array of shape (n_features, n_neurons).
+        A feature mask with all ones, of shape (n_features_in_leaf, n_neurons) leaf by
+        leaf. Classifier coefficients carry a trailing class axis, which the mask does
+        not distinguish and therefore drops.
     """
-    extra_shape = (n_classes,) if n_classes else ()
     if coef is not None:
-        return jax.tree_util.tree_map(lambda c: jnp.ones(c.shape), coef)
-    if isinstance(X, dict):
-        return jax.tree_util.tree_map(lambda x: jnp.ones((n_neurons, *extra_shape)), X)
-    else:
-        return jnp.ones((X.shape[1], n_neurons, *extra_shape))
+        return jax.tree_util.tree_map(lambda c: jnp.ones(c.shape[:2]), coef)
+    return jax.tree_util.tree_map(lambda x: jnp.ones((x.shape[1], n_neurons)), X)
+
+
+def freeze_first_coef_leaf(model, params):
+    """Pin the first ``coef`` leaf of ``model`` to its value in ``params``.
+
+    Pinning a coefficient leaf rather than the intercept is what leaves part of the
+    ``coef`` subtree active: the intercept is one leaf, so pinning it says nothing about
+    what happens when a subtree is split.
+
+    Returns
+    -------
+    :
+        The ``coef`` spec read back from the model. The setter validates and casts it, so
+        this is the value the pinned leaf is actually held at.
+    """
+    leaves, treedef = jax.tree_util.tree_flatten(params.coef)
+    spec = jax.tree_util.tree_unflatten(
+        treedef, [leaves[0]] + [None] * (len(leaves) - 1)
+    )
+    model.fix_params = (spec, None)
+    return model.fix_params[0]
 
 
 DEFAULT_KWARGS = {
@@ -453,40 +509,140 @@ class CombinedBasis(BasisFuncsTesting):
 
 
 def is_eval_basis(basis_cls) -> bool:
-    is_eval = "Eval" in basis_cls.__name__ or issubclass(
-        basis_cls, (basis.Zero, Category)
-    )
-    return is_eval
+    """Whether a basis maps its input through the basis functions.
+
+    The mixin is the criterion: it is what actually gives the class its ``Eval`` behaviour,
+    so it classifies correctly regardless of naming. The name suffix is kept as a fallback
+    for classes that implement the behaviour without the mixin, such as test doubles.
+    ``Zero`` and ``Category`` need no special case -- both carry ``EvalBasisMixin``.
+    """
+    return issubclass(basis_cls, EvalBasisMixin) or basis_cls.__name__.endswith("Eval")
 
 
 def is_conv_basis(basis_cls) -> bool:
-    is_eval = "Conv" in basis_cls.__name__
-    return is_eval
+    """Whether a basis convolves its input with the basis kernel. See ``is_eval_basis``."""
+    return issubclass(basis_cls, ConvBasisMixin) or basis_cls.__name__.endswith("Conv")
+
+
+# Instantiable means ``Basis`` plus a behaviour mixin, which drops bases like ``FourierBasis``.
+_BASIS_BEHAVIOUR_MIXINS = (EvalBasisMixin, ConvBasisMixin, CompositeBasisMixin)
+
+
+def _discover_basis_classes() -> list:
+    """Every instantiable basis in ``nemos.basis``, found by walking the whole package.
+
+    Walking the package rather than naming modules is what keeps this from going stale: a
+    basis added in a new private module (as ``Category`` was, in ``nemos.basis._category``)
+    is picked up without touching this helper.
+
+    ``CustomBasis`` is the one genuine exception, and for a substantive reason -- it is not a
+    ``Basis`` subclass, so no amount of discovery over ``Basis`` will find it.
+    """
+    found = set()
+    for _, modname, _ in pkgutil.walk_packages(
+        nmo.basis.__path__, prefix="nemos.basis."
+    ):
+        try:
+            module = importlib.import_module(modname)
+        except Exception:  # pragma: no cover - an unimportable private module
+            continue
+        for _, obj in inspect.getmembers(module, inspect.isclass):
+            if (
+                issubclass(obj, Basis)
+                and issubclass(obj, _BASIS_BEHAVIOUR_MIXINS)
+                and not inspect_utils.is_abstract(obj)
+                and obj.__module__.startswith("nemos.basis")
+            ):
+                found.add(obj)
+    # sorted so parametrization ids and ordering are reproducible across runs
+    return sorted(found, key=lambda cls: cls.__name__) + [CustomBasis]
+
+
+# computed once: the walk imports every submodule, which should not run per call
+_ALL_BASIS_CLASSES = _discover_basis_classes()
+
+
+def is_composite_basis(basis_cls) -> bool:
+    """Whether a basis combines other bases rather than evaluating an input itself.
+
+    Note this is **not** the complement of ``AtomicBasisMixin``, tempting as that reading is.
+    The two agree on 19 of the 20 bases; ``CustomBasis`` carries neither mixin, since it is
+    not a ``Basis`` subclass. That one class is why the non-composite sets below have to be
+    defined by the absence of ``CompositeBasisMixin`` rather than the presence of
+    ``AtomicBasisMixin`` -- the latter would drop ``CustomBasis``, which is precisely the
+    class every call site used to append by hand.
+    """
+    return issubclass(basis_cls, CompositeBasisMixin)
 
 
 # automatic define user accessible basis and check the methods
 def list_all_basis_classes(filter_basis="all") -> list[BasisMixin]:
     """
-    Return all the classes in nemos.basis which are a subclass of Basis,
-    which should be all concrete classes except TransformerBasis.
+    Return all the instantiable basis classes in nemos.basis, which is every concrete
+    class combining ``Basis`` with an Eval/Conv/Composite mixin, plus ``CustomBasis``.
+
+    Parameters
+    ----------
+    filter_basis :
+        ``"all"`` for everything, ``"Eval"`` or ``"Conv"`` for the bases carrying that
+        behaviour, or ``"NonComposite"`` for everything that is not a composite.
+
+        ``"NonComposite"`` is the entry point for the tests that exercise single bases: it is
+        the set that used to be spelled ``list_all_basis_classes("Eval") +
+        list_all_basis_classes("Conv") + [CustomBasis]``. Defining it by the mixin a composite
+        *carries*, rather than by the absence of Eval and Conv, keeps it correct if a further
+        behaviour mixin is ever introduced -- such a basis would still be non-composite, and
+        the Eval/Conv partition guard is what would flag the new behaviour.
+
+        ``"EvalLike"`` is the non-composite bases that do not convolve, i.e. the former
+        ``list_all_basis_classes("Eval") + [CustomBasis]``. ``CustomBasis`` belongs there
+        because it evaluates a user-supplied callable, which is Eval behaviour without the
+        mixin.
     """
-    all_basis = (
-        [
-            class_obj
-            for _, class_obj in inspect_utils.get_non_abstract_classes(basis)
-            if issubclass(class_obj, Basis)
-        ]
-        + [
-            bas
-            for _, bas in inspect_utils.get_non_abstract_classes(nmo.basis._basis)
-            if bas != TransformerBasis
-        ]
-        + [CustomBasis, Category]
-    )
-    if filter_basis != "all":
-        cond_fn = is_eval_basis if filter_basis == "Eval" else is_conv_basis
-        all_basis = [a for a in all_basis if cond_fn(a)]
-    return all_basis
+    all_basis = list(_ALL_BASIS_CLASSES)
+    if filter_basis == "all":
+        return all_basis
+    cond_fn = {
+        "Eval": is_eval_basis,
+        "Conv": is_conv_basis,
+        "NonComposite": lambda cls: not is_composite_basis(cls),
+        "EvalLike": lambda cls: not is_composite_basis(cls) and not is_conv_basis(cls),
+    }[filter_basis]
+    return [a for a in all_basis if cond_fn(a)]
+
+
+def implementation_superclass(basis_cls) -> Optional[type]:
+    """The shared implementation base a public basis inherits its maths from.
+
+    ``MSplineEval`` and ``MSplineConv`` both derive from ``MSplineBasis``, which holds the
+    evaluation logic; the public classes add only the Eval/Conv behaviour. Several tests need
+    that pairing so they can call the superclass implementation directly and compare.
+
+    Read off the MRO rather than tabulated, so a renamed or newly added basis needs no edit
+    here. No mixin has to be excluded by name because none of them subclass ``Basis``.
+
+    Returns ``None`` where no such base exists: the composites (``AdditiveBasis``,
+    ``MultiplicativeBasis``), ``CustomBasis``, and ``Category``, which implements its own
+    evaluation directly. Callers comparing against a superclass should skip those.
+    """
+    for base in basis_cls.__mro__[1:]:
+        if base is not Basis and isinstance(base, type) and issubclass(base, Basis):
+            return base
+    return None
+
+
+def atomic_basis_superclass_pairs() -> list[tuple]:
+    """``(basis_cls, implementation_superclass)`` for every atomic basis that has one.
+
+    The single source for the tests that pair a public basis against the base implementing
+    its maths, so they cannot drift apart or fall behind a newly added basis.
+    """
+    return [
+        (cls, implementation_superclass(cls))
+        for cls in list_all_basis_classes()
+        if issubclass(cls, AtomicBasisMixin)
+        and implementation_superclass(cls) is not None
+    ]
 
 
 def list_all_real_basis_classes(filter_basis="all"):
@@ -1071,29 +1227,6 @@ def example_data_prox_operator_multineuron():
     scaling = 0.5
 
     return params, regularizer_strength, mask, scaling
-
-
-@pytest.fixture
-def poisson_observation_model():
-    return nmo.observation_models.PoissonObservations(jnp.exp)
-
-
-@pytest.fixture
-def ridge_regularizer():
-    return nmo.regularizer.Ridge()
-
-
-@pytest.fixture
-def lasso_regularizer():
-    return nmo.regularizer.Lasso(solver_name="ProximalGradient")
-
-
-@pytest.fixture
-def group_lasso_2groups_5features_regularizer():
-    mask = np.zeros((2, 5))
-    mask[0, :2] = 1
-    mask[1, 2:] = 1
-    return nmo.regularizer.GroupLasso(solver_name="ProximalGradient", mask=mask)
 
 
 @pytest.fixture
@@ -1693,21 +1826,23 @@ def instantiate_glm_func(
     regularizer: str = "UnRegularized",
     solver_name: str = None,
     simulate=False,
+    init_kwargs: dict = None,
 ):
     np.random.seed(123)
     n_features = 2
     X = np.ones((500, n_features))
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
-    if obs_model == "Gamma":
-        inv_link = jax.nn.softplus
-    else:
-        inv_link = None
+    # A link passed in ``init_kwargs`` wins; the default below applies only if none was.
+    init_kwargs = dict(init_kwargs or {})
+    init_kwargs.setdefault(
+        "inverse_link_function", jax.nn.softplus if obs_model == "Gamma" else None
+    )
     model = nmo.glm.GLM(
         observation_model=obs_model,
         regularizer=regularizer,
         solver_name=solver_name,
-        inverse_link_function=inv_link,
+        **init_kwargs,
     )
     model.coef_ = np.random.randn(n_features)
     model.intercept_ = np.random.randn(1)
@@ -1735,21 +1870,23 @@ def instantiate_population_glm_func(
     regularizer: str = "UnRegularized",
     solver_name: str = None,
     simulate=False,
+    init_kwargs: dict = None,
 ):
     np.random.seed(123)
     n_features = 2
     X = np.ones((500, n_features))
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
-    if obs_model == "Gamma":
-        inv_link = jax.nn.softplus
-    else:
-        inv_link = None
+    # A link passed in ``init_kwargs`` wins; the default below applies only if none was.
+    init_kwargs = dict(init_kwargs or {})
+    init_kwargs.setdefault(
+        "inverse_link_function", jax.nn.softplus if obs_model == "Gamma" else None
+    )
     model = nmo.glm.PopulationGLM(
         observation_model=obs_model,
         regularizer=regularizer,
         solver_name=solver_name,
-        inverse_link_function=inv_link,
+        **init_kwargs,
     )
     model.coef_ = np.random.randn(n_features, n_neurons)
     model.intercept_ = np.random.randn(n_neurons)
@@ -1773,6 +1910,7 @@ def instantiate_classifier_glm_func(
     regularizer: str = "UnRegularized",
     solver_name: str = None,
     simulate=False,
+    init_kwargs: dict = None,
 ):
     np.random.seed(124)
     n_features = 2
@@ -1784,6 +1922,7 @@ def instantiate_classifier_glm_func(
         n_classes=n_classes,
         regularizer=regularizer,
         solver_name=solver_name,
+        **(init_kwargs or {}),
     )
     model.coef_ = np.random.randn(n_features, n_classes)
     model.intercept_ = np.random.randn(n_classes)
@@ -1807,6 +1946,7 @@ def instantiate_population_classifier_glm_func(
     regularizer: str = "UnRegularized",
     solver_name: str = None,
     simulate=False,
+    init_kwargs: dict = None,
 ):
     np.random.seed(124)
     n_features = 2
@@ -1818,6 +1958,7 @@ def instantiate_population_classifier_glm_func(
         n_classes=n_classes,
         regularizer=regularizer,
         solver_name=solver_name,
+        **(init_kwargs or {}),
     )
     model.set_classes(np.arange(n_classes))
     model.coef_ = np.random.randn(n_features, n_neurons, n_classes)
@@ -1895,6 +2036,7 @@ def instantiate_glm_hmm_func(
     simulate: bool = False,
     solver_kwargs=None,
     maxiter: int = 2,
+    init_kwargs: dict = None,
 ):
     np.random.seed(123)
     if solver_kwargs is None:
@@ -1907,6 +2049,7 @@ def instantiate_glm_hmm_func(
         solver_name=solver_name,
         solver_kwargs=solver_kwargs,
         maxiter=maxiter,
+        **(init_kwargs or {}),
     )
     n_features = 2
     X = np.ones((500, n_features))
@@ -1993,6 +2136,15 @@ MODEL_CONFIG = {
 }
 
 
+OBSERVATION_PER_MODEL = {
+    "GLM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
+    "ClassifierGLM": ["Categorical"],
+    "ClassifierPopulationGLM": ["Categorical"],
+    "PopulationGLM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
+    "GLMHMM": ["Bernoulli"],
+}
+
+
 def is_population_model(model) -> bool:
     """Check if a model is a population model using registry instead of string matching."""
     model_name = model.__class__.__name__
@@ -2007,6 +2159,10 @@ def instantiate_base_regressor_subclass(request):
     model_name: str = request.param["model"]
     obs_model: str | nmo.observation_models.Observations = request.param["obs_model"]
     simulate: bool = request.param["simulate"]
+    # Extra keyword arguments for the model constructor, e.g. a specific
+    # ``inverse_link_function``. Part of the cache key: two tests asking for different
+    # ones must not be served the same model.
+    init_kwargs: dict = request.param.get("init_kwargs", None)
 
     # Create cache key (class-scoped). Include the x64 flag: data simulated under
     # one precision must not be served to tests running under the other (the
@@ -2015,6 +2171,7 @@ def instantiate_base_regressor_subclass(request):
         model_name,
         str(obs_model),
         simulate,
+        str(sorted((init_kwargs or {}).items(), key=lambda kv: kv[0])),
         jax.config.jax_enable_x64,
         id(request.cls) if request.cls else id(request.module),
     )
@@ -2022,17 +2179,25 @@ def instantiate_base_regressor_subclass(request):
     # Check cache
     if cache_key not in _MODEL_CACHE:
         if model_name == "GLM":
-            result = instantiate_glm_func(obs_model=obs_model, simulate=simulate)
+            result = instantiate_glm_func(
+                obs_model=obs_model, simulate=simulate, init_kwargs=init_kwargs
+            )
         elif model_name == "PopulationGLM":
             result = instantiate_population_glm_func(
-                obs_model=obs_model, simulate=simulate
+                obs_model=obs_model, simulate=simulate, init_kwargs=init_kwargs
             )
         elif model_name == "ClassifierGLM":
-            result = instantiate_classifier_glm_func(simulate=simulate)
+            result = instantiate_classifier_glm_func(
+                simulate=simulate, init_kwargs=init_kwargs
+            )
         elif model_name == "ClassifierPopulationGLM":
-            result = instantiate_population_classifier_glm_func(simulate=simulate)
+            result = instantiate_population_classifier_glm_func(
+                simulate=simulate, init_kwargs=init_kwargs
+            )
         elif model_name == "GLMHMM":
-            result = instantiate_glm_hmm_func(obs_model=obs_model, simulate=simulate)
+            result = instantiate_glm_hmm_func(
+                obs_model=obs_model, simulate=simulate, init_kwargs=init_kwargs
+            )
         else:
             raise ValueError("model_name {} unknown".format(model_name))
         _MODEL_CACHE[cache_key] = result

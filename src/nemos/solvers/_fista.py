@@ -77,7 +77,7 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
     stepsize: float | None = None
     maxls: int = 15
     decrease_factor: float = 0.5
-    max_stepsize: float | None = 1.0
+    max_stepsize: float | None = None
 
     acceleration: bool = True
 
@@ -246,9 +246,8 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
                 jnp.array(1.0),
                 new_stepsize / self.decrease_factor,
             )
-            # B: in my experience, this guard helps stabilize and reduce the number of iterations
-            # For some reason, without it this implementation sometimes needs more iterations than the
-            # original JAXopt implementation, which in theory should be mathematically identical.
+            # Unbounded by default, matching JAXopt: its `ProximalGradient` has no
+            # `max_stepsize`.
             if self.max_stepsize is not None:
                 new_stepsize = jnp.minimum(new_stepsize, self.max_stepsize)
         else:

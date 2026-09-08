@@ -143,7 +143,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         self,
         init_params: Params,
         data_loader: DataLoader,
-        num_epochs: int,
+        n_passes: int,
         callback: Callback | None = None,
         ctx: TrainingContext | None = None,
     ) -> StepResult:
@@ -157,8 +157,9 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         data_loader
             Data loader providing batches and metadata.
             Must be re-iterable (each ``__iter__`` call returns fresh iterator).
-        num_epochs
-            Number of passes over the data. Must be >= 1.
+        n_passes
+            Number of passes over the data (one pass is what the machine-learning
+            literature calls an *epoch*). Must be >= 1.
         callback :
             Training callback. A single ``Callback`` instance (use
             ``CallbackList`` for multiple callbacks).
@@ -177,14 +178,14 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         NotImplementedError
             If the solver does not support stochastic optimization.
         ValueError
-            If num_epochs < 1.
+            If n_passes < 1.
         """
         if not self._supports_stochastic:
             raise NotImplementedError(
                 f"{self.__class__.__name__} does not support stochastic optimization. "
             )
-        if num_epochs < 1:
-            raise ValueError("num_epochs must be >= 1")
+        if n_passes < 1:
+            raise ValueError("n_passes must be >= 1")
         if callback is None:
             callback = Callback()
         if ctx is None:
@@ -192,12 +193,12 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
 
         ctx.solver = self
         ctx.params = init_params
-        ctx.num_epochs = num_epochs
+        ctx.n_passes = n_passes
 
         return self._stochastic_run_impl(
             init_params,
             data_loader,
-            num_epochs,
+            n_passes,
             callback=callback,
             ctx=ctx,
         )
@@ -206,7 +207,7 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         self,
         init_params: Params,
         data_loader: DataLoader,
-        num_epochs: int,
+        n_passes: int,
         callback: Callback,
         ctx: TrainingContext | None = None,
     ) -> StepResult:
@@ -226,28 +227,28 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
         state: SolverState,
         prev_state: SolverState,
         aux: Any,
-        epoch: int,
+        pass_idx: int,
     ) -> bool:
         """
         Evaluate convergence criterion for stochastic optimization.
 
-        Called once per epoch. Subclasses that support stochastic optimization
+        Called once per pass. Subclasses that support stochastic optimization
         should override this to provide a meaningful default.
 
         Parameters
         ----------
         params :
-            Parameter values at end of current epoch.
+            Parameter values at end of current pass.
         prev_params :
-            Parameter values at end of previous epoch.
+            Parameter values at end of previous pass.
         state :
-            Solver state at end of current epoch.
+            Solver state at end of current pass.
         prev_state :
-            Solver state at end of previous epoch.
+            Solver state at end of previous pass.
         aux :
-            Auxiliary output from the last batch of the current epoch.
-        epoch :
-            Current epoch index (0-based).
+            Auxiliary output from the last batch of the current pass.
+        pass_idx :
+            Current pass index (0-based).
 
         Returns
         -------

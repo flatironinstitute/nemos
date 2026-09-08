@@ -147,7 +147,7 @@ model = nmo.glm.GLM(
     solver_name="GradientDescent",
     solver_kwargs={"stepsize": 0.01, "acceleration": False},
 )
-model.stochastic_fit(loader, num_epochs=10)
+model.stochastic_fit(loader, n_passes=10)
 
 ```
 
@@ -178,7 +178,7 @@ NeMoS provides `ArrayDataLoader` for in-memory arrays. For out-of-core data, use
 At the solver level, stochastic optimization is provided through the `stochastic_run` method:
 
 ```python
-params, state, aux = solver.stochastic_run(init_params, data_loader, num_epochs=10)
+params, state, aux = solver.stochastic_run(init_params, data_loader, n_passes=10)
 ```
 
 Not all solvers support stochastic optimization. Only solvers with `_supports_stochastic = True` can be used. Currently supported solvers:
@@ -192,7 +192,7 @@ Solvers that do not support stochastic optimization (e.g., `BFGS`, `LBFGS`, `Non
 
 ### Implementation details
 
-Stochastic support is implemented through the `StochasticSolverMixin` class which provides a default implementation of `_stochastic_run_impl`. This mixin iterates over the data loader for the specified number of epochs, calling `update` on each batch.
+Stochastic support is implemented through the `StochasticSolverMixin` class which provides a default implementation of `_stochastic_run_impl`. This mixin iterates over the data loader for the specified number of passes, calling `update` on each batch.
 
 For SVRG-based solvers, `stochastic_run` in the wrappers dispatches to a `run_streaming` method that handles the more complex optimization loop that requires computing full gradients at reference points.
 

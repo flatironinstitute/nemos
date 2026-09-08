@@ -4,7 +4,6 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.4
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -232,8 +231,8 @@ if path.exists():
 
 ## Pytrees
 [`PopulationGLM`](nemos.glm.PopulationGLM) is compatible with JAX [`pytrees`](https://docs.jax.dev/en/latest/pytrees.html), which are general, potentially nested, container-like structures. Pytrees include lists, dictionaries, tuples or any combination thereof. If you structure your predictors
-in a pytree, the `feature_mask` must be a pytree of the same structure, containing arrays
-of shape `(n_neurons, )`.
+in a pytree, the `feature_mask` must be a pytree of the same structure, each leaf shaped like
+the coefficients it masks, `(n_features_in_leaf, n_neurons)`.
 For example, if we use a Python `dict`, the example above can be reformulated as follows,
 
 ```{code-cell} ipython3
@@ -244,11 +243,12 @@ pytree_features = dict(
     neu_1=input_features[:, 2:]
 )
 
-# Define a mask as a dictionary
+# Define a mask as a dictionary. Each group holds a single feature here, so each leaf has
+# shape (1, n_neurons).
 pytree_mask = dict(
-    shared=np.array([1, 1]),
-    neu_0=np.array([1, 0]),
-    neu_1=np.array([0, 1])
+    shared=np.array([[1, 1]]),
+    neu_0=np.array([[1, 0]]),
+    neu_1=np.array([[0, 1]])
 )
 
 # fit a model
@@ -258,3 +258,35 @@ model_tree.fit(pytree_features, spikes)
 # print the coefficients
 print(model_tree.coef_)
 ```
+
+:::{note} Migrating a pytree `feature_mask` from nemos 0.2.9 or earlier
+
+In nemos 0.2.9 and earlier, a pytree `feature_mask` held one entry per neuron in each leaf, shape `(n_neurons,)`, so a single entry included or excluded an entire input group for that neuron. Leaves now match the coefficients they mask, shape `(n_features_in_leaf, n_neurons)`, which also lets you mask individual features inside a group. A mask in the old form is rejected with a shape error.
+
+Expanding each leaf along the feature axis reproduces the old masking exactly. For the mask above, whose groups happen to hold one feature each:
+
+```python
+# nemos <= 0.2.9: one entry per neuron
+pytree_mask = dict(
+    shared=np.array([1, 1]),
+    neu_0=np.array([1, 0]),
+    neu_1=np.array([0, 1]),
+)
+
+# equivalent today: one entry per coefficient
+pytree_mask = dict(
+    shared=np.array([[1, 1]]),
+    neu_0=np.array([[1, 0]]),
+    neu_1=np.array([[0, 1]]),
+)
+```
+
+With more than one feature per group, every feature of a group shared its neuron's flag, so broadcasting against the predictors gives the same model:
+
+```python
+pytree_mask = {
+    key: np.broadcast_to(mask, (pytree_features[key].shape[1], *mask.shape))
+    for key, mask in old_pytree_mask.items()
+}
+```
+:::
