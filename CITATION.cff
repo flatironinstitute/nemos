@@ -25,6 +25,9 @@ authors:
   - family-names: Maura
     given-names: Camila
     orcid: "https://orcid.org/0000-0002-1304-5641"
+  - family-names: De Wulf
+    given-names: Wolf
+    orcid: "https://orcid.org/0000-0002-0219-3120"
   - family-names: Crespo Darriba
     given-names: Pablo
   - family-names: Viejo
@@ -41,6 +44,7 @@ authors:
     orcid: "https://orcid.org/0000-0001-5853-103X"
 repository-code: "https://github.com/flatironinstitute/nemos"
 url: "https://nemos.readthedocs.io/"
+doi: 10.5281/zenodo.17553286
 license: MIT
 keywords:
   - neuroscience
