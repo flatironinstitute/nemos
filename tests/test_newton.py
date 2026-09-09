@@ -256,6 +256,7 @@ def _init_params_for(glm_class):
     return GLMParams(coef=jnp.zeros(2), intercept=jnp.zeros(1))
 
 
+@_SOLVERS
 @pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
 @pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
 def test_newton_glm_instantiate_solver(regularizer_name, glm_class, solver_name):
