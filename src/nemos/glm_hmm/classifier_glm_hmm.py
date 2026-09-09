@@ -193,7 +193,7 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
     **Fit a ClassifierGLMHMM**
 
     The number of hidden states is the only required argument; the number of classes can be inferred
-    from the observations. The shape of ``coef_`` depends on the number of features, classes, and states, 
+    from the observations. The shape of ``coef_`` depends on the number of features, classes, and states,
     and the HMM transition matrix and initial distribution are exposed as fitted attributes.
 
     >>> import jax
@@ -816,6 +816,7 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
         *args,
         session_starts: Optional[jnp.ndarray] = None,
         n_samples: Optional[int] = None,
+        safe: bool = True,
         **kwargs,
     ) -> StepResult:
         """Run a single EM iteration on the Classifier GLM-HMM.
@@ -830,6 +831,11 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
 
         :meth:`initialize_optimizer_and_state` must be called first so that the EM
         step function and initial ``opt_state`` are available.
+
+        **Important**: If using ``safe=False`` to skip validation while providing a
+        custom ``session_starts``, it must be formatted as a boolean  array of shape
+        ``(n_time_bins,)``. You can validate this variable by passing it as a keyword
+        argument to ``initialize_optimizer_and_state``.
 
         Parameters
         ----------
@@ -858,6 +864,9 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
         n_samples :
             Total sample count to use when estimating the residual degrees of
             freedom. Defaults to ``X.shape[0]``.
+        safe :
+            If ``True``, perform input validation and consistency checks. If
+            ``False``, skip validation for speed (caller must ensure inputs are valid).
 
         Returns
         -------
@@ -878,13 +887,25 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
         >>> np.random.seed(0)
         >>> X = np.random.normal(size=(80, 3))
         >>> y = np.random.binomial(n=1, p=0.5, size=80)
+        >>> session_starts = np.zeros(80, dtype=bool)
+        >>> session_starts[0] = True
         >>> model = nmo.glm_hmm.ClassifierGLMHMM(n_states=2)
+        >>> model.set_classes(y)
         >>> init_params = model.initialize_params(X, y)
-        >>> opt_state = model.initialize_optimizer_and_state(init_params, X, y)
-        >>> new_params, new_state = model.update(init_params, opt_state, X, y)
+        >>> opt_state = model.initialize_optimizer_and_state(init_params, X, y, session_starts=session_starts)
+        >>> new_params, new_state = model.update(init_params, opt_state, X, y, session_starts=session_starts)
         """
         self._label_encoder.check_classes_is_set("update")
         y = self._label_encoder.encode(y)
+        y = jax.nn.one_hot(y, self.n_classes)
         return super().update(
-            params, opt_state, X, y, session_starts=session_starts, n_samples=n_samples
+            params,
+            opt_state,
+            X,
+            y,
+            *args,
+            session_starts=session_starts,
+            n_samples=n_samples,
+            safe=safe,
+            **kwargs,
         )
