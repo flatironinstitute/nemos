@@ -2223,6 +2223,7 @@ _common_solvers = [
     nmo.solvers.SolverSpec("SVRG", "nemos", nmo.solvers.WrappedSVRG),
     nmo.solvers.SolverSpec("ProxSVRG", "nemos", nmo.solvers.WrappedProxSVRG),
     nmo.solvers.SolverSpec("Newton", "nemos", nmo.solvers.Newton),
+    nmo.solvers.SolverSpec("ProximalNewton", "nemos", nmo.solvers.ProximalNewton),
 ]
 _solvers_per_backend = {
     "optimistix": [
