@@ -13,6 +13,7 @@ import pynapple as nap
 from numpy.typing import ArrayLike, NDArray
 
 from .. import observation_models as obs
+from .. import tree_utils
 from .._observation_model_builder import instantiate_observation_model
 from ..hmm.expectation_maximization import EMState, em_hmm, em_step
 from ..hmm.hmm import BaseHMM
@@ -20,6 +21,7 @@ from ..hmm.initialize_parameters import HMM_INITIALIZATION_FN_DICT, InitFunction
 from ..hmm.utils import _check_state_format
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
+from ..pytrees import FeaturePytree
 from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
 from ..tree_utils import pytree_map_and_reduce
 from ..typing import (
@@ -775,13 +777,13 @@ class GLMHMM(
         setup : Configure the initializers used when ``init_params is None``.
         update : Run a single EM iteration (advanced, manual loop).
         """
-        self._validator.validate_inputs(X=X, y=y)
-        # validate and cast session boundaries, shifting markers off NaN samples
-        session_starts = self._validator.validate_and_cast_session_starts(
+        # validate inputs, cast the session boundaries shifting markers off NaN samples,
+        # then check continuity within each session
+        session_starts = self._validator.validate_and_cast_inputs(
             X, y, session_starts=session_starts
         )
 
-        # validate the inputs & initialize solver
+        # initialize solver
         # initialize params if no params are provided
         if init_params is None:
             init_params = self._model_specific_initialization(X, y, session_starts)
@@ -1483,6 +1485,7 @@ class GLMHMM(
         *args,
         session_starts: Optional[jnp.ndarray] = None,
         n_samples: Optional[int] = None,
+        safe: bool = True,
         **kwargs,
     ) -> StepResult:
         """Run a single EM iteration on the GLM-HMM.
@@ -1497,6 +1500,11 @@ class GLMHMM(
 
         :meth:`initialize_optimizer_and_state` must be called first so that the EM
         step function and initial ``opt_state`` are available.
+
+        **Important**: If using ``safe=False`` to skip validation while providing a
+        custom ``session_starts``, it must be formatted as a boolean  array of shape
+        ``(n_time_bins,)``. You can validate this variable by passing it as a keyword
+        argument to ``initialize_optimizer_and_state``.
 
         Parameters
         ----------
@@ -1525,6 +1533,9 @@ class GLMHMM(
         n_samples :
             Total sample count to use when estimating the residual degrees of
             freedom. Defaults to ``X.shape[0]``.
+        safe :
+            If ``True``, perform input validation and consistency checks. If
+            ``False``, skip validation for speed (caller must ensure inputs are valid).
 
         Returns
         -------
@@ -1545,19 +1556,29 @@ class GLMHMM(
         >>> np.random.seed(0)
         >>> X = np.random.normal(size=(80, 3))
         >>> y = np.random.binomial(n=1, p=0.5, size=80)
+        >>> session_starts = np.zeros(80, dtype=bool)
+        >>> session_starts[0] = True
         >>> model = nmo.glm_hmm.GLMHMM(n_states=2)
         >>> init_params = model.initialize_params(X, y)
-        >>> opt_state = model.initialize_optimizer_and_state(init_params, X, y)
-        >>> new_params, new_state = model.update(init_params, opt_state, X, y)
+        >>> opt_state = model.initialize_optimizer_and_state(init_params, X, y, session_starts=session_starts)
+        >>> new_params, new_state = model.update(init_params, opt_state, X, y, session_starts=session_starts)
         """
-        # validate inputs and session boundaries
-        self._validator.validate_inputs(X=X, y=y)
-        session_starts = self._validator.validate_and_cast_session_starts(
-            X, y, session_starts=session_starts
-        )
-
-        # drop nans and pull pytree data
-        data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
+        if safe is True:
+            # validate inputs and session boundaries
+            session_starts = self._validator.validate_and_cast_inputs(
+                X, y, session_starts=session_starts
+            )
+            # drop nans and pull pytree data
+            data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
+        else:
+            if session_starts is None:
+                session_starts = jnp.zeros(y.shape[0], dtype=bool).at[0].set(True)
+            # find non-nans
+            X, y, session_starts = tree_utils.drop_nans(X, y, session_starts)
+            # ensure boolean and first sample is a session start
+            session_starts = jnp.array(session_starts, dtype=bool).at[0].set(True)
+            # grab the data
+            data = X.data if isinstance(X, FeaturePytree) else X
 
         # wrap into model params (assumes init was done via
         # `initialize_optimizer_and_state` so the EM step function is in place)
@@ -1588,8 +1609,13 @@ class GLMHMM(
         init_params: ModelParamsT,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
+        frozen_params: Optional[ModelParamsT] = None,
     ) -> SolverState:
-        """Initialize the optimizer and state of the model."""
+        """Initialize the optimizer and state of the model.
+
+        ``frozen_params`` is accepted for signature compatibility with the base
+        entry points but ignored: the GLM-HMM does not support parameter freezing.
+        """
         # glm params m-step setup
         is_population = y.ndim > 1
         m_step_update = prepare_mstep_update_fn(

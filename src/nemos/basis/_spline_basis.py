@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from pynapple import Tsd, TsdFrame, TsdTensor
 from scipy.interpolate import splev
 
+from ..tree_utils import is_traced
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ._basis import Basis, check_transform_input, min_max_rescale_samples
@@ -240,6 +241,8 @@ class MSplineBasis(SplineBasis, abc.ABC):
 
         # get the original shape
         shape = sample_pts.shape
+        # neighboring elements share sub-splines, compute them once
+        cache = {}
         X = jnp.stack(
             [
                 mspline(
@@ -249,6 +252,7 @@ class MSplineBasis(SplineBasis, abc.ABC):
                     self.order,
                     i,
                     knot_locs,
+                    cache,
                 )
                 for i in range(self.n_basis_funcs)
             ],
@@ -362,7 +366,7 @@ class BSplineBasis(SplineBasis, abc.ABC):
         sample_pts, _ = min_max_rescale_samples(
             sample_pts,
             getattr(self, "bounds", None),
-            use_jax=False,
+            use_jax=is_traced(sample_pts),
         )
         # add knots
         knot_locs = self._generate_knots(is_cyclic=False)
@@ -474,7 +478,7 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
         sample_pts, _ = min_max_rescale_samples(
             sample_pts,
             getattr(self, "bounds", None),
-            use_jax=False,
+            use_jax=is_traced(sample_pts),
         )
         knot_locs = self._generate_knots(is_cyclic=True)
 
@@ -504,14 +508,23 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
         ind = sample_pts > xc
 
         basis_eval = bspline(sample_pts, knots, order=self.order, der=0, outer_ok=True)
-        sample_pts[ind] = sample_pts[ind] - knots.max() + knot_locs[0]
+        wrapped_pts = sample_pts - knots.max() + knot_locs[0]
 
-        if np.sum(ind):
-            basis_eval[ind] = basis_eval[ind] + bspline(
-                sample_pts[ind], knots, order=self.order, outer_ok=True, der=0
+        if is_traced(sample_pts):
+            # tracers cannot be indexed with a boolean mask: wrap every sample,
+            # then keep the extra contribution only where it belongs.
+            wrapped_eval = bspline(
+                jnp.where(ind, wrapped_pts, sample_pts),
+                knots,
+                order=self.order,
+                outer_ok=True,
+                der=0,
             )
-        # restore points
-        sample_pts[ind] = sample_pts[ind] + knots.max() - knot_locs[0]
+            basis_eval = basis_eval + jnp.where(ind[:, None], wrapped_eval, 0.0)
+        elif np.sum(ind):
+            basis_eval[ind] = basis_eval[ind] + bspline(
+                wrapped_pts[ind], knots, order=self.order, outer_ok=True, der=0
+            )
 
         basis_eval = basis_eval.reshape(*shape, basis_eval.shape[1])
         return basis_eval
@@ -541,7 +554,9 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
         return super().evaluate_on_grid(n_samples)
 
 
-def mspline(x: NDArray, k: int, i: int, T: NDArray) -> NDArray:
+def mspline(
+    x: NDArray, k: int, i: int, T: NDArray, cache: Optional[dict] = None
+) -> NDArray:
     """Compute M-spline basis function.
 
     Parameters
@@ -554,6 +569,12 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray) -> NDArray:
         Number of the spline basis.
     T
         knot locations. should lie in interval [0, 1], shape (k + n_basis_funcs,).
+    cache
+        Sub-splines already computed for ``x`` and ``T``, keyed by ``(k, i)``.
+        The recursion reaches the same ``(k, i)`` pair along several branches,
+        so sharing them keeps the number of computed sub-splines linear in
+        ``k`` instead of doubling with it. Pass one dictionary across the
+        elements of a basis to share sub-splines between them too.
 
     Returns
     -------
@@ -570,25 +591,31 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray) -> NDArray:
     >>> mspline_eval.shape
     (100,)
     """
+    cache = {} if cache is None else cache
+    if (k, i) in cache:
+        return cache[(k, i)]
+
     # Boundary conditions.
     if (T[i + k] - T[i]) < 1e-6:
-        return jnp.zeros_like(x)
+        spline = jnp.zeros_like(x)
 
     # Special base case of first-order spline basis.
     elif k == 1:
-        v = jnp.where((x >= T[i]) & (x < T[i + 1]), 1 / (T[i + 1] - T[i]), 0.0)
-        return v
+        spline = jnp.where((x >= T[i]) & (x < T[i + 1]), 1 / (T[i + 1] - T[i]), 0.0)
 
     # General case, defined recursively
     else:
-        return (
+        spline = (
             k
             * (
-                (x - T[i]) * mspline(x, k - 1, i, T)
-                + (T[i + k] - x) * mspline(x, k - 1, i + 1, T)
+                (x - T[i]) * mspline(x, k - 1, i, T, cache)
+                + (T[i + k] - x) * mspline(x, k - 1, i + 1, T, cache)
             )
             / ((k - 1) * (T[i + k] - T[i]))
         )
+
+    cache[(k, i)] = spline
+    return spline
 
 
 def bspline(
@@ -645,6 +672,11 @@ def bspline(
     >>> bspline_eval.shape
     (100, 10)
     """
+    # splev is a thin wrapper around FITPACK and is faster than the recursion,
+    # but it cannot be traced. Switch implementation under jax transformations.
+    if is_traced(sample_pts):
+        return bspline_jax(sample_pts, knots, order=order, der=der)
+
     knots.sort()
     nk = knots.shape[0]
 
@@ -680,3 +712,129 @@ def bspline(
         )
 
     return basis_eval.T
+
+
+def bspline_jax(
+    sample_pts: NDArray,
+    knots: NDArray,
+    order: int = 4,
+    der: int = 0,
+) -> jnp.ndarray:
+    r"""
+    Evaluate the B-spline basis with the Cox-de Boor recursion, in pure jax.
+
+    This is the traceable counterpart of :func:`bspline`, which relies on
+    scipy's ``splev``. Both return the same values, and this one is used only
+    under a jax transformation: ``splev`` needs no compilation, which makes it
+    the better choice for the one-shot calls of the eager path.
+
+    Each basis element is built with the same recursion as :func:`mspline`,
+
+    .. math::
+        B_{i,p}(x) = \frac{x - t_i}{t_{i+p} - t_i} B_{i,p-1}(x)
+        + \frac{t_{i+p+1} - x}{t_{i+p+1} - t_{i+1}} B_{i+1,p-1}(x),
+
+    where :math:`t` are the knots and :math:`p` the degree, down to the degree
+    zero indicator of a knot interval. Derivatives use the companion identity
+
+    .. math::
+        \frac{d}{dx} B_{i,p}(x) = p \left(
+        \frac{B_{i,p-1}(x)}{t_{i+p} - t_i}
+        - \frac{B_{i+1,p-1}(x)}{t_{i+p+1} - t_{i+1}} \right).
+
+    Knots are kept in NumPy so that every span is a scalar constant of the
+    compiled graph. Sub-expressions are shared across basis elements: without
+    it the recursion spawns :math:`2^p` calls per element, which costs
+    compilation time (up to ~5x on the sizes we benchmarked) and buys nothing,
+    since XLA merges the duplicated branches anyway.
+
+    Parameters
+    ----------
+    sample_pts :
+        An array containing sample points for which B-spline basis needs to be evaluated,
+        shape (n_samples,)
+    knots :
+        An array containing knots for the B-spline basis. The knots are sorted in ascending order.
+    order :
+        The order of the B-spline basis.
+    der :
+        The derivative of the B-spline basis to be evaluated. As for ``splev``,
+        it must satisfy ``0 <= der <= order - 1``.
+
+    Returns
+    -------
+    basis_eval :
+        An array containing the evaluation of B-spline basis for the given sample points.
+        Shape (n_samples, n_basis_funcs). Sample points outside the knots range,
+        NaNs included, are set to NaN.
+
+    Raises
+    ------
+    ValueError
+        If ``der`` is negative or larger than the degree ``order - 1``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from numpy import linspace
+    >>> from nemos.basis._spline_basis import bspline_jax
+    >>> sample_points = linspace(0, 1, 100)
+    >>> knots = np.array([0, 0, 0, 0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 1, 1, 1, 1])
+    >>> bspline_eval = bspline_jax(sample_points, knots) # define a cubic B-spline
+    >>> bspline_eval.shape
+    (100, 10)
+    """
+    if not 0 <= der <= order - 1:
+        raise ValueError(
+            f"0 <= der <= order - 1 must hold, der={der} and order={order} provided."
+        )
+
+    knots = np.sort(np.asarray(knots))
+    sample_pts = jnp.asarray(sample_pts)
+    cache = {}
+
+    def basis_element(i: int, deg: int, der: int) -> jnp.ndarray:
+        """Evaluate the der-th derivative of the i-th element of degree deg."""
+        if (i, deg, der) in cache:
+            return cache[(i, deg, der)]
+
+        # a zero span means a repeated knot: the corresponding term drops out
+        span_left = knots[i + deg] - knots[i]
+        span_right = knots[i + deg + 1] - knots[i + 1]
+
+        if der:
+            spline = jnp.zeros_like(sample_pts)
+            if span_left > 0:
+                spline += deg / span_left * basis_element(i, deg - 1, der - 1)
+            if span_right > 0:
+                spline -= deg / span_right * basis_element(i + 1, deg - 1, der - 1)
+
+        elif deg == 0:
+            spline = jnp.where(
+                (sample_pts >= knots[i]) & (sample_pts < knots[i + 1]), 1.0, 0.0
+            )
+
+        else:
+            spline = jnp.zeros_like(sample_pts)
+            if span_left > 0:
+                spline += (
+                    (sample_pts - knots[i]) / span_left * basis_element(i, deg - 1, der)
+                )
+            if span_right > 0:
+                spline += (
+                    (knots[i + deg + 1] - sample_pts)
+                    / span_right
+                    * basis_element(i + 1, deg - 1, der)
+                )
+
+        cache[(i, deg, der)] = spline
+        return spline
+
+    basis_eval = jnp.stack(
+        [basis_element(i, order - 1, der) for i in range(knots.shape[0] - order)],
+        axis=1,
+    )
+
+    # match ``bspline``: samples out of the knots range, NaNs included, are NaN
+    in_sample = (sample_pts >= knots[0]) & (sample_pts <= knots[-1])
+    return jnp.where(in_sample[:, None], basis_eval, jnp.nan)

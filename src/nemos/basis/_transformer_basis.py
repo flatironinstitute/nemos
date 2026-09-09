@@ -4,6 +4,7 @@ import copy
 from functools import wraps
 from typing import TYPE_CHECKING, Generator
 
+import jax.tree
 import numpy as np
 
 from ..typing import FeatureMatrix
@@ -40,6 +41,12 @@ class TransformerBasis:
     model selection, enabling the cross-validation of the basis type and parameters,
     for example ``n_basis_funcs``. See the example section below.
 
+    .. attention::
+
+        Any ``Eval`` basis composing the transformer must have its ``bounds`` set, so its domain is
+        fixed rather than re-inferred from each fold's data during cross-validation. The example sets
+        ``bounds=(x.min(), x.max())`` for this reason.
+
     Parameters
     ----------
     basis :
@@ -58,7 +65,7 @@ class TransformerBasis:
     >>> # Generate data
     >>> num_samples, num_features = 10000, 1
     >>> x = np.random.normal(size=(num_samples, ))  # raw time series
-    >>> basis = BSplineEval(10)
+    >>> basis = BSplineEval(10, bounds=(x.min(), x.max()))
     >>> features = basis.compute_features(x)  # basis transformed time series
     >>> weights = np.random.normal(size=basis.n_basis_funcs)  # true weights
     >>> y = np.random.poisson(np.exp(features.dot(weights)))  # spike counts
@@ -134,6 +141,23 @@ class TransformerBasis:
                 "Please call `set_input_shape` before calling `fit`, `transform`, or "
                 "`fit_transform`."
             )
+        for b in basis._iterate_over_components():
+            # ``_bounds_define_domain`` (True only on the bounded Eval mixin) flags bases whose
+            # domain is data-inferred when ``bounds`` is unset; those are the unsafe ones. It's
+            # False elsewhere, and True implies a ``bounds`` attribute, so no existence check needed.
+            # Some bases have n-d bounds (FourierEval): a list of tuples or Nones. We must reject any
+            # None. ``jax.tree.leaves`` skips empty (None) leaves by default, so ``is_leaf`` keeps them.
+            if getattr(b, "_bounds_define_domain", False) and any(
+                v is None
+                for v in jax.tree.leaves(b.bounds, is_leaf=lambda x: x is None)
+            ):
+                raise RuntimeError(
+                    f"Cannot apply TransformerBasis: component {b} has unset ``bounds``.\n"
+                    "When a basis is used as a transformer, ``bounds`` must be set explicitly so the "
+                    "domain is identical across folds; otherwise it is derived from the input data and "
+                    "the transformation changes at every fit. Set the ``bounds`` attribute before calling "
+                    "``fit``, ``transform``, or ``fit_transform``."
+                )
 
     def _unpack_inputs(self, X: FeatureMatrix) -> Generator:
         """Unpack inputs.
@@ -182,9 +206,13 @@ class TransformerBasis:
         Raises
         ------
         RuntimeError
-            If ``self.n_basis_input`` is None. Call ``self.set_input_shape`` before calling ``fit`` to avoid this.
+            - If the basis has no defined input shape (``self.n_basis_input`` is ``None``).
+              Call ``set_input_shape`` before ``fit``, ``transform``, or ``fit_transform``.
+            - If a component basis derives its domain from ``bounds`` but ``bounds`` is unset.
+              Such a basis would re-fit its domain to the input on every call, so ``bounds`` must
+              be set explicitly before it is used as a transformer.
         ValueError:
-            If the number of columns in X do not ``self.n_basis_input_``.
+            If the number of columns in X does not match ``self.n_basis_input_``.
 
         Examples
         --------
@@ -195,7 +223,7 @@ class TransformerBasis:
         >>> X = np.random.normal(size=(100, 2))
 
         >>> # Define and fit tranformation basis
-        >>> basis = MSplineEval(10).set_input_shape(2)
+        >>> basis = MSplineEval(10, bounds=(X.min(), X.max())).set_input_shape(2)
         >>> transformer = TransformerBasis(basis)
         >>> transformer_fitted = transformer.fit(X)
         """
@@ -221,6 +249,15 @@ class TransformerBasis:
         -------
         :
             The data transformed by the basis functions.
+
+        Raises
+        ------
+        RuntimeError
+            - If the basis has no defined input shape (``self.n_basis_input`` is ``None``).
+              Call ``set_input_shape`` before ``fit``, ``transform``, or ``fit_transform``.
+            - If a component basis derives its domain from ``bounds`` but ``bounds`` is unset.
+              Such a basis would re-fit its domain to the input on every call, so ``bounds`` must
+              be set explicitly before it is used as a transformer.
 
         Examples
         --------
@@ -269,6 +306,15 @@ class TransformerBasis:
             The data transformed by the basis functions, after fitting the basis
             functions to the data.
 
+        Raises
+        ------
+        RuntimeError
+            - If the basis has no defined input shape (``self.n_basis_input`` is ``None``).
+              Call ``set_input_shape`` before ``fit``, ``transform``, or ``fit_transform``.
+            - If a component basis derives its domain from ``bounds`` but ``bounds`` is unset.
+              Such a basis would re-fit its domain to the input on every call, so ``bounds`` must
+              be set explicitly before it is used as a transformer.
+
         Examples
         --------
         >>> import numpy as np
@@ -278,7 +324,7 @@ class TransformerBasis:
         >>> X = np.random.normal(size=(100, 1))
 
         >>> # Define tranformation basis
-        >>> basis = MSplineEval(10).set_input_shape(1)
+        >>> basis = MSplineEval(10, bounds=(X.min(), X.max())).set_input_shape(1)
         >>> transformer = TransformerBasis(basis)
 
         >>> # Fit and transform basis

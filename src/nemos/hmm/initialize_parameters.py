@@ -769,6 +769,18 @@ def _validate_init_funcs_keys(
     return init_funcs
 
 
+def _resolution_was_noop(value: dict, resolved: dict) -> bool:
+    """Check that resolving ``value`` left keys and value identities unchanged.
+
+    Used by the ``*_initialization_funcs`` setters to keep the caller's dict when
+    resolution changed nothing, so sklearn clone's identity round-trip
+    (``get_params -> __init__ -> get_params``) holds.
+    """
+    return value.keys() == resolved.keys() and all(
+        value[k] is resolved[k] for k in value
+    )
+
+
 def _resolve_existing_slots(
     init_funcs: dict,
     slot_keys: Tuple[str, ...],

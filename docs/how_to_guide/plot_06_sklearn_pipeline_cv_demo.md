@@ -4,7 +4,6 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.4
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -187,12 +186,19 @@ We might want to combine first transforming the input data with our basis functi
 
 This is exactly what `Pipeline` is for!
 
+:::{admonition} Setting `bounds` for cross-validation
+:class: note
+
+An `Eval` basis used as a transformer must have its `bounds` set explicitly, so that the domain stays fixed across cross-validation folds instead of being re-inferred from each fold's data. See [here for more info about bounds](transformer-basis-bounds).
+:::
+
 ```{code-cell} ipython3
 pipeline = Pipeline(
     [
         (
             "transformerbasis",
-            nmo.basis.RaisedCosineLinearEval(6).to_transformer(),
+            # define bounds explicitly so the domain is consistent across folds
+            nmo.basis.RaisedCosineLinearEval(6, bounds=(0, 1)).to_transformer(),
         ),
         (
             "glm",
@@ -351,7 +357,7 @@ scores = np.zeros((len(regularizer_strength) * len(n_basis_funcs), n_folds))
 coeffs = {}
 
 # initialize basis and model
-basis = nmo.basis.RaisedCosineLinearEval(6)
+basis = nmo.basis.RaisedCosineLinearEval(6, bounds=(0, 1))
 basis = nmo.basis.TransformerBasis(basis)
 model = nmo.glm.GLM(regularizer="Ridge")
 
@@ -476,12 +482,12 @@ Here we include `transformerbasis__basis` in the parameter grid to try different
 param_grid = dict(
     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
     transformerbasis__basis=(
-        nmo.basis.RaisedCosineLinearEval(5),
-        nmo.basis.RaisedCosineLinearEval(10),
-        nmo.basis.RaisedCosineLogEval(5),
-        nmo.basis.RaisedCosineLogEval(10),
-        nmo.basis.MSplineEval(5),
-        nmo.basis.MSplineEval(10),
+        nmo.basis.RaisedCosineLinearEval(5, bounds=(0, 1)),
+        nmo.basis.RaisedCosineLinearEval(10, bounds=(0, 1)),
+        nmo.basis.RaisedCosineLogEval(5, bounds=(0, 1)),
+        nmo.basis.RaisedCosineLogEval(10, bounds=(0, 1)),
+        nmo.basis.MSplineEval(5, bounds=(0, 1)),
+        nmo.basis.MSplineEval(10, bounds=(0, 1)),
     ),
 )
 ```

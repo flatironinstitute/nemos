@@ -4,7 +4,6 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.18.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -16,6 +15,9 @@ kernelspec:
 
 %matplotlib inline
 import warnings
+import jax
+
+jax.config.update("jax_enable_x64", True)
 
 # Ignore the first specific warning
 warnings.filterwarnings(

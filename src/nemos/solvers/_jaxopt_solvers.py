@@ -3,20 +3,27 @@
 from importlib.util import find_spec as _find_spec
 
 from ._jaxopt_adapter import JaxoptAdapter
+from ._stochastic_mixins import JaxoptStochasticSolverMixin
 
 JAXOPT_AVAILABLE = _find_spec("jaxopt") is not None
 
 if JAXOPT_AVAILABLE:
     from jaxopt import BFGS, LBFGS, GradientDescent, NonlinearCG, ProximalGradient
 
-if JAXOPT_AVAILABLE:
-
-    class JaxoptGradientDescent(JaxoptAdapter):
+    class JaxoptGradientDescent(JaxoptStochasticSolverMixin, JaxoptAdapter):
         """Adapter for jaxopt.GradientDescent."""
 
         _solver_cls = GradientDescent
 
-    class JaxoptProximalGradient(JaxoptAdapter):
+        @property
+        def acceleration_turned_on(self) -> bool:
+            return self.acceleration
+
+        @property
+        def linesearch_turned_on(self) -> bool:
+            return self.stepsize <= 0.0
+
+    class JaxoptProximalGradient(JaxoptStochasticSolverMixin, JaxoptAdapter):
         """
         Adapter for jaxopt.ProximalGradient.
 
@@ -26,6 +33,14 @@ if JAXOPT_AVAILABLE:
 
         _solver_cls = ProximalGradient
         _proximal = True
+
+        @property
+        def acceleration_turned_on(self) -> bool:
+            return self.acceleration
+
+        @property
+        def linesearch_turned_on(self) -> bool:
+            return self.stepsize <= 0.0
 
     class JaxoptBFGS(JaxoptAdapter):
         """Adapter for jaxopt.BFGS."""

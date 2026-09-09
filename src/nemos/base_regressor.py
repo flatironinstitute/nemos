@@ -1,6 +1,5 @@
 """Abstract class for regression models."""
 
-# required to get ArrayLike to render correctly
 from __future__ import annotations
 
 import abc
@@ -9,15 +8,9 @@ from abc import abstractmethod
 from copy import deepcopy
 from functools import wraps
 from pathlib import Path
-from typing import (
-    Any,
-    Generic,
-    Optional,
-    Tuple,
-    Type,
-    Union,
-)
+from typing import Any, Callable, Generic, Optional, Tuple, Type, Union
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -29,6 +22,9 @@ from .base_class import Base
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
+from .solvers._hess import HessianTag
+from .solvers._newton import Newton
+from .solvers._no_op import NoOpSolver
 from .type_casting import cast_to_jax, is_numpy_array_like
 from .typing import (
     DESIGN_INPUT_TYPE,
@@ -117,9 +113,13 @@ class BaseRegressor(
     """
 
     _validator: ValidatorT
+    _hess_tag: HessianTag | None = None
 
     # overwrite this in subclasses if their objective functions return aux
     _has_aux: bool = False
+
+    # user setting: fixed-parameter spec (array leaf = fixed value, None leaf = learn).
+    _fix_params: Optional[ModelParamsT] = None
 
     def __init__(
         self,
@@ -260,6 +260,8 @@ class BaseRegressor(
                 stacklevel=2,
             )
             self.solver_name = None
+        else:
+            self._invalidate_solver()
 
     @property
     def regularizer_strength(self) -> Any:
@@ -269,6 +271,7 @@ class BaseRegressor(
     @regularizer_strength.setter
     def regularizer_strength(self, strength: Any):
         self._regularizer_strength = self.regularizer._validate_strength(strength)
+        self._invalidate_solver()
 
     @property
     def solver_name(self) -> str:
@@ -287,13 +290,32 @@ class BaseRegressor(
             spec = solvers.get_solver(solver_name)
             self._regularizer.check_solver(spec.algo_name)
             self._solver_spec = spec
+        self._invalidate_solver()
+
+    def _hess_property_override(self) -> type | None:
+        """Definiteness the model can certify beyond what coverage inference sees.
+
+        Defaults to None (use the combined loss+regularizer tag). A subclass returns a
+        matrix-property type when its loss supplies definiteness on the subtrees the
+        regularizer leaves unpenalized (e.g. a GLM whose loss is positive definite on
+        the unregularized intercept, making a Ridge-penalized Hessian positive definite).
+        """
+        return None
+
+    def _resolve_default_solver(self) -> str:
+        """Name of the default solver when the user has not set one.
+
+        Defaults to the regularizer's own default solver. Subclasses may override to
+        express a model- and regularizer-specific preference (e.g. GLMs default to
+        Newton when the regularizer makes the Hessian positive definite).
+        """
+        return self.regularizer.default_solver
 
     @property
     def solver_spec(self) -> SolverSpec:
         """Getter for the solver specification."""
         if self._solver_spec is None:
-            spec = solvers.get_solver(self.regularizer.default_solver)
-            return spec
+            return solvers.get_solver(self._resolve_default_solver())
         return self._solver_spec
 
     @property
@@ -308,6 +330,7 @@ class BaseRegressor(
             solver_cls = self.solver_spec.implementation
             self._check_solver_kwargs(solver_cls, solver_kwargs)
         self._solver_kwargs = solver_kwargs
+        self._invalidate_solver()
 
     @staticmethod
     def _check_solver_kwargs(solver_class: Type, solver_kwargs: dict[str, Any]) -> None:
@@ -335,6 +358,123 @@ class BaseRegressor(
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
             )
 
+    def _invalidate_solver(self):
+        self._solver = None
+        self._solver_loss_fun = None
+        self._optimizer_init_state = None
+        self._optimizer_update = None
+        self._optimizer_run = None
+
+    def _no_op_optimizer(self) -> SolverState:
+        """Install :class:`NoOpSolver`, for when the active parameter tree is empty."""
+        warnings.warn(
+            "Every parameter is fixed, through `fix_params` and/or `fit_intercept=False`; "
+            "no optimization will run and the fixed values are returned unchanged.",
+            UserWarning,
+        )
+        self._solver = NoOpSolver()
+        self._optimizer_init_state = self._solver.init_state
+        self._optimizer_update = self._solver.update
+        self._optimizer_run = self._solver.run
+        return self._optimizer_init_state(None)
+
+    def _partition_active(
+        self, params: ModelParamsT
+    ) -> Tuple[ModelParamsT, ModelParamsT]:
+        """
+        Compute active and frozen parameter trees.
+
+        Parameters
+        ----------
+        params:
+            The model parameters.
+
+        Returns
+        -------
+        :
+            A tuple containing the active and frozen parameter trees.
+
+        """
+        return eqx.partition(params, self._active_filter_spec())
+
+    def _active_filter_spec(self) -> Any:
+        """Boolean filter spec (tree-prefix) marking the actively optimized leaves.
+
+        Derived from ``_fix_params`` alone: a leaf is active iff the spec holds
+        ``None`` there. Subclasses fold model-specific settings in (e.g. the GLM
+        freezes the intercept when ``fit_intercept=False``).
+        """
+        return jax.tree_util.tree_map(
+            lambda x: x is None, self._fix_params, is_leaf=lambda x: x is None
+        )
+
+    def _frozen_values(
+        self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray
+    ) -> Optional[ModelParamsT]:
+        """Values the frozen leaves are pinned to, implied by the model settings.
+
+        Complement of :meth:`_active_filter_spec`: the spec marks *which* leaves are
+        actively optimized, this returns *what* the remaining leaves are held at
+        (tree-prefix with ``None`` on active leaves; ``None`` when nothing is frozen).
+        Derived from ``_fix_params`` alone here — its array leaves are the fixed
+        values. Subclasses fold model-specific settings in (e.g. the GLM pins the
+        intercept at zero when ``fit_intercept=False``); ``X`` and ``y`` let them
+        infer the shape of a pinned leaf.
+        """
+        return self._fix_params
+
+    def _normalize_user_params(
+        self,
+        init_params: UserProvidedParamsT,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+    ) -> UserProvidedParamsT:
+        """Complete a user-provided parameter set before validation.
+
+        User-facing entry points (``fit``, ``initialize_optimizer_and_state``) accept
+        parameters in a convenient, possibly *incomplete* form: leaves that the model
+        will not learn may be omitted (passed as ``None``) so the user does not have to
+        supply a value for something that is held fixed. This hook is the single seam
+        where such input is turned into a complete, concrete parameter set, filling in
+        the omitted leaves with their fixed defaults (and warning if the user supplied a
+        value for a leaf that will not be estimated).
+
+        It is separate from the other parameter-processing steps because it is the only
+        one allowed to *change values*, and the only one that is inherently model
+        specific:
+
+        - ``_normalize_user_params`` (this method): inject defaults for omitted/fixed
+          leaves, coerce/override, warn. Model specific — the base class does not know
+          which leaves a subclass can leave unset (e.g. the GLM intercept when
+          ``fit_intercept=False``), so it is a no-op here and subclasses override it.
+        - ``validate_and_cast_params``: validate structure/dtype/shape and cast the
+          user tuple to a ``ModelParams`` pytree. Assumes a *complete* set of concrete
+          arrays, which is why normalization must run first.
+        - ``validate_consistency``: check the parameters against the data (feature and
+          output dimensions).
+        - ``_partition_active``: split the concrete parameters into the active subtree
+          the solver optimizes and the frozen subtree recombined afterwards. The fixed
+          values injected here are what end up in the frozen subtree.
+
+        Running order is therefore: normalize -> validate/cast -> check consistency ->
+        partition. The default implementation returns ``init_params`` unchanged.
+
+        Parameters
+        ----------
+        init_params :
+            User-provided parameters, in the model's user-facing format.
+        X :
+            Input predictors, used to infer the shape/default of any omitted leaf.
+        y :
+            Target data, used to infer the shape/default of any omitted leaf.
+
+        Returns
+        -------
+        :
+            The parameters with any omitted fixed leaves filled in.
+        """
+        return init_params
+
     def _instantiate_solver(
         self,
         loss,
@@ -343,6 +483,7 @@ class BaseRegressor(
         solver_kwargs: Optional[dict] = None,
         regularizer: Optional[Regularizer] = None,
         regularizer_strength: Optional[Any] = None,
+        frozen_params: Optional[ModelParamsT] = None,
     ) -> SolverProtocol:
         """
         Instantiate the solver with the provided loss function.
@@ -374,6 +515,8 @@ class BaseRegressor(
             Optional regularizer, default is self.regularizer.
         regularizer_strength:
             Optional regularization strength, default is self.regularizer_strength.
+        frozen_params:
+            Set of fixed parameters that will be combined with actively learned ``init_params``.
 
         Returns
         -------
@@ -398,14 +541,31 @@ class BaseRegressor(
 
         self._check_solver_kwargs(solver_cls, solver_kwargs)
 
+        if frozen_params is not None:
+
+            def _loss(params, *args, **kwargs):
+                params = eqx.combine(params, frozen_params)
+                return loss(params, *args, **kwargs)
+
+        else:
+            _loss = loss
+
         solver = solver_cls(
-            loss,
+            _loss,
             regularizer,
             regularizer_strength,
             has_aux=self._has_aux,
             init_params=init_params,
             **solver_kwargs,
         )
+
+        if isinstance(solver, Newton):
+            solver.setup_hessian(
+                self._get_hess_fn(frozen=frozen_params),
+                self._hess_tag,
+                regularizer.resolve_hess_tag(init_params),
+                self._hess_property_override(),
+            )
 
         # nemos's solvers store a .fun attribute, but it's not necessary for a solver to work.
         # A test relies on having _solver_loss_fun saved, so still check and save it if possible.
@@ -416,6 +576,9 @@ class BaseRegressor(
             self._solver_loss_fun = solver.fun
 
         return solver
+
+    def _get_hess_fn(self, frozen: Optional[ModelParamsT] = None) -> Optional[Callable]:
+        return None
 
     @abc.abstractmethod
     def fit(
@@ -456,6 +619,26 @@ class BaseRegressor(
     def _set_model_params(self, params: ModelParamsT):
         """Unpack and store params pytree to coef_ and intercept_."""
         pass
+
+    def get_model_params(self) -> UserProvidedParamsT:
+        """
+        Return the fitted model parameters in user-facing form.
+
+        The exact structure depends on the concrete subclass (e.g.
+        ``(coef, intercept)`` for a GLM), matching what
+        :meth:`initialize_params` returns.
+
+        Returns
+        -------
+        :
+            The fitted parameters in user-facing form.
+        """
+        params = self._validator.from_model_params(self._get_model_params())
+        # Make a kind of copy by rebuilding the pytree structure so callers
+        # cannot mutate container-like model params (for example dict coefficients)
+        # by changing the return value. This is fine for the current JAX-array leaves,
+        # but it would need revisiting if future subclasses store mutable objects at the leaves.
+        return jax.tree_util.tree_map(lambda x: x, params)
 
     @abc.abstractmethod
     def _compute_loss(
@@ -680,6 +863,7 @@ class BaseRegressor(
         init_params: ModelParamsT,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
+        frozen_params: Optional[ModelParamsT] = None,
     ) -> SolverState:
         """Initialize the optimizer and the state of the optimizer for running fit and update."""
         pass
@@ -690,6 +874,7 @@ class BaseRegressor(
         init_params: UserProvidedParamsT,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
+        **kwargs,
     ) -> SolverState:
         """Initialize the optimization routine and its state for running fit and update.
 
@@ -698,17 +883,19 @@ class BaseRegressor(
 
         Parameters
         ----------
-        X
+        init_params :
+            Initial parameter tuple of (coefficients, intercept).
+        X :
             Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
-        y
+        y :
             Target data, array of shape ``(n_time_bins,)`` for single neuron models or
             ``(n_time_bins, n_neurons)`` for population models.
-        init_params
-            Initial parameter tuple of (coefficients, intercept).
+        kwargs :
+            Additional keyword arguments for validation.
 
         Returns
         -------
-        state
+        state :
             Initial solver state.
 
         Raises
@@ -716,11 +903,14 @@ class BaseRegressor(
         ValueError
             If inputs or parameters have incompatible shapes or invalid values.
         """
-        self._validator.validate_inputs(X, y)
+        self._validator.validate_inputs(X=X, y=y, **kwargs)
+        init_params = self._normalize_user_params(init_params, X, y)
         init_params = self._validator.validate_and_cast_params(init_params)
         self._validator.validate_consistency(init_params, X=X, y=y)
         X, y = self._preprocess_inputs(X, y, drop_nans=True)
-        return self._initialize_optimizer_and_state(init_params, X, y)
+        active, frozen = self._partition_active(init_params)
+        state = self._initialize_optimizer_and_state(active, X, y, frozen_params=frozen)
+        return state
 
     def _optimize_solver_params(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> dict:
         """
@@ -866,3 +1056,130 @@ class BaseRegressor(
         Provide instance specific validator configuration if needed.
         """
         return {}
+
+    @staticmethod
+    def _convergence_badge_html(solver_state) -> str:
+        """Build the convergence diagnostic HTML for the model repr.
+
+        Mirror the convergence detection used in ``GLM.fit``: prefer
+        ``stats.converged``, fall back to a ``converged`` flag exposed directly
+        by custom solvers, and otherwise report it as unknown. A missing solver
+        state (e.g. for a model loaded from disk) is treated the same as a
+        solver that does not report convergence.
+
+        Parameters
+        ----------
+        solver_state :
+            The model's ``solver_state_`` attribute, or ``None``.
+
+        Returns
+        -------
+        str
+            An HTML snippet displaying the convergence status.
+        """
+        if solver_state is None:
+            converged = None
+        elif hasattr(solver_state, "stats") and hasattr(
+            solver_state.stats, "converged"
+        ):
+            converged = bool(solver_state.stats.converged)
+        elif hasattr(solver_state, "converged"):
+            converged = bool(solver_state.converged)
+        else:
+            converged = None
+
+        if converged is None:
+            c_color, c_text = ("#6c757d", "Unknown")
+        elif converged:
+            c_color, c_text = ("#28a745", "Yes")
+        else:
+            c_color, c_text = ("#dc3545", "No")
+        return f'<span><strong>Converged:</strong> <span style="color: {c_color};">{c_text}</span></span>'
+
+    def _repr_mimebundle_(self, **kwargs):
+        """Mimebundle representation of the model.
+
+        Wraps the default scikit-learn diagram with a small nemos diagnostics bar.
+
+        Parameters
+        ----------
+        **kwargs : dict
+            Keyword arguments passed to the default scikit-learn mimebundle generator.
+
+        Returns
+        -------
+        dict
+            A dictionary mapping mime types to representation data.
+        """
+        bundle_func = getattr(super(), "_repr_mimebundle_", None)
+        bundle = bundle_func(**kwargs) if bundle_func else {}
+
+        if "text/html" not in bundle:
+            html_func = getattr(super(), "_repr_html_", None)
+            bundle["text/html"] = html_func() if html_func else repr(self)
+
+        state = self._get_fit_state()
+        coef = state.get("coef_")
+        is_fitted = coef is not None
+
+        state_color, state_text = (
+            ("#28a745", "Fitted") if is_fitted else ("#dc3545", "Unfitted")
+        )
+        diagnostics = "</div>"
+
+        if is_fitted:
+            intercept_shape = getattr(state.get("intercept_"), "shape", ())
+            n_neurons = (
+                1
+                if intercept_shape in ((), (1,))
+                else getattr(intercept_shape, "__getitem__", lambda x: "N/A")(0)
+            )
+
+            def get_features(x):
+                return getattr(x, "shape", (1,))[0] if getattr(x, "ndim", 0) > 0 else 1
+
+            n_features = "Unknown"
+            try:
+                n_features = sum(
+                    jax.tree_util.tree_flatten(
+                        jax.tree_util.tree_map(get_features, coef)
+                    )[0]
+                )
+            except Exception:
+                pass
+
+            conv_html = self._convergence_badge_html(state.get("solver_state_"))
+
+            diagnostics = f"""<span style="margin-right: 15px;"><strong>Neurons:</strong> {n_neurons}</span>
+            </div>
+            <div style="margin-top: 8px;">
+                <span style="margin-right: 15px;"><strong>Features:</strong> {n_features}</span>
+                {conv_html}
+            </div>"""
+
+        nemos_html = f"""
+        <div style="
+            font-family: sans-serif;
+            margin-bottom: 10px;
+            padding: 10px 14px;
+            border-left: 4px solid {state_color};
+            background-color: #f8f9fa;
+            color: #333;
+            border-radius: 4px;
+            display: inline-block;
+            font-size: 13px;
+        ">
+            <div>
+                <span style="font-weight: bold; margin-right: 15px;">
+                    Model State: <span style="color: {state_color};">{state_text}</span>
+                </span>
+                {diagnostics}
+        </div>
+        """
+
+        bundle["text/html"] = nemos_html + bundle.get("text/html", "")
+        return bundle
+
+    def _repr_html_(self) -> str:
+        """HTML representation of the model."""
+        return self._repr_mimebundle_().get("text/html", repr(self))

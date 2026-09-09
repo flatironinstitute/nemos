@@ -142,7 +142,7 @@ class Category(EvalBasisMixin, AtomicBasisMixin, Basis):
             n_basis_funcs=self.n_basis_funcs,
             label=label,
         )
-        EvalBasisMixin.__init__(self, bounds=None)
+        EvalBasisMixin.__init__(self)
 
     @property
     def out_of_category(self) -> int | str | float | None:

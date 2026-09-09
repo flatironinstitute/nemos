@@ -88,7 +88,7 @@ def _posterior_weighted_objective_impl(
     jax.jit, static_argnames=["inverse_link_function", "negative_log_likelihood_func"]
 )
 def posterior_weighted_glm_negative_log_likelihood(
-    glm_params: GLMParams,
+    glm_params: GLMParams[jnp.ndarray],
     X: Array,
     y: Array,
     posteriors: Array,
