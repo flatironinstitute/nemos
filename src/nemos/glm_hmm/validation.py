@@ -189,6 +189,31 @@ class ClassifierGLMHMMValidator(GLMHMMValidator):
     extra_params: Dict[Literal["n_classes"], int] = field(kw_only=True)
     model_class: str = "ClassifierGLMHMM"
     _glm_validator: ClassifierGLMValidator = field(init=False, default=None)
+    expected_param_dims: Tuple[int] = (
+        3,
+        2,
+        1,
+        1,
+        2,
+    )  # (coef.ndim, intercept.ndim, scale.ndim, init_prob.ndim, transition_prob.ndim)
+    params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
+        *GLMHMMValidator.params_validation_sequence[:2],
+        (
+            "check_array_dimensions",
+            dict(
+                err_message_format="Invalid parameter dimensionality.\n- coef must be an array "
+                "or any JAX pytree with array leaves of shape "
+                "``(n_features, n_classes, n_states)``.\n- intercept must be of shape ``(n_classes,n_states)``.\n"
+                "- scale must be of shape ``(n_states,)``.\n"
+                "- initial_prob must be of shape ``(n_states,)``.\n"
+                "- transition_prob must be of shape ``(n_states, n_states)``.\n"
+                "\nThe provided coef, intercept, scale, initial_prob and transition_prob "
+                "have shape ``{}``, ``{}``, ``{}``, ``{}`` and ``{}`` "
+                "instead."
+            ),
+        ),
+        *GLMHMMValidator.params_validation_sequence[3:],
+    )
 
     def __post_init__(self):
         object.__setattr__(
@@ -246,7 +271,7 @@ class ClassifierGLMHMMValidator(GLMHMMValidator):
             X,
         )
         empty_intercept = jnp.empty((n_classes, self.extra_params["n_states"]))
-        empty_scale = jnp.empty_like(empty_intercept)
+        empty_scale = jnp.empty(self.extra_params["n_states"])
         model_params = GLMHMMModelParams(
             coef=empty_coef, intercept=empty_intercept, log_scale=empty_scale
         )
