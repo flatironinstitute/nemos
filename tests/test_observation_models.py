@@ -346,7 +346,9 @@ class TestPoissonObservations:
         # Validate custom link function
         expected_output = jnp.sqrt(test_value)
         result = initialize_intercept_matching_mean_rate(
-            model.observation_model.inverse_link_function, test_value
+            model.observation_model.inverse_link_function,
+            jnp.zeros((test_value.shape[0], 1)),
+            test_value,
         )
 
         assert np.allclose(

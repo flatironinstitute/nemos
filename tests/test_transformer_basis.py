@@ -84,7 +84,7 @@ def test_transformer_has_the_same_public_attributes_as_basis(
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis],
+    list_all_basis_classes("NonComposite"),
 )
 def test_to_transformer_and_constructor_are_equivalent(
     basis_cls, basis_class_specific_params
@@ -253,7 +253,7 @@ def test_transformerbasis_getattr(
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis],
+    list_all_basis_classes("NonComposite"),
 )
 @pytest.mark.parametrize("n_basis_funcs_init", [5])
 @pytest.mark.parametrize("n_basis_funcs_new", [6, 10, 20])
@@ -291,7 +291,7 @@ def test_transformerbasis_set_params(
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis],
+    list_all_basis_classes("NonComposite"),
 )
 def test_transformerbasis_setattr_basis(basis_cls, basis_class_specific_params):
 
@@ -315,7 +315,7 @@ def test_transformerbasis_setattr_basis(basis_cls, basis_class_specific_params):
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis],
+    list_all_basis_classes("NonComposite"),
 )
 def test_transformerbasis_setattr_basis_attribute(
     basis_cls, basis_class_specific_params
@@ -353,7 +353,7 @@ def test_transformerbasis_setattr_basis_attribute(
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis],
+    list_all_basis_classes("NonComposite"),
 )
 def test_transformerbasis_copy_basis_on_construct(
     basis_cls, basis_class_specific_params

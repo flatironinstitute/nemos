@@ -140,7 +140,7 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
     inputs_validation_sequence: Tuple[
         Tuple[str, None] | Tuple[str, dict[str, Any]], ...
     ] = (
-        ("validate_inputs", None),
+        ("validate_inputs", {"validate_session_starts": False}),
         ("validate_and_cast_session_starts", None),
         ("check_is_continuous", None),
     )
@@ -216,6 +216,60 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
                 f"and must sum to 1. "
             )
         return params
+
+    def validate_inputs(
+        self,
+        X: Optional[DESIGN_INPUT_TYPE] = None,
+        y: Optional[ArrayLike] = None,
+        session_starts: Optional[jnp.ndarray] = None,
+        validate_session_starts: bool = True,
+    ):
+        """
+        Validate input data dimensions and sample consistency.
+
+        Checks that X and y have the expected dimensionality (as specified by
+        X_dimensionality and y_dimensionality) and that they have the same
+        number of samples along axis 0. Also verifies that session_starts has
+        the same number of samples as X and y, if provided. This check is redundant
+        with validate_and_cast_session_starts, but is added for validation of the
+        inputs in custom solver pipelines that bypasses casting session_starts.
+
+        Parameters
+        ----------
+        X :
+            Input data/design matrix, shape ``(n_samples, n_features)``, or a pytree
+            of such arrays.
+        y :
+            Output data/observations, shape ``(n_samples, ...)``. If None (e.g. during
+            simulation), only ``X`` is checked.
+        session_starts :
+            Boolean array of session-start indicators, shape ``(n_samples,)``, as
+            returned by :meth:`validate_and_cast_session_starts`.
+
+        Raises
+        ------
+        ValueError
+            If X or y don't have the expected dimensionality.
+        ValueError
+            If X and y have different number of samples along axis 0.
+        ValueError
+            If all samples are invalid (contain only NaN/Inf values).
+        """
+        super().validate_inputs(X=X, y=y)
+        # redundant check for session_starts shape for public initialize_optimizer_and_state
+        if validate_session_starts and (session_starts is not None):
+            n_samples = (
+                y.shape[0]
+                if y is not None
+                else jax.tree_util.tree_leaves(X)[0].shape[0]
+            )
+            if session_starts.shape[0] != n_samples:
+                raise ValueError(
+                    "session_starts must have the same number of samples as input. "
+                    f"input has {n_samples} samples, "
+                    f"and session_starts has {session_starts.shape[0]} samples."
+                )
+            validation.error_all_invalid(session_starts)
 
     def validate_and_cast_inputs(
         self,

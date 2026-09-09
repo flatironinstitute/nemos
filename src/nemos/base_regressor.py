@@ -23,6 +23,7 @@ from .base_class import Base
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
+from .solvers._no_op import NoOpSolver
 from .type_casting import cast_to_jax, is_numpy_array_like
 from .typing import (
     DESIGN_INPUT_TYPE,
@@ -367,6 +368,19 @@ class BaseRegressor(
         self._optimizer_init_state = None
         self._optimizer_update = None
         self._optimizer_run = None
+
+    def _no_op_optimizer(self) -> SolverState:
+        """Install :class:`NoOpSolver`, for when the active parameter tree is empty."""
+        warnings.warn(
+            "Every parameter is fixed, through `fix_params` and/or `fit_intercept=False`; "
+            "no optimization will run and the fixed values are returned unchanged.",
+            UserWarning,
+        )
+        self._solver = NoOpSolver()
+        self._optimizer_init_state = self._solver.init_state
+        self._optimizer_update = self._solver.update
+        self._optimizer_run = self._solver.run
+        return self._optimizer_init_state(None)
 
     def _partition_active(
         self, params: ModelParamsT
@@ -867,6 +881,7 @@ class BaseRegressor(
         init_params: UserProvidedParamsT,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
+        **kwargs,
     ) -> SolverState:
         """Initialize the optimization routine and its state for running fit and update.
 
@@ -875,17 +890,19 @@ class BaseRegressor(
 
         Parameters
         ----------
-        X
+        init_params :
+            Initial parameter tuple of (coefficients, intercept).
+        X :
             Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
-        y
+        y :
             Target data, array of shape ``(n_time_bins,)`` for single neuron models or
             ``(n_time_bins, n_neurons)`` for population models.
-        init_params
-            Initial parameter tuple of (coefficients, intercept).
+        kwargs :
+            Additional keyword arguments for validation.
 
         Returns
         -------
-        state
+        state :
             Initial solver state.
 
         Raises
@@ -893,7 +910,7 @@ class BaseRegressor(
         ValueError
             If inputs or parameters have incompatible shapes or invalid values.
         """
-        self._validator.validate_inputs(X, y)
+        self._validator.validate_inputs(X=X, y=y, **kwargs)
         init_params = self._normalize_user_params(init_params, X, y)
         init_params = self._validator.validate_and_cast_params(init_params)
         self._validator.validate_consistency(init_params, X=X, y=y)
