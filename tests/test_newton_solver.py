@@ -157,9 +157,9 @@ def test_run_converges_on_pd_quadratic(jit):
     x_opt, state, _ = solver.run(x0)
 
     assert bool(state.stats.converged), "Solver did not converge on a PD quadratic."
-    assert (
-        state.stats.num_steps == 2
-    ), "Solver did not converge in 2 step on a PD quadratic."
+    assert state.stats.num_steps == 2, (
+        "Solver did not converge in 2 step on a PD quadratic."
+    )
     np.testing.assert_allclose(
         x_opt,
         x_star,
@@ -713,7 +713,7 @@ def test_eigh_newton_solves_rosenbrock_from_indefinite_region(jit):
     params, state, _ = solver.run(x0)
 
     assert bool(state.stats.converged)
-    assert state.stats.num_steps < 100
+    assert state.stats.num_steps < 20
     np.testing.assert_allclose(
         params,
         jnp.ones(2),
