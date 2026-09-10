@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import warnings
+from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
@@ -11,7 +12,6 @@ import jax
 import jax.numpy as jnp
 import pynapple as nap
 from numpy.typing import ArrayLike, NDArray
-from functools import partial
 
 from .. import observation_models as obs
 from .. import tree_utils
