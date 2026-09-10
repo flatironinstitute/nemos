@@ -116,7 +116,7 @@ Same computation but without the conditioning on $z_{u-1}$.
 
 :::
 
-
+This last proposition implies that $F_{0:t} = \prod_{j=0}^t F_{j:j}$ for all $t=0,\dots,T-1$, a matrix product, which is associative.
 
 :::{admonition} Proposition ($\hat{\alpha}_t$ and $c$ from $F_{0:t}$)
 :class: note
@@ -141,7 +141,9 @@ for all $j=0,\dots,K-1$.
 :::{admonition} Proof
 :class: dropdown
 
-By definition of $F_{u:t}$ and the Bayes theorem we have:
+$\hat{\alpha}_t = p(z_t = \cdot \mid y_{s(t):t})$ by definition.
+
+Rewriting $F_{s(t):t}$ via the Bayes rule we have:
 
 $$
 \begin{aligned}
@@ -152,6 +154,28 @@ F_{s(t):t}[j,\cdot] &= p(y_{s(t):t}, z_t = \cdot) \\
 \end{aligned}
 $$
 
-Since $s(t) \in S$.
+since $s(t) \in S$. Note how $F_{s(t):t}[j,\cdot]$ is constant for all $j$ - the $F_{s(t):t}$ has constant columns.
 
+By proposition 2,
+
+$$
+\begin{aligned}
+F_{0:t} & = F_{0:s(t)-1} \,F_{s(t):t} \\
+&= \sum_k F_{0:s(t)-1}[\cdot \,, k] p(y_{s(t):t})  \hat{\alpha}_t[\cdot]\\
+&= \big(\sum_k F_{0:s(t)-1}[\cdot\, , k]\big) \, p(y_{s(t):t})  \hat{\alpha}_t[\cdot] \\
+&= \big(\sum_k p(y_{0:s(t)-1}, z_t=k) \big) \, p(y_{s(t):t}) \hat{\alpha}_t[\cdot]\\
+&= p(y_{0:s(t)-1})  p(y_{s(t):t}) \hat{\alpha}_t[\cdot] \\
+&= p(y_{0:t})\hat{\alpha}_t[\cdot],
+\end{aligned}
+$$
+
+where the last one holds for the independence of the sessions. Substituting $F_{0:t}[j, \cdot] \mathbf{1}=p(y_{0:t})$, and solving for $\hat{\alpha}_t$ proves the first claim.
+
+For the second claim, we can notice that within one session, by definition of $c_t$,
+
+$$
+\prod_{r=s(t)}^t c_r = p(y_s(t)) \prod_{r=s(t)+1}^t p(y_r \mid y_{s(t):r-1})= p(y_{s(t):t})
+$$
+
+Therefore, for independence across sessions, $\prod_{r\leq t} c_r = p(y_{0:t}) = F_{0:t}[j, \cdot] \mathbf{1}$.
 :::
