@@ -11,6 +11,7 @@ import jax
 import jax.numpy as jnp
 import pynapple as nap
 from numpy.typing import ArrayLike, NDArray
+from functools import partial
 
 from .. import observation_models as obs
 from .. import tree_utils
@@ -384,6 +385,7 @@ class GLMHMM(
         is_population_glm = (y.ndim > 2) if self._is_categorical_glm else (y.ndim > 1)
         cache_key = (
             is_population_glm,
+            self._is_categorical_glm,
             self._observation_model,
             self._inverse_link_function,
         )
@@ -629,9 +631,12 @@ class GLMHMM(
         ValueError
             If a callable is non-differentiable or returns an unsupported type.
         """
-        self._inverse_link_function = resolve_inverse_link_function(
+        inverse_link = resolve_inverse_link_function(
             inverse_link_function, self._observation_model
         )
+        if self._is_categorical_glm:
+            inverse_link = partial(inverse_link, axis=-2)
+        self._inverse_link_function = inverse_link
 
     def _check_model_is_fit(self):
         """Ensure the instance has been fitted."""

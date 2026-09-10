@@ -277,7 +277,7 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
         self.n_classes = n_classes
         super().__init__(
             n_states=n_states,
-            observation_model=CategoricalObservations(class_axis=-2),
+            observation_model=CategoricalObservations(),
             inverse_link_function=inverse_link_function,
             regularizer=regularizer,
             regularizer_strength=regularizer_strength,

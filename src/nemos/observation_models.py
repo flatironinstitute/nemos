@@ -1,7 +1,6 @@
 """Observation model classes for GLMs."""
 
 import abc
-from functools import partial
 from typing import Callable, Literal, Union
 
 import jax
@@ -11,7 +10,6 @@ from numpy.typing import NDArray
 from . import utils
 from .base_class import Base
 from .inverse_link_function_utils import (
-    _make_wrapper,
     exp,
     expit,
     identity,
@@ -1955,20 +1953,14 @@ class CategoricalObservations(Observations):
 
     glm_convexity_preserving_links = (log_softmax,)
 
-    def __init__(self, class_axis: int = -1):
+    def __init__(self):
         super().__init__()
         self.scale = 1.0
         self._separable_scale = True
-        self.class_axis = class_axis
 
     @property
     def default_inverse_link_function(self):
-        # return log_softmax
-        return _make_wrapper(
-            partial(jax.nn.log_softmax, axis=self.class_axis),
-            log_softmax.__name__,
-            log_softmax.__doc__,
-        )
+        return log_softmax
 
     def _negative_log_likelihood(
         self,
