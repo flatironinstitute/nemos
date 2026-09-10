@@ -327,8 +327,9 @@ def list_available_algorithms() -> list[str]:
     Example
     -------
     >>> import nemos as nmo
-    >>> nmo.solvers.list_available_algorithms()
-    ['GradientDescent', 'ProximalGradient', 'LBFGS', 'BFGS', 'NonlinearCG', 'SVRG', 'ProxSVRG', 'Newton']
+    >>> nmo.solvers.list_available_algorithms() # doctest: +NORMALIZE_WHITESPACE
+    ['GradientDescent', 'ProximalGradient', 'LBFGS', 'BFGS', 'NonlinearCG',
+     'SVRG', 'ProxSVRG', 'Newton', 'ProximalNewton']
     """
     return list(_registry.keys())
 

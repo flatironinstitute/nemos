@@ -13,14 +13,12 @@ import optax
 import pytest
 
 import nemos as nmo
-from conftest import all_subclasses, initialize_feature_mask_for_population_glm
-from nemos._hess import (
-    BlockDiagonal,
-    Full,
-    HessianTag,
-    PositiveDefinite,
-    PositiveSemiDefinite,
+from conftest import (
+    all_subclasses,
+    freeze_first_coef_leaf,
+    initialize_feature_mask_for_population_glm,
 )
+from nemos._hess import MatrixProperty, MatrixStructure
 from nemos._inspect_utils import is_abstract
 from nemos.base_regressor import BaseRegressor
 from nemos.glm import GLM, PopulationGLM
@@ -121,8 +119,7 @@ def _block_diagonal_models():
             for cls in all_subclasses(BaseRegressor)
             if cls.__module__.startswith("nemos")
             and not is_abstract(cls)
-            and getattr(cls, "_hess_tag", None) is not None
-            and cls._hess_tag.structure is BlockDiagonal
+            and cls._hess_structure is MatrixStructure.BLOCK_DIAGONAL
         ),
         key=lambda cls: cls.__name__,
     )
@@ -247,6 +244,19 @@ def test_newton_init_state_default(request, regr_setup, regularizer, solver_name
 
 
 @_SOLVERS
+def _init_params_for(glm_class):
+    """Well-shaped initial params for ``_instantiate_solver``.
+
+    Setting the solver up resolves the Hessian tag against the parameters being fitted, so
+    it reads the tree: which leaves exist, and which of them are active. A bare array has
+    neither.
+    """
+    if issubclass(glm_class, PopulationGLM):
+        return GLMParams(coef=jnp.zeros((2, 3)), intercept=jnp.zeros(3))
+    return GLMParams(coef=jnp.zeros(2), intercept=jnp.zeros(1))
+
+
+@_SOLVERS
 @pytest.mark.parametrize("regularizer_name", ["Ridge", "UnRegularized"])
 @pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
 def test_newton_glm_instantiate_solver(regularizer_name, glm_class, solver_name):
@@ -255,29 +265,12 @@ def test_newton_glm_instantiate_solver(regularizer_name, glm_class, solver_name)
         solver_name=solver_name,
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
     )
-    solver = glm._instantiate_solver(glm._compute_loss, np.zeros(1))
+    solver = glm._instantiate_solver(glm._compute_loss, _init_params_for(glm_class))
 
     assert glm.solver_name == solver_name
     # exact type, not ``isinstance``: ``ProximalNewton`` subclasses ``Newton``, so an
     # isinstance check cannot tell the two apart and would pass for the wrong solver
     assert type(solver) is _SOLVER_CLASSES[solver_name]
-
-
-def _freeze_first_coef_leaf(model, params):
-    """Build a ``_fix_params`` spec pinning the first ``coef`` leaf to its true value.
-
-    Freezing a coefficient leaf rather than the intercept is what exercises the
-    ``coef`` block of the Hessian: the intercept is a single row, so dropping it
-    leaves the interesting block untouched.
-    """
-    leaves, treedef = jax.tree_util.tree_flatten(params.coef)
-    # cast the pinned leaf: ``fit`` casts its inputs, so an un-cast spec would be
-    # compared against a fitted leaf of a different dtype
-    spec = jax.tree_util.tree_unflatten(
-        treedef, [jnp.asarray(leaves[0])] + [None] * (len(leaves) - 1)
-    )
-    model._fix_params = GLMParams(spec, None)
-    return spec
 
 
 @pytest.mark.requires_x64
@@ -313,7 +306,7 @@ def test_newton_matches_first_order_solver_with_frozen_params(
         if freeze == "intercept":
             m.fit_intercept = False
         else:
-            _freeze_first_coef_leaf(m, true_params)
+            freeze_first_coef_leaf(m, true_params)
         return m
 
     newton = build(solver_name).fit(X, y)
@@ -353,17 +346,8 @@ def test_newton_leaves_frozen_params_untouched(
             frozen_model.intercept_, np.zeros_like(true_params.intercept)
         )
     else:
-        pinned = _freeze_first_coef_leaf(frozen_model, true_params)
-        # the spec decides which leaves the solver skips, not what they are worth: a
-        # frozen leaf is held at whatever the initialization put there. The intercept
-        # is filled from the spec at init time, a coef leaf is not, so the pinned value
-        # is handed in through ``init_params`` for the fitted leaf to be comparable.
-        zeros = jax.tree_util.tree_map(jnp.zeros_like, true_params.coef)
-        init_params = (
-            eqx.combine(pinned, zeros),
-            jnp.zeros_like(true_params.intercept),
-        )
-        frozen_model.fit(X, y, init_params=init_params)
+        pinned = freeze_first_coef_leaf(frozen_model, true_params)
+        frozen_model.fit(X, y)
         fitted = jax.tree_util.tree_leaves(frozen_model.coef_)[0]
         np.testing.assert_array_equal(fitted, jax.tree_util.tree_leaves(pinned)[0])
 
@@ -416,7 +400,7 @@ def test_newton_population_glm_feature_mask_with_frozen_params(
         if freeze == "intercept":
             m.fit_intercept = False
         else:
-            _freeze_first_coef_leaf(m, true_params)
+            freeze_first_coef_leaf(m, true_params)
         return m
 
     newton = build(solver_name).fit(X, y)
@@ -438,7 +422,7 @@ def test_population_glm_hess_fn_drops_frozen_leaves(freeze, request):
     if freeze == "intercept":
         model.fit_intercept = False
     else:
-        _freeze_first_coef_leaf(model, true_params)
+        freeze_first_coef_leaf(model, true_params)
 
     params = model._model_specific_initialization(X, y)
     active, frozen = model._partition_active(params)
@@ -449,7 +433,7 @@ def test_population_glm_hess_fn_drops_frozen_leaves(freeze, request):
         assert hess.intercept is None
         assert all(row.intercept is None for row in hess.coef.values())
     else:
-        pinned = sorted(model._fix_params.coef)[0]
+        pinned = sorted(model.fix_params[0])[0]
         assert active.coef[pinned] is None
         assert hess.coef[pinned] is None
         # the frozen leaf is dropped as a column too, not just as a row
@@ -508,7 +492,7 @@ def test_newton_glm_passes_solver_kwargs(regularizer_name, glm_class, solver_nam
         solver_kwargs=solver_kwargs,
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
     )
-    solver = glm._instantiate_solver(glm._compute_loss, np.zeros(1))
+    solver = glm._instantiate_solver(glm._compute_loss, _init_params_for(glm_class))
 
     for k, v in solver_kwargs.items():
         assert getattr(solver, k) == v
@@ -594,10 +578,26 @@ def test_newton_population_glm_converges(
     assert bool(model.solver_state_.stats.converged), "Solver did not converge."
 
 
+def _full_autodiff_model(model):
+    """Copy ``model`` with the block Hessian replaced by one dense autodiff matrix.
+
+    Dropping ``_get_hess_fn`` sends ``Newton`` to ``jax.hessian`` of the penalized loss,
+    and the declaration has to follow it: what the copy assembles is a single full matrix,
+    not one block per neuron, so it neither has a block structure nor a batch axis to name.
+    """
+    full_model = deepcopy(model)
+    full_model._get_hess_fn = lambda frozen=None: None
+    full_model._hess_structure = MatrixStructure.FULL
+    full_model._hess_batch_axes = None
+    return full_model
+
+
 @pytest.mark.requires_x64
 @_SOLVERS
 @pytest.mark.parametrize("feature_mask", [True, False])
-def test_newton_population_glm_matches_full_autodiff(request, feature_mask, solver_name):
+def test_newton_population_glm_matches_full_autodiff(
+    request, feature_mask, solver_name
+):
     """A block-Hessian fit should match a full autodiff model that does not vmap over subproblems."""
     X, y, model, params, _ = request.getfixturevalue(
         "population_poissonGLM_model_instantiation"
@@ -610,9 +610,7 @@ def test_newton_population_glm_matches_full_autodiff(request, feature_mask, solv
             X, y.shape[1], coef=params.coef
         )
 
-    full_model = deepcopy(model)
-    full_model._get_hess_fn = lambda frozen=None: None
-    full_model._hess_tag = HessianTag(structure=Full, property=PositiveSemiDefinite)
+    full_model = _full_autodiff_model(model)
 
     full_model.fit(X, y)
     model.fit(X, y)
@@ -659,9 +657,7 @@ def test_newton_block_diagonal_matches_full_autodiff_update(
             X, y.shape[1], coef=params.coef
         )
 
-    full_model = deepcopy(model)
-    full_model._get_hess_fn = lambda frozen=None: None
-    full_model._hess_tag = HessianTag(structure=Full, property=PositiveSemiDefinite)
+    full_model = _full_autodiff_model(model)
 
     p0 = model.initialize_params(X, y)
     state0 = model.initialize_optimizer_and_state(p0, X, y)
@@ -714,9 +710,7 @@ def test_newton_population_glm_block_hessian_matches_full(
             X, y.shape[1], coef=params.coef
         )
 
-    full_model = deepcopy(model)
-    full_model._get_hess_fn = lambda frozen=None: None
-    full_model._hess_tag = HessianTag(structure=Full, property=PositiveSemiDefinite)
+    full_model = _full_autodiff_model(model)
 
     p0 = model.initialize_params(X, y)
     model.initialize_optimizer_and_state(p0, X, y)
@@ -840,9 +834,7 @@ def test_newton_population_classifier_glm_matches_full_autodiff(
             X, y.shape[1], coef=params.coef
         )
 
-    full_model = deepcopy(model)
-    full_model._get_hess_fn = lambda frozen=None: None
-    full_model._hess_tag = HessianTag(structure=Full, property=PositiveSemiDefinite)
+    full_model = _full_autodiff_model(model)
 
     full_model.fit(X, y)
     model.fit(X, y)
@@ -887,9 +879,7 @@ def test_newton_population_classifier_glm_block_hessian_matches_full(
             X, y.shape[1], coef=params.coef
         )
 
-    full_model = deepcopy(model)
-    full_model._get_hess_fn = lambda frozen=None: None
-    full_model._hess_tag = HessianTag(structure=Full, property=PositiveSemiDefinite)
+    full_model = _full_autodiff_model(model)
 
     p0 = model.initialize_params(X, y)
     model.initialize_optimizer_and_state(p0, X, y)
@@ -958,7 +948,7 @@ def test_newton_population_classifier_glm_block_hessian_matches_full(
 class _FullHessianGLM(GLM):
     """GLM supplying its own unpenalized Hessian while keeping the inherited ``Full`` tag.
 
-    Every in-tree model that overrides ``_get_hess_fn`` is tagged ``BlockDiagonal``
+    Every in-tree model that overrides ``_get_hess_fn`` is tagged ``BLOCK_DIAGONAL``
     (``PopulationGLM`` and its classifier subclass), so this is the only way to reach the
     unbatched branches: ``batch_axes=None`` in ``BaseRegressor._instantiate_solver`` and the
     early return it triggers in ``Regularizer._get_hess_fn``.
@@ -1138,62 +1128,235 @@ def test_solver_invalidated_after_solver_kwargs_change(
     assert model._solver is None, "_solver must be None after solver_kwargs change."
 
 
-def test_glm_hess_tag_structure():
-    """GLM Hessian should have Full structure."""
-    assert GLM._hess_tag.structure is Full
+def test_glm_hess_structure():
+    """A GLM assembles one dense Hessian, so it declares no block layout and no batch axis."""
+    assert GLM._hess_structure is MatrixStructure.FULL
+    assert GLM._hess_batch_axes is None
 
 
-def test_glm_hess_tag_property_unregularized():
-    """Unpenalized GLM Hessian is only positive semidefinite."""
-    assert GLM._hess_tag.property is PositiveSemiDefinite
+def test_population_glm_hess_structure():
+    """A PopulationGLM assembles one block per neuron.
 
-
-def test_population_glm_hess_tag_structure():
-    """PopulationGLM Hessian should have BlockDiagonal structure."""
-    assert PopulationGLM._hess_tag.structure is BlockDiagonal
-
-
-def test_population_glm_hess_tag_property():
-    """PopulationGLM certifies only PositiveSemiDefinite at the class level, like GLM
-    and ClassifierPopulationGLM: the unpenalized block is singular whenever a
-    coefficient carries no curvature (a masked-out feature). Ridge promotes it to
-    PositiveDefinite via ``_hess_property_override``, checked just below."""
-    assert PopulationGLM._hess_tag.property is PositiveSemiDefinite
-    assert PopulationGLM._hess_tag.property is GLM._hess_tag.property
-
-
-def test_population_glm_hess_tag_batch_axes():
-    """PopulationGLM _hess_tag should carry per-neuron batch_axes as a GLMParams."""
-    from nemos.glm.params import GLMParams
-
-    tag = PopulationGLM._hess_tag
-    assert tag.batch_axes is not None
-    assert isinstance(tag.batch_axes, GLMParams)
-
-
-@pytest.mark.parametrize("glm_class", [GLM, PopulationGLM])
-def test_hess_property_override(glm_class):
-    """Ridge-penalized GLM should override Hessian property to PositiveDefinite."""
-    model = glm_class(regularizer="Ridge", regularizer_strength=0.1)
-    assert model._hess_property_override() is PositiveDefinite
-
-
-@pytest.mark.parametrize("glm_class", [ClassifierGLM, ClassifierPopulationGLM])
-def test_hess_property_override_classification(glm_class):
-    """Ridge-penalized GLM should override Hessian property to PositiveDefinite."""
-    model = glm_class(regularizer="Ridge", regularizer_strength=0.1)
-    assert model._hess_property_override() is None
+    The batch is the neuron axis of each parameter: axis 1 of ``coef``, axis 0 of
+    ``intercept``.
+    """
+    assert PopulationGLM._hess_structure is MatrixStructure.BLOCK_DIAGONAL
+    assert PopulationGLM._hess_batch_axes == GLMParams(1, 0)
 
 
 @pytest.mark.parametrize(
-    "regularizer_name",
-    ["UnRegularized", "Lasso", "GroupLasso"],
+    "glm_class", [GLM, PopulationGLM, ClassifierGLM, ClassifierPopulationGLM]
 )
-def test_hess_property_override_non_ridge(regularizer_name):
-    """Non-Ridge GLMs should return None from _hess_property_override."""
-    strength = 0.1 if regularizer_name != "UnRegularized" else None
-    model = GLM(regularizer=regularizer_name, regularizer_strength=strength)
-    assert model._hess_property_override() is None
+def test_unpenalized_loss_is_only_semidefinite(glm_class):
+    """The loss alone is convex for a convexity-preserving link, and no more than that.
+
+    A coefficient block is ``X.T W X``, which any rank-deficient design makes singular.
+    """
+    assert glm_class()._resolve_hess_property() is MatrixProperty.POSITIVE_SEMI_DEFINITE
+
+
+# Whether a Ridge-penalized model resolves a definite Hessian. The penalty curves every
+# coefficient but skips the intercept, so the verdict comes down to what the loss certifies
+# there: a GLM's intercept block is ``1.T W 1``, positive for any design, while a softmax is
+# flat along a uniform shift of the intercept and so certifies nothing.
+_RIDGE_TAG_CASES = [
+    pytest.param(
+        "poissonGLM_model_instantiation", MatrixProperty.POSITIVE_DEFINITE, id="GLM"
+    ),
+    pytest.param(
+        "population_poissonGLM_model_instantiation",
+        MatrixProperty.POSITIVE_DEFINITE,
+        id="PopulationGLM",
+    ),
+    pytest.param(
+        "classifierGLM_model_instantiation",
+        MatrixProperty.POSITIVE_SEMI_DEFINITE,
+        id="ClassifierGLM",
+    ),
+    pytest.param(
+        "population_classifierGLM_model_instantiation",
+        MatrixProperty.POSITIVE_SEMI_DEFINITE,
+        id="ClassifierPopulationGLM",
+    ),
+]
+
+
+@pytest.mark.parametrize("fixture_name, expected_property", _RIDGE_TAG_CASES)
+def test_ridge_tag_is_definite_when_the_loss_certifies_the_intercept(
+    request, fixture_name, expected_property
+):
+    """Ridge is definite on the coefficients and flat on the intercept.
+
+    The sum is therefore definite exactly for the models whose loss certifies the
+    intercept.
+    """
+    _, _, model, params, *_ = request.getfixturevalue(fixture_name)
+    model.regularizer = "Ridge"
+    model.regularizer_strength = 0.1
+    model.solver_name = "Newton"
+
+    solver = model._instantiate_solver(model._compute_loss, params)
+    assert solver._hess_tag.property is expected_property
+
+
+@pytest.mark.parametrize("fixture_name, _", _RIDGE_TAG_CASES)
+def test_unregularized_tag_is_not_definite(request, fixture_name, _):
+    """With no penalty the tag is the loss's own.
+
+    The intercept alone is certified, which leaves the coefficients, and so the whole
+    matrix, uncertified.
+    """
+    _, _, model, params, *_ = request.getfixturevalue(fixture_name)
+    model.regularizer = "UnRegularized"
+    model.regularizer_strength = None
+    model.solver_name = "Newton"
+
+    solver = model._instantiate_solver(model._compute_loss, params)
+    assert solver._hess_tag.property is MatrixProperty.POSITIVE_SEMI_DEFINITE
+
+
+@pytest.mark.parametrize("regularizer_name", ["Lasso", "GroupLasso"])
+def test_non_smooth_penalties_resolve_no_tag(regularizer_name):
+    """A penalty with no second derivative describes no curvature, and says so with
+    ``None`` rather than with a tag claiming nothing: ``combine_hessian_tags`` propagates
+    it, so Newton claims nothing about the sum either.
+
+    These regularizers do not allow Newton, so the tag is read off the regularizer rather
+    than off an instantiated solver.
+    """
+    regularizer = getattr(nmo.regularizer, regularizer_name)()
+    params = _init_params_for(GLM)
+    assert regularizer._resolve_hess_tag(params, 0.1) is None
+
+
+def _installed_newton(model, X, y):
+    """Return the model's ``Newton``, after ``init_state`` picked the linear solver."""
+    model.initialize_optimizer_and_state(model.initialize_params(X, y), X, y)
+    return model._solver
+
+
+def _assert_linear_solver(solver, expected_cls):
+    """Assert the linear solver Newton picked, and the operator tags that go with it."""
+    assert isinstance(solver._linear_solver, expected_cls)
+    if expected_cls is lx.Cholesky:
+        assert (
+            solver._operator_tags == lx.positive_semidefinite_tag
+        ), f"Expected ``positive_semidefinite_tag`` for Cholesky solver. Got ``{solver._operator_tags}`` instead!"
+    else:
+        assert solver._operator_tags == ()
+        assert (
+            solver._linear_solver.well_posed is False
+        ), "Solver is well posed but shouldn't for the given tag."
+
+
+_LINEAR_SOLVER_CASES = [
+    pytest.param(fixture_name, regularizer_name, expected_cls, id=test_id)
+    for fixture_name, regularizer_name, expected_cls, test_id in [
+        ("poissonGLM_model_instantiation", "Ridge", lx.Cholesky, "GLM-Ridge"),
+        (
+            "population_poissonGLM_model_instantiation",
+            "Ridge",
+            lx.Cholesky,
+            "PopulationGLM-Ridge",
+        ),
+        (
+            "classifierGLM_model_instantiation",
+            "Ridge",
+            lx.AutoLinearSolver,
+            "ClassifierGLM-Ridge",
+        ),
+        (
+            "population_classifierGLM_model_instantiation",
+            "Ridge",
+            lx.AutoLinearSolver,
+            "ClassifierPopulationGLM-Ridge",
+        ),
+        (
+            "poissonGLM_model_instantiation",
+            "UnRegularized",
+            lx.AutoLinearSolver,
+            "GLM-UnRegularized",
+        ),
+        (
+            "population_poissonGLM_model_instantiation",
+            "UnRegularized",
+            lx.AutoLinearSolver,
+            "PopulationGLM-UnRegularized",
+        ),
+        (
+            "classifierGLM_model_instantiation",
+            "UnRegularized",
+            lx.AutoLinearSolver,
+            "ClassifierGLM-UnRegularized",
+        ),
+        (
+            "population_classifierGLM_model_instantiation",
+            "UnRegularized",
+            lx.AutoLinearSolver,
+            "ClassifierPopulationGLM-UnRegularized",
+        ),
+    ]
+]
+
+
+@pytest.mark.parametrize(
+    "fixture_name, regularizer_name, expected_cls", _LINEAR_SOLVER_CASES
+)
+def test_linear_solver_follows_the_resolved_tag(
+    request, fixture_name, regularizer_name, expected_cls
+):
+    """A definite tag selects ``lx.Cholesky``, a weaker one ``lx.AutoLinearSolver``."""
+    X, y, model, *_ = request.getfixturevalue(fixture_name)
+    model.regularizer = regularizer_name
+    model.regularizer_strength = None if regularizer_name == "UnRegularized" else 0.1
+    model.solver_name = "Newton"
+
+    _assert_linear_solver(_installed_newton(model, X, y), expected_cls)
+
+
+@pytest.mark.parametrize(
+    "fixture_name, regularizer_name, expected_cls", _LINEAR_SOLVER_CASES
+)
+def test_fit_resolves_the_same_linear_solver(
+    request, fixture_name, regularizer_name, expected_cls
+):
+    """``fit`` reaches the same linear solver as ``initialize_optimizer_and_state``.
+
+    The two differ only by ``_optimize_solver_params``, which sets solver kwargs and leaves
+    the tag alone.
+    """
+    X, y, model, *_ = request.getfixturevalue(fixture_name)
+    model.regularizer = regularizer_name
+    model.regularizer_strength = None if regularizer_name == "UnRegularized" else 0.1
+    model.solver_name = "Newton"
+
+    model.fit(X, y)
+
+    _assert_linear_solver(model._solver, expected_cls)
+
+
+@pytest.mark.requires_x64
+def test_newton_without_hessian_tag_uses_auto_linear_solver(linear_regression):
+    """With no tag set, ``init_state`` falls back to one that claims nothing."""
+    X, y, _, params, loss = linear_regression
+
+    param_init = jax.tree_util.tree_map(np.zeros_like, params)
+    newton = Newton(
+        loss,
+        regularizer=UnRegularized(),
+        regularizer_strength=0.0,
+        has_aux=False,
+        init_params=param_init,
+    )
+    assert newton._hess_tag is None
+
+    newton.init_state(param_init, X, y)
+
+    assert newton._hess_tag.property is MatrixProperty.SYMMETRIC
+    assert newton._hess_tag.structure is MatrixStructure.FULL
+    assert not any(jax.tree_util.tree_leaves(newton._hess_tag.flat_on))
+    assert not any(jax.tree_util.tree_leaves(newton._hess_tag.definite_on))
+    _assert_linear_solver(newton, lx.AutoLinearSolver)
 
 
 @pytest.mark.parametrize(
@@ -1464,7 +1627,9 @@ def test_prox_newton_singular_hessian_converges(request):
     hess = (2.0 / n) * X.T @ X
     eigvals = np.linalg.eigvalsh(hess)
     assert eigvals.min() > -1e-10, "Hessian must be positive semidefinite"
-    assert eigvals.min() < 1e-10, "Hessian must be singular for this test to mean anything"
+    assert (
+        eigvals.min() < 1e-10
+    ), "Hessian must be singular for this test to mean anything"
 
     # grad f orthogonal to ker H: the condition that bounds the subproblem below
     grad = -(2.0 / n) * X.T @ (y - X @ np.asarray(params))
@@ -1488,7 +1653,10 @@ def test_prox_newton_prox_applies_across_a_pytree():
     """
     np.random.seed(0)
     n = 200
-    X = {"input_1": np.random.normal(size=(n, 2)), "input_2": np.random.normal(size=(n, 3))}
+    X = {
+        "input_1": np.random.normal(size=(n, 2)),
+        "input_2": np.random.normal(size=(n, 3)),
+    }
     y = np.random.normal(size=n)
 
     def loss(params, X, y):
@@ -1498,7 +1666,8 @@ def test_prox_newton_prox_applies_across_a_pytree():
     zeros = {k: jnp.zeros(v.shape[1]) for k, v in X.items()}
     grad_at_zero = jax.grad(loss)(zeros, X, y)
     strength = 2.0 * max(
-        float(jnp.max(jnp.abs(leaf))) for leaf in jax.tree_util.tree_leaves(grad_at_zero)
+        float(jnp.max(jnp.abs(leaf)))
+        for leaf in jax.tree_util.tree_leaves(grad_at_zero)
     )
     # start away from the optimum: initializing at zero would let a solver that never
     # moved pass this test
@@ -1510,7 +1679,9 @@ def test_prox_newton_prox_applies_across_a_pytree():
     assert jax.tree_util.tree_structure(params) == jax.tree_util.tree_structure(init)
     assert bool(state.stats.converged)
     for key in X:
-        np.testing.assert_array_equal(np.asarray(params[key]), np.zeros(X[key].shape[1]))
+        np.testing.assert_array_equal(
+            np.asarray(params[key]), np.zeros(X[key].shape[1])
+        )
 
 
 @pytest.mark.requires_x64

@@ -22,11 +22,17 @@ from sklearn.linear_model import (
 from sklearn.model_selection import GridSearchCV
 
 import nemos as nmo
-from conftest import initialize_feature_mask_for_population_glm
+from conftest import (
+    OBSERVATION_PER_MODEL,
+    freeze_first_coef_leaf,
+    initialize_feature_mask_for_population_glm,
+)
+from nemos._hess import MatrixProperty
 from nemos._observation_model_builder import instantiate_observation_model
 from nemos._regularizer_builder import instantiate_regularizer
 from nemos.glm.params import GLMParams
-from nemos.inverse_link_function_utils import identity, log_softmax
+from nemos.inverse_link_function_utils import exp, identity, log_softmax
+from nemos.solvers._no_op import NoOpSolver
 from nemos.tree_utils import (
     pytree_map_and_reduce,
     tree_l2_norm,
@@ -1108,7 +1114,7 @@ class TestGLM:
         ],
     )
     @pytest.mark.parametrize(
-        "model_class, fit_state_attrs",
+        "model_class, fit_state_attrs, fix_params",
         [
             (
                 nmo.glm.GLM,
@@ -1121,6 +1127,9 @@ class TestGLM:
                     "dof_resid_": 3,
                     "aux_": None,
                 },
+                # coef pinned, intercept left learnable: a spec with both an array and a
+                # ``None`` leaf, the latter being the fragile half of the round-trip
+                (jnp.ones((3,)), None),
             ),
             (
                 nmo.glm.PopulationGLM,
@@ -1131,6 +1140,7 @@ class TestGLM:
                     "dof_resid_": 3,
                     "aux_": None,
                 },
+                (jnp.ones((3, 1)), None),
             ),
             (
                 nmo.glm.ClassifierGLM,
@@ -1142,6 +1152,7 @@ class TestGLM:
                     "aux_": None,
                     "classes_": np.array([2, 3]),
                 },
+                (jnp.ones((3, 2)), None),
             ),
             (
                 nmo.glm.ClassifierPopulationGLM,
@@ -1153,6 +1164,7 @@ class TestGLM:
                     "aux_": None,
                     "classes_": np.array([2, 3]),
                 },
+                (jnp.ones((3, 1, 2)), None),
             ),
         ],
     )
@@ -1161,6 +1173,7 @@ class TestGLM:
         regularizer,
         obs_model,
         solver_name,
+        fix_params,
         tmp_path,
         glm_class_type,
         fit_state_attrs,
@@ -1186,6 +1199,7 @@ class TestGLM:
             regularizer=regularizer,
             regularizer_strength=2.0,
             solver_kwargs={"tol": 10**-6},
+            fix_params=fix_params,
         )
         clean_kwargs = dict(
             (k, p) for k, p in kwargs.items() if k in model_class._get_param_names()
@@ -1231,6 +1245,20 @@ class TestGLM:
                 assert np.allclose(
                     np.array(init_val), np.array(load_val)
                 ), f"{key} array mismatch"
+            elif isinstance(init_val, tuple):
+                # e.g. ``fix_params``: compare leafwise, keeping ``None`` a leaf so a
+                # dropped one cannot pass as an empty pytree node
+                is_none = lambda leaf: leaf is None
+                init_leaves = jax.tree_util.tree_leaves(init_val, is_leaf=is_none)
+                load_leaves = jax.tree_util.tree_leaves(load_val, is_leaf=is_none)
+                assert len(init_leaves) == len(
+                    load_leaves
+                ), f"{key} structure mismatch: {init_val} != {load_val}"
+                for init_leaf, load_leaf in zip(init_leaves, load_leaves):
+                    if init_leaf is None:
+                        assert load_leaf is None, f"{key} lost a None leaf"
+                    else:
+                        np.testing.assert_allclose(load_leaf, init_leaf)
             elif isinstance(init_val, Callable):
                 assert _get_name(init_val) == _get_name(
                     load_val
@@ -1836,6 +1864,195 @@ class TestPartitionActive:
         assert jax.tree_util.tree_leaves(frozen) == []
         assert frozen.coef is None
         assert frozen.intercept is None
+
+
+class TestHessianTag:
+    """The tag the GLM resolves: its sign from the inverse link, its claims from the
+    parameters left active."""
+
+    # One model per observation model, with every link that observation model declares
+    # convexity preserving, plus ``None`` for the default it picks itself.
+    _DECLARED_LINKS = [
+        pytest.param(
+            {
+                "model": model_name,
+                "obs_model": observation_model,
+                "simulate": False,
+                "init_kwargs": {"inverse_link_function": link},
+            },
+            id=f"{observation_model}-{'default' if link is None else link.__name__}",
+        )
+        for model_name in ("GLM", "ClassifierGLM")
+        for observation_model in OBSERVATION_PER_MODEL[model_name]
+        for link in (
+            None,
+            *instantiate_observation_model(
+                observation_model
+            ).glm_convexity_preserving_links,
+        )
+    ]
+
+    _UNDECLARED_LINK = [
+        pytest.param(
+            {
+                "model": model_name,
+                "obs_model": observation_model,
+                "simulate": False,
+                "init_kwargs": {"inverse_link_function": jnp.square},
+            },
+            id=observation_model,
+        )
+        for model_name in ("GLM", "ClassifierGLM")
+        for observation_model in OBSERVATION_PER_MODEL[model_name]
+    ]
+
+    _CASES = [
+        ("none", "UnRegularized", MatrixProperty.POSITIVE_SEMI_DEFINITE),
+        ("none", "Ridge", MatrixProperty.POSITIVE_DEFINITE),
+        ("coef", "UnRegularized", MatrixProperty.POSITIVE_DEFINITE),
+        ("coef", "Ridge", MatrixProperty.POSITIVE_DEFINITE),
+        ("intercept", "UnRegularized", MatrixProperty.POSITIVE_SEMI_DEFINITE),
+        ("intercept", "Ridge", MatrixProperty.POSITIVE_DEFINITE),
+    ]
+
+    def _configure(
+        self, model, true_params, freeze, regularizer_name, link, strength=0.1
+    ):
+        """Pin the leaves named by ``freeze`` at their true values, and set up Newton."""
+        model.inverse_link_function = link
+        model.regularizer = regularizer_name
+        model.regularizer_strength = (
+            None if regularizer_name == "UnRegularized" else strength
+        )
+        model.solver_name = "Newton"
+        if freeze == "coef_leaf":
+            freeze_first_coef_leaf(model, true_params)
+        elif freeze != "none":
+            model.fix_params = (
+                true_params.coef if freeze in ("coef", "both") else None,
+                true_params.intercept if freeze in ("intercept", "both") else None,
+            )
+
+    @pytest.mark.parametrize(
+        "instantiate_base_regressor_subclass", _DECLARED_LINKS, indirect=True
+    )
+    def test_declared_link_keeps_the_loss_semidefinite(
+        self, instantiate_base_regressor_subclass
+    ):
+        """Every link an observation model declares leaves the loss semidefinite.
+
+        ``link=None`` is the marker for the observation model's own default, so a default
+        swapped for something outside the declared list shows up here rather than as a
+        Cholesky solve quietly turning into a least-squares one.
+        """
+        model = instantiate_base_regressor_subclass.model
+        assert model._resolve_hess_property() is MatrixProperty.POSITIVE_SEMI_DEFINITE
+
+    @pytest.mark.parametrize(
+        "instantiate_base_regressor_subclass", _UNDECLARED_LINK, indirect=True
+    )
+    def test_undeclared_link_leaves_the_loss_unsigned(
+        self, instantiate_base_regressor_subclass
+    ):
+        """A link the observation model does not declare carries no sign at all."""
+        model = instantiate_base_regressor_subclass.model
+        assert model._resolve_hess_property() is MatrixProperty.SYMMETRIC
+
+    @pytest.mark.parametrize(
+        "link, convexity_preserving", [(exp, True), (identity, False)]
+    )
+    @pytest.mark.parametrize("freeze, regularizer_name, signed_property", _CASES)
+    def test_property_under_freezing(
+        self,
+        freeze,
+        regularizer_name,
+        signed_property,
+        link,
+        convexity_preserving,
+        poissonGLM_model_instantiation,
+    ):
+        """The tag is definite when the loss and the penalty claim every active leaf.
+
+        The loss claims the intercept, the penalty the coefficients, and a pinned leaf takes
+        its claim with it. A link the observation model does not list leaves the loss
+        unsigned, which discards the penalty's claims too, so those cells claim nothing.
+        """
+        X, y, model, true_params, _ = poissonGLM_model_instantiation
+        self._configure(model, true_params, freeze, regularizer_name, link)
+
+        model.initialize_optimizer_and_state(model.initialize_params(X, y), X, y)
+
+        expected = signed_property if convexity_preserving else MatrixProperty.SYMMETRIC
+        assert model._solver._hess_tag.property is expected
+
+    @pytest.mark.parametrize(
+        "link, convexity_preserving", [(exp, True), (identity, False)]
+    )
+    @pytest.mark.parametrize(
+        "regularizer_name, signed_property",
+        [
+            ("UnRegularized", MatrixProperty.POSITIVE_SEMI_DEFINITE),
+            ("Ridge", MatrixProperty.POSITIVE_DEFINITE),
+        ],
+    )
+    def test_property_with_one_coef_leaf_pinned(
+        self,
+        regularizer_name,
+        signed_property,
+        link,
+        convexity_preserving,
+        poissonGLM_model_instantiation_pytree,
+    ):
+        """Pinning one ``coef`` leaf drops that leaf's claim and no other.
+
+        The leaves still being fitted need a claimant of their own, so the property is the
+        one of the nothing-pinned case rather than of the whole-``coef`` one: only a
+        ``coef`` with every leaf pinned leaves the intercept alone to cover the tree.
+        """
+        X, y, model, true_params, _ = poissonGLM_model_instantiation_pytree
+        self._configure(model, true_params, "coef_leaf", regularizer_name, link)
+
+        model.initialize_optimizer_and_state(model.initialize_params(X, y), X, y)
+
+        expected = signed_property if convexity_preserving else MatrixProperty.SYMMETRIC
+        assert model._solver._hess_tag.property is expected
+
+    def test_tag_follows_a_regularizer_change(self, poissonGLM_model_instantiation):
+        """Changing the regularizer drops the solver, so the next tag is the new one's."""
+        X, y, model, true_params, _ = poissonGLM_model_instantiation
+        self._configure(model, true_params, "none", "Ridge", exp)
+        params = model.initialize_params(X, y)
+
+        model.initialize_optimizer_and_state(params, X, y)
+        assert model._solver._hess_tag.property is MatrixProperty.POSITIVE_DEFINITE
+
+        model.regularizer = "UnRegularized"
+        model.regularizer_strength = None
+        model.initialize_optimizer_and_state(params, X, y)
+        assert model._solver._hess_tag.property is MatrixProperty.POSITIVE_SEMI_DEFINITE
+
+    def test_zero_strength_claims_nothing(self, poissonGLM_model_instantiation):
+        """A Ridge strength of zero curves no leaf, leaving the same tag as no penalty."""
+        X, y, model, true_params, _ = poissonGLM_model_instantiation
+        self._configure(model, true_params, "none", "Ridge", exp, strength=0.0)
+
+        model.initialize_optimizer_and_state(model.initialize_params(X, y), X, y)
+
+        assert model._solver._hess_tag.property is MatrixProperty.POSITIVE_SEMI_DEFINITE
+
+    @pytest.mark.parametrize("regularizer_name", ["UnRegularized", "Ridge"])
+    def test_no_tag_when_every_parameter_is_pinned(
+        self, regularizer_name, poissonGLM_model_instantiation
+    ):
+        """With nothing left to optimize the model installs ``NoOpSolver``, which has no tag."""
+        X, y, model, true_params, _ = poissonGLM_model_instantiation
+        self._configure(model, true_params, "both", regularizer_name, exp)
+
+        with pytest.warns(UserWarning, match="Every parameter is fixed"):
+            model.initialize_optimizer_and_state(model.initialize_params(X, y), X, y)
+
+        assert isinstance(model._solver, NoOpSolver)
+        assert not hasattr(model._solver, "_hess_tag")
 
 
 @pytest.mark.parametrize(
@@ -3451,16 +3668,33 @@ def test_estimate_dof_resid_feature_mask(
         (nmo.regularizer.Ridge(), _DOF_MASK_COUNT),
     ],
 )
-@pytest.mark.parametrize("fit_intercept", [True, False])
+@pytest.mark.parametrize(
+    "fit_intercept, init_intercept, warn_match",
+    [
+        (True, "pinned_value", None),
+        # a frozen intercept handed the value it is pinned at discards nothing
+        (False, "pinned_value", None),
+        # handed anything else, the value is dropped and the user is told
+        (False, "other_value", "the provided intercept is ignored"),
+    ],
+)
 @pytest.mark.requires_x64
 def test_dof_resid_after_fit_feature_mask(
-    reg, dof_per_neuron, fit_intercept, request, patch_optimizer_run
+    reg,
+    dof_per_neuron,
+    fit_intercept,
+    init_intercept,
+    warn_match,
+    request,
+    patch_optimizer_run,
+    recwarn,
 ):
     """fit stores the per-neuron DOF of the masked model.
 
     The solver is a no-op returning ``init_params``, so the fitted coefficients are the
     injected ones and the DOF is fully determined. With ``fit_intercept=False`` the
-    intercept is frozen out of the partition and costs no DOF.
+    intercept is frozen out of the partition and costs no DOF, whatever intercept the
+    caller passed in.
     """
     _, _, model, _, _ = request.getfixturevalue(
         "population_poissonGLM_model_instantiation"
@@ -3476,18 +3710,18 @@ def test_dof_resid_after_fit_feature_mask(
 
     X = _set_masked_state(model, False, as_pytree=False)
     # hand the sparse state to fit as the starting point, leaving the model unfitted
-    init_params = (model.coef_, model.intercept_)
+    offset = 1.0 if init_intercept == "other_value" else 0.0
+    intercept = model.intercept_ + offset
+    init_params = (model.coef_, intercept)
     model.coef_, model.intercept_ = None, None
     y = np.ones((X.shape[0], _DOF_N_NEURONS))
 
-    # the injected init_params carry an intercept, which a frozen intercept discards
-    warns_ignored_intercept = (
-        does_not_raise()
-        if fit_intercept
-        else pytest.warns(UserWarning, match="the provided intercept is ignored")
-    )
-    with warns_ignored_intercept:
+    if warn_match is None:
         model.fit(X, y, init_params=init_params)
+        assert not [w for w in recwarn if issubclass(w.category, UserWarning)]
+    else:
+        with pytest.warns(UserWarning, match=warn_match):
+            model.fit(X, y, init_params=init_params)
 
     intercept_dof = 1 if fit_intercept else 0
     np.testing.assert_allclose(

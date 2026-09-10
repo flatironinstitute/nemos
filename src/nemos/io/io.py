@@ -77,6 +77,7 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     >>> for key, value in model.get_params().items():
     ...     print(f"{key}: {value}")
     fit_intercept: True
+    fix_params: (None, None)
     inverse_link_function: <function one_over_x at ...>
     observation_model: GammaObservations()
     regularizer: Ridge()
@@ -91,6 +92,7 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     >>> for key, value in model.get_params().items():  # doctest: +ELLIPSIS
     ...     print(f"{key}: {value}")
     fit_intercept: True
+    fix_params: (None, None)
     inverse_link_function: <function one_over_x at ...>
     observation_model: GammaObservations()
     regularizer: Ridge()
@@ -110,6 +112,7 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     >>> for key, value in loaded_model.get_params().items():
     ...     print(f"{key}: {value}")
     fit_intercept: True
+    fix_params: (None, None)
     inverse_link_function: <function <lambda> at ...>
     observation_model: PoissonObservations()
     regularizer: UnRegularized()

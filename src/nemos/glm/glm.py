@@ -10,24 +10,22 @@ from typing import Any, Callable, Literal, Optional, Tuple, Union
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, NDArray
 from sklearn.utils import InputTags, TargetTags
 
 from .. import observation_models as obs
 from .. import tree_utils, validation
-from .._hess import (
-    BlockDiagonal,
-    Full,
-    HessianTag,
-    PositiveDefinite,
-    PositiveSemiDefinite,
-)
+from .._hess import LeafClaim, MatrixProperty, MatrixStructure
 from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor, strip_metadata
 from ..batching import DataLoader, _PreprocessedDataLoader, is_data_loader
 from ..callbacks import Callback, TrainingContext, _normalize_callbacks
 from ..exceptions import NotFittedError
-from ..inverse_link_function_utils import resolve_inverse_link_function, softplus
+from ..inverse_link_function_utils import (
+    LINK_NAME_TO_FUNC,
+    resolve_inverse_link_function,
+    softplus,
+)
 from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers import WrappedProxSVRG, WrappedSVRG, list_stochastic_solvers
@@ -71,6 +69,22 @@ def _broadcast_mask_to(mask: jnp.ndarray, coef: jnp.ndarray) -> jnp.ndarray:
     a classifier). A no-op when the two already share a shape.
     """
     return mask.reshape(mask.shape + (1,) * (coef.ndim - mask.ndim))
+
+
+def _active_columns(x_leaves: list, active_coef: Any) -> jnp.ndarray:
+    """Flag the design columns whose coefficient the solver estimates.
+
+    A coefficient frozen through ``fix_params`` is ``None`` in the active tree, so its
+    columns cost no degrees of freedom. The flags follow the column order of the design,
+    which is the leaf order of ``X``.
+    """
+    active_leaves = jax.tree_util.tree_leaves(active_coef, is_leaf=lambda x: x is None)
+    return jnp.concatenate(
+        [
+            jnp.full((x.shape[1],), coef is not None)
+            for x, coef in zip(x_leaves, active_leaves)
+        ]
+    )
 
 
 def _glm_hessian_block(
@@ -217,6 +231,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         parameter structure to regularize parameters differentially.
     fit_intercept :
         When True (default), an intercept term is fit. When False, only the coefficients are fit.
+        An intercept pinned through ``fix_params`` takes precedence over this flag.
+    fix_params :
+        Parameters to hold fixed during fitting, as a ``(coef, intercept)`` tuple with
+        ``coef`` of shape ``(n_features,)`` and ``intercept`` of shape ``(1,)``. An array
+        pins that parameter at the value provided, ``None`` leaves it to be learned. When
+        ``X`` is a pytree, ``coef`` mirrors its structure, its leaves have shape
+        ``(n_features_in_leaf,)``, and each leaf is pinned or learned on its own.
+        Defaults to ``None``, which learns every parameter.
     solver_name :
         Solver to use for model optimization. Defines the optimization scheme and related parameters.
         The solver must be an appropriate match for the chosen regularizer.
@@ -305,6 +327,18 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
     >>> model.regularizer
     Lasso()
 
+    **Fix some parameters**
+
+    Pin the first feature block's coefficients to ``[1, 1]`` and learn the rest.
+    The ``fix_params`` spec mirrors the ``(coef, intercept)`` structure, with
+    ``None`` marking the parameters to learn:
+
+    >>> fix_params = ([jnp.ones((2,)), None], None)
+    >>> model = nmo.glm.GLM(fix_params=fix_params)
+    >>> model = model.fit([X[:, :2], X[:, 2:]], y)
+    >>> model.coef_[0]
+    Array([1., 1.], dtype=...)
+
     **Select a Solver**
 
     Use LBFGS solver for potentially faster convergence:
@@ -327,10 +361,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
     _invalid_observation_types = (obs.CategoricalObservations,)
     _validator_class = GLMValidator
-    # The unregularized GLM loss Hessian (Fisher information) is positive
-    # semidefinite; a strictly positive-definite regularizer (e.g. Ridge) promotes
-    # it to positive definite via ``combine_hessian_tags``.
-    _hess_tag: HessianTag = HessianTag(structure=Full, property=PositiveSemiDefinite)
+
     # default until the instance sets it; read during ``__init__`` before assignment
     # (e.g. when solver-kwargs validation resolves the default solver).
     _fit_intercept: bool = True
@@ -348,14 +379,73 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             return "Newton"
         return super()._resolve_default_solver()
 
-    def _hess_property_override(self) -> type | None:
-        # The GLM loss is positive definite on the intercept (its all-ones column is
-        # independent of X), the one subtree Ridge leaves unpenalized. So a Ridge-
-        # penalized GLM Hessian is positive definite even though coverage inference,
-        # seeing only the regularizer, certifies no more than General.
-        if isinstance(self.regularizer, Ridge):
-            return PositiveDefinite
-        return None
+    def _resolve_hess_property(self) -> MatrixProperty:
+        """Resolve the hessian property.
+
+        Return the property of the GLM loss function for an unpenalized model.
+        The penalization contribution is resolved by combining the hessian tag
+        of the model with that of the regularizer.
+
+        Notes
+        -----
+        Unknown links can easily break convexity: always tag as MatrixProperty.SYMMETRIC if the link is unknown.
+
+        """
+        conv_preserving_inv_links = (
+            self._observation_model.glm_convexity_preserving_links
+        )
+        link = self._inverse_link_function
+
+        if hasattr(link, "__module__") and hasattr(link, "__name__"):
+            qual_name = f"{link.__module__}.{link.__name__}"
+        else:
+            qual_name = None
+
+        convexity_preserving = (
+            link in conv_preserving_inv_links
+            or LINK_NAME_TO_FUNC.get(qual_name) in conv_preserving_inv_links
+        )
+
+        return (
+            MatrixProperty.POSITIVE_SEMI_DEFINITE
+            if convexity_preserving
+            else MatrixProperty.SYMMETRIC
+        )
+
+    def _hess_leaf_claims(
+        self, params: GLMParams[jnp.ndarray], active_spec: GLMParams[bool]
+    ) -> GLMParams[LeafClaim]:
+        """Certify the intercept, whenever it is being fitted.
+
+        The intercept's own block of the loss Hessian is ``1.T W 1``, the per-sample
+        curvatures added up. They are non-negative for a link that keeps the likelihood
+        convex, and their sum is positive, so that block is definite for any design matrix.
+        No other block can be certified: each one is ``X.T W X`` on some columns of ``X``,
+        and whether that is definite is a question about the rank of the design.
+
+        The link is not checked here. One that breaks convexity leaves the whole tag
+        unsigned, and ``normalize`` drops the definite claim of an unsigned tag, so a single
+        rule covers every model rather than each model repeating the check.
+
+        Parameters
+        ----------
+        params :
+            The parameters being fitted.
+        active_spec :
+            The filter spec ``params`` was partitioned with.
+
+        Returns
+        -------
+        :
+            A tree shaped like ``params`` with ``LeafClaim.DEFINITE`` on the
+            intercept and ``LeafClaim.UNCLAIMED`` on the coefficients. An intercept that is
+            not being fitted is absent from ``params``, and so is its claim: there is no
+            block of the Hessian to describe.
+        """
+        claims = super()._hess_leaf_claims(params, active_spec)
+        if not active_spec.intercept:
+            return claims
+        return eqx.tree_at(lambda p: p.intercept, claims, LeafClaim.DEFINITE)
 
     def __init__(
         self,
@@ -367,6 +457,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Any = None,
         fit_intercept: bool = True,
+        fix_params: Optional[GLMUserParams[jnp.ndarray | NDArray | None]] = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
     ):
@@ -379,10 +470,11 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         self.observation_model = observation_model
         self.inverse_link_function = inverse_link_function
 
-        self._validator = self._validator_class(
+        self._validator: GLMValidator = self._validator_class(
             extra_params=self._get_validator_extra_params()
         )
         self.fit_intercept = fit_intercept
+        self.fix_params = fix_params
 
         # initialize to None fit output
         self.intercept_ = None
@@ -392,6 +484,20 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         self.dof_resid_ = None
         self.aux_ = None
         self._solver = None
+
+    @property
+    def fix_params(self) -> GLMUserParams[jnp.ndarray | NDArray | None]:
+        """Parameters held fixed during fitting, as a ``(coef, intercept)`` tuple."""
+        return self._validator.from_model_params(self._fix_params)
+
+    @fix_params.setter
+    def fix_params(self, value: GLMUserParams[jnp.ndarray | NDArray | None] | None):
+        """Setter for ``fix_params`` property.
+
+        Validates the specification (delegated to the validator) and sets it.
+        """
+        self._fix_params = self._validator.validate_param_specs(value)
+        self._invalidate_solver()
 
     @property
     def fit_intercept(self) -> bool:
@@ -568,7 +674,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             )
 
     def _predict(
-        self, params: GLMParams, X: Union[dict[str, jnp.ndarray], jnp.ndarray]
+        self,
+        params: GLMParams[jnp.ndarray],
+        X: Union[dict[str, jnp.ndarray], jnp.ndarray],
     ) -> jnp.ndarray:
         """
         Predicts firing rates based on given parameters and design matrix.
@@ -674,7 +782,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
     def _compute_loss(
         self,
-        params: GLMParams,
+        params: GLMParams[jnp.ndarray],
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         *args,
@@ -849,7 +957,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         **kwargs,
-    ) -> GLMParams:
+    ) -> GLMParams[jnp.ndarray]:
         """Initialize the parameters based on the structure and dimensions X and y.
 
         This method initializes the coefficients (spike basis coefficients) and intercepts (bias terms)
@@ -889,21 +997,38 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         else:
             data = X
 
+        frozen = self._frozen_values(X, y)
+        frozen_coef = frozen.coef
+        frozen_intercept = frozen.intercept
+
         empty_params = self._validator.get_empty_params(data, y)
-        if self._fit_intercept:
+        # Resolution order: if fix params provides an intercept use it as fix, otherwise follow flag.
+        fit_intercept = False if frozen_intercept is not None else self.fit_intercept
+
+        if fit_intercept:
             initial_intercept = initialize_intercept_matching_mean_rate(
-                self._inverse_link_function, y
+                self._inverse_link_function,
+                data,
+                y,
+                frozen_coef=frozen_coef,
             )
             initial_coef = jax.tree_util.tree_map(
                 lambda x: jnp.zeros(x.shape), empty_params.coef
             )
+            initial_coef = eqx.combine(frozen_coef, initial_coef)
         else:
-            initial_intercept = jnp.zeros_like(empty_params.intercept)
+            initial_intercept = (
+                frozen_intercept
+                if frozen_intercept is not None
+                else jnp.zeros_like(empty_params.intercept)
+            )
             initial_coef = initialize_constant_coef_matching_mean_rate(
                 self._inverse_link_function,
                 data,
                 y,
                 empty_params.coef,
+                frozen_coef=frozen_coef,
+                frozen_intercept=frozen_intercept,
             )
 
         init_params = eqx.tree_at(
@@ -918,8 +1043,11 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         return init_params
 
     def _normalize_user_params(
-        self, init_params: GLMUserParams, X: DESIGN_INPUT_TYPE, y: jnp.ndarray
-    ) -> GLMUserParams:
+        self,
+        init_params: GLMUserParams[jnp.ndarray | None],
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+    ) -> GLMUserParams[jnp.ndarray]:
         """Fill the intercept when it is held fixed (``fit_intercept=False``).
 
         When the intercept is not estimated the user may omit it (pass ``None`` as the
@@ -931,7 +1059,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         """
         if not self._fit_intercept:
             self._validator.check_user_params_structure(init_params)
-            if init_params[-1] is not None:
+            warn = init_params[-1] is not None and not jnp.array_equal(
+                self._frozen_values(X, y).intercept, init_params[-1]
+            )
+            if warn:
                 warnings.warn(
                     "`fit_intercept=False`: the provided intercept is ignored and the "
                     "intercept is held at zero. Set `fit_intercept=True` to estimate it.",
@@ -947,7 +1078,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
-        init_params: Optional[GLMUserParams] = None,
+        init_params: Optional[GLMUserParams[jnp.ndarray | NDArray]] = None,
     ):
         """Fit GLM to neural activity.
 
@@ -1075,7 +1206,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         self,
         data: DataLoader,
         *,
-        init_params: Optional[GLMUserParams] = None,
+        init_params: Optional[GLMUserParams[jnp.ndarray | NDArray]] = None,
         n_passes: int = 1,
         callbacks: "Callback | list[Callback] | None" = None,
     ):
@@ -1308,7 +1439,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             ),
         )
 
-    def _get_model_params(self):
+    def _get_model_params(self) -> GLMParams[jnp.ndarray]:
         """Pack coef_ and intercept_  into a params pytree.
 
         This method should be overwritten in case the parameter structure changes,
@@ -1317,7 +1448,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         # Retrieve parameter tree
         return GLMParams(self.coef_, self.intercept_)
 
-    def _set_model_params(self, params: GLMParams):
+    def _set_model_params(self, params: GLMParams[jnp.ndarray]):
         """Unpack and store params pytree to coef_ and intercept_.
 
         This method should be overwritten in case the parameter structure changes,
@@ -1429,8 +1560,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         :
             An estimate of the degrees of freedom of the residuals.
         """
+        x_leaves = jax.tree_util.tree_leaves(X)
         # Convert a pytree to a design-matrix with pytrees
-        X = jnp.hstack(jax.tree_util.tree_leaves(X))
+        X = jnp.hstack(x_leaves)
 
         if n_samples is None:
             n_samples = X.shape[0]
@@ -1447,6 +1579,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         # tree and consume no degrees of freedom.
         active, _ = self._partition_active(params)
         intercept_dof = 0 if active.intercept is None else 1
+        active_cols = _active_columns(x_leaves, active.coef)
         # if the regularizer is lasso use the non-zero
         # coeff as an estimate of the dof
         # see https://arxiv.org/abs/0712.0881
@@ -1461,37 +1594,44 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         elif isinstance(self.regularizer, Ridge):
             # for Ridge, use the tot parameters (estimated features + intercept)
             return (
-                n_samples - self._n_estimated_features(X) - intercept_dof
+                n_samples - self._n_estimated_features(active_cols) - intercept_dof
             ) * jnp.ones_like(params.intercept)
         else:
             # for UnRegularized, use the rank
-            return (n_samples - self._design_rank(X) - intercept_dof) * jnp.ones_like(
-                params.intercept
-            )
+            return (
+                n_samples - self._design_rank(X, active_cols) - intercept_dof
+            ) * jnp.ones_like(params.intercept)
 
-    def _n_estimated_features(self, X: jnp.ndarray) -> jnp.ndarray:
+    def _n_estimated_features(self, active_cols: jnp.ndarray) -> jnp.ndarray:
         """Count the coefficients the model estimates, as a scalar or one per neuron.
 
-        Every column of the design contributes a coefficient here. ``PopulationGLM``
-        overrides this: a masked-out feature is not estimated for that neuron.
+        Every active column of the design contributes a coefficient here.
+        ``PopulationGLM`` overrides this: a masked-out feature is not estimated for that
+        neuron.
         """
-        return X.shape[1]
+        return jnp.sum(active_cols)
 
-    def _design_rank(self, X: jnp.ndarray) -> jnp.ndarray:
-        """Rank of the design, as a scalar or one per neuron.
+    def _design_rank(self, X: jnp.ndarray, active_cols: jnp.ndarray) -> jnp.ndarray:
+        """Rank of the design the model estimates over, as a scalar or one per neuron.
 
         The rank, rather than the column count, is what an unpenalized fit consumes:
-        collinear columns share degrees of freedom. ``PopulationGLM`` overrides this to
-        take the rank per neuron, since the mask gives each neuron its own design.
+        collinear columns share degrees of freedom. Frozen columns are dropped rather
+        than zeroed: a rank is an SVD away and the smaller matrix is the better
+        conditioned one. ``PopulationGLM`` overrides this to take the rank per neuron,
+        since the mask gives each neuron its own design.
         """
+        X = X[:, active_cols]
+        # every coefficient frozen leaves no design to take the rank of
+        if X.shape[1] == 0:
+            return jnp.asarray(0)
         return jnp.linalg.matrix_rank(X)
 
     def _initialize_optimizer_and_state(
         self,
-        init_params: GLMParams,
+        init_params: GLMParams[jnp.ndarray],
         X: dict[str, jnp.ndarray] | jnp.ndarray,
         y: jnp.ndarray,
-        frozen_params: GLMParams = None,
+        frozen_params: GLMParams[jnp.ndarray | None] = None,
     ) -> SolverState:
         """Initialize the solver by instantiating its init_state, update and, run methods.
 
@@ -1524,6 +1664,11 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         >>> opt_state = model.initialize_optimizer_and_state(params, X, y)
         >>> # Now ready to run optimization or update steps
         """
+        # ``eqx.partition`` leaves ``None`` on the frozen leaves and jax drops those, so
+        # an empty leaf list means every parameter is fixed and there is nothing to run.
+        if not jax.tree_util.tree_leaves(init_params):
+            return self._no_op_optimizer()
+
         opt_solver_kwargs = self._optimize_solver_params(X, y)
         #  set up the solver init/run/update attrs
         self._solver = self._instantiate_solver(
@@ -1541,7 +1686,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
     @cast_to_jax
     def update(
         self,
-        params: GLMUserParams,
+        params: GLMUserParams[jnp.ndarray | NDArray],
         opt_state: SolverState,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
@@ -1688,6 +1833,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         >>> for key, value in model.get_params().items():
         ...     print(f"{key}: {value}")
         fit_intercept: True
+        fix_params: (None, None)
         inverse_link_function: <function one_over_x at ...>
         observation_model: GammaObservations()
         regularizer: Ridge()
@@ -1702,6 +1848,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         >>> for key, value in model.get_params().items():  # doctest: +ELLIPSIS
         ...     print(f"{key}: {value}")
         fit_intercept: True
+        fix_params: (None, None)
         inverse_link_function: <function one_over_x at ...>
         observation_model: GammaObservations()
         regularizer: Ridge()
@@ -1724,6 +1871,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         >>> for key, value in loaded_model.get_params().items():
         ...     print(f"{key}: {value}")
         fit_intercept: True
+        fix_params: (None, None)
         inverse_link_function: <function <lambda> at ...>
         observation_model: PoissonObservations()
         regularizer: UnRegularized()
@@ -1859,6 +2007,14 @@ class PopulationGLM(GLM):
         parameter structure to regularize parameters differentially.
     fit_intercept :
         When True (default), an intercept term is fit. When False, only the coefficients are fit.
+        An intercept pinned through ``fix_params`` takes precedence over this flag.
+    fix_params :
+        Parameters to hold fixed during fitting, as a ``(coef, intercept)`` tuple with
+        ``coef`` of shape ``(n_features, n_neurons)`` and ``intercept`` of shape
+        ``(n_neurons,)``. An array pins that parameter at the value provided, ``None``
+        leaves it to be learned. When ``X`` is a pytree, ``coef`` mirrors its structure,
+        its leaves have shape ``(n_features_in_leaf, n_neurons)``, and each leaf is
+        pinned or learned on its own. Defaults to ``None``, which learns every parameter.
     solver_name :
         Solver to use for model optimization. Defines the optimization scheme and related parameters.
         The solver must be an appropriate match for the chosen regularizer.
@@ -1972,14 +2128,12 @@ class PopulationGLM(GLM):
     """
 
     _validator_class = PopulationGLMValidator
-    # positive semidefinite like the single-neuron GLM: the unpenalized block can be
-    # singular (a masked-out coefficient has no curvature). Ridge promotes it to
-    # positive definite through ``_hess_property_override``.
-    _hess_tag: HessianTag = HessianTag(
-        structure=BlockDiagonal,
-        property=PositiveSemiDefinite,
-        batch_axes=GLMParams(1, 0),
-    )
+    # One block per neuron, since the Hessian is assembled by vmapping over the neuron
+    # axis: axis 1 of ``coef``, which is ``(n_features, n_neurons)``, and axis 0 of
+    # ``intercept``. The sign and the per-leaf claims are inherited from ``GLM`` and hold
+    # block by block — each neuron's intercept block is that neuron's sum of weights.
+    _hess_structure = MatrixStructure.BLOCK_DIAGONAL
+    _hess_batch_axes = GLMParams(1, 0)
 
     def __init__(
         self,
@@ -1991,10 +2145,10 @@ class PopulationGLM(GLM):
         regularizer: Union[str, Regularizer] = "UnRegularized",
         regularizer_strength: Any = None,
         fit_intercept: bool = True,
+        fix_params: Optional[GLMUserParams[jnp.ndarray | NDArray | None]] = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
         feature_mask: Optional[jnp.ndarray] = None,
-        **kwargs,
     ):
         super().__init__(
             observation_model=observation_model,
@@ -2002,9 +2156,9 @@ class PopulationGLM(GLM):
             regularizer_strength=regularizer_strength,
             regularizer=regularizer,
             fit_intercept=fit_intercept,
+            fix_params=fix_params,
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
-            **kwargs,
         )
         self._metadata = None
         self.feature_mask = feature_mask
@@ -2060,7 +2214,7 @@ class PopulationGLM(GLM):
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
-        init_params: Optional[GLMUserParams] = None,
+        init_params: Optional[GLMUserParams[jnp.ndarray | NDArray]] = None,
     ):
         """Fit GLM to the activity of a population of neurons.
 
@@ -2139,7 +2293,7 @@ class PopulationGLM(GLM):
         return super().fit(X, y, init_params)
 
     def _predict(
-        self, params: GLMParams, X: jnp.ndarray, feature_mask: Any = None
+        self, params: GLMParams[jnp.ndarray], X: jnp.ndarray, feature_mask: Any = None
     ) -> jnp.ndarray:
         """
         Predicts firing rates based on given parameters and design matrix.
@@ -2183,26 +2337,33 @@ class PopulationGLM(GLM):
             + params.intercept
         )
 
-    def _n_estimated_features(self, X: jnp.ndarray) -> jnp.ndarray:
+    def _n_estimated_features(self, active_cols: jnp.ndarray) -> jnp.ndarray:
         """Count the features the mask lets through, per neuron.
 
         A masked-out coefficient contributes nothing to the rate and is never estimated,
-        so it must not be charged against the residual degrees of freedom.
+        so it must not be charged against the residual degrees of freedom. A frozen one
+        is dropped the same way, through ``active_cols``.
         """
         if self._feature_mask is None:
-            return super()._n_estimated_features(X)
+            return super()._n_estimated_features(active_cols)
         mask = jnp.concatenate(jax.tree_util.tree_leaves(self._feature_mask), axis=0)
-        return jnp.sum(mask, axis=0)
+        return jnp.sum(mask[active_cols], axis=0)
 
-    def _design_rank(self, X: jnp.ndarray) -> jnp.ndarray:
+    def _design_rank(self, X: jnp.ndarray, active_cols: jnp.ndarray) -> jnp.ndarray:
         """Rank of each neuron's own design, after its masked columns are dropped.
 
         Zeroing the masked columns leaves the rank unchanged relative to deleting them,
-        so this stays a plain array op rather than a boolean index.
+        so the per-neuron mask stays a plain array op rather than a boolean index. The
+        frozen columns are the same for every neuron, so those are sliced away once,
+        before the vmap: every rank is then read off a smaller matrix.
         """
         if self._feature_mask is None:
-            return super()._design_rank(X)
+            return super()._design_rank(X, active_cols)
         mask = jnp.concatenate(jax.tree_util.tree_leaves(self._feature_mask), axis=0)
+        X, mask = X[:, active_cols], mask[active_cols]
+        # every coefficient frozen leaves no design to take the rank of
+        if X.shape[1] == 0:
+            return jnp.zeros(mask.shape[1], dtype=int)
         return jax.vmap(lambda m: jnp.linalg.matrix_rank(X * m), in_axes=1, out_axes=0)(
             mask
         )
@@ -2214,7 +2375,7 @@ class PopulationGLM(GLM):
         # filter spec is per-leaf, so expand before splitting the axes.
         active_axis, frozen_axis = self._partition_active(
             tree_utils.tree_broadcast_prefix(
-                self._hess_tag.batch_axes, self._active_filter_spec()
+                self._hess_batch_axes, self._active_filter_spec()
             )
         )
 
