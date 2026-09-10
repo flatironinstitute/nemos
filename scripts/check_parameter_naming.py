@@ -162,6 +162,10 @@ VALID_PAIRS = [
     {"frozen_intercept", "rec_intercept"},
     {"frozen_intercept", "true_intercept"},
     {"claim", "claims"},
+    # ppglm params
+    {"M_samples", "n_samples"},
+    {"bias", "bas"},
+    {"M_grid", "grid"},
 ]
 
 
