@@ -196,6 +196,8 @@ def prepare_estep_log_likelihood(
     ----------
     is_population_glm:
         True if it is a population GLM likelihood.
+    is_categorical_glm:
+        True if it is a categorical GLM likelihood.
     observation_model:
         The observation model.
     inverse_link_function:
@@ -468,6 +470,8 @@ def prepare_mstep_update_fn(
     ----------
     is_population_glm:
         True if it is a population GLM likelihood.
+    is_categorical_glm:
+        True if it is a categorical GLM likelihood.
     observation_model:
         The observation model.
     inverse_link_function:
