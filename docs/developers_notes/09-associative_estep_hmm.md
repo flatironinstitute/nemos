@@ -179,3 +179,29 @@ $$
 
 Therefore, for independence across sessions, $\prod_{r\leq t} c_r = p(y_{0:t}) = F_{0:t}[j, \cdot] \mathbf{1}$.
 :::
+
+An associative scan over $F$s is possible, and would recover the forward step parameters, however, this approach would not work numerically. In particular, $F_{u:v}$ are joint probabilities over $v-u+1$ observations, and therefore decay geometrically with the length of the sequence, and the running products in the scan would rapidly underflow. In the next session, we will introduce an alternative parametrization that prevents that from happening while still preserving the associativity of the operations involved in the scan.
+
+## Stable Parametrization
+
+The idea is to decompose $F_{u:t}$ in its row sums and the rest,
+
+$$
+l_{u:t} = F_{u:t} \mathbf{1}, \qquad L_{u:t} = \text{diag}(l_{u:t})^-1 F_{u:t}.
+$$
+
+The first term is $l_{u:t} = p(y_{u:t} \mid z_{u-1} = j)$, the second one is
+
+$$
+\begin{aligned}
+L_{u:t}[j,i] &=\; \frac{F_{u:t}[j,i]}{\ell_{u:t}[j]} \\
+&=\; \frac{p\bigl(y_{u:t},\, z_t = i \mid z_{u-1} = j\bigr)}
+         {p\bigl(y_{u:t} \mid z_{u-1} = j\bigr)} \\
+&=\; p\bigl(z_t = i \mid z_{u-1} = j,\, y_{u:t}\bigr).
+\label{eq:factored-pi}
+\end{aligned}
+$$
+
+In particular, each row of $L_{u:t}$ is a probability distribution over the states, which means that its entries lie in $[0,1]$ and the rows sum to $1$ no matter how long the sequence of states is. There is no underflow issue anymore. The $F_{u:t}$ can be recovered from $(l_{u:t}, L_{u:t})$, and from the $F$s we can recover the forward pass messages.
+
+## Get $(l, L})$ via scan
