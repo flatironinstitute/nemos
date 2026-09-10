@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from nemos.glm_hmm.params import GLMHMMParams
-from nemos.glm_hmm.validation import GLMHMMValidator, ClassifierGLMHMMValidator
+from nemos.glm_hmm.validation import ClassifierGLMHMMValidator, GLMHMMValidator
 
 # ---------------------------------------------------------------------------
 # Constants and shared fixtures

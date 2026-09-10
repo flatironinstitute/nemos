@@ -1,8 +1,8 @@
 """Observation model classes for GLMs."""
 
 import abc
-from typing import Callable, Literal, Union
 from functools import partial
+from typing import Callable, Literal, Union
 
 import jax
 import jax.numpy as jnp
@@ -11,13 +11,13 @@ from numpy.typing import NDArray
 from . import utils
 from .base_class import Base
 from .inverse_link_function_utils import (
+    _make_wrapper,
     exp,
     expit,
     identity,
     log_softmax,
     logistic,
     softplus,
-    _make_wrapper,
 )
 
 __all__ = [

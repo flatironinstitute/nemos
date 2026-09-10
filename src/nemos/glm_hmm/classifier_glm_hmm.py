@@ -1,20 +1,20 @@
 """GLM-HMM for Classification."""
 
-from ..glm.classifier_glm import ClassifierMixin
-from .glm_hmm import GLMHMM
-from ..hmm.hmm import BaseHMM
-from ..basis._composition_utils import add_docstring
-from typing import Optional, Callable, Union, Any, Literal, NamedTuple, Tuple
-import jax.numpy as jnp
-from ..regularizer import Regularizer
-from .initialize_parameters import GLMHMM_INITIALIZATION_FN_DICT
-from ..hmm.initialize_parameters import HMM_INITIALIZATION_FN_DICT
+from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
+
 import jax
-from ..observation_models import CategoricalObservations
+import jax.numpy as jnp
+import pynapple as nap
 from numpy.typing import ArrayLike, NDArray
+
+from ..glm.classifier_glm import ClassifierMixin
+from ..hmm.initialize_parameters import HMM_INITIALIZATION_FN_DICT
+from ..observation_models import CategoricalObservations
+from ..regularizer import Regularizer
 from ..type_casting import support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, StepResult
-import pynapple as nap
+from .glm_hmm import GLMHMM
+from .initialize_parameters import GLMHMM_INITIALIZATION_FN_DICT
 from .params import GLMHMMUserParams
 from .validation import ClassifierGLMHMMValidator
 
@@ -406,13 +406,42 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
         y = self._label_encoder.encode(y)
         return super().fit(X, y, init_params, session_starts)
 
-    @add_docstring("score", BaseHMM)
     def score(
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
         session_starts: Optional[ArrayLike] = None,
     ) -> jnp.ndarray:
+        """
+        Marginal log-likelihood of the data under the fitted Classifier GLM-HMM.
+
+        HMM-family models score only by log-likelihood. Variance-based or
+        deviance-based pseudo-R² metrics are not implemented because they
+        depend on a null/saturated-model construction that has no clean
+        analogue for latent-state sequence models. Compute AIC/BIC or
+        held-out log-likelihood externally if needed.
+
+        Parameters
+        ----------
+        X :
+            Input data/design matrix, shape ``(n_samples, n_features)``.
+        y :
+            Target class labels of shape ``(n_samples,)``. Labels can be any hashable
+            type (integers, strings, etc.). Float arrays with integer values are
+            accepted and converted automatically.
+        session_starts :
+            Optional array indicating user-provided session boundaries. Can be:
+            - a boolean array indicating session starts, shape ``(n_samples,)``
+            - an integer array of indices marking session starts, shape ``(n_sessions,)``
+            - a pynapple.IntervalSet marking session epochs (requires either X or y to be a
+            pynapple Tsd or TsdFrame to get timestamps)
+            If None, creates a default array treating all data as one session.
+
+        Returns
+        -------
+        :
+            The marginal log-likelihood (summed over time).
+        """
         self._label_encoder.check_classes_is_set("score")
         y = self._label_encoder.encode(y)
         return super().score(X, y, session_starts)

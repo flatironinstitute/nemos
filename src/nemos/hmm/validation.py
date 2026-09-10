@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Optional, Tuple, Dict, Literal
+from typing import Any, Dict, Literal, Optional, Tuple
 
 import jax
 import jax.numpy as jnp

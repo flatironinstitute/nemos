@@ -1,14 +1,14 @@
 """Validation classes for GLMHMM and PopulationGLMHMM models."""
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, Tuple, Union, Dict, Literal
+from typing import Any, Callable, Dict, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-from jax.typing import DTypeLike, ArrayLike
+from jax.typing import ArrayLike, DTypeLike
 
 from ..base_validator import RegressorValidator
-from ..glm.validation import GLMValidator, ClassifierGLMValidator
+from ..glm.validation import ClassifierGLMValidator, GLMValidator
 from ..hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
 from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMHMMModelParams, GLMHMMParams, GLMHMMUserParams
@@ -186,6 +186,8 @@ class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
 
 @dataclass(frozen=True, repr=False)
 class ClassifierGLMHMMValidator(GLMHMMValidator):
+    """Validate Classifier GLM-HMM parameters and inputs."""
+
     extra_params: Dict[Literal["n_classes"], int] = field(kw_only=True)
     model_class: str = "ClassifierGLMHMM"
     _glm_validator: ClassifierGLMValidator = field(init=False, default=None)
@@ -216,6 +218,7 @@ class ClassifierGLMHMMValidator(GLMHMMValidator):
     )
 
     def __post_init__(self):
+        """Update _glm_validator once n_classes is known."""
         object.__setattr__(
             self,
             "_glm_validator",
@@ -261,6 +264,7 @@ class ClassifierGLMHMMValidator(GLMHMMValidator):
 
     @staticmethod
     def check_and_cast_y_to_integer(y: ArrayLike) -> jnp.ndarray:
+        """Check that y is an array of integers."""
         return ClassifierGLMValidator.check_and_cast_y_to_integer(y)
 
     def get_empty_params(self, X, y) -> GLMHMMParams:
