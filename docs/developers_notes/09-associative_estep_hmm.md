@@ -275,15 +275,10 @@ L_{u:t} &= \operatorname{diag}\bigl(L_{u:v-1} e^{m}w\bigr)^{-1} L_{u:v-1} \opera
 \end{aligned}
 \end{cases}
 $$
+
 ## The Scan, Step by Step
 
-An element is a pair $x = (\log l, L)$ with $L$ row-stochastic, composed with earlier segments on the left. Every operation below is one of
-
-$$
-\text{cond}(M, \log w) \;=\; \left(\log(Mw), \;\; \text{diag}(Mw)^{-1} M \,\text{diag}(w)\right), \qquad M \text{ row-stochastic}, \; w > 0,
-$$
-
-which conditions a row-stochastic matrix on a nonnegative weight per exit state and renormalizes the rows, returning the log row sums it divided out. Its output is again row-stochastic.
+An element is a pair $x = (\log l, L)$ with $L$ row-stochastic, composed with earlier segments on the left.
 
 ### Elements
 
@@ -292,25 +287,43 @@ Applying $\phi$ to Proposition 1, $x_t = \phi(F_{t:t})$ is
 $$
 x_t = \begin{cases}
 \left(\log(\pi^\top b_t)\,\mathbf{1}, \;\; \mathbf{1}(\pi \odot b_t)^\top / (\pi^\top b_t)\right), & t \in S, \\
-\left(\log(A b_t), \;\; \text{diag}(A b_t)^{-1} A\, \text{diag}(b_t)\right), & t \notin S,
+\left(\log(A b_t), \;\; \text{diag}(A b_t)^{-1} A\, \text{diag}(b_t)\right), & t \notin S.
 \end{cases}
 $$
 
-that is, $x_t = \text{cond}(\mathbf{1}\pi^\top, \log b_t)$ at a session start and $x_t = \text{cond}(A, \log b_t)$ elsewhere. Sessions enter only through which matrix is conditioned: one `where` on the base matrix, then one batched $\text{cond}$ over all $t$.
+The two lines are the same expression of a base matrix. Setting $M_t = \mathbf{1}\pi^\top$ for $t \in S$ and $M_t = A$ otherwise, both read
+
+$$
+x_t = \left(\log(M_t b_t), \;\; \text{diag}(M_t b_t)^{-1} M_t\, \text{diag}(b_t)\right),
+$$
+
+since $\mathbf{1}\pi^\top b_t = (\pi^\top b_t)\mathbf{1}$ and $\text{diag}\bigl((\pi^\top b_t)\mathbf{1}\bigr)^{-1} \mathbf{1}\pi^\top \text{diag}(b_t) = \mathbf{1}(\pi \odot b_t)^\top / (\pi^\top b_t)$. Sessions enter only through $M_t$: one `where` on the base matrix, then one expression evaluated for all $t$ at once.
 
 ### Combine
 
-With $m = \max_k \log l_2[k]$ and $w = \exp(\log l_2 - m \mathbf{1}) \in (0,1]^K$, the stabilized formulas of the previous section read
+The formulas of the previous section, with $l_2$ left unexpanded, are
 
 $$
-x_1 \oplus x_2 \;=\; \left(\log l_1 + \log(L_1 w) + m\mathbf{1}, \;\; \text{diag}(L_1 w)^{-1} L_1 \text{diag}(w)\, L_2 \right),
+x_1 \oplus x_2 \;=\; \Bigl(\log l_1 + \log(L_1 l_2), \;\; \bigl[\text{diag}(L_1 l_2)^{-1} L_1 \text{diag}(l_2)\bigr] L_2 \Bigr).
 $$
 
-which is $\text{cond}(L_1, \log l_2 - m\mathbf{1})$, giving $(\log r, L')$, followed by $\log l_1 + \log r + m\mathbf{1}$ and $L' L_2$. Nothing in the step can overflow: $w \le 1$, $L_1 w$ is a convex combination of entries of $w$ and so lies in $(0,1]$, and the matrix half is row-stochastic again by construction rather than by accumulated luck.
+Grouped this way, the bracketed factor and the term added to $\log l_1$ are the element expression above with $(M_t, b_t)$ replaced by $(L_1, l_2)$: a row-stochastic matrix conditioned on one positive weight per exit state, and the log of the row sums that conditioning divided out. The rest of the step is the two things the element form does not contain — carrying the earlier log scale $\log l_1$, and the multiplication by $L_2$.
+
+### Conditioning on exit weights
+
+Both therefore call the same operation,
+
+$$
+\text{cond}(M, \log w) \;=\; \left(\log(Mw), \;\; \text{diag}(Mw)^{-1} M \,\text{diag}(w)\right), \qquad M \text{ row-stochastic}, \; w > 0,
+$$
+
+with $(M, w) = (M_t, b_t)$ for an element and $(M, w) = (L_1, l_2)$ for a combine, whose result $(\log r, L')$ is finished off as $\log l_1 + \log r$ and $L' L_2$. Its output matrix is row-stochastic again, so the elements and everything the scan builds from them live in the same set.
+
+It takes $\log w$ rather than $w$ because that is where the stabilization goes: with $m = \max_k \log w[k]$, the matrix half is unchanged by rescaling $w$ and $\log(Mw) = m\mathbf{1} + \log\left(M e^{\log w - m\mathbf{1}}\right)$, so the shift is exact and the one exponential in the step has a nonpositive argument. Nothing can overflow: $e^{\log w - m\mathbf{1}} \leq 1$, and $M e^{\log w - m\mathbf{1}}$ is a convex combination of its entries, so it lies in $(0,1]$. A combine therefore never forms $l_2$ itself. The implementation subtracts one more maximum from the $\log l$ it returns; that one is not part of $\oplus$ and is the rescaling of the next paragraph.
 
 ### Dropping the accumulated scale
 
-For $c>0$, $\phi(cF) = (\log l + \log c\,\mathbf{1}, L)$: a common scalar factor lands entirely in the log half and leaves every $L$ untouched. Subtracting $\max_k \log l[k]$ from an element after each combine therefore changes nothing that is read out, and it keeps $\log l_{0:t}$ from accumulating the segment log-likelihood, which grows linearly in $t$, while the combine reads only its $O(1)$ internal differences. The price is that $\log l_{0:T-1}$ is no longer $\log p(y_{0:T-1})$, which is why the normalizers are recomputed below instead of being differenced out of it.
+Unlike the shift inside $\text{cond}$, which is an identity, this one replaces an element by a different one. For $c>0$, $\phi(cF) = (\log l + \log c\,\mathbf{1}, L)$: a common scalar factor lands entirely in the log half and leaves every $L$ untouched. Subtracting $\max_k \log l[k]$ from an element after each combine therefore returns $\phi(cF)$ for a $c$ nobody tracks, which changes nothing that is read out, and it keeps $\log l_{0:t}$ from accumulating the segment log-likelihood, which grows linearly in $t$, while $\text{cond}$ reads only the $O(1)$ internal differences $\log l_2 - m\mathbf{1}$ of it. The price is that $\log l_{0:T-1}$ is no longer $\log p(y_{0:T-1})$, which is why the normalizers are recomputed below instead of being differenced out of it.
 
 ### Read-out
 
@@ -334,6 +347,10 @@ c_t = \begin{cases}
 $$
 
 for all $t$ at once — one $T \times K$ by $K \times K$ product and one reduction, every operand $O(1)$. The dummy $\hat{\alpha}_{-1}$ that makes the shapes line up at $t=0$ is discarded by the $t \in S$ branch, but it must be a valid distribution rather than zeros: $\log 0$ has an infinite derivative, and reverse-mode differentiation of a `where` hands that infinity a zero cotangent, producing `nan`.
+
+### Cost
+
+Each $\oplus$ is two $K \times K$ matrix products plus $O(K^2)$ elementwise work, and `associative_scan` performs about $2T$ of them: $O(TK^3)$ work at depth $O(\log T)$, against $O(TK^2)$ work at depth $O(T)$ for the sequential recursion. The trade is worth taking only where the $T$ sequential steps, each of them a small kernel launch, dominate — which is what the benchmarks have to decide, per $K$ and per device.
 
 ### Sketch
 
@@ -361,9 +378,5 @@ def forward(log_pi, log_A, log_b, session_starts):
 ```
 
 `jnp.exp(log_pi)` broadcasts against a $(T, K, K)$ base, which is the $\mathbf{1}\pi^\top$ of the element formula.
-
-### Cost
-
-Each $\oplus$ is two $K \times K$ matrix products plus $O(K^2)$ elementwise work, and `associative_scan` performs about $2T$ of them: $O(TK^3)$ work at depth $O(\log T)$, against $O(TK^2)$ work at depth $O(T)$ for the sequential recursion. The trade is worth taking only where the $T$ sequential steps, each of them a small kernel launch, dominate — which is what the benchmarks have to decide, per $K$ and per device.
 
 The backward pass is not covered by the propositions above. Its messages are not row-stochastic (they carry the $1/c_t$ factors), the equal-rows argument that made sessions free here does not apply to it, and its elements need an explicit reset flag.
