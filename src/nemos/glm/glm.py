@@ -15,11 +15,7 @@ from sklearn.utils import InputTags, TargetTags
 
 from .. import observation_models as obs
 from .. import tree_utils, validation
-from .._hess import (
-    LeafClaim,
-    MatrixProperty,
-    MatrixStructure,
-)
+from .._hess import LeafClaim, MatrixProperty, MatrixStructure
 from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor, strip_metadata
 from ..batching import DataLoader, _PreprocessedDataLoader, is_data_loader
@@ -159,17 +155,23 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
     Below is a table listing the default and available solvers for each regularizer.
 
-    +---------------+------------------+---------------------------------------------------------------------+
-    | Regularizer   | Default Solver   | Available Solvers                                                   |
-    +===============+==================+=====================================================================+
-    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
-    +---------------+------------------+---------------------------------------------------------------------+
-    | Ridge         | Newton           | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
-    +---------------+------------------+---------------------------------------------------------------------+
-    | Lasso         | ProximalGradient | ProximalGradient                                                    |
-    +---------------+------------------+---------------------------------------------------------------------+
-    | GroupLasso    | ProximalGradient | ProximalGradient                                                    |
-    +---------------+------------------+---------------------------------------------------------------------+
+    +---------------+------------------+-------------------------------------------------------+
+    | Regularizer   | Default Solver   | Available Solvers                                     |
+    +===============+==================+=======================================================+
+    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG,            |
+    |               |                  | ProximalGradient, SVRG, ProxSVRG, Newton,             |
+    |               |                  | ProximalNewton                                        |
+    +---------------+------------------+-------------------------------------------------------+
+    | Ridge         | Newton           | GradientDescent, BFGS, LBFGS, NonlinearCG,            |
+    |               |                  | ProximalGradient, SVRG, ProxSVRG, Newton,             |
+    |               |                  | ProximalNewton                                        |
+    +---------------+------------------+-------------------------------------------------------+
+    | Lasso         | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |
+    +---------------+------------------+-------------------------------------------------------+
+    | ElasticNet    | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |
+    +---------------+------------------+-------------------------------------------------------+
+    | GroupLasso    | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |
+    +---------------+------------------+-------------------------------------------------------+
 
     The default solver for ``Ridge`` is ``Newton``: the ridge penalty makes the Hessian positive
     definite, so each step is a stable Cholesky solve that converges in a handful of iterations at the
@@ -1929,17 +1931,23 @@ class PopulationGLM(GLM):
     stored in tabular format, shape (n_timebins, num_features) or as a pytree of arrays of the same shape.
     Below is a table listing the default and available solvers for each regularizer.
 
-    +---------------+------------------+---------------------------------------------------------------------+
-    | Regularizer   | Default Solver   | Available Solvers                                                   |
-    +===============+==================+=====================================================================+
-    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
-    +---------------+------------------+---------------------------------------------------------------------+
-    | Ridge         | Newton           | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, Newton |
-    +---------------+------------------+---------------------------------------------------------------------+
-    | Lasso         | ProximalGradient | ProximalGradient                                                    |
-    +---------------+------------------+---------------------------------------------------------------------+
-    | GroupLasso    | ProximalGradient | ProximalGradient                                                    |
-    +---------------+------------------+---------------------------------------------------------------------+
+    +---------------+------------------+-------------------------------------------------------+
+    | Regularizer   | Default Solver   | Available Solvers                                     |
+    +===============+==================+=======================================================+
+    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG,            |
+    |               |                  | ProximalGradient, SVRG, ProxSVRG, Newton,             |
+    |               |                  | ProximalNewton                                        |
+    +---------------+------------------+-------------------------------------------------------+
+    | Ridge         | Newton           | GradientDescent, BFGS, LBFGS, NonlinearCG,            |
+    |               |                  | ProximalGradient, SVRG, ProxSVRG, Newton,             |
+    |               |                  | ProximalNewton                                        |
+    +---------------+------------------+-------------------------------------------------------+
+    | Lasso         | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |
+    +---------------+------------------+-------------------------------------------------------+
+    | ElasticNet    | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |
+    +---------------+------------------+-------------------------------------------------------+
+    | GroupLasso    | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |
+    +---------------+------------------+-------------------------------------------------------+
 
     The default solver for ``Ridge`` is ``Newton``: the ridge penalty makes the Hessian positive
     definite, so each step is a stable Cholesky solve that converges in a handful of iterations at the

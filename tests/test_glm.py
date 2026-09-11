@@ -2659,7 +2659,7 @@ class TestGLMObservationModel:
 
         return model
 
-    @pytest.mark.parametrize("solver_name", ["BFGS"])
+    @pytest.mark.parametrize("solver_name", ["BFGS", "Newton", "ProximalNewton"])
     @pytest.mark.solver_related
     @pytest.mark.requires_x64
     @pytest.mark.filterwarnings("ignore:Setting penalty=None will ignore:UserWarning")
@@ -2679,7 +2679,7 @@ class TestGLMObservationModel:
         )
         self._fit_and_compare_to_sklearn(model, sklearn_model, X, y, atol=1e-6)
 
-    @pytest.mark.parametrize("solver_name", ["LBFGS", "Newton"])
+    @pytest.mark.parametrize("solver_name", ["LBFGS", "Newton", "ProximalNewton"])
     @pytest.mark.solver_related
     @pytest.mark.requires_x64
     @pytest.mark.filterwarnings("ignore:Setting penalty=None will ignore:UserWarning")
@@ -2709,7 +2709,9 @@ class TestGLMObservationModel:
         )
         assert jnp.all(model.intercept_ == 0.0)
 
-    @pytest.mark.parametrize("solver_name", ["GradientDescent", "LBFGS", "Newton"])
+    @pytest.mark.parametrize(
+        "solver_name", ["GradientDescent", "LBFGS", "Newton", "ProximalNewton"]
+    )
     @pytest.mark.solver_related
     @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_fit_intercept_false_leaves_intercept_zero(
