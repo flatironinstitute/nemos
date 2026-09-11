@@ -2084,3 +2084,37 @@ def test_second_order_solvers_step_only_on_a_descent_slope(
             np.asarray(new_ls_state.learning_rate),
             np.asarray(state.ls_state.learning_rate),
         )
+
+
+@pytest.mark.requires_x64
+def test_prox_newton_does_not_read_a_nan_slope_as_stationary():
+    """A blown-up direction must reach the iterate, not be rejected as a null step.
+
+    Rejection leaves ``params`` where they were, so ``y_diff`` is zero and the next
+    Cauchy test reports convergence -- the failure would be announced as success. This is
+    the ``jnp.isnan`` half of the gate in ``_apply_or_reject``, and it is reachable: with
+    an indefinite Hessian the subproblem is unbounded, and the iterates overflow to NaN
+    through a sequence of perfectly good descent directions.
+    """
+    np.random.seed(0)
+    X = np.random.normal(size=(200, _KINKED_PARAMS.size))
+    y = np.random.normal(size=200)
+    params = jnp.asarray(_KINKED_PARAMS)
+
+    solver = ProximalNewton(
+        _mse,
+        regularizer=Lasso(),
+        regularizer_strength=_PENALTY_STRENGTH,
+        has_aux=False,
+        init_params=params,
+        tol=1e-12,
+    )
+    state = solver.init_state(params, X, y)
+    (fval, _), grad = solver._gradient(params, X, y)
+    step = jax.tree.map(lambda g: jnp.full_like(g, jnp.nan), grad)
+
+    _, slope, _ = solver._line_search_inputs(params, step, grad, fval, X, y)
+    assert np.isnan(float(lx.internal.tree_dot(slope, step)))
+
+    new_params, _ = solver._apply_or_reject(params, step, grad, state, fval, X, y)
+    assert not np.all(np.isfinite(np.asarray(new_params)))
