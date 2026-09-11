@@ -54,7 +54,9 @@ def condition(log_w: Array, M: Array) -> Tuple[Array, Array, Array]:
     return log_l, L, max_log_w
 
 
-def combine(x1: Tuple[Array, Array], x2: Tuple[Array, Array]) -> Tuple[Array, Array]:
+def combine_forward(
+    x1: Tuple[Array, Array], x2: Tuple[Array, Array]
+) -> Tuple[Array, Array]:
     r"""Combine in the associative scan.
 
     The combination implements the :math:`\oplus` operator described
@@ -177,7 +179,7 @@ def _forward_pass_assoc(
     log_l, L, _ = condition(log_conditional_prob, base)
     # the log output of the scan is discarded: combine subtracts out the max that
     # would otherwise accumulate, so it is no longer log(p(y_0:t)).
-    _, L_cum = jax.lax.associative_scan(combine, (log_l, L))
+    _, L_cum = jax.lax.associative_scan(combine_forward, (log_l, L))
     filtered_probs = L_cum[:, 0, :]
     return filtered_probs, normalizers(
         initial_prob,
