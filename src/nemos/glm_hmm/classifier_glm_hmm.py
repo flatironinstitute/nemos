@@ -211,18 +211,6 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
     >>> model.initial_prob_.shape
     (3,)
 
-    **Multi-class Classification**
-
-    Classify into more than two classes:
-
-    >>> np.random.seed(123)
-    >>> key = jax.random.PRNGKey(123)
-    >>> rate = np.random.normal(size=(200, 4))
-    >>> y = jax.random.categorical(key, rate)
-    >>> model = nmo.glm_hmm.ClassifierGLMHMM(n_states=3, n_classes=4).fit(X, y)
-    >>> model.coef_.shape
-    (5, 4, 3)
-
     **Fit Across Multiple Sessions**
 
     Mark session boundaries with ``session_starts`` so the HMM resets at each
@@ -238,6 +226,18 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
     >>> # Equivalent: pass the starts as integer indices.
     >>> model = nmo.glm_hmm.ClassifierGLMHMM(n_states=2).fit(X, y, session_starts=np.array([0, 100]))
 
+    **Multi-class Classification**
+
+    Classify into more than two classes:
+
+    >>> np.random.seed(123)
+    >>> key = jax.random.PRNGKey(123)
+    >>> rate = np.random.normal(size=(200, 4))
+    >>> y = jax.random.categorical(key, rate)
+    >>> model = nmo.glm_hmm.ClassifierGLMHMM(n_states=3, n_classes=4).fit(X, y)
+    >>> model.coef_.shape
+    (5, 4, 3)
+
     **Decode Hidden States**
 
     Recover the most-likely state sequence (Viterbi-style) or the smoothed
@@ -245,10 +245,10 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
 
     >>> states = model.decode_state(X, y, session_starts=is_new_mask)
     >>> states.shape
-    (200, 2)
+    (200, 3)
     >>> post = model.smooth_proba(X, y, session_starts=is_new_mask)
     >>> post.shape
-    (200, 2)
+    (200, 3)
     """
 
     _validator_class = ClassifierGLMHMMValidator
@@ -920,13 +920,13 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
         >>> session_starts[0] = True
         >>> model = nmo.glm_hmm.ClassifierGLMHMM(n_states=2)
         >>> model.set_classes(y)
+        ClassifierGLMHMM(...)
         >>> init_params = model.initialize_params(X, y)
         >>> opt_state = model.initialize_optimizer_and_state(init_params, X, y, session_starts=session_starts)
         >>> new_params, new_state = model.update(init_params, opt_state, X, y, session_starts=session_starts)
         """
         self._label_encoder.check_classes_is_set("update")
         y = self._label_encoder.encode(y)
-        y = jax.nn.one_hot(y, self.n_classes)
         return super().update(
             params,
             opt_state,
