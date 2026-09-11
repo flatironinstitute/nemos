@@ -7,27 +7,47 @@ import optax
 import pytest
 
 from nemos._hess import (
-    BlockDiagonal,
-    Full,
-    General,
     HessianTag,
-    NegativeDefinite,
-    PositiveDefinite,
-    PositiveSemiDefinite,
-    Symmetric,
+    MatrixProperty,
+    MatrixStructure,
+    mask_claim_all,
+    mask_claim_none,
 )
 from nemos.regularizer import Ridge, UnRegularized
 from nemos.solvers._abstract_solver import OptimizationInfo
-from nemos.solvers._newton import Newton, NewtonState
+from nemos.solvers._newton import Newton, NewtonState, ProximalNewton
 from nemos.tree_utils import pytree_map_and_reduce
 
 N = 8
 
-_PD_TAG = HessianTag(structure=Full, property=PositiveDefinite)
-_PSD_TAG = HessianTag(structure=Full, property=PositiveSemiDefinite)
-_GENERAL_TAG = HessianTag(structure=Full, property=General)
-_SYMMETRIC_TAG = HessianTag(structure=Full, property=Symmetric)
-_ND_TAG = HessianTag(structure=Full, property=NegativeDefinite)
+# The two second-order solvers. Everything ``Newton`` converges to, ``ProximalNewton``
+# converges to as well: they differ in how the penalty is reached (a proximal operator
+# rather than the penalized loss) and in the convergence test, not in the optimum. So the
+# solver-agnostic tests below run for both, and only the genuinely divergent behaviour gets
+# a dedicated test.
+_NEWTON_SOLVERS = ("Newton", "ProximalNewton")
+
+_SOLVERS = pytest.mark.parametrize("solver_name", _NEWTON_SOLVERS)
+
+_SOLVER_CLASSES = {"Newton": Newton, "ProximalNewton": ProximalNewton}
+
+
+def _make_pd_tag(init_params):
+    return HessianTag(
+        structure=MatrixStructure.FULL,
+        property=MatrixProperty.POSITIVE_DEFINITE,
+        flat_on=mask_claim_none(init_params),
+        definite_on=mask_claim_all(init_params),
+    )
+
+
+def _make_tag(init_params, property, structure=MatrixStructure.FULL):
+    return HessianTag(
+        structure=structure,
+        property=property,
+        flat_on=mask_claim_none(init_params),
+        definite_on=mask_claim_all(init_params),
+    )
 
 
 def _make_pd_problem(n, dtype, rng=None):
@@ -132,7 +152,14 @@ def test_pd_quadratic_convergence(dtype, jit):
     loss, hess = _quadratic_loss_and_hessian(A, b)
     x0 = jnp.zeros_like(x_star)
 
-    solver = _make_solver(loss, hess, _PD_TAG, x0, shift_const=0.0, jit=jit)
+    solver = _make_solver(
+        loss,
+        hess,
+        _make_tag(x0, property=MatrixProperty.POSITIVE_DEFINITE),
+        x0,
+        shift_const=0.0,
+        jit=jit,
+    )
 
     x_opt, state, _ = solver.run(x0)
 
@@ -152,7 +179,13 @@ def test_run_converges_on_pd_quadratic(jit):
     A, b, x_star = _make_pd_problem(N, np.float64)
     loss, hess = _quadratic_loss_and_hessian(A, b)
     x0 = jnp.zeros(N)
-    solver = _make_solver(loss, hess, _PD_TAG, x0, jit=jit)
+    solver = _make_solver(
+        loss,
+        hess,
+        _make_tag(x0, property=MatrixProperty.POSITIVE_DEFINITE),
+        x0,
+        jit=jit,
+    )
 
     x_opt, state, _ = solver.run(x0)
 
@@ -178,7 +211,14 @@ def test_pd_quadratic_convergence_autodiff(dtype, jit):
     loss = _quadratic_loss(A, b)
     x0 = jnp.zeros_like(x_star)
 
-    solver = _make_solver(loss, None, _PD_TAG, x0, shift_const=0.0, jit=jit)
+    solver = _make_solver(
+        loss,
+        None,
+        _make_tag(x0, property=MatrixProperty.POSITIVE_DEFINITE),
+        x0,
+        shift_const=0.0,
+        jit=jit,
+    )
 
     x_opt, state, _ = solver.run(x0)
 
@@ -198,7 +238,13 @@ def test_psd_singular_quadratic_preserves_null_space(dtype, jit):
     loss, hess = _quadratic_loss_and_hessian(A, b)
 
     solver = _make_solver(
-        loss, hess, _PSD_TAG, x0, shift_const=1.0, maxiter=100, jit=jit
+        loss,
+        hess,
+        _make_tag(x0, property=MatrixProperty.POSITIVE_SEMI_DEFINITE),
+        x0,
+        shift_const=1.0,
+        maxiter=100,
+        jit=jit,
     )
 
     x_opt, state, _ = solver.run(x0)
@@ -235,7 +281,13 @@ def test_psd_singular_quadratic_preserves_null_space_autodiff(dtype, jit):
     loss, _ = _quadratic_loss_and_hessian(A, b)
 
     solver = _make_solver(
-        loss, None, _PSD_TAG, x0, shift_const=1.0, maxiter=100, jit=jit
+        loss,
+        None,
+        _make_tag(x0, property=MatrixProperty.POSITIVE_SEMI_DEFINITE),
+        x0,
+        shift_const=1.0,
+        maxiter=100,
+        jit=jit,
     )
 
     x_opt, state, _ = solver.run(x0)
@@ -276,7 +328,14 @@ def test_pd_quadratic_scale_equivariance(dtype, scale, jit):
         scale * b,
     )
 
-    solver = _make_solver(loss, None, _PD_TAG, x0, shift_const=0.0, jit=jit)
+    solver = _make_solver(
+        loss,
+        None,
+        _make_tag(x0, property=MatrixProperty.POSITIVE_DEFINITE),
+        x0,
+        shift_const=0.0,
+        jit=jit,
+    )
 
     x_opt, state, _ = solver.run(x0)
 
@@ -296,7 +355,13 @@ def test_psd_quadratic_scale_equivariance(dtype, scale, jit):
     loss = _quadratic_loss(scale * A, scale * b)
 
     solver = _make_solver(
-        loss, None, _PSD_TAG, x0, shift_const=1.0, maxiter=100, jit=jit
+        loss,
+        None,
+        _make_tag(x0, property=MatrixProperty.POSITIVE_SEMI_DEFINITE),
+        x0,
+        shift_const=1.0,
+        maxiter=100,
+        jit=jit,
     )
 
     x_opt, state, _ = solver.run(x0)
@@ -374,7 +439,11 @@ def test_newton_init_state_default(request, regr_setup, regularizer):
     assert isinstance(state.ls_state, optax.ScaleByBacktrackingLinesearchState)
 
 
-_MOD_TAGS = [_GENERAL_TAG, _SYMMETRIC_TAG, _ND_TAG]
+_MOD_PROPS = [
+    MatrixProperty.SYMMETRIC,
+    MatrixProperty.NEGATIVE_DEFINITE,
+    MatrixProperty.NEGATIVE_SEMI_DEFINITE,
+]
 
 
 def _modified_direction(
@@ -390,10 +459,6 @@ def _modified_direction(
 @pytest.mark.requires_x64
 @pytest.mark.parametrize("jit", [False, True])
 def test_eigh_produces_identical_directions(jit):
-    """
-    General, Symmetric and NegativeDefinite go down the same branch,
-    so they must produce identical steps on the same problem.
-    """
     H = jnp.asarray(
         [
             [-2.0, 0.5, 0.0],
@@ -403,9 +468,16 @@ def test_eigh_produces_identical_directions(jit):
         dtype=jnp.float64,
     )
     grad = jnp.asarray([1.0, -2.0, 0.5], dtype=jnp.float64)
-    directions = [
-        _modified_direction(H, grad, hess_tag, jit=jit) for hess_tag in _MOD_TAGS
-    ]
+
+    directions = []
+    for prop in _MOD_PROPS:
+        tag = _make_tag(
+            init_params=jnp.zeros_like(grad),
+            property=prop,
+            structure=MatrixStructure.FULL,
+        )
+        directions.append(_modified_direction(H, grad, tag, jit=jit))
+
     for direction in directions[1:]:
         np.testing.assert_allclose(
             direction,
@@ -417,16 +489,17 @@ def test_eigh_produces_identical_directions(jit):
 
 @pytest.mark.requires_x64
 @pytest.mark.parametrize("jit", [False, True])
-def test_general_pd_direction_matches_cholesky(jit):
-    """
-    With all eigenvalues well above the floor,
-    the general path gives the same step as the Cholesky path,
-    and solves a quadratic in one step.
-    """
+def test_symmetric_pd_direction_matches_cholesky(jit):
     A, _, _ = _make_pd_problem(6, jnp.float64)
     grad = jnp.asarray([0.5, -1.0, 2.0, 0.25, -0.75, 1.5])
 
-    general_step = _modified_direction(A, grad, _GENERAL_TAG, jit=jit)
+    tag = _make_tag(
+        init_params=jnp.zeros_like(grad),
+        property=MatrixProperty.SYMMETRIC,
+        structure=MatrixStructure.FULL,
+    )
+
+    general_step = _modified_direction(A, grad, tag, jit=jit)
     expected = jnp.linalg.solve(A, -grad)
 
     np.testing.assert_allclose(
@@ -438,9 +511,9 @@ def test_general_pd_direction_matches_cholesky(jit):
 
 
 @pytest.mark.requires_x64
-@pytest.mark.parametrize("hess_tag", _MOD_TAGS)
+@pytest.mark.parametrize("hess_prop", _MOD_PROPS)
 @pytest.mark.parametrize("jit", [False, True])
-def test_eigh_direction_matches_sqrtm_reference(hess_tag, jit):
+def test_eigh_direction_matches_sqrtm_reference(hess_prop, jit):
     rng = np.random.default_rng(4)
     Q, _ = np.linalg.qr(rng.standard_normal((5, 5)))
     eigenvalues = np.asarray([-5.0, -2.0, 0.5, 1.5, 4.0])
@@ -456,6 +529,13 @@ def test_eigh_direction_matches_sqrtm_reference(hess_tag, jit):
         absolute_hessian,
         -grad_np,
         assume_a="pos",
+    )
+
+    init_params = jnp.zeros_like(jnp.asarray(grad_np))
+    hess_tag = _make_tag(
+        init_params=init_params,
+        property=hess_prop,
+        structure=MatrixStructure.FULL,
     )
 
     direction = _modified_direction(
@@ -478,13 +558,19 @@ def test_eigh_direction_is_invariant_to_eigenvalue_signs(jit):
     magnitudes = np.asarray([0.5, 1.0, 2.0, 4.0])
     grad = jnp.asarray(rng.standard_normal(4))
 
+    tag = _make_tag(
+        init_params=jnp.zeros_like(grad),
+        property=MatrixProperty.SYMMETRIC,
+        structure=MatrixStructure.FULL,
+    )
+
     reference = None
 
     for signs in itertools.product([-1.0, 1.0], repeat=4):
         eigenvalues = magnitudes * np.asarray(signs)
         H = jnp.asarray(Q @ np.diag(eigenvalues) @ Q.T)
 
-        direction = _modified_direction(H, grad, _GENERAL_TAG, jit=jit)
+        direction = _modified_direction(H, grad, tag, jit=jit)
 
         if reference is None:
             reference = direction
@@ -517,7 +603,13 @@ def test_eigh_direction_is_descent(eigenvalues, jit):
     H = jnp.asarray(Q @ np.diag(eigenvalues) @ Q.T)
     grad = jnp.asarray(rng.standard_normal(n))
 
-    direction = _modified_direction(H, grad, _GENERAL_TAG, jit=jit)
+    tag = _make_tag(
+        init_params=jnp.zeros_like(grad),
+        property=MatrixProperty.SYMMETRIC,
+        structure=MatrixStructure.FULL,
+    )
+
+    direction = _modified_direction(H, grad, tag, jit=jit)
     slope = float(jnp.vdot(grad, direction))
 
     modified_eigenvalues = np.maximum(np.abs(eigenvalues), 1e-6)
@@ -547,7 +639,14 @@ def test_eigh_direction_applies_eigenvalue_floor(sign, jit):
     )
     H = jnp.diag(eigenvalues)
     grad = jnp.asarray([1.0, -2.0, 3.0, -4.0], dtype=jnp.float64)
-    direction = _modified_direction(H, grad, _GENERAL_TAG, jit=jit)
+
+    tag = _make_tag(
+        init_params=jnp.zeros_like(grad),
+        property=MatrixProperty.SYMMETRIC,
+        structure=MatrixStructure.FULL,
+    )
+
+    direction = _modified_direction(H, grad, tag, jit=jit)
     expected = -grad / jnp.maximum(jnp.abs(eigenvalues), delta)
     np.testing.assert_allclose(
         direction,
@@ -559,9 +658,8 @@ def test_eigh_direction_applies_eigenvalue_floor(sign, jit):
 
 @pytest.mark.requires_x64
 @pytest.mark.parametrize("x0", [-0.2, 0.2])
-@pytest.mark.parametrize("hess_tag", [_GENERAL_TAG, _SYMMETRIC_TAG])
 @pytest.mark.parametrize("jit", [False, True])
-def test_eigh_newton_escapes_quartic_saddle_region(x0, hess_tag, jit):
+def test_eigh_newton_escapes_quartic_saddle_region(x0, jit):
     def loss(params, *args):
         del args
         x = params[0]
@@ -577,8 +675,14 @@ def test_eigh_newton_escapes_quartic_saddle_region(x0, hess_tag, jit):
 
     assert hess(init_params)[0, 0] < 0.0
 
+    tag = _make_tag(
+        init_params=init_params,
+        property=MatrixProperty.SYMMETRIC,
+        structure=MatrixStructure.FULL,
+    )
+
     solver = _make_solver(
-        loss, hess, hess_tag, init_params, maxiter=30, tol=1e-10, rtol=1e-8, jit=jit
+        loss, hess, tag, init_params, maxiter=30, tol=1e-10, rtol=1e-8, jit=jit
     )
 
     params, state, _ = solver.run(init_params)
@@ -605,9 +709,11 @@ def test_eigh_direction_is_computed_blockwise(jit):
     params = jnp.zeros_like(grad)
 
     tag = HessianTag(
-        structure=BlockDiagonal,
-        property=General,
-        batch_axes=0,
+        structure=MatrixStructure.BLOCK_DIAGONAL,
+        property=MatrixProperty.SYMMETRIC,
+        flat_on=mask_claim_none(params),
+        definite_on=mask_claim_none(params),
+        batch_axes=(0,),
     )
 
     def loss(params, *args):
@@ -662,7 +768,13 @@ def test_eigh_direction_preserves_pytree_flattening_order(jit):
     grad = jax.grad(loss)(params)
     H = jax.hessian(loss)(params)
 
-    solver = _make_solver(loss, lambda params, *args: H, _GENERAL_TAG, params, jit=jit)
+    tag = _make_tag(
+        init_params=jnp.zeros(3),
+        property=MatrixProperty.SYMMETRIC,
+        structure=MatrixStructure.FULL,
+    )
+
+    solver = _make_solver(loss, lambda params, *args: H, tag, params, jit=jit)
     solver.init_state(params)
 
     direction = solver._newton_direction(grad, H, params)
@@ -699,10 +811,16 @@ def test_eigh_newton_solves_rosenbrock_from_indefinite_region(jit):
 
     assert jnp.linalg.det(hess(x0)) < 0.0
 
+    tag = _make_tag(
+        init_params=x0,
+        property=MatrixProperty.SYMMETRIC,
+        structure=MatrixStructure.FULL,
+    )
+
     solver = _make_solver(
         loss,
         hess,
-        _GENERAL_TAG,
+        tag,
         x0,
         jit=jit,
         maxiter=20,

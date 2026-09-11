@@ -108,7 +108,7 @@ class Newton(HessianMixin):
 
     def init_state(self, init_params, *args):
         self._build_cache()
-        self._resolve_linear_solver()
+        self._resolve_linear_solver(init_params)
         ls_state = self._line_search.init(init_params)
 
         fval_shape = jax.eval_shape(self.fun, init_params, *args)
