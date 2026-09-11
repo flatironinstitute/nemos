@@ -189,7 +189,7 @@ class Newton(HessianMixin):
         def reject(_):
             return params, state.ls_state
 
-        new_params, new_ls_state = jax.lax.cond(descent, accept, reject, None)
+        new_params, new_ls_state = jax.lax.cond(descent < 0, accept, reject, None)
         return new_params, new_ls_state
 
     def update(
