@@ -39,7 +39,7 @@ def valid_user_params(is_classifier):
         return (
             jnp.zeros((N_FEATURES, N_CLASSES, N_STATES)),
             jnp.zeros((N_CLASSES, N_STATES)),
-            jnp.ones((N_STATES,)),
+            jnp.ones((N_CLASSES, N_STATES)),
             jnp.ones(N_STATES) / N_STATES,
             jnp.ones((N_STATES, N_STATES)) / N_STATES,
         )
