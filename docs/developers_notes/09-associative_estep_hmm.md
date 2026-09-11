@@ -190,7 +190,7 @@ $$
 l_{u:t} = F_{u:t} \mathbf{1}, \qquad L_{u:t} = \text{diag}(l_{u:t})^-1 F_{u:t}.
 $$
 
-The first term is $l_{u:t} = p(y_{u:t} \mid z_{u-1} = j)$, the second one is
+The first term is $l_{u:t} = p(y_{u:t} \mid z_{u-1} = j) \in (0, 1]$ for all the emissions in nemos (therefore we can safely invert it, as in the formula above), the second one is
 
 $$
 \begin{aligned}
@@ -202,6 +202,12 @@ L_{u:t}[j,i] &=\; \frac{F_{u:t}[j,i]}{\ell_{u:t}[j]} \\
 \end{aligned}
 $$
 
-In particular, each row of $L_{u:t}$ is a probability distribution over the states, which means that its entries lie in $[0,1]$ and the rows sum to $1$ no matter how long the sequence of states is. There is no underflow issue anymore. The $F_{u:t}$ can be recovered from $(l_{u:t}, L_{u:t})$, and from the $F$s we can recover the forward pass messages.
+In particular, each row of $L_{u:t}$ is a probability distribution over the states, which means that its entries lie in $[0,1]$ and the rows sum to $1$ no matter how long the sequence of states is. There is no underflow issue anymore.
+
+$F_{u:t}$ can be recovered from $(l_{u:t}, L_{u:t})$, and from $F_{u:t}$ we can compute the forward pass messages.
 
 ## Get $(l, L})$ via scan
+
+What we need to show is that we can compute $l$ and $L$ with a scan and that the operation we are scanning over is associative.
+
+Let's define the invertible map $\phi(F) = \left(F\mathbf{1},\,\text{diag}(F\mathbf{1})^-1 F\right)$. The map is closed under matrix multiplication, in the sense that 1
