@@ -49,7 +49,7 @@ class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
     expected_param_dims: Tuple[int] = (
         2,
         1,
-        1,
+        2,
         1,
         2,
     )  # (coef.ndim, intercept.ndim, scale.ndim, init_prob.ndim, transition_prob.ndim)
@@ -73,7 +73,7 @@ class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
                 err_message_format="Invalid parameter dimensionality.\n- coef must be an array "
                 "or any JAX pytree with array leaves of shape "
                 "``(n_features, n_states)``.\n- intercept must be of shape ``(n_states,)``.\n"
-                "- scale must be of shape ``(n_states,)``.\n"
+                "- scale must be of shape ``(n_classes, n_states)``.\n"
                 "- initial_prob must be of shape ``(n_states,)``.\n"
                 "- transition_prob must be of shape ``(n_states, n_states)``.\n"
                 "\nThe provided coef, intercept, scale, initial_prob and transition_prob "

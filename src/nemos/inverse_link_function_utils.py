@@ -22,8 +22,8 @@ def _make_wrapper(func_exec, name, description):
         func = func_exec
 
     @functools.wraps(func)
-    def wrapper(x):
-        return func_exec(x)
+    def wrapper(x, **kwargs):
+        return func_exec(x, **kwargs)
 
     # Combine the custom description with original docstring
     original_doc = func.__doc__ or "No docstring available."

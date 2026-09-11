@@ -832,7 +832,7 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
         y, y_proba, simulated_states = super().simulate(
             random_key, feedforward_input, state_format, session_starts
         )
-        argmax = support_pynapple(conv_type="jax")(lambda x: jnp.argmax(x, axis=-2))
+        argmax = support_pynapple(conv_type="jax")(lambda x: jnp.argmax(x, axis=-1))
         y = self._label_encoder.decode(argmax(y))
         return y, y_proba, simulated_states
 

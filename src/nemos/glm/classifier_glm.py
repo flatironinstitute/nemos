@@ -228,6 +228,7 @@ class ClassifierMixin:
         init_params: UserProvidedParamsT,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
+        **kwargs,
     ) -> SolverState:
         """Initialize the solver and its state for running fit and update.
 
@@ -256,7 +257,7 @@ class ClassifierMixin:
         """
         self._label_encoder.check_classes_is_set("initialize_optimizer_and_state")
         y = self._label_encoder.encode(y)
-        return super().initialize_optimizer_and_state(init_params, X, y)
+        return super().initialize_optimizer_and_state(init_params, X, y, **kwargs)
 
     def initialize_params(
         self,

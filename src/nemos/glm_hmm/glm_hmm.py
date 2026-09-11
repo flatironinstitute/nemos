@@ -390,12 +390,17 @@ class GLMHMM(
             self._inverse_link_function,
         )
         ll_func = self._log_like_cache.get(cache_key)
+
         if ll_func is None:
+            if self._is_categorical_glm:
+                inverse_link = partial(self._inverse_link_function, axis=-2)
+            else:
+                inverse_link = self._inverse_link_function
             ll_func = prepare_estep_log_likelihood(
                 is_population_glm,
                 self._is_categorical_glm,
                 self._observation_model,
-                self._inverse_link_function,
+                inverse_link,
             )
             self._log_like_cache[cache_key] = ll_func
         return ll_func(params, X, y)
@@ -631,12 +636,12 @@ class GLMHMM(
         ValueError
             If a callable is non-differentiable or returns an unsupported type.
         """
-        inverse_link = resolve_inverse_link_function(
+        self._inverse_link_function = resolve_inverse_link_function(
             inverse_link_function, self._observation_model
         )
-        if self._is_categorical_glm:
-            inverse_link = partial(inverse_link, axis=-2)
-        self._inverse_link_function = inverse_link
+        # if self._is_categorical_glm:
+        #     inverse_link = partial(inverse_link, axis=-2)
+        # self._inverse_link_function = inverse_link
 
     def _check_model_is_fit(self):
         """Ensure the instance has been fitted."""
@@ -1633,11 +1638,16 @@ class GLMHMM(
         """
         # glm params m-step setup
         is_population = (y.ndim > 2) if self._is_categorical_glm else (y.ndim > 1)
+        if self._is_categorical_glm:
+            inverse_link = partial(self._inverse_link_function, axis=-2)
+        else:
+            inverse_link = self._inverse_link_function
+
         m_step_update = prepare_mstep_update_fn(
             is_population_glm=is_population,
             is_categorical_glm=self._is_categorical_glm,
             observation_model=self._observation_model,
-            inverse_link_function=self._inverse_link_function,
+            inverse_link_function=inverse_link,
             setup_solver=self._instantiate_solver,
             init_params=init_params.model_params,
         )
