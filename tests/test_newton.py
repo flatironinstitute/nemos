@@ -24,7 +24,7 @@ from nemos.base_regressor import BaseRegressor
 from nemos.glm import GLM, PopulationGLM
 from nemos.glm.classifier_glm import ClassifierGLM, ClassifierPopulationGLM
 from nemos.glm.params import GLMParams
-from nemos.regularizer import Lasso, Regularizer, Ridge, UnRegularized
+from nemos.regularizer import GroupLasso, Lasso, Regularizer, Ridge, UnRegularized
 from nemos.solvers._abstract_solver import OptimizationInfo
 from nemos.solvers._newton import Newton, NewtonState, ProximalNewton
 from nemos.tree_utils import pytree_map_and_reduce
@@ -1751,3 +1751,270 @@ def test_prox_newton_indefinite_hessian_does_not_report_success():
 
     finite = bool(np.all(np.isfinite(np.asarray(params))))
     assert not (finite and bool(state.stats.converged))
+
+
+# Constants of the backtracking search ``Newton.__init__`` builds: ``max_backtracking_steps``
+# is set there, the rest are ``optax.scale_by_backtracking_linesearch`` defaults. The
+# reference below reproduces the algorithm from them, so a change on either side shows up
+# as a disagreement rather than as a silently different search.
+_SLOPE_RTOL = 1e-4
+_DECREASE_FACTOR = 0.8
+_INCREASE_FACTOR = 1.5
+_MAX_LEARNING_RATE = 1.0
+_MAX_BACKTRACKING_STEPS = 30
+
+# A point with both zero and non-zero coefficients: the zeros are where the penalty is
+# not differentiable, which is the whole reason the composite slope is needed.
+_KINKED_PARAMS = np.array([0.7, 0.0, -0.4, 0.0, 0.25, 0.1])
+_PENALTY_STRENGTH = 0.01
+
+# Three groups over the six coefficients, so a group straddles a zero and a non-zero one.
+_GROUP_MASK = np.zeros((3, _KINKED_PARAMS.size))
+_GROUP_MASK[0, :2] = 1.0
+_GROUP_MASK[1, 2:4] = 1.0
+_GROUP_MASK[2, 4:] = 1.0
+
+
+def _mse_grad(params, X, y):
+    """Gradient of ``_mse``, differentiated by hand rather than taken from the solver."""
+    return (-2.0 / X.shape[0]) * X.T @ (y - X @ np.asarray(params))
+
+
+def _l1_penalty(params):
+    return _PENALTY_STRENGTH * np.abs(np.asarray(params)).sum()
+
+
+def _group_l2_penalty(params):
+    """``strength * sum_j sqrt(dim(beta_j)) ||beta_j||_2``, the formula ``GroupLasso`` documents."""
+    params = np.asarray(params)
+    return _PENALTY_STRENGTH * sum(
+        np.sqrt(group.sum()) * np.linalg.norm(params[group.astype(bool)])
+        for group in _GROUP_MASK
+    )
+
+
+def _step_off_a_zero(params):
+    """A unit step along the first zero coefficient, where the penalty has its kink."""
+    step = np.zeros_like(params)
+    step[np.flatnonzero(np.asarray(params) == 0.0)[0]] = 1.0
+    return step
+
+
+# Both nonsmooth penalties allowed for ``ProximalNewton``, each with the penalty written
+# out in numpy so the expected slope does not come from the object under test. The
+# regularizers are built inside the test: a ``GroupLasso`` constructed at collection time
+# stores a float32 mask, since ``requires_x64`` has not switched precision on yet.
+_PENALTY_CASES = [
+    pytest.param(Lasso, _l1_penalty, id="Lasso"),
+    pytest.param(
+        lambda: GroupLasso(mask=_GROUP_MASK), _group_l2_penalty, id="GroupLasso"
+    ),
+]
+
+# Steps chosen for the sign of ``P(b + d) - P(b)`` they force, since that difference is
+# the term the composite slope adds. The tiny variants make ``penalty_diff / ||d||^2``
+# large, which is where the encoding could lose the term to cancellation, and the null
+# step is the ``sq_norm > 0`` guard.
+_STEP_CASES = [
+    pytest.param(lambda b: -b, -1.0, id="to_the_origin"),
+    pytest.param(lambda b: -1e-6 * b, -1.0, id="to_the_origin_tiny"),
+    pytest.param(_step_off_a_zero, 1.0, id="off_a_zero_coefficient"),
+    pytest.param(
+        lambda b: 1e-6 * _step_off_a_zero(b), 1.0, id="off_a_zero_coefficient_tiny"
+    ),
+    pytest.param(np.zeros_like, 0.0, id="null_step"),
+]
+
+
+def _line_search_inputs_at(regularizer, strength, params, step, X, y):
+    """``_line_search_inputs`` and the gradient it was given, at ``params``."""
+    solver = ProximalNewton(
+        _mse,
+        regularizer=regularizer,
+        regularizer_strength=strength,
+        has_aux=False,
+        init_params=params,
+        tol=1e-12,
+    )
+    state = solver.init_state(params, X, y)
+    (fval, _), grad = solver._gradient(params, X, y)
+    return (
+        solver,
+        state,
+        grad,
+        solver._line_search_inputs(params, step, grad, fval, X, y),
+    )
+
+
+@pytest.mark.parametrize("make_regularizer, penalty", _PENALTY_CASES)
+@pytest.mark.parametrize("make_step, penalty_change", _STEP_CASES)
+@pytest.mark.requires_x64
+def test_prox_newton_line_search_slope_is_the_composite_delta(
+    make_regularizer, penalty, make_step, penalty_change
+):
+    """Contracted with the step, the slope handed to ``optax`` is the Tseng & Yun (2009) ``Delta``.
+
+    ``optax`` forms ``vdot(step, slope)`` and never differentiates ``slope``, so the
+    override encodes ``Delta = grad f^T d + P(b + d) - P(b)`` by adding
+    ``[P(b + d) - P(b)] / ||d||^2 * d`` to the gradient. It is ``Delta``, not
+    ``grad f^T d``, that certifies descent of the nonsmooth objective, so the identity is
+    what makes the stock Armijo search correct here.
+
+    Every reference is numpy: the penalty formulas, the hand-differentiated gradient of
+    ``_mse`` and the composite value. Worst measured relative error over these cases is
+    1.4e-11, on the tiny steps where the ``1/||d||^2`` scaling costs digits; the 1e-9
+    bound is ~70x above it.
+    """
+    np.random.seed(0)
+    X = np.random.normal(size=(200, _KINKED_PARAMS.size))
+    y = np.random.normal(size=200)
+    params = jnp.asarray(_KINKED_PARAMS)
+    step = make_step(_KINKED_PARAMS)
+
+    _, _, _, (value, slope, value_fn) = _line_search_inputs_at(
+        make_regularizer(), _PENALTY_STRENGTH, params, jnp.asarray(step), X, y
+    )
+
+    penalty_diff = penalty(_KINKED_PARAMS + step) - penalty(_KINKED_PARAMS)
+    assert np.sign(penalty_diff) == penalty_change, (
+        "the step must move the penalty in the parametrized direction, otherwise the "
+        "case tests the smooth slope only"
+    )
+
+    smooth = float(np.mean((y - X @ _KINKED_PARAMS) ** 2))
+    np.testing.assert_allclose(value, smooth + penalty(_KINKED_PARAMS), rtol=1e-12)
+
+    expected = _mse_grad(_KINKED_PARAMS, X, y) @ step + penalty_diff
+    np.testing.assert_allclose(
+        lx.internal.tree_dot(slope, jnp.asarray(step)), expected, rtol=1e-9, atol=1e-15
+    )
+    # the null step divides 0 by 0 unless the guard holds
+    assert np.all(np.isfinite(np.asarray(slope)))
+
+    moved = _KINKED_PARAMS + step
+    np.testing.assert_allclose(
+        value_fn(jnp.asarray(moved)),
+        float(np.mean((y - X @ moved) ** 2)) + penalty(moved),
+        rtol=1e-12,
+    )
+
+
+@pytest.mark.requires_x64
+def test_prox_newton_line_search_slope_is_the_gradient_when_unpenalized():
+    """With ``P = 0`` the added term vanishes and the search gets the plain smooth inputs.
+
+    The penalty difference is identically zero, so the carrier vector must reduce to the
+    gradient exactly -- a spurious term here would push a correct Armijo search off a
+    smooth objective it already handles.
+    """
+    np.random.seed(0)
+    X = np.random.normal(size=(200, _KINKED_PARAMS.size))
+    y = np.random.normal(size=200)
+    params = jnp.asarray(_KINKED_PARAMS)
+    step = jnp.asarray(-_KINKED_PARAMS)
+
+    _, _, grad, (value, slope, value_fn) = _line_search_inputs_at(
+        UnRegularized(), None, params, step, X, y
+    )
+
+    np.testing.assert_array_equal(np.asarray(slope), np.asarray(grad))
+    np.testing.assert_allclose(
+        value, float(np.mean((y - X @ _KINKED_PARAMS) ** 2)), rtol=1e-12
+    )
+    np.testing.assert_allclose(
+        value_fn(params + step), float(np.mean(y**2)), rtol=1e-12
+    )
+
+
+def _tseng_yun_backtracking(objective, params, step, delta, prev_stepsize):
+    """Armijo backtracking on a composite objective, Tseng & Yun (2009), in plain numpy.
+
+    Tries ``a = min(1.5 * a_prev, 1) * 0.8^k`` for ``k = 0, 1, ...`` and accepts the first
+    satisfying ``F(b + a d) <= F(b) + c a Delta``; ``a = 0`` if the objective is not a
+    number, and the last ``a`` tried if the budget runs out. Returns the stepsize and the
+    number of objective evaluations, so a run matches the reference step by step and not
+    only at its endpoint.
+    """
+    value = objective(params)
+    stepsize = min(_INCREASE_FACTOR * prev_stepsize, _MAX_LEARNING_RATE)
+    error, evaluations = np.inf, 0
+    for iter_num in range(_MAX_BACKTRACKING_STEPS + 1):
+        if error <= 0.0:
+            break
+        if iter_num > 0:
+            stepsize *= _DECREASE_FACTOR
+        residual = (
+            objective(params + stepsize * step) - value - stepsize * _SLOPE_RTOL * delta
+        )
+        error = np.inf if np.isnan(residual) else max(residual, 0.0)
+        evaluations += 1
+    return (0.0 if np.isinf(error) else stepsize), evaluations
+
+
+@pytest.mark.parametrize("start", [np.zeros_like(_KINKED_PARAMS), _KINKED_PARAMS])
+@pytest.mark.parametrize("scale", [1.0, 5.0, 50.0])
+@pytest.mark.parametrize("prev_stepsize", [1.0, 0.4])
+@pytest.mark.requires_x64
+def test_prox_newton_backtracking_matches_tseng_yun_reference(
+    start, scale, prev_stepsize
+):
+    """The optax search, fed the rewritten inputs, is the Tseng & Yun search written directly.
+
+    ``_apply_or_reject`` is compared against ``_tseng_yun_backtracking``, which owes optax
+    nothing but the four constants: same accepted stepsize, same number of objective
+    evaluations, same iterate. ``scale`` inflates the proximal Newton direction past the
+    minimizer of the local model so the full step is rejected and the loop actually
+    backtracks -- 6 and 16 evaluations at 5x and 50x against 1 at the Newton step --
+    and ``prev_stepsize`` exercises the warm start, whose candidate ``min(1.5 a, 1)``
+    saturates at 1.0 and does not at 0.4.
+
+    The comparison is bit-exact in practice (stepsizes equal, iterates within 1.1e-16)
+    because the accepted step clears the sufficient-decrease test by 3e-3 to 5e-1 here,
+    far above the precision at which the two objectives could disagree. It also has teeth
+    on the composite value function: passing the smooth loss alone in its place accepts
+    0.4096 rather than 0.32768 at ``scale=5``.
+    """
+    np.random.seed(0)
+    X = np.random.normal(size=(200, _KINKED_PARAMS.size))
+    y = np.random.normal(size=200)
+    params = jnp.asarray(start)
+
+    def objective(coef):
+        coef = np.asarray(coef)
+        return float(np.mean((y - X @ coef) ** 2) + _l1_penalty(coef))
+
+    solver = ProximalNewton(
+        _mse,
+        regularizer=Lasso(),
+        regularizer_strength=_PENALTY_STRENGTH,
+        has_aux=False,
+        init_params=params,
+        tol=1e-12,
+    )
+    state = solver.init_state(params, X, y)
+    # the search reads its previous stepsize off the state; setting it directly keeps the
+    # warm start a parametrized axis instead of a by-product of a trajectory
+    state = eqx.tree_at(
+        lambda s: s.ls_state.learning_rate, state, jnp.asarray(prev_stepsize)
+    )
+
+    (fval, _), grad = solver._gradient(params, X, y)
+    H = solver._hessian(params, X, y)
+    step = jax.tree.map(lambda d: scale * d, solver._newton_direction(grad, H, params))
+    _, slope, _ = solver._line_search_inputs(params, step, grad, fval, X, y)
+    delta = float(lx.internal.tree_dot(slope, step))
+    assert delta < 0.0, "the reference only terminates on a descent direction"
+
+    new_params, ls_state = solver._apply_or_reject(
+        params, step, grad, state, fval, X, y
+    )
+    expected_stepsize, expected_evaluations = _tseng_yun_backtracking(
+        objective, start, np.asarray(step), delta, prev_stepsize
+    )
+
+    np.testing.assert_allclose(ls_state.learning_rate, expected_stepsize, rtol=1e-12)
+    assert int(ls_state.info.num_linesearch_steps) == expected_evaluations
+    np.testing.assert_allclose(
+        new_params, start + expected_stepsize * np.asarray(step), rtol=1e-12, atol=1e-15
+    )
+    assert objective(new_params) < objective(start)
