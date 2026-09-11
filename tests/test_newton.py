@@ -1485,7 +1485,7 @@ def test_second_order_solvers_store_rtol(solver_name):
         solver_name=solver_name,
         solver_kwargs={"rtol": 1e-3},
     )
-    solver = model._instantiate_solver(model._compute_loss, np.zeros(1))
+    solver = model._instantiate_solver(model._compute_loss, _init_params_for(GLM))
     assert solver.rtol == 1e-3
 
 
