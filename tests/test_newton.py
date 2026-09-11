@@ -2018,3 +2018,69 @@ def test_prox_newton_backtracking_matches_tseng_yun_reference(
         new_params, start + expected_stepsize * np.asarray(step), rtol=1e-12, atol=1e-15
     )
     assert objective(new_params) < objective(start)
+
+
+# Both second-order solvers share ``_apply_or_reject``, and the slope reaching it is built
+# differently by each: the plain gradient for the smooth solver, the composite Delta for
+# the proximal one.
+_GATE_CASES = [
+    pytest.param(Newton, Ridge, 0.1, id="Newton-Ridge"),
+    pytest.param(ProximalNewton, Lasso, _PENALTY_STRENGTH, id="ProximalNewton-Lasso"),
+]
+
+
+@pytest.mark.parametrize("solver_cls, regularizer_cls, strength", _GATE_CASES)
+@pytest.mark.parametrize(
+    "make_step, slope_sign",
+    [
+        pytest.param(lambda grad: jax.tree.map(lambda g: -g, grad), -1.0, id="descent"),
+        pytest.param(jnp.zeros_like, 0.0, id="stationary"),
+        pytest.param(lambda grad: grad, 1.0, id="ascent"),
+    ],
+)
+@pytest.mark.requires_x64
+def test_second_order_solvers_step_only_on_a_descent_slope(
+    solver_cls, regularizer_cls, strength, make_step, slope_sign
+):
+    """``_apply_or_reject`` runs the line search on a negative slope and on nothing else.
+
+    The gate is ``tree_dot(slope, step)``, a slope rather than a flag, so it has to be
+    compared against zero: a positive value certifies nothing, and the Armijo test it
+    would then run puts its threshold above the current value, accepting an increase.
+    A proximal step with a positive ``Delta`` is what an inexact subproblem solve returns.
+    """
+    np.random.seed(0)
+    X = np.random.normal(size=(200, _KINKED_PARAMS.size))
+    y = np.random.normal(size=200)
+    params = jnp.asarray(_KINKED_PARAMS)
+
+    solver = solver_cls(
+        _mse,
+        regularizer=regularizer_cls(),
+        regularizer_strength=strength,
+        has_aux=False,
+        init_params=params,
+        tol=1e-12,
+    )
+    state = solver.init_state(params, X, y)
+    (fval, _), grad = solver._gradient(params, X, y)
+    step = make_step(grad)
+
+    _, slope, _ = solver._line_search_inputs(params, step, grad, fval, X, y)
+    descent = float(lx.internal.tree_dot(slope, step))
+    assert np.sign(descent) == slope_sign
+
+    new_params, new_ls_state = solver._apply_or_reject(
+        params, step, grad, state, fval, X, y
+    )
+
+    if slope_sign < 0:
+        assert not np.allclose(new_params, params), "a descent step must be taken"
+    else:
+        np.testing.assert_array_equal(np.asarray(new_params), np.asarray(params))
+        # the rejected branch returns the state untouched, so the next iteration
+        # restarts the search from the same stepsize
+        np.testing.assert_array_equal(
+            np.asarray(new_ls_state.learning_rate),
+            np.asarray(state.ls_state.learning_rate),
+        )
