@@ -1827,7 +1827,7 @@ _STEP_CASES = [
 
 
 def _line_search_inputs_at(regularizer, strength, params, step, X, y):
-    """``_line_search_inputs`` and the gradient it was given, at ``params``."""
+    """The gradient at ``params`` and the line-search inputs built from it."""
     solver = ProximalNewton(
         _mse,
         regularizer=regularizer,
@@ -1836,14 +1836,9 @@ def _line_search_inputs_at(regularizer, strength, params, step, X, y):
         init_params=params,
         tol=1e-12,
     )
-    state = solver.init_state(params, X, y)
+    solver.init_state(params, X, y)
     (fval, _), grad = solver._gradient(params, X, y)
-    return (
-        solver,
-        state,
-        grad,
-        solver._line_search_inputs(params, step, grad, fval, X, y),
-    )
+    return grad, solver._line_search_inputs(params, step, grad, fval, X, y)
 
 
 @pytest.mark.parametrize("make_regularizer, penalty", _PENALTY_CASES)
@@ -1871,7 +1866,7 @@ def test_prox_newton_line_search_slope_is_the_composite_delta(
     params = jnp.asarray(_KINKED_PARAMS)
     step = make_step(_KINKED_PARAMS)
 
-    _, _, _, (value, slope, value_fn) = _line_search_inputs_at(
+    _, (value, slope, value_fn) = _line_search_inputs_at(
         make_regularizer(), _PENALTY_STRENGTH, params, jnp.asarray(step), X, y
     )
 
@@ -1913,7 +1908,7 @@ def test_prox_newton_line_search_slope_is_the_gradient_when_unpenalized():
     params = jnp.asarray(_KINKED_PARAMS)
     step = jnp.asarray(-_KINKED_PARAMS)
 
-    _, _, grad, (value, slope, value_fn) = _line_search_inputs_at(
+    grad, (value, slope, value_fn) = _line_search_inputs_at(
         UnRegularized(), None, params, step, X, y
     )
 
