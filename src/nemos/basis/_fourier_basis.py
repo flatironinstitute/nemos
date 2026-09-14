@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import math
 import warnings
 from numbers import Number
 from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    Generator,
     List,
     Literal,
     Optional,
@@ -28,7 +30,7 @@ from ..type_casting import is_at_least_1d_numpy_array_like, support_pynapple
 from ..typing import Array, FeatureMatrix
 from ..utils import format_repr
 from ._basis import Basis, check_transform_input, min_max_rescale_samples
-from ._basis_mixin import AtomicBasisMixin
+from ._basis_mixin import AtomicBasisMixin, BoundedEvalBasisMixin
 
 # A collection of frequency arrays only needs to be indexable/sliceable and
 # iterable, hence ``Sequence``; each element is a NumPy or JAX ``Array``.
@@ -460,11 +462,13 @@ class FourierBasis(AtomicBasisMixin, Basis):
         frequency_mask: (
             Literal["all", "no-intercept"] | jnp.ndarray | None
         ) = "no-intercept",
+        weights: Optional[ArrayLike] = None,
         label: Optional[str] = None,
     ) -> None:
         self._n_inputs = self._check_ndim(ndim)
         self.frequencies = frequencies
         self.frequency_mask = frequency_mask
+        self._weights = self._check_weights(weights)
         Basis.__init__(
             self,
         )
@@ -473,6 +477,19 @@ class FourierBasis(AtomicBasisMixin, Basis):
             n_basis_funcs=self.n_basis_funcs,
             label=label,
         )
+
+    def _check_weights(self, weights: Optional[ArrayLike]) -> Optional[jnp.ndarray]:
+        """Validate per-output-column weights against the number of basis functions."""
+        if weights is None:
+            return None
+        weights = jnp.asarray(weights, dtype=float)
+        if weights.shape[0] != self.n_basis_funcs:
+            raise ValueError(
+                "``weights`` must have one entry per basis function "
+                f"(``n_basis_funcs`` = {self.n_basis_funcs}); "
+                f"got {weights.shape[0]} instead."
+            )
+        return weights
 
     @property
     def frequency_mask(self) -> Callable | jnp.ndarray | Literal["all", "no-intercept"]:
@@ -715,6 +732,15 @@ class FourierBasis(AtomicBasisMixin, Basis):
     def n_basis_funcs(self) -> int | None:
         return 2 * self._freq_combinations.shape[-1] - self._has_zero_phase
 
+    @property
+    def weights(self) -> Optional[jnp.ndarray]:
+        """Per-output-column weights applied inside :meth:`evaluate`.
+
+        ``None`` when no weights were provided at construction, in which case no
+        reweighting is applied.
+        """
+        return self._weights
+
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     def evaluate(  # call these _evaluate
@@ -759,6 +785,8 @@ class FourierBasis(AtomicBasisMixin, Basis):
         out = jnp.concatenate(
             [jnp.cos(angles), jnp.sin(angles[..., self._has_zero_phase :])], axis=1
         )
+        if self._weights is not None:
+            out = out * self._weights
         return out.reshape(*shape, out.shape[-1])
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
@@ -822,3 +850,264 @@ class FourierBasis(AtomicBasisMixin, Basis):
 
     def __repr__(self):
         return format_repr(self, exclude_keys=["fill_value"])
+
+
+def _get_nodes_weights(
+    lengthscale: float, variance: float, eps: float, L: float
+) -> Tuple[jnp.ndarray, jnp.ndarray, float, int]:
+    """Find the nodes of the equispaced quadrature in Fourier domain.
+
+    Operates on the discretized inverse Fourier transform for a 1-D
+    squared-exponential kernel. This involves finding the spacing between
+    nodes ``h`` and the number of nodes ``2m + 1``. This is done from a
+    formula in [1]_.
+
+    Returns the non-negative frequency grid ``xi_j = j * h`` for
+    ``j = 0, 1, ..., m``, the weights corresponding to each column
+    (also prior standard deviations from the GP perspective) in
+    ``[cos columns, sin columns]`` so that an i.i.d. ``N(0, 1)`` prior
+    on coefficients gives an approximate squared-exponential covariance
+    kernel. also returns the frequency spacing ``h``, and the number of
+    non-negative frequencies, ``m``.
+
+    Parameters
+    ----------
+    lengthscale, variance :
+        se kernel hyperparameters.
+    eps :
+        error tolerance on kernel approximation
+    L :
+        time domain length ``t1 - t0``.
+
+    Returns
+    -------
+    xis :
+        non-negative frequencies of shape ``(m + 1,)``.
+    weights :
+        weights of shape ``(2 * m + 1,)`` corresponding to the columns
+        ``[cos columns, sin columns]``: cos columns first
+        (``j = 0, 1, ..., m``), then sin columns (``j = 1, ..., m``).
+    h :
+        spacing between frequencies
+    m :
+        number of positive frequencies
+
+    References
+    ----------
+    .. [1] Barnett, A. H., Greengard, P., & Rachh, M. (2024). Uniform
+        approximation of common Gaussian process kernels using equispaced Fourier
+        grids. Applied and Computational Harmonic Analysis, 71, 101640.
+    """
+    lengthscale = float(lengthscale)
+    var = float(variance)
+    eps_use = float(eps) / var
+
+    # Heuristic for h and m
+    h = 1.0 / (L + lengthscale * math.sqrt(2.0 * math.log(12.0 / eps_use)))
+    m = math.ceil(math.sqrt(math.log(16.0 / eps_use) / 2.0) / math.pi / lengthscale / h)
+
+    j = jnp.arange(m + 1, dtype=float)
+    xis = j * h
+
+    # 1d se spectral density: S(xi) = var * sqrt(2*pi*l^2) * exp(-2*pi^2*l^2*xi^2)
+    prefactor = var * math.sqrt(2.0 * math.pi * lengthscale**2)
+    S = prefactor * jnp.exp(-2.0 * (math.pi * lengthscale) ** 2 * xis**2)
+    w = jnp.sqrt(S * h)  # efgp per-mode weight, shape (m + 1,)
+
+    # convert standard efgp xis with +/- modes into a positive-only modes.
+    sqrt2 = math.sqrt(2.0)
+    w_cos = w.at[1:].multiply(sqrt2)  # cos columns: w_0, sqrt(2)*w_1, ...
+    w_sin = sqrt2 * w[1:]  # sin columns: sqrt(2)*w_1, ...
+    weights = jnp.concatenate([w_cos, w_sin])
+    return xis, weights, h, m
+
+
+def _grid_params_from_nodes(xis: ArrayLike) -> Tuple[float, int]:
+    """Recover the grid spacing ``h`` and max index ``m`` from the node grid.
+
+    The nodes are the non-negative, equispaced frequencies ``xi_j = j * h`` for
+    ``j = 0, 1, ..., m`` produced by :func:`_get_nodes_weights`, so the spacing
+    is ``h = xis[1] - xis[0]`` and the number of positive frequencies is
+    ``m = len(xis) - 1``.
+
+    Parameters
+    ----------
+    xis :
+        Non-negative, equispaced frequency grid, shape ``(m + 1,)``.
+
+    Returns
+    -------
+    h :
+        Spacing between consecutive frequencies.
+    m :
+        Number of positive frequencies.
+    """
+    xis = jnp.asarray(xis)
+    m = int(xis.shape[0] - 1)
+    h = float(xis[1] - xis[0])
+    return h, m
+
+
+class FourierGP(BoundedEvalBasisMixin, FourierBasis):
+    """1d Fourier basis with an approximate squared-exponential GP prior.
+
+    Generates ``cos`` and ``sin`` basis functions on a domain ``[t0, t1]``
+    whose frequencies and per-column weights are picked so that an i.i.d.
+    ``N(0, 1)`` prior on the basis coefficients corresponds to a Gaussian
+    process with approximately squared-exponential (SE) covariance:
+
+    .. code-block:: text
+
+        k(r) = variance * exp(-r^2 / (2 * lengthscale^2))
+
+    The equispaced frequency grid for Gaussian processes is from [1]_. Given
+    the error tolerance ``eps``, the basis has ``2 * m + 1`` functions: cosines
+    at frequencies ``j * h`` for ``j = 0, ..., m`` and sines at ``j * h`` for
+    ``j = 1, ..., m``; the spacing ``h`` and node count ``m`` follow the kernel
+    approximation bounds in [2]_.
+
+    This basis reuses :class:`FourierBasis`: it is built on the integer
+    harmonics ``j = 0, ..., m`` whose effective frequency is rescaled to
+    ``j * h`` (see :meth:`_shift_angles`), and the SE spectral density enters
+    through the inherited per-column ``weights``.
+
+    Parameters
+    ----------
+    lengthscale :
+        SE kernel lengthscale, in the same units as ``bounds``.
+    bounds :
+        Pair ``(t0, t1)`` with ``t0 < t1`` defining the construction domain.
+    eps :
+        kernel approximation error tolerance.
+    variance :
+        SE kernel variance (prefactor). Default is ``1.0``.
+    label :
+        descriptive label for the basis. Defaults to the class name.
+
+    References
+    ----------
+    .. [1] Greengard, P., Rachh, M., & Barnett, A. H. (2025). Equispaced Fourier
+        representations for efficient Gaussian process regression from a billion
+        data points. SIAM/ASA Journal on Uncertainty Quantification, 13(1).
+    .. [2] Barnett, A. H., Greengard, P., & Rachh, M. (2024). Uniform
+        approximation of common Gaussian process kernels using equispaced Fourier
+        grids. Applied and Computational Harmonic Analysis, 71, 101640.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from nemos.basis import FourierGP
+    >>> basis = FourierGP(
+    ...     lengthscale=0.2, bounds=(0.0, 1.0), eps=1e-4, variance=2.0
+    ... )
+    >>> basis.n_frequencies
+    8
+    >>> basis.n_basis_funcs
+    17
+    >>> x = np.linspace(0, 1, 100)
+    >>> X = basis.compute_features(x)
+    >>> X.shape  # (n_samples, n_basis_funcs)
+    (100, 17)
+    """
+
+    # Fourier basis is defined over the entire real line; out-of-bounds
+    # samples should not be filled with a sentinel value.
+    _apply_bounds_fill = False
+
+    def __init__(
+        self,
+        lengthscale: float,
+        bounds: Tuple[float, float],
+        eps: float,
+        variance: float = 1.0,
+        label: Optional[str] = "FourierGP",
+    ) -> None:
+        lengthscale = float(lengthscale)
+        variance = float(variance)
+        eps = float(eps)
+        if lengthscale <= 0:
+            raise ValueError(f"``lengthscale`` must be positive, got {lengthscale}.")
+        if variance <= 0:
+            raise ValueError(f"``variance`` must be positive, got {variance}.")
+        if eps <= 0:
+            raise ValueError(f"``eps`` must be positive, got {eps}.")
+        if not (isinstance(bounds, (tuple, list)) and len(bounds) == 2):
+            raise TypeError(
+                "``bounds`` must be a 2-element tuple ``(t0, t1)``; " f"got {bounds!r}."
+            )
+        t0, t1 = float(bounds[0]), float(bounds[1])
+        if not t0 < t1:
+            raise ValueError(f"``bounds`` must satisfy ``t0 < t1``; got ({t0}, {t1}).")
+
+        xis, weights, _, m = _get_nodes_weights(lengthscale, variance, eps, t1 - t0)
+
+        self._lengthscale = lengthscale
+        self._variance = variance
+        self._eps = eps
+        self._xis = xis
+
+        # Build on integer harmonics ``j = 0, ..., m`` (``frequency_mask="all"``
+        # keeps the ``j = 0`` DC term). ``_shift_angles`` rescales the angle so
+        # the effective frequency of harmonic ``j`` becomes ``j * h = xi_j``,
+        # and ``weights`` injects the SE spectral density.
+        FourierBasis.__init__(
+            self,
+            frequencies=m + 1,
+            ndim=1,
+            frequency_mask="all",
+            weights=weights,
+            label=label,
+        )
+        BoundedEvalBasisMixin.__init__(self, bounds=(t0, t1))
+
+    @property
+    def lengthscale(self) -> float:
+        """SE kernel lengthscale."""
+        return self._lengthscale
+
+    @property
+    def variance(self) -> float:
+        """SE kernel variance (prefactor)."""
+        return self._variance
+
+    @property
+    def eps(self) -> float:
+        """Kernel error approximation tolerance."""
+        return self._eps
+
+    @property
+    def xis(self) -> jnp.ndarray:
+        """Non-negative frequencies ``j * h`` for ``j = 0, ..., m``."""
+        return self._xis
+
+    @property
+    def frequency_spacing(self) -> float:
+        """Frequency spacing, recovered from :attr:`xis`."""
+        return _grid_params_from_nodes(self._xis)[0]
+
+    @property
+    def n_frequencies(self) -> int:
+        """Number of positive frequencies ``m``.
+
+        The underlying grid :attr:`xis` holds ``m + 1`` non-negative
+        frequencies ``j * h`` for ``j = 0, ..., m``; this excludes the
+        ``j = 0`` (DC) term, so ``n_frequencies == len(frequencies[0]) - 1``.
+        The basis has ``2 * n_frequencies + 1`` functions.
+        """
+        return len(self.frequencies[0]) - 1
+
+    def _shift_angles(self, sample_pts: ArrayLike) -> ArrayLike:
+        """Rescale ``[0, 1]`` samples so frequency ``j`` evaluates at ``j * h``.
+
+        :meth:`FourierBasis.evaluate` maps samples to
+        ``2 * pi * _shift_angles(x_scaled)`` and multiplies by the integer
+        ``j``. Scaling by ``h * L`` therefore makes the effective
+        frequency ``j * h``, matching the squared-exponential quadrature grid.
+        """
+        t0, t1 = self.bounds
+        return sample_pts * (self.frequency_spacing * (t1 - t0))
+
+    def _get_samples(self, *n_samples: int) -> Generator[NDArray, None, None]:
+        """Produce equispaced samples over the construction domain."""
+        t0, t1 = self.bounds
+        return (np.linspace(t0, t1, n_samples[0]),)

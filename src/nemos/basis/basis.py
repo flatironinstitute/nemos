@@ -2677,6 +2677,12 @@ class FourierEval(BoundedEvalBasisMixin, FourierBasis):
         Values must be 0/1 or boolean. Callables must return a single boolean or
         {0, 1} value for each frequency coordinate.
 
+    weights :
+        Optional per-output-column weights, with one entry per basis function
+        (``n_basis_funcs``), applied inside ``evaluate``. The columns are ordered
+        as the cosine terms followed by the sine terms. When ``None`` (default),
+        no reweighting is applied.
+
     label :
         Descriptive label for the basis (e.g., to use in plots or summaries).
 
@@ -2782,6 +2788,7 @@ class FourierEval(BoundedEvalBasisMixin, FourierBasis):
         frequency_mask: (
             Literal["all", "no-intercept"] | NDArray[bool] | None
         ) = "no-intercept",
+        weights: Optional[ArrayLike] = None,
         label: Optional[str] = "FourierEval",
     ):
         FourierBasis.__init__(
@@ -2790,6 +2797,7 @@ class FourierEval(BoundedEvalBasisMixin, FourierBasis):
             label=label,
             frequency_mask=frequency_mask,
             ndim=ndim,
+            weights=weights,
         )
         BoundedEvalBasisMixin.__init__(self, bounds=bounds)
 

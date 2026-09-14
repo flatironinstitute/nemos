@@ -20,6 +20,7 @@ import nemos.basis.basis as basis
 import nemos.convolve as convolve
 from conftest import (
     _BASIS_BEHAVIOUR_MIXINS,
+    CLASS_DEFAULT_KWARGS,
     DEFAULT_KWARGS,
     BasisFuncsTesting,
     CombinedBasis,
@@ -35,6 +36,7 @@ from nemos.basis import (
     Category,
     CustomBasis,
     FourierEval,
+    FourierGP,
     HistoryConv,
     IdentityEval,
     TransformerBasis,
@@ -53,7 +55,7 @@ from nemos.basis._basis_mixin import (
 )
 from nemos.basis._composition_utils import generate_basis_label_pair, set_input_shape
 from nemos.basis._decaying_exponential import OrthExponentialBasis
-from nemos.basis._fourier_basis import FourierBasis
+from nemos.basis._fourier_basis import FourierBasis, _get_nodes_weights
 from nemos.basis._identity import HistoryBasis, IdentityBasis
 from nemos.basis._raised_cosine_basis import (
     RaisedCosineBasisLinear,
@@ -309,9 +311,11 @@ def instantiate_atomic_basis(cls, **kwargs):
         return custom_basis(**kwargs)
     names = cls._get_param_names()
 
-    all_defaults = DEFAULT_KWARGS.copy()
+    # per-class overrides win over the shared table, but never over an explicit kwarg
+    defaults = {**DEFAULT_KWARGS, **CLASS_DEFAULT_KWARGS.get(cls.__name__, {})}
+    all_defaults = defaults.copy()
 
-    for name in DEFAULT_KWARGS:
+    for name in defaults:
         if name not in names:
             all_defaults.pop(name)
         elif name not in kwargs:
@@ -349,6 +353,12 @@ def extra_kwargs(cls, n_basis):
     name = cls.__name__
     if "OrthExp" in name:
         return dict(decay_rates=np.arange(1, n_basis + 1))
+    # before the "Fourier" branch: FourierGP matches that substring but takes no frequencies.
+    # bounds is left to instantiate_atomic_basis: call sites pass it and would collide here.
+    elif cls.__name__ in CLASS_DEFAULT_KWARGS:
+        return {
+            k: v for k, v in CLASS_DEFAULT_KWARGS[cls.__name__].items() if k != "bounds"
+        }
     elif "Fourier" in name:
         return dict(frequencies=(1, 1 + n_basis // 2))
     return {}
@@ -3308,6 +3318,91 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         basis_obj.compute_features(np.linspace(*sample_range, 100))
 
 
+class TestFourierGP(BasisFuncsTesting):
+    cls = {"eval": FourierGP}
+
+    def se_kernel(self, x1, x2, length_scale, variance):
+        diff = x1 - x2
+        return variance * jax.numpy.exp(-0.5 * diff**2 / length_scale**2)
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize("length_scale", [1e-2, 1e-1])
+    @pytest.mark.parametrize("variance", [1e0])
+    @pytest.mark.parametrize("eps", [1e-6, 1e-4, 1e-2])
+    @pytest.mark.parametrize("bounds", [(0.0, 1.0), (-2.0, 3.0)])
+    def test_covariance_approximation_accuracy(
+        self, length_scale, variance, eps, bounds
+    ):
+        basis = FourierGP(
+            lengthscale=length_scale, bounds=bounds, eps=eps, variance=variance
+        )
+        x = jax.numpy.linspace(bounds[0], bounds[1], 20)
+        Phi = basis.evaluate(x)
+        K_approx = Phi @ Phi.T
+
+        x1, x2 = jax.numpy.meshgrid(x, x)
+        K_true = self.se_kernel(x1, x2, length_scale, variance)
+        decimal = int(round(-np.log10(eps)))
+        np.testing.assert_array_almost_equal(K_approx, K_true, decimal=decimal)
+
+    @pytest.mark.parametrize("length_scale", [1e-2])
+    @pytest.mark.parametrize("variance", [1e0])
+    @pytest.mark.parametrize("eps", [1e-4])
+    @pytest.mark.parametrize("bounds", [(0.0, 1.0)])
+    def test_real_weights(self, length_scale, eps, bounds, variance):
+        basis = FourierGP(
+            lengthscale=length_scale, variance=variance, bounds=bounds, eps=eps
+        )
+        assert np.all(np.isreal(basis._weights))
+
+    @pytest.mark.parametrize("length_scale", [1e-2])
+    @pytest.mark.parametrize("variance", [1e0])
+    @pytest.mark.parametrize("eps", [1e-4])
+    @pytest.mark.parametrize("bounds", [(0.0, 1.0)])
+    def test_scalar_property_setting(self, length_scale, variance, eps, bounds):
+        basis = FourierGP(
+            lengthscale=length_scale, bounds=bounds, eps=eps, variance=variance
+        )
+        assert basis.lengthscale == length_scale
+        assert basis.variance == variance
+        assert basis.eps == eps
+
+    @pytest.mark.parametrize("length_scale", [1e-2, 1e-1, 1e0])
+    @pytest.mark.parametrize("variance", [1e0])
+    @pytest.mark.parametrize("eps", [1e-4])
+    @pytest.mark.parametrize("bounds", [(0.0, 1.0), (-2.0, 3.0)])
+    def test_xis_property_setting(self, length_scale, variance, eps, bounds):
+        L = bounds[1] - bounds[0]
+        expected_xis, _, _, _ = _get_nodes_weights(length_scale, variance, eps, L)
+
+        basis = FourierGP(
+            lengthscale=length_scale, bounds=bounds, eps=eps, variance=variance
+        )
+        np.testing.assert_allclose(basis.xis, expected_xis, rtol=1e-4)
+
+    @pytest.mark.parametrize("length_scale", [1e-2])
+    @pytest.mark.parametrize("variance", [1e0])
+    @pytest.mark.parametrize("eps", [1e-4])
+    @pytest.mark.parametrize("bounds", [(0.0, 1.0)])
+    def test_equispaced_grid(self, length_scale, eps, bounds, variance):
+        basis = FourierGP(
+            lengthscale=length_scale, variance=variance, bounds=bounds, eps=eps
+        )
+        gaps = np.diff(basis.xis)
+        np.testing.assert_allclose(gaps, basis.frequency_spacing, rtol=1e-4)
+
+    @pytest.mark.parametrize("length_scale", [1e-2])
+    @pytest.mark.parametrize("variance", [1e0])
+    @pytest.mark.parametrize("eps", [1e-4])
+    @pytest.mark.parametrize("bounds", [(0.0, 1.0)])
+    def test_n_frequencies_matches_shapes(self, length_scale, eps, bounds, variance):
+        basis = FourierGP(
+            lengthscale=length_scale, variance=variance, bounds=bounds, eps=eps
+        )
+        assert basis.n_frequencies == len(basis.xis) - 1
+        assert basis.n_frequencies == len(basis.frequencies[0]) - 1
+
+
 class TestFourierBasis(BasisFuncsTesting):
     cls = {"eval": FourierEval}
 
@@ -3927,6 +4022,97 @@ class TestFourierBasis(BasisFuncsTesting):
                     if frequency_mask is not None
                     else "all"
                 )
+
+    test_freqs = (1, 10)
+    n_test_freqs = test_freqs[1] - test_freqs[0]
+    expected_n_basis_funcs = 2 * (n_test_freqs)
+    freq_mask = np.ones(n_test_freqs)
+    freq_mask[0] = 0
+    expected_n_basis_funcs_masked = 2 * (np.sum(freq_mask))
+
+    @pytest.mark.parametrize("mode", ["eval"])
+    @pytest.mark.parametrize("ndim", [1])
+    @pytest.mark.parametrize("frequencies", [test_freqs])
+    @pytest.mark.parametrize(
+        "weights, frequency_mask, expectation",
+        [
+            (None, None, does_not_raise()),
+            (
+                [1],
+                None,
+                pytest.raises(ValueError, match="one entry per basis function"),
+            ),
+            (np.arange(expected_n_basis_funcs), None, does_not_raise()),
+            (
+                np.ones((expected_n_basis_funcs, expected_n_basis_funcs)),
+                None,
+                pytest.raises(ValueError, match="one entry per basis function"),
+            ),
+            (
+                np.ones((2, expected_n_basis_funcs // 2)),
+                None,
+                pytest.raises(ValueError, match="one entry per basis function"),
+            ),
+            (np.arange(expected_n_basis_funcs_masked), freq_mask, does_not_raise()),
+            (
+                np.arange(expected_n_basis_funcs),
+                freq_mask,
+                pytest.raises(ValueError, match="one entry per basis function"),
+            ),
+        ],
+    )
+    def test_weights_setting(
+        self, frequencies, weights, expectation, frequency_mask, mode, ndim
+    ):
+        with expectation:
+            bas = instantiate_atomic_basis(
+                self.cls[mode],
+                ndim=ndim,
+                frequencies=frequencies,
+                weights=weights,
+                frequency_mask=frequency_mask,
+            )
+            assert isinstance(bas.weights, (jax.numpy.ndarray, type(None)))
+
+    @pytest.mark.parametrize("mode", ["eval"])
+    @pytest.mark.parametrize("ndim", [1])
+    @pytest.mark.parametrize("frequencies", [test_freqs])
+    @pytest.mark.parametrize(
+        "weights, frequency_mask",
+        [
+            (None, None),
+            (np.arange(expected_n_basis_funcs), None),
+            (np.arange(expected_n_basis_funcs_masked), freq_mask),
+        ],
+    )
+    def test_weights_scaling(self, frequencies, weights, frequency_mask, mode, ndim):
+        unweighted_bas = instantiate_atomic_basis(
+            self.cls[mode],
+            ndim=ndim,
+            frequencies=frequencies,
+            weights=None,
+            frequency_mask=frequency_mask,
+        )
+
+        weighted_bas = instantiate_atomic_basis(
+            self.cls[mode],
+            ndim=ndim,
+            frequencies=frequencies,
+            weights=weights,
+            frequency_mask=frequency_mask,
+        )
+
+        sample_pts = np.linspace(0, 1, 25)
+        unweighted_eval = unweighted_bas.evaluate(sample_pts)
+        weighted_eval = weighted_bas.evaluate(sample_pts)
+        assert weighted_eval.shape == unweighted_eval.shape
+        if weights is not None:
+            assert weighted_eval.shape[-1] == weights.shape[0]
+            np.testing.assert_allclose(
+                weighted_eval, unweighted_eval * np.array(weights), rtol=1e-4
+            )
+        else:
+            np.testing.assert_allclose(weighted_eval, unweighted_eval, rtol=1e-4)
 
     @pytest.mark.parametrize("mode", ["eval"])
     @pytest.mark.parametrize(
