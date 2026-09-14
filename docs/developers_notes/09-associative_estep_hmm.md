@@ -379,4 +379,59 @@ def forward(log_pi, log_A, log_b, session_starts):
 
 `jnp.exp(log_pi)` broadcasts against a $(T, K, K)$ base, which is the $\mathbf{1}\pi^\top$ of the element formula.
 
+## The Same Scan in Log Space
+
+Everything above keeps $L$ in probability space, and that puts a floor under it: a state whose message falls below $10^{-308}$ in double precision, or $10^{-38}$ in single, is stored as zero and its log comes back as $-\infty$ where the sequential recursion returns a large finite number. The measured threshold is roughly 700 nats of within-bin spread between states in f64, which a fitted model does not reach, and about 87 in f32, which a population model reaches routinely. Since the floor costs nothing to remove, the implementation to write first is the one that carries the shape half in logs as well, and the probability-space form above becomes the faster variant to route to once the two agree.
+
+What changes is small, because the parametrization does not. The pair is still a scale and a shape, $(\log l, \log L)$ rather than $(\log l, L)$, and the rows of $\log L$ now sum to zero under $\operatorname{logsumexp}$ instead of summing to one.
+
+In $\text{cond}$ the explicit max shift disappears, absorbed into the $\operatorname{logsumexp}$ that replaces the row sum, and the row division becomes a subtraction. It takes $\log M$ and returns $\log l$ and $\log L$ directly.
+
+In the combine only the matrix product changes, to a log-semiring product $\operatorname{logsumexp}_k(\log L_1[i,k] + \log L_2[k,j])$. Everything else stands, including the subtraction of $\max_j \log l[j]$, which is doing exactly the same job as before.
+
+That last point is worth stating plainly, because the obvious log-space design gets it wrong. Carrying $\log F$ whole — one matrix, log-semiring products, no split — is algebraically identical and numerically much worse: its entries then have the magnitude of $\log p(y_{0:t})$, so recovering the O(1) normalized message at read-out costs the ULP of that magnitude, and the error grows *linearly in T*. Measured at $K=5$ with a per-bin log-likelihood of $-801$: 1.65e-10, 1.48e-9, 3.02e-8, 2.44e-7 at $T = 10^3$ to $10^6$, each equal to $|\log p(y)|$ times the machine epsilon. Splitting the scale out and dropping it, as below, holds the error at 5.6e-13 regardless of $T$. The rule is the one from the previous section: the shape and the scale must not share a number.
+
+The elements no longer exponentiate $\pi$ and $A$, so the only place a probability appears is inside the log-semiring product. The read-out is now the cumulative matrix's first row as it stands, with no $\log$ applied — which is precisely where the probability-space version reintroduced the floor it had otherwise avoided. The per-step normalizers must be rewritten in logs for the same reason, the predicted distribution being formed by a log-matvec against $\log A$ rather than a matvec against $A$.
+
+The cost is one $\exp$ and one $\log$ per combine, against a plain GEMM. Peak memory is about 25% lower, since one $(T, K, K)$ array of logs replaces a matrix plus a separate scale.
+
+```python
+def log_matmul(log_A, log_B):
+    """Log-semiring product: out[i, j] = logsumexp_k(log_A[i, k] + log_B[k, j]).
+
+    Shifted and run as a GEMM rather than as a broadcast logsumexp, which would
+    materialize a (..., K, K, K) intermediate.
+    """
+    a = jnp.max(log_A, axis=-1, keepdims=True)
+    b = jnp.max(log_B, axis=-2, keepdims=True)
+    return jnp.log(jnp.exp(log_A - a) @ jnp.exp(log_B - b)) + a + b
+
+def cond(log_M, log_w):
+    """Condition a row-stochastic log_M on log weights per exit state, renormalizing."""
+    log_Mw = log_M + log_w[..., None, :]           # log of M @ diag(w)
+    log_r = logsumexp(log_Mw, axis=-1)             # log row sums, the shift is inside
+    return log_r, log_Mw - log_r[..., None]
+
+def combine(x1, x2):                                # x1 earlier, x2 later
+    log_l1, log_L1 = x1
+    log_l2, log_L2 = x2
+    log_r, log_L = cond(log_L1, log_l2)
+    log_l = log_l1 + log_r
+    return log_l - jnp.max(log_l, axis=-1, keepdims=True), log_matmul(log_L, log_L2)
+
+def forward(log_pi, log_A, log_b, session_starts):
+    log_base = jnp.where(session_starts[:, None, None], log_pi, log_A)
+    elements = cond(log_base, log_b)                # x_t = phi(F_{t:t}), batched over t
+    _, log_L_cum = jax.lax.associative_scan(combine, elements)
+    log_alphas = log_L_cum[:, 0, :]                 # rows of L_{0:t} are all equal
+    return log_alphas, normalizers(log_pi, log_A, log_b, session_starts, log_alphas)
+
+def normalizers(log_pi, log_A, log_b, session_starts, log_alphas):
+    """log c_t, recomputed locally: the scan drops the scale that would carry it."""
+    log_prev = jnp.concatenate([log_alphas[:1], log_alphas[:-1]])
+    log_transitioned = logsumexp(log_prev[..., :, None] + log_A[None], axis=-2)
+    log_predicted = jnp.where(session_starts[:, None], log_pi, log_transitioned)
+    return logsumexp(log_b + log_predicted, axis=-1)
+```
+
 The backward pass is not covered by the propositions above. Its messages are not row-stochastic (they carry the $1/c_t$ factors), the equal-rows argument that made sessions free here does not apply to it, and its elements need an explicit reset flag.
