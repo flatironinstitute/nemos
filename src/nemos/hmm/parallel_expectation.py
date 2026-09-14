@@ -40,12 +40,12 @@ whereas the forward gets them for free because the rows of a reset element are c
 """
 
 from functools import partial
-from typing import Callable, Tuple
+from typing import Tuple
 
 import jax
 import jax.numpy as jnp
 
-from ..typing import ModelParamsT
+from ..typing import EStepOutput, LogLikelihoodFn, ModelParamsT
 from .expectation_maximization import compute_xi_log
 from .utils import Array
 
@@ -257,7 +257,7 @@ def forward_pass_assoc(
     params: ModelParamsT,
     X: Array,
     y: Array,
-    log_likelihood_func: Callable[[Array, Array, Array], Array],
+    log_likelihood_func: LogLikelihoodFn,
     session_starts: Array | None = None,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
@@ -448,9 +448,9 @@ def forward_backward_assoc(
     params: ModelParamsT,
     X: Array,
     y: Array,
-    log_likelihood_func: Callable[[Array, Array, Array], Array],
+    log_likelihood_func: LogLikelihoodFn,
     session_starts: Array | None = None,
-):
+) -> EStepOutput:
     """
     Run the forward-backward Baum-Welch algorithm.
 
