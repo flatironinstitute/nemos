@@ -21,7 +21,7 @@ from nemos.glm_hmm.glm_hmm import GLMHMM
 from nemos.glm_hmm.params import GLMHMMModelParams, GLMHMMParams
 from nemos.glm_hmm.validation import GLMHMMValidator
 from nemos.hmm.expectation_maximization import EMState
-from nemos.hmm.hmm import BaseHMM
+from nemos.hmm.hmm import FORWARD_BACKWARD, FORWARD_PASS, BaseHMM
 from nemos.hmm.params import HMMParams
 from nemos.regularizer import Ridge, UnRegularized
 from nemos.utils import _get_name
@@ -1981,3 +1981,158 @@ def test_get_optimal_solver_params_config():
         None,
         None,
     )
+
+
+# ---------------------------------------------------------------------------
+# E-step routing
+# ---------------------------------------------------------------------------
+
+# Derived from the registry rather than written out, so a third E-step reaches
+# every test below without touching this file. The guard in TestEStepRouting
+# keeps the two registries and the setter from drifting apart from each other.
+ESTEP_TYPES = tuple(FORWARD_BACKWARD)
+
+
+def _spy_registry(monkeypatch, registry, key):
+    """Wrap ``registry[key]`` with a spy that forwards to the real callable.
+
+    The dict counterpart of ``_spy_calls``: the E-step implementations are selected
+    by ``registry[self._estep_type]`` rather than by attribute, so the entry has to
+    be replaced with ``setitem``. Patching the item rather than rebinding the module
+    attribute is also what makes this visible from ``glm_hmm.py``, which imports
+    ``FORWARD_BACKWARD`` by name and so holds a reference to the same dict.
+
+    Returns a list of ``(args, kwargs)`` tuples per call.
+    """
+    calls = []
+    real = registry[key]
+
+    def spy(*args, **kwargs):
+        calls.append((args, kwargs))
+        return real(*args, **kwargs)
+
+    monkeypatch.setitem(registry, key, spy)
+    return calls
+
+
+class TestEStepRouting:
+    """``estep_type`` selects which registry entry every E-step call site reaches."""
+
+    @pytest.mark.metatest
+    def test_registries_and_setter_agree(self, glm_hmm_data):
+        """Every registered E-step is reachable, and both registries offer the same set.
+
+        ``ESTEP_TYPES`` is derived from ``FORWARD_BACKWARD``, so this is what stops a
+        new entry from being covered in name only: it must also exist in
+        ``FORWARD_PASS`` and be accepted by the ``estep_type`` setter.
+        """
+        assert FORWARD_PASS.keys() == FORWARD_BACKWARD.keys()
+
+        model = GLMHMM(n_states=glm_hmm_data["n_states"], observation_model="Bernoulli")
+        for estep_type in ESTEP_TYPES:
+            model.estep_type = estep_type
+            assert model.estep_type == estep_type
+        with pytest.raises(ValueError, match="estep_type must be either"):
+            model.estep_type = "not-an-estep"
+
+    @staticmethod
+    def _spy_both(monkeypatch, registry):
+        return {key: _spy_registry(monkeypatch, registry, key) for key in ESTEP_TYPES}
+
+    @staticmethod
+    def _fit_model(glm_hmm_data, estep_type, **kwargs):
+        """Fit on the small fixture for one iteration, the least that leaves a model fitted."""
+        model = GLMHMM(
+            n_states=glm_hmm_data["n_states"],
+            observation_model="Bernoulli",
+            estep_type=estep_type,
+            maxiter=1,
+            **kwargs,
+        )
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+            session_starts=glm_hmm_data["session_starts"],
+        )
+        return model
+
+    @pytest.mark.parametrize("estep_type", ESTEP_TYPES)
+    def test_fit_routes_to_selected_estep(self, monkeypatch, glm_hmm_data, estep_type):
+        """``fit`` reaches the forward-backward implementation ``estep_type`` names."""
+        calls = self._spy_both(monkeypatch, FORWARD_BACKWARD)
+        self._fit_model(glm_hmm_data, estep_type)
+
+        other = next(key for key in ESTEP_TYPES if key != estep_type)
+        assert calls[estep_type]
+        assert calls[other] == []
+
+    @pytest.mark.parametrize("estep_type", ESTEP_TYPES)
+    @pytest.mark.parametrize(
+        "method, registry",
+        [
+            ("smooth_proba", FORWARD_BACKWARD),
+            ("filter_proba", FORWARD_PASS),
+            ("score", FORWARD_PASS),
+        ],
+    )
+    def test_inference_routes_to_selected_estep(
+        self,
+        monkeypatch,
+        glm_hmm_data,
+        estep_type,
+        method,
+        registry,
+        mock_glm_hmm_optimizer_run,
+    ):
+        """The inference paths read ``estep_type`` at call time, not at fit time.
+
+        The fit here only has to leave the model fitted, so the solver is mocked out:
+        what is under test runs afterwards, in the inference call.
+        """
+        model = self._fit_model(glm_hmm_data, "sequential")
+        model.estep_type = estep_type
+
+        calls = self._spy_both(monkeypatch, registry)
+        getattr(model, method)(glm_hmm_data["X"], glm_hmm_data["y"])
+
+        other = next(key for key in ESTEP_TYPES if key != estep_type)
+        assert calls[estep_type]
+        assert calls[other] == []
+
+    def test_setting_estep_type_invalidates_the_solver(self, glm_hmm_data):
+        """The optimizer partials are dropped, the E-step being bound into them."""
+        model = GLMHMM(n_states=glm_hmm_data["n_states"], observation_model="Bernoulli")
+        model.initialize_optimizer_and_state(
+            glm_hmm_data["init_params"], glm_hmm_data["X"], glm_hmm_data["y"]
+        )
+        assert model._optimizer_run is not None
+
+        model.estep_type = "associative"
+        assert model._optimizer_run is None
+        assert model._optimizer_update is None
+
+    def test_update_follows_a_change_of_estep_type(self, monkeypatch, glm_hmm_data):
+        """``update`` after switching runs the new algorithm, not the bound one.
+
+        Regression test: the E-step is bound into ``_optimizer_update`` by
+        ``eqx.Partial`` when the solver is instantiated, so without invalidation the
+        switch would be silently ignored here.
+        """
+        X, y = glm_hmm_data["X"], glm_hmm_data["y"]
+        init_params, session_starts = (
+            glm_hmm_data["init_params"],
+            glm_hmm_data["session_starts"],
+        )
+        model = GLMHMM(n_states=glm_hmm_data["n_states"], observation_model="Bernoulli")
+        model.initialize_optimizer_and_state(init_params, X, y)  # binds sequential
+
+        model.estep_type = "associative"
+        # the spies must be installed before the solver is rebuilt: the E-step is
+        # bound into the partials there, not looked up when update runs.
+        calls = self._spy_both(monkeypatch, FORWARD_BACKWARD)
+        opt_state = model.initialize_optimizer_and_state(init_params, X, y)
+        model.update(init_params, opt_state, X, y, session_starts)
+
+        assert calls["associative"]
+        assert calls["sequential"] == []

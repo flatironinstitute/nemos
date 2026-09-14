@@ -171,6 +171,10 @@ class BaseHMM(
                 f"{value} provided instead."
             )
         self._estep_type = value
+        # the E-step is bound into the optimizer partials when the solver is
+        # instantiated, so an already-built solver would keep running the previous
+        # algorithm. The inference paths read self._estep_type live and are unaffected.
+        self._invalidate_solver()
 
     def _hmm_setup(
         self,
