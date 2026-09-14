@@ -321,7 +321,7 @@ def forward_pass_assoc(
     session_starts = (
         session_starts
         if session_starts is not None
-        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
+        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(True)
     )
 
     # Compute log-likelihoods
@@ -515,7 +515,7 @@ def forward_backward_assoc(
     session_starts = (
         session_starts
         if session_starts is not None
-        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
+        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(True)
     )
 
     # Compute log-likelihoods
@@ -563,3 +563,148 @@ def forward_backward_assoc(
         log_alphas,
         log_betas,
     )
+
+
+def max_plus_matmul(log_earlier: Array, log_later: Array) -> Array:
+    r"""Max-plus product of two segments, earlier on the left.
+
+    :math:`\text{out}[i,j] = \max_k(\text{earlier}[i,k] + \text{later}[k,j])`, the
+    tropical-semiring counterpart of :func:`log_matmul`. Max-plus is a semiring, so
+    this product is associative and the Viterbi recursion is a prefix problem in
+    the same way the forward pass is.
+    """
+    return jnp.max(
+        log_earlier[..., :, :, jnp.newaxis] + log_later[..., jnp.newaxis, :, :],
+        axis=-2,
+    )
+
+
+def _compose_backpointers(later: Array, earlier: Array) -> Array:
+    """Compose two backpointer maps, ``(earlier o later)[i] = earlier[later[i]]``.
+
+    Backtracking is a chain of maps from the state at one step to the state at the
+    previous one, and composing maps is associative, so the backtrack is a scan too.
+    Without it the parallel forward would be paired with a sequential pointer chase
+    of the same length, which is the cost the scan exists to remove.
+
+    Session boundaries need no flag here: a reset makes the map constant, and a
+    constant map absorbs everything composed after it, which is the statement that
+    the state before a session start does not depend on the state after it.
+
+    As in :func:`_combine_backward`, ``reverse=True`` hands the operands over in
+    reverse time, so ``later`` arrives first while the composition still applies the
+    earlier map last.
+    """
+    return jnp.take_along_axis(earlier, later, axis=-1)
+
+
+@partial(
+    jax.jit,
+    static_argnames=["log_likelihood_func", "return_index"],
+)
+def max_sum_assoc(
+    params: ModelParamsT,
+    X: Array,
+    y: Array,
+    log_likelihood_func: LogLikelihoodFn,
+    session_starts: Array | None = None,
+    return_index: bool = False,
+):
+    r"""
+    Find maximum a posteriori (MAP) state path via the max-sum algorithm.
+
+    Associative-scan counterpart of
+    :func:`~nemos.hmm.expectation_maximization.max_sum`, returning the same path.
+    Both halves run at depth :math:`O(\\log T)`: the scores by a max-plus scan over
+    the same one-step elements the forward pass uses, and the backtrack by composing
+    backpointer maps.
+
+    Parameters
+    ----------
+    params :
+        Current HMM and model parameters.
+        It must include the attribute `hmm_params`, which is a `ModelParams` subclass with attributes
+        `log_initial_prob` and `log_transition_prob`, as well as the attribute `model_params`, also a
+        `ModelParams` subclass containing model-dependent parameters used in the log-likelihood function.
+
+    X :
+        Design matrix, pytree with leaves of shape ``(n_time_bins, n_features)``.
+
+    y :
+        Observations, pytree with leaves of shape ``(n_time_bins,)``.
+
+    log_likelihood_func :
+        Function computing log p(y | model_parameters) for the emissions model.
+
+    session_starts :
+        Boolean array marking the start of a new session.
+        If unspecified or empty, treats the full set of trials as a single session.
+
+    return_index:
+        If False, return 1-hot encoded map states, if True, return map state indices.
+
+    Returns
+    -------
+    map_path:
+        The MAP state path.
+
+    Notes
+    -----
+    The scan accumulates the score of the sessions already closed, so its scores
+    differ from those of the sequential recursion by a constant per time bin. Nothing
+    reads them except through an ``argmax`` over states, which that constant leaves
+    untouched, so unlike the forward pass there is no scale to drop.
+    """
+    # unpack parameters
+    model_params = params.model_params
+    log_transition = params.hmm_params.log_transition_prob
+    log_init = params.hmm_params.log_initial_prob
+
+    n_states = log_init.shape[0]
+
+    # initialize new session
+    session_starts = (
+        session_starts
+        if session_starts is not None
+        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(True)
+    )
+
+    log_emission = log_likelihood_func(model_params, X, y)
+
+    # the elements of the scan are those of the forward pass, read in the tropical
+    # semiring: at a session start the row-constant initial distribution, elsewhere
+    # the transition matrix, both conditioned on that step's emissions.
+    log_base = jnp.where(
+        session_starts[:, jnp.newaxis, jnp.newaxis], log_init, log_transition
+    )
+    cumulative = jax.lax.associative_scan(
+        max_plus_matmul, log_base + log_emission[:, jnp.newaxis, :]
+    )
+    omegas = cumulative[:, 0, :]
+
+    # Backpointers, recomputed from the scores rather than carried through the scan,
+    # the same trade _compute_log_normalizers makes: one batched argmax over all t.
+    backpointers = jnp.argmax(
+        omegas[:-1, :, jnp.newaxis] + log_transition[jnp.newaxis], axis=1
+    )
+    # at a session start the previous state is not reachable from the current one, so
+    # the map is the constant that closes the previous session at its own best state.
+    backpointers = jnp.where(
+        session_starts[1:, jnp.newaxis],
+        jnp.argmax(omegas[:-1], axis=-1)[:, jnp.newaxis],
+        backpointers,
+    )
+
+    # Backward pass
+    best_final_state = jnp.argmax(omegas[-1])
+    composed = jax.lax.associative_scan(
+        _compose_backpointers, backpointers, reverse=True
+    )
+    map_path = jnp.concatenate(
+        [composed[:, best_final_state], jnp.array([best_final_state])]
+    )
+
+    if not return_index:
+        map_path = jax.nn.one_hot(map_path, n_states, dtype=jnp.int32)
+
+    return map_path
