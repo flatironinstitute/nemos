@@ -19,6 +19,7 @@ from ..hmm.expectation_maximization import (
     forward_pass,
     max_sum,
 )
+from ..hmm.parallel_expectation import forward_backward_assoc, forward_pass_assoc
 from ..regularizer import Regularizer
 from ..type_casting import support_pynapple
 from ..typing import (
@@ -44,6 +45,16 @@ nap = lazy.load("pynapple")
 
 MODEL_INITIALIZATION_FN_DICT_T = TypeVar("MODEL_INITIALIZATION_FN_DICT_T")
 HMMValidatorT = TypeVar("HMMValidatorT", bound="HMMValidator")
+
+FORWARD_PASS = {
+    "sequential": forward_pass,
+    "associative": forward_pass_assoc,
+}
+
+FORWARD_BACKWARD = {
+    "sequential": forward_backward,
+    "associative": forward_backward_assoc,
+}
 
 
 class BaseHMM(
@@ -122,6 +133,7 @@ class BaseHMM(
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
         hmm_initialization_funcs: Optional[HMM_INITIALIZATION_FN_DICT] = None,
+        estep_type: Literal["sequential", "associative"] = "sequential",
     ):
         super().__init__(
             regularizer=regularizer,
@@ -143,6 +155,22 @@ class BaseHMM(
         self.initial_prob_: Optional[jnp.ndarray] = None
 
         self.hmm_initialization_funcs = hmm_initialization_funcs
+        self.estep_type = estep_type
+
+    @property
+    def estep_type(self):
+        """Expectation type: sequential or associative."""
+        return self._estep_type
+
+    @estep_type.setter
+    def estep_type(self, value):
+        """Setter for expectation type: sequential or associative."""
+        if value not in ["sequential", "associative"]:
+            raise ValueError(
+                "estep_type must be either ``'sequential'`` or ``'associative'``. "
+                f"{value} provided instead."
+            )
+        self._estep_type = value
 
     def _hmm_setup(
         self,
@@ -682,7 +710,7 @@ class BaseHMM(
         # make sure session_starts starts with a 1
         session_starts = session_starts.at[0].set(True)
 
-        _, log_norm = forward_pass(
+        _, log_norm = FORWARD_PASS[self._estep_type](
             params=params,
             X=data,
             y=y,
@@ -750,7 +778,7 @@ class BaseHMM(
         session_starts = session_starts.at[0].set(True)
 
         # smooth with forward backward
-        log_posteriors, _, _, _, _, _ = forward_backward(
+        log_posteriors, _, _, _, _, _ = FORWARD_BACKWARD[self._estep_type](
             params=params,
             X=data,
             y=y,
@@ -846,7 +874,7 @@ class BaseHMM(
 
         # make sure session_starts starts with a 1
         session_starts = session_starts.at[0].set(True)
-        log_proba, _ = forward_pass(
+        log_proba, _ = FORWARD_PASS[self._estep_type](
             params,
             data,
             y,
