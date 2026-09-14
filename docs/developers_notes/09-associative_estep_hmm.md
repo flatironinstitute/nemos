@@ -393,7 +393,7 @@ That last point is worth stating plainly, because the obvious log-space design g
 
 The elements no longer exponentiate $\pi$ and $A$, so the only place a probability appears is inside the log-semiring product. The read-out is now the cumulative matrix's first row as it stands, with no $\log$ applied — which is precisely where the probability-space version reintroduced the floor it had otherwise avoided. The per-step normalizers must be rewritten in logs for the same reason, the predicted distribution being formed by a log-matvec against $\log A$ rather than a matvec against $A$.
 
-The cost is one $\exp$ and one $\log$ per combine, against a plain GEMM. Peak memory is about 25% lower, since one $(T, K, K)$ array of logs replaces a matrix plus a separate scale.
+The cost is one $\exp$ and one $\log$ per combine, against a plain GEMM, and about 30% more memory: the pair is still a matrix plus a scale, and the log-semiring product materializes exponentiated copies on top of it. Measured peak, full forward-backward, is $5.3$ to $5.8 \times T K^2$ times the float size against $3.5$ to $4.4$ for the probability-space form.
 
 ```python
 def log_matmul(log_A, log_B):
