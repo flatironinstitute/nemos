@@ -16,7 +16,7 @@ from .. import observation_models as obs
 from .. import tree_utils
 from .._observation_model_builder import instantiate_observation_model
 from ..hmm.expectation_maximization import EMState, em_hmm, em_step
-from ..hmm.hmm import BaseHMM
+from ..hmm.hmm import FORWARD_BACKWARD, BaseHMM
 from ..hmm.initialize_parameters import HMM_INITIALIZATION_FN_DICT, InitFunctionHMM
 from ..hmm.utils import _check_state_format
 from ..inverse_link_function_utils import resolve_inverse_link_function
@@ -119,6 +119,18 @@ class GLMHMM(
     dirichlet_transition_proba :
         Alpha parameters for the Dirichlet prior over the transition probabilities.
         Shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
+    estep_type:
+      How the forward-backward recursions of the E-step are evaluated. ``"sequential"``
+      steps through the time bins one at a time; ``"associative"`` uses
+      ``jax.lax.associative_scan``, whose depth grows like ``log(n_time_bins)`` rather
+      than ``n_time_bins``.
+
+      Which is faster depends on the hardware. On GPU and TPU the ``"associative"``
+      can be orders of magnitude faster; on CPU it is usually slower, a CPU core being
+      well suited to a tight sequential loop. ``"associative"`` also holds its whole scan
+      in memory, roughly ``4 * n_time_bins * n_states ** 2`` floats against
+      ``n_time_bins * n_states``, which becomes the binding constraint for large
+      ``n_states``.
     solver_name :
         Solver used for the GLM M-step. The solver must be valid for the chosen
         regularizer (see table above). Default is ``None``, in which case the
@@ -338,6 +350,7 @@ class GLMHMM(
         dirichlet_transition_proba: Union[
             jnp.ndarray | None
         ] = None,  # (n_state, n_state)
+        estep_type: Literal["sequential", "associative"] = "sequential",
         solver_name: str = None,
         solver_kwargs: Optional[dict] = None,
         maxiter: int = 1000,
@@ -358,6 +371,7 @@ class GLMHMM(
             tol=tol,
             seed=seed,
             hmm_initialization_funcs=hmm_initialization_funcs,
+            estep_type=estep_type,
         )
         self.observation_model = observation_model
         self.inverse_link_function = inverse_link_function
@@ -1632,6 +1646,7 @@ class GLMHMM(
             em_hmm,
             log_likelihood_func=self._log_likelihood,
             m_step_fn_model_params=m_step_update,
+            e_step_fn=FORWARD_BACKWARD[self._estep_type],
             maxiter=self.maxiter,
             tol=self.tol,
         )
@@ -1640,6 +1655,7 @@ class GLMHMM(
             em_step,
             log_likelihood_func=self._log_likelihood,
             m_step_fn_model_params=m_step_update,
+            e_step_fn=FORWARD_BACKWARD[self._estep_type],
         )
 
         def init_state_fn(*args, **kwargs) -> SolverState:
