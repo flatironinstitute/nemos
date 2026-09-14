@@ -434,4 +434,81 @@ def normalizers(log_pi, log_A, log_b, session_starts, log_alphas):
     return logsumexp(log_b + log_predicted, axis=-1)
 ```
 
+## The MAP Path in the Same Shape
+
+Viterbi is the same prefix problem in a different semiring. Replace the $\operatorname{logsumexp}$ that sums over the intermediate state with a $\max$ over it, and the sum that accumulates along a path stays a sum: $(\max, +)$, the [tropical semiring](https://en.wikipedia.org/wiki/Tropical_semiring). Associativity is all the scan needs, and it holds there for the same reason it holds in the log semiring — $\max$ is associative with identity $-\infty$, addition distributes over it — so the matrix product
+
+$$
+(X \otimes Y)[i,j] \;=\; \max_k \bigl( X[i,k] + Y[k,j] \bigr)
+$$
+
+is associative and the elements of the forward pass can be reused unchanged.
+
+Those elements are the one-step transfer matrices of Proposition 1 read in logs, $\log A + \log b_t$ off a session start and $\log \pi + \log b_t$ broadcast over the rows at one, which is the same `where` the forward pass performs. Their running product under $\otimes$ has entries
+
+$$
+(M_0 \otimes \dots \otimes M_t)[j,i] \;=\; \max_{\text{paths } j \to i} \Bigl( \log p(\text{path}) + \sum_{r \le t} \log b_r \Bigr),
+$$
+
+so reading row $0$ gives $\delta^{\text{scan}}_t[i]$, the best score of any path over $y_{0:t}$ ending in state $i$.
+
+Sessions need no reset flag, as in the forward pass: the element at a session start is row-constant. They do leave the score of every session already closed inside the running product, so $\delta^{\text{scan}}$ is the sequential recursion's $\delta$, which restarts at $s(t)$, shifted by the best score reached before the current session began:
+
+$$
+\delta^{\text{scan}}_t[i] = \delta_t[i] + \kappa_t, \qquad \kappa_t = \max_j \delta^{\text{scan}}_{s(t)-1}[j], \qquad \kappa_t = 0 \;\text{ for }\; s(t) = 0 .
+$$
+
+Unlike $\log l$ in the forward pass, $\kappa_t$ never has to be dropped: it does not depend on $i$, and every read of $\delta^{\text{scan}}$ is an $\arg\max$ over $i$.
+
+What does not carry over is that a scan over scores does not produce a path. The sequential algorithm records a backpointer at each step as a by-product of its $\arg\max$; the parallel one has no steps to record at. Both halves of the fix mirror decisions already made elsewhere in this note. The backpointers come back from the scores, in one batched $\arg\max$ over all $t$ at once,
+
+$$
+\text{bp}_t[i] \;=\; \operatorname*{arg\,max}_j \bigl( \delta^{\text{scan}}_{t-1}[j] + \log A[j,i] \bigr),
+$$
+
+which is the same trade as recomputing $\log c_t$ rather than differencing the scan's accumulated scale — and it is well defined against the shifted $\delta$, an additive constant leaving the $\arg\max$ alone. At a session start the state at $t-1$ is not reachable from the state at $t$, and $\text{bp}_t$ becomes the constant map onto $\operatorname{arg\,max}_j \delta_{t-1}[j]$, which closes the previous session at its own best state.
+
+The backtrack is then a scan as well. Each $\text{bp}_t$ is a map $\{0,\dots,K-1\} \to \{0,\dots,K-1\}$, and composition of maps is associative,
+
+$$
+\bigl((f \circ g) \circ h\bigr)[i] = f\bigl[g[h[i]]\bigr] = \bigl(f \circ (g \circ h)\bigr)[i],
+$$
+
+so the suffix compositions $G_t = \text{bp}_t \circ \text{bp}_{t+1} \circ \dots \circ \text{bp}_{T-1}$ are a scan map in the sense of the first section, run in reverse.
+
+They are also the answer, not an ingredient of it. Backtracking is the recursion $\text{path}[t-1] = \text{bp}_t\bigl[\text{path}[t]\bigr]$ started from $\text{path}[T-1] = \operatorname*{arg\,max}_i \delta^{\text{scan}}_{T-1}[i]$, and unrolling it down from $T-1$ gives
+
+$$
+\text{path}[t-1] \;=\; \text{bp}_t\Bigl[\text{bp}_{t+1}\bigl[\dots\text{bp}_{T-1}[\text{path}[T-1]]\dots\bigr]\Bigr] \;=\; G_t\bigl[\text{path}[T-1]\bigr].
+$$
+
+The path is therefore one column of the scan's output, the column indexed by the best final state, and no step of the backtrack is left to run sequentially.
+
+Sessions need no flag here either. A reset makes $\text{bp}_t$ constant, and a constant map absorbs whatever is composed after it, $c \circ f = c$, which is the statement that the state before a session start does not depend on the state after it.
+
+```python
+def max_plus_matmul(log_earlier, log_later):
+    """out[i, j] = max_k(earlier[i, k] + later[k, j]); fused, not materialized."""
+    return jnp.max(log_earlier[..., :, :, None] + log_later[..., None, :, :], axis=-2)
+
+def compose_backpointers(later, earlier):
+    """(earlier o later)[i] = earlier[later[i]]; reverse=True hands `later` over first."""
+    return jnp.take_along_axis(earlier, later, axis=-1)
+
+def max_sum(log_pi, log_A, log_b, session_starts):
+    log_base = jnp.where(session_starts[:, None, None], log_pi, log_A)
+    cumulative = jax.lax.associative_scan(max_plus_matmul, log_base + log_b[:, None, :])
+    deltas = cumulative[:, 0, :]                     # every row equal, index 0 resets
+
+    backpointers = jnp.argmax(deltas[:-1, :, None] + log_A[None], axis=1)
+    boundary = jnp.argmax(deltas[:-1], axis=-1)      # the previous session's best exit
+    backpointers = jnp.where(session_starts[1:, None], boundary[:, None], backpointers)
+
+    final = jnp.argmax(deltas[-1])
+    composed = jax.lax.associative_scan(compose_backpointers, backpointers, reverse=True)
+    return jnp.concatenate([composed[:, final], jnp.array([final])])
+```
+
+Ties are broken the way `argmax` breaks them, by lowest index, in the backpointers and in the choice of final state alike. That is the same rule the sequential recursion applies at the same two places, which is why the two return not merely equally scoring paths but the identical one.
+
 The backward pass is not covered by the propositions above. Its messages are not row-stochastic (they carry the $1/c_t$ factors), the equal-rows argument that made sessions free here does not apply to it, and its elements need an explicit reset flag.
