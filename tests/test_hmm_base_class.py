@@ -10,7 +10,7 @@ import sklearn.cluster
 
 from conftest import MockHMM
 from nemos._inspect_utils import extract_literal_options
-from nemos.hmm.hmm import FORWARD_BACKWARD, FORWARD_PASS, BaseHMM
+from nemos.hmm.hmm import FORWARD_BACKWARD, FORWARD_PASS, MAX_SUM, BaseHMM
 from nemos.hmm.initialize_parameters import (
     AVAILABLE_INIT_FUNCTIONS,
     DEFAULT_INIT_FUNCTIONS,
@@ -57,6 +57,42 @@ class TestHMMInit:
         with expectation:
             model = MockHMM(n_states=n_states)
             assert model.n_states == int(n_states)
+
+    # -------------------------------------------------------------------------
+    # estep_type setter tests
+    # -------------------------------------------------------------------------
+    @pytest.mark.parametrize(
+        "estep_type, expectation",
+        [
+            ("sequential", does_not_raise()),
+            ("associative", does_not_raise()),
+            ("Sequential", pytest.raises(ValueError, match="estep_type must be")),
+            ("linear", pytest.raises(ValueError, match="estep_type must be")),
+            ("", pytest.raises(ValueError, match="estep_type must be")),
+            (None, pytest.raises(ValueError, match="estep_type must be")),
+            (0, pytest.raises(ValueError, match="estep_type must be")),
+            (["sequential"], pytest.raises(ValueError, match="estep_type must be")),
+        ],
+    )
+    @pytest.mark.parametrize("through", ["constructor", "setter"])
+    def test_estep_type_setter(self, estep_type, expectation, through):
+        """Only the registered E-step names are accepted, by either route."""
+        with expectation:
+            if through == "constructor":
+                model = MockHMM(n_states=3, estep_type=estep_type)
+            else:
+                model = MockHMM(n_states=3)
+                model.estep_type = estep_type
+            assert model.estep_type == estep_type
+
+    def test_estep_type_error_message_reports_the_value(self):
+        """The message names the offending value, the two valid ones being in it too."""
+        with pytest.raises(
+            ValueError,
+            match=r"estep_type must be either ``'sequential'`` or ``'associative'``\. "
+            r"not-an-estep provided instead\.",
+        ):
+            MockHMM(n_states=3, estep_type="not-an-estep")
 
     # -------------------------------------------------------------------------
     # maxiter setter tests
@@ -1632,20 +1668,22 @@ class TestEStepRouting:
 
     @pytest.mark.metatest
     def test_registries_and_setter_agree(self):
-        """Every registered E-step is reachable, and both registries offer the same set.
+        """Every registered E-step is reachable, and all registries offer the same set.
 
         The ``ESTEP_TYPE`` parametrization is derived from ``FORWARD_BACKWARD``, so this
         is what stops a new entry from being covered in name only: it must also exist
-        in ``FORWARD_PASS`` and be accepted by the ``estep_type`` setter.
+        in ``FORWARD_PASS`` and ``MAX_SUM``, and be accepted by the ``estep_type``
+        setter. Add any further registry to the assertion below.
         """
-        assert FORWARD_PASS.keys() == FORWARD_BACKWARD.keys()
+        assert FORWARD_PASS.keys() == FORWARD_BACKWARD.keys() == MAX_SUM.keys()
 
+        # every registered name must survive the setter, which is where a new entry
+        # would otherwise be unreachable; the setter's rejections are covered by
+        # TestHMMInit.test_estep_type_setter.
         model = MockHMM(n_states=3)
         for estep_type in FORWARD_BACKWARD:
             model.estep_type = estep_type
             assert model.estep_type == estep_type
-        with pytest.raises(ValueError, match="estep_type must be either"):
-            model.estep_type = "not-an-estep"
 
     @ESTEP_TYPE
     @pytest.mark.parametrize(
@@ -1653,6 +1691,7 @@ class TestEStepRouting:
         [
             pytest.param("smooth_proba", FORWARD_BACKWARD, id="smooth_proba"),
             pytest.param("filter_proba", FORWARD_PASS, id="filter_proba"),
+            pytest.param("decode_state", MAX_SUM, id="decode_state"),
         ],
     )
     def test_inference_routes_to_selected_estep(
