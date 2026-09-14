@@ -19,7 +19,11 @@ from ..hmm.expectation_maximization import (
     forward_pass,
     max_sum,
 )
-from ..hmm.parallel_expectation import forward_backward_assoc, forward_pass_assoc
+from ..hmm.parallel_expectation import (
+    forward_backward_assoc,
+    forward_pass_assoc,
+    max_sum_assoc,
+)
 from ..regularizer import Regularizer
 from ..type_casting import support_pynapple
 from ..typing import (
@@ -54,6 +58,11 @@ FORWARD_PASS = {
 FORWARD_BACKWARD = {
     "sequential": forward_backward,
     "associative": forward_backward_assoc,
+}
+
+MAX_SUM = {
+    "sequential": max_sum,
+    "associative": max_sum_assoc,
 }
 
 
@@ -979,7 +988,7 @@ class BaseHMM(
         # make sure session_starts starts with a 1
         session_starts = session_starts.at[0].set(True)
 
-        decoded_states = max_sum(
+        decoded_states = MAX_SUM[self._estep_type](
             params,
             data,
             y,
@@ -1073,6 +1082,31 @@ class BaseHMM(
         - The algorithm properly handles session boundaries and NaN values at epoch borders
         - Decoding is useful for segmenting continuous data into discrete behavioral states
         - For uncertainty estimates about states, use ``smooth_proba()`` instead
+
+        Decoding walks the time bins one at a time, which suits a CPU core and does not
+        suit a GPU: each step is a tiny kernel launch of a few microseconds, so the cost
+        is set by the number of bins rather than by the arithmetic, and a long recording
+        can take minutes on an accelerator that a CPU finishes in seconds. Unlike the
+        E-step, which :class:`~nemos.glm_hmm.GLMHMM`'s ``estep_type`` can switch to a
+        parallel scan, this method has no such option yet.
+
+        On a long recording it is therefore often faster to decode on the CPU, even from
+        a model fit on the GPU. Placing the inputs on a CPU device is enough, the
+        computation following its data:
+
+        >>> import jax                                              # doctest: +SKIP
+        >>> cpu = jax.devices("cpu")[0]                             # doctest: +SKIP
+        >>> states = model.decode_state(                            # doctest: +SKIP
+        ...     jax.device_put(X, cpu), jax.device_put(y, cpu)
+        ... )
+
+        The transfers cost a fraction of what the loop saves: the inputs are one
+        ``(n_samples, n_features)`` array and one of observations, against a per-bin
+        launch overhead paid ``n_samples`` times. ``jax.default_device`` is the
+        alternative if several calls should run there:
+
+        >>> with jax.default_device(cpu):                           # doctest: +SKIP
+        ...     states = model.decode_state(X, y)
         """
         params, X, y, session_starts = self._validate_and_prepare_inputs(
             X, y, session_starts
