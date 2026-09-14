@@ -267,7 +267,7 @@ def forward_pass(
     session_starts = (
         session_starts
         if session_starts is not None
-        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
+        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(True)
     )
 
     # Compute log-likelihoods
@@ -458,7 +458,7 @@ def forward_backward(
     session_starts = (
         session_starts
         if session_starts is not None
-        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
+        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(True)
     )
 
     # Compute log-likelihoods
@@ -829,7 +829,7 @@ def em_hmm(
     session_starts = (
         session_starts
         if session_starts is not None
-        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
+        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(True)
     )
 
     state = EMState(
@@ -931,7 +931,7 @@ def max_sum(
     session_starts = (
         session_starts
         if session_starts is not None
-        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
+        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(True)
     )
 
     log_emission = log_likelihood_func(model_params, X, y)
