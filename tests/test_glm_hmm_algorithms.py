@@ -29,10 +29,9 @@ from nemos.hmm.expectation_maximization import (
     compute_xi_log,
     em_hmm,
     forward_backward,
-    max_sum,
     run_m_step,
 )
-from nemos.hmm.hmm import FORWARD_BACKWARD
+from nemos.hmm.hmm import FORWARD_BACKWARD, MAX_SUM
 from nemos.hmm.m_step_analytical_updates import (
     _analytical_m_step_log_initial_prob,
     _analytical_m_step_log_transition_prob,
@@ -2246,9 +2245,10 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population, estep
     )
 
 
+@ESTEP_TYPE
 class TestViterbi:
     @pytest.mark.parametrize("use_new_sess", [True, False])
-    def test_viterbi_against_hmmlearn(self, use_new_sess):
+    def test_viterbi_against_hmmlearn(self, use_new_sess, estep_type):
         data = np.load(fetch_data("em_three_states.npz"))
         initial_prob = data["initial_prob"]
         transition_prob = data["transition_prob"]
@@ -2274,7 +2274,7 @@ class TestViterbi:
             return log_like_func(y, predicted_rate)
 
         log_emission_array = log_like_func(y, predicted_rate_given_state)
-        map_path = max_sum(
+        map_path = MAX_SUM[estep_type](
             GLMHMMParams(
                 hmm_params=HMMParams(jnp.log(initial_prob), jnp.log(transition_prob)),
                 model_params=GLMHMMModelParams(coef, intercept),
@@ -2297,7 +2297,7 @@ class TestViterbi:
 
     @pytest.mark.parametrize("use_new_sess", [True, False])
     @pytest.mark.parametrize("return_index", [True, False])
-    def test_viterbi_return_index(self, use_new_sess, return_index):
+    def test_viterbi_return_index(self, use_new_sess, return_index, estep_type):
         data = np.load(fetch_data("em_three_states.npz"))
         initial_prob = data["initial_prob"]
         transition_prob = data["transition_prob"]
@@ -2321,7 +2321,7 @@ class TestViterbi:
             predicted_rate = inverse_link_function(X @ params.coef + params.intercept)
             return log_like_func(y, predicted_rate)
 
-        map_path = max_sum(
+        map_path = MAX_SUM[estep_type](
             GLMHMMParams(
                 hmm_params=HMMParams(jnp.log(initial_prob), jnp.log(transition_prob)),
                 model_params=GLMHMMModelParams(coef, intercept),
