@@ -21,7 +21,6 @@ from nemos.glm_hmm.algorithm_configs import (
 )
 from nemos.glm_hmm.params import GLMHMMModelParams, GLMHMMParams, HMMParams
 from nemos.glm_hmm.utils import compute_rate_per_state
-from nemos.hmm.hmm import FORWARD_BACKWARD as SRC_FORWARD_BACKWARD
 from nemos.hmm.expectation_maximization import (
     EMState,
     _backward_pass,
@@ -33,6 +32,7 @@ from nemos.hmm.expectation_maximization import (
     max_sum,
     run_m_step,
 )
+from nemos.hmm.hmm import FORWARD_BACKWARD
 from nemos.hmm.m_step_analytical_updates import (
     _analytical_m_step_log_initial_prob,
     _analytical_m_step_log_transition_prob,
@@ -40,7 +40,6 @@ from nemos.hmm.m_step_analytical_updates import (
 from nemos.hmm.parallel_expectation import (
     _backward_pass_assoc,
     _forward_pass_assoc,
-    forward_backward_assoc,
 )
 from nemos.observation_models import (
     BernoulliObservations,
@@ -62,15 +61,10 @@ _BACKWARD = {
     "associative": _backward_pass_assoc,
 }
 
-FORWARD_BACKWARD = {
-    "sequential": forward_backward,
-    "associative": forward_backward_assoc,
-}
-
 # Derived from the registry in src, not from the local dicts above: a new E-step
 # then parametrizes every test here immediately, and the local dicts raise a
 # KeyError until they are extended too, which is the work list.
-ESTEP_TYPE = pytest.mark.parametrize("estep_type", tuple(SRC_FORWARD_BACKWARD))
+ESTEP_TYPE = pytest.mark.parametrize("estep_type", tuple(FORWARD_BACKWARD))
 
 
 def setup_solver(
