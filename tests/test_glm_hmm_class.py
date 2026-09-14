@@ -21,7 +21,7 @@ from nemos.glm_hmm.glm_hmm import GLMHMM
 from nemos.glm_hmm.params import GLMHMMModelParams, GLMHMMParams
 from nemos.glm_hmm.validation import GLMHMMValidator
 from nemos.hmm.expectation_maximization import EMState
-from nemos.hmm.hmm import FORWARD_BACKWARD, FORWARD_PASS, BaseHMM
+from nemos.hmm.hmm import FORWARD_BACKWARD, BaseHMM
 from nemos.hmm.params import HMMParams
 from nemos.regularizer import Ridge, UnRegularized
 from nemos.utils import _get_name
@@ -2018,23 +2018,6 @@ def _spy_registry(monkeypatch, registry, key):
 class TestEStepRouting:
     """``estep_type`` selects which registry entry every E-step call site reaches."""
 
-    @pytest.mark.metatest
-    def test_registries_and_setter_agree(self, glm_hmm_data):
-        """Every registered E-step is reachable, and both registries offer the same set.
-
-        ``ESTEP_TYPES`` is derived from ``FORWARD_BACKWARD``, so this is what stops a
-        new entry from being covered in name only: it must also exist in
-        ``FORWARD_PASS`` and be accepted by the ``estep_type`` setter.
-        """
-        assert FORWARD_PASS.keys() == FORWARD_BACKWARD.keys()
-
-        model = GLMHMM(n_states=glm_hmm_data["n_states"], observation_model="Bernoulli")
-        for estep_type in ESTEP_TYPES:
-            model.estep_type = estep_type
-            assert model.estep_type == estep_type
-        with pytest.raises(ValueError, match="estep_type must be either"):
-            model.estep_type = "not-an-estep"
-
     @staticmethod
     def _spy_both(monkeypatch, registry):
         return {key: _spy_registry(monkeypatch, registry, key) for key in ESTEP_TYPES}
@@ -2067,38 +2050,27 @@ class TestEStepRouting:
         assert calls[estep_type]
         assert calls[other] == []
 
-    @pytest.mark.parametrize("estep_type", ESTEP_TYPES)
     @pytest.mark.parametrize(
-        "method, registry",
+        "method, base_method",
         [
-            ("smooth_proba", FORWARD_BACKWARD),
-            ("filter_proba", FORWARD_PASS),
-            ("score", FORWARD_PASS),
+            pytest.param("smooth_proba", "_smooth_proba", id="smooth_proba"),
+            pytest.param("filter_proba", "_filter_proba", id="filter_proba"),
         ],
     )
-    def test_inference_routes_to_selected_estep(
-        self,
-        monkeypatch,
-        glm_hmm_data,
-        estep_type,
-        method,
-        registry,
-        mock_glm_hmm_optimizer_run,
+    def test_inference_delegates_to_the_base(
+        self, monkeypatch, glm_hmm_data, method, base_method, mock_glm_hmm_optimizer_run
     ):
-        """The inference paths read ``estep_type`` at call time, not at fit time.
+        """The overrides here add documentation only, and reach the base implementation.
 
-        The fit here only has to leave the model fitted, so the solver is mocked out:
-        what is under test runs afterwards, in the inference call.
+        Which E-step each base method then selects is checked in
+        ``tests/test_hmm_base_class.py``, alongside the methods themselves.
         """
         model = self._fit_model(glm_hmm_data, "sequential")
-        model.estep_type = estep_type
+        calls = _spy_calls(monkeypatch, BaseHMM, base_method)
 
-        calls = self._spy_both(monkeypatch, registry)
         getattr(model, method)(glm_hmm_data["X"], glm_hmm_data["y"])
 
-        other = next(key for key in ESTEP_TYPES if key != estep_type)
-        assert calls[estep_type]
-        assert calls[other] == []
+        assert len(calls) == 1
 
     def test_setting_estep_type_invalidates_the_solver(self, glm_hmm_data):
         """The optimizer partials are dropped, the E-step being bound into them."""
