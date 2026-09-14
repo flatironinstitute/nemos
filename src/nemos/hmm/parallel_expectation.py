@@ -1,4 +1,43 @@
-"""Parallel implementation of the forward-backward algorithm."""
+r"""Parallel implementation of the forward-backward algorithm.
+
+The recursions of :mod:`nemos.hmm.expectation_maximization` are prefix problems over a
+sequence of per-step transfer matrices, so they can be evaluated by
+``jax.lax.associative_scan`` at depth :math:`O(\\log T)` rather than by a scan of length
+:math:`T`. The derivation is in docs/developers_notes/09-associative_estep_hmm.md;
+:func:`forward_backward_assoc` returns the same 6-tuple as
+:func:`~nemos.hmm.expectation_maximization.forward_backward` and is interchangeable
+with it.
+
+Conventions
+-----------
+**entry and exit states.** Every matrix here is indexed ``[entry, exit]``: the row is
+the state the segment is entered in, the column the state it is left in. This follows
+``log_transition_prob[j, i] = log p(z_t = i | z_{t-1} = j)``, the one-step case. A
+weight carried per column is therefore a weight per *exit* state, which is what
+``log_exit_weights`` means in :func:`_condition_on`.
+
+**earlier and later.** Composing two segments is a matrix product: the earlier segment is
+always the left factor, ``log_matmul(earlier,later)``, with the shared boundary state contracted away.
+The scan's operands are named for their position in time rather than in the argument list, because the two do not
+always agree: ``associative_scan`` passes ``(earlier, later)`` going forwards, but with
+``reverse=True`` it passes them in reverse time, so :func:`_combine_backward` receives
+``(later, earlier)`` and still puts the earlier segment on the left of the product.
+
+**the two halves of a forward element.** A forward element is a pair
+``(log_l, log_L)``: a scale, which grows with the length of the segment it spans, and a
+row-stochastic matrix whose rows ``logsumexp`` to zero. They are kept apart on purpose.
+Carrying them in one number is the obvious alternative and it is wrong -- the O(1)
+message would then have to be recovered by cancelling numbers of the magnitude of
+``log p(y)``, an error growing linearly in ``T``. :func:`combine_forward` drops the
+scale at every step, which is why ``log c_t`` cannot be read off the scan and is
+recomputed by :func:`_compute_log_normalizers`.
+
+**the backward has no such split.** Its messages carry the ``1 / c_t`` factors so that
+``log_alphas + log_betas`` is the log posterior, so their absolute scale is meaningful
+and cannot be dropped. It does not need to be: the ``1 / c_t`` folded into each element
+keeps the products O(1). The cost is that sessions need an explicit reset flag there,
+whereas the forward gets them for free because the rows of a reset element are constant.
+"""
 
 from functools import partial
 from typing import Callable, Tuple
@@ -7,22 +46,44 @@ import jax
 import jax.numpy as jnp
 
 from ..typing import ModelParamsT
+from .expectation_maximization import compute_xi_log
 from .utils import Array
 
 
-def condition(log_w: Array, M: Array) -> Tuple[Array, Array, Array]:
+def log_matmul(log_earlier: Array, log_later: Array) -> Array:
+    r"""Log-semiring product of two segments, earlier on the left.
+
+    :math:`\text{out}[i,j] = \text{logsumexp}_k(\text{earlier}[i,k] + \text{later}[k,j])`,
+    so ``i`` indexes the entry state of the earlier segment and ``j`` the exit state
+    of the later one, with the shared boundary state ``k`` contracted away.
+
+    Shifted per row of ``log_A`` and per column of ``log_B``, then run as a GEMM. The
+    broadcast form would materialize a ``(..., K, K, K)`` intermediate, which at
+    ``T = 1e6``, ``K = 20`` is 8e9 elements; exponentiating and calling into GEMM is
+    ``O(T K^2)`` memory instead. The shifts make the result exact except for entries
+    more than ~700 decades (f64) below their row's or column's maximum.
     """
-    Stable computation of (log(l), L).
+    row_max = jnp.max(log_earlier, axis=-1, keepdims=True)
+    col_max = jnp.max(log_later, axis=-2, keepdims=True)
+    prod = jnp.exp(log_earlier - row_max) @ jnp.exp(log_later - col_max)
+    return jnp.log(prod) + row_max + col_max
+
+
+def _condition_on(
+    log_exit_weights: Array, log_row_stochastic: Array
+) -> Tuple[Array, Array]:
+    """
+    Stable computation of (log(l), log(L)).
 
     Conditioning step described in the notes docs/developers_notes/09-associative_estep_hmm.md
 
     Parameters
     ----------
-    log_w:
+    log_exit_weights:
         Log of either :math:`p(y_t | z_t=i)` (when computing initial elements) or
         :math:`p(y_{v:t} | z_{v-1}=k)` (during the scan). Shape (n_samples, n_states).
-    M:
-        Either :math:`p(z_t=i | z_{t-1}=j)` (when computing initial elements) or
+    log_row_stochastic:
+        Log of either :math:`p(z_t=i | z_{t-1}=j)` (when computing initial elements) or
         :math:`p(z_{v-1}=k | z_{u-1}=j, y_{u:v-1})$` (during the scan). Shape (n_samples, n_states, n_states).
 
     Returns
@@ -30,32 +91,30 @@ def condition(log_w: Array, M: Array) -> Tuple[Array, Array, Array]:
     log_l:
         The log of :math:`p(y_t | z_{t-1}=j)` (when computing initial elements) or
         :math:`p(y_{v:t} | z_{u-1}=j, y_{u:v-1})` (during the scan).
-    L:
-        Either :math:`p(z_t=i | z_{t-1}=j, y_t)` (when computing initial elements)
-        or :math:`p(z_{v-1}=k | z_{u-1}=j, y_{u:t})` (during the scan).
-    max_log_w:
-        The max of log_w over states.
+    log_L:
+        Log of either :math:`p(z_t=i | z_{t-1}=j, y_t)` (when computing initial elements)
+        or :math:`p(z_{v-1}=k | z_{u-1}=j, y_{u:t})` (during the scan). Its rows
+        logsumexp to zero.
 
     Notes
     -----
     The conditioning operation is described in section **Stable Parametrization** in
     the notes docs/developers_notes/09-associative_estep_hmm.md.
 
-    The actual stable computation of the conditioning implemented here is described in
-    the **Scan, Step by Step** section, subsection **Conditioning on exit weights**.
+    The log-space form implemented here is described in the section
+    **The Same Scan in Log Space**. Against the probability-space form of the section
+    above it, the explicit max shift is absorbed into the ``logsumexp`` that replaces
+    the row sum, and the row normalization becomes a subtraction. Keeping ``log_L`` in
+    the log rather than ``L`` in probability space is what removes the floor under an
+    individual message, which a population model reaches in single precision.
     """
-    # safe exp
-    max_log_w = jnp.max(log_w, axis=-1, keepdims=True)
-    exp_cond = jnp.exp(log_w - max_log_w)
-    L_unnorm = M * exp_cond[..., jnp.newaxis, :]
-    lin = L_unnorm.sum(axis=-1)
-    log_l = jnp.log(lin) + max_log_w
-    L = L_unnorm / lin[..., jnp.newaxis]
-    return log_l, L, max_log_w
+    log_L_unnorm = log_row_stochastic + log_exit_weights[..., jnp.newaxis, :]
+    log_l = jax.scipy.special.logsumexp(log_L_unnorm, axis=-1)
+    return log_l, log_L_unnorm - log_l[..., jnp.newaxis]
 
 
 def combine_forward(
-    x1: Tuple[Array, Array], x2: Tuple[Array, Array]
+    earlier: Tuple[Array, Array], later: Tuple[Array, Array]
 ) -> Tuple[Array, Array]:
     r"""Combine in the associative scan.
 
@@ -66,21 +125,23 @@ def combine_forward(
     The stable implementation is described from section **Combine** to
     section **Dropping the accumulated scale**.
     """
-    log_l1, L1 = x1
-    log_l2, L2 = x2
-    log_r, L_prime, max_log_l2 = condition(log_l2, L1)
-    # subtracting max_log_l2 is what drops the accumulated
-    # scale keeping log_l O(1)
-    log_l = log_l1 + log_r - max_log_l2
-    return log_l, L_prime @ L2
+    log_l1, log_L1 = earlier
+    log_l2, log_L2 = later
+    log_r, log_L_prime = _condition_on(log_l2, log_L1)
+    log_l = log_l1 + log_r
+    # subtracting the max is what drops the accumulated scale, keeping log_l O(1).
+    # Without it log_l reaches the magnitude of log p(y_0:t) and the O(1) message is
+    # recovered by cancelling numbers that large, an error growing linearly with T.
+    log_l = log_l - jnp.max(log_l, axis=-1, keepdims=True)
+    return log_l, log_matmul(log_L_prime, log_L2)
 
 
-def normalizers(
-    initial_prob: Array,
-    transition_prob: Array,
+def _compute_log_normalizers(
+    log_initial_prob: Array,
+    log_transition_prob: Array,
     log_conditional_prob: Array,
     session_starts: Array,
-    filtered_probs: Array,
+    log_alphas: Array,
 ) -> Array:
     r"""
     Recompute the per-step log normalizers from the filtered probabilities.
@@ -93,38 +154,38 @@ def normalizers(
 
     Parameters
     ----------
-    initial_prob:
-        Initial state distribution, shape (n_states,).
-    transition_prob:
-        Transition matrix, shape (n_states, n_states), indexed ``[from, to]``.
+    log_initial_prob:
+        Log initial state distribution, shape (n_states,).
+    log_transition_prob:
+        Log transition matrix, shape (n_states, n_states), indexed ``[from, to]``.
     log_conditional_prob:
         Log-emissions :math:`\log p(y_t | z_t=i)`, shape (n_samples, n_states).
     session_starts:
         Boolean array marking the start of a new session, shape (n_samples,).
-    filtered_probs:
-        Filtered probabilities :math:`\hat{\alpha}_t`, shape (n_samples, n_states).
+    log_alphas:
+        Log filtered probabilities :math:`\log \hat{\alpha}_t`, shape (n_samples, n_states).
 
     Returns
     -------
     :
         Log normalizers :math:`\log c_t`, shape (n_samples,).
     """
-    # alpha_hat_{t-1}; the row at t=0 is discarded by the where below, index 0 being
-    # always a session start, and is duplicated only to line the shapes up.
-    filtered_prev = jnp.concatenate([filtered_probs[:1], filtered_probs[:-1]])
-    predicted_prob = jnp.where(
-        session_starts[:, jnp.newaxis], initial_prob, filtered_prev @ transition_prob
+    # log alpha_hat_{t-1}; the row at t=0 is discarded by the where below, index 0
+    # being always a session start, and is duplicated only to line the shapes up.
+    log_alphas_prev = jnp.concatenate([log_alphas[:1], log_alphas[:-1]])
+    log_transitioned = jax.scipy.special.logsumexp(
+        log_alphas_prev[..., :, jnp.newaxis] + log_transition_prob[jnp.newaxis],
+        axis=-2,
     )
-    # b_t is the one factor that cannot be carried in probability space: it is a sum
-    # over neurons in the log, so exp(log_conditional_prob) underflows on its own.
-    max_log_b = jnp.max(log_conditional_prob, axis=-1, keepdims=True)
-    lin = jnp.sum(predicted_prob * jnp.exp(log_conditional_prob - max_log_b), axis=-1)
-    return jnp.log(lin) + max_log_b[:, 0]
+    log_predicted = jnp.where(
+        session_starts[:, jnp.newaxis], log_initial_prob, log_transitioned
+    )
+    return jax.scipy.special.logsumexp(log_conditional_prob + log_predicted, axis=-1)
 
 
 def _forward_pass_assoc(
-    initial_prob: Array,
-    transition_prob: Array,
+    log_initial_prob: Array,
+    log_transition_prob: Array,
     log_conditional_prob: Array,
     session_starts: Array,
 ) -> Tuple[Array, Array]:
@@ -132,24 +193,25 @@ def _forward_pass_assoc(
     Forward pass of an HMM by associative scan.
 
     The scan composes the one-step elements :math:`\phi(F_{t:t})` of
-    docs/developers_notes/09-associative_estep_hmm.md with :func:`combine`, so it runs at
-    depth :math:`O(\log T)` instead of the :math:`O(T)` of the sequential recursion. Every
-    matrix in the scan is row-stochastic and carried in probability space; the only
-    quantities kept in the log are the emissions and the segment scales.
+    docs/developers_notes/09-associative_estep_hmm.md with :func:`combine_forward`, so it
+    runs at depth :math:`O(\log T)` instead of the :math:`O(T)` of the sequential
+    recursion. Every matrix in the scan is row-stochastic and carried in the log, its
+    rows summing to zero under ``logsumexp``, so no individual message has a floor
+    under it; the scale rides alongside as ``log_l`` and is dropped at every combine.
 
     At a session start the element is built from the initial distribution rather than
     from the transition matrix, which is all the session handling the forward pass
     needs: index 0 is a session start, its element has equal rows, and both the
-    matrix product and the row rescaling in :func:`combine` preserve equal rows, so
+    matrix product and the row rescaling in :func:`combine_forward` preserve equal rows, so
     every cumulative matrix has all its rows equal to the filtered distribution.
 
     Parameters
     ----------
-    initial_prob :
-        Initial state distribution, shape (n_states,).
-    transition_prob :
-        Transition matrix, shape (n_states, n_states), where entry ``[j, i]`` is
-        :math:`p(z_t = i | z_{t-1} = j)`.
+    log_initial_prob :
+        Log initial state distribution, shape (n_states,).
+    log_transition_prob :
+        Log transition matrix, shape (n_states, n_states), where entry ``[j, i]`` is
+        :math:`\log p(z_t = i | z_{t-1} = j)`.
     log_conditional_prob :
         Log-emissions :math:`\log p(y_t | z_t=i)`, shape (n_time_bins, n_states).
     session_starts :
@@ -157,9 +219,9 @@ def _forward_pass_assoc(
 
     Returns
     -------
-    filtered_probs :
-        Filtered probabilities :math:`\hat{\alpha}_t`, shape (n_time_bins, n_states),
-        in probability space.
+    log_alphas :
+        Log filtered probabilities :math:`\log \hat{\alpha}_t`, shape
+        (n_time_bins, n_states), each row summing to zero under ``logsumexp``.
     log_normalizers :
         Log normalizers :math:`\log c_t`, shape (n_time_bins,). Their sum is the
         log-likelihood of the observations.
@@ -170,23 +232,23 @@ def _forward_pass_assoc(
     """
     n_time_bins, n_states = log_conditional_prob.shape
 
-    # compute the scan elements log_l, L = phi(F_{t:t})
-    base = jnp.where(
+    # compute the scan elements log_l, log_L = phi(F_{t:t})
+    log_base = jnp.where(
         session_starts[:, jnp.newaxis, jnp.newaxis],
-        jnp.broadcast_to(initial_prob, (n_time_bins, n_states, n_states)),
-        transition_prob,
+        jnp.broadcast_to(log_initial_prob, (n_time_bins, n_states, n_states)),
+        log_transition_prob,
     )
-    log_l, L, _ = condition(log_conditional_prob, base)
+    elements = _condition_on(log_conditional_prob, log_base)
     # the log output of the scan is discarded: combine subtracts out the max that
     # would otherwise accumulate, so it is no longer log(p(y_0:t)).
-    _, L_cum = jax.lax.associative_scan(combine_forward, (log_l, L))
-    filtered_probs = L_cum[:, 0, :]
-    return filtered_probs, normalizers(
-        initial_prob,
-        transition_prob,
+    _, log_L_cum = jax.lax.associative_scan(combine_forward, elements)
+    log_alphas = log_L_cum[:, 0, :]
+    return log_alphas, _compute_log_normalizers(
+        log_initial_prob,
+        log_transition_prob,
         log_conditional_prob,
         session_starts,
-        filtered_probs,
+        log_alphas,
     )
 
 
@@ -252,8 +314,8 @@ def forward_pass_assoc(
     """
     # unpack parameters
     model_params = params.model_params
-    initial_prob = jnp.exp(params.hmm_params.log_initial_prob)
-    transition_prob = jnp.exp(params.hmm_params.log_transition_prob)
+    log_initial_prob = params.hmm_params.log_initial_prob
+    log_transition_prob = params.hmm_params.log_transition_prob
 
     # Initialize variables
     session_starts = (
@@ -266,38 +328,42 @@ def forward_pass_assoc(
     log_conditionals = log_likelihood_func(model_params, X, y)
 
     # Compute forward pass
-    alphas, log_normalizers = _forward_pass_assoc(
-        initial_prob, transition_prob, log_conditionals, session_starts
+    log_alphas, log_normalizers = _forward_pass_assoc(
+        log_initial_prob, log_transition_prob, log_conditionals, session_starts
     )  # these are equivalent to the forward pass with python loop
-    return jnp.log(alphas), log_normalizers
+    return log_alphas, log_normalizers
 
 
 def _combine_backward(
-    x: Tuple[Array, Array], y: Tuple[Array, Array]
+    later: Tuple[Array, Array], earlier: Tuple[Array, Array]
 ) -> Tuple[Array, Array]:
     r"""Compose backward transfer matrices, keeping their scale.
 
-    Nothing is renormalized here, unlike in :func:`combine`: the backward messages are
+    Nothing is renormalized here, unlike in :func:`combine_forward`: the backward messages are
     not distributions over the states, they carry the :math:`1/c_t` factors so that
     ``log_alphas + log_betas`` is the log posterior, so there is no row-stochastic
     invariant to restore. Nothing needs to be either, the :math:`1/c_t` folded into each
     element being what keeps the products O(1).
 
-    With ``reverse=True`` the element at the current index arrives as ``y`` and the
-    accumulation over later times as ``x``, so the product is ordered
-    :math:`N_t (N_{t+1} \cdots N_{T-1})`. A reset in ``y`` truncates the block, a session
-    start at the current index making the message independent of everything after it, and
-    the flag is propagated so that a block containing a reset shadows any later block it
-    is composed with.
+    Note the argument order: ``reverse=True`` hands the operands to the combine in
+    reverse time, so ``later`` arrives first, and the product below still places the
+    earlier segment on the left, :math:`N_t (N_{t+1} \cdots N_{T-1})`. A reset in
+    ``earlier`` truncates the block, a session start at that index making the message
+    independent of everything after it, and the flag is propagated so that a block
+    containing a reset shadows any later block it is composed with.
     """
-    N_x, reset_x = x
-    N_y, reset_y = y
-    composed = jnp.where(reset_y[:, None, None], N_y, N_y @ N_x)
-    return composed, reset_x | reset_y
+    log_N_later, reset_later = later
+    log_N_earlier, reset_earlier = earlier
+    composed = jnp.where(
+        reset_earlier[:, jnp.newaxis, jnp.newaxis],
+        log_N_earlier,
+        log_matmul(log_N_earlier, log_N_later),
+    )
+    return composed, reset_later | reset_earlier
 
 
 def _backward_pass_assoc(
-    transition_prob: Array,
+    log_transition_prob: Array,
     log_conditional_prob: Array,
     log_normalizers: Array,
     session_starts: Array,
@@ -333,9 +399,9 @@ def _backward_pass_assoc(
 
     Parameters
     ----------
-    transition_prob :
-        Transition matrix, shape (n_states, n_states), where entry ``[j, i]`` is
-        :math:`p(z_t = i | z_{t-1} = j)`.
+    log_transition_prob :
+        Log transition matrix, shape (n_states, n_states), where entry ``[j, i]`` is
+        :math:`\log p(z_t = i | z_{t-1} = j)`.
     log_conditional_prob :
         Log-emissions :math:`\log p(y_t | z_t=i)`, shape (n_time_bins, n_states).
     log_normalizers :
@@ -346,9 +412,9 @@ def _backward_pass_assoc(
     Returns
     -------
     :
-        Backward messages :math:`\hat{\beta}_t`, shape (n_time_bins, n_states), in
-        probability space, normalized as in eqn. 13.62 of [1]_ so that their product
-        with the filtered probabilities is the marginal posterior.
+        Log backward messages :math:`\log \hat{\beta}_t`, shape (n_time_bins, n_states),
+        normalized as in eqn. 13.62 of [1]_ so that their sum with the log filtered
+        probabilities is the log marginal posterior.
 
     References
     ----------
@@ -356,24 +422,25 @@ def _backward_pass_assoc(
     """
     n_states = log_conditional_prob.shape[1]
 
-    # b_t / c_t is the pairing that stays O(1): each is of the order of the per-bin
-    # likelihood, which underflows on its own for a population model, while their ratio
-    # is a ratio of two averages of the same numbers.
-    # The reset element R satisfies R 1 = 1, that is, beta_hat = 1 at a session end.
-    elements = jnp.where(
-        session_starts[:, None, None],
-        1.0 / n_states,
-        transition_prob[None]
-        * jnp.exp(log_conditional_prob - log_normalizers[:, None])[:, None, :],
+    # log b_t - log c_t is the pairing that stays O(1): each is of the order of the
+    # per-bin log-likelihood, large and negative for a population model, while their
+    # difference is a ratio of two averages of the same numbers.
+    # The reset element R satisfies R 1 = 1, that is, beta_hat = 1 at a session end,
+    # which in the log is a row-constant matrix of -log K.
+    log_elements = jnp.where(
+        session_starts[:, jnp.newaxis, jnp.newaxis],
+        -jnp.log(jnp.asarray(n_states, log_conditional_prob.dtype)),
+        log_transition_prob[jnp.newaxis]
+        + (log_conditional_prob - log_normalizers[:, jnp.newaxis])[:, jnp.newaxis, :],
     )
-    cumulative, _ = jax.lax.associative_scan(
-        _combine_backward, (elements, session_starts), reverse=True
+    log_cumulative, _ = jax.lax.associative_scan(
+        _combine_backward, (log_elements, session_starts), reverse=True
     )
-    # cumulative[t] maps beta_{T-1} = 1 to beta_{t-1}, so the messages are its row sums.
-    # Index 0 is dropped, there being no beta_{-1}, and it cannot pollute the others
-    # since cumulative[t] folds only the indices >= t.
-    betas = cumulative[1:].sum(axis=2)
-    return jnp.concatenate([betas, jnp.ones((1, n_states), betas.dtype)])
+    # cumulative[t] maps beta_{T-1} = 1 to beta_{t-1}, so the messages are its row
+    # sums, here a logsumexp. Index 0 is dropped, there being no beta_{-1}, and it
+    # cannot pollute the others since cumulative[t] folds only the indices >= t.
+    log_betas = jax.scipy.special.logsumexp(log_cumulative[1:], axis=2)
+    return jnp.concatenate([log_betas, jnp.zeros((1, n_states), log_betas.dtype)])
 
 
 @partial(jax.jit, static_argnames=["log_likelihood_func"])
@@ -440,8 +507,8 @@ def forward_backward_assoc(
     """
     # unpack parameters
     model_params = params.model_params
-    initial_prob = jnp.exp(params.hmm_params.log_initial_prob)
-    transition_prob = jnp.exp(params.hmm_params.log_transition_prob)
+    log_initial_prob = params.hmm_params.log_initial_prob
+    log_transition_prob = params.hmm_params.log_transition_prob
 
     # Initialize variables
     n_time_bins = y.shape[0]
@@ -455,13 +522,13 @@ def forward_backward_assoc(
     log_conditionals = log_likelihood_func(model_params, X, y)
 
     # Compute forward pass
-    alphas, log_normalization = _forward_pass_assoc(
-        initial_prob, transition_prob, log_conditionals, session_starts
+    log_alphas, log_normalization = _forward_pass_assoc(
+        log_initial_prob, log_transition_prob, log_conditionals, session_starts
     )  # these are equivalent to the forward pass with python loop
 
     # Compute backward pass
-    betas = _backward_pass_assoc(
-        transition_prob, log_conditionals, log_normalization, session_starts
+    log_betas = _backward_pass_assoc(
+        log_transition_prob, log_conditionals, log_normalization, session_starts
     )
 
     log_likelihood = jnp.sum(
@@ -474,19 +541,20 @@ def forward_backward_assoc(
     # ----------
     # Compute posterior distributions
     # Gamma - Equations 13.32, 13.64 from [1]
-    log_alphas, log_betas = jnp.log(alphas), jnp.log(betas)
     log_posteriors = log_alphas + log_betas
 
     # xis Equations 13.43 and 13.65 from [1]
-    # Posterior over consecutive states summed across time steps
-    # b_t / c_t is the O(1) pairing: alpha_hat / c_t overflows and b_t * beta_hat
-    # underflows separately, while their product is the xi probability.
-    weights = jnp.exp(log_conditionals[1:] - log_normalization[1:, jnp.newaxis])
-    weights = jnp.where(session_starts[1:, jnp.newaxis], 0.0, weights)
-    # (n_states, n_time_bins - 1) @ (n_time_bins - 1, n_states), summing over time
-    # without materializing the (n_time_bins, n_states, n_states) intermediate.
-    sum_xis = alphas[:-1].T @ (betas[1:] * weights)
-    log_joint_posterior = jnp.log(sum_xis * transition_prob)
+    # Posterior over consecutive states summed across time steps. Both passes return
+    # the same log-space messages as the sequential ones, so this is the sequential
+    # E-step's own function rather than a reimplementation of it.
+    log_joint_posterior = compute_xi_log(
+        log_alphas,
+        log_betas,
+        log_conditionals,
+        log_normalization,
+        session_starts,
+        log_transition_prob,
+    )
     return (
         log_posteriors,
         log_joint_posterior,
