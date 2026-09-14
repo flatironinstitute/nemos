@@ -459,7 +459,9 @@ $$ (bwd-product)
 
 since the chain resets at $e(t) + 1 \in S$ and $\hat\beta_{e(t)} = \mathbf{1}$.
 
-Crossing a session therefore means truncating the product, and the truncation is carried in the element. An element is a pair $x = (N_x, r_x)$ with $r_x \in \{0,1\}$ marking "this element begins a fresh segment", and at a session start the matrix is $R = \mathbf{1}\mathbf{1}^\top / K$, which satisfies $R\mathbf{1} = \mathbf{1}$. Writing $x$ for the accumulation over later times and $y$ for the element at the current index, the order in which `reverse=True` supplies them,
+Composing blocks is a matrix product, so bracketing cannot change the value and the sequential sweep and the scan return the same $\hat\beta$. Within a session there is nothing further to check.
+
+Sessions are the part that needs care, and the mechanism is easiest to read off the sequential sweep. Going right to left, {eq}`bwd-recursion` grows the message by $\hat\beta_{t-1} = N_t \hat\beta_t$ until $t$ is a session start, where $\hat\beta_{t-1} = \mathbf{1}$ instead. Putting that reset in the element itself means using the matrix $R = \mathbf{1}\mathbf{1}^\top / K$ there, for which $R\mathbf{1} = \mathbf{1}$. Session starts can be tracked as a boolean alongside the matrix, so each element of the scan becomes a pair $x = (N_x, r_x)$ with $r_x \in \{0,1\}$, and $\oplus$ becomes, with $x$ the block over later times and $y$ the one over earlier times, the order in which `reverse=True` supplies them,
 
 $$
 x \oplus y = \bigl(N, \max(r_x, r_y)\bigr), \qquad
@@ -469,7 +471,31 @@ N_y N_x, & r_y = 0 .
 \end{cases}
 $$ (bwd-combine)
 
-A marker on $y$ discards $x$, so a reset drops everything after it, which is what makes $\hat\beta_{t-1}$ independent of the times at and beyond the next session start. Markers combine by $\max$, so a segment is marked as soon as it contains one.
+A marked $y$ keeps itself and discards $x$, and $\max$ never clears a marker once it is set, so a block that has reached a session start stops growing: through the remaining rounds of the scan its value no longer changes. That is what keeps $\hat\beta_{t-1}$ independent of the times at and beyond the next session start. All that is left is that $\oplus$ is associative.
+
+
+:::{admonition} Proposition (the flagged operator is associative)
+
+$(x \oplus y) \oplus z = x \oplus (y \oplus z)$.
+:::
+
+:::{admonition} Proof
+:class: dropdown
+
+Write $(x \oplus y) \oplus z = (N_{\mathrm{L}}, r_{\mathrm{L}})$ and $x \oplus (y \oplus z) = (N_{\mathrm{R}}, r_{\mathrm{R}})$, and distinguish cases on $(r_y, r_z)$; $r_x$ never enters the matrix.
+
+If $r_z = 1$, then $N_{\mathrm{L}} = N_z$, and since $\max(r_y, r_z) = 1$ also $N_{\mathrm{R}} = N_z$.
+
+If $r_z = 0$ and $r_y = 1$, then $N_{x \oplus y} = N_y$ gives $N_{\mathrm{L}} = N_z N_y$, while $N_{y \oplus z} = N_z N_y$ with $\max(r_y, r_z) = 1$ gives $N_{\mathrm{R}} = N_z N_y$.
+
+If $r_z = 0$ and $r_y = 0$, then $N_{\mathrm{L}} = N_z (N_y N_x)$ and $N_{\mathrm{R}} = (N_z N_y) N_x$, equal because the matrix product is associative, the only case in which that is needed.
+
+For the markers, $\max(\max(r_x, r_y), r_z) = \max(r_x, \max(r_y, r_z))$.
+:::
+
+Taking $r_t = 1$ for $t \in S$ and $0$ otherwise, the reverse scan's element at index $t$ is $N_t \cdots N_{e(t)}$, and $\hat\beta_{t-1}$ is its row sum. Index $0$ is unused, there being no $\hat\beta_{-1}$, and it cannot contaminate the others because the suffix at $t$ involves only indices $\geq t$.
+
+Since the $N_t$ of {eq}`bwd-recursion` are already $O(1)$, this pass is carried directly in log coordinates with the log-semiring product of the previous section and no renormalization. There is no row-stochastic structure to factor out here, and nothing to drop.
 
 :::{admonition} Two sessions of three bins, written out
 :class: dropdown
@@ -517,29 +543,6 @@ Slot 2 stops at $d=1$ because its own marker is set the moment it swallows $x_3$
 
 Reading off {eq}`bwd-product`, $\hat\beta_{t-1}$ is the row sum of slot $t$: $\hat\beta_0 = N_1N_2\mathbf{1}$, $\hat\beta_1 = N_2\mathbf{1}$, $\hat\beta_2 = \mathbf{1}$, $\hat\beta_3 = N_4N_5\mathbf{1}$, $\hat\beta_4 = N_5\mathbf{1}$, with $\hat\beta_5 = \mathbf{1}$ the seed and slot $0$ unused. The trailing $R$ costs nothing, $R\mathbf{1} = \mathbf{1}$.
 :::
-
-:::{admonition} Proposition (the flagged operator is associative)
-
-$(x \oplus y) \oplus z = x \oplus (y \oplus z)$.
-:::
-
-:::{admonition} Proof
-:class: dropdown
-
-Write $(x \oplus y) \oplus z = (N_{\mathrm{L}}, r_{\mathrm{L}})$ and $x \oplus (y \oplus z) = (N_{\mathrm{R}}, r_{\mathrm{R}})$, and distinguish cases on $(r_y, r_z)$; $r_x$ never enters the matrix.
-
-If $r_z = 1$, then $N_{\mathrm{L}} = N_z$, and since $\max(r_y, r_z) = 1$ also $N_{\mathrm{R}} = N_z$.
-
-If $r_z = 0$ and $r_y = 1$, then $N_{x \oplus y} = N_y$ gives $N_{\mathrm{L}} = N_z N_y$, while $N_{y \oplus z} = N_z N_y$ with $\max(r_y, r_z) = 1$ gives $N_{\mathrm{R}} = N_z N_y$.
-
-If $r_z = 0$ and $r_y = 0$, then $N_{\mathrm{L}} = N_z (N_y N_x)$ and $N_{\mathrm{R}} = (N_z N_y) N_x$, equal because the matrix product is associative, the only case in which that is needed.
-
-For the markers, $\max(\max(r_x, r_y), r_z) = \max(r_x, \max(r_y, r_z))$.
-:::
-
-Taking $r_t = 1$ for $t \in S$ and $0$ otherwise, the reverse scan's element at index $t$ is $N_t \cdots N_{e(t)}$, and $\hat\beta_{t-1}$ is its row sum. Index $0$ is unused, there being no $\hat\beta_{-1}$, and it cannot contaminate the others because the suffix at $t$ involves only indices $\geq t$.
-
-Since the $N_t$ of {eq}`bwd-recursion` are already $O(1)$, this pass is carried directly in log coordinates with the log-semiring product of the previous section and no renormalization. There is no row-stochastic structure to factor out here, and nothing to drop.
 
 ## The MAP Path in the Same Shape
 
