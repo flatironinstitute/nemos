@@ -11,6 +11,7 @@ This note will clarify the math behind the associative scan implementation of th
 | $\pi \in \mathbb{R}_+^K$ | $\pi[i] = p(z_t = i)$ at a session start |
 | $S$ | set of session-start indices, always $0 \in S$ |
 | $s(t)$ | start of the session containing $t$, $s(t) = \max\{u \in S : u \leq t\}$ |
+| $e(t)$ | end of the session containing $t$, $e(t) = \min\{u \in S : u > t\} - 1$, and $T-1$ if no such $u$ |
 
 ## Scan Map
 
@@ -389,7 +390,7 @@ In $\text{cond}$ the explicit max shift disappears, absorbed into the $\operator
 
 In the combine only the matrix product changes, to a log-semiring product $\operatorname{logsumexp}_k(\log L_1[i,k] + \log L_2[k,j])$. Everything else stands, including the subtraction of $\max_j \log l[j]$, which is doing exactly the same job as before.
 
-That last point is worth stating plainly, because the obvious log-space design gets it wrong. Carrying $\log F$ whole — one matrix, log-semiring products, no split — is algebraically identical and numerically much worse: its entries then have the magnitude of $\log p(y_{0:t})$, so recovering the O(1) normalized message at read-out costs the ULP of that magnitude, and the error grows *linearly in T*. Measured at $K=5$ with a per-bin log-likelihood of $-801$: 1.65e-10, 1.48e-9, 3.02e-8, 2.44e-7 at $T = 10^3$ to $10^6$, each equal to $|\log p(y)|$ times the machine epsilon. Splitting the scale out and dropping it, as below, holds the error at 5.6e-13 regardless of $T$. The rule is the one from the previous section: the shape and the scale must not share a number.
+Carrying $\log F$ whole — one matrix, log-semiring products, no split — is algebraically identical and numerically much worse: its entries then have the magnitude of $\log p(y_{0:t})$, so recovering the O(1) normalized message at read-out costs the ULP of that magnitude, and the error grows *linearly in T*. Measured at $K=5$ with a per-bin log-likelihood of $-801$: 1.65e-10, 1.48e-9, 3.02e-8, 2.44e-7 at $T = 10^3$ to $10^6$, each equal to $|\log p(y)|$ times the machine epsilon. Splitting the scale out and dropping it, as below, holds the error at 5.6e-13 regardless of $T$. The rule is the one from the previous section: the shape and the scale must not share a number.
 
 The elements no longer exponentiate $\pi$ and $A$, so the only place a probability appears is inside the log-semiring product. The read-out is now the cumulative matrix's first row as it stands, with no $\log$ applied — which is precisely where the probability-space version reintroduced the floor it had otherwise avoided. The per-step normalizers must be rewritten in logs for the same reason, the predicted distribution being formed by a log-matvec against $\log A$ rather than a matvec against $A$.
 
@@ -434,6 +435,112 @@ def normalizers(log_pi, log_A, log_b, session_starts, log_alphas):
     return logsumexp(log_b + log_predicted, axis=-1)
 ```
 
+## The Backward Pass
+
+Reading the recursion off the sequential implementation, with $\hat\beta$ a column vector,
+
+$$
+\hat\beta_{t-1} = \frac{1}{c_t} A \bigl(b_t \odot \hat\beta_t\bigr) = N_t \hat\beta_t,
+\qquad
+N_t := \frac{1}{c_t} A \operatorname{diag}(b_t) = \frac{F_{t:t}}{c_t},
+$$ (bwd-recursion)
+
+seeded with $\hat\beta_{T-1} = \mathbf{1}$ and reset by $\hat\beta_{t-1} = \mathbf{1}$ whenever $t \in S$. The backward transfer matrix is the forward one-step element divided by the forward normalizer, which is what makes $\hat\beta$ an $O(1)$ quantity: $b_t$ and $c_t$ are of the same order, so the pairing $b_t / c_t$ is the same cancellation the sequential code relies on. Unrolling from the seed,
+
+$$
+\hat\beta_{t-1} = N_t N_{t+1} \cdots N_{T-1} \mathbf{1},
+$$
+
+a suffix product within a session, which is the prefix problem of the first section run right to left. The product runs to the end of that session,
+
+$$
+\hat\beta_{t-1} = N_t N_{t+1} \cdots N_{e(t)} \mathbf{1},
+$$ (bwd-product)
+
+since the chain resets at $e(t) + 1 \in S$ and $\hat\beta_{e(t)} = \mathbf{1}$.
+
+Crossing a session therefore means truncating the product, and the truncation is carried in the element. An element is a pair $x = (N_x, r_x)$ with $r_x \in \{0,1\}$ marking "this element begins a fresh segment", and at a session start the matrix is $R = \mathbf{1}\mathbf{1}^\top / K$, which satisfies $R\mathbf{1} = \mathbf{1}$. Writing $x$ for the accumulation over later times and $y$ for the element at the current index, the order in which `reverse=True` supplies them,
+
+$$
+x \oplus y = \bigl(N, \max(r_x, r_y)\bigr), \qquad
+N = \begin{cases}
+N_y, & r_y = 1, \\
+N_y N_x, & r_y = 0 .
+\end{cases}
+$$ (bwd-combine)
+
+A marker on $y$ discards $x$, so a reset drops everything after it, which is what makes $\hat\beta_{t-1}$ independent of the times at and beyond the next session start. Markers combine by $\max$, so a segment is marked as soon as it contains one.
+
+:::{admonition} Two sessions of three bins, written out
+:class: dropdown
+
+Take $T = 6$ and $S = \{0, 3\}$, so the sessions are $\{0,1,2\}$ and $\{3,4,5\}$, and $e = (2,2,2,5,5,5)$. The elements are
+
+$$
+x_0 = (R, 1), \quad x_1 = (N_1, 0), \quad x_2 = (N_2, 0), \quad x_3 = (R, 1), \quad x_4 = (N_4, 0), \quad x_5 = (N_5, 0).
+$$
+
+The scan reaches the suffixes in rounds, each doubling how far forward a slot reaches. At distance $d$, slot $t$ applies $\oplus$ with $x$ the block at $t+d$ and $y$ the block at $t$, and slots whose partner is past the end are left alone. Applying the two cases of {eq}`bwd-combine` literally:
+
+```
+elements   x0 = (R, 1)   x1 = (N1, 0)   x2 = (N2, 0)   x3 = (R, 1)   x4 = (N4, 0)   x5 = (N5, 0)
+
+d = 1      pair y = x_t with x = x_{t+1}
+
+           t=0   y = x0, x = x1   r_y = 1   ->  a0 = (R, 1)
+           t=1   y = x1, x = x2   r_y = 0   ->  a1 = (N1 N2, max(0,0)) = (N1 N2, 0)
+           t=2   y = x2, x = x3   r_y = 0   ->  a2 = (N2 R,  max(1,0)) = (N2 R,  1)
+           t=3   y = x3, x = x4   r_y = 1   ->  a3 = (R, 1)
+           t=4   y = x4, x = x5   r_y = 0   ->  a4 = (N4 N5, max(0,0)) = (N4 N5, 0)
+           t=5   y = x5, no x, 5+1 >= 6      ->  a5 = (N5, 0)
+
+d = 2      pair y = a_t with x = a_{t+2}
+
+           t=0   y = a0, x = a2   r_y = 1   ->  b0 = (R, 1)
+           t=1   y = a1, x = a3   r_y = 0   ->  b1 = (N1 N2 R, max(1,0)) = (N1 N2 R, 1)
+           t=2   y = a2, x = a4   r_y = 1   ->  b2 = (N2 R, 1)
+           t=3   y = a3, x = a5   r_y = 1   ->  b3 = (R, 1)
+           t=4   y = a4, no x, 4+2 >= 6      ->  b4 = (N4 N5, 0)
+           t=5   y = a5, no x, 5+2 >= 6      ->  b5 = (N5, 0)
+
+d = 4      pair y = b_t with x = b_{t+4}
+
+           t=0   y = b0, x = b4   r_y = 1   ->  (R, 1)
+           t=1   y = b1, x = b5   r_y = 1   ->  (N1 N2 R, 1)
+           t=2   y = b2, no x, 2+4 >= 6      ->  (N2 R, 1)
+           t=3   y = b3, no x, 3+4 >= 6      ->  (R, 1)
+           t=4   y = b4, no x, 4+4 >= 6      ->  (N4 N5, 0)
+           t=5   y = b5, no x, 5+4 >= 6      ->  (N5, 0)
+```
+
+Slot 2 stops at $d=1$ because its own marker is set the moment it swallows $x_3$, and slot 1 stops at $d=2$ for the same reason: a marked $y$ keeps itself and drops $x$, so no block grows past a session start.
+
+Reading off {eq}`bwd-product`, $\hat\beta_{t-1}$ is the row sum of slot $t$: $\hat\beta_0 = N_1N_2\mathbf{1}$, $\hat\beta_1 = N_2\mathbf{1}$, $\hat\beta_2 = \mathbf{1}$, $\hat\beta_3 = N_4N_5\mathbf{1}$, $\hat\beta_4 = N_5\mathbf{1}$, with $\hat\beta_5 = \mathbf{1}$ the seed and slot $0$ unused. The trailing $R$ costs nothing, $R\mathbf{1} = \mathbf{1}$.
+:::
+
+:::{admonition} Proposition (the flagged operator is associative)
+
+$(x \oplus y) \oplus z = x \oplus (y \oplus z)$.
+:::
+
+:::{admonition} Proof
+:class: dropdown
+
+Write $(x \oplus y) \oplus z = (N_{\mathrm{L}}, r_{\mathrm{L}})$ and $x \oplus (y \oplus z) = (N_{\mathrm{R}}, r_{\mathrm{R}})$, and distinguish cases on $(r_y, r_z)$; $r_x$ never enters the matrix.
+
+If $r_z = 1$, then $N_{\mathrm{L}} = N_z$, and since $\max(r_y, r_z) = 1$ also $N_{\mathrm{R}} = N_z$.
+
+If $r_z = 0$ and $r_y = 1$, then $N_{x \oplus y} = N_y$ gives $N_{\mathrm{L}} = N_z N_y$, while $N_{y \oplus z} = N_z N_y$ with $\max(r_y, r_z) = 1$ gives $N_{\mathrm{R}} = N_z N_y$.
+
+If $r_z = 0$ and $r_y = 0$, then $N_{\mathrm{L}} = N_z (N_y N_x)$ and $N_{\mathrm{R}} = (N_z N_y) N_x$, equal because the matrix product is associative, the only case in which that is needed.
+
+For the markers, $\max(\max(r_x, r_y), r_z) = \max(r_x, \max(r_y, r_z))$.
+:::
+
+Taking $r_t = 1$ for $t \in S$ and $0$ otherwise, the reverse scan's element at index $t$ is $N_t \cdots N_{e(t)}$, and $\hat\beta_{t-1}$ is its row sum. Index $0$ is unused, there being no $\hat\beta_{-1}$, and it cannot contaminate the others because the suffix at $t$ involves only indices $\geq t$.
+
+Since the $N_t$ of {eq}`bwd-recursion` are already $O(1)$, this pass is carried directly in log coordinates with the log-semiring product of the previous section and no renormalization. There is no row-stochastic structure to factor out here, and nothing to drop.
+
 ## The MAP Path in the Same Shape
 
 Viterbi is the same prefix problem in a different semiring. Replace the $\operatorname{logsumexp}$ that sums over the intermediate state with a $\max$ over it, and the sum that accumulates along a path stays a sum: $(\max, +)$, the [tropical semiring](https://en.wikipedia.org/wiki/Tropical_semiring). Associativity is all the scan needs, and it holds there for the same reason it holds in the log semiring — $\max$ is associative with identity $-\infty$, addition distributes over it — so the matrix product
@@ -476,7 +583,7 @@ $$
 
 so the suffix compositions $G_t = \text{bp}_t \circ \text{bp}_{t+1} \circ \dots \circ \text{bp}_{T-1}$ are a scan map in the sense of the first section, run in reverse.
 
-They are also the answer, not an ingredient of it. Backtracking is the recursion $\text{path}[t-1] = \text{bp}_t\bigl[\text{path}[t]\bigr]$ started from $\text{path}[T-1] = \operatorname*{arg\,max}_i \delta^{\text{scan}}_{T-1}[i]$, and unrolling it down from $T-1$ gives
+Backtracking is the recursion $\text{path}[t-1] = \text{bp}_t\bigl[\text{path}[t]\bigr]$ started from $\text{path}[T-1] = \operatorname*{arg\,max}_i \delta^{\text{scan}}_{T-1}[i]$, and unrolling it down from $T-1$ gives
 
 $$
 \text{path}[t-1] \;=\; \text{bp}_t\Bigl[\text{bp}_{t+1}\bigl[\dots\text{bp}_{T-1}[\text{path}[T-1]]\dots\bigr]\Bigr] \;=\; G_t\bigl[\text{path}[T-1]\bigr].
@@ -510,5 +617,3 @@ def max_sum(log_pi, log_A, log_b, session_starts):
 ```
 
 Ties are broken the way `argmax` breaks them, by lowest index, in the backpointers and in the choice of final state alike. That is the same rule the sequential recursion applies at the same two places, which is why the two return not merely equally scoring paths but the identical one.
-
-The backward pass is not covered by the propositions above. Its messages are not row-stochastic (they carry the $1/c_t$ factors), the equal-rows argument that made sessions free here does not apply to it, and its elements need an explicit reset flag.
