@@ -163,6 +163,8 @@ VALID_PAIRS = [
     {"frozen_intercept", "rec_intercept"},
     {"frozen_intercept", "true_intercept"},
     {"claim", "claims"},
+    {"initial_prob", "initial_proba_init"},
+    {"transition_prob", "transition_proba_init"},
 ]
 
 
