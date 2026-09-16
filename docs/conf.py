@@ -10,6 +10,8 @@ import sys, os, urllib.request
 import typing
 from pathlib import Path
 
+from sphinx import addnodes
+
 from importlib.metadata import version
 release: str = version("nemos")
 # this will grab major.minor.patch (excluding any .devN afterwards, which should only
@@ -133,12 +135,14 @@ html_theme_options = {
     "show_prev_next": True,
     "header_links_before_dropdown": 6,
     "navigation_depth": 4,
+    "show_nav_level": 2,
     "logo": {
       "image_light": "_static/NeMoS_Logo_CMYK_Full.svg",
       "image_dark": "_static/NeMoS_Logo_CMYK_White.svg",
    },
     "secondary_sidebar_items": {
         "[!a]?[!p]?[!i]**": ["page-toc", "sourcelink"],
+        "user_guide/README": [],
         "user_guide/basis/README": [],
     },
 }
@@ -150,7 +154,7 @@ html_sidebars = {
     "benchmarking": [],
     "how_to_guide/README": [],
     "tutorials/README": [],
-    "**": ["search-field.html", "sidebar-nav-bs.html"],
+    "**": ["sidebar-nav-bs.html"],
 }
 
 
@@ -289,6 +293,28 @@ def add_download_admonition(app, docname, source):
     source[0] = "".join(lines)
 
 
+# ---- Toctree captions in the sidebar only, on listed pages ----
+# A toctree ``:caption:`` is printed twice: once above the list in the page body,
+# once as the group header of the left sidebar nav. On the pages below, each
+# toctree sits under a section header that repeats the caption, so the body copy
+# is dropped and the sidebar one kept. Captions render normally everywhere else;
+# add a docname here to opt a page in.
+_SIDEBAR_ONLY_CAPTION_PAGES = ("user_guide/README",)
+
+
+def drop_body_toctree_captions(app, doctree, docname):
+    """Clear the caption of every toctree in the body of a listed page.
+
+    ``doctree-resolved`` fires before the body toctrees are resolved, so clearing
+    the attribute here only affects the body; the sidebar nav is resolved later
+    from the stored doctree and keeps its captions.
+    """
+    if docname not in _SIDEBAR_ONLY_CAPTION_PAGES:
+        return
+    for toctree in doctree.findall(addnodes.toctree):
+        toctree["caption"] = None
+
+
 def strip_generic_bases(app, name, obj, options, bases):
     """Render ``Base[...]`` as bare ``Base`` in the Bases: line (drops generic clutter)."""
     for i, base in enumerate(bases):
@@ -322,5 +348,6 @@ def _add_benchmark_assets(app, pagename, templatename, context, doctree):
 
 def setup(app):
     app.connect("source-read", add_download_admonition)
+    app.connect("doctree-resolved", drop_body_toctree_captions)
     app.connect("autodoc-process-bases", strip_generic_bases)
     app.connect("html-page-context", _add_benchmark_assets)
