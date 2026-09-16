@@ -969,9 +969,9 @@ def test_solver_invalidated_after_strength_change(request, model_instantiation_t
     assert model._solver is not None
 
     model.regularizer_strength = 0.5
-    assert (
-        model._solver is None
-    ), "_solver must be None after regularizer_strength change."
+    assert model._solver is None, (
+        "_solver must be None after regularizer_strength change."
+    )
 
 
 @pytest.mark.parametrize(
@@ -1157,96 +1157,139 @@ def _installed_newton(model, X, y):
     return model._solver
 
 
-def _assert_linear_solver(solver, expected_cls):
-    """Assert the linear solver Newton picked, and the operator tags that go with it."""
-    assert isinstance(solver._linear_solver, expected_cls)
-    if expected_cls is lx.Cholesky:
-        assert (
-            solver._operator_tags == lx.positive_semidefinite_tag
-        ), f"Expected ``positive_semidefinite_tag`` for Cholesky solver. Got ``{solver._operator_tags}`` instead!"
-    else:
-        assert solver._operator_tags == ()
-        assert (
-            solver._linear_solver.well_posed is False
-        ), "Solver is well posed but shouldn't for the given tag."
+def _assert_hessian_solver(solver, expected):
+    """Check the attributes associated with a resolved Hessian strategy."""
+    for attr_name, expected_value in expected.items():
+        actual_value = getattr(solver, attr_name)
+
+        if isinstance(expected_value, type):
+            assert isinstance(actual_value, expected_value), (
+                f"{attr_name}: expected an instance of {expected_value.__name__}, "
+                f"got {type(actual_value).__name__}"
+            )
+        elif callable(expected_value):
+            assert expected_value(actual_value), (
+                f"{attr_name} did not satisfy its expected condition"
+            )
+        else:
+            assert actual_value == expected_value, (
+                f"{attr_name}: expected {expected_value!r}, got {actual_value!r}"
+            )
 
 
-_LINEAR_SOLVER_CASES = [
-    pytest.param(fixture_name, regularizer_name, expected_cls, id=test_id)
-    for fixture_name, regularizer_name, expected_cls, test_id in [
-        ("poissonGLM_model_instantiation", "Ridge", lx.Cholesky, "GLM-Ridge"),
-        (
-            "population_poissonGLM_model_instantiation",
-            "Ridge",
-            lx.Cholesky,
-            "PopulationGLM-Ridge",
-        ),
-        (
-            "classifierGLM_model_instantiation",
-            "Ridge",
-            lx.AutoLinearSolver,
-            "ClassifierGLM-Ridge",
-        ),
-        (
-            "population_classifierGLM_model_instantiation",
-            "Ridge",
-            lx.AutoLinearSolver,
-            "ClassifierPopulationGLM-Ridge",
-        ),
-        (
-            "poissonGLM_model_instantiation",
-            "UnRegularized",
-            lx.AutoLinearSolver,
-            "GLM-UnRegularized",
-        ),
-        (
-            "population_poissonGLM_model_instantiation",
-            "UnRegularized",
-            lx.AutoLinearSolver,
-            "PopulationGLM-UnRegularized",
-        ),
-        (
-            "classifierGLM_model_instantiation",
-            "UnRegularized",
-            lx.AutoLinearSolver,
-            "ClassifierGLM-UnRegularized",
-        ),
-        (
-            "population_classifierGLM_model_instantiation",
-            "UnRegularized",
-            lx.AutoLinearSolver,
-            "ClassifierPopulationGLM-UnRegularized",
-        ),
-    ]
+class _ProbeOperator:
+    """Minimal operator for evaluating the configured diagonal shift."""
+
+    def as_matrix(self):
+        return jnp.eye(2)
+
+
+def _zero_shift(shift_fn):
+    return float(shift_fn(_ProbeOperator())) == 0.0
+
+
+def _positive_shift(shift_fn):
+    return float(shift_fn(_ProbeOperator())) > 0.0
+
+
+_CHOLESKY_PD = {
+    "_resolved_hessian_solver": "cholesky",
+    "_linear_solver": lx.Cholesky,
+    "_operator_tags": lx.positive_semidefinite_tag,
+    "_shift_fn": _zero_shift,
+}
+
+_CHOLESKY_PSD = {
+    "_resolved_hessian_solver": "cholesky",
+    "_linear_solver": lx.Cholesky,
+    "_operator_tags": lx.positive_semidefinite_tag,
+    "_shift_fn": _positive_shift,
+}
+
+_EIGH = {
+    "_resolved_hessian_solver": "eigh",
+    "_linear_solver": None,
+    "_operator_tags": (),
+    "_shift_fn": _zero_shift,
+    "_delta": 1e-6,
+}
+
+
+_HESSIAN_SOLVER_CASES = [
+    pytest.param(
+        "poissonGLM_model_instantiation",
+        "Ridge",
+        _CHOLESKY_PD,
+        id="GLM-Ridge-PD",
+    ),
+    pytest.param(
+        "population_poissonGLM_model_instantiation",
+        "Ridge",
+        _CHOLESKY_PD,
+        id="PopulationGLM-Ridge-PD",
+    ),
+    pytest.param(
+        "classifierGLM_model_instantiation",
+        "Ridge",
+        _CHOLESKY_PSD,
+        id="ClassifierGLM-Ridge-PSD",
+    ),
+    pytest.param(
+        "population_classifierGLM_model_instantiation",
+        "Ridge",
+        _CHOLESKY_PSD,
+        id="ClassifierPopulationGLM-Ridge-PSD",
+    ),
+    pytest.param(
+        "poissonGLM_model_instantiation",
+        "UnRegularized",
+        _CHOLESKY_PSD,
+        id="GLM-UnRegularized-PSD",
+    ),
+    pytest.param(
+        "population_poissonGLM_model_instantiation",
+        "UnRegularized",
+        _CHOLESKY_PSD,
+        id="PopulationGLM-UnRegularized-PSD",
+    ),
+    pytest.param(
+        "classifierGLM_model_instantiation",
+        "UnRegularized",
+        _CHOLESKY_PSD,
+        id="ClassifierGLM-UnRegularized-PSD",
+    ),
+    pytest.param(
+        "population_classifierGLM_model_instantiation",
+        "UnRegularized",
+        _CHOLESKY_PSD,
+        id="ClassifierPopulationGLM-UnRegularized-PSD",
+    ),
 ]
 
 
 @pytest.mark.parametrize(
-    "fixture_name, regularizer_name, expected_cls", _LINEAR_SOLVER_CASES
+    "fixture_name, regularizer_name, expected",
+    _HESSIAN_SOLVER_CASES,
 )
-def test_linear_solver_follows_the_resolved_tag(
-    request, fixture_name, regularizer_name, expected_cls
+def test_hessian_solver_follows_the_resolved_tag(
+    request, fixture_name, regularizer_name, expected
 ):
-    """A definite tag selects ``lx.Cholesky``, a weaker one ``lx.AutoLinearSolver``."""
+    """The Hessian tag selects the strategy and its associated state."""
     X, y, model, *_ = request.getfixturevalue(fixture_name)
     model.regularizer = regularizer_name
     model.regularizer_strength = None if regularizer_name == "UnRegularized" else 0.1
     model.solver_name = "Newton"
-
-    _assert_linear_solver(_installed_newton(model, X, y), expected_cls)
+    _assert_hessian_solver(_installed_newton(model, X, y), expected)
 
 
 @pytest.mark.parametrize(
-    "fixture_name, regularizer_name, expected_cls", _LINEAR_SOLVER_CASES
+    "fixture_name, regularizer_name, expected",
+    _HESSIAN_SOLVER_CASES,
 )
-def test_fit_resolves_the_same_linear_solver(
-    request, fixture_name, regularizer_name, expected_cls
+def test_fit_resolves_the_same_hessian_solver(
+    request, fixture_name, regularizer_name, expected
 ):
-    """``fit`` reaches the same linear solver as ``initialize_optimizer_and_state``.
-
-    The two differ only by ``_optimize_solver_params``, which sets solver kwargs and leaves
-    the tag alone.
-    """
+    """Fit resolves the same strategy as explicit initialization."""
     X, y, model, *_ = request.getfixturevalue(fixture_name)
     model.regularizer = regularizer_name
     model.regularizer_strength = None if regularizer_name == "UnRegularized" else 0.1
@@ -1254,7 +1297,7 @@ def test_fit_resolves_the_same_linear_solver(
 
     model.fit(X, y)
 
-    _assert_linear_solver(model._solver, expected_cls)
+    _assert_hessian_solver(model._solver, expected)
 
 
 @pytest.mark.requires_x64
@@ -1278,7 +1321,7 @@ def test_newton_without_hessian_tag_uses_auto_linear_solver(linear_regression):
     assert newton._hess_tag.structure is MatrixStructure.FULL
     assert not any(jax.tree_util.tree_leaves(newton._hess_tag.flat_on))
     assert not any(jax.tree_util.tree_leaves(newton._hess_tag.definite_on))
-    _assert_linear_solver(newton, lx.AutoLinearSolver)
+    _assert_hessian_solver(newton, _EIGH)
 
 
 @pytest.mark.parametrize(
@@ -1549,9 +1592,9 @@ def test_prox_newton_singular_hessian_converges(request):
     hess = (2.0 / n) * X.T @ X
     eigvals = np.linalg.eigvalsh(hess)
     assert eigvals.min() > -1e-10, "Hessian must be positive semidefinite"
-    assert (
-        eigvals.min() < 1e-10
-    ), "Hessian must be singular for this test to mean anything"
+    assert eigvals.min() < 1e-10, (
+        "Hessian must be singular for this test to mean anything"
+    )
 
     # grad f orthogonal to ker H: the condition that bounds the subproblem below
     grad = -(2.0 / n) * X.T @ (y - X @ np.asarray(params))

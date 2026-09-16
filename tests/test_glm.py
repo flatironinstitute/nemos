@@ -2588,8 +2588,6 @@ class TestGLMObservationModel:
         """Assert that sklearn and nemos parameters match within tolerance."""
         if is_classifier:
             # Softmax parameters are invariant to a common shift across classes.
-            sklearn_coef = sklearn_coef - np.mean(sklearn_coef, axis=-1, keepdims=True)
-            nemos_coef = nemos_coef - np.mean(nemos_coef, axis=-1, keepdims=True)
             sklearn_intercept = sklearn_intercept - np.mean(
                 sklearn_intercept, axis=-1, keepdims=True
             )
