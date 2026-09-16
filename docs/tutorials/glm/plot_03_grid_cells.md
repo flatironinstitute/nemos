@@ -324,12 +324,12 @@ import os
 root = os.environ.get("READTHEDOCS_OUTPUT")
 if root:
    path = Path(root) / "html/_static/thumbnails/tutorials"
-# if local store in ../_build/html...
+# if local store in ../../_build/html...
 else:
-   path = Path("../_build/html/_static/thumbnails/tutorials")
+   path = Path("../../_build/html/_static/thumbnails/tutorials")
 
 # make sure the folder exists if run from build
-if root or Path("../assets/stylesheets").exists():
+if root or Path("../../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)
 
 if path.exists():

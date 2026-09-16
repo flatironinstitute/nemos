@@ -12,6 +12,13 @@ pip install nemos[examples]
 ```
 :::
 
+% Only the first toctree of each group carries the :caption:, so the sidebar shows one
+% group header per model family; conf.py keeps captions out of this page's body.
+
+## GLM
+
+Encoding models of intracellular current injection, head direction, grid and place fields, V1 responses and calcium transients.
+
 ::::{grid} 1 2 3 3
 
 :::{grid-item-card}
@@ -22,8 +29,9 @@ pip install nemos[examples]
 
 ```{toctree}
 :maxdepth: 2
+:caption: GLM
 
-plot_01_current_injection.md
+glm/plot_01_current_injection.md
 ```
 :::
 
@@ -36,7 +44,7 @@ plot_01_current_injection.md
 ```{toctree}
 :maxdepth: 2
 
-plot_02_head_direction.md
+glm/plot_02_head_direction.md
 ```
 :::
 
@@ -49,9 +57,8 @@ plot_02_head_direction.md
 ```{toctree}
 :maxdepth: 2
 
-plot_03_grid_cells.md
+glm/plot_03_grid_cells.md
 ```
-
 :::
 
 :::{grid-item-card}
@@ -63,7 +70,7 @@ plot_03_grid_cells.md
 ```{toctree}
 :maxdepth: 2
 
-plot_04_v1_cells.md
+glm/plot_04_v1_cells.md
 ```
 :::
 
@@ -76,21 +83,30 @@ plot_04_v1_cells.md
 ```{toctree}
 :maxdepth: 2
 
-plot_05_place_cells.md
+glm/plot_05_place_cells.md
 ```
 :::
 
 :::{grid-item-card}
 
 <figure>
-<img src="../_static/thumbnails/tutorials/plot_06_calcium_imaging.svg" style="height: 100px", alt="Calcium immaging."/>
+<img src="../_static/thumbnails/tutorials/plot_06_calcium_imaging.svg" style="height: 100px", alt="Calcium imaging."/>
 </figure>
 
 ```{toctree}
 :maxdepth: 2
-plot_06_calcium_imaging.md
+
+glm/plot_06_calcium_imaging.md
 ```
 :::
+
+::::
+
+## GLM-HMM
+
+Inferring the behavioral states an animal switches between during a decision-making task.
+
+::::{grid} 1 2 3 3
 
 :::{grid-item-card}
 
@@ -100,7 +116,9 @@ plot_06_calcium_imaging.md
 
 ```{toctree}
 :maxdepth: 2
-plot_07_behavioral_states.md
+:caption: GLM-HMM
+
+glm_hmm/plot_07_behavioral_states.md
 ```
 :::
 
