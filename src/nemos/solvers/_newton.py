@@ -223,7 +223,11 @@ class Newton(HessianMixin):
         def reject(_):
             return params, state.ls_state
 
-        new_params, new_ls_state = jax.lax.cond(descent, accept, reject, None)
+        # A NaN slope is not a stationary point: rejecting it would leave a zero step
+        # behind for the Cauchy criterion to report as convergence, so it is stepped on
+        # and the iterate goes non-finite instead.
+        take_step = jnp.isnan(descent) | (descent < 0)
+        new_params, new_ls_state = jax.lax.cond(take_step, accept, reject, None)
         return new_params, new_ls_state
 
     def update(
