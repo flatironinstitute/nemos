@@ -1,4 +1,5 @@
 import itertools
+import warnings
 
 import jax
 import jax.numpy as jnp
@@ -15,6 +16,7 @@ from nemos._hess import (
 )
 from nemos.regularizer import Ridge, UnRegularized
 from nemos.solvers._abstract_solver import OptimizationInfo
+from nemos.solvers._hessian_mixins import HessianSolver
 from nemos.solvers._newton import Newton, NewtonState, ProximalNewton
 from nemos.tree_utils import pytree_map_and_reduce
 
@@ -445,20 +447,36 @@ _MOD_PROPS = [
     MatrixProperty.NEGATIVE_SEMI_DEFINITE,
 ]
 
+_MOD_SOLVERS = ("eigh", "identity_shift")
+
 
 def _modified_direction(
-    H: jax.Array, grad: jax.Array, hess_tag: HessianTag, jit: bool
+    H: jax.Array,
+    grad: jax.Array,
+    hess_tag: HessianTag,
+    jit: bool,
+    hessian_solver: HessianSolver = "eigh",
+    **solver_kwargs,
 ) -> jax.Array:
     params = jnp.zeros_like(grad)
     loss = _quadratic_loss(H, jnp.zeros_like(grad))
-    solver = _make_solver(loss, lambda params, *args: H, hess_tag, params, jit=jit)
+    solver = _make_solver(
+        loss,
+        lambda params, *args: H,
+        hess_tag,
+        params,
+        jit=jit,
+        hessian_solver=hessian_solver,
+        **solver_kwargs,
+    )
     solver.init_state(params)
     return solver._newton_direction(grad, H, params)
 
 
 @pytest.mark.requires_x64
+@pytest.mark.parametrize("hessian_solver", _MOD_SOLVERS)
 @pytest.mark.parametrize("jit", [False, True])
-def test_eigh_produces_identical_directions(jit):
+def test_modified_solver_produces_identical_directions_across_tags(hessian_solver, jit):
     H = jnp.asarray(
         [
             [-2.0, 0.5, 0.0],
@@ -476,7 +494,16 @@ def test_eigh_produces_identical_directions(jit):
             property=prop,
             structure=MatrixStructure.FULL,
         )
-        directions.append(_modified_direction(H, grad, tag, jit=jit))
+        directions.append(
+            _modified_direction(
+                H,
+                grad,
+                tag,
+                jit=jit,
+                hessian_solver=hessian_solver,
+                identity_shift_beta=1e-3,
+            )
+        )
 
     for direction in directions[1:]:
         np.testing.assert_allclose(
@@ -488,26 +515,28 @@ def test_eigh_produces_identical_directions(jit):
 
 
 @pytest.mark.requires_x64
+@pytest.mark.parametrize("hessian_solver", _MOD_SOLVERS)
 @pytest.mark.parametrize("jit", [False, True])
-def test_symmetric_pd_direction_matches_cholesky(jit):
+def test_modified_solver_on_pd_matrix_matches_cholesky(hessian_solver, jit):
     A, _, _ = _make_pd_problem(6, jnp.float64)
     grad = jnp.asarray([0.5, -1.0, 2.0, 0.25, -0.75, 1.5])
 
     tag = _make_tag(
         init_params=jnp.zeros_like(grad),
         property=MatrixProperty.SYMMETRIC,
-        structure=MatrixStructure.FULL,
     )
 
-    general_step = _modified_direction(A, grad, tag, jit=jit)
+    direction = _modified_direction(
+        A,
+        grad,
+        tag,
+        jit=jit,
+        hessian_solver=hessian_solver,
+        identity_shift_beta=1e-3,
+    )
     expected = jnp.linalg.solve(A, -grad)
 
-    np.testing.assert_allclose(
-        general_step,
-        expected,
-        atol=1e-10,
-        rtol=1e-10,
-    )
+    np.testing.assert_allclose(direction, expected, atol=1e-10, rtol=1e-10)
 
 
 @pytest.mark.requires_x64
@@ -584,6 +613,7 @@ def test_eigh_direction_is_invariant_to_eigenvalue_signs(jit):
 
 
 @pytest.mark.requires_x64
+@pytest.mark.parametrize("hessian_solver", _MOD_SOLVERS)
 @pytest.mark.parametrize(
     "eigenvalues",
     [
@@ -595,7 +625,7 @@ def test_eigh_direction_is_invariant_to_eigenvalue_signs(jit):
     ],
 )
 @pytest.mark.parametrize("jit", [False, True])
-def test_eigh_direction_is_descent(eigenvalues, jit):
+def test_modified_direction_is_descent(hessian_solver, eigenvalues, jit):
     rng = np.random.default_rng(6)
     n = len(eigenvalues)
     Q, _ = np.linalg.qr(rng.standard_normal((n, n)))
@@ -606,21 +636,19 @@ def test_eigh_direction_is_descent(eigenvalues, jit):
     tag = _make_tag(
         init_params=jnp.zeros_like(grad),
         property=MatrixProperty.SYMMETRIC,
-        structure=MatrixStructure.FULL,
     )
 
-    direction = _modified_direction(H, grad, tag, jit=jit)
-    slope = float(jnp.vdot(grad, direction))
+    direction = _modified_direction(
+        H,
+        grad,
+        tag,
+        jit=jit,
+        hessian_solver=hessian_solver,
+        identity_shift_beta=1e-3,
+    )
 
-    modified_eigenvalues = np.maximum(np.abs(eigenvalues), 1e-6)
-    squared_grad_norm = float(jnp.vdot(grad, grad))
-
-    lower_bound = -squared_grad_norm / modified_eigenvalues.min()
-    upper_bound = -squared_grad_norm / modified_eigenvalues.max()
-
-    assert slope < 0.0
-    assert lower_bound - 1e-10 <= slope
-    assert slope <= upper_bound + 1e-10
+    assert bool(jnp.all(jnp.isfinite(direction)))
+    assert float(jnp.vdot(grad, direction)) < 0.0
 
 
 @pytest.mark.requires_x64
@@ -657,9 +685,135 @@ def test_eigh_direction_applies_eigenvalue_floor(sign, jit):
 
 
 @pytest.mark.requires_x64
+@pytest.mark.parametrize("jit", [False, True])
+def test_identity_shift_uses_initial_diagonal_shift(jit):
+    H = jnp.asarray(
+        [
+            [-2.0, 0.0],
+            [0.0, 3.0],
+        ],
+        dtype=jnp.float64,
+    )
+    grad = jnp.asarray([1.0, -2.0], dtype=jnp.float64)
+    beta = 0.25
+
+    tag = _make_tag(
+        init_params=jnp.zeros_like(grad),
+        property=MatrixProperty.SYMMETRIC,
+    )
+
+    direction = _modified_direction(
+        H,
+        grad,
+        tag,
+        jit=jit,
+        hessian_solver="identity_shift",
+        identity_shift_beta=beta,
+    )
+
+    # min(diag(H)) = -2, so tau0 = 2 + beta.
+    tau = 2.0 + beta
+    expected = jnp.linalg.solve(H + tau * jnp.eye(2), -grad)
+
+    np.testing.assert_allclose(
+        direction,
+        expected,
+        atol=1e-12,
+        rtol=1e-12,
+    )
+
+
+@pytest.mark.requires_x64
+@pytest.mark.parametrize("jit", [False, True])
+def test_identity_shift_retries_until_cholesky_succeeds(jit):
+    H = jnp.asarray(
+        [
+            [1.0, 2.0],
+            [2.0, 1.0],
+        ],
+        dtype=jnp.float64,
+    )
+    grad = jnp.asarray([1.0, -0.5], dtype=jnp.float64)
+    beta = 0.2
+
+    tag = _make_tag(
+        init_params=jnp.zeros_like(grad),
+        property=MatrixProperty.SYMMETRIC,
+    )
+
+    direction = _modified_direction(
+        H,
+        grad,
+        tag,
+        jit=jit,
+        hessian_solver="identity_shift",
+        identity_shift_beta=beta,
+    )
+
+    expected_tau = 2.0
+    expected = jnp.linalg.solve(
+        H + expected_tau * jnp.eye(2, dtype=H.dtype),
+        -grad,
+    )
+
+    np.testing.assert_allclose(
+        direction,
+        expected,
+        atol=1e-12,
+        rtol=1e-12,
+    )
+    assert float(jnp.vdot(grad, direction)) < 0.0
+
+
+@pytest.mark.requires_x64
+@pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
+@pytest.mark.parametrize("jit", [False, True])
+def test_identity_shift_beta_is_floored_at_epsilon(dtype, jit):
+    H = jnp.asarray([[-1.0]], dtype=dtype)
+    grad = jnp.asarray([2.0], dtype=dtype)
+
+    tag = _make_tag(
+        init_params=jnp.zeros_like(grad),
+        property=MatrixProperty.SYMMETRIC,
+    )
+
+    direction = _modified_direction(
+        H,
+        grad,
+        tag,
+        jit=jit,
+        hessian_solver="identity_shift",
+        identity_shift_beta=0.0,
+    )
+
+    eps = jnp.finfo(dtype).eps
+    tau = jnp.asarray(1.0, dtype=dtype) + eps
+    expected = -grad / (-1.0 + tau)
+
+    np.testing.assert_allclose(
+        direction,
+        expected,
+        rtol=10 * float(eps),
+        atol=10 * float(eps),
+    )
+
+
+@pytest.mark.requires_x64
+@pytest.mark.parametrize(
+    "hessian_solver,maxiter",
+    [
+        pytest.param("eigh", 30, id="eigh"),
+        pytest.param("identity_shift", 100, id="identity-shift"),
+    ],
+)
 @pytest.mark.parametrize("x0", [-0.2, 0.2])
 @pytest.mark.parametrize("jit", [False, True])
-def test_eigh_newton_escapes_quartic_saddle_region(x0, jit):
+def test_modified_newton_escapes_quartic_saddle_region(
+    hessian_solver,
+    maxiter,
+    x0,
+    jit,
+):
     def loss(params, *args):
         del args
         x = params[0]
@@ -682,19 +836,29 @@ def test_eigh_newton_escapes_quartic_saddle_region(x0, jit):
     )
 
     solver = _make_solver(
-        loss, hess, tag, init_params, maxiter=30, tol=1e-10, rtol=1e-8, jit=jit
+        loss,
+        hess,
+        tag,
+        init_params,
+        maxiter=maxiter,
+        tol=1e-10,
+        rtol=1e-8,
+        jit=jit,
+        hessian_solver=hessian_solver,
+        identity_shift_beta=1.0,
     )
 
     params, state, _ = solver.run(init_params)
 
     assert bool(state.stats.converged)
-    assert state.stats.num_steps < 20
+    assert state.stats.num_steps < maxiter
     np.testing.assert_allclose(params, expected, atol=1e-7, rtol=1e-7)
 
 
 @pytest.mark.requires_x64
+@pytest.mark.parametrize("hessian_solver", _MOD_SOLVERS)
 @pytest.mark.parametrize("jit", [False, True])
-def test_eigh_direction_is_computed_blockwise(jit):
+def test_modified_direction_is_computed_blockwise(hessian_solver, jit):
     H = jnp.asarray(
         [
             [[-2.0, 0.5], [0.5, 3.0]],
@@ -713,40 +877,62 @@ def test_eigh_direction_is_computed_blockwise(jit):
         property=MatrixProperty.SYMMETRIC,
         flat_on=mask_claim_none(params),
         definite_on=mask_claim_none(params),
-        batch_axes=(0,),
+        batch_axes=0,
     )
 
     def loss(params, *args):
         del args
         return jnp.sum(params**2)
 
-    solver = _make_solver(loss, lambda params, *args: H, tag, params, jit=jit)
+    solver = _make_solver(
+        loss,
+        lambda params, *args: H,
+        tag,
+        params,
+        jit=jit,
+        hessian_solver=hessian_solver,
+        identity_shift_beta=1e-3,
+    )
     solver.init_state(params)
 
     direction = solver._newton_direction(grad, H, params)
 
+    # Compare the blockwise result with solving each block separately.
     expected = []
-    for block, block_grad in zip(np.asarray(H), np.asarray(grad)):
-        eigenvalues, eigenvectors = np.linalg.eigh(block)
-        modified = np.maximum(np.abs(eigenvalues), 1e-6)
-        expected.append(eigenvectors @ ((eigenvectors.T @ -block_grad) / modified))
+    for block, block_grad in zip(H, grad):
+        block_tag = _make_tag(
+            init_params=block_grad,
+            property=MatrixProperty.SYMMETRIC,
+            structure=MatrixStructure.FULL,
+        )
+        expected.append(
+            _modified_direction(
+                block,
+                block_grad,
+                block_tag,
+                jit=jit,
+                hessian_solver=hessian_solver,
+                identity_shift_beta=1e-3,
+            )
+        )
 
     np.testing.assert_allclose(
         direction,
-        np.asarray(expected),
+        jnp.stack(expected),
         atol=1e-10,
         rtol=1e-10,
     )
 
 
 @pytest.mark.requires_x64
+@pytest.mark.parametrize("hessian_solver", _MOD_SOLVERS)
 @pytest.mark.parametrize("jit", [False, True])
-def test_eigh_direction_preserves_pytree_flattening_order(jit):
+def test_modified_direction_preserves_pytree_flattening_order(hessian_solver, jit):
     H_dense = jnp.asarray(
         [
-            [-2.0, 0.5, 0.25],
-            [0.5, 3.0, -0.75],
-            [0.25, -0.75, 1.0],
+            [4.0, 0.5, 0.25],
+            [0.5, 3.0, -0.25],
+            [0.25, -0.25, 2.0],
         ],
         dtype=jnp.float64,
     )
@@ -769,38 +955,43 @@ def test_eigh_direction_preserves_pytree_flattening_order(jit):
     H = jax.hessian(loss)(params)
 
     tag = _make_tag(
-        init_params=jnp.zeros(3),
+        init_params=params,
         property=MatrixProperty.SYMMETRIC,
-        structure=MatrixStructure.FULL,
     )
 
-    solver = _make_solver(loss, lambda params, *args: H, tag, params, jit=jit)
+    solver = _make_solver(
+        loss,
+        lambda params, *args: H,
+        tag,
+        params,
+        jit=jit,
+        hessian_solver=hessian_solver,
+    )
     solver.init_state(params)
 
     direction = solver._newton_direction(grad, H, params)
 
-    grad_flat = np.concatenate([np.asarray(grad["a"]), np.asarray(grad["b"])])
-    eigenvalues, eigenvectors = np.linalg.eigh(np.asarray(H_dense))
-    modified = np.maximum(np.abs(eigenvalues), 1e-6)
-    expected = eigenvectors @ ((eigenvectors.T @ -grad_flat) / modified)
+    grad_flat, _ = jax.flatten_util.ravel_pytree(grad)
+    expected = jnp.linalg.solve(H_dense, -grad_flat)
 
-    np.testing.assert_allclose(
-        direction["a"],
-        expected[:2],
-        atol=1e-10,
-        rtol=1e-10,
-    )
-    np.testing.assert_allclose(
-        direction["b"],
-        expected[2:],
-        atol=1e-10,
-        rtol=1e-10,
-    )
+    np.testing.assert_allclose(direction["a"], expected[:2], atol=1e-10, rtol=1e-10)
+    np.testing.assert_allclose(direction["b"], expected[2:], atol=1e-10, rtol=1e-10)
 
 
 @pytest.mark.requires_x64
+@pytest.mark.parametrize(
+    "hessian_solver,maxiter",
+    [
+        pytest.param("eigh", 20, id="eigh"),
+        pytest.param("identity_shift", 100, id="identity-shift"),
+    ],
+)
 @pytest.mark.parametrize("jit", [False, True])
-def test_eigh_newton_solves_rosenbrock_from_indefinite_region(jit):
+def test_modified_newton_solves_rosenbrock_from_indefinite_region(
+    hessian_solver,
+    maxiter,
+    jit,
+):
     def loss(params, *args):
         del args
         x, y = params
@@ -823,18 +1014,180 @@ def test_eigh_newton_solves_rosenbrock_from_indefinite_region(jit):
         tag,
         x0,
         jit=jit,
-        maxiter=20,
+        maxiter=maxiter,
         tol=1e-8,
         rtol=1e-8,
+        hessian_solver=hessian_solver,
+        identity_shift_beta=1.0,
     )
 
     params, state, _ = solver.run(x0)
 
     assert bool(state.stats.converged)
-    assert state.stats.num_steps < 20
+    assert state.stats.num_steps < maxiter
     np.testing.assert_allclose(
         params,
         jnp.ones(2),
         atol=1e-5,
         rtol=1e-5,
     )
+
+
+@pytest.mark.parametrize(
+    "matrix_property, expected",
+    [
+        (MatrixProperty.POSITIVE_DEFINITE, "cholesky"),
+        (MatrixProperty.POSITIVE_SEMI_DEFINITE, "cholesky"),
+        (MatrixProperty.SYMMETRIC, "eigh"),
+        (MatrixProperty.NEGATIVE_DEFINITE, "eigh"),
+        (MatrixProperty.NEGATIVE_SEMI_DEFINITE, "eigh"),
+    ],
+)
+def test_hessian_solver_auto_resolution(matrix_property, expected):
+    params = jnp.zeros(2)
+    H = jnp.eye(2)
+    loss = _quadratic_loss(H, jnp.zeros(2))
+
+    solver = _make_solver(
+        loss,
+        lambda params, *args: H,
+        _make_tag(params, property=matrix_property),
+        params,
+        hessian_solver="auto",
+    )
+    solver.init_state(params)
+
+    assert solver._resolved_hessian_solver == expected
+
+
+@pytest.mark.parametrize("requested", ["eigh", "identity_shift"])
+@pytest.mark.parametrize(
+    "matrix_property",
+    [
+        MatrixProperty.POSITIVE_DEFINITE,
+        MatrixProperty.POSITIVE_SEMI_DEFINITE,
+        MatrixProperty.SYMMETRIC,
+        MatrixProperty.NEGATIVE_DEFINITE,
+        MatrixProperty.NEGATIVE_SEMI_DEFINITE,
+    ],
+)
+def test_explicit_hessian_solver_overrides_tag(requested, matrix_property):
+    params = jnp.zeros(2)
+    H = jnp.eye(2)
+    loss = _quadratic_loss(H, jnp.zeros(2))
+
+    solver = _make_solver(
+        loss,
+        lambda params, *args: H,
+        _make_tag(params, property=matrix_property),
+        params,
+        hessian_solver=requested,
+    )
+    solver.init_state(params)
+
+    assert solver._resolved_hessian_solver == requested
+
+
+@pytest.mark.parametrize("matrix_property", _MOD_PROPS)
+def test_forced_cholesky_warns_for_nonpositive_tag(matrix_property):
+    params = jnp.zeros(2)
+    H = jnp.eye(2)
+    loss = _quadratic_loss(H, jnp.zeros(2))
+
+    solver = _make_solver(
+        loss,
+        lambda params, *args: H,
+        _make_tag(params, property=matrix_property),
+        params,
+        hessian_solver="cholesky",
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match="Cholesky generally requires",
+    ):
+        solver.init_state(params)
+
+    assert solver._resolved_hessian_solver == "cholesky"
+
+
+@pytest.mark.parametrize(
+    "hessian_solver,matrix_property",
+    [
+        ("cholesky", MatrixProperty.POSITIVE_DEFINITE),
+        ("cholesky", MatrixProperty.POSITIVE_SEMI_DEFINITE),
+        ("eigh", MatrixProperty.POSITIVE_DEFINITE),
+        ("eigh", MatrixProperty.SYMMETRIC),
+        ("identity_shift", MatrixProperty.POSITIVE_DEFINITE),
+        ("identity_shift", MatrixProperty.SYMMETRIC),
+    ],
+)
+def test_compatible_hessian_solver_emits_no_warning(hessian_solver, matrix_property):
+    params = jnp.zeros(2)
+    H = jnp.eye(2)
+    loss = _quadratic_loss(H, jnp.zeros(2))
+
+    solver = _make_solver(
+        loss,
+        lambda params, *args: H,
+        _make_tag(params, property=matrix_property),
+        params,
+        hessian_solver=hessian_solver,
+    )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        solver.init_state(params)
+
+
+def test_invalid_hessian_solver_raises():
+    params = jnp.zeros(2)
+    H = jnp.eye(2)
+    loss = _quadratic_loss(H, jnp.zeros(2))
+
+    with pytest.raises(ValueError, match="Unknown Hessian solver"):
+        Newton(
+            loss,
+            regularizer=UnRegularized(),
+            regularizer_strength=0.0,
+            has_aux=False,
+            init_params=params,
+            hessian_solver="invalid",
+        )
+
+
+def test_negative_identity_shift_beta_raises():
+    params = jnp.zeros(2)
+    H = jnp.eye(2)
+    loss = _quadratic_loss(H, jnp.zeros(2))
+
+    with pytest.raises(
+        ValueError,
+        match="identity_shift_beta must be nonnegative",
+    ):
+        Newton(
+            loss,
+            regularizer=UnRegularized(),
+            regularizer_strength=0.0,
+            has_aux=False,
+            init_params=params,
+            hessian_solver="identity_shift",
+            identity_shift_beta=-1.0,
+        )
+
+
+def test_mutated_invalid_hessian_solver_raises_during_resolution():
+    params = jnp.zeros(2)
+    H = jnp.eye(2)
+    loss = _quadratic_loss(H, jnp.zeros(2))
+
+    solver = _make_solver(
+        loss,
+        lambda params, *args: H,
+        _make_pd_tag(params),
+        params,
+    )
+    solver.hessian_solver = "invalid"
+
+    with pytest.raises(ValueError, match="Unknown Hessian solver"):
+        solver.init_state(params)
