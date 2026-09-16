@@ -171,6 +171,7 @@ _STRENGTHS = pytest.mark.parametrize(
 )
 
 
+@_SOLVERS
 def _init_params_for(glm_class):
     """Well-shaped initial params for ``_instantiate_solver``.
 
@@ -693,6 +694,7 @@ def test_newton_population_glm_block_hessian_matches_full(
             )
 
 
+@pytest.mark.requires_x64
 @pytest.mark.parametrize("solver_name, regularizer_cls", _solver_regularizer_cases())
 @pytest.mark.parametrize("structure", ["", "_pytree"])
 def test_newton_classifier_glm_converges(
