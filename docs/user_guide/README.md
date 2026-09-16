@@ -51,17 +51,19 @@ regularizers.md
 solvers.md
 ```
 
-## Scalability
+## Saving and loading
 
-Fitting when the data does not fit in memory.
+Writing a model to disk and reading it back.
 
 ```{toctree}
 :maxdepth: 1
 
-scalability/README.md
+saving_and_loading.md
 ```
 
-## scikit-learn compatibility
+## Interactions with other packages
+
+### Interaction with `scikit-learn`
 
 Every basis and model implements the scikit-learn estimator API, so they drop into the tools built around it.
 
@@ -73,8 +75,8 @@ sklearn_compatibility/pipeline.md
 sklearn_compatibility/cross_validation.md
 ```
 
-## pynapple compatibility
 
+### Interaction with Pynapple
 Passing time-aware objects to the basis and the models, and what comes back.
 
 ```{toctree}
@@ -83,12 +85,13 @@ Passing time-aware objects to the basis and the models, and what comes back.
 pynapple.md
 ```
 
-## Saving and loading
 
-Writing a model to disk and reading it back.
+## Scalability
+
+Fitting when the data does not fit in memory.
 
 ```{toctree}
 :maxdepth: 1
 
-saving_and_loading.md
+scalability/README.md
 ```
