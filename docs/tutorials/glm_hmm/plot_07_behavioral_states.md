@@ -84,7 +84,7 @@ sns.set_theme(style="ticks", palette="colorblind", font_scale=1.5, rc=custom_par
 
 We will analyze the IBL decision-making task (IBL et al., 2021) <span id="cite2a"></span><a href="#ref2a">[2a]</a>, which is a variation of the two-alternative forced-choice perceptual detection task (Burgess et al., 2017) <span id="cite3"></span><a href="#ref3">[3]</a>. During this task, a sinusoidal grating with varying contrast [0\%-100\%] appeared either at the right or left side of the screen. The goal for the mice was to indicate this side by turning a little wheel so that this turn would accordingly move the stimuli to the center of the screen (Burgess et al., 2017) <span id="cite3"></span><a href="#ref3">[3]</a>. If the mice chose the side correctly, they would receive a water reward; if not, they would get a noise burst and a 1-second timeout. For the first 90 trials of each session, the stimulus appeared on the left or right side with equal probability; after that, the stimulus appeared on one side with fixed probability 0.8 and alternated randomly every 20-100 trials.
 
-```{figure} ../assets/ibl_task.svg
+```{figure} ../../assets/ibl_task.svg
 :width: 640px
 :alt: Task illustration
 :align: center
@@ -95,7 +95,7 @@ Task illustration. Redrawn after IBL et al. (2021) <span id="cite2b"></span><a h
 
 A GLM-HMM combines two components. The HMM component governs the distribution over the latent states $z$, which here correspond to hidden behavioral strategies. The GLM component is really a collection of state-specific GLMs — as many GLMs as there are states — each specifying how the system behaves in that state. For a given latent state, the state's weights are combined with the inputs in the design matrix, passed through a nonlinearity, and used as the parameter of the observation model, which generates the observed output. In our case the output is a binary choice (left or right), so we use a Bernoulli observation model, giving us a Bernoulli GLM-HMM.
 
-```{figure} ../assets/glm_hmm_graphical_model.svg
+```{figure} ../../assets/glm_hmm_graphical_model.svg
 :alt: GLM-HMM graphical model
 :align: center
 "Graphical model" of a GLM-HMM with mouse actions. The latent state $z_t$ selects
@@ -115,7 +115,7 @@ With different uses of these three components we can gather a lot of information
 
 We will replicate the main findings of Ashwood et al. (2022) <span id="cite1b"></span><a href="#ref1b">[1b]</a>. In particular, we aim to reproduce the following figures from that work:
 
-```{figure} ../assets/ashwood_targets.svg
+```{figure} ../../assets/ashwood_targets.svg
 :alt: Ashwood et al. (2022) results to replicate
 :align: center
 Results reported in Ashwood et al. (2022) <span id="cite1c"></span><a href="#ref1c">[1c]</a> that we will replicate in this tutorial: (**2d**) the state transition matrix, (**2e**) the GLM weights per state, (**2f**) accuracy overall and per state, and (**3d**) fractional occupancy of each state. Panel labels are those of the original publication.
@@ -267,7 +267,7 @@ We will build the design matrix using the NeMoS basis module `nmo.basis`, which 
 
 | Input | Definition | Interpretation |
 |---|---|---|
-| Previous choice <br> <img src="../assets/previous_choice.svg" alt="two trial frames: the previous trial holds the mouse's wheel turn, the current trial is empty" width="110"> | $\text{Previous choice}_t = c_{t-1}$ <br> with $c_t \in \{-1, +1\}$ | Direct lagged choice predictor, capturing serial dependence in decisions. |
+| Previous choice <br> <img src="../../assets/previous_choice.svg" alt="two trial frames: the previous trial holds the mouse's wheel turn, the current trial is empty" width="110"> | $\text{Previous choice}_t = c_{t-1}$ <br> with $c_t \in \{-1, +1\}$ | Direct lagged choice predictor, capturing serial dependence in decisions. |
 
 :::
 
@@ -295,7 +295,7 @@ We get a lagged list. Notice that the first element is a `NaN`: a history featur
 
 | Input | Definition | Interpretation |
 |---|---|---|
-| Win-stay lose-shift <br> <img src="../assets/win_stay_lose_shift.svg" alt="after a reward the mouse repeats its wheel turn; after no reward it makes the opposite turn" width="180"> | $\text{WSLS}_t = c_{t-1} \cdot r_{t-1}$ <br> with $c_t, r_t \in \{-1, +1\}$ | Interaction of past choice and outcome: repeat a rewarded choice, switch away from an unrewarded one. |
+| Win-stay lose-shift <br> <img src="../../assets/win_stay_lose_shift.svg" alt="after a reward the mouse repeats its wheel turn; after no reward it makes the opposite turn" width="180"> | $\text{WSLS}_t = c_{t-1} \cdot r_{t-1}$ <br> with $c_t, r_t \in \{-1, +1\}$ | Interaction of past choice and outcome: repeat a rewarded choice, switch away from an unrewarded one. |
 
 :::
 
@@ -310,7 +310,7 @@ The four combinations of previous choice and previous outcome give:
 
 Win-stay lose-shift reflects the interaction between past choice and outcome: $WSLS_t = c_{t-1} \cdot r_{t-1}$. If a choice was rewarded on the previous trial, the predictor signals to "stay" (repeat that choice); if it was not rewarded, it signals to "switch" to the other alternative.
 
-To capture an interaction between variables, we can use a [multiplicative basis object](../user_guide/basis/composing.md), which in this case performs an element-wise multiplication. We create a lagged reward basis and multiply it with the lagged choice basis.
+To capture an interaction between variables, we can use a [multiplicative basis object](../../user_guide/basis/composing.md), which in this case performs an element-wise multiplication. We create a lagged reward basis and multiply it with the lagged choice basis.
 
 ```{code-cell} ipython3
 # Create lagged reward basis
@@ -340,7 +340,7 @@ The result is an element-wise multiplication, shifted by one. The first element 
 
 | Input | Definition | Interpretation |
 |---|---|---|
-| Signed contrast <br> <img src="../assets/screen_grating.svg" alt="stimulus grating" width="80"> | $\text{signed contrast} = \text{contrast}_\text{left} - \text{contrast}_\text{right}$ <br> with $\text{contrast}_\text{left}, \text{contrast}_\text{right} \in S$ <br> where $S = \{0, 0.0625, 0.125, 0.25, 1\}$ | Encodes sensory evidence in 1D; magnitude reflects strength, sign encodes direction. <br> $> 0$: left-favoring evidence <br> $< 0$: right-favoring evidence <br> $= 0$: no directional evidence |
+| Signed contrast <br> <img src="../../assets/screen_grating.svg" alt="stimulus grating" width="80"> | $\text{signed contrast} = \text{contrast}_\text{left} - \text{contrast}_\text{right}$ <br> with $\text{contrast}_\text{left}, \text{contrast}_\text{right} \in S$ <br> where $S = \{0, 0.0625, 0.125, 0.25, 1\}$ | Encodes sensory evidence in 1D; magnitude reflects strength, sign encodes direction. <br> $> 0$: left-favoring evidence <br> $< 0$: right-favoring evidence <br> $= 0$: no directional evidence |
 
 :::
 
