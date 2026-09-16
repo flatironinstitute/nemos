@@ -14,8 +14,7 @@ hide:
 
 # Quickstart
 
-## **Overview**
-
+## Overview
 NeMoS is a neural modeling software package designed to model neural spiking activity and other time-series data
  powered by [JAX](https://jax.readthedocs.io/en/latest/).
 
@@ -31,12 +30,10 @@ It includes a suite of composable feature constructors that accept time-series d
 range of observed variables—such as stimuli, head direction, position, or spike counts— as inputs to the GLM.
 
 
-## **Generalized Linear Model**
-
+## Generalized Linear Model
 NeMoS provides two implementations of the GLM: one for fitting a single neuron, and one for fitting a  neural population simultaneously.
 
-### **Single Neuron GLM**
-
+### Single Neuron GLM
 You can define a single neuron GLM by instantiating an `GLM` object.
 
 ```{code-cell} ipython3
@@ -92,8 +89,7 @@ log_likelihood = model.score(X, spike_counts)
 
 ```
 
-### **Population GLM**
-
+### Population GLM
 You can set up a population GLM by instantiating a `PopulationGLM`. The API for the `PopulationGLM` is the same as for the single-neuron `GLM`; the only difference you'll notice is that some of the methods' inputs and outputs have an additional dimension for the different neurons.
 
 ```{code-cell}
@@ -140,8 +136,7 @@ print(f"Model intercept shape: {population_model.intercept_.shape}")
 
 ```
 
-### **Classifier GLM**
-
+### Classifier GLM
 For classification tasks, such as modeling behavioral choices, NeMoS provides the `ClassifierGLM`. This model treats observations as categorical random variables.
 
 ```{code-cell}
@@ -193,8 +188,7 @@ population_model = nmo.glm.ClassifierPopulationGLM(n_classes)
 
 For a complete example with confusion matrix visualization, see the [GLM for Classification how-to guide](how_to_guide/glm_for_classification).
 
-## **Basis: Feature Construction**
-
+## Basis: Feature Construction
 The `basis` module includes objects that perform two types of transformations on the inputs:
 
 1. **Non-linear Mapping:** This process transforms the input data through a non-linear function,
@@ -208,8 +202,7 @@ The `basis` module includes objects that perform two types of transformations on
     Both transformations produce a vector of features `X` that changes over time, with a shape
     of `(n_time_points, n_features)`.
 
-### **Non-linear Mapping**
-
+### Non-linear Mapping
 <figure class="custom-figure">
     <img src="_static/glm_features_scheme.svg" alt="GLM Feature Scheme" width="100%">
     <figcaption><strong>Figure 1:</strong> Basis as non-linear mappings. The figure demonstrate the use of basis functions to create complex non-linear features for a GLM.</figcaption>
@@ -244,8 +237,7 @@ X.shape
 
 ```
 
-### **Convolution**
-
+### Convolution
 <figure class="custom-figure">
     <img src="_static/glm_population_scheme.svg" alt="GLM Population Scheme">
     <figcaption><strong>Figure 2:</strong> Basis as a bank of convolutional filters. The figure shows a population GLM for functional connectivity analysis, a classical use-case for basis functions in convolutional mode.</figcaption>
@@ -297,10 +289,8 @@ X_multi.shape
 For additional information on one-dimensional convolutions, see [here](convolution_background).
 
 
-## **Other Observation Models**
-
-### **Continuous Observations**
-
+## Other Observation Models
+### Continuous Observations
 By default, NeMoS' GLM uses [Poisson observations](nemos.observation_models.PoissonObservations), which are a natural choice for spike counts. However, the
 package also supports a [Gamma](nemos.observation_models.GammaObservations) GLM and a [Gaussian](nemos.observation_models.GaussianObservations) GLM.
 
@@ -337,9 +327,7 @@ glm = nmo.glm.GLM(observation_model="Gaussian")
 
 Take a look at our [tutorial](tutorial-calcium-imaging) for a detailed example.
 
-### **Binary Observations**
-
-
+### Binary Observations
 NeMoS additionally supports a [Bernoulli observation model](nemos.observation_models.BernoulliObservations), which is useful for modeling binary observations, such as a binary choices or singular spikes. To use this observation model, set the `observation_model` argument during model initialization.
 
 
@@ -352,8 +340,7 @@ glm = nmo.glm.GLM(observation_model=nmo.observation_models.BernoulliObservations
 
 ```
 
-### **Counts with Supra-Poisson Variability**
-
+### Counts with Supra-Poisson Variability
 A [Negative Binomial observation model](nemos.observation_models.NegativeBinomialObservations) is appropriate for describing a counting process (such as neural spike counts) that exhibits supra-Poisson variability — that is, it is over-dispersed relative to a Poisson model (equivalently, the variance of the counts is larger than the mean).
 
 To set up a Negative Binomial GLM, provide this `observation_model` at initialization. The degree of overdispersion can be controlled via the `scale` parameter: larger values of `scale` result in greater variability compared to a Poisson model, while as `scale` approaches zero, the distribution converges to a Poisson. An appropriate value for `scale` depends on the distribution of the observed spike counts and should be tuned, for example through [cross-validation](sklearn-how-to).
@@ -370,9 +357,7 @@ glm = nmo.glm.GLM(observation_model=nmo.observation_models.NegativeBinomialObser
 
 
 
-## **Regularization**
-
-
+## Regularization
 NeMoS supports various regularization schemes, including [Ridge](nemos.regularizer.Ridge) ($L_2$), [Lasso](nemos.regularizer.Lasso) ($L_1$), [ElasticNet](nemos.regularizer.ElasticNet) ($L_1 + L_2$), and [Group Lasso](nemos.regularizer.GroupLasso), to prevent overfitting and improve model generalization.
 
 You can specify the regularization scheme and its strength when initializing the GLM model:
@@ -397,9 +382,7 @@ glm = nmo.glm.GLM(regularizer="ElasticNet", regularizer_strength=(0.1,0.5))
 ```
 
 
-## **Pre-processing with `pynapple`**
-
-
+## Pre-processing with `pynapple`
 :::{note}
 
 This section assumes some familiarity with the `pynapple` package for time series manipulation and data
@@ -506,9 +489,7 @@ xlab = plt.xlabel("heading angle")
 
 ```
 
-## **Compatibility with `scikit-learn`**
-
-
+## Compatibility with `scikit-learn`
 [`scikit-learn`](https://scikit-learn.org/stable/) is a machine learning toolkit that offers advanced features like pipelines and cross-validation methods.
 NeMoS takes advantage of these features, while still gaining the benefit of JAX's just-in-time compilation and GPU-acceleration!
 
