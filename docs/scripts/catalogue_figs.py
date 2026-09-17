@@ -160,7 +160,7 @@ def plot_addition_thumbnail():
     widths = [0.44, 0.28, 0.18]
     gap = 0.05
 
-    fig, ax = _blank_axes(keep={"left"})
+    fig, ax = _blank_axes(keep={"left", "bottom"})
     left = 0.0
     for index, (width, edge) in enumerate(zip(widths, (ORANGE, GREEN, BLUE)), start=1):
         ax.add_patch(
