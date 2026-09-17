@@ -204,10 +204,6 @@ max-complexity = 10
 [tool.ruff.lint.pycodestyle]
 max-line-length = 120
 
-[tool.ruff.lint.flake8-annotations]
-allow-star-arg-any = true
-suppress-none-returning = true
-
 [tool.ruff.lint.per-file-ignores]
 # Ignore documentation and annotation rules outside src.
 "!src/**.py" = ["D", "DOC", "ANN"]
