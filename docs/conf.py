@@ -7,14 +7,15 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 import os
+import re
+import shutil
 import sys
 import typing
 import urllib.request
-
-from sphinx import addnodes
-
 from importlib.metadata import version
 from pathlib import Path
+
+from sphinx import addnodes
 
 release: str = version("nemos")
 # this will grab major.minor.patch (excluding any .devN afterwards, which should only
@@ -23,6 +24,7 @@ version: str = ".".join(release.split(".")[:3])
 
 sys.path.insert(0, str(Path("..", "src").resolve()))
 sys.path.insert(0, os.path.abspath("sphinxext"))
+sys.path.insert(0, os.path.abspath("scripts"))
 
 
 project = "nemos"
@@ -196,6 +198,69 @@ if exclude_tutorials:
 
 viewcode_follow_imported_members = True
 
+# Sphinx only re-reads a page whose own source changed, so editing a figure
+# script under scripts/ leaves the pages holding its plot directives untouched
+# and the previously drawn images in place. REBUILD_FIGURES=true re-reads every
+# page carrying a plot directive and clears the cache the directive draws into,
+# which redraws the figures without the full clean a notebook rebuild would cost.
+rebuild_figures = os.environ.get("REBUILD_FIGURES", "false").lower() == "true"
+
+_PLOT_DIRECTIVE = re.compile(r"^\s*\.\.\s+plot::", re.MULTILINE)
+
+
+def generate_dark_diagrams(app):
+    """Derive the dark variant of each diagram from its light source.
+
+    Done on every build rather than checked in, so the two can never fall out of
+    step after someone edits a light diagram.
+    """
+    import make_dark_svgs
+
+    make_dark_svgs.main()
+
+
+def clear_figure_cache(app):
+    """Drop the drawn figures, before the builder has taken stock of them.
+
+    This runs on ``builder-inited`` rather than alongside the re-read below: the
+    builder records which image belongs to which page while reading, so deleting
+    the files at that point leaves entries pointing at paths that no longer
+    exist, and every one of them is reported as a failed copy.
+    """
+    if not rebuild_figures:
+        return
+    # Where plot_directive writes its rendered figures, alongside the doctrees.
+    cache = Path(app.doctreedir).parent / "plot_directive"
+    if not cache.exists():
+        return
+    # The copies the builder already made have to go as well: sphinx's copyfile
+    # refuses to overwrite an existing destination, so a redrawn figure would
+    # stay in the cache and never reach the output.
+    images = Path(app.outdir) / "_images"
+    for drawn in cache.rglob("*.*"):
+        images.joinpath(drawn.name).unlink(missing_ok=True)
+    shutil.rmtree(cache)
+
+
+def force_figure_rebuild(app, env, added, changed, removed):
+    """Re-read every page holding a plot directive, so the figures are drawn again."""
+    if not rebuild_figures:
+        return []
+    outdated = set()
+    for docname in env.found_docs:
+        source = Path(env.doc2path(docname))
+        if source.is_file() and _PLOT_DIRECTIVE.search(
+            source.read_text(encoding="utf-8")
+        ):
+            outdated.add(docname)
+    return outdated.difference(added, changed, removed)
+
+
+# A scaled image is wrapped in a link to the full-size file by default, which on
+# the thumbnail cards just navigates to a bare png. The pages carrying one are
+# all card galleries, so the link is dropped everywhere rather than per image.
+html_scaled_image_link = False
+
 # option for mpl extension
 plot_html_show_formats = False
 
@@ -355,3 +420,6 @@ def setup(app):
     app.connect("doctree-resolved", drop_body_toctree_captions)
     app.connect("autodoc-process-bases", strip_generic_bases)
     app.connect("html-page-context", _add_benchmark_assets)
+    app.connect("builder-inited", generate_dark_diagrams)
+    app.connect("builder-inited", clear_figure_cache)
+    app.connect("env-get-outdated", force_figure_rebuild)

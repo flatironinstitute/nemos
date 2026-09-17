@@ -28,79 +28,263 @@ It streamlines the process of defining and selecting models, through a collectio
 
 The core of NeMoS includes GPU-accelerated, well-tested implementations of standard statistical models for systems neuroscience.
 
-We provide:
-- A {class}`GLM <nemos.glm.GLM>` for single neurons and a {class}`PopulationGLM <nemos.glm.PopulationGLM>`, with a choice of {ref}`observation models <observation_models>` ({class}`Poisson <nemos.observation_models.PoissonObservations>`, {class}`Negative Binomial <nemos.observation_models.NegativeBinomialObservations>`, {class}`Gamma <nemos.observation_models.GammaObservations>`, {class}`Gaussian <nemos.observation_models.GaussianObservations>`, {class}`Bernoulli <nemos.observation_models.BernoulliObservations>`) and a {class}`ClassifierGLM <nemos.glm.ClassifierGLM>` for categorical responses.
-- A composable {ref}`basis module <nemos_basis>` for constructing and transforming model features.
-- Multiple {ref}`regularization schemes <regularizers>`: {class}`Ridge <nemos.regularizer.Ridge>`, {class}`Lasso <nemos.regularizer.Lasso>`, {class}`GroupLasso <nemos.regularizer.GroupLasso>`, and {class}`ElasticNet <nemos.regularizer.ElasticNet>`.
+::::{grid} auto
 
-::::{grid} 1 2 3 3
+:::{grid-item}
+```{button-ref} getting_started
+:ref-type: doc
+:color: primary
+:shadow:
 
-:::{grid-item-card} <span class="iconify" data-icon="mdi:clock-fast"></span> &nbsp; **Getting Started**
-:link: getting_started.html
-:link-alt: Getting Started
----
+Getting Started
+```
+:::
+:::{grid-item}
+```{button-ref} user_guide/README
+:ref-type: doc
+:color: primary
+:shadow:
 
-Install NeMoS and fit a first model with our quickstart.
+User Guide
+```
+:::
+:::{grid-item}
+```{button-ref} how_to_guide/README
+:ref-type: doc
+:color: primary
+:shadow:
 
-```{code-block}
+How-To Guide
+```
+:::
+:::{grid-item}
+```{button-ref} tutorials/README
+:ref-type: doc
+:color: primary
+:shadow:
 
-pip install nemos
+Tutorials
+```
+:::
+:::{grid-item}
+```{button-ref} api/index
+:ref-type: doc
+:color: primary
+:shadow:
 
+API Reference
+```
+:::
+::::
+
+
+## __Models__
+
+::::{grid} 1 1 2 2
+:gutter: 3
+
+:::{grid-item-card} __GLM__
+
+```{image} assets/lnp_model_colscheme.svg
+:alt: Linear-Nonlinear-Poisson diagram.
+:width: 100%
+:class: only-light
+```
+
+```{image} assets/lnp_model_colscheme_dark.svg
+:alt: Linear-Nonlinear-Poisson diagram.
+:width: 100%
+:class: only-dark
 ```
 
 :::
 
-:::{grid-item-card} <span class="iconify" data-icon="mdi:book-open-variant-outline"></span> &nbsp; **User Guide**
-:link: user_guide/README.html
-:link-alt: User Guide
+:::{grid-item-card} __GLM-HMM__
 
----
+```{image} assets/glm_hmm_graphical_model.svg
+:alt: GLM-HMM graphical model.
+:width: 100%
+:class: only-light
+```
 
-Tour the package one concept at a time, from the theory behind the models to the classes that implement them.
+```{image} assets/glm_hmm_graphical_model_dark.svg
+:alt: GLM-HMM graphical model.
+:width: 100%
+:class: only-dark
+```
 
 :::
 
-:::{grid-item-card} <span class="iconify" data-icon="mdi:lightbulb-on-10"></span> &nbsp; **How-to Guide**
-:link: how_to_guide/README.html
-:link-alt: How-to-Guide
+::::
 
----
+Within the same model class, you can configure:
 
-Already familiar with the concepts? Learn how you to process and analyze your data with NeMoS.
+- __Observation models__: {class}`Poisson <nemos.observation_models.PoissonObservations>`, {class}`NegativeBinomial <nemos.observation_models.NegativeBinomialObservations>`, {class}`Gamma <nemos.observation_models.GammaObservations>`, {class}`Gaussian <nemos.observation_models.GaussianObservations>`, {class}`Bernoulli <nemos.observation_models.BernoulliObservations>`. Categorical responses are the exception, and are fit with {class}`ClassifierGLM <nemos.glm.ClassifierGLM>`, a separate class that fixes {class}`CategoricalObservations <nemos.observation_models.CategoricalObservations>` as its observation model.
+- __Regularizers__: {class}`UnRegularized <nemos.regularizer.UnRegularized>`, {class}`Ridge <nemos.regularizer.Ridge>`, {class}`Lasso <nemos.regularizer.Lasso>`, {class}`GroupLasso <nemos.regularizer.GroupLasso>`, {class}`ElasticNet <nemos.regularizer.ElasticNet>`.
 
 
-<div class="card-footer-content">
+### __Examples__
 
-*Requires familiarity with the theory.*
+% The model names below become links to the quick example of each model in the
+% user guide, once those are written.
+
+::::{grid} 1 2 4 4
+:gutter: 3
+
+:::{grid-item-card} __Spike counts__
+
+```{eval-rst}
+
+.. plot:: scripts/catalogue_figs.py plot_counts_thumbnail
+   :show-source-link: False
+   :height: 100px
+   :class: only-light
+
+.. plot:: scripts/catalogue_figs.py plot_counts_thumbnail_dark
+   :show-source-link: False
+   :height: 100px
+   :class: only-dark
+```
+
+<div style="text-align: center;">
+
+GLM<br/>GLM-HMM
 
 </div>
-
 :::
 
-:::{grid-item-card} <span class="iconify" data-icon="mdi:brain"></span> &nbsp; **Neural Modeling**
-:link: tutorials/README.html
-:link-alt: Tutorials
+:::{grid-item-card} __Continuous signals__
 
----
+```{eval-rst}
 
-Explore fully worked examples to learn how to analyze neural recordings from scratch.
+.. plot:: scripts/catalogue_figs.py plot_continuous_thumbnail
+   :show-source-link: False
+   :height: 100px
+   :class: only-light
 
-<div class="card-footer-content">
+.. plot:: scripts/catalogue_figs.py plot_continuous_thumbnail_dark
+   :show-source-link: False
+   :height: 100px
+   :class: only-dark
+```
 
-*Requires familiarity with the theory.*
+<div style="text-align: center;">
+
+GLM<br/>GLM-HMM
 
 </div>
-
 :::
 
-:::{grid-item-card} <span class="iconify" data-icon="mdi:cog"></span> &nbsp; **API Reference**
-:link: api/index.html
-:link-alt: API Reference
+:::{grid-item-card} __Binary outcomes__
 
----
+```{eval-rst}
 
-Access a detailed description of each module and function, including parameters and functionality.
+.. plot:: scripts/catalogue_figs.py plot_binary_thumbnail
+   :show-source-link: False
+   :height: 100px
+   :class: only-light
 
+.. plot:: scripts/catalogue_figs.py plot_binary_thumbnail_dark
+   :show-source-link: False
+   :height: 100px
+   :class: only-dark
+```
+
+<div style="text-align: center;">
+
+GLM<br/>GLM-HMM
+
+</div>
+:::
+
+:::{grid-item-card} __Choices and categories__
+
+```{eval-rst}
+
+.. plot:: scripts/catalogue_figs.py plot_choices_thumbnail
+   :show-source-link: False
+   :height: 100px
+   :class: only-light
+
+.. plot:: scripts/catalogue_figs.py plot_choices_thumbnail_dark
+   :show-source-link: False
+   :height: 100px
+   :class: only-dark
+```
+
+<div style="text-align: center;">
+
+ClassifierGLM
+
+</div>
+:::
+
+::::
+
+
+## __Building the features__
+
+::::{grid} 1 1 3 3
+:gutter: 3
+
+:::{grid-item-card} __Building blocks__
+:link: user_guide/basis/one_dimensional.html
+:link-alt: Building blocks
+
+```{eval-rst}
+
+.. plot:: scripts/catalogue_figs.py plot_zoo_thumbnail
+   :show-source-link: False
+   :height: 100px
+   :class: only-light
+
+.. plot:: scripts/catalogue_figs.py plot_zoo_thumbnail_dark
+   :show-source-link: False
+   :height: 100px
+   :class: only-dark
+```
+
+B-splines, raised cosines, Fourier, M-splines, and many more.
+:::
+
+:::{grid-item-card} __Multiple predictors__
+:link: user_guide/basis/composing.html
+:link-alt: Multiple predictors
+
+```{eval-rst}
+
+.. plot:: scripts/catalogue_figs.py plot_addition_thumbnail
+   :show-source-link: False
+   :height: 100px
+   :class: only-light
+
+.. plot:: scripts/catalogue_figs.py plot_addition_thumbnail_dark
+   :show-source-link: False
+   :height: 100px
+   :class: only-dark
+```
+
+Add bases to give each input its own block of the design matrix.
+:::
+
+:::{grid-item-card} __Higher dimension__
+:link: user_guide/basis/composing.html
+:link-alt: Higher dimension
+
+```{eval-rst}
+
+.. plot:: scripts/catalogue_figs.py plot_product_thumbnail
+   :show-source-link: False
+   :height: 100px
+   :class: only-light
+
+.. plot:: scripts/catalogue_figs.py plot_product_thumbnail_dark
+   :show-source-link: False
+   :height: 100px
+   :class: only-dark
+```
+
+Multiply bases to model the joint effect of two inputs.
 :::
 
 ::::
