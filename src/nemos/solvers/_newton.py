@@ -5,7 +5,6 @@ from typing import Any, Callable, ClassVar, Optional
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-import jax.scipy.linalg as jsp_linalg
 import lineax as lx
 import optax
 import optimistix as optx
@@ -32,6 +31,60 @@ class NewtonState(eqx.Module):
 
 
 NewtonStepResult = tuple[Params, NewtonState]
+
+
+def _solve_shifted_system(
+    operator,
+    grad,
+    shift,
+    *,
+    solver,
+    tags,
+    throw=True,
+):
+    r"""Solve a shifted Newton system.
+
+    Solves
+
+    .. math::
+        (H + \tau I)d = -g,
+
+    while preserving the PyTree structure of the Hessian operator.
+
+    Parameters
+    ----------
+    operator :
+        Linear operator representing the Hessian.
+    grad :
+        Gradient on the right-hand side of the Newton system.
+    shift :
+        Scalar identity shift.
+    solver :
+        Lineax linear solver.
+    tags :
+        Lineax tags describing the shifted operator.
+    throw :
+        Whether Lineax should raise an exception when the solve fails.
+
+    Returns
+    -------
+    :
+        The result returned by :func:`lineax.linear_solve`.
+    """
+    identity = lx.IdentityLinearOperator(operator.in_structure())
+    shifted_operator = operator + shift * identity
+    tagged_operator = lx.TaggedLinearOperator(
+        shifted_operator,
+        tags=tags,
+    )
+    neg_grad = jax.tree.map(jnp.negative, grad)
+
+    return lx.linear_solve(
+        tagged_operator,
+        neg_grad,
+        solver=solver,
+        throw=throw,
+    )
 
 
 class Newton(HessianMixin):
@@ -167,50 +220,67 @@ class Newton(HessianMixin):
         # Add tau * I and increase tau until Cholesky succeeds
         # Nocedal and Wright Algorithm 3.3
         if self._resolved_hessian_solver == "identity_shift":
-            g_flat, unravel = jax.flatten_util.ravel_pytree(grad)
-            H_dense = operator.as_matrix()
-            dtype = H_dense.dtype
+            diag = lx.diagonal(operator)
+            dtype = diag.dtype
 
+            # Floor for beta
             eps = jnp.asarray(jnp.finfo(dtype).eps, dtype=dtype)
             beta = jnp.maximum(
                 jnp.asarray(self._identity_shift_beta, dtype=dtype),
                 eps,
             )
 
-            min_diag = jnp.min(jnp.diag(H_dense))
+            min_diag = jnp.min(diag)
             tau0 = jnp.where(
                 min_diag > 0,
                 jnp.zeros((), dtype=dtype),
                 -min_diag + beta,
             )
 
-            identity = jnp.eye(H_dense.shape[0], dtype=dtype)
+            cholesky = lx.Cholesky()
 
-            def factorize(tau):
-                return jnp.linalg.cholesky(H_dense + tau * identity)
+            def _solve(tau):
+                result = _solve_shifted_system(
+                    operator,
+                    grad,
+                    tau,
+                    solver=cholesky,
+                    tags=lx.positive_semidefinite_tag,
+                    throw=False,
+                )
+                failed = (
+                    result.result != lx.RESULTS.successful
+                ) | ~tree_utils.tree_all_finite(result.value)
+                return result.value, failed
 
-            factor0 = factorize(tau0)
+            direction0, failed0 = _solve(tau0)
 
             def cond(carry):
-                iteration, _, factor = carry
-                failed = jnp.any(jnp.isnan(factor))
+                iteration, _, _, failed = carry
                 return failed & (iteration < self._identity_shift_max_steps)
 
             def body(carry):
-                iteration, tau, _ = carry
-                new_tau = jnp.maximum(10.0 * tau, beta)
-                return iteration + 1, new_tau, factorize(new_tau)
+                iteration, tau, _, _ = carry
+                new_tau = jnp.maximum(
+                    jnp.asarray(10.0, dtype=dtype) * tau,
+                    beta,
+                )
+                direction, failed = _solve(new_tau)
+                return iteration + 1, new_tau, direction, failed
 
-            _, _, factor = eqx.internal.while_loop(
+            _, _, direction, _ = eqx.internal.while_loop(
                 cond,
                 body,
-                (jnp.asarray(0), tau0, factor0),
+                (
+                    jnp.asarray(0),
+                    tau0,
+                    direction0,
+                    failed0,
+                ),
                 kind="lax",
             )
 
-            # Reuse the successful factor rather than factorizing the matrix again.
-            direction = jsp_linalg.cho_solve((factor, True), -g_flat)
-            return unravel(direction)
+            return direction
 
         # Catch use before init_state has resolved the requested strategy.
         if self._resolved_hessian_solver != "cholesky":
@@ -221,17 +291,12 @@ class Newton(HessianMixin):
 
         # Solve a positive Hessian with Lineax Cholesky.
         # For a PSD tag, _shift_fn adds the small numerical shift selected by the tag
-        shift = self._shift_fn(operator)
-        identity = lx.DiagonalLinearOperator(jax.tree.map(jnp.ones_like, grad))
-        shifted_operator = operator + shift * identity
-
-        return lx.linear_solve(
-            lx.TaggedLinearOperator(
-                shifted_operator,
-                tags=self._operator_tags,
-            ),
-            jax.tree.map(lambda x: -x, grad),
-            self._linear_solver,
+        return _solve_shifted_system(
+            operator,
+            grad,
+            self._shift_fn(operator),
+            solver=self._linear_solver,
+            tags=self._operator_tags,
         ).value
 
     def _newton_direction(self, grad, H, params):
