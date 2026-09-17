@@ -69,7 +69,7 @@ In particular, we will learn:
 ## What is a scikit-learn pipeline
 
 <figure markdown>
-<img src="../_static/pipeline.svg" style="width: 100%" alt="Pipeline illustration."/>
+<img src="../../_static/pipeline.svg" style="width: 100%" alt="Pipeline illustration."/>
 <figcaption>Schematic of a scikit-learn pipeline.</figcaption>
 </figure>
 
@@ -313,7 +313,7 @@ Let's run a 5-fold cross-validation of the hyperparameters with the scikit-learn
 :icon: info
 
 <p align="center">
-<img src="../_static/kfold.svg" alt="Grid Search Cross Validation" style="max-width: 80%; height: auto;", alt="K-fold illustration.">
+<img src="../../_static/kfold.svg" alt="Grid Search Cross Validation" style="max-width: 80%; height: auto;", alt="K-fold illustration.">
 <br>
 <em>K-fold cross-validation (modified from <a href="https://scikit-learn.org/stable/modules/cross_validation.html" target="_blank">scikit-learn docs</a>)</em>
 </p>
