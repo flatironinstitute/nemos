@@ -226,8 +226,6 @@ suppress-none-returning = true
     "E741",  # Short mathematical variable names.
 ]
 
-# Exercise notebooks may reference names defined in skipped cells.
-"exercises*.ipynb" = ["F821"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
