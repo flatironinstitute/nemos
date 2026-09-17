@@ -183,19 +183,70 @@ exclude_lines = [
     "if __name__ == .__main__.:"
 ]
 
-
 [tool.ruff]
+extend-include = ["*.ipynb"]
+src = ["src", "tests", "examples"]
 exclude = ["src/nemos/_documentation_utils"]
 
+# Set the maximum line length (same as Black)
+line-length = 88
+
+indent-width = 4 # same as Black
+
+[tool.ruff.format]
+# Like Black, use double quotes for strings.
+quote-style = "double"
+
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Like Black, respect magic trailing commas.
+skip-magic-trailing-comma = false
+
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"
+
+docstring-code-format = true
 
 [tool.ruff.lint]
-select = ["D"]
-ignore = ["D202"]  # this conflicts with black
+select = [
+    # pycodestyle
+    "E",
+    # Pyflakes: basic static analysis for common errors like undefined names
+    # and missing imports.
+    "F",
+    # pyupgrade
+    "UP",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
+    # in particular, this looks for invalid escape sequences (has been an issue
+    # for regex strings used in tests)
+    "W",
+    # docstrings, note that DOC rules (pydoclint) are all in preview, so have to be explicitly added
+    "D", "DOC201", "DOC202", "DOC402", "DOC403", "DOC501",
+    "ANN",
+    # catch missing f-strings (this is in preview and so has to be explicitly added)
+    "RUF027",
+]
+ignore = []
 
+[tool.ruff.lint.flake8-annotations]
+allow-star-arg-any = true
+suppress-none-returning = true
+
+[tool.ruff.lint.per-file-ignores]
+# Ignore docstring rules everywhere except for the `src/` directory, from
+# https://docs.astral.sh/ruff/settings/#lint_per-file-ignores.
+"!src/**.py" = ["D", "DOC", "ANN"]
+# this file has very long lines
+"src/plenoptic/_api_change.py" = ["E501"]
+# exercise notebooks sometimes will have undefined names in the skipped cells
+"exercises*ipynb" = ["F821"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
-
 
 [tool.jupytext]
 # Keep the writer's local jupytext version out of the myst-nb markdown notebooks,
