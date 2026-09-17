@@ -221,7 +221,7 @@ suppress-none-returning = true
 ]
 "scripts/**" = [
     "E501",  # Long parametrizations and expected messages.
-    "C901",  # Complex tests and fixtures.
+    "C901",  # Complex scripts.
     "E731",  # Lambda assignments as compact test callables.
     "E741",  # Short mathematical variable names.
 ]
