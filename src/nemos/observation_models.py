@@ -1900,7 +1900,6 @@ def check_observation_model(observation_model, force_checks=False):
 
     # Perform checks for each attribute
     for attr_name, check_info in checks.items():
-
         # check if the observation model has the attribute
         utils.assert_has_attribute(observation_model, attr_name)
 

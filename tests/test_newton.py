@@ -1047,9 +1047,9 @@ def test_solver_invalidated_after_strength_change(request, model_instantiation_t
     assert model._solver is not None
 
     model.regularizer_strength = 0.5
-    assert (
-        model._solver is None
-    ), "_solver must be None after regularizer_strength change."
+    assert model._solver is None, (
+        "_solver must be None after regularizer_strength change."
+    )
 
 
 @pytest.mark.parametrize(
@@ -1239,14 +1239,14 @@ def _assert_linear_solver(solver, expected_cls):
     """Assert the linear solver Newton picked, and the operator tags that go with it."""
     assert isinstance(solver._linear_solver, expected_cls)
     if expected_cls is lx.Cholesky:
-        assert (
-            solver._operator_tags == lx.positive_semidefinite_tag
-        ), f"Expected ``positive_semidefinite_tag`` for Cholesky solver. Got ``{solver._operator_tags}`` instead!"
+        assert solver._operator_tags == lx.positive_semidefinite_tag, (
+            f"Expected ``positive_semidefinite_tag`` for Cholesky solver. Got ``{solver._operator_tags}`` instead!"
+        )
     else:
         assert solver._operator_tags == ()
-        assert (
-            solver._linear_solver.well_posed is False
-        ), "Solver is well posed but shouldn't for the given tag."
+        assert solver._linear_solver.well_posed is False, (
+            "Solver is well posed but shouldn't for the given tag."
+        )
 
 
 _LINEAR_SOLVER_CASES = [
@@ -1627,9 +1627,9 @@ def test_prox_newton_singular_hessian_converges(request):
     hess = (2.0 / n) * X.T @ X
     eigvals = np.linalg.eigvalsh(hess)
     assert eigvals.min() > -1e-10, "Hessian must be positive semidefinite"
-    assert (
-        eigvals.min() < 1e-10
-    ), "Hessian must be singular for this test to mean anything"
+    assert eigvals.min() < 1e-10, (
+        "Hessian must be singular for this test to mean anything"
+    )
 
     # grad f orthogonal to ker H: the condition that bounds the subproblem below
     grad = -(2.0 / n) * X.T @ (y - X @ np.asarray(params))

@@ -1091,7 +1091,6 @@ class BaseRegressor(
         string_attrs :
             List of attributes to be saved as strings.
         """
-
         # extract model parameters
         model_params = self.get_params(deep=False)
         model_params = _unpack_params(model_params, string_attrs)

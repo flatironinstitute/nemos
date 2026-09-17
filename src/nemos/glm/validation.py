@@ -474,7 +474,6 @@ class ClassifierGLMValidator(GLMValidator):
             Format string for intercept error message. Should have 3 placeholders:
             expected_class_dim, n_classes, actual_shape.
         """
-
         coef, intercept = params
         n_classes = self.extra_params["n_classes"]
         expected_class_dim = n_classes
