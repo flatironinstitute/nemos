@@ -2,7 +2,7 @@ exclude: ^src/nemos/third_party/
 
 repos:
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.12.12
+  rev: v0.16.8
   hooks:
     # Run the formatter.
     - id: ruff-format

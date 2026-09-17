@@ -641,7 +641,6 @@ def _flatten_dict(
     dict :
         A flattened dictionary where the hierarchy is represented by concatenated keys (using __ as a separator).
     """
-
     sep = "::"
     items = []
     # Iterate over key-value pairs in the dictionary
@@ -831,7 +830,6 @@ def _unpack_params(params_dict: dict, string_attrs: list = None) -> dict:
     dict :
         Serializable dictionary with class names and nested parameters.
     """
-
     out = dict()
     for key, value in params_dict.items():
         # if the parameter is an objet with get_params/set_params,

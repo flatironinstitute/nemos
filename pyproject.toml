@@ -46,13 +46,10 @@ local_scheme = 'no-local-version'
 # Define optional dependencies for the project
 [project.optional-dependencies]
 dev = [
-    "black",                        # Code formatter
-    "isort",                        # Import sorter
     "pip-tools",                    # Dependency management
-    "ruff",                         # Lint docstrings for now, eventually switch to ruff for all linting
+    "ruff",                         # General formatting
     "pytest",                       # Testing framework
     "pytest-xdist",                 # Parallelize pytest
-    "flake8",                       # Code linter
     "coverage",                     # Test coverage measurement
     "pytest-cov",                   # Test coverage plugin for pytest
     "statsmodels",                  # Used to compare model pseudo-r2 in testing
@@ -115,35 +112,6 @@ jaxopt = [
 ]
 
 
-[tool.black]
-target-version = ['py312', 'py313', 'py314']
-skip-string-normalization = false
-exclude = '''
-(
-  /(
-      \.eggs
-    | \.git
-    | \.hg
-    | \.mypy_cache
-    | \.md
-    | \.toml
-    | \.cfg
-    | \.txt
-    | \.tox
-    | \.venv
-    | _build
-    | buck-out
-    | build
-    | dist
-    | examples
-    ))'''
-
-# Configure isort
-[tool.isort]
-multi_line_output = 3             # Use three-line style for multi-line imports
-include_trailing_comma = true     # Include trailing comma in multi-line imports
-profile = "black"
-skip = []
 
 # Configure pytest
 [tool.pytest.ini_options]
@@ -209,41 +177,57 @@ line-ending = "auto"
 docstring-code-format = true
 
 [tool.ruff.lint]
+preview = true
 select = [
     # pycodestyle
     "E",
     # Pyflakes: basic static analysis for common errors like undefined names
     # and missing imports.
     "F",
-    # pyupgrade
-    "UP",
-    # flake8-simplify
-    "SIM",
     # isort
     "I",
     # in particular, this looks for invalid escape sequences (has been an issue
     # for regex strings used in tests)
     "W",
     # docstrings, note that DOC rules (pydoclint) are all in preview, so have to be explicitly added
-    "D", "DOC201", "DOC202", "DOC402", "DOC403", "DOC501",
-    "ANN",
+    "D",
     # catch missing f-strings (this is in preview and so has to be explicitly added)
     "RUF027",
+    # complexity check
+    "C90"
 ]
-ignore = []
+ignore = ["D420", "D421", "D401", "F722"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pycodestyle]
+max-line-length = 120
 
 [tool.ruff.lint.flake8-annotations]
 allow-star-arg-any = true
 suppress-none-returning = true
 
 [tool.ruff.lint.per-file-ignores]
-# Ignore docstring rules everywhere except for the `src/` directory, from
-# https://docs.astral.sh/ruff/settings/#lint_per-file-ignores.
+# Ignore documentation and annotation rules outside src.
 "!src/**.py" = ["D", "DOC", "ANN"]
-# this file has very long lines
-"src/plenoptic/_api_change.py" = ["E501"]
-# exercise notebooks sometimes will have undefined names in the skipped cells
-"exercises*ipynb" = ["F821"]
+
+# Tests and scripts have explicit setup and may use older syntax to test compatibility.
+"tests/**" = [
+    "E501",  # Long parametrizations and expected messages.
+    "C901",  # Complex tests and fixtures.
+    "E731",  # Lambda assignments as compact test callables.
+    "E741",  # Short mathematical variable names.
+]
+"scripts/**" = [
+    "E501",  # Long parametrizations and expected messages.
+    "C901",  # Complex tests and fixtures.
+    "E731",  # Lambda assignments as compact test callables.
+    "E741",  # Short mathematical variable names.
+]
+
+# Exercise notebooks may reference names defined in skipped cells.
+"exercises*.ipynb" = ["F821"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"

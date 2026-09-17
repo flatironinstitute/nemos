@@ -256,9 +256,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixAdapterState]):
         state: OptimistixSolverState,
         num_steps: jax.numpy.ndarray = jax.numpy.array(0),
     ) -> OptimizationInfo:
-        function_val = (
-            state.f if hasattr(state, "f") else state.f_info.f
-        )  # pyright: ignore
+        function_val = state.f if hasattr(state, "f") else state.f_info.f  # pyright: ignore
 
         return OptimizationInfo(
             function_val=function_val,

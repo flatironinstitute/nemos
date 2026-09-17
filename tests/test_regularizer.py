@@ -45,7 +45,7 @@ def register_deregister_agradientdescent():
 
     yield
 
-    from nemos.solvers._solver_registry import _registry, _defaults
+    from nemos.solvers._solver_registry import _defaults, _registry
 
     if name in _registry and "custom" in _registry[name]:
         # remove custom dummy implementation

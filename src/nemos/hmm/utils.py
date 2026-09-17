@@ -222,6 +222,5 @@ def _check_state_format(state_format: str) -> None:
     valid_formats = ("one-hot", "index")
     if state_format not in valid_formats:
         raise ValueError(
-            f"Invalid state_format '{state_format}'. "
-            f"Must be one of {valid_formats}."
+            f"Invalid state_format '{state_format}'. Must be one of {valid_formats}."
         )

@@ -427,6 +427,6 @@ def test_jaxopt_solvers_in_registry():
     ]
     for algo_name in expected_jaxopt_algos:
         backends = nmo.solvers.list_algo_backends(algo_name)
-        assert (
-            "jaxopt" in backends
-        ), f"jaxopt backend missing for {algo_name}. Available backends: {backends}"
+        assert "jaxopt" in backends, (
+            f"jaxopt backend missing for {algo_name}. Available backends: {backends}"
+        )

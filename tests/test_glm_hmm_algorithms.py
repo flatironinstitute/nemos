@@ -974,9 +974,11 @@ class TestMStep:
         )
         # Initial probability:
         sum_gammas = np.sum(gammas[np.where(new_sess)[0]], axis=0)
-        lagrange_multiplier = -jax.grad(expected_log_likelihood_wrt_initial_prob)(
-            new_initial_prob, sum_gammas
-        ).mean()  # note that the lagrange mult makes the gradient all the same for each prob.
+        lagrange_multiplier = (
+            -jax.grad(expected_log_likelihood_wrt_initial_prob)(
+                new_initial_prob, sum_gammas
+            ).mean()
+        )  # note that the lagrange mult makes the gradient all the same for each prob.
         grad_objective = jax.grad(lagrange_mult_loss)
         grad_at_init, grad_at_lagr = grad_objective(
             (new_initial_prob, lagrange_multiplier),
@@ -1159,9 +1161,11 @@ class TestMStep:
         )
         # Initial probabilities:
         sum_gammas = np.sum(np.exp(log_gammas)[np.where(new_sess)[0]], axis=0)
-        lagrange_multiplier = -jax.grad(expected_log_likelihood_wrt_initial_prob)(
-            new_initial_prob, sum_gammas, dirichlet_alphas=alphas_init
-        ).mean()  # note that the lagrange mult makes the gradient all the same for each prob.
+        lagrange_multiplier = (
+            -jax.grad(expected_log_likelihood_wrt_initial_prob)(
+                new_initial_prob, sum_gammas, dirichlet_alphas=alphas_init
+            ).mean()
+        )  # note that the lagrange mult makes the gradient all the same for each prob.
         # 2) Check that the gradient of the loss is zero
         grad_objective = jax.grad(lagrange_mult_loss)
         grad_at_init, grad_at_lagr = grad_objective(
@@ -1771,9 +1775,9 @@ class TestMStep:
             log_likelihood_func=ll_func,
             session_starts=new_sess,
         )
-        assert (
-            updated_log_like > initial_log_like
-        ), "M-step for initial prob did not increase likelihood"
+        assert updated_log_like > initial_log_like, (
+            "M-step for initial prob did not increase likelihood"
+        )
 
         initial_log_like = updated_log_like
         new_log_transition_prob = _analytical_m_step_log_transition_prob(
@@ -1791,9 +1795,9 @@ class TestMStep:
             log_likelihood_func=ll_func,
             session_starts=new_sess,
         )
-        assert (
-            updated_log_like > initial_log_like
-        ), "M-step for transition prob did not increase likelihood"
+        assert updated_log_like > initial_log_like, (
+            "M-step for transition prob did not increase likelihood"
+        )
 
         # Minimize negative log-likelihood to update GLM weights
         initial_log_like = updated_log_like
@@ -1815,9 +1819,9 @@ class TestMStep:
             log_likelihood_func=ll_func,
             session_starts=new_sess,
         )
-        assert (
-            updated_log_like > initial_log_like
-        ), "M-step for GLMParams prob did not increase likelihood"
+        assert updated_log_like > initial_log_like, (
+            "M-step for GLMParams prob did not increase likelihood"
+        )
 
         # Minimize negative log-likelihood to update scale (if applicable)
         initial_log_like = updated_log_like
@@ -1844,9 +1848,9 @@ class TestMStep:
                 log_likelihood_func=ll_func,
                 session_starts=new_sess,
             )
-            assert (
-                updated_log_like > initial_log_like
-            ), "M-step for GLM scale prob did not increase likelihood"
+            assert updated_log_like > initial_log_like, (
+                "M-step for GLM scale prob did not increase likelihood"
+            )
         else:
             np.testing.assert_array_equal(new_scale, jnp.zeros_like(intercept))
 
@@ -1997,9 +2001,9 @@ class TestEMAlgorithm:
             y,
             log_likelihood_func=likelihood_func,
         )
-        assert (
-            log_likelihood_true_params < log_likelihood_em
-        ), "log-likelihood did not increase."
+        assert log_likelihood_true_params < log_likelihood_em, (
+            "log-likelihood did not increase."
+        )
 
     @pytest.mark.parametrize("n_neurons", [5])
     @pytest.mark.requires_x64
@@ -2143,12 +2147,12 @@ class TestEMAlgorithm:
         max_corr = np.max(corr_matrix, axis=1)
         print("\nMAX CORR", max_corr)
         assert np.all(max_corr > 0.9), "State recovery failed."
-        assert np.all(
-            max_corr > max_corr_before_em
-        ), "Latent state recovery did not improve."
-        assert (
-            log_likelihood_noisy_params < log_likelihood_em
-        ), "Log-likelihood decreased."
+        assert np.all(max_corr > max_corr_before_em), (
+            "Latent state recovery did not improve."
+        )
+        assert log_likelihood_noisy_params < log_likelihood_em, (
+            "Log-likelihood decreased."
+        )
 
 
 @pytest.mark.requires_x64
@@ -2505,9 +2509,9 @@ class TestConvergence:
         )
 
         # check converged flag is False
-        assert (
-            not final_state.converged
-        ), "EMState converged flag should be set to False"
+        assert not final_state.converged, (
+            "EMState converged flag should be set to False"
+        )
 
     @pytest.mark.requires_x64
     def test_em_stops_when_converged(self):
@@ -2576,9 +2580,9 @@ class TestConvergence:
         )
 
         # Should have actually converged according to the criterion
-        assert check_log_likelihood_increment(
-            final_state, tol=tol
-        ), "EM stopped but did not meet convergence criterion"
+        assert check_log_likelihood_increment(final_state, tol=tol), (
+            "EM stopped but did not meet convergence criterion"
+        )
 
     @pytest.mark.requires_x64
     def test_em_nan_diagnostics_after_convergence(self):
@@ -2640,25 +2644,25 @@ class TestConvergence:
         )
 
         # Final state should have valid likelihood
-        assert jnp.isfinite(
-            final_state.data_log_likelihood
-        ), "Final state has non-finite log-likelihood"
+        assert jnp.isfinite(final_state.data_log_likelihood), (
+            "Final state has non-finite log-likelihood"
+        )
 
         # Final state should have valid previous likelihood
-        assert jnp.isfinite(
-            final_state.previous_data_log_likelihood
-        ), "Final state has non-finite previous log-likelihood"
+        assert jnp.isfinite(final_state.previous_data_log_likelihood), (
+            "Final state has non-finite previous log-likelihood"
+        )
 
         # All learned parameters should be valid
-        assert jnp.all(
-            jnp.isfinite(learned_params.hmm_params.log_initial_prob)
-        ), "Final log_initial_prob contains non-finite values"
-        assert jnp.all(
-            jnp.isfinite(learned_params.hmm_params.log_transition_prob)
-        ), "Final log_transition_prob contains non-finite values"
-        assert jnp.all(
-            jnp.isfinite(learned_params.model_params.log_scale)
-        ), "Final log_scale contains non-finite values"
+        assert jnp.all(jnp.isfinite(learned_params.hmm_params.log_initial_prob)), (
+            "Final log_initial_prob contains non-finite values"
+        )
+        assert jnp.all(jnp.isfinite(learned_params.hmm_params.log_transition_prob)), (
+            "Final log_transition_prob contains non-finite values"
+        )
+        assert jnp.all(jnp.isfinite(learned_params.model_params.log_scale)), (
+            "Final log_scale contains non-finite values"
+        )
 
     @pytest.mark.requires_x64
     def test_convergence_with_different_tolerances(self):
@@ -2801,9 +2805,9 @@ class TestConvergence:
         )
 
         # Should stop at or just after 5 iterations
-        assert (
-            final_state.iterations <= 6
-        ), f"EM should stop around 5 iterations, but ran for {final_state.iterations}"
+        assert final_state.iterations <= 6, (
+            f"EM should stop around 5 iterations, but ran for {final_state.iterations}"
+        )
 
 
 class TestCompilation:
@@ -2931,9 +2935,9 @@ class TestCompilation:
             dirichlet_transition_proba=np.ones(transition_prob.shape),
             dirichlet_initial_proba=np.ones(initial_prob.shape),
         )
-        assert (
-            compilation_counter["n_compilations"] == 2
-        ), "None -> array should recompile"
+        assert compilation_counter["n_compilations"] == 2, (
+            "None -> array should recompile"
+        )
 
         # 4th call with prior (different values, same shape)
         _ = tracked_run_m_step(
@@ -3077,9 +3081,9 @@ class TestCompilation:
             maxiter=5,
             tol=1e-8,
         )
-        assert (
-            compilation_counter["n_compilations"] == 1
-        ), "Second call should use cache"
+        assert compilation_counter["n_compilations"] == 1, (
+            "Second call should use cache"
+        )
 
         # Third call with DIFFERENT data (same shape) - should NOT recompile
         X_new = (X + np.random.randn(*X.shape) * 0.1).astype(X.dtype)
@@ -3107,9 +3111,9 @@ class TestCompilation:
             maxiter=5,
             tol=1e-8,
         )
-        assert (
-            compilation_counter["n_compilations"] == 1
-        ), "Different data (same shape) should use cache"
+        assert compilation_counter["n_compilations"] == 1, (
+            "Different data (same shape) should use cache"
+        )
 
     @pytest.mark.requires_x64
     @pytest.mark.parametrize(
@@ -3711,9 +3715,9 @@ class TestEMScaleOptimization:
 
         # Verify scale was updated (should differ from initialization)
         final_scale = jnp.exp(final_params.model_params.log_scale)
-        assert not jnp.allclose(
-            final_scale, init_scale, atol=0.1
-        ), "Scale should have been updated from initialization"
+        assert not jnp.allclose(final_scale, init_scale, atol=0.1), (
+            "Scale should have been updated from initialization"
+        )
 
         # Verify scale is positive
         assert jnp.all(final_scale > 0), "All scale parameters should be positive"
@@ -3831,9 +3835,9 @@ class TestEMScaleOptimization:
         ), "EM with scale optimization should achieve at least as good likelihood"
 
         # Verify scale changed
-        assert not jnp.allclose(
-            final_scale, init_scale, atol=0.1
-        ), "Scale parameters should have been optimized"
+        assert not jnp.allclose(final_scale, init_scale, atol=0.1), (
+            "Scale parameters should have been optimized"
+        )
 
     def test_em_gamma_numerical_scale_single_neuron(self, gamma_data_single_neuron):
         """
@@ -3917,9 +3921,9 @@ class TestEMScaleOptimization:
 
         # Verify scale was updated
         final_scale = jnp.exp(final_params.model_params.log_scale)
-        assert not jnp.allclose(
-            final_scale, init_scale, atol=0.1
-        ), "Scale should have been updated from initialization"
+        assert not jnp.allclose(final_scale, init_scale, atol=0.1), (
+            "Scale should have been updated from initialization"
+        )
 
         # Verify shapes
         assert final_scale.shape == (data["n_states"],)
@@ -4006,12 +4010,14 @@ class TestEMScaleOptimization:
         assert final_scale.shape == (
             n_neurons,
             data["n_states"],
-        ), f"Expected scale shape ({n_neurons}, {data['n_states']}), got {final_scale.shape}"
+        ), (
+            f"Expected scale shape ({n_neurons}, {data['n_states']}), got {final_scale.shape}"
+        )
 
         # Verify scale was updated
-        assert not jnp.allclose(
-            final_scale, init_scale, atol=0.1
-        ), "Scale should have been updated from initialization"
+        assert not jnp.allclose(final_scale, init_scale, atol=0.1), (
+            "Scale should have been updated from initialization"
+        )
 
         # Verify all scales are positive
         assert jnp.all(final_scale > 0), "All scale parameters should be positive"

@@ -220,7 +220,6 @@ model = nmo.glm.GLM(
     solver_kwargs={"stepsize": 0.01, "acceleration": False},
 )
 model.stochastic_fit(loader, n_passes=10)
-
 ```
 
 ### DataLoader protocol
