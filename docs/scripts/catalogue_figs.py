@@ -1,7 +1,9 @@
+import colorsys
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pynapple as nap
-from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.colors import LinearSegmentedColormap, to_rgb
 from matplotlib.patches import Rectangle
 
 import nemos as nmo
@@ -25,8 +27,6 @@ BLUE = "#4C82C3"
 # rather than drawn as a line.
 PASTEL = {ORANGE: "#FAE0C8", GREEN: "#DDEFDA", BLUE: "#D8E4F4"}
 
-# Cycled across the elements of a basis, so a panel reads as a family of curves.
-CYCLE = (ORANGE, GREEN, BLUE)
 
 FIGSIZE = (5, 3)
 
@@ -184,7 +184,7 @@ def plot_addition_thumbnail():
         )
         left += width + gap
     ax.set_xlim(-0.02, left - gap + 0.02)
-    ax.set_ylim(-0.02, 1.16)
+    ax.set_ylim(-0.02, 1.03)
     ax.invert_yaxis()
     # The card renders this 3-inch-tall figure at 100px, so type has to be set
     # far larger than the on-figure size suggests to survive the reduction.
@@ -193,10 +193,38 @@ def plot_addition_thumbnail():
     fig.tight_layout()
 
 
-def _draw_kernels(ax, x, kernels):
-    """One basis drawn into a panel, its elements cycling through the palette."""
-    for index in range(kernels.shape[1]):
-        ax.plot(x, kernels[:, index], color=CYCLE[index % len(CYCLE)], lw=1.6)
+def _cyclic_colours(count):
+    """A hue wheel carrying the weight of the default cycle.
+
+    ``hsv`` is cyclic but far louder than the cycle the straight bases use, and
+    both twilight maps pass through a near-white that vanishes on a light page.
+    Sweeping hue at the saturation and value of the default cycle keeps the
+    periodic panel the same weight as the ones beside it.
+    """
+    cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"][:count]
+    reference = [colorsys.rgb_to_hsv(*to_rgb(colour)) for colour in cycle]
+    saturation = float(np.mean([s for _, s, _ in reference]))
+    value = float(np.mean([v for _, _, v in reference]))
+    return [
+        colorsys.hsv_to_rgb(hue, saturation, value)
+        for hue in np.linspace(0, 1, count, endpoint=False)
+    ]
+
+
+def _draw_kernels(ax, x, kernels, periodic=False):
+    """One basis drawn into a panel.
+
+    The straight bases take matplotlib's default cycle, the one the basis table
+    in the user guide is drawn with. A basis that wraps takes a cyclic map
+    instead, so its last element comes back to the colour of the first.
+    """
+    if periodic:
+        count = kernels.shape[1]
+        colours = _cyclic_colours(count)
+        for index in range(count):
+            ax.plot(x, kernels[:, index], color=colours[index], lw=1.6)
+    else:
+        ax.plot(x, kernels, lw=1.6)
     for side in ["left", "right", "top", "bottom"]:
         ax.spines[side].set_visible(False)
     ax.set_xticks([])
@@ -209,15 +237,19 @@ def plot_zoo_thumbnail():
     fig, axes = plt.subplots(2, 2, figsize=FIGSIZE)
     fig.patch.set_alpha(0)
 
+    # The cyclic basis is drawn with the looping palette, the rest with the
+    # straight one, so the panel that wraps is marked out by its colours too.
     bases = (
-        nmo.basis.BSplineEval(n_basis_funcs=7),
-        nmo.basis.RaisedCosineLogEval(n_basis_funcs=7),
-        nmo.basis.FourierEval(frequencies=3),
-        nmo.basis.MSplineEval(n_basis_funcs=7),
+        (nmo.basis.BSplineEval(n_basis_funcs=6), False),
+        (nmo.basis.RaisedCosineLogEval(n_basis_funcs=6), False),
+        (nmo.basis.FourierEval(frequencies=3), False),
+        (nmo.basis.CyclicBSplineEval(n_basis_funcs=6), True),
     )
-    for ax, basis in zip(axes.ravel(), bases):
-        _draw_kernels(ax, *basis.evaluate_on_grid(200))
-    fig.tight_layout()
+    for ax, (basis, periodic) in zip(axes.ravel(), bases):
+        _draw_kernels(ax, *basis.evaluate_on_grid(200), periodic=periodic)
+    fig.subplots_adjust(
+        left=0.01, right=0.99, top=0.99, bottom=0.01, wspace=0.08, hspace=0.12
+    )
 
 
 def plot_product_thumbnail():

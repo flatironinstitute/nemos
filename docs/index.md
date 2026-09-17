@@ -235,16 +235,16 @@ ClassifierGLM
 
 .. plot:: scripts/catalogue_figs.py plot_zoo_thumbnail
    :show-source-link: False
-   :height: 100px
+   :height: 140px
    :class: only-light
 
 .. plot:: scripts/catalogue_figs.py plot_zoo_thumbnail_dark
    :show-source-link: False
-   :height: 100px
+   :height: 140px
    :class: only-dark
 ```
 
-B-splines, raised cosines, Fourier, M-splines, and many more.
+B-splines (regular or cyclic), raised cosines, Fourier, and many more.
 :::
 
 :::{grid-item-card} __Multiple predictors__
@@ -255,12 +255,12 @@ B-splines, raised cosines, Fourier, M-splines, and many more.
 
 .. plot:: scripts/catalogue_figs.py plot_addition_thumbnail
    :show-source-link: False
-   :height: 100px
+   :height: 140px
    :class: only-light
 
 .. plot:: scripts/catalogue_figs.py plot_addition_thumbnail_dark
    :show-source-link: False
-   :height: 100px
+   :height: 140px
    :class: only-dark
 ```
 
@@ -275,12 +275,12 @@ Add bases to give each input its own block of the design matrix.
 
 .. plot:: scripts/catalogue_figs.py plot_product_thumbnail
    :show-source-link: False
-   :height: 100px
+   :height: 140px
    :class: only-light
 
 .. plot:: scripts/catalogue_figs.py plot_product_thumbnail_dark
    :show-source-link: False
-   :height: 100px
+   :height: 140px
    :class: only-dark
 ```
 
