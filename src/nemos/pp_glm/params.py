@@ -15,8 +15,8 @@ class PPGLMParamsWithKey(ModelParams):
     random_key: jnp.ndarray
 
     @staticmethod
-    def regularizable_subtrees() -> (
-        list[Callable[["PPGLMParamsWithKey"], jnp.ndarray | dict]]
-    ):
+    def regularizable_subtrees() -> list[
+        Callable[["PPGLMParamsWithKey"], jnp.ndarray | dict]
+    ]:
         """Filter regularizable subtrees."""
         return [lambda p: p.params.coef]

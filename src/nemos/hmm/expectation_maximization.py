@@ -145,8 +145,7 @@ def _forward_pass(
                 log_alphas[t] = log_initial_prob + log_py_z[t]
             else:
                 log_alphas[t] = log_py_z[t] + logsumexp(
-                    log_transition_prob + log_alphas[t - 1][None, :],
-                    axis=1
+                    log_transition_prob + log_alphas[t - 1][None, :], axis=1
                 )
 
             log_c[t] = logsumexp(log_alphas[t])
@@ -331,10 +330,14 @@ def _backward_pass(
             if new_sess[t + 1]:
                 log_betas[t] = np.zeros(n_states)
             else:
-                log_betas[t] = logsumexp(
-                    log_transition_prob + (log_betas[t + 1] + log_py_z[t + 1])[None, :],
-                    axis=1
-                ) - log_c[t + 1]
+                log_betas[t] = (
+                    logsumexp(
+                        log_transition_prob
+                        + (log_betas[t + 1] + log_py_z[t + 1])[None, :],
+                        axis=1,
+                    )
+                    - log_c[t + 1]
+                )
 
     References
     ----------
@@ -633,7 +636,6 @@ def _em_step(
     until convergence criteria are met. The carry structure allows JAX to efficiently
     compile and execute the EM loop.
     """
-
     params, previous_state = carry
 
     log_posteriors, log_joint_posterior, _, new_log_like, _, _ = forward_backward(

@@ -174,10 +174,14 @@ class BaseHMM(
 
         An example of a custom initialization function for initial probabilities could be:
         ```
-        def custom_initial_proba_init(n_states, X, y, session_starts, random_key, min_prob=0.05):
+        def custom_initial_proba_init(
+            n_states, X, y, session_starts, random_key, min_prob=0.05
+        ):
             init_prob = jax.random.uniform(random_key, (n_states,), dtype=float)
             init_prob = init_prob / init_prob.sum()  # normalize to sum to 1
-            init_prob = jnp.clip(init_prob, a_min=min_prob)  # enforce minimum probability
+            init_prob = jnp.clip(
+                init_prob, a_min=min_prob
+            )  # enforce minimum probability
             return init_prob / init_prob.sum()  # renormalize after clipping
         ```
 
@@ -536,9 +540,9 @@ class BaseHMM(
         if self._hmm_use_kmeans is not None:
             for param, use_kmeans in self._hmm_use_kmeans.items():
                 if use_kmeans:
-                    self._hmm_initialization_funcs[f"{param}_kwargs"][
-                        "initializer"
-                    ] = initializer
+                    self._hmm_initialization_funcs[f"{param}_kwargs"]["initializer"] = (
+                        initializer
+                    )
         if self._model_use_kmeans is not None:
             for param, use_kmeans in self._model_use_kmeans.items():
                 if use_kmeans:
