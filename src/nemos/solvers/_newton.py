@@ -8,10 +8,11 @@ import jax.numpy as jnp
 import lineax as lx
 import optax
 import optimistix as optx
+from jax.flatten_util import ravel_pytree
 from optimistix._misc import cauchy_termination
 
 from .. import tree_utils
-from ..solvers._hessian_mixins import HessianMixin, HessianSolver
+from ..solvers._hessian_mixins import HessianMixin, LinearSolverTag
 from ..typing import Params
 from ._abstract_solver import OptimizationInfo
 from ._fista import FISTA
@@ -71,17 +72,18 @@ def _solve_shifted_system(
     :
         The result returned by :func:`lineax.linear_solve`.
     """
-    identity = lx.IdentityLinearOperator(operator.in_structure())
-    shifted_operator = operator + shift * identity
-    tagged_operator = lx.TaggedLinearOperator(
-        shifted_operator,
+    if shift is not None:
+        identity = lx.IdentityLinearOperator(operator.in_structure())
+        operator = operator + shift * identity
+
+    operator = lx.TaggedLinearOperator(
+        operator,
         tags=tags,
     )
-    neg_grad = jax.tree.map(jnp.negative, grad)
 
     return lx.linear_solve(
-        tagged_operator,
-        neg_grad,
+        operator,
+        jax.tree.map(jnp.negative, grad),
         solver=solver,
         throw=throw,
     )
@@ -99,10 +101,9 @@ class Newton(HessianMixin):
         maxiter: int = DEFAULT_MAX_STEPS,
         tol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
-        shift_const: float = 1.0,
         identity_shift_beta: float = 0.0,
         identity_shift_max_steps: int = 20,
-        hessian_solver: HessianSolver = "auto",
+        linear_solver: LinearSolverTag = "auto",
     ):
         if init_params is None:
             raise ValueError(
@@ -117,7 +118,7 @@ class Newton(HessianMixin):
         self.rtol = rtol
 
         self._init_hessian(
-            regularizer, regularizer_strength, init_params, hessian_solver
+            regularizer, regularizer_strength, init_params, linear_solver
         )
 
         # A proximal solver differentiates the smooth part only and carries the penalty
@@ -147,27 +148,21 @@ class Newton(HessianMixin):
             max_backtracking_steps=30
         )
 
-        # Cache
         self._gradient: Callable | None = None
         self._hessian: Callable | None = None
-
-        self._linear_solver = lx.Cholesky()
-
-        self._shift_fn: Callable | None = lambda _: 0.0
-        self._shift_const: float = shift_const
 
         if identity_shift_beta < 0:
             raise ValueError(
                 "identity_shift_beta must be nonnegative; "
                 f"received {identity_shift_beta}."
             )
-        self._identity_shift_beta = identity_shift_beta
+        self.identity_shift_beta = identity_shift_beta
         if identity_shift_max_steps <= 0:
             raise ValueError(
                 "identity_shift_max_steps must be positive; "
                 f"received {identity_shift_max_steps}."
             )
-        self._identity_shift_max_steps = identity_shift_max_steps
+        self.identity_shift_max_steps = identity_shift_max_steps
 
     def _build_cache(self):
         if self._gradient is None:
@@ -208,8 +203,8 @@ class Newton(HessianMixin):
 
         # Modify the Hessian eigenvalues, then solve the resulting positive-definite system
         # This handles symmetric indefinite Hessians in one decomposition
-        if self._resolved_hessian_solver == "eigh":
-            g_flat, unravel = jax.flatten_util.ravel_pytree(grad)
+        if self._resolved_linear_solver == "eigh":
+            g_flat, unravel = ravel_pytree(grad)
             H_dense = operator.as_matrix()
 
             eigvals, Q = jnp.linalg.eigh(H_dense)
@@ -219,14 +214,14 @@ class Newton(HessianMixin):
 
         # Add tau * I and increase tau until Cholesky succeeds
         # Nocedal and Wright Algorithm 3.3
-        if self._resolved_hessian_solver == "identity_shift":
+        if self._resolved_linear_solver == "identity_shift":
             diag = lx.diagonal(operator)
             dtype = diag.dtype
 
             # Floor for beta
             eps = jnp.asarray(jnp.finfo(dtype).eps, dtype=dtype)
             beta = jnp.maximum(
-                jnp.asarray(self._identity_shift_beta, dtype=dtype),
+                jnp.asarray(self.identity_shift_beta, dtype=dtype),
                 eps,
             )
 
@@ -257,7 +252,7 @@ class Newton(HessianMixin):
 
             def cond(carry):
                 iteration, _, _, failed = carry
-                return failed & (iteration < self._identity_shift_max_steps)
+                return failed & (iteration < self.identity_shift_max_steps)
 
             def body(carry):
                 iteration, tau, _, _ = carry
@@ -283,10 +278,9 @@ class Newton(HessianMixin):
             return direction
 
         # Catch use before init_state has resolved the requested strategy.
-        if self._resolved_hessian_solver != "cholesky":
+        if self._resolved_linear_solver != "cholesky":
             raise RuntimeError(
-                "The Hessian solver has not been resolved. "
-                "Call init_state before update."
+                "The solver has not been resolved. Call init_state before update."
             )
 
         # Solve a positive Hessian with Lineax Cholesky.
@@ -476,8 +470,7 @@ class Newton(HessianMixin):
             "tol",
             "rtol",
             "jit",
-            "hessian_solver",
-            "shift_const",
+            "linear_solver",
             "identity_shift_beta",
             "identity_shift_max_steps",
         }
@@ -658,8 +651,7 @@ class ProximalNewton(Newton):
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
         return super().get_accepted_arguments() - {
-            "hessian_solver",
-            "shift_const",
+            "linear_solver",
             "identity_shift_beta",
             "identity_shift_max_steps",
         } | {

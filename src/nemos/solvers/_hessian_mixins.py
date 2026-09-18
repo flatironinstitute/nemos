@@ -16,15 +16,8 @@ from .._hess import (
     mask_claim_none,
 )
 
-
-def _compute_diagonal_shift(H, shift_const):
-    diag = jnp.diag(H)
-    m = H.shape[0]
-    return shift_const * m * jnp.finfo(H.dtype).eps * jnp.max(diag)
-
-
-HessianSolver = Literal["auto", "cholesky", "eigh", "identity_shift"]
-ResolvedHessianSolver = Literal["cholesky", "eigh", "identity_shift"]
+LinearSolverTag = Literal["auto", "cholesky", "eigh", "identity_shift"]
+ResolvedLinearSolverTag = Literal["cholesky", "eigh", "identity_shift"]
 
 VALID_SOLVERS = {"auto", "cholesky", "eigh", "identity_shift"}
 
@@ -56,12 +49,12 @@ class HessianMixin:
         regularizer,
         regularizer_strength,
         init_params,
-        hessian_solver: HessianSolver = "auto",
+        linear_solver: LinearSolverTag = "auto",
     ) -> None:
         """Store what ``setup_hessian`` needs and default the resolved solver state."""
-        if hessian_solver not in VALID_SOLVERS:
+        if linear_solver not in VALID_SOLVERS:
             raise ValueError(
-                f"Unknown Hessian solver {hessian_solver!r}. "
+                f"Unknown linear solver {linear_solver!r}. "
                 f"Expected one of {sorted(VALID_SOLVERS)}."
             )
 
@@ -72,12 +65,12 @@ class HessianMixin:
         self._hess_tag: HessianTag | None = None
         self._hessian: Callable | None = None
 
-        self.hessian_solver: HessianSolver = hessian_solver
-        self._resolved_hessian_solver: ResolvedHessianSolver | None = None
-
-        # Overwritten in _resolve_linear_solver once the tag is known
-        self._linear_solver = lx.AutoLinearSolver(well_posed=False)
+        self.linear_solver: LinearSolverTag = linear_solver
+        self._resolved_linear_solver: ResolvedLinearSolverTag | None = None
+        # overwritten in _resolve_linear_solver once the tag is known
+        self._linear_solver: lx.AbstractLinearSolver | None = None
         self._operator_tags = ()
+        self._shift_fn: Callable | None = None
 
     def setup_hessian(
         self,
@@ -181,17 +174,17 @@ class HessianMixin:
                 f"Hessian has unsupported matrix property: {matrix_property}"
             )
 
-        requested = self.hessian_solver
+        requested = self.linear_solver
 
         # Revalidate in case a caller changed the public field after construction
         if requested not in VALID_SOLVERS:
             raise ValueError(
-                f"Unknown Hessian solver {requested!r}. "
+                f"Unknown linear solver {requested!r}. "
                 f"Expected one of {sorted(VALID_SOLVERS)}."
             )
 
         if requested == "auto":
-            resolved: ResolvedHessianSolver = (
+            resolved: ResolvedLinearSolverTag = (
                 "cholesky" if matrix_property in positive_properties else "eigh"
             )
         else:
@@ -199,7 +192,7 @@ class HessianMixin:
 
         if resolved == "cholesky" and matrix_property not in positive_properties:
             warnings.warn(
-                "hessian_solver='cholesky' was requested, but the Hessian tag "
+                "linear_solver='cholesky' was requested, but the Hessian tag "
                 f"reports {matrix_property}. Cholesky generally requires a "
                 "positive-definite or positive-semidefinite Hessian. Proceeding "
                 "with Cholesky as requested; the solve may fail or return "
@@ -208,24 +201,29 @@ class HessianMixin:
                 stacklevel=2,
             )
 
-        self._resolved_hessian_solver = resolved
+        self._resolved_linear_solver = resolved
 
         if resolved == "cholesky":
             self._linear_solver = lx.Cholesky()
             self._operator_tags = lx.positive_semidefinite_tag
             # Continue using the tag to distinguish the PSD and PD branches
             if matrix_property is MatrixProperty.POSITIVE_SEMI_DEFINITE:
-                self._shift_fn = lambda operator: _compute_diagonal_shift(
-                    operator.as_matrix(),
-                    self._shift_const,
-                )
+
+                def _compute_shift(operator):
+                    diagonal = lx.diagonal(operator)
+                    return (
+                        diagonal.size * jnp.finfo(diagonal.dtype).eps * diagonal.max()
+                    )
+
+                self._shift_fn = _compute_shift
             else:
-                self._shift_fn = lambda _: 0.0
+                self._shift_fn = lambda _: None
         elif resolved == "eigh":
             self._linear_solver = None
             self._operator_tags = ()
             self._shift_fn = lambda _: 0.0
-            self._delta = 1e-6
+            dtype = jnp.result_type(*jax.tree_util.tree_leaves(init_params))
+            self._delta = jnp.sqrt(jnp.finfo(dtype).eps)
         else:
             # Nocedal and Wright Algorithm 3.3: add tau * I until Cholesky
             # succeeds. The actual retry loop runs in Newton._solve.

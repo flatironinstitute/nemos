@@ -649,7 +649,7 @@ In nemos the case that arises is narrower. Block structure only ever comes from 
 ## Newton directions and Hessian modification
 
 The tag describes the Hessian; it does not by itself prescribe one numerical algorithm.
-`Newton` resolves the requested `hessian_solver` into one of several strategies.
+`Newton` resolves the requested `linear_solver` into one of several strategies.
 Some strategies solve the original Newton system,
 
 $$

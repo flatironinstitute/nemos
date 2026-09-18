@@ -407,12 +407,20 @@ def test_newton_glm_passes_solver_kwargs(regularizer_name, glm_class, solver_nam
         "maxiter": np.random.randint(1, 100),
         "jit": False,
         "tol": 1e-6,
-        # ``rtol`` is read by ``ProximalNewton._converged`` and merely stored by
-        # ``Newton``; both accept it, so it belongs in the shared set
         "rtol": 1e-7,
     }
+    if solver_name == "Newton":
+        solver_kwargs |= {
+            "linear_solver": "identity_shift",
+            "identity_shift_beta": 2.0,
+            "identity_shift_max_steps": 12,
+        }
     if solver_name == "ProximalNewton":
-        solver_kwargs |= {"inner_iter": 7, "inner_atol": 1e-9, "inner_rtol": 1e-9}
+        solver_kwargs |= {
+            "inner_iter": 7,
+            "inner_atol": 1e-9,
+            "inner_rtol": 1e-9,
+        }
 
     glm = glm_class(
         regularizer=regularizer_name,
@@ -420,10 +428,13 @@ def test_newton_glm_passes_solver_kwargs(regularizer_name, glm_class, solver_nam
         solver_kwargs=solver_kwargs,
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
     )
-    solver = glm._instantiate_solver(glm._compute_loss, _init_params_for(glm_class))
+    solver = glm._instantiate_solver(
+        glm._compute_loss,
+        _init_params_for(glm_class),
+    )
 
-    for k, v in solver_kwargs.items():
-        assert getattr(solver, k) == v
+    for name, expected in solver_kwargs.items():
+        assert getattr(solver, name) == expected
 
 
 @_SOLVERS
@@ -1157,7 +1168,7 @@ def _installed_newton(model, X, y):
     return model._solver
 
 
-def _assert_hessian_solver(solver, expected):
+def _assert_linear_solver(solver, expected):
     """Check the attributes associated with a resolved Hessian strategy."""
     for attr_name, expected_value in expected.items():
         actual_value = getattr(solver, attr_name)
@@ -1184,8 +1195,15 @@ class _ProbeOperator:
         return jnp.eye(2)
 
 
+@lx.diagonal.register(_ProbeOperator)
+def _probe_diagonal(_):
+    return jnp.ones(2)
+
+
 def _zero_shift(shift_fn):
-    return float(shift_fn(_ProbeOperator())) == 0.0
+    return (
+        shift_fn(_ProbeOperator()) is None or float(shift_fn(_ProbeOperator())) == 0.0
+    )
 
 
 def _positive_shift(shift_fn):
@@ -1193,25 +1211,24 @@ def _positive_shift(shift_fn):
 
 
 _CHOLESKY_PD = {
-    "_resolved_hessian_solver": "cholesky",
+    "_resolved_linear_solver": "cholesky",
     "_linear_solver": lx.Cholesky,
     "_operator_tags": lx.positive_semidefinite_tag,
     "_shift_fn": _zero_shift,
 }
 
 _CHOLESKY_PSD = {
-    "_resolved_hessian_solver": "cholesky",
+    "_resolved_linear_solver": "cholesky",
     "_linear_solver": lx.Cholesky,
     "_operator_tags": lx.positive_semidefinite_tag,
     "_shift_fn": _positive_shift,
 }
 
 _EIGH = {
-    "_resolved_hessian_solver": "eigh",
+    "_resolved_linear_solver": "eigh",
     "_linear_solver": None,
     "_operator_tags": (),
     "_shift_fn": _zero_shift,
-    "_delta": 1e-6,
 }
 
 
@@ -1271,7 +1288,7 @@ _HESSIAN_SOLVER_CASES = [
     "fixture_name, regularizer_name, expected",
     _HESSIAN_SOLVER_CASES,
 )
-def test_hessian_solver_follows_the_resolved_tag(
+def test_linear_solver_follows_the_resolved_tag(
     request, fixture_name, regularizer_name, expected
 ):
     """The Hessian tag selects the strategy and its associated state."""
@@ -1279,14 +1296,14 @@ def test_hessian_solver_follows_the_resolved_tag(
     model.regularizer = regularizer_name
     model.regularizer_strength = None if regularizer_name == "UnRegularized" else 0.1
     model.solver_name = "Newton"
-    _assert_hessian_solver(_installed_newton(model, X, y), expected)
+    _assert_linear_solver(_installed_newton(model, X, y), expected)
 
 
 @pytest.mark.parametrize(
     "fixture_name, regularizer_name, expected",
     _HESSIAN_SOLVER_CASES,
 )
-def test_fit_resolves_the_same_hessian_solver(
+def test_fit_resolves_the_same_linear_solver(
     request, fixture_name, regularizer_name, expected
 ):
     """Fit resolves the same strategy as explicit initialization."""
@@ -1297,7 +1314,78 @@ def test_fit_resolves_the_same_hessian_solver(
 
     model.fit(X, y)
 
-    _assert_hessian_solver(model._solver, expected)
+    _assert_linear_solver(model._solver, expected)
+
+
+@pytest.mark.requires_x64
+@pytest.mark.parametrize(
+    "linear_solver",
+    ["auto", "cholesky", "eigh", "identity_shift"],
+)
+def test_every_linear_solver_reaches_the_same_fit(
+    poissonGLM_model_instantiation,
+    linear_solver,
+):
+    """Hessian strategies should reach the same optimum."""
+    X, y, model, *_ = poissonGLM_model_instantiation
+
+    def fit_with(strategy: str) -> GLM:
+        fitted = deepcopy(model)
+        fitted.regularizer = "Ridge"
+        fitted.regularizer_strength = 0.1
+        fitted.solver_name = "Newton"
+        fitted.solver_kwargs = {"linear_solver": strategy}
+        return fitted.fit(X, y)
+
+    reference = fit_with("auto")
+    fitted = fit_with(linear_solver)
+
+    np.testing.assert_allclose(fitted.coef_, reference.coef_, atol=1e-5)
+    np.testing.assert_allclose(fitted.intercept_, reference.intercept_, atol=1e-5)
+
+
+def test_invalid_linear_solver_raises(poissonGLM_model_instantiation):
+    """An unknown Hessian strategy should be rejected."""
+    X, y, model, *_ = poissonGLM_model_instantiation
+    model.regularizer = "Ridge"
+    model.regularizer_strength = 0.1
+    model.solver_name = "Newton"
+    model.solver_kwargs = {"linear_solver": "bogus"}
+
+    with pytest.raises(ValueError, match="Unknown linear solver"):
+        model.fit(X, y)
+
+
+def test_hessian_solver_cases_cover_every_model_regularizer_pair():
+    fixtures = {
+        "poissonGLM_model_instantiation",
+        "population_poissonGLM_model_instantiation",
+        "classifierGLM_model_instantiation",
+        "population_classifierGLM_model_instantiation",
+    }
+    expected = {
+        (fixture_name, regularizer_name)
+        for fixture_name in fixtures
+        for regularizer_name in ("Ridge", "UnRegularized")
+    }
+    actual = {(case.values[0], case.values[1]) for case in _HESSIAN_SOLVER_CASES}
+
+    assert actual == expected
+
+
+def test_every_block_diagonal_model_has_fixtures():
+    """Registry and discovery must agree, so no block-diagonal model goes unchecked.
+    ``test_newton_block_diagonal_matches_full_autodiff_update`` is parametrized from
+    ``_BLOCK_MODEL_FIXTURES``, so a model missing from it would be skipped rather than fail.
+    This test is what turns that silence into a failure.
+    """
+    discovered = {cls.__name__ for cls in _block_diagonal_models()}
+    registered = {cls.__name__ for cls in _BLOCK_MODEL_FIXTURES}
+    assert discovered == registered, (
+        f"declare a block-diagonal Hessian but are absent from _BLOCK_MODEL_FIXTURES, so "
+        f"they are never checked against the full Hessian: {sorted(discovered - registered)}. "
+        f"Registered but no longer block-diagonal: {sorted(registered - discovered)}."
+    )
 
 
 @pytest.mark.requires_x64
@@ -1321,7 +1409,7 @@ def test_newton_without_hessian_tag_uses_auto_linear_solver(linear_regression):
     assert newton._hess_tag.structure is MatrixStructure.FULL
     assert not any(jax.tree_util.tree_leaves(newton._hess_tag.flat_on))
     assert not any(jax.tree_util.tree_leaves(newton._hess_tag.definite_on))
-    _assert_hessian_solver(newton, _EIGH)
+    _assert_linear_solver(newton, _EIGH)
 
 
 @pytest.mark.parametrize(
