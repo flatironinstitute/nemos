@@ -308,11 +308,8 @@ class LineSearchLoopMixin(Generic[Y]):
 
         def body(carry):
             p, s = carry
-            pnew, snew = self.update(
-                p,
-                eqx.combine(s, static),
-                *args,
-            )[:2]  # Discard aux; convergence only needs params and state
+            # Discard aux; convergence only needs params and state
+            pnew, snew, _ = self.update(p, eqx.combine(s, static), *args)
             return pnew, eqx.filter(snew, eqx.is_array)
 
         if self.jit:
