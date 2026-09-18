@@ -59,6 +59,8 @@ __all__ = [
     "JaxoptLBFGS",
     "JaxoptNonlinearCG",
     "JaxoptProximalGradient",
+    "Newton",
+    "ProximalNewton",
     "OptimistixOptaxGradientDescent",
     "OptimistixOptaxLBFGS",
     "OptimistixBFGS",

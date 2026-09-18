@@ -980,9 +980,9 @@ def test_solver_invalidated_after_strength_change(request, model_instantiation_t
     assert model._solver is not None
 
     model.regularizer_strength = 0.5
-    assert (
-        model._solver is None
-    ), "_solver must be None after regularizer_strength change."
+    assert model._solver is None, (
+        "_solver must be None after regularizer_strength change."
+    )
 
 
 @pytest.mark.parametrize(
@@ -1179,13 +1179,13 @@ def _assert_linear_solver(solver, expected):
                 f"got {type(actual_value).__name__}"
             )
         elif callable(expected_value):
-            assert expected_value(
-                actual_value
-            ), f"{attr_name} did not satisfy its expected condition"
+            assert expected_value(actual_value), (
+                f"{attr_name} did not satisfy its expected condition"
+            )
         else:
-            assert (
-                actual_value == expected_value
-            ), f"{attr_name}: expected {expected_value!r}, got {actual_value!r}"
+            assert actual_value == expected_value, (
+                f"{attr_name}: expected {expected_value!r}, got {actual_value!r}"
+            )
 
 
 class _ProbeOperator:
@@ -1680,9 +1680,9 @@ def test_prox_newton_singular_hessian_converges(request):
     hess = (2.0 / n) * X.T @ X
     eigvals = np.linalg.eigvalsh(hess)
     assert eigvals.min() > -1e-10, "Hessian must be positive semidefinite"
-    assert (
-        eigvals.min() < 1e-10
-    ), "Hessian must be singular for this test to mean anything"
+    assert eigvals.min() < 1e-10, (
+        "Hessian must be singular for this test to mean anything"
+    )
 
     # grad f orthogonal to ker H: the condition that bounds the subproblem below
     grad = -(2.0 / n) * X.T @ (y - X @ np.asarray(params))

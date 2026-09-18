@@ -117,7 +117,9 @@ class ClassifierMixin:
         >>> model.set_classes(y_all_classes)
         ClassifierGLM(...)
         >>> init_params = model.initialize_params(X_batch1, y_batch1)
-        >>> state = model.initialize_optimizer_and_state(init_params, X_batch1, y_batch1)
+        >>> state = model.initialize_optimizer_and_state(
+        ...     init_params, X_batch1, y_batch1
+        ... )
 
         Now batches with any subset of classes work with :meth:`update`:
 
@@ -732,7 +734,9 @@ class ClassifierGLM(ClassifierMixin, GLM):
 
     Classify into more than two classes:
 
-    >>> X = jnp.array([[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]])
+    >>> X = jnp.array(
+    ...     [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]]
+    ... )
     >>> y = jnp.array([0, 0, 1, 1, 2, 2])
     >>> model = nmo.glm.ClassifierGLM(n_classes=3).fit(X, y)
     >>> model.coef_.shape
@@ -743,9 +747,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
     Change regularization strength:
 
     >>> model = nmo.glm.ClassifierGLM(
-    ...     n_classes=2,
-    ...     regularizer="Ridge",
-    ...     regularizer_strength=0.5
+    ...     n_classes=2, regularizer="Ridge", regularizer_strength=0.5
     ... )
     >>> model.regularizer
     Ridge()
@@ -986,7 +988,9 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     >>> import jax.numpy as jnp
     >>> import numpy as np
     >>> import nemos as nmo
-    >>> X = jnp.array([[1., 2.], [2., 3.], [3., 4.], [4., 5.], [5., 6.], [6., 7.]])
+    >>> X = jnp.array(
+    ...     [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]]
+    ... )
     >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
     >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X, y)
     >>> model.coef_.shape
@@ -1012,7 +1016,9 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
     Class labels can be strings or any hashable type:
 
-    >>> y_str = np.array([["a", "a"], ["a", "b"], ["b", "a"], ["b", "c"], ["c", "b"], ["c", "c"]])
+    >>> y_str = np.array(
+    ...     [["a", "a"], ["a", "b"], ["b", "a"], ["b", "c"], ["c", "b"], ["c", "c"]]
+    ... )
     >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X, y_str)
     >>> model.classes_
     array(['a', 'b', 'c'], dtype='<U1')
@@ -1026,8 +1032,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     >>> feature_mask = jnp.array([[1, 0], [1, 1]])
     >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
     >>> model = nmo.glm.ClassifierPopulationGLM(
-    ...     n_classes=3,
-    ...     feature_mask=feature_mask
+    ...     n_classes=3, feature_mask=feature_mask
     ... ).fit(X, y)
     >>> model.coef_
     Array(...)
@@ -1037,9 +1042,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     Change regularization strength:
 
     >>> model = nmo.glm.ClassifierPopulationGLM(
-    ...     n_classes=3,
-    ...     regularizer="Ridge",
-    ...     regularizer_strength=0.5
+    ...     n_classes=3, regularizer="Ridge", regularizer_strength=0.5
     ... )
     >>> model.regularizer
     Ridge()
@@ -1157,7 +1160,9 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         --------
         >>> import jax.numpy as jnp
         >>> import nemos as nmo
-        >>> X = jnp.array([[1., 2.], [2., 3.], [3., 4.], [4., 5.], [5., 6.], [6., 7.]])
+        >>> X = jnp.array(
+        ...     [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]]
+        ... )
         >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
         >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3)
         >>> model = model.fit(X, y)
@@ -1206,7 +1211,9 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         --------
         >>> import jax.numpy as jnp
         >>> import nemos as nmo
-        >>> X = jnp.array([[1., 2.], [2., 3.], [3., 4.], [4., 5.], [5., 6.], [6., 7.]])
+        >>> X = jnp.array(
+        ...     [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]]
+        ... )
         >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
         >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X, y)
         >>> score = model.score(X, y)

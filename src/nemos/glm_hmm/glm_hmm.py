@@ -287,7 +287,9 @@ class GLMHMM(
     >>> is_new_mask[100] = True
     >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(X, y, session_starts=is_new_mask)
     >>> # Equivalent: pass the starts as integer indices.
-    >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(X, y, session_starts=np.array([0, 100]))
+    >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(
+    ...     X, y, session_starts=np.array([0, 100])
+    ... )
 
     **Decode Hidden States**
 
@@ -481,6 +483,7 @@ class GLMHMM(
 
             from nemos.hmm.initialize_parameters import InitFunctionHMM
             from nemos.glm_hmm.initialize_parameters import InitFunctionGLM
+
             help(InitFunctionHMM)  # or help(InitFunctionGLM)
 
         All arguments must appear in the function signature even when unused, so the
@@ -498,8 +501,13 @@ class GLMHMM(
 
         >>> import jax.numpy as jnp
         >>> def my_glm_init(
-        ...     n_states, X, y, inverse_link_function, observation_model,
-        ...     session_starts, random_key,
+        ...     n_states,
+        ...     X,
+        ...     y,
+        ...     inverse_link_function,
+        ...     observation_model,
+        ...     session_starts,
+        ...     random_key,
         ... ):
         ...     coef = jnp.zeros((X.shape[1], n_states))
         ...     intercept = jnp.zeros((n_states,))
@@ -774,7 +782,9 @@ class GLMHMM(
         Multiple sessions via explicit ``session_starts``:
 
         >>> session_starts = np.array([0, 100])
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(X, y, session_starts=session_starts)
+        >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(
+        ...     X, y, session_starts=session_starts
+        ... )
 
         See Also
         --------
@@ -1158,7 +1168,9 @@ class GLMHMM(
         >>> np.random.seed(123)
         >>> X = np.random.randn(100, 5)
         >>> y = np.random.poisson(2, size=100)
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson").fit(X, y)
+        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson").fit(
+        ...     X, y
+        ... )
         >>> posteriors = model.smooth_proba(X, y)
         >>> posteriors.shape
         (100, 3)
@@ -1255,7 +1267,9 @@ class GLMHMM(
         >>> np.random.seed(123)
         >>> X = np.random.randn(100, 5)
         >>> y = np.random.poisson(2, size=100)
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson").fit(X, y)
+        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson").fit(
+        ...     X, y
+        ... )
         >>> filt = model.filter_proba(X, y)
         >>> filt.shape
         (100, 3)
@@ -1366,7 +1380,9 @@ class GLMHMM(
         >>> np.random.seed(123)
         >>> X = np.random.randn(100, 5)
         >>> y = np.random.poisson(2, size=100)
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson").fit(X, y)
+        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson").fit(
+        ...     X, y
+        ... )
         >>> states = model.decode_state(X, y, state_format="index")
         >>> states.shape
         (100,)
@@ -1429,8 +1445,13 @@ class GLMHMM(
 
         >>> import jax.numpy as jnp
         >>> def my_glm_init(
-        ...     n_states, X, y, inverse_link_function, observation_model,
-        ...     session_starts, random_key,
+        ...     n_states,
+        ...     X,
+        ...     y,
+        ...     inverse_link_function,
+        ...     observation_model,
+        ...     session_starts,
+        ...     random_key,
         ... ):
         ...     return jnp.zeros((X.shape[1], n_states)), jnp.zeros((n_states,))
         >>> model = nmo.glm_hmm.GLMHMM(n_states=2)
@@ -1564,8 +1585,12 @@ class GLMHMM(
         >>> session_starts[0] = True
         >>> model = nmo.glm_hmm.GLMHMM(n_states=2)
         >>> init_params = model.initialize_params(X, y)
-        >>> opt_state = model.initialize_optimizer_and_state(init_params, X, y, session_starts=session_starts)
-        >>> new_params, new_state = model.update(init_params, opt_state, X, y, session_starts=session_starts)
+        >>> opt_state = model.initialize_optimizer_and_state(
+        ...     init_params, X, y, session_starts=session_starts
+        ... )
+        >>> new_params, new_state = model.update(
+        ...     init_params, opt_state, X, y, session_starts=session_starts
+        ... )
         """
         if safe is True:
             # validate inputs and session boundaries

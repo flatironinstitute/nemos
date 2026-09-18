@@ -32,7 +32,9 @@ class SolverSpec:
     Examples
     --------
     >>> import nemos as nmo
-    >>> spec = nmo.solvers.SolverSpec("BFGS", "optimistix", nmo.solvers._optimistix_solvers.OptimistixBFGS)
+    >>> spec = nmo.solvers.SolverSpec(
+    ...     "BFGS", "optimistix", nmo.solvers._optimistix_solvers.OptimistixBFGS
+    ... )
     >>> spec.algo_name
     'BFGS'
     >>> spec.backend
@@ -236,7 +238,9 @@ def register(
     Examples
     --------
     >>> import nemos as nmo
-    >>> nmo.solvers.register("FISTA", nmo.solvers._fista.OptimistixFISTA, backend="optimistix")
+    >>> nmo.solvers.register(
+    ...     "FISTA", nmo.solvers._fista.OptimistixFISTA, backend="optimistix"
+    ... )
     """
     if not replace and backend in _registry.get(algo_name, {}):
         raise ValueError(
@@ -327,7 +331,7 @@ def list_available_algorithms() -> list[str]:
     Example
     -------
     >>> import nemos as nmo
-    >>> nmo.solvers.list_available_algorithms() # doctest: +NORMALIZE_WHITESPACE
+    >>> nmo.solvers.list_available_algorithms()  # doctest: +NORMALIZE_WHITESPACE
     ['GradientDescent', 'ProximalGradient', 'LBFGS', 'BFGS', 'NonlinearCG',
      'SVRG', 'ProxSVRG', 'Newton', 'ProximalNewton']
     """
