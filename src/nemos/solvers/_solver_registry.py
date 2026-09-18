@@ -6,6 +6,7 @@ from typing import Type
 
 from ._abstract_solver import SolverProtocol
 from ._fista import OptimistixFISTA, OptimistixNAG
+from ._lbfgs import ProximalLBFGS
 from ._newton import Newton, ProximalNewton
 from ._optax_optimistix_solvers import (
     OptimistixOptaxGradientDescent,
@@ -405,6 +406,7 @@ register("ProximalNewton", ProximalNewton, "nemos", default=True)
 register(
     "GradientDescent", OptimistixOptaxGradientDescent, "optax+optimistix", default=False
 )
+register("ProximalLBFGS", ProximalLBFGS, "nemos", default=True)
 
 if JAXOPT_AVAILABLE:
     from ._jaxopt_solvers import (
