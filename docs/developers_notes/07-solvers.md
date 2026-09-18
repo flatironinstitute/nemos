@@ -88,16 +88,20 @@ Abstract Class AbstractSolver
 │   ├─ Concrete Subclass WrappedSVRG [S]
 │   └─ Concrete Subclass WrappedProxSVRG [S]
 
-Mixin HessianMixin
+Mixin LineSearchLoopMixin          (outer loop, step acceptance, LineSearchState)
 │
-└─ Concrete Subclass Newton [H]
-  │
-  └─ Concrete Subclass ProximalNewton [H]
+├─ Mixin HessianMixin              (assembled curvature; sets _uses_hessian)
+│ └─ Concrete Subclass Newton [H]
+│
+└─ Mixin CompositeQuadraticMixin   (penalized quadratic subproblem; sets _proximal)
+  ├─ Concrete Subclass ProximalNewton [H]   (= CompositeQuadraticMixin + Newton)
+  └─ Concrete Subclass ProximalLBFGS        (= CompositeQuadraticMixin + LineSearchLoopMixin)
 ```
 
-`Newton` and `ProximalNewton` sit outside the adapter tree: they are not backed by an external
-optimization library, so they implement `SolverProtocol` structurally rather than subclassing
-`AbstractSolver`. What they do inherit is `HessianMixin`, which supplies the curvature machinery.
+`Newton`, `ProximalNewton` and `ProximalLBFGS` sit outside the adapter tree: they are not backed
+by an external optimization library, so they implement `SolverProtocol` structurally rather than
+subclassing `AbstractSolver`. What they share is assembled from three mixins, described under
+[second-order optimization](#second-order-optimization).
 
 `OptaxOptimistixSolver` is an adapter for Optax solvers, relying on `optimistix.OptaxMinimiser` to run the full optimization loop. If there is a need, this can be used to wrap adaptive solvers (e.g. Adam).
 

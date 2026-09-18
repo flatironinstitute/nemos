@@ -26,7 +26,8 @@ from nemos.glm.classifier_glm import ClassifierGLM, ClassifierPopulationGLM
 from nemos.glm.params import GLMParams
 from nemos.regularizer import GroupLasso, Lasso, Regularizer, Ridge, UnRegularized
 from nemos.solvers._abstract_solver import OptimizationInfo
-from nemos.solvers._newton import Newton, NewtonState, ProximalNewton
+from nemos.solvers._line_search_mixins import LineSearchState
+from nemos.solvers._newton import Newton, ProximalNewton
 from nemos.tree_utils import pytree_map_and_reduce
 
 # Import every submodule so all BaseRegressor subclasses are registered before the
@@ -232,7 +233,7 @@ def test_newton_init_state_default(request, regr_setup, regularizer, solver_name
     )
     state = newton.init_state(param_init, X, y)
 
-    assert isinstance(state, NewtonState)
+    assert isinstance(state, LineSearchState)
     assert state.grad_norm == jnp.array(jnp.inf)
     assert isinstance(state.stats, OptimizationInfo)
     assert state.stats.num_steps == 0
@@ -523,7 +524,7 @@ def test_newton_glm_initialize_state(
     init_params = glm.initialize_params(X, y)
     state = glm.initialize_optimizer_and_state(init_params, X, y)
 
-    assert isinstance(state, NewtonState)
+    assert isinstance(state, LineSearchState)
     assert state.grad_norm == jnp.array(jnp.inf)
     assert isinstance(state.stats, OptimizationInfo)
     assert state.stats.num_steps == 0
@@ -1995,7 +1996,7 @@ def test_prox_newton_backtracking_matches_tseng_yun_reference(
 
     (fval, _), grad = solver._gradient(params, X, y)
     H = solver._hessian(params, X, y)
-    step = jax.tree.map(lambda d: scale * d, solver._newton_direction(grad, H, params))
+    step = jax.tree.map(lambda d: scale * d, solver._direction(grad, H, params))
     _, slope, _ = solver._line_search_inputs(params, step, grad, fval, X, y)
     delta = float(lx.internal.tree_dot(slope, step))
     assert delta < 0.0, "the reference only terminates on a descent direction"
