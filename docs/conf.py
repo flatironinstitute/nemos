@@ -209,6 +209,8 @@ intersphinx_mapping = {
     "scipy": ("https://docs.scipy.org/doc/scipy/", None),
 }
 
+full_api = os.environ.get("NEMOS_FULL_API", "false").lower() == "true"
+
 # ---- API index generation ----
 api_order = [
     "glm.rst",
@@ -251,6 +253,45 @@ for api_rst in api_order:
         if not c.strip().startswith(".. _") and not c.strip().startswith(":toctree:")
     ]
     api_index += "\n".join(contents)
+
+if full_api:
+    autodoc_default_options["private-members"] = True
+    nitpicky = False
+
+    # A handful of modules (utils, observation_models, regularizer) define a
+    # module-level ``__dir__`` returning ``__all__``. autodoc discovers module
+    # members through ``dir()``, so those modules would expose only their public
+    # names no matter what options we pass -- ``:ignore-module-all:`` does not
+    # help, since it is ``__all__`` via ``__dir__`` that hides them. Import the
+    # package eagerly and drop the overrides so ``dir()`` falls back to the
+    # module ``__dict__``. Safe here because no nemos module pairs ``__dir__``
+    # with a lazy ``__getattr__``.
+    import importlib
+    import pkgutil
+
+    import nemos
+
+    for _mod_info in pkgutil.walk_packages(nemos.__path__, prefix="nemos."):
+        try:
+            importlib.import_module(_mod_info.name)
+        except ImportError as e:
+            print(f"full API: could not import {_mod_info.name}: {e}")
+    for _mod in list(sys.modules.values()):
+        if getattr(_mod, "__name__", "").startswith("nemos") and "__dir__" in vars(
+            _mod
+        ):
+            del _mod.__dir__
+
+    # add full API page without stripping toctree
+    api_rst = api_dir / "full.rst"
+    contents = api_rst.read_text().split("\n")
+    api_index += "\n".join(contents)
+
+else:
+    exclude_patterns += ["api/full.rst", "api/generated/full/**"]
+
+
+
 
 (api_dir / "index.rst").write_text(api_index)
 
