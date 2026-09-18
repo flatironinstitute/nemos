@@ -655,7 +655,9 @@ Everything in the table is in `src/nemos/_hess.py` unless another module is name
 | the normalizing map | `normalize` |
 | $R^*$ | `combine_hessian_tags`, which is `combine_property` applied over `combine_definite_on` |
 | the structure ordering | `MatrixStructure`, an `IntEnum` whose value is how general the structure is, so "take the larger" is `max` |
-| the decision the tag is for | `Newton.init_state` in `nemos/solvers/_newton.py`: `POSITIVE_DEFINITE` selects `lx.Cholesky` and tags the operator semidefinite, anything weaker selects `lx.AutoLinearSolver(well_posed=False)` |
+| the decision the tag is for | `HessianMixin._resolve_linear_solver`, reached from `Newton._init_curvature` in `nemos/solvers/_newton.py`: `POSITIVE_DEFINITE` selects `lx.Cholesky` and tags the operator semidefinite, anything weaker selects `lx.AutoLinearSolver(well_posed=False)` |
+
+That last row is also why `ProximalLBFGS` carries no tag at all, and declares `_uses_hessian = False`. Its subproblem only multiplies by the curvature model and never solves with it, so the Cholesky-versus-least-squares decision the tag exists for never arises. Its operator is positive semidefinite, but that is not a claim anyone can make about $\nabla^2\ell + \nabla^2 p_\lambda$: it is a numerical property of the limited-memory approximation, maintained by skipping curvature pairs with $s^\top y \le \varepsilon$, and asserted on the operator directly via `lx.positive_semidefinite_tag`. The absence is deliberate, not an omission.
 
 The tag is built when the solver is set up, in `BaseRegressor._instantiate_solver`, against the parameters actually being fitted. A parameter held fixed is `None` in that tree, and every `tree_map` above drops it together with whatever was claimed about it. A claim about a pinned leaf therefore disappears with the leaf; it does not become an unclaimed leaf.
 
