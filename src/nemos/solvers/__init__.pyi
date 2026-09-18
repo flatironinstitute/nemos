@@ -18,6 +18,7 @@ from ._jaxopt_solvers import (
     JaxoptNonlinearCG,
     JaxoptProximalGradient,
 )
+from ._lbfgs import ProximalLBFGS
 from ._newton import Newton, ProximalNewton
 from ._optax_optimistix_solvers import (
     OptimistixOptaxGradientDescent,
@@ -61,6 +62,7 @@ __all__ = [
     "JaxoptProximalGradient",
     "Newton",
     "ProximalNewton",
+    "ProximalLBFGS",
     "OptimistixOptaxGradientDescent",
     "OptimistixOptaxLBFGS",
     "OptimistixBFGS",

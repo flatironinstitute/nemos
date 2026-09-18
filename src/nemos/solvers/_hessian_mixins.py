@@ -150,9 +150,25 @@ class HessianMixin:
         """Apply ``fn(grad, H, other)`` once per Hessian block.
 
         The one place that reads ``_hess_tag`` for block structure, shared by the Newton
-        solve and by any subclass' Hessian-vector product.
+        solve and by the Hessian-vector product.
         """
         if self._hess_tag.structure is MatrixStructure.BLOCK_DIAGONAL:
             axes = self._hess_tag.batch_axes
             return jax.vmap(fn, in_axes=(axes, 0, axes), out_axes=axes)(grad, H, other)
         return fn(grad, H, other)
+
+    def _hvp_block(self, grad, H, d) -> Any:
+        """Hessian-vector product for a single block."""
+        del grad
+        return lx.PyTreeLinearOperator(
+            H, jax.eval_shape(lambda: d), tags=self._operator_tags
+        ).mv(d)
+
+    def _hvp(self, grad, H, d) -> Any:
+        """``H d`` for an assembled Hessian, one block at a time.
+
+        The assembled-Hessian side of the seam ``CompositeQuadraticMixin`` leaves open.
+        A solver whose curvature model already knows how to multiply -- a limited-memory
+        operator, say -- overrides this with the multiplication itself.
+        """
+        return self._block_apply(self._hvp_block, grad, H, d)

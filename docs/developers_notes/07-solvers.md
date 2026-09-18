@@ -88,16 +88,20 @@ Abstract Class AbstractSolver
 │   ├─ Concrete Subclass WrappedSVRG [S]
 │   └─ Concrete Subclass WrappedProxSVRG [S]
 
-Mixin HessianMixin
+Mixin LineSearchLoopMixin          (outer loop, step acceptance, LineSearchState)
 │
-└─ Concrete Subclass Newton [H]
-  │
-  └─ Concrete Subclass ProximalNewton [H]
+├─ Mixin HessianMixin              (assembled curvature; sets _uses_hessian)
+│ └─ Concrete Subclass Newton [H]
+│
+└─ Mixin CompositeQuadraticMixin   (penalized quadratic subproblem; sets _proximal)
+  ├─ Concrete Subclass ProximalNewton [H]   (= CompositeQuadraticMixin + Newton)
+  └─ Concrete Subclass ProximalLBFGS        (= CompositeQuadraticMixin + LineSearchLoopMixin)
 ```
 
-`Newton` and `ProximalNewton` sit outside the adapter tree: they are not backed by an external
-optimization library, so they implement `SolverProtocol` structurally rather than subclassing
-`AbstractSolver`. What they do inherit is `HessianMixin`, which supplies the curvature machinery.
+`Newton`, `ProximalNewton` and `ProximalLBFGS` sit outside the adapter tree: they are not backed
+by an external optimization library, so they implement `SolverProtocol` structurally rather than
+subclassing `AbstractSolver`. What they share is assembled from three mixins, described under
+[second-order optimization](#second-order-optimization).
 
 `OptaxOptimistixSolver` is an adapter for Optax solvers, relying on `optimistix.OptaxMinimiser` to run the full optimization loop. If there is a need, this can be used to wrap adaptive solvers (e.g. Adam).
 
@@ -140,6 +144,34 @@ Some solvers can exploit the second derivative of the loss. Rather than autodiff
 supply an analytic Hessian: `BaseRegressor._instantiate_solver` offers it to the solver through
 `setup_hessian`, along with tags describing the matrix (see `nemos._hess`).
 
+### How the three solvers are assembled
+
+NeMoS' native second-order solvers are built from three mixins, so that each axis varies
+independently: the loop, where curvature comes from, and whether the objective is composite.
+
+| mixin | module | supplies | used by |
+| --- | --- | --- | --- |
+| `LineSearchLoopMixin` | `_line_search_mixins` | `LineSearchState`, `init_state`, `update`, `run`, `_apply_or_reject`, `_get_optim_info` | all three |
+| `HessianMixin` | `_hessian_mixins` | the assembled Hessian, its tag, the linear solver, `_hvp` | `Newton`, `ProximalNewton` |
+| `CompositeQuadraticMixin` | `_composite_mixins` | the penalized quadratic subproblem, the Tseng & Yun slope, Cauchy convergence | `ProximalNewton`, `ProximalLBFGS` |
+
+`LineSearchLoopMixin` leaves three seams: `_curvature` and `_init_curvature`, which say where the
+curvature model comes from and what of it is carried in `LineSearchState.curvature` (opaque to the
+loop, `None` for `Newton`, which rebuilds its Hessian every iteration); `_direction`, which reads a
+step off that model; and `_converged`, whose default is the gradient-norm test.
+
+`CompositeQuadraticMixin` leaves one seam, `_hvp(grad, H, d)`. That single method is the whole
+numerical difference between the two proximal solvers: `HessianMixin._hvp` splits the product per
+Hessian block, while `ProximalLBFGS._hvp` is `H.mv(d)`, the compact form multiplying itself. The
+mixin deliberately does not define `_hvp` even as a raising stub, because it precedes
+`HessianMixin` in `ProximalNewton`'s MRO and a stub would shadow the real implementation.
+
+`ProximalLBFGS` additionally exposes `line_search`, selecting between `optax`'s backtracking Armijo
+(the default) and its zoom search. `Newton` and `ProximalNewton` hardcode backtracking. Zoom is
+offered for experiment rather than recommended: it autodiffs the composite objective at each trial
+point to test the curvature condition, which compares a pointwise derivative against the Tseng &
+Yun surrogate slope, a pairing no result covers.
+
 ### Solver-level interface
 
 Only solvers with `_uses_hessian = True` are offered the Hessian; every other solver is left
@@ -147,6 +179,13 @@ untouched, exactly as `_supports_stochastic` gates `stochastic_run`. Currently:
 
 - `Newton`
 - `ProximalNewton`
+
+`ProximalLBFGS` is deliberately absent. Its subproblem only ever multiplies by the curvature model,
+never solves with it, so the decision the tag exists for -- Cholesky versus a rank-deficiency
+tolerant least-squares solve -- does not arise. Nor is the operator's positive semidefiniteness
+something anyone can declare about the model: it is a numerical property of the limited-memory
+approximation, maintained by skipping curvature pairs with non-positive `s^T y`. See
+[hessian tagging](#developers-hessian-tagging).
 
 ### Implementation details
 
@@ -177,23 +216,34 @@ Cauchy criterion would report convergence.
 
 ### Proximal second-order solvers
 
-`ProximalNewton` minimizes a composite objective `f + P`, with `P` reached through its proximal
-operator. Setting `_proximal = True` changes four things:
+`ProximalNewton` and `ProximalLBFGS` minimize a composite objective `f + P`, with `P` reached
+through its proximal operator. `CompositeQuadraticMixin` sets `_proximal = True`, which changes
+four things:
 
 - the solver receives the **unregularized** loss and the regularizer's proximal operator, the same
-  convention `OptimistixAdapter._proximal` uses;
+  convention `OptimistixAdapter._proximal` uses. This is the mixin's `_resolve_loss` override,
+  replacing the penalized loss the smooth loop would otherwise differentiate;
 - the penalty contributes neither curvature nor tag to the Hessian, since the prox already applies
   it -- adding it would double-count;
 - convergence is a Cauchy criterion on the step rather than `||grad|| <= tol`, because the gradient
   of the smooth part does not vanish at the optimum of a nonsmooth objective;
 - the line search is handed the composite objective and the Tseng & Yun (2009) slope
   `Delta = grad f^T d + P(b + d) - P(b)`, since `grad F^T d` does not exist where `P` has its kink.
-  `optax`'s search only ever contracts the vector it is given with the step, so
-  `ProximalNewton._line_search_inputs` folds `Delta` into that contraction and the stock Armijo
-  search applies unchanged.
+  `optax`'s backtracking search only ever contracts the vector it is given with the step, so
+  `_line_search_inputs` folds `Delta` into that contraction and the stock Armijo search applies
+  unchanged. This is also the reason zoom is not the default anywhere: it tests the curvature
+  condition by differentiating at trial points, and no result pairs that with `Delta`.
 
-Each iteration solves the penalized quadratic subproblem with `FISTA`. The Hessian is never
-inverted, only multiplied, so a singular smooth Hessian is not by itself a problem.
+Each iteration solves the penalized quadratic subproblem with `FISTA`, on the full parameter tree:
+`GroupLasso`'s mask and per-feature strengths are defined there, so slicing the penalty per block
+would mean slicing every regularizer's metadata. Only the Hessian-vector product is split per
+block. The curvature model is never inverted, only multiplied, so a singular one is not by itself
+a problem -- see `CompositeQuadraticMixin` for the two conditions the subproblem does need.
+
+`ProximalNewton` gets its curvature from the model's analytic Hessian and inherits block structure
+from the tag, one block per neuron for a `PopulationGLM`. `ProximalLBFGS` builds it from the last
+`history_length` curvature pairs and has no block structure at all, so a `PopulationGLM` fit gives
+it one curvature model spanning every neuron.
 
 ## Stochastic optimization
 
