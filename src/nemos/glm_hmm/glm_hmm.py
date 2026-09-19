@@ -1661,6 +1661,8 @@ class GLMHMM(
             em_hmm,
             log_likelihood_func=self._log_likelihood,
             m_step_fn_model_params=m_step_update,
+            dirichlet_initial_proba=self._dirichlet_initial_proba,
+            dirichlet_transition_proba=self._dirichlet_transition_proba,
             maxiter=self.maxiter,
             tol=self.tol,
         )
@@ -1669,6 +1671,8 @@ class GLMHMM(
             em_step,
             log_likelihood_func=self._log_likelihood,
             m_step_fn_model_params=m_step_update,
+            dirichlet_initial_proba=self._dirichlet_initial_proba,
+            dirichlet_transition_proba=self._dirichlet_transition_proba,
         )
 
         def init_state_fn(*args, **kwargs) -> SolverState:
