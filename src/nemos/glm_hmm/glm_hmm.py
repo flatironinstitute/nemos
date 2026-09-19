@@ -340,10 +340,8 @@ class GLMHMM(
         regularizer: Union[str, Regularizer] = "Ridge",
         regularizer_strength: Any = 1.0,  # this is used to regularize GLM coef.
         # prior to regularize init prob and transition
-        dirichlet_initial_proba: Union[jnp.ndarray, None] = None,  # (n_state, )
-        dirichlet_transition_proba: Union[
-            jnp.ndarray | None
-        ] = None,  # (n_state, n_state)
+        dirichlet_initial_proba: Optional[ArrayLike] = None,  # (n_state, )
+        dirichlet_transition_proba: Optional[ArrayLike] = None,  # (n_state, n_state)
         solver_name: str = None,
         solver_kwargs: Optional[dict] = None,
         maxiter: int = 1000,

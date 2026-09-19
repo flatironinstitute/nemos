@@ -625,6 +625,12 @@ def _em_step(
         M-step update function for GLM coefficients and intercepts.
     session_starts :
         Boolean array marking session boundaries.
+    dirichlet_initial_proba :
+        Alpha parameters of the Dirichlet prior over the initial state probabilities,
+        shape ``(n_states,)``. If None, a flat (uninformative) prior is assumed.
+    dirichlet_transition_proba :
+        Alpha parameters of the Dirichlet prior over the transition probabilities,
+        shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
 
     Returns
     -------
@@ -710,6 +716,12 @@ def em_step(
         Callable that performs the M-step update for model parameters.
     session_starts :
         Boolean mask for the first observation of each session.
+    dirichlet_initial_proba :
+        Alpha parameters of the Dirichlet prior over the initial state probabilities,
+        shape ``(n_states,)``. If None, a flat (uninformative) prior is assumed.
+    dirichlet_transition_proba :
+        Alpha parameters of the Dirichlet prior over the transition probabilities,
+        shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
 
     Returns
     -------
@@ -806,6 +818,12 @@ def em_hmm(
         Typically created by configuring a solver with the appropriate regularizer/prior.
     session_starts :
         Boolean mask for the first observation of each session.
+    dirichlet_initial_proba :
+        Alpha parameters of the Dirichlet prior over the initial state probabilities,
+        shape ``(n_states,)``. If None, a flat (uninformative) prior is assumed.
+    dirichlet_transition_proba :
+        Alpha parameters of the Dirichlet prior over the transition probabilities,
+        shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
     maxiter :
         Maximum number of EM iterations.
     tol :

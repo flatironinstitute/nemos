@@ -108,10 +108,8 @@ class BaseHMM(
     def __init__(
         self,
         n_states: int,
-        dirichlet_initial_proba: Union[jnp.ndarray, None] = None,  # (n_state, )
-        dirichlet_transition_proba: Union[
-            jnp.ndarray | None
-        ] = None,  # (n_state, n_state):
+        dirichlet_initial_proba: Optional[ArrayLike] = None,  # (n_state, )
+        dirichlet_transition_proba: Optional[ArrayLike] = None,  # (n_state, n_state):
         regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Optional[
             Any
@@ -331,7 +329,7 @@ class BaseHMM(
         return self._dirichlet_initial_proba
 
     @dirichlet_initial_proba.setter
-    def dirichlet_initial_proba(self, value: jnp.ndarray | None):
+    def dirichlet_initial_proba(self, value: Optional[ArrayLike]):
         """Validate and set the alpha parameters of the Dirichlet prior over the initial probabilities."""
         self._dirichlet_initial_proba = _resolve_dirichlet_priors(
             value, (self._n_states,)
@@ -346,7 +344,7 @@ class BaseHMM(
         return self._dirichlet_transition_proba
 
     @dirichlet_transition_proba.setter
-    def dirichlet_transition_proba(self, value: jnp.ndarray | None):
+    def dirichlet_transition_proba(self, value: Optional[ArrayLike]):
         """Validate and set the alpha parameters of the Dirichlet prior over the transition probabilities."""
         self._dirichlet_transition_proba = _resolve_dirichlet_priors(
             value, (self._n_states, self._n_states)
