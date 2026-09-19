@@ -3,9 +3,15 @@
 
 ## Background
 
-A Newton step solves `H d = -g`, and how that linear system is best solved depends on what is known about `H` beforehand. A Cholesky factorization is the cheapest option but needs a positive definite matrix and fails on a singular one. A pseudo-inverse handles a singular matrix but costs more. A diagonal Hessian can be solved in time linear in the number of parameters. And if `H` has no sign guarantee at all, `-H^{-1} g` need not even point downhill, in which case a Newton step is the wrong thing to take and a first-order or quasi-Newton solver is a better choice.
+A Newton step solves `H d = -g`, and how that linear system is best solved depends on what is known about `H` beforehand.
+A Cholesky factorization is the cheapest option but needs a positive definite matrix and fails on a singular one.
+A pseudo-inverse handles a singular matrix but costs more.
+A diagonal Hessian can be solved in time linear in the number of parameters.
+And if `H` has no sign guarantee at all, `-H^{-1} g` need not even point downhill, in which case a Newton step is the wrong thing to take and a first-order or quasi-Newton solver is a better choice.
 
-Checking any of this at run time means factorizing the matrix, which costs as much as the Newton solve itself. Under `jit` a failed Cholesky cannot be caught and retried either. So the information is carried alongside the Hessian instead, as a `HessianTag` that each model and each regularizer declares about the term it contributes. The tags are combined when the terms are added, and the result picks the linear solver.
+Checking any of this at run time means factorizing the matrix, which costs as much as the Newton solve itself.
+So the information is carried alongside the Hessian instead, as a `HessianTag` that each model and each regularizer declares about the term it contributes.
+The tags are combined when the terms are added, and the result picks the linear solver.
 
 What the tag has to distinguish follows from what the decisions turn on:
 
@@ -640,6 +646,160 @@ Two cases are easy, because the diagonal partition refines every other: diagonal
 
 In nemos the case that arises is narrower. Block structure only ever comes from vmapping over a batch axis, so the partition is that axis by construction and is the same for the model term and the penalty term: $\mathcal{P}_1 = \mathcal{P}_2$, and the join is that partition again. Under that hypothesis the ordering `Diagonal` $<$ `BlockDiagonal` $<$ `Full`, combined by taking the larger, is correct. Without it, two block diagonal terms can sum to something the ordering would call `BlockDiagonal` and that is in fact `Full`.
 
+## Newton directions and Hessian modification
+
+The tag describes the Hessian; it does not by itself prescribe one numerical algorithm.
+`Newton` resolves the requested `linear_solver` into one of several strategies.
+Some strategies solve the original Newton system,
+
+$$
+H d = -g,
+$$
+
+while others replace $H$ with a positive-definite matrix $B$ and solve
+
+$$
+B d = -g.
+$$
+
+Solving the original system preserves the local quadratic model, but it requires enough sign and rank information to make the solve safe.
+Modifying the Hessian changes that model, but it can produce a descent direction when $H$ is singular or indefinite.
+
+The implemented dense strategies are:
+
+| strategy | system solved | required information | main cost | descent guarantee |
+| --- | --- | --- | --- | --- |
+| `cholesky` | $(H+\tau I)d=-g$, with a fixed numerical shift | $H$ certified positive (semi)definite as required by the resolved tag | one Cholesky factorization | strict descent when $H+\tau I\succ0$ |
+| `identity_shift` | $(H+\tau I)d=-g$, increasing $\tau$ until Cholesky succeeds | $H$ symmetric | one or more Cholesky factorizations | strict descent after a positive-definite shift succeeds |
+| `eigh` | $Q\widetilde{\Lambda}Q^\top d=-g$ | $H$ symmetric | one symmetric eigendecomposition | strict descent for non-zero $g$ and $\delta>0$ |
+
+The block machinery can apply these strategies independently to Hessian blocks when the combined structure allows it. All guarantees below concern exact arithmetic unless stated otherwise.
+
+### Direct Cholesky
+
+When the combined tag certifies enough positive curvature, the cheapest dense solve is Cholesky. Given a fixed shift $\tau$, this branch solves
+
+$$
+(H+\tau I)d=-g.
+$$
+
+The shift is selected from the resolved Hessian tag.
+It can be zero for a matrix certified positive definite or a small positive numerical shift for a matrix that may be semidefinite in floating-point arithmetic.
+
+If $H+\tau I\succ0$, then for $g\neq0$,
+
+$$
+g^\top d
+=
+-g^\top(H+\tau I)^{-1}g
+<0,
+$$
+
+so $d$ is a strict descent direction.
+
+### Iterative identity shift
+
+The `identity_shift` strategy follows the identity-shifted Cholesky scheme of Nocedal and Wright, Algorithm 3.3.
+It chooses an initial shift from the smallest diagonal entry,
+
+$$
+\tau_0 =
+\begin{cases}
+0, & \min_i H_{ii}>0,\\
+-\min_i H_{ii}+\beta, & \text{otherwise},
+\end{cases}
+$$
+
+where the implementation floors $\beta$ at machine precision,
+
+$$
+\beta \leftarrow \max(\beta,\epsilon_{\mathrm{dtype}}).
+$$
+
+It then attempts a Cholesky solve of
+
+$$
+(H+\tau_k I)d_k=-g.
+$$
+
+If the attempt fails, it increases the shift according to
+
+$$
+\tau_{k+1}=\max(10\tau_k,\beta)
+$$
+
+and tries again, up to `identity_shift_max_steps`.
+
+The initial diagonal correction is only a lower bound on the shift that may be needed.
+Positive diagonal entries do not imply positive definiteness, so the Cholesky attempts remain necessary.
+
+Once an attempt produces $H+\tau_kI\succ0$, its direction satisfies
+
+$$
+g^\top d_k
+=
+-g^\top(H+\tau_kI)^{-1}g
+<0
+$$
+
+for every non-zero $g$.
+
+This strategy may perform several dense factorizations.
+It trades the deterministic cost of an eigendecomposition for the possibility that one or a small number of Cholesky attempts will suffice.
+
+### Eigenvalue modification
+
+The `eigh` strategy follows the eigenvalue modification in Nocedal and Wright, equation 3.50 (p. 50). For a symmetric Hessian,
+
+$$
+H=Q\Lambda Q^\top,
+$$
+
+it replaces every eigenvalue with
+
+$$
+\widetilde{\lambda}_i
+=
+\max\bigl(|\lambda_i|,\delta\bigr),
+$$
+
+and defines
+
+$$
+B
+=
+Q\widetilde{\Lambda}Q^\top,
+\qquad
+\widetilde{\Lambda}
+=
+\operatorname{diag}
+\left(
+\widetilde{\lambda}_1,\ldots,\widetilde{\lambda}_N
+\right).
+$$
+
+The direction is computed directly from the eigenpairs:
+
+$$
+d
+=
+-Q\widetilde{\Lambda}^{-1}Q^\top g.
+$$
+
+The absolute value flips negative curvature, and the floor replaces zero or small curvature with at least $\delta$.
+Consequently $B\succ0$ when $\delta>0$, and
+
+$$
+g^\top d
+=
+-\sum_i
+\frac{(q_i^\top g)^2}
+     {\max(|\lambda_i|,\delta)}
+<0
+$$
+
+for every non-zero $g$. This produces a descent direction for any symmetric $H$, including singular and indefinite Hessians.
+
 ## Where each piece lives
 
 Everything in the table is in `src/nemos/_hess.py` unless another module is named.
@@ -655,7 +815,10 @@ Everything in the table is in `src/nemos/_hess.py` unless another module is name
 | the normalizing map | `normalize` |
 | $R^*$ | `combine_hessian_tags`, which is `combine_property` applied over `combine_definite_on` |
 | the structure ordering | `MatrixStructure`, an `IntEnum` whose value is how general the structure is, so "take the larger" is `max` |
-| the decision the tag is for | `Newton.init_state` in `nemos/solvers/_newton.py`: `POSITIVE_DEFINITE` selects `lx.Cholesky` and tags the operator semidefinite, anything weaker selects `lx.AutoLinearSolver(well_posed=False)` |
+| Hessian-solver resolution | `Newton.init_state` and `HessianMixin._resolve_linear_solver` |
+| construction and solution of $(H+\tau I)d=-g$ | `_solve_shifted_system` in `_newton.py` |
+| iterative identity shifting | the `identity_shift` branch of `Newton._solve` |
+| eigenvalue modification | the `eigh` branch of `Newton._solve` |
 
 The tag is built when the solver is set up, in `BaseRegressor._instantiate_solver`, against the parameters actually being fitted. A parameter held fixed is `None` in that tree, and every `tree_map` above drops it together with whatever was claimed about it. A claim about a pinned leaf therefore disappears with the leaf; it does not become an unclaimed leaf.
 

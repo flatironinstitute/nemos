@@ -159,10 +159,12 @@ VALID_PAIRS = [
     {"inner_atol", "inner_rtol"},
     {"fix_params", "fit_params"},
     {"active_coef", "active_cols"},
+    {"inner_atol", "inner_rtol"},
     {"true_intercept", "fit_intercept"},
     {"frozen_intercept", "rec_intercept"},
     {"frozen_intercept", "true_intercept"},
     {"claim", "claims"},
+    {"identity_shift", "identity_shift_beta"},
 ]
 
 
