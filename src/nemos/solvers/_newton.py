@@ -81,12 +81,31 @@ def _solve_shifted_system(
         tags=tags,
     )
 
-    return lx.linear_solve(
+    solution = lx.linear_solve(
         operator,
         jax.tree.map(jnp.negative, grad),
         solver=solver,
-        throw=throw,
+        throw=False,
     )
+
+    if throw:
+        failed = (
+            solution.result != lx.RESULTS.successful
+        ) | ~tree_utils.tree_all_finite(solution.value)
+
+        checked_value = eqx.error_if(
+            solution.value,
+            failed,
+            "Cholesky solve failed; the Hessian may not be positive definite. "
+            "Try using the 'eigh' or 'identity_shift' solver instead.",
+        )
+        solution = eqx.tree_at(
+            lambda result: result.value,
+            solution,
+            checked_value,
+        )
+
+    return solution
 
 
 class Newton(HessianMixin):
@@ -101,7 +120,7 @@ class Newton(HessianMixin):
         maxiter: int = DEFAULT_MAX_STEPS,
         tol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
-        identity_shift_beta: float = 0.0,
+        identity_shift_beta: float = 1e-3,
         identity_shift_max_steps: int = 20,
         linear_solver: LinearSolverTag = "auto",
     ):
@@ -218,10 +237,12 @@ class Newton(HessianMixin):
             diag = lx.diagonal(operator)
             dtype = diag.dtype
 
-            # Floor for beta
+            # Beta scales with the matrix so the shift ladder is scale-equivariant;
+            # N&W p.52 give 1e-3 as the typical magnitude, here relative to the diagonal.
             eps = jnp.asarray(jnp.finfo(dtype).eps, dtype=dtype)
             beta = jnp.maximum(
-                jnp.asarray(self.identity_shift_beta, dtype=dtype),
+                jnp.asarray(self.identity_shift_beta, dtype=dtype)
+                * jnp.max(jnp.abs(diag)),
                 eps,
             )
 

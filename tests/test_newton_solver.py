@@ -18,21 +18,10 @@ from nemos._hess import (
 from nemos.regularizer import Ridge, UnRegularized
 from nemos.solvers._abstract_solver import OptimizationInfo
 from nemos.solvers._hessian_mixins import LinearSolverTag
-from nemos.solvers._newton import Newton, NewtonState, ProximalNewton
+from nemos.solvers._newton import Newton, NewtonState
 from nemos.tree_utils import pytree_map_and_reduce
 
 N = 8
-
-# The two second-order solvers. Everything ``Newton`` converges to, ``ProximalNewton``
-# converges to as well: they differ in how the penalty is reached (a proximal operator
-# rather than the penalized loss) and in the convergence test, not in the optimum. So the
-# solver-agnostic tests below run for both, and only the genuinely divergent behaviour gets
-# a dedicated test.
-_NEWTON_SOLVERS = ("Newton", "ProximalNewton")
-
-_SOLVERS = pytest.mark.parametrize("solver_name", _NEWTON_SOLVERS)
-
-_SOLVER_CLASSES = {"Newton": Newton, "ProximalNewton": ProximalNewton}
 
 
 def _make_pd_tag(init_params):
@@ -149,9 +138,8 @@ def _make_solver(loss_fn, hess_fn, hess_tag, init_params, jit=False, **kwargs):
 @pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
 @pytest.mark.parametrize("jit", [False, True])
 def test_pd_quadratic_convergence(dtype, jit):
-    """Newton-Cholesky solves a PD quadratic exactly in one Newton step."""
+    """Newton-Cholesky solves a PD quadratic in one Newton step."""
     A, b, x_star = _make_pd_problem(6, dtype)
-
     loss, hess = _quadratic_loss_and_hessian(A, b)
     x0 = jnp.zeros_like(x_star)
 
@@ -168,38 +156,21 @@ def test_pd_quadratic_convergence(dtype, jit):
     assert bool(state.stats.converged)
     assert state.stats.num_steps == 2
 
-    np.testing.assert_allclose(x_opt, x_star, atol=solver.tol, rtol=solver.rtol)
+    eps = np.finfo(np.dtype(dtype)).eps
 
-    residual = A @ x_opt - b
-    np.testing.assert_allclose(residual, 0.0, atol=solver.tol, rtol=solver.rtol)
-
-
-@pytest.mark.requires_x64
-@pytest.mark.parametrize("jit", [False, True])
-def test_run_converges_on_pd_quadratic(jit):
-    """Solver must converge to the exact minimiser of a strongly convex quadratic."""
-    A, b, x_star = _make_pd_problem(N, np.float64)
-    loss, hess = _quadratic_loss_and_hessian(A, b)
-    x0 = jnp.zeros(N)
-    solver = _make_solver(
-        loss,
-        hess,
-        _make_tag(x0, property=MatrixProperty.POSITIVE_DEFINITE),
-        x0,
-        jit=jit,
-    )
-
-    x_opt, state, _ = solver.run(x0)
-
-    assert bool(state.stats.converged), "Solver did not converge on a PD quadratic."
-    assert (
-        state.stats.num_steps == 2
-    ), "Solver did not converge in 2 step on a PD quadratic."
     np.testing.assert_allclose(
         x_opt,
         x_star,
-        atol=1e-6,
-        err_msg="Solver solution does not match analytic solution.",
+        atol=0.0,
+        rtol=20 * eps,
+    )
+
+    residual = A @ x_opt - b
+    np.testing.assert_allclose(
+        residual,
+        0.0,
+        atol=20 * eps * float(jnp.linalg.norm(b, ord=jnp.inf)),
+        rtol=0.0,
     )
 
 
@@ -226,7 +197,20 @@ def test_pd_quadratic_convergence_autodiff(dtype, jit):
     assert bool(state.stats.converged)
     assert state.stats.num_steps == 2
 
-    np.testing.assert_allclose(x_opt, x_star, atol=solver.tol, rtol=solver.rtol)
+    eps = np.finfo(np.dtype(dtype)).eps
+    np.testing.assert_allclose(
+        x_opt,
+        x_star,
+        atol=0.0,
+        rtol=20 * eps,
+    )
+    residual = A @ x_opt - b
+    np.testing.assert_allclose(
+        residual,
+        0.0,
+        atol=20 * eps * float(jnp.linalg.norm(b, ord=jnp.inf)),
+        rtol=0.0,
+    )
 
 
 @pytest.mark.requires_x64
@@ -340,7 +324,21 @@ def test_pd_quadratic_scale_equivariance(dtype, scale, jit):
     assert bool(state.stats.converged)
     assert state.stats.num_steps == 2
 
-    np.testing.assert_allclose(x_opt, x_star, atol=solver.tol, rtol=solver.rtol)
+    eps = np.finfo(np.dtype(dtype)).eps
+    np.testing.assert_allclose(
+        x_opt,
+        x_star,
+        atol=0.0,
+        rtol=20 * eps,
+    )
+    scaled_b = scale * b
+    residual = scale * A @ x_opt - scaled_b
+    np.testing.assert_allclose(
+        residual,
+        0.0,
+        atol=20 * eps * float(jnp.linalg.norm(scaled_b, ord=jnp.inf)),
+        rtol=0.0,
+    )
 
 
 @pytest.mark.requires_x64
@@ -531,7 +529,13 @@ def test_modified_solver_on_pd_matrix_matches_cholesky(linear_solver, jit):
     )
     expected = jnp.linalg.solve(A, -grad)
 
-    np.testing.assert_allclose(direction, expected, atol=1e-10, rtol=1e-10)
+    eps = float(jnp.finfo(A.dtype).eps)
+    np.testing.assert_allclose(
+        direction,
+        expected,
+        atol=100 * eps,
+        rtol=100 * eps,
+    )
 
 
 @pytest.mark.requires_x64
@@ -608,6 +612,7 @@ def test_eigh_direction_is_invariant_to_eigenvalue_signs(jit):
 
 
 @pytest.mark.requires_x64
+@pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
 @pytest.mark.parametrize("linear_solver", _MOD_SOLVERS)
 @pytest.mark.parametrize(
     "eigenvalues",
@@ -620,13 +625,20 @@ def test_eigh_direction_is_invariant_to_eigenvalue_signs(jit):
     ],
 )
 @pytest.mark.parametrize("jit", [False, True])
-def test_modified_direction_is_descent(linear_solver, eigenvalues, jit):
+def test_modified_direction_is_descent(
+    dtype,
+    linear_solver,
+    eigenvalues,
+    jit,
+):
     rng = np.random.default_rng(6)
     n = len(eigenvalues)
     Q, _ = np.linalg.qr(rng.standard_normal((n, n)))
 
-    H = jnp.asarray(Q @ np.diag(eigenvalues) @ Q.T)
-    grad = jnp.asarray(rng.standard_normal(n))
+    Q = jnp.asarray(Q, dtype=dtype)
+    eigenvalues = jnp.asarray(eigenvalues, dtype=dtype)
+    H = Q @ jnp.diag(eigenvalues) @ Q.T
+    grad = jnp.asarray(rng.standard_normal(n), dtype=dtype)
 
     tag = _make_tag(
         init_params=jnp.zeros_like(grad),
@@ -643,15 +655,32 @@ def test_modified_direction_is_descent(linear_solver, eigenvalues, jit):
     )
 
     assert bool(jnp.all(jnp.isfinite(direction)))
-    assert float(jnp.vdot(grad, direction)) < 0.0
+
+    slope = jnp.vdot(grad, direction)
+    assert float(slope) < 0.0
+
+    if linear_solver == "eigh":
+        eigvals, eigvecs = jnp.linalg.eigh(H)
+        delta = jnp.sqrt(jnp.finfo(dtype).eps)
+        modified_eigenvalues = jnp.maximum(jnp.abs(eigvals), delta)
+        projected_grad = eigvecs.T @ grad
+        expected_slope = -jnp.sum(projected_grad**2 / modified_eigenvalues)
+
+        np.testing.assert_allclose(
+            slope,
+            expected_slope,
+            atol=10 * float(jnp.finfo(dtype).eps),
+            rtol=10 * float(delta),
+        )
 
 
 @pytest.mark.requires_x64
+@pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
 @pytest.mark.parametrize("sign", [-1.0, 1.0])
 @pytest.mark.parametrize("jit", [False, True])
-def test_eigh_direction_applies_eigenvalue_floor(sign, jit):
-    grad = jnp.asarray([1.0, -2.0, 3.0, -4.0], dtype=jnp.float64)
-    delta = jnp.sqrt(jnp.finfo(grad.dtype).eps)
+def test_eigh_direction_applies_eigenvalue_floor(dtype, sign, jit):
+    grad = jnp.asarray([1.0, -2.0, 3.0, -4.0], dtype=dtype)
+    delta = jnp.sqrt(jnp.finfo(dtype).eps)
     eigenvalues = jnp.asarray(
         [
             0.0,
@@ -659,7 +688,7 @@ def test_eigh_direction_applies_eigenvalue_floor(sign, jit):
             sign * delta,
             sign * 2.0 * delta,
         ],
-        dtype=jnp.float64,
+        dtype=dtype,
     )
     H = jnp.diag(eigenvalues)
 
@@ -671,25 +700,28 @@ def test_eigh_direction_applies_eigenvalue_floor(sign, jit):
 
     direction = _modified_direction(H, grad, tag, jit=jit)
     expected = -grad / jnp.maximum(jnp.abs(eigenvalues), delta)
+
+    eps = float(jnp.finfo(dtype).eps)
     np.testing.assert_allclose(
         direction,
         expected,
-        atol=1e-8,
-        rtol=1e-12,
+        atol=10 * eps,
+        rtol=10 * eps,
     )
 
 
 @pytest.mark.requires_x64
+@pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
 @pytest.mark.parametrize("jit", [False, True])
-def test_identity_shift_uses_initial_diagonal_shift(jit):
+def test_identity_shift_uses_relative_initial_diagonal_shift(jit, dtype):
     H = jnp.asarray(
         [
             [-2.0, 0.0],
             [0.0, 3.0],
         ],
-        dtype=jnp.float64,
+        dtype=dtype,
     )
-    grad = jnp.asarray([1.0, -2.0], dtype=jnp.float64)
+    grad = jnp.asarray([1.0, -2.0], dtype=dtype)
     beta = 0.25
 
     tag = _make_tag(
@@ -706,29 +738,34 @@ def test_identity_shift_uses_initial_diagonal_shift(jit):
         identity_shift_beta=beta,
     )
 
-    # min(diag(H)) = -2, so tau0 = 2 + beta.
-    tau = 2.0 + beta
-    expected = jnp.linalg.solve(H + tau * jnp.eye(2), -grad)
+    diagonal_scale = jnp.max(jnp.abs(jnp.diag(H)))
+    tau = 2.0 + beta * diagonal_scale
+    expected = jnp.linalg.solve(
+        H + tau * jnp.eye(2, dtype=H.dtype),
+        -grad,
+    )
 
+    eps = float(jnp.finfo(dtype).eps)
     np.testing.assert_allclose(
         direction,
         expected,
-        atol=1e-12,
-        rtol=1e-12,
+        atol=10 * eps,
+        rtol=10 * eps,
     )
 
 
 @pytest.mark.requires_x64
+@pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
 @pytest.mark.parametrize("jit", [False, True])
-def test_identity_shift_retries_until_cholesky_succeeds(jit):
+def test_identity_shift_retries_until_cholesky_succeeds(dtype, jit):
     H = jnp.asarray(
         [
             [1.0, 2.0],
             [2.0, 1.0],
         ],
-        dtype=jnp.float64,
+        dtype=dtype,
     )
-    grad = jnp.asarray([1.0, -0.5], dtype=jnp.float64)
+    grad = jnp.asarray([1.0, -0.5], dtype=dtype)
     beta = 0.2
 
     tag = _make_tag(
@@ -745,17 +782,20 @@ def test_identity_shift_retries_until_cholesky_succeeds(jit):
         identity_shift_beta=beta,
     )
 
-    expected_tau = 2.0
+    # max(abs(diag(H))) = 1, so the initial shift is 0.2.
+    # The next shift in the retry ladder is 2.0, which succeeds.
+    expected_tau = jnp.asarray(2.0, dtype=dtype)
     expected = jnp.linalg.solve(
-        H + expected_tau * jnp.eye(2, dtype=H.dtype),
+        H + expected_tau * jnp.eye(2, dtype=dtype),
         -grad,
     )
 
+    eps = float(jnp.finfo(dtype).eps)
     np.testing.assert_allclose(
         direction,
         expected,
-        atol=1e-12,
-        rtol=1e-12,
+        atol=10 * eps,
+        rtol=10 * eps,
     )
     assert float(jnp.vdot(grad, direction)) < 0.0
 
@@ -969,8 +1009,20 @@ def test_modified_direction_preserves_pytree_flattening_order(linear_solver, jit
     grad_flat, _ = ravel_pytree(grad)
     expected = jnp.linalg.solve(H_dense, -grad_flat)
 
-    np.testing.assert_allclose(direction["a"], expected[:2], atol=1e-10, rtol=1e-10)
-    np.testing.assert_allclose(direction["b"], expected[2:], atol=1e-10, rtol=1e-10)
+    eps = float(jnp.finfo(H_dense.dtype).eps)
+
+    np.testing.assert_allclose(
+        direction["a"],
+        expected[:2],
+        atol=100 * eps,
+        rtol=100 * eps,
+    )
+    np.testing.assert_allclose(
+        direction["b"],
+        expected[2:],
+        atol=100 * eps,
+        rtol=100 * eps,
+    )
 
 
 @pytest.mark.requires_x64
@@ -1186,3 +1238,152 @@ def test_mutated_invalid_linear_solver_raises_during_resolution():
 
     with pytest.raises(ValueError, match="Unknown linear solver"):
         solver.init_state(params)
+
+
+@pytest.mark.requires_x64
+def test_cholesky_raises_for_indefinite_matrix_with_positive_tag():
+    H = jnp.asarray(
+        [[1.0, 3.0], [3.0, 1.0]],
+        dtype=jnp.float64,
+    )
+    params = jnp.asarray([0.3, -0.1], dtype=jnp.float64)
+
+    solver = _make_solver(
+        _quadratic_loss(H, jnp.asarray([1.0, 0.5], dtype=H.dtype)),
+        lambda params, *args: H,
+        _make_tag(params, property=MatrixProperty.POSITIVE_DEFINITE),
+        params,
+        linear_solver="cholesky",
+    )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        with pytest.raises(
+            jax.errors.JaxRuntimeError,
+            match="Cholesky solve failed",
+        ):
+            solver.run(params)
+
+
+@pytest.mark.requires_x64
+def test_forced_cholesky_on_indefinite_hessian_raise():
+    """A forced Cholesky warns and reports failure rather than raising."""
+    H = jnp.asarray([[1.0, 3.0], [3.0, 1.0]])  # eigenvalues 4 and -2
+    params = jnp.asarray([0.3, -0.1])
+    solver = _make_solver(
+        _quadratic_loss(H, jnp.asarray([1.0, 0.5])),
+        lambda params, *args: H,
+        _make_tag(params, property=MatrixProperty.SYMMETRIC),
+        params,
+        linear_solver="cholesky",
+    )
+    with (
+        pytest.warns(RuntimeWarning, match="Cholesky generally requires"),
+        pytest.raises(
+            jax.errors.JaxRuntimeError,
+            match="Cholesky solve failed",
+        ),
+    ):
+        solver.run(params)
+
+
+@pytest.mark.requires_x64
+@pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
+def test_eigh_delta_matches_parameter_dtype(dtype):
+    params = jnp.zeros(2, dtype=dtype)
+    H = jnp.eye(2, dtype=dtype)
+
+    solver = _make_solver(
+        _quadratic_loss(H, jnp.zeros_like(params)),
+        lambda params, *args: H,
+        _make_tag(params, property=MatrixProperty.SYMMETRIC),
+        params,
+        linear_solver="eigh",
+    )
+    solver.init_state(params)
+
+    expected = jnp.sqrt(jnp.finfo(dtype).eps)
+
+    assert solver._delta.dtype == dtype
+    np.testing.assert_array_equal(solver._delta, expected)
+
+
+@pytest.mark.requires_x64
+@pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
+@pytest.mark.parametrize("jit", [False, True])
+def test_eigh_scale_crossover_at_eigenvalue_floor(dtype, jit):
+    eigenvalues = jnp.asarray([-2.0, 4.0], dtype=dtype)
+    grad = jnp.asarray([1.0, -0.5], dtype=dtype)
+    delta = jnp.sqrt(jnp.finfo(dtype).eps)
+
+    tag = _make_tag(
+        init_params=jnp.zeros_like(grad),
+        property=MatrixProperty.SYMMETRIC,
+    )
+
+    def direction(scale):
+        H = jnp.diag(scale * eigenvalues)
+        return _modified_direction(
+            H,
+            scale * grad,
+            tag,
+            jit=jit,
+            linear_solver="eigh",
+        )
+
+    # Both eigenvalues are above the floor, so scaling cancels.
+    scale_above = 2.0 * delta
+    expected_above = -grad / jnp.abs(eigenvalues)
+
+    # Both eigenvalues are below the floor, so curvature is discarded.
+    scale_below = 0.1 * delta
+    expected_below = -(scale_below / delta) * grad
+
+    eps = float(jnp.finfo(dtype).eps)
+    np.testing.assert_allclose(
+        direction(scale_above),
+        expected_above,
+        atol=20 * eps,
+        rtol=20 * eps,
+    )
+    np.testing.assert_allclose(
+        direction(scale_below),
+        expected_below,
+        atol=20 * eps,
+        rtol=20 * eps,
+    )
+
+
+@pytest.mark.requires_x64
+@pytest.mark.parametrize("jit", [False, True])
+@pytest.mark.parametrize("scale", [1e-6, 1.0, 1e6])
+def test_identity_shift_is_equivariant(jit, scale):
+    H = jnp.diag(jnp.asarray([-2.0, 3.0], dtype=jnp.float64))
+    grad = jnp.asarray([1.0, -0.5], dtype=jnp.float64)
+
+    tag = _make_tag(
+        init_params=jnp.zeros_like(grad),
+        property=MatrixProperty.SYMMETRIC,
+    )
+
+    reference = _modified_direction(
+        H,
+        grad,
+        tag,
+        jit=jit,
+        linear_solver="identity_shift",
+    )
+    scaled = _modified_direction(
+        scale * H,
+        scale * grad,
+        tag,
+        jit=jit,
+        linear_solver="identity_shift",
+    )
+
+    np.testing.assert_allclose(
+        scaled,
+        reference,
+        atol=1e-10,
+        rtol=1e-10,
+    )

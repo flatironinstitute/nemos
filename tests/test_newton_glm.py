@@ -1168,10 +1168,11 @@ def _installed_newton(model, X, y):
     return model._solver
 
 
-def _assert_linear_solver(solver, expected):
+def _assert_linear_solver(solver, params, expected):
     """Check the attributes associated with a resolved Hessian strategy."""
     for attr_name, expected_value in expected.items():
         actual_value = getattr(solver, attr_name)
+        expected_value = expected_value(params)
 
         if isinstance(expected_value, type):
             assert isinstance(actual_value, expected_value), (
@@ -1211,28 +1212,31 @@ def _positive_shift(shift_fn):
 
 
 _CHOLESKY_PD = {
-    "_resolved_linear_solver": "cholesky",
-    "_linear_solver": lx.Cholesky,
-    "_operator_tags": lx.positive_semidefinite_tag,
-    "_shift_fn": _zero_shift,
+    "_resolved_linear_solver": lambda _: "cholesky",
+    "_linear_solver": lambda _: lx.Cholesky,
+    "_operator_tags": lambda _: lx.positive_semidefinite_tag,
+    "_shift_fn": lambda _: _zero_shift,
 }
 
 _CHOLESKY_PSD = {
-    "_resolved_linear_solver": "cholesky",
-    "_linear_solver": lx.Cholesky,
-    "_operator_tags": lx.positive_semidefinite_tag,
-    "_shift_fn": _positive_shift,
+    "_resolved_linear_solver": lambda _: "cholesky",
+    "_linear_solver": lambda _: lx.Cholesky,
+    "_operator_tags": lambda _: lx.positive_semidefinite_tag,
+    "_shift_fn": lambda _: _positive_shift,
 }
 
 _EIGH = {
-    "_resolved_linear_solver": "eigh",
-    "_linear_solver": None,
-    "_operator_tags": (),
-    "_shift_fn": _zero_shift,
+    "_resolved_linear_solver": lambda _: "eigh",
+    "_linear_solver": lambda _: None,
+    "_operator_tags": lambda _: (),
+    "_shift_fn": lambda _: _zero_shift,
+    "_delta": lambda params: jnp.sqrt(
+        jnp.finfo(jnp.result_type(*jax.tree_util.tree_leaves(params))).eps
+    ),
 }
 
 
-_HESSIAN_SOLVER_CASES = [
+_LINEAR_SOLVER_CASES = [
     pytest.param(
         "poissonGLM_model_instantiation",
         "Ridge",
@@ -1286,35 +1290,35 @@ _HESSIAN_SOLVER_CASES = [
 
 @pytest.mark.parametrize(
     "fixture_name, regularizer_name, expected",
-    _HESSIAN_SOLVER_CASES,
+    _LINEAR_SOLVER_CASES,
 )
 def test_linear_solver_follows_the_resolved_tag(
     request, fixture_name, regularizer_name, expected
 ):
     """The Hessian tag selects the strategy and its associated state."""
-    X, y, model, *_ = request.getfixturevalue(fixture_name)
+    X, y, model, _, params, *_ = request.getfixturevalue(fixture_name)
     model.regularizer = regularizer_name
     model.regularizer_strength = None if regularizer_name == "UnRegularized" else 0.1
     model.solver_name = "Newton"
-    _assert_linear_solver(_installed_newton(model, X, y), expected)
+    _assert_linear_solver(_installed_newton(model, X, y), params, expected)
 
 
 @pytest.mark.parametrize(
     "fixture_name, regularizer_name, expected",
-    _HESSIAN_SOLVER_CASES,
+    _LINEAR_SOLVER_CASES,
 )
 def test_fit_resolves_the_same_linear_solver(
     request, fixture_name, regularizer_name, expected
 ):
     """Fit resolves the same strategy as explicit initialization."""
-    X, y, model, *_ = request.getfixturevalue(fixture_name)
+    X, y, model, _, params, *_ = request.getfixturevalue(fixture_name)
     model.regularizer = regularizer_name
     model.regularizer_strength = None if regularizer_name == "UnRegularized" else 0.1
     model.solver_name = "Newton"
 
     model.fit(X, y)
 
-    _assert_linear_solver(model._solver, expected)
+    _assert_linear_solver(model._solver, params, expected)
 
 
 @pytest.mark.requires_x64
@@ -1368,7 +1372,7 @@ def test_hessian_solver_cases_cover_every_model_regularizer_pair():
         for fixture_name in fixtures
         for regularizer_name in ("Ridge", "UnRegularized")
     }
-    actual = {(case.values[0], case.values[1]) for case in _HESSIAN_SOLVER_CASES}
+    actual = {(case.values[0], case.values[1]) for case in _LINEAR_SOLVER_CASES}
 
     assert actual == expected
 
@@ -1393,7 +1397,7 @@ def test_newton_without_hessian_tag_uses_auto_linear_solver(linear_regression):
     """With no tag set, ``init_state`` falls back to one that claims nothing."""
     X, y, _, params, loss = linear_regression
 
-    param_init = jax.tree_util.tree_map(np.zeros_like, params)
+    param_init = jax.tree_util.tree_map(jnp.zeros_like, params)
     newton = Newton(
         loss,
         regularizer=UnRegularized(),
@@ -1409,7 +1413,7 @@ def test_newton_without_hessian_tag_uses_auto_linear_solver(linear_regression):
     assert newton._hess_tag.structure is MatrixStructure.FULL
     assert not any(jax.tree_util.tree_leaves(newton._hess_tag.flat_on))
     assert not any(jax.tree_util.tree_leaves(newton._hess_tag.definite_on))
-    _assert_linear_solver(newton, _EIGH)
+    _assert_linear_solver(newton, param_init, _EIGH)
 
 
 @pytest.mark.parametrize(

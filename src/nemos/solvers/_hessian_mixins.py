@@ -195,8 +195,7 @@ class HessianMixin:
                 "linear_solver='cholesky' was requested, but the Hessian tag "
                 f"reports {matrix_property}. Cholesky generally requires a "
                 "positive-definite or positive-semidefinite Hessian. Proceeding "
-                "with Cholesky as requested; the solve may fail or return "
-                "non-finite values.",
+                "with Cholesky as requested; the solve may fail.",
                 RuntimeWarning,
                 stacklevel=2,
             )
