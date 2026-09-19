@@ -29,6 +29,7 @@ class NewtonState(eqx.Module):
     # Previous accepted step, for solvers whose convergence test is Cauchy rather than
     # gradient based. Initialized to inf so the first iteration never counts as converged.
     y_diff: Optional[Any] = None
+    identity_shift: Any = None
 
 
 NewtonStepResult = tuple[Params, NewtonState]
@@ -197,9 +198,9 @@ class Newton(HessianMixin):
         self._build_cache()
         self._resolve_linear_solver(init_params)
         ls_state = self._line_search.init(init_params)
-
         fval_shape = jax.eval_shape(self.fun, init_params, *args)
         scalar_dtype = fval_shape.dtype
+        zero = jnp.zeros((), dtype=scalar_dtype)
         return NewtonState(
             grad_norm=jnp.asarray(jnp.inf, dtype=scalar_dtype),
             stats=OptimizationInfo(
@@ -213,9 +214,10 @@ class Newton(HessianMixin):
                 lambda x: jnp.full_like(x, jnp.inf),
                 init_params,
             ),
+            identity_shift=self._init_block_state(init_params, zero),
         )
 
-    def _solve(self, grad, H, params):
+    def _solve(self, grad, H, params, previous_shift):
         del params
 
         operator = lx.PyTreeLinearOperator(H, jax.eval_shape(lambda: grad))
@@ -225,11 +227,10 @@ class Newton(HessianMixin):
         if self._resolved_linear_solver == "eigh":
             g_flat, unravel = ravel_pytree(grad)
             H_dense = operator.as_matrix()
-
             eigvals, Q = jnp.linalg.eigh(H_dense)
             lam_mod = jnp.maximum(jnp.abs(eigvals), self._delta)
             direction = Q @ ((Q.T @ (-g_flat)) / lam_mod)
-            return unravel(direction)
+            return unravel(direction), previous_shift
 
         # Add tau * I and increase tau until Cholesky succeeds
         # Nocedal and Wright Algorithm 3.3
@@ -250,7 +251,7 @@ class Newton(HessianMixin):
             tau0 = jnp.where(
                 min_diag > 0,
                 jnp.zeros((), dtype=dtype),
-                -min_diag + beta,
+                jnp.maximum(-min_diag + beta, previous_shift),
             )
 
             cholesky = lx.Cholesky()
@@ -279,12 +280,12 @@ class Newton(HessianMixin):
                 iteration, tau, _, _ = carry
                 new_tau = jnp.maximum(
                     jnp.asarray(10.0, dtype=dtype) * tau,
-                    beta,
+                    jnp.maximum(beta, previous_shift),
                 )
                 direction, failed = _solve(new_tau)
                 return iteration + 1, new_tau, direction, failed
 
-            _, _, direction, _ = eqx.internal.while_loop(
+            _, tau, direction, failed = eqx.internal.while_loop(
                 cond,
                 body,
                 (
@@ -296,7 +297,8 @@ class Newton(HessianMixin):
                 kind="lax",
             )
 
-            return direction
+            accepted_shift = jnp.where(failed, previous_shift, tau)
+            return direction, accepted_shift
 
         # Catch use before init_state has resolved the requested strategy.
         if self._resolved_linear_solver != "cholesky":
@@ -306,7 +308,7 @@ class Newton(HessianMixin):
 
         # Solve a positive Hessian with Lineax Cholesky.
         # For a PSD tag, _shift_fn adds the small numerical shift selected by the tag
-        return _solve_shifted_system(
+        direction = _solve_shifted_system(
             operator,
             grad,
             self._shift_fn(operator),
@@ -314,8 +316,16 @@ class Newton(HessianMixin):
             tags=self._operator_tags,
         ).value
 
-    def _newton_direction(self, grad, H, params):
-        return self._block_apply(self._solve, grad, H, params)
+        return direction, previous_shift
+
+    def _newton_direction(self, grad, H, params, identity_shift):
+        return self._block_apply(
+            self._solve,
+            grad,
+            H,
+            params,
+            block_state=identity_shift,
+        )
 
     def _line_search_inputs(self, params, step, grad, fval, *args):
         """Value, slope and objective handed to ``self._line_search``.
@@ -403,23 +413,28 @@ class Newton(HessianMixin):
 
         def step(_):
             H = self._hessian(params, *args)
-            step = self._newton_direction(grad, H, params)
+            direction, identity_shift = self._newton_direction(
+                grad,
+                H,
+                params,
+                state.identity_shift,
+            )
 
             new_params, new_ls_state = self._apply_or_reject(
                 params,
-                step,
+                direction,
                 grad,
                 state,
                 fval,
                 *args,
             )
 
-            return new_params, new_ls_state
+            return new_params, new_ls_state, identity_shift
 
         def no_step(_):
-            return params, state.ls_state
+            return params, state.ls_state, state.identity_shift
 
-        new_params, new_ls_state = jax.lax.cond(
+        new_params, new_ls_state, identity_shift = jax.lax.cond(
             converged,
             no_step,
             step,
@@ -442,6 +457,7 @@ class Newton(HessianMixin):
             ),
             ls_state=new_ls_state,
             y_diff=tree_utils.tree_sub(new_params, params),
+            identity_shift=identity_shift,
         )
 
         return new_params, new_state, aux
@@ -611,7 +627,7 @@ class ProximalNewton(Newton):
             H, jax.eval_shape(lambda: d), tags=self._operator_tags
         ).mv(d)
 
-    def _newton_direction(self, grad, H, params):
+    def _newton_direction(self, grad, H, params, identity_shift):
         r"""Minimize :math:`\nabla f^\top (z - \beta) + \frac12 (z - \beta)^\top H (z - \beta) + P(z)`.
 
         Solving for the new parameters :math:`z` rather than the step keeps the penalty
@@ -638,8 +654,7 @@ class ProximalNewton(Newton):
             max_steps=self.inner_iter,
             throw=False,
         ).value
-        # ``_apply_or_reject`` scales and adds the result, so return the step
-        return tree_utils.tree_sub(new_params, params)
+        return tree_utils.tree_sub(new_params, params), identity_shift
 
     def _line_search_inputs(self, params, step, grad, fval, *args):
         r"""Feed the composite objective and its slope to the inherited line search.

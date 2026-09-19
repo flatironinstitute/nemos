@@ -2052,7 +2052,9 @@ def test_prox_newton_backtracking_matches_tseng_yun_reference(
 
     (fval, _), grad = solver._gradient(params, X, y)
     H = solver._hessian(params, X, y)
-    step = jax.tree.map(lambda d: scale * d, solver._newton_direction(grad, H, params))
+    step = jax.tree.map(
+        lambda d: scale * d, solver._newton_direction(grad, H, params, None)[0]
+    )
     _, slope, _ = solver._line_search_inputs(params, step, grad, fval, X, y)
     delta = float(lx.internal.tree_dot(slope, step))
     assert delta < 0.0, "the reference only terminates on a descent direction"

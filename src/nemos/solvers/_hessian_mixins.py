@@ -230,7 +230,7 @@ class HessianMixin:
             self._operator_tags = ()
             self._shift_fn = lambda _: 0.0
 
-    def _block_apply(self, fn, grad, H, other) -> Any:
+    def _block_apply(self, fn, grad, H, other, block_state=None) -> Any:
         """Apply ``fn(grad, H, other)`` once per Hessian block.
 
         The one place that reads ``_hess_tag`` for block structure, shared by the Newton
@@ -238,5 +238,27 @@ class HessianMixin:
         """
         if self._hess_tag.structure is MatrixStructure.BLOCK_DIAGONAL:
             axes = self._hess_tag.batch_axes
-            return jax.vmap(fn, in_axes=(axes, 0, axes), out_axes=axes)(grad, H, other)
+            if block_state is not None:
+                return jax.vmap(
+                    fn,
+                    in_axes=(axes, 0, axes, 0),
+                    out_axes=(axes, 0),
+                )(grad, H, other, block_state)
+            return jax.vmap(
+                fn,
+                in_axes=(axes, 0, axes),
+                out_axes=axes,
+            )(grad, H, other)
+        if block_state is not None:
+            return fn(grad, H, other, block_state)
         return fn(grad, H, other)
+
+    def _init_block_state(self, params, value: jax.Array) -> jax.Array:
+        """Broadcast a scalar to one value per Hessian block."""
+        if self._hess_tag.structure is MatrixStructure.BLOCK_DIAGONAL:
+            return jax.vmap(
+                lambda _: value,
+                in_axes=(self._hess_tag.batch_axes,),
+                out_axes=0,
+            )(params)
+        return value

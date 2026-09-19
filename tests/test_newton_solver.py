@@ -134,6 +134,18 @@ def _make_solver(loss_fn, hess_fn, hess_tag, init_params, jit=False, **kwargs):
     return solver
 
 
+def _compute_direction(solver, grad, H, params):
+    """Compute a direction from a freshly initialized solver state."""
+    state = solver.init_state(params)
+    direction, _ = solver._newton_direction(
+        grad,
+        H,
+        params,
+        state.identity_shift,
+    )
+    return direction
+
+
 @pytest.mark.requires_x64
 @pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
 @pytest.mark.parametrize("jit", [False, True])
@@ -429,9 +441,9 @@ def test_newton_init_state_default(request, regr_setup, regularizer):
     assert state.stats.num_steps == 0
     assert state.stats.converged == jnp.array(False)
     assert jnp.isnan(state.stats.function_val)
-    assert state.stats.converged == jnp.array(False)
     assert state.stats.reached_max_steps == jnp.array(False)
     assert isinstance(state.ls_state, optax.ScaleByBacktrackingLinesearchState)
+    np.testing.assert_array_equal(state.identity_shift, 0.0)
 
 
 _MOD_PROPS = [
@@ -462,8 +474,7 @@ def _modified_direction(
         linear_solver=linear_solver,
         **solver_kwargs,
     )
-    solver.init_state(params)
-    return solver._newton_direction(grad, H, params)
+    return _compute_direction(solver, grad, H, params)
 
 
 @pytest.mark.requires_x64
@@ -928,9 +939,20 @@ def test_modified_direction_is_computed_blockwise(linear_solver, jit):
         linear_solver=linear_solver,
         identity_shift_beta=1e-3,
     )
-    solver.init_state(params)
+    state = solver.init_state(params)
 
-    direction = solver._newton_direction(grad, H, params)
+    assert state.identity_shift.shape == (H.shape[0],)
+    np.testing.assert_array_equal(
+        state.identity_shift,
+        jnp.zeros(H.shape[0], dtype=params.dtype),
+    )
+
+    direction, _ = solver._newton_direction(
+        grad,
+        H,
+        params,
+        state.identity_shift,
+    )
 
     # Compare the blockwise result with solving each block separately.
     expected = []
@@ -1002,9 +1024,7 @@ def test_modified_direction_preserves_pytree_flattening_order(linear_solver, jit
         jit=jit,
         linear_solver=linear_solver,
     )
-    solver.init_state(params)
-
-    direction = solver._newton_direction(grad, H, params)
+    direction = _compute_direction(solver, grad, H, params)
 
     grad_flat, _ = ravel_pytree(grad)
     expected = jnp.linalg.solve(H_dense, -grad_flat)
@@ -1387,3 +1407,85 @@ def test_identity_shift_is_equivariant(jit, scale):
         atol=1e-10,
         rtol=1e-10,
     )
+
+
+@pytest.mark.requires_x64
+@pytest.mark.parametrize("jit", [False, True])
+def test_identity_shift_returns_accepted_shift(jit):
+    H = jnp.asarray(
+        [
+            [1.0, 2.0],
+            [2.0, 1.0],
+        ],
+        dtype=jnp.float64,
+    )
+    grad = jnp.asarray([1.0, -0.5], dtype=H.dtype)
+    params = jnp.zeros_like(grad)
+
+    solver = _make_solver(
+        _quadratic_loss(H, -grad),
+        lambda params, *args: H,
+        _make_tag(params, property=MatrixProperty.SYMMETRIC),
+        params,
+        jit=jit,
+        linear_solver="identity_shift",
+        identity_shift_beta=0.2,
+    )
+    state = solver.init_state(params)
+
+    direction, identity_shift = solver._newton_direction(
+        grad,
+        H,
+        params,
+        state.identity_shift,
+    )
+
+    expected_shift = jnp.asarray(2.0, dtype=H.dtype)
+    expected = jnp.linalg.solve(
+        H + expected_shift * jnp.eye(H.shape[0], dtype=H.dtype),
+        -grad,
+    )
+
+    np.testing.assert_allclose(direction, expected, atol=1e-12, rtol=1e-12)
+    np.testing.assert_allclose(identity_shift, expected_shift)
+
+
+@pytest.mark.requires_x64
+@pytest.mark.parametrize("jit", [False, True])
+def test_identity_shift_uses_previous_accepted_shift(jit):
+    H = jnp.asarray(
+        [
+            [1.0, 2.0],
+            [2.0, 1.0],
+        ],
+        dtype=jnp.float64,
+    )
+    grad = jnp.asarray([1.0, -0.5], dtype=H.dtype)
+    params = jnp.zeros_like(grad)
+    previous_shift = jnp.asarray(3.0, dtype=H.dtype)
+
+    solver = _make_solver(
+        _quadratic_loss(H, -grad),
+        lambda params, *args: H,
+        _make_tag(params, property=MatrixProperty.SYMMETRIC),
+        params,
+        jit=jit,
+        linear_solver="identity_shift",
+        identity_shift_beta=0.2,
+    )
+    solver.init_state(params)
+
+    direction, identity_shift = solver._newton_direction(
+        grad,
+        H,
+        params,
+        previous_shift,
+    )
+
+    expected = jnp.linalg.solve(
+        H + previous_shift * jnp.eye(H.shape[0], dtype=H.dtype),
+        -grad,
+    )
+
+    np.testing.assert_allclose(direction, expected, atol=1e-12, rtol=1e-12)
+    np.testing.assert_allclose(identity_shift, previous_shift)
