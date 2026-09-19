@@ -749,7 +749,7 @@ It trades the deterministic cost of an eigendecomposition for the possibility th
 
 ### Eigenvalue modification
 
-The `eigh` strategy follows the eigenvalue modification in Nocedal and Wright, equation 3.43. For a symmetric Hessian,
+The `eigh` strategy follows the eigenvalue modification in Nocedal and Wright, equation 3.50 (p. 50). For a symmetric Hessian,
 
 $$
 H=Q\Lambda Q^\top,
