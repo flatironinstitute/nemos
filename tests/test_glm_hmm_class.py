@@ -1454,6 +1454,256 @@ class TestEMConfiguration:
 
 
 # ---------------------------------------------------------------------------
+# TestDirichletPriorRouting — integration: model attribute -> setup -> EM -> M-step
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
+class TestDirichletPriorRouting:
+    """The Dirichlet priors must survive every hop from the constructor to the M-step.
+
+    Each hop already has unit coverage (the setters in test_hmm_base_class.py, the
+    analytic updates in test_glm_hmm_analytic_mstep.py), but a prior silently dropped
+    *between* the model and ``em_hmm``/``em_step`` passes all of them. These tests spy
+    the GLM-HMM optimizer setup and the EM entry points in the same run, then check the
+    end of the chain numerically.
+    """
+
+    ALPHAS_INIT = np.array([4.0, 1.0, 1.0])
+    ALPHAS_TRANS = np.eye(3) * 3.0 + 1.0
+
+    def _model(self, glm_hmm_data, with_priors=True, **kwargs):
+        """GLMHMM with a few EM iterations, with or without the Dirichlet priors."""
+        priors = (
+            dict(
+                dirichlet_initial_proba=self.ALPHAS_INIT,
+                dirichlet_transition_proba=self.ALPHAS_TRANS,
+            )
+            if with_priors
+            else {}
+        )
+        return GLMHMM(n_states=glm_hmm_data["n_states"], maxiter=3, **priors, **kwargs)
+
+    def test_setup_does_not_bake_priors_into_the_em_partials(
+        self, glm_hmm_data, monkeypatch
+    ):
+        """The priors stay out of the optimizer setup: they are data, not configuration.
+
+        Binding them into ``_optimizer_run``/``_optimizer_update`` would make a change
+        of prior require a new setup, which rebuilds the *static* m-step closure and
+        forces a retrace (see test_changing_a_prior_does_not_retrace).
+        """
+        captured = {}
+        real_init = GLMHMM._initialize_optimizer_and_state
+
+        def capturing_init(self, init_params, data, y):
+            result = real_init(self, init_params, data, y)
+            captured["run"] = self._optimizer_run
+            captured["update"] = self._optimizer_update
+            self._optimizer_run = lambda p, *a, **kw: (
+                p,
+                SimpleNamespace(iterations=1, converged=True),
+            )
+            return result
+
+        monkeypatch.setattr(GLMHMM, "_initialize_optimizer_and_state", capturing_init)
+
+        model = self._model(glm_hmm_data)
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+
+        for partial_fn in (captured["run"], captured["update"]):
+            assert "dirichlet_initial_proba" not in partial_fn.keywords
+            assert "dirichlet_transition_proba" not in partial_fn.keywords
+        # the static configuration does stay bound
+        assert captured["run"].keywords["maxiter"] == model.maxiter
+
+    def test_fit_forwards_priors_to_em_hmm(self, glm_hmm_data, monkeypatch):
+        """fit() reaches em_hmm with the priors as stored on the model."""
+        from nemos.glm_hmm import glm_hmm as glm_hmm_module
+
+        calls = _spy_calls(monkeypatch, glm_hmm_module, "em_hmm")
+        model = self._model(glm_hmm_data)
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+
+        assert len(calls) == 1
+        _, kwargs = calls[0]
+        np.testing.assert_array_equal(
+            kwargs["dirichlet_initial_proba"], self.ALPHAS_INIT
+        )
+        np.testing.assert_array_equal(
+            kwargs["dirichlet_transition_proba"], self.ALPHAS_TRANS
+        )
+
+    def test_update_forwards_priors_to_em_step(self, glm_hmm_data, monkeypatch):
+        """A manual EM iteration reaches em_step with the same priors as fit()."""
+        from nemos.glm_hmm import glm_hmm as glm_hmm_module
+
+        calls = _spy_calls(monkeypatch, glm_hmm_module, "em_step")
+        model = self._model(glm_hmm_data)
+        params = glm_hmm_data["init_params"]
+        state = model.initialize_optimizer_and_state(
+            params, glm_hmm_data["X"], glm_hmm_data["y"]
+        )
+        model.update(params, state, glm_hmm_data["X"], glm_hmm_data["y"])
+
+        assert len(calls) == 1
+        _, kwargs = calls[0]
+        np.testing.assert_array_equal(
+            kwargs["dirichlet_initial_proba"], self.ALPHAS_INIT
+        )
+        np.testing.assert_array_equal(
+            kwargs["dirichlet_transition_proba"], self.ALPHAS_TRANS
+        )
+
+    def test_flat_prior_forwards_none(self, glm_hmm_data, monkeypatch):
+        """Without priors the EM receives None, i.e. the flat-prior branch of the M-step."""
+        from nemos.glm_hmm import glm_hmm as glm_hmm_module
+
+        calls = _spy_calls(monkeypatch, glm_hmm_module, "em_hmm")
+        model = self._model(glm_hmm_data, with_priors=False)
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+
+        assert len(calls) == 1
+        _, kwargs = calls[0]
+        assert kwargs["dirichlet_initial_proba"] is None
+        assert kwargs["dirichlet_transition_proba"] is None
+
+    def test_priors_reach_the_analytical_m_step(self, glm_hmm_data, monkeypatch):
+        """The priors cross the jit boundary and land in the analytic M-step updates.
+
+        Inside ``em_hmm`` the alphas are traced, so only their presence and shape can
+        be asserted here; the values are checked by the numerical test below.
+        """
+        from nemos.hmm import expectation_maximization as em_module
+
+        init_calls = _spy_calls(
+            monkeypatch, em_module, "_analytical_m_step_log_initial_prob"
+        )
+        trans_calls = _spy_calls(
+            monkeypatch, em_module, "_analytical_m_step_log_transition_prob"
+        )
+
+        n_states = glm_hmm_data["n_states"]
+        model = self._model(glm_hmm_data)
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+
+        assert init_calls and trans_calls
+        for (_, kwargs), shape in (
+            (init_calls[0], (n_states,)),
+            (trans_calls[0], (n_states, n_states)),
+        ):
+            alphas = kwargs["dirichlet_prior_alphas"]
+            assert alphas is not None
+            assert alphas.shape == shape
+
+    def test_prior_changed_after_setup_takes_effect_on_next_update(
+        self, glm_hmm_data, monkeypatch
+    ):
+        """A prior set after initialize_optimizer_and_state reaches the next update().
+
+        Passing the priors at call time is what makes this work: bound into the setup
+        partials, the second update would silently keep using the stale prior.
+        """
+        from nemos.glm_hmm import glm_hmm as glm_hmm_module
+
+        calls = _spy_calls(monkeypatch, glm_hmm_module, "em_step")
+        model = self._model(glm_hmm_data, with_priors=False)
+        params = glm_hmm_data["init_params"]
+        state = model.initialize_optimizer_and_state(
+            params, glm_hmm_data["X"], glm_hmm_data["y"]
+        )
+        model.update(params, state, glm_hmm_data["X"], glm_hmm_data["y"])
+
+        # change the prior without re-running the optimizer setup
+        model.dirichlet_initial_proba = self.ALPHAS_INIT
+        model.update(params, state, glm_hmm_data["X"], glm_hmm_data["y"])
+
+        assert len(calls) == 2
+        assert calls[0][1]["dirichlet_initial_proba"] is None
+        np.testing.assert_array_equal(
+            calls[1][1]["dirichlet_initial_proba"], self.ALPHAS_INIT
+        )
+
+    def test_changing_a_prior_does_not_retrace(self, glm_hmm_data):
+        """Varying the prior values across update() calls costs no recompilation.
+
+        The alphas are traced arguments, so only their shape/dtype key the jit cache.
+        This is the reason they are passed per call instead of bound at setup: re-running
+        the setup to pick up a new prior would rebuild the static m-step closure and
+        retrace the whole M-step.
+        """
+        from nemos.hmm.expectation_maximization import run_m_step
+
+        if not hasattr(run_m_step, "_cache_size"):  # pragma: no cover - jax internal
+            pytest.skip("jax build does not expose the jit cache size")
+
+        model = self._model(glm_hmm_data)
+        params = glm_hmm_data["init_params"]
+        state = model.initialize_optimizer_and_state(
+            params, glm_hmm_data["X"], glm_hmm_data["y"]
+        )
+        model.update(params, state, glm_hmm_data["X"], glm_hmm_data["y"])
+
+        traces_after_first = run_m_step._cache_size()
+        for multiplier in (2.0, 3.0, 4.0):
+            model.dirichlet_initial_proba = self.ALPHAS_INIT * multiplier
+            model.dirichlet_transition_proba = self.ALPHAS_TRANS * multiplier
+            model.update(params, state, glm_hmm_data["X"], glm_hmm_data["y"])
+
+        assert run_m_step._cache_size() == traces_after_first
+
+    def test_strong_prior_dominates_fitted_hmm_params(self, glm_hmm_data):
+        """A prior heavy enough to swamp the data drives the fitted HMM parameters.
+
+        This is the end of the chain: the priors are not merely forwarded, they change
+        the numbers coming out of the M-step.
+        """
+        n_states = glm_hmm_data["n_states"]
+        strong = 1.0 + 1e6
+        alphas_init = np.ones(n_states)
+        alphas_init[0] = strong
+        alphas_trans = np.eye(n_states) * strong + 1.0
+
+        fit_kwargs = dict(
+            X=glm_hmm_data["X"],
+            y=glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+        model = GLMHMM(
+            n_states=n_states,
+            maxiter=5,
+            dirichlet_initial_proba=alphas_init,
+            dirichlet_transition_proba=alphas_trans,
+        ).fit(**fit_kwargs)
+        flat = GLMHMM(n_states=n_states, maxiter=5).fit(**fit_kwargs)
+
+        # the prior mode: all initial mass on state 0, self-transitions only
+        assert model.initial_prob_[0] > 0.99
+        np.testing.assert_allclose(
+            np.diag(model.transition_prob_), np.ones(n_states), atol=1e-3
+        )
+        # and the data alone does not land there
+        assert flat.initial_prob_[0] < 0.99
+        assert np.diag(flat.transition_prob_).mean() < 0.99
+
+
+# ---------------------------------------------------------------------------
 # save_params / load_model round-trip
 # ---------------------------------------------------------------------------
 

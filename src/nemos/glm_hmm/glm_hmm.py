@@ -119,10 +119,14 @@ class GLMHMM(
         ``1.0``. Ignored when ``regularizer="UnRegularized"``.
     dirichlet_initial_proba :
         Alpha parameters for the Dirichlet prior over the initial state probabilities.
-        Shape ``(n_states,)``. If None, a flat (uninformative) prior is assumed.
+        Any array-like (list, tuple, NumPy or JAX array) of shape ``(n_states,)``, cast
+        to a JAX array on assignment. All values must be >= 1. If None, a flat
+        (uninformative) prior is assumed.
     dirichlet_transition_proba :
         Alpha parameters for the Dirichlet prior over the transition probabilities.
-        Shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
+        Any array-like (list, tuple, NumPy or JAX array) of shape
+        ``(n_states, n_states)``, cast to a JAX array on assignment. All values must be
+        >= 1. If None, a flat (uninformative) prior is assumed.
     solver_name :
         Solver used for the GLM M-step. The solver must be valid for the chosen
         regularizer (see table above). Default is ``None``, in which case the
@@ -817,7 +821,14 @@ class GLMHMM(
         (
             fit_params,
             self.solver_state_,
-        ) = self._optimizer_run(init_params, X=data, y=y, session_starts=session_starts)
+        ) = self._optimizer_run(
+            init_params,
+            X=data,
+            y=y,
+            session_starts=session_starts,
+            dirichlet_initial_proba=self._dirichlet_initial_proba,
+            dirichlet_transition_proba=self._dirichlet_transition_proba,
+        )
 
         if self.solver_state_.iterations == self.maxiter:
             warnings.warn(
@@ -1613,7 +1624,13 @@ class GLMHMM(
 
         # one EM step
         updated_params, updated_state = self._optimizer_update(
-            params, opt_state, data, y, session_starts=session_starts
+            params,
+            opt_state,
+            data,
+            y,
+            session_starts=session_starts,
+            dirichlet_initial_proba=self._dirichlet_initial_proba,
+            dirichlet_transition_proba=self._dirichlet_transition_proba,
         )
 
         # persist
@@ -1655,12 +1672,14 @@ class GLMHMM(
 
         # cannot wrap session_starts, that's to be calculated at each update form the provided X and y.
         # for consistency, do not make a partial of that argument in run as well.
+        # the Dirichlet priors are not bound here either: they are traced arrays, not
+        # static configuration, and binding them would tie a change of prior to a new
+        # optimizer setup, which rebuilds the static m-step closure and forces a
+        # retrace. ``fit`` and ``update`` pass them at call time instead.
         self._optimizer_run = eqx.Partial(
             em_hmm,
             log_likelihood_func=self._log_likelihood,
             m_step_fn_model_params=m_step_update,
-            dirichlet_initial_proba=self._dirichlet_initial_proba,
-            dirichlet_transition_proba=self._dirichlet_transition_proba,
             maxiter=self.maxiter,
             tol=self.tol,
         )
@@ -1669,8 +1688,6 @@ class GLMHMM(
             em_step,
             log_likelihood_func=self._log_likelihood,
             m_step_fn_model_params=m_step_update,
-            dirichlet_initial_proba=self._dirichlet_initial_proba,
-            dirichlet_transition_proba=self._dirichlet_transition_proba,
         )
 
         def init_state_fn(*args, **kwargs) -> SolverState:
