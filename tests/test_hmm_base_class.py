@@ -167,6 +167,18 @@ class TestHMMInit:
         model = MockHMM(n_states=3, dirichlet_initial_proba=alphas)
         assert jnp.array_equal(model.dirichlet_initial_proba, alphas)
 
+    @pytest.mark.parametrize(
+        "alphas",
+        [[1.0, 2.0, 3.0], (1.0, 2.0, 3.0), [1, 2, 3], np.array([1.0, 2.0, 3.0])],
+    )
+    def test_dirichlet_prior_init_prob_array_like(self, alphas):
+        """Any array-like is accepted and stored as a JAX array."""
+        model = MockHMM(n_states=3, dirichlet_initial_proba=alphas)
+        assert isinstance(model.dirichlet_initial_proba, jnp.ndarray)
+        assert jnp.array_equal(
+            model.dirichlet_initial_proba, jnp.array([1.0, 2.0, 3.0])
+        )
+
     def test_dirichlet_prior_init_prob_wrong_shape(self):
         """Test that wrong shape raises ValueError."""
         alphas = jnp.array([1.0, 2.0])  # n_states=3 but only 2 elements
@@ -192,6 +204,14 @@ class TestHMMInit:
         alphas = jnp.ones((3, 3))
         model = MockHMM(n_states=3, dirichlet_transition_proba=alphas)
         assert jnp.array_equal(model.dirichlet_transition_proba, alphas)
+
+    def test_dirichlet_prior_transition_array_like(self):
+        """Nested sequences are accepted for the transition prior too."""
+        model = MockHMM(n_states=2, dirichlet_transition_proba=[[2.0, 1.0], [1.0, 2.0]])
+        assert isinstance(model.dirichlet_transition_proba, jnp.ndarray)
+        assert jnp.array_equal(
+            model.dirichlet_transition_proba, jnp.array([[2.0, 1.0], [1.0, 2.0]])
+        )
 
     def test_dirichlet_prior_transition_wrong_shape(self):
         """Test that wrong shape raises ValueError."""

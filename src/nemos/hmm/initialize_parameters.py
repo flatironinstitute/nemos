@@ -1057,7 +1057,8 @@ def _resolve_dirichlet_priors(
     Parameters
     ----------
     alphas :
-        Dirichlet prior alpha parameters. Can be None or array-like.
+        Dirichlet prior alpha parameters. Can be None or array-like, including
+        nested sequences (lists, tuples), NumPy and JAX arrays.
     expected_shape :
         Expected shape of the alpha parameter array.
 
@@ -1071,26 +1072,30 @@ def _resolve_dirichlet_priors(
     ValueError
         If the shape doesn't match expected_shape or if any alpha < 1.
     TypeError
-        If alphas is not None or array-like.
+        If alphas is not None and cannot be converted to a numeric array.
     """
     if alphas is None:
         return None
-    elif is_numpy_array_like(alphas)[1]:
-        alphas = jnp.asarray(alphas, dtype=float)
-        if alphas.shape != expected_shape:
-            raise ValueError(
-                "Dirichlet prior alpha parameters for initial state probabilities "
-                f"must have shape ``{expected_shape}``, "
-                f"but got shape ``{alphas.shape}``."
-            )
-        if not jnp.all(alphas >= 1):
-            raise ValueError(
-                "Dirichlet prior alpha parameters must be >= 1, but got values < 1"
-                f":\n{alphas}"
-            )
-        return alphas
-    else:
+
+    # unwrap pandas-like containers; sequences are left untouched and converted below
+    unwrapped, _ = is_numpy_array_like(alphas)
+    try:
+        alphas = jnp.asarray(unwrapped, dtype=float)
+    except (TypeError, ValueError):
         raise TypeError(
             f"Invalid type for Dirichlet prior alpha parameters: ``{type(alphas).__name__}``. "
             f"Must be None or an array-like object of shape ``{expected_shape}`` with strictly positive values."
         )
+
+    if alphas.shape != expected_shape:
+        raise ValueError(
+            "Dirichlet prior alpha parameters for initial state probabilities "
+            f"must have shape ``{expected_shape}``, "
+            f"but got shape ``{alphas.shape}``."
+        )
+    if not jnp.all(alphas >= 1):
+        raise ValueError(
+            "Dirichlet prior alpha parameters must be >= 1, but got values < 1"
+            f":\n{alphas}"
+        )
+    return alphas

@@ -1,3 +1,4 @@
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -129,3 +130,30 @@ def test_tree_slice(idx):
     for key in mydict:
         expected = mydict[key][idx]
         assert jnp.all(result[key] == expected)
+
+
+@pytest.mark.parametrize("dtype", [jnp.float16, jnp.int32, "float32"])
+def test_tree_astype_casts_every_leaf(dtype):
+    trees = ({"a": jnp.ones(2)}, [np.zeros(3), jnp.arange(4)])
+    out = tree_utils.tree_astype(*trees, dtype=dtype)
+    assert len(out) == len(trees)
+    leaves = jax.tree_util.tree_leaves(out)
+    assert leaves and all(leaf.dtype == jnp.dtype(dtype) for leaf in leaves)
+
+
+def test_tree_astype_always_returns_a_tuple():
+    """One argument in, a one-element tuple out: no special case for a single tree."""
+    (out,) = tree_utils.tree_astype(jnp.ones(3), dtype=jnp.float16)
+    assert out.dtype == jnp.float16
+
+
+def test_tree_astype_passes_none_through():
+    """None is an empty pytree node, so optional arguments need no guard."""
+    array, missing = tree_utils.tree_astype(jnp.ones(3), None, dtype=jnp.float16)
+    assert array.dtype == jnp.float16
+    assert missing is None
+
+
+def test_tree_astype_default_dtype_is_a_noop():
+    (out,) = tree_utils.tree_astype({"a": jnp.ones(2, dtype=jnp.int16)})
+    assert out["a"].dtype == jnp.int16
