@@ -1603,14 +1603,17 @@ class TestDirichletPriorRouting:
             init_params=glm_hmm_data["init_params"],
         )
 
+        # each log holds one (args, kwargs) pair per call, in call order
         assert init_calls and trans_calls
-        for (_, kwargs), shape in (
-            (init_calls[0], (n_states,)),
-            (trans_calls[0], (n_states, n_states)),
+        _, first_init_kwargs = init_calls[0]  # first EM iteration
+        _, first_trans_kwargs = trans_calls[0]
+        for kwargs, expected_shape in (
+            (first_init_kwargs, (n_states,)),
+            (first_trans_kwargs, (n_states, n_states)),
         ):
             alphas = kwargs["dirichlet_prior_alphas"]
             assert alphas is not None
-            assert alphas.shape == shape
+            assert alphas.shape == expected_shape
 
     @pytest.mark.parametrize("entry_point", ["fit", "update"])
     def test_priors_are_recast_to_the_observation_dtype(
@@ -1678,10 +1681,12 @@ class TestDirichletPriorRouting:
         model.dirichlet_initial_proba = self.ALPHAS_INIT
         model.update(params, state, glm_hmm_data["X"], glm_hmm_data["y"])
 
+        # _spy_calls logs one (args, kwargs) pair per call, in call order
         assert len(calls) == 2
-        assert calls[0][1]["dirichlet_initial_proba"] is None
+        (_, before_kwargs), (_, after_kwargs) = calls
+        assert before_kwargs["dirichlet_initial_proba"] is None
         np.testing.assert_array_equal(
-            calls[1][1]["dirichlet_initial_proba"], self.ALPHAS_INIT
+            after_kwargs["dirichlet_initial_proba"], self.ALPHAS_INIT
         )
 
     def test_changing_a_prior_does_not_retrace(self, glm_hmm_data):
