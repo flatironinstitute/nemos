@@ -1612,6 +1612,50 @@ class TestDirichletPriorRouting:
             assert alphas is not None
             assert alphas.shape == shape
 
+    @pytest.mark.parametrize("entry_point", ["fit", "update"])
+    def test_priors_are_recast_to_the_observation_dtype(
+        self, entry_point, glm_hmm_data, monkeypatch
+    ):
+        """The priors reach EM in y's precision, whatever they were stored in.
+
+        The setters convert the alphas at assignment, before any data exists, so their
+        dtype comes from the x64 config at that moment — enabling x64 afterwards leaves
+        float32 priors against a float64 y. The EM while_loop needs an invariant carry
+        dtype, so a mismatch breaks compilation. float16 stands in here for "stored
+        under a different configuration".
+        """
+        from nemos.glm_hmm import glm_hmm as glm_hmm_module
+
+        spied = "em_hmm" if entry_point == "fit" else "em_step"
+        calls = _spy_calls(monkeypatch, glm_hmm_module, spied)
+
+        model = self._model(glm_hmm_data)
+        model._dirichlet_initial_proba = jnp.asarray(self.ALPHAS_INIT, jnp.float16)
+        model._dirichlet_transition_proba = jnp.asarray(self.ALPHAS_TRANS, jnp.float16)
+
+        X, y, params = (
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            glm_hmm_data["init_params"],
+        )
+        if entry_point == "fit":
+            model.fit(X, y, init_params=params)
+        else:
+            state = model.initialize_optimizer_and_state(params, X, y)
+            model.update(params, state, X, y)
+
+        assert len(calls) == 1
+        args, kwargs = calls[0]
+        # em_hmm receives y as a keyword, em_step positionally
+        y_dtype = (kwargs["y"] if "y" in kwargs else args[3]).dtype
+        assert y_dtype != jnp.float16  # otherwise the test proves nothing
+        for key in ("dirichlet_initial_proba", "dirichlet_transition_proba"):
+            assert kwargs[key].dtype == y_dtype
+        # the cast preserves the values
+        np.testing.assert_allclose(
+            kwargs["dirichlet_initial_proba"], self.ALPHAS_INIT, rtol=1e-3
+        )
+
     def test_prior_changed_after_setup_takes_effect_on_next_update(
         self, glm_hmm_data, monkeypatch
     ):

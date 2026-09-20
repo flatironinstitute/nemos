@@ -817,6 +817,15 @@ class GLMHMM(
         # set up optimization
         self._initialize_optimizer_and_state(init_params, data, y)
 
+        # the priors were cast to arrays at assignment, before any data was seen, so
+        # their precision comes from the x64 config at that time; match y's instead, or
+        # the EM while_loop carry changes dtype and fails to compile.
+        dirichlet_initial_proba, dirichlet_transition_proba = tree_utils.tree_astype(
+            self._dirichlet_initial_proba,
+            self._dirichlet_transition_proba,
+            dtype=y.dtype,
+        )
+
         # run EM
         (
             fit_params,
@@ -826,8 +835,8 @@ class GLMHMM(
             X=data,
             y=y,
             session_starts=session_starts,
-            dirichlet_initial_proba=self._dirichlet_initial_proba,
-            dirichlet_transition_proba=self._dirichlet_transition_proba,
+            dirichlet_initial_proba=dirichlet_initial_proba,
+            dirichlet_transition_proba=dirichlet_transition_proba,
         )
 
         if self.solver_state_.iterations == self.maxiter:
@@ -1622,6 +1631,13 @@ class GLMHMM(
         # `initialize_optimizer_and_state` so the EM step function is in place)
         params = self._validator.to_model_params(params)
 
+        # match the priors' precision to the data's (see the same cast in ``fit``)
+        dirichlet_initial_proba, dirichlet_transition_proba = tree_utils.tree_astype(
+            self._dirichlet_initial_proba,
+            self._dirichlet_transition_proba,
+            dtype=y.dtype,
+        )
+
         # one EM step
         updated_params, updated_state = self._optimizer_update(
             params,
@@ -1629,8 +1645,8 @@ class GLMHMM(
             data,
             y,
             session_starts=session_starts,
-            dirichlet_initial_proba=self._dirichlet_initial_proba,
-            dirichlet_transition_proba=self._dirichlet_transition_proba,
+            dirichlet_initial_proba=dirichlet_initial_proba,
+            dirichlet_transition_proba=dirichlet_transition_proba,
         )
 
         # persist

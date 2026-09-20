@@ -683,7 +683,7 @@ class BaseHMM(
         # filter for non-nans, grab data if needed
         data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
         # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+        (params,) = tree_utils.tree_astype(params, dtype=y.dtype)
 
         # make sure session_starts starts with a 1
         session_starts = session_starts.at[0].set(True)
@@ -750,7 +750,7 @@ class BaseHMM(
         data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
 
         # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+        (params,) = tree_utils.tree_astype(params, dtype=y.dtype)
 
         # make sure session_starts starts with a 1
         session_starts = session_starts.at[0].set(True)
@@ -848,7 +848,7 @@ class BaseHMM(
         data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
 
         # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+        (params,) = tree_utils.tree_astype(params, dtype=y.dtype)
 
         # make sure session_starts starts with a 1
         session_starts = session_starts.at[0].set(True)
@@ -948,7 +948,7 @@ class BaseHMM(
         data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
 
         # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+        (params,) = tree_utils.tree_astype(params, dtype=y.dtype)
 
         # make sure session_starts starts with a 1
         session_starts = session_starts.at[0].set(True)
