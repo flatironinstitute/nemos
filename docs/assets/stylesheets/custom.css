@@ -147,8 +147,7 @@ table.table-center{
    padding the columns keeps the two halves exactly the same width. The
    variable has to be set on the row: the grid's own sd-gx-* class declares it
    there, and that beats a value inherited from the container. */
-.landing-captioned > .sd-row,
-.landing-split > .sd-row {
+.landing-captioned > .sd-row {
     --sd-gutter-x: 4rem;
 }
 
@@ -172,20 +171,19 @@ table.table-center{
    rows out of step. Fixing the drawing's height instead makes every card the
    same height, whatever the width of the block it belongs to. */
 .landing-band .sd-card-body img {
-    height: 120px;
+    max-height: 90px;
     width: auto;
     max-width: 100%;
     margin: 0 auto;
 }
 
 .landing-captioned .sd-card-body img {
-    height: 130px;
+    max-height: 130px;
 }
 
 /* The grid container pads itself by 12px, which sets the cards and the band
    titles in from the headings and body text of the page. */
-.landing-band.sd-container-fluid,
-.landing-split.sd-container-fluid {
+.landing-band.sd-container-fluid {
     padding-left: 0;
     padding-right: 0;
 }
