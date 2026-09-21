@@ -120,7 +120,7 @@ def combine_forward(
 
     The combination implements the :math:`\oplus` operator described
     in section **Get (log(l), L) via scan** of the note
-    the notes docs/developers_notes/09-associative_estep_hmm.md.
+    docs/developers_notes/09-associative_estep_hmm.md.
 
     The stable implementation is described from section **Combine** to
     section **Dropping the accumulated scale**.
