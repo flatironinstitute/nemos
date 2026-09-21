@@ -302,7 +302,7 @@ def forward_pass_assoc(
 
     See Also
     --------
-    :func:`~nemos.hmm.forward_backward` : Computes both forward and backward messages for smoothing.
+    :func:`~nemos.hmm.forward_backward_assoc` : Computes both forward and backward messages for smoothing.
 
     Notes
     -----
