@@ -7,7 +7,14 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 
-from ..typing import Aux, ModelParamsT, SolverState
+from ..typing import (
+    Aux,
+    EStepFn,
+    EStepOutput,
+    LogLikelihoodFn,
+    ModelParamsT,
+    SolverState,
+)
 from .m_step_analytical_updates import (
     _analytical_m_step_log_initial_prob,
     _analytical_m_step_log_transition_prob,
@@ -195,7 +202,7 @@ def forward_pass(
     params: ModelParamsT,
     X: Array,
     y: Array,
-    log_likelihood_func: Callable[[Array, Array, Array], Array],
+    log_likelihood_func: LogLikelihoodFn,
     session_starts: Array | None = None,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
@@ -259,7 +266,7 @@ def forward_pass(
     session_starts = (
         session_starts
         if session_starts is not None
-        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
+        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(True)
     )
 
     # Compute log-likelihoods
@@ -387,9 +394,9 @@ def forward_backward(
     params: ModelParamsT,
     X: Array,
     y: Array,
-    log_likelihood_func: Callable[[Array, Array, Array], Array],
+    log_likelihood_func: LogLikelihoodFn,
     session_starts: Array | None = None,
-):
+) -> EStepOutput:
     """
     Run the forward-backward Baum-Welch algorithm.
 
@@ -454,7 +461,7 @@ def forward_backward(
     session_starts = (
         session_starts
         if session_starts is not None
-        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
+        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(True)
     )
 
     # Compute log-likelihoods
@@ -595,10 +602,11 @@ def _em_step(
     carry: EMCarry,
     X: Array,
     y: Array,
-    log_likelihood_func: Callable[[Array, Array, Array], Array],
+    log_likelihood_func: LogLikelihoodFn,
     m_step_fn_model_params: Callable[
         [ModelParamsT, Array, Array, Array], Tuple[ModelParamsT, SolverState, Aux]
     ],
+    e_step_fn: EStepFn,
     session_starts: Array,
     dirichlet_initial_proba: Array | None = None,
     dirichlet_transition_proba: Array | None = None,
@@ -623,6 +631,8 @@ def _em_step(
         Log-likelihood function for the E-step.
     m_step_fn_model_params :
         M-step update function for GLM coefficients and intercepts.
+    e_step_fn:
+        Callable that runs the forward-backward algorithm.
     session_starts :
         Boolean array marking session boundaries.
     dirichlet_initial_proba :
@@ -646,7 +656,7 @@ def _em_step(
     """
     params, previous_state = carry
 
-    log_posteriors, log_joint_posterior, _, new_log_like, _, _ = forward_backward(
+    log_posteriors, log_joint_posterior, _, new_log_like, _, _ = e_step_fn(
         params,
         X,
         y,
@@ -684,8 +694,9 @@ def em_step(
     state: EMState,
     X: Array,
     y: Array,
-    log_likelihood_func: Callable,
+    log_likelihood_func: LogLikelihoodFn,
     m_step_fn_model_params: Callable,
+    e_step_fn: EStepFn,
     session_starts: Array,
     dirichlet_initial_proba: Array | None = None,
     dirichlet_transition_proba: Array | None = None,
@@ -714,6 +725,8 @@ def em_step(
         Function computing the log-likelihood or log emissions probability.
     m_step_fn_model_params :
         Callable that performs the M-step update for model parameters.
+    e_step_fn:
+        Callable that runs the forward-backward algorithm.
     session_starts :
         Boolean mask for the first observation of each session.
     dirichlet_initial_proba :
@@ -740,6 +753,7 @@ def em_step(
         y=y,
         log_likelihood_func=log_likelihood_func,
         m_step_fn_model_params=m_step_fn_model_params,
+        e_step_fn=e_step_fn,
         session_starts=session_starts,
         dirichlet_initial_proba=dirichlet_initial_proba,
         dirichlet_transition_proba=dirichlet_transition_proba,
@@ -773,6 +787,7 @@ def check_log_likelihood_increment(state: EMState, tol: float) -> Array:
     static_argnames=[
         "log_likelihood_func",
         "m_step_fn_model_params",
+        "e_step_fn",
         "maxiter",
         "check_convergence",
         "tol",
@@ -782,8 +797,9 @@ def em_hmm(
     params: ModelParamsT,
     X: Array,
     y: Array,
-    log_likelihood_func: Callable,
+    log_likelihood_func: LogLikelihoodFn,
     m_step_fn_model_params: Callable,
+    e_step_fn: EStepFn,
     session_starts: Optional[Array] = None,
     dirichlet_initial_proba: Array | None = None,
     dirichlet_transition_proba: Array | None = None,
@@ -816,6 +832,8 @@ def em_hmm(
         Callable that performs the M-step update for the model parameters.
         Should have signature: ``f(model_params, X, y, posteriors) -> (updated_params, state)``.
         Typically created by configuring a solver with the appropriate regularizer/prior.
+    e_step_fn:
+        Callable that runs the forward-backward algorithm.
     session_starts :
         Boolean mask for the first observation of each session.
     dirichlet_initial_proba :
@@ -841,7 +859,7 @@ def em_hmm(
     session_starts = (
         session_starts
         if session_starts is not None
-        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
+        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(True)
     )
 
     state = EMState(
@@ -858,6 +876,7 @@ def em_hmm(
         y=y,
         log_likelihood_func=log_likelihood_func,
         m_step_fn_model_params=m_step_fn_model_params,
+        e_step_fn=e_step_fn,
         session_starts=session_starts,
         dirichlet_initial_proba=dirichlet_initial_proba,
         dirichlet_transition_proba=dirichlet_transition_proba,
@@ -894,7 +913,7 @@ def max_sum(
     params: ModelParamsT,
     X: Array,
     y: Array,
-    log_likelihood_func: Callable[[Array, Array, Array], Array],
+    log_likelihood_func: LogLikelihoodFn,
     session_starts: Array | None = None,
     return_index: bool = False,
 ):
@@ -944,7 +963,7 @@ def max_sum(
     session_starts = (
         session_starts
         if session_starts is not None
-        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
+        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(True)
     )
 
     log_emission = log_likelihood_func(model_params, X, y)
