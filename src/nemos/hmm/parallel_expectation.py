@@ -2,7 +2,7 @@ r"""Parallel implementation of the forward-backward algorithm.
 
 The recursions of :mod:`nemos.hmm.expectation_maximization` are prefix problems over a
 sequence of per-step transfer matrices, so they can be evaluated by
-``jax.lax.associative_scan`` at depth :math:`O(\\log T)` rather than by a scan of length
+``jax.lax.associative_scan`` at depth :math:`O(\log T)` rather than by a scan of length
 :math:`T`. The derivation is in docs/developers_notes/09-associative_estep_hmm.md;
 :func:`forward_backward_assoc` returns the same 6-tuple as
 :func:`~nemos.hmm.expectation_maximization.forward_backward` and is interchangeable
@@ -57,7 +57,7 @@ def log_matmul(log_earlier: Array, log_later: Array) -> Array:
     so ``i`` indexes the entry state of the earlier segment and ``j`` the exit state
     of the later one, with the shared boundary state ``k`` contracted away.
 
-    Shifted per row of ``log_A`` and per column of ``log_B``, then run as a GEMM. The
+    Shifted per row of ``log_earlier`` and per column of ``log_later``, then run as a GEMM. The
     broadcast form would materialize a ``(..., K, K, K)`` intermediate, which at
     ``T = 1e6``, ``K = 20`` is 8e9 elements; exponentiating and calling into GEMM is
     ``O(T K^2)`` memory instead. The shifts make the result exact except for entries
@@ -87,7 +87,7 @@ def _condition_on(
         :math:`p(y_{v:t} | z_{v-1}=k)` (during the scan). Shape (n_samples, n_states).
     log_row_stochastic:
         Log of either :math:`p(z_t=i | z_{t-1}=j)` (when computing initial elements) or
-        :math:`p(z_{v-1}=k | z_{u-1}=j, y_{u:v-1})$` (during the scan). Shape (n_samples, n_states, n_states).
+        :math:`p(z_{v-1}=k | z_{u-1}=j, y_{u:v-1})` (during the scan). Shape (n_samples, n_states, n_states).
 
     Returns
     -------
@@ -122,8 +122,8 @@ def _combine_forward(
     r"""Combine in the associative scan.
 
     The combination implements the :math:`\oplus` operator described
-    in section **Get (log(l), L) via scan**  of the note
-    the notes docs/developers_notes/09-associative_estep_hmm.md.
+    in section **Get (log(l), L) via scan** of the note
+    docs/developers_notes/09-associative_estep_hmm.md.
 
     The stable implementation is described from section **Combine** to
     section **Dropping the accumulated scale**.
@@ -305,7 +305,7 @@ def forward_pass_assoc(
 
     See Also
     --------
-    :func:`~nemos.hmm.forward_backward` : Computes both forward and backward messages for smoothing.
+    :func:`~nemos.hmm.forward_backward_assoc` : Computes both forward and backward messages for smoothing.
 
     Notes
     -----
