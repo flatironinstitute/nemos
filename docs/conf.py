@@ -291,8 +291,6 @@ else:
     exclude_patterns += ["api/full.rst", "api/generated/full/**"]
 
 
-
-
 (api_dir / "index.rst").write_text(api_index)
 
 # ---- Download admonition for runnable notebook docs ----
