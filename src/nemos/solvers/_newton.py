@@ -224,6 +224,7 @@ class Newton(HessianMixin):
 
         # Modify the Hessian eigenvalues, then solve the resulting positive-definite system
         # This handles symmetric indefinite Hessians in one decomposition
+        # Nocedal and Wright Algorithm equation (3.49)
         if self._resolved_linear_solver == "eigh":
             g_flat, unravel = ravel_pytree(grad)
             H_dense = operator.as_matrix()
@@ -239,7 +240,7 @@ class Newton(HessianMixin):
             dtype = diag.dtype
 
             # Beta scales with the matrix so the shift ladder is scale-equivariant;
-            # N&W p.52 give 1e-3 as the typical magnitude, here relative to the diagonal.
+            # N&W give 1e-3 as the typical magnitude, here relative to the diagonal
             eps = jnp.asarray(jnp.finfo(dtype).eps, dtype=dtype)
             beta = jnp.maximum(
                 jnp.asarray(self.identity_shift_beta, dtype=dtype)
@@ -248,10 +249,18 @@ class Newton(HessianMixin):
             )
 
             min_diag = jnp.min(diag)
-            tau0 = jnp.where(
-                min_diag > 0,
+            # N&W seed the ladder from the shift the last iteration accepted.
+            # Decaying it by the factor the ladder climbs by costs at most one extra
+            # factorization when the required shift is stable, and lets tau fall back
+            # to zero once the iterates reach a region where the unshifted Cholesky succeeds.
+            warm_start = jnp.where(
+                previous_shift > beta,
+                jnp.asarray(0.1, dtype=dtype) * previous_shift,  # scale it down of 1/10
                 jnp.zeros((), dtype=dtype),
-                jnp.maximum(-min_diag + beta, previous_shift),
+            )
+            tau0 = jnp.maximum(
+                jnp.where(min_diag > 0, jnp.zeros((), dtype=dtype), -min_diag + beta),
+                warm_start,
             )
 
             cholesky = lx.Cholesky()
@@ -278,10 +287,7 @@ class Newton(HessianMixin):
 
             def body(carry):
                 iteration, tau, _, _ = carry
-                new_tau = jnp.maximum(
-                    jnp.asarray(10.0, dtype=dtype) * tau,
-                    jnp.maximum(beta, previous_shift),
-                )
+                new_tau = jnp.maximum(jnp.asarray(10.0, dtype=dtype) * tau, beta)
                 direction, failed = _solve(new_tau)
                 return iteration + 1, new_tau, direction, failed
 

@@ -699,41 +699,83 @@ so $d$ is a strict descent direction.
 
 ### Iterative identity shift
 
-The `identity_shift` strategy follows the identity-shifted Cholesky scheme of Nocedal and Wright, Algorithm 3.3.
-It chooses an initial shift from the smallest diagonal entry,
+The `identity_shift` strategy is an adaptation of the identity-shifted Cholesky scheme in Nocedal and Wright, Algorithm 3.3.
+
+It first computes a scale-dependent minimum shift,
 
 $$
-\tau_0 =
+\beta
+=
+\max\left(
+\beta_{\mathrm{user}}\max_i |H_{ii}|,
+\epsilon_{\mathrm{dtype}}
+\right).
+$$
+
+Let $\tau_{\mathrm{prev}}$ be the shift accepted at the preceding optimization iteration.
+The warm-start candidate is
+
+$$
+\tau_{\mathrm{warm}}
+=
 \begin{cases}
-0, & \min_i H_{ii}>0,\\
--\min_i H_{ii}+\beta, & \text{otherwise},
+\tau_{\mathrm{prev}}/10,
+    & \tau_{\mathrm{prev}}>\beta,\\
+0,  & \text{otherwise}.
 \end{cases}
 $$
 
-where the implementation floors $\beta$ at machine precision,
+The initial shift is then
 
 $$
-\beta \leftarrow \max(\beta,\epsilon_{\mathrm{dtype}}).
+\tau_0
+=
+\max\left(
+\tau_{\mathrm{diag}},
+\tau_{\mathrm{warm}}
+\right),
 $$
 
-It then attempts a Cholesky solve of
+where
 
 $$
-(H+\tau_k I)d_k=-g.
+\tau_{\mathrm{diag}}
+=
+\begin{cases}
+0, & \min_i H_{ii}>0,\\
+-\min_i H_{ii}+\beta, & \text{otherwise}.
+\end{cases}
 $$
 
-If the attempt fails, it increases the shift according to
+Starting one ladder step below the previously accepted shift allows the shift to decrease as the Hessian becomes better conditioned.
+If approximately the same shift is still required, this costs at most one additional Cholesky attempt.
+
+For each candidate shift, the strategy attempts to solve
 
 $$
-\tau_{k+1}=\max(10\tau_k,\beta)
+(H+\tau_k I)d_k=-g
 $$
 
-and tries again, up to `identity_shift_max_steps`.
+using a Cholesky factorization.
+If the factorization or solve fails, or if it produces a non-finite result, the shift is increased according to
 
-The initial diagonal correction is only a lower bound on the shift that may be needed.
+$$
+\tau_{k+1}
+=
+\max(10\tau_k,\beta).
+$$
+
+The implementation performs the initial attempt followed by at most `identity_shift_max_steps` retries.
+Thus, the maximum number of Cholesky attempts is
+
+$$
+1+\texttt{identity\_shift\_max\_steps}.
+$$
+
+The diagonal correction is only a lower bound on the required shift.
 Positive diagonal entries do not imply positive definiteness, so the Cholesky attempts remain necessary.
 
-Once an attempt produces $H+\tau_kI\succ0$, its direction satisfies
+When an attempt successfully produces a positive-definite matrix $H+\tau_kI$, the resulting direction satisfies
 
 $$
 g^\top d_k
@@ -742,14 +784,18 @@ g^\top d_k
 <0
 $$
 
-for every non-zero $g$.
+for every nonzero $g$, up to numerical error.
+
+After a successful solve, $\tau_k$ is retained as the accepted shift for the next optimization iteration.
+If all attempts fail, the previously accepted shift remains unchanged.
 
 This strategy may perform several dense factorizations.
 It trades the deterministic cost of an eigendecomposition for the possibility that one or a small number of Cholesky attempts will suffice.
 
 ### Eigenvalue modification
 
-The `eigh` strategy follows the eigenvalue modification in Nocedal and Wright, equation 3.50 (p. 50). For a symmetric Hessian,
+The `eigh` strategy follows the eigenvalue modification described by Nocedal and Wright in equation (3.49).
+For a symmetric Hessian,
 
 $$
 H=Q\Lambda Q^\top,
@@ -783,22 +829,25 @@ The direction is computed directly from the eigenpairs:
 $$
 d
 =
+-B^{-1}g
+=
 -Q\widetilde{\Lambda}^{-1}Q^\top g.
 $$
 
-The absolute value flips negative curvature, and the floor replaces zero or small curvature with at least $\delta$.
-Consequently $B\succ0$ when $\delta>0$, and
+The absolute value converts negative curvature into positive curvature, while the floor replaces zero or small curvature by at least $\delta$.
+Consequently, $B\succ0$ when $\delta>0$, and
 
 $$
 g^\top d
 =
 -\sum_i
 \frac{(q_i^\top g)^2}
-     {\max(|\lambda_i|,\delta)}
+     {\max\bigl(|\lambda_i|,\delta\bigr)}
 <0
 $$
 
-for every non-zero $g$. This produces a descent direction for any symmetric $H$, including singular and indefinite Hessians.
+for every nonzero $g$, up to numerical error.
+    This produces a descent direction for any symmetric $H$, including singular and indefinite Hessians.
 
 ## Where each piece lives
 
@@ -825,3 +874,6 @@ The tag is built when the solver is set up, in `BaseRegressor._instantiate_solve
 Two places where the code carries more than the derivation above needs. `MatrixProperty` also has `NEGATIVE_SEMI_DEFINITE` and `NEGATIVE_DEFINITE`, handled by the $-H$ symmetry the definition of $\Sigma$ already invokes; no loss or penalty in the package declares one. And a leaf carries `UNCLAIMED` rather than being absent from both masks, which is the same statement as lying in neither $F$ nor $D$, with the enum making it impossible to claim a leaf both flat and definite.
 
 Assumption 3 is enforced rather than assumed: `Regularizer._validate_strength` rejects a negative strength leaf by leaf, so `_leaf_claim` only ever compares non-negative entries.
+
+## References
+> Jorge Nocedal and Stephen J. Wright, *Numerical Optimization*, 2nd edition, Springer, 2006, §3.4, “Newton’s Method with Hessian Modification.”
