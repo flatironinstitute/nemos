@@ -234,14 +234,31 @@ def _draw_kernels(ax, x, kernels, periodic=False):
 
 
 def plot_basis_scheme_thumbnail():
-    """A weighted sum of raised cosines, and the two-peaked tuning it composes."""
-    basis = nmo.basis.RaisedCosineLinearEval(n_basis_funcs=10)
+    """A cyclic B-spline basis, the weights that fit a two-peaked tuning, and their sum."""
+    basis = nmo.basis.CyclicBSplineEval(n_basis_funcs=6)
     x, kernels = basis.evaluate_on_grid(400)
-    # All the weight on the third basis function and, half as much, on the
-    # seventh: a tall mode and a shorter one. Nothing on either end, so the
-    # tails of the sum reach zero inside the panel.
-    weights = np.array([0.0, 0.0, 1.0, 0.4, 0.0, 0.0, 0.55, 0.25, 0.0, 0.0])
-    tuning = kernels @ weights
+
+    # A tall mode and a shorter one over a periodic input, on a floor of 0.25:
+    # the distance to each mode wraps, so the fit closes on itself at the ends.
+    # What the basis composes is the log of the rate, which is why the last
+    # panel is the exponential of the sum rather than the sum itself.
+    def wrapped(centre):
+        return np.minimum(np.abs(x - centre), 1 - np.abs(x - centre))
+
+    rate = (
+        0.25
+        + np.exp(-((wrapped(0.3) / 0.14) ** 2))
+        + 0.55 * np.exp(-((wrapped(0.7) / 0.154) ** 2))
+    )
+    # Least squares rather than weights chosen by hand, so some of them come out
+    # negative, which is what the middle panel is there to show. A cyclic
+    # B-spline basis sums to one at every point, so splitting the coefficients
+    # into an intercept and weights that average to zero leaves the curve
+    # untouched -- and is the form a fitted GLM takes, level in the intercept.
+    coefficients = np.linalg.lstsq(kernels, np.log(rate), rcond=None)[0]
+    intercept = coefficients.mean()
+    weights = coefficients - intercept
+    tuning = np.exp(intercept + kernels @ weights)
 
     # Wide and shallow: the card gives this the full width of a half band, and
     # the three panels are only legible there if they are not also tall.
@@ -249,27 +266,38 @@ def plot_basis_scheme_thumbnail():
     fig.patch.set_alpha(0)
     grid = fig.add_gridspec(1, 3, width_ratios=(1, 0.55, 1.25), wspace=0.45)
     basis_ax, weight_ax, tuning_ax = (fig.add_subplot(grid[0, i]) for i in range(3))
-    for ax in (basis_ax, weight_ax, tuning_ax):
-        for side in ("right", "top"):
+    for ax, label in (
+        (basis_ax, "bases"),
+        (weight_ax, "weights"),
+        (tuning_ax, "tuning curve"),
+    ):
+        for side in ("left", "right", "top"):
             ax.spines[side].set_visible(False)
         ax.set_xticks([])
         ax.set_yticks([])
         ax.patch.set_alpha(0)
+        # The three axes share a row, so their labels sit on one line.
+        ax.set_xlabel(label, fontsize=15, labelpad=4)
 
-    # Headroom over the basis, so the family does not fill its panel top to
-    # bottom the way the tuning function it composes does.
-    basis_ax.plot(x, kernels, lw=1.4)
+    # One colour for the family: a cyclic basis wraps, and a palette would pair
+    # the first element with the last rather than leave them part of the set.
+    # Headroom over it, so it does not fill its panel top to bottom the way the
+    # tuning function it composes does.
+    basis_ax.plot(x, kernels, color=BLUE, lw=1.4)
     basis_ax.set_xlim(x[0], x[-1])
     basis_ax.set_ylim(0, float(kernels.max()) * 1.7)
 
-    # A marker on a weight of zero would sit half under the axis, so only the
-    # basis functions that carry weight are drawn.
+    # The weights are signed, so their panel is an axis at zero with no frame
+    # around it rather than a corner to sit in.
+    ink = plt.rcParams["text.color"]
+    weight_ax.spines["bottom"].set_visible(False)
+    weight_ax.axhline(0, color=ink, lw=1.2)
     positions = np.arange(len(weights))
-    carrying = weights > 0
-    weight_ax.vlines(positions[carrying], 0, weights[carrying], color=ORANGE, lw=2.2)
-    weight_ax.plot(positions[carrying], weights[carrying], "o", color=ORANGE, ms=5)
+    weight_ax.vlines(positions, 0, weights, color=ORANGE, lw=2.2)
+    weight_ax.plot(positions, weights, "o", color=ORANGE, ms=5)
+    limit = float(np.abs(weights).max()) * 1.3
     weight_ax.set_xlim(-1, len(weights))
-    weight_ax.set_ylim(0, float(weights.max()) * 1.35)
+    weight_ax.set_ylim(-limit, limit)
 
     tuning_ax.fill_between(x, tuning, color=PASTEL[GREEN])
     tuning_ax.plot(x, tuning, color=GREEN, lw=3)
@@ -278,13 +306,27 @@ def plot_basis_scheme_thumbnail():
 
     # The card renders this at a tenth of its size, so the operators have to be
     # set far larger than they look on the figure.
-    ink = plt.rcParams["text.color"]
+    fig.subplots_adjust(left=0.02, right=0.98, top=0.96, bottom=0.2)
     for left, right, symbol in (
         (basis_ax, weight_ax, "\u00d7"),
         (weight_ax, tuning_ax, "\u2192"),
     ):
-        gap = (left.get_position().x1 + right.get_position().x0) / 2
-        fig.text(gap, 0.5, symbol, ha="center", va="center", fontsize=20, color=ink)
+        first, second = left.get_position(), right.get_position()
+        middle = (first.x1 + second.x0) / 2
+        height = (first.y0 + first.y1) / 2
+        fig.text(
+            middle, height, symbol, ha="center", va="center", fontsize=20, color=ink
+        )
+        if symbol == "\u2192":
+            fig.text(
+                middle,
+                height + 0.09,
+                "exp",
+                ha="center",
+                va="bottom",
+                fontsize=13,
+                color=ink,
+            )
 
 
 def plot_product_thumbnail():
@@ -368,6 +410,9 @@ def _penalty_ball(radius, edges=(), figsize=(3, 3)):
     fig.patch.set_alpha(0)
     ax = fig.add_subplot(projection="3d")
     ax.set_axis_off()
+    # Saved with no background, so the card shows through in either theme. The
+    # figure patch alone is not enough: the axes has one of its own.
+    ax.patch.set_alpha(0)
     # mplot3d leaves a wide margin around the box; the zoom spends it on the
     # shape, which is what the card has room for.
     ax.set_box_aspect((1, 1, 1), zoom=1.65)
@@ -387,9 +432,8 @@ def _penalty_ball(radius, edges=(), figsize=(3, 3)):
         x,
         y,
         z,
-        # The fill the densities beside these are drawn with, so the two
-        # grids on the landing page read as one set.
-        color=PASTEL[BLUE],
+        # Green, against the orange of the distributions in the grid above.
+        color=PASTEL[GREEN],
         alpha=0.55,
         linewidth=0,
         shade=False,
@@ -478,8 +522,8 @@ _DENSITY_FIGSIZE = (4, 2.6)
 def _plot_pmf(support, probabilities):
     """A discrete distribution, as a stem for each outcome it puts mass on."""
     fig, ax = _blank_axes(figsize=_DENSITY_FIGSIZE, keep={"bottom"})
-    ax.vlines(support, 0, probabilities, color=BLUE, lw=3)
-    ax.plot(support, probabilities, "o", color=BLUE, ms=7)
+    ax.vlines(support, 0, probabilities, color=ORANGE, lw=3)
+    ax.plot(support, probabilities, "o", color=ORANGE, ms=7)
     # Half an outcome of margin, so the stems at either end of a short support
     # are not drawn on the edge of the axes.
     ax.set_xlim(support[0] - 0.6, support[-1] + 0.6)
@@ -490,8 +534,8 @@ def _plot_pmf(support, probabilities):
 def _plot_pdf(x, density):
     """A continuous distribution, as a filled curve."""
     fig, ax = _blank_axes(figsize=_DENSITY_FIGSIZE, keep={"bottom"})
-    ax.fill_between(x, density, color=PASTEL[BLUE])
-    ax.plot(x, density, color=BLUE, lw=3)
+    ax.fill_between(x, density, color=PASTEL[ORANGE])
+    ax.plot(x, density, color=ORANGE, lw=3)
     ax.set_xlim(x[0], x[-1])
     ax.set_ylim(0, density.max() * 1.18)
     fig.subplots_adjust(left=0.03, right=0.97, top=0.97, bottom=0.06)
