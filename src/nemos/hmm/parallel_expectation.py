@@ -2,7 +2,7 @@ r"""Parallel implementation of the forward-backward algorithm.
 
 The recursions of :mod:`nemos.hmm.expectation_maximization` are prefix problems over a
 sequence of per-step transfer matrices, so they can be evaluated by
-``jax.lax.associative_scan`` at depth :math:`O(\\log T)` rather than by a scan of length
+``jax.lax.associative_scan`` at depth :math:`O(\log T)` rather than by a scan of length
 :math:`T`. The derivation is in docs/developers_notes/09-associative_estep_hmm.md;
 :func:`forward_backward_assoc` returns the same 6-tuple as
 :func:`~nemos.hmm.expectation_maximization.forward_backward` and is interchangeable
