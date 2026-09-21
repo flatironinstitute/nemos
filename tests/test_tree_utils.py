@@ -132,6 +132,76 @@ def test_tree_slice(idx):
         assert jnp.all(result[key] == expected)
 
 
+@pytest.mark.parametrize(
+    "tree, expected",
+    [
+        (jnp.array([1.0, 2.0, 3.0]), True),
+        (jnp.array([1.0, jnp.nan, 3.0]), False),
+        (jnp.array([1.0, jnp.inf, 3.0]), False),
+        (jnp.array([1.0, -jnp.inf, 3.0]), False),
+        (
+            {
+                "a": jnp.array([1.0, 2.0]),
+                "b": {"c": jnp.array([3.0, 4.0])},
+            },
+            True,
+        ),
+        (
+            {
+                "a": jnp.array([1.0, 2.0]),
+                "b": {"c": jnp.array([3.0, jnp.nan])},
+            },
+            False,
+        ),
+        (
+            {
+                "a": jnp.array([1.0, jnp.inf]),
+                "b": jnp.array([3.0, 4.0]),
+            },
+            False,
+        ),
+        (
+            {
+                "float": jnp.array([1.0, 2.0]),
+                "integer": jnp.array([1, 2]),
+                "boolean": jnp.array([True, False]),
+            },
+            True,
+        ),
+    ],
+)
+def test_tree_all_finite(tree, expected):
+    """Test whether all elements across all PyTree leaves are finite."""
+    result = tree_utils.tree_all_finite(tree)
+
+    assert result.shape == ()
+    assert jnp.array_equal(result, jnp.asarray(expected))
+
+
+@pytest.mark.parametrize(
+    "tree, expected",
+    [
+        ({"a": jnp.array([1.0, 2.0])}, True),
+        ({"a": jnp.array([1.0, jnp.nan])}, False),
+        ({"a": jnp.array([1.0, jnp.inf])}, False),
+    ],
+)
+def test_tree_all_finite_jit(tree, expected):
+    """Test that tree_all_finite works under JIT compilation."""
+    result = jax.jit(tree_utils.tree_all_finite)(tree)
+
+    assert result.shape == ()
+    assert jnp.array_equal(result, jnp.asarray(expected))
+
+
+def test_tree_all_finite_empty_tree():
+    """Test that an empty PyTree is considered finite."""
+    result = tree_utils.tree_all_finite({})
+
+    assert result.shape == ()
+    assert jnp.array_equal(result, jnp.asarray(True))
+
+
 @pytest.mark.parametrize("dtype", [jnp.float16, jnp.int32, "float32"])
 def test_tree_astype_casts_every_leaf(dtype):
     trees = ({"a": jnp.ones(2)}, [np.zeros(3), jnp.arange(4)])

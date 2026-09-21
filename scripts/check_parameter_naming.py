@@ -165,6 +165,7 @@ VALID_PAIRS = [
     {"claim", "claims"},
     {"initial_prob", "initial_proba_init"},
     {"transition_prob", "transition_proba_init"},
+    {"identity_shift", "identity_shift_beta"},
 ]
 
 
