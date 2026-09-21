@@ -259,7 +259,9 @@ def tree_broadcast_prefix(prefix: Any, full: Any) -> Any:
     Examples
     --------
     >>> from nemos.tree_utils import tree_broadcast_prefix
-    >>> tree_broadcast_prefix({"a": 1, "b": 0}, {"a": {"x": None, "y": None}, "b": None})
+    >>> tree_broadcast_prefix(
+    ...     {"a": 1, "b": 0}, {"a": {"x": None, "y": None}, "b": None}
+    ... )
     {'a': {'x': None, 'y': None}, 'b': None}
     """
     treedef = jax.tree_util.tree_structure(prefix)
@@ -319,6 +321,35 @@ def tree_zeros_like(pytree_x):
 def tree_full_like(pytree_x, fill_value):
     """Create a tree with the same structure as pytree_x and fill it with fill_value."""
     return jax.tree_util.tree_map(lambda _: fill_value, pytree_x)
+
+
+def tree_astype(*trees, dtype=None):
+    """Cast every leaf of each tree to ``dtype``.
+
+    ``None`` is an empty pytree node, so ``None`` entries pass through untouched; this
+    makes the helper usable on optional arguments without a guard at the call site.
+
+    Parameters
+    ----------
+    *trees :
+        Trees to cast.
+    dtype :
+        Target dtype. ``None`` (the default) leaves each leaf's own dtype alone.
+
+    Returns
+    -------
+    :
+        Tuple of the cast trees, one per input, each with the structure of its input.
+
+    Examples
+    --------
+    >>> import jax.numpy as jnp
+    >>> from nemos.tree_utils import tree_astype
+    >>> alphas, missing = tree_astype(jnp.ones(3), None, dtype=jnp.float16)
+    >>> alphas.dtype, missing
+    (dtype('float16'), None)
+    """
+    return jax.tree_util.tree_map(lambda x: jnp.asarray(x, dtype=dtype), trees)
 
 
 def has_matching_axis_pytree(*pytree: Any, axis: int = 0):

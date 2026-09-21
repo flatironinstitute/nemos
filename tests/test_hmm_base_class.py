@@ -27,7 +27,6 @@ ESTEP_TYPE = pytest.mark.parametrize("estep_type", tuple(FORWARD_BACKWARD))
 
 
 class TestHMMInit:
-
     # -------------------------------------------------------------------------
     # n_states setter tests
     # -------------------------------------------------------------------------
@@ -206,6 +205,18 @@ class TestHMMInit:
         model = MockHMM(n_states=3, dirichlet_initial_proba=alphas)
         assert jnp.array_equal(model.dirichlet_initial_proba, alphas)
 
+    @pytest.mark.parametrize(
+        "alphas",
+        [[1.0, 2.0, 3.0], (1.0, 2.0, 3.0), [1, 2, 3], np.array([1.0, 2.0, 3.0])],
+    )
+    def test_dirichlet_prior_init_prob_array_like(self, alphas):
+        """Any array-like is accepted and stored as a JAX array."""
+        model = MockHMM(n_states=3, dirichlet_initial_proba=alphas)
+        assert isinstance(model.dirichlet_initial_proba, jnp.ndarray)
+        assert jnp.array_equal(
+            model.dirichlet_initial_proba, jnp.array([1.0, 2.0, 3.0])
+        )
+
     def test_dirichlet_prior_init_prob_wrong_shape(self):
         """Test that wrong shape raises ValueError."""
         alphas = jnp.array([1.0, 2.0])  # n_states=3 but only 2 elements
@@ -231,6 +242,14 @@ class TestHMMInit:
         alphas = jnp.ones((3, 3))
         model = MockHMM(n_states=3, dirichlet_transition_proba=alphas)
         assert jnp.array_equal(model.dirichlet_transition_proba, alphas)
+
+    def test_dirichlet_prior_transition_array_like(self):
+        """Nested sequences are accepted for the transition prior too."""
+        model = MockHMM(n_states=2, dirichlet_transition_proba=[[2.0, 1.0], [1.0, 2.0]])
+        assert isinstance(model.dirichlet_transition_proba, jnp.ndarray)
+        assert jnp.array_equal(
+            model.dirichlet_transition_proba, jnp.array([[2.0, 1.0], [1.0, 2.0]])
+        )
 
     def test_dirichlet_prior_transition_wrong_shape(self):
         """Test that wrong shape raises ValueError."""
@@ -318,7 +337,6 @@ class TestHMMInit:
 
 
 class TestHMMSetup:
-
     def test_setup_with_no_input(self):
         """Test that setup leaves everything as default."""
         model = MockHMM(n_states=3)
@@ -351,19 +369,17 @@ class TestHMMSetup:
             ),
             (
                 "custom",
-                lambda n_states, X, y, session_starts, random_key, extra_arg: jnp.full(
-                    (n_states,), 1.0
-                )
-                / n_states,
+                lambda n_states, X, y, session_starts, random_key, extra_arg: (
+                    jnp.full((n_states,), 1.0) / n_states
+                ),
                 {"extra_arg": "value"},
                 does_not_raise(),
             ),
             (
                 "custom",
-                lambda n_states, X, y, session_starts, random_key: jnp.full(
-                    (n_states,), 1.0
-                )
-                / n_states,
+                lambda n_states, X, y, session_starts, random_key: (
+                    jnp.full((n_states,), 1.0) / n_states
+                ),
                 {"extra_arg": "value"},
                 pytest.raises(ValueError, match="Invalid keyword argument"),
             ),
@@ -422,19 +438,17 @@ class TestHMMSetup:
             ),
             (
                 "custom",
-                lambda n_states, X, y, session_starts, random_key, extra_arg: jnp.full(
-                    (n_states, n_states), 1.0
-                )
-                / n_states,
+                lambda n_states, X, y, session_starts, random_key, extra_arg: (
+                    jnp.full((n_states, n_states), 1.0) / n_states
+                ),
                 {"extra_arg": "value"},
                 does_not_raise(),
             ),
             (
                 "custom",
-                lambda n_states, X, y, session_starts, random_key: jnp.full(
-                    (n_states, n_states), 1.0
-                )
-                / n_states,
+                lambda n_states, X, y, session_starts, random_key: (
+                    jnp.full((n_states, n_states), 1.0) / n_states
+                ),
                 {"extra_arg": "value"},
                 pytest.raises(ValueError, match="Invalid keyword argument"),
             ),
@@ -591,7 +605,6 @@ class TestHMMSetup:
 
 
 class TestHMMInitialParams:
-
     def test__hmm_params_initialization_defaults(self):
         """Test that _hmm_params_initialization returns expected default parameters and validation flag."""
         model = MockHMM(n_states=3)
@@ -616,10 +629,9 @@ class TestHMMInitialParams:
     def test__hmm_params_initialization_custom_validation(self):
         model = MockHMM(n_states=3)
         model.setup(
-            initial_proba_init=lambda n_states, X, y, session_starts, random_key: jnp.full(
-                (n_states,), 1.0
+            initial_proba_init=lambda n_states, X, y, session_starts, random_key: (
+                jnp.full((n_states,), 1.0) / n_states
             )
-            / n_states
         )
         (initial_prob, _), validate_params = model._hmm_params_initialization(
             None, None, None, random_key_pair=jax.random.split(jax.random.PRNGKey(0), 2)
@@ -629,10 +641,9 @@ class TestHMMInitialParams:
 
         model = MockHMM(n_states=3)
         model.setup(
-            transition_proba_init=lambda n_states, X, y, session_starts, random_key: jnp.full(
-                (n_states, n_states), 1.0
+            transition_proba_init=lambda n_states, X, y, session_starts, random_key: (
+                jnp.full((n_states, n_states), 1.0) / n_states
             )
-            / n_states
         )
         (_, transition_prob), validate_params = model._hmm_params_initialization(
             None, None, None, random_key_pair=jax.random.split(jax.random.PRNGKey(0), 2)
@@ -702,16 +713,16 @@ class TestHMMInitialParams:
         [
             (
                 "initial_proba_init",
-                lambda n_states, X, y, session_starts, random_key: jnp.ones((n_states,))
-                / n_states,
+                lambda n_states, X, y, session_starts, random_key: (
+                    jnp.ones((n_states,)) / n_states
+                ),
                 does_not_raise(),
             ),
             (
                 "transition_proba_init",
-                lambda n_states, X, y, session_starts, random_key: jnp.ones(
-                    (n_states, n_states)
-                )
-                / n_states,
+                lambda n_states, X, y, session_starts, random_key: (
+                    jnp.ones((n_states, n_states)) / n_states
+                ),
                 does_not_raise(),
             ),
             (
@@ -754,7 +765,6 @@ class TestHMMInitialParams:
 
 
 class TestHMMNewSession:
-
     @pytest.mark.parametrize(
         "X, y, session_starts, expected_new_session",
         [
@@ -1273,9 +1283,9 @@ class TestHMMInference:
         expected_shape = self._get_expected_shape(
             method_name, kwargs, n_samples, n_states
         )
-        assert (
-            out.shape == expected_shape
-        ), f"Expected shape {expected_shape}, got {out.shape}"
+        assert out.shape == expected_shape, (
+            f"Expected shape {expected_shape}, got {out.shape}"
+        )
 
     @pytest.mark.parametrize("method_name", ["smooth_proba", "filter_proba"])
     def test_posterior_proba_returns_valid_probabilities(self, method_name):
@@ -1294,9 +1304,9 @@ class TestHMMInference:
 
         # Check sum across states
         row_sums = jnp.sum(posteriors, axis=1)
-        assert jnp.allclose(
-            row_sums, 1.0, rtol=1e-5
-        ), f"Probabilities don't sum to 1. Min: {row_sums.min()}, Max: {row_sums.max()}"
+        assert jnp.allclose(row_sums, 1.0, rtol=1e-5), (
+            f"Probabilities don't sum to 1. Min: {row_sums.min()}, Max: {row_sums.max()}"
+        )
 
     @pytest.mark.parametrize(
         "method_config",
@@ -1358,9 +1368,9 @@ class TestHMMInference:
             assert isinstance(out, nap.Tsd), f"Expected nap.Tsd, got {type(out)}"
             assert out.shape == (n_samples,)
         else:
-            assert isinstance(
-                out, nap.TsdFrame
-            ), f"Expected nap.TsdFrame, got {type(out)}"
+            assert isinstance(out, nap.TsdFrame), (
+                f"Expected nap.TsdFrame, got {type(out)}"
+            )
             assert out.shape == (n_samples, model.n_states)
         assert jnp.allclose(out.t, time)
 
@@ -1438,9 +1448,9 @@ class TestHMMInference:
         out_2 = getattr(model, method_name)(X, y, **kwargs)
 
         # Check consistency
-        assert jnp.allclose(
-            out_1, out_2
-        ), f"{method_name} returns different results on consecutive calls"
+        assert jnp.allclose(out_1, out_2), (
+            f"{method_name} returns different results on consecutive calls"
+        )
 
     @pytest.mark.parametrize(
         "method_name", ["smooth_proba", "filter_proba", "decode_state"]
@@ -1504,9 +1514,9 @@ class TestHMMInference:
         X = nap.TsdFrame(t=np.arange(X.shape[0]), d=X, time_support=ep)
         out = getattr(model, method_name)(X, y)
         assert isinstance(out, nap.TsdFrame), "Did not return pynapple!"
-        assert np.all(
-            np.isnan(out[nan_location])
-        ), "Not returning NaNs in the expected location!"
+        assert np.all(np.isnan(out[nan_location])), (
+            "Not returning NaNs in the expected location!"
+        )
 
     @pytest.mark.parametrize(
         "method_name", ["smooth_proba", "filter_proba", "decode_state"]
@@ -1523,9 +1533,9 @@ class TestHMMInference:
         y = nap.Tsd(t=np.arange(y.shape[0]), d=y, time_support=ep)
         posteriors = getattr(model, method_name)(X, y)
         assert isinstance(posteriors, nap.TsdFrame), "Did not return pynapple!"
-        assert np.all(
-            np.isnan(posteriors[nan_location])
-        ), "Not returning NaNs in the expected location!"
+        assert np.all(np.isnan(posteriors[nan_location])), (
+            "Not returning NaNs in the expected location!"
+        )
 
     @pytest.mark.parametrize(
         "method_name", ["smooth_proba", "filter_proba", "decode_state"]
@@ -1565,12 +1575,12 @@ class TestHMMInference:
         model.fit(X, y)
         out_onehot = model.decode_state(X, y, state_format="one-hot")
         out_index = model.decode_state(X, y, state_format="index")
-        assert jnp.all(
-            jnp.where(out_onehot == 1)[1] == out_index
-        ), "index and one-hot do not match!"
-        assert jnp.all(
-            out_onehot.sum(axis=1) == 1
-        ), "more than one hot value in one-hot array!"
+        assert jnp.all(jnp.where(out_onehot == 1)[1] == out_index), (
+            "index and one-hot do not match!"
+        )
+        assert jnp.all(out_onehot.sum(axis=1) == 1), (
+            "more than one hot value in one-hot array!"
+        )
 
     def test_decode_state_invalid_state_format(self):
         """Test that decode_state raises ValueError for invalid state_format."""
@@ -1622,19 +1632,19 @@ class TestHMMInference:
         out_all_new_sess = getattr(model, method_name)(
             X, y, session_starts=np.ones(10, dtype=bool)
         )
-        assert np.all(
-            out_all_new_sess == out_all_new_sess[0]
-        ), "Output should be the same for all time points"
+        assert np.all(out_all_new_sess == out_all_new_sess[0]), (
+            "Output should be the same for all time points"
+        )
         out_default = getattr(model, method_name)(X, y)
-        assert not np.allclose(
-            out_all_new_sess, out_default
-        ), "Output with all new sessions should not match default output"
+        assert not np.allclose(out_all_new_sess, out_default), (
+            "Output with all new sessions should not match default output"
+        )
         out_no_new_sess = getattr(model, method_name)(
             X, y, session_starts=np.zeros(10, dtype=bool)
         )
-        assert jnp.allclose(
-            out_no_new_sess, out_default
-        ), "Output with no new sessions should match default output"
+        assert jnp.allclose(out_no_new_sess, out_default), (
+            "Output with no new sessions should match default output"
+        )
 
 
 def _spy_registry(monkeypatch, registry, key):

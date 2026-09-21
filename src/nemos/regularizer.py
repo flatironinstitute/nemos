@@ -382,7 +382,6 @@ class Regularizer(Base, abc.ABC):
 
     def penalized_loss(self, loss: Callable, params: Any, strength: Any) -> Callable:
         """Return a function for calculating the penalized loss."""
-
         penalty_fn = self.penalty_fn(params=params, strength=strength)
 
         def _penalized_loss(params, *args, **kwargs):
@@ -564,7 +563,6 @@ class Regularizer(Base, abc.ABC):
             - A non-scalar strength leaf does not match the shape of the
               corresponding parameter leaf.
         """
-
         wheres = getattr(params, "regularizable_subtrees", lambda: [lambda x: x])()
         struct = jax.tree_util.tree_structure(params)
         structured_strength = jax.tree_util.tree_unflatten(
@@ -964,13 +962,15 @@ class GroupLasso(Regularizer):
     Examples
     --------
     >>> import numpy as np
-    >>> from nemos.regularizer import GroupLasso  # Assuming the module is named group_lasso
+    >>> from nemos.regularizer import (
+    ...     GroupLasso,
+    ... )  # Assuming the module is named group_lasso
     >>> from nemos.glm import GLM
     >>> # simulate some counts
     >>> num_samples, num_features, num_groups = 1000, 5, 3
-    >>> X = np.random.normal(size=(num_samples, num_features)) # design matrix
-    >>> w = [0, 0.5, 1, 0, -0.5] # define some weights
-    >>> y = np.random.poisson(np.exp(X.dot(w))) # observed counts
+    >>> X = np.random.normal(size=(num_samples, num_features))  # design matrix
+    >>> w = [0, 0.5, 1, 0, -0.5]  # define some weights
+    >>> y = np.random.poisson(np.exp(X.dot(w)))  # observed counts
     >>> # Define a mask for 3 groups and 5 features
     >>> mask = np.zeros((num_groups, num_features))
     >>> mask[0] = [1, 0, 0, 1, 0]  # Group 0 includes features 0 and 3

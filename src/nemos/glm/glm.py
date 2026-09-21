@@ -299,7 +299,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
     Or pass the observation model object directly:
 
-    >>> model = nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
+    >>> model = nmo.glm.GLM(
+    ...     observation_model=nmo.observation_models.GammaObservations()
+    ... )
     >>> model.observation_model
     GammaObservations()
 
@@ -870,7 +872,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         >>> # get model score
         >>> log_likelihood_score = model.score(X, y)
         >>> # get a pseudo-R2 score
-        >>> pseudo_r2_score = model.score(X, y, score_type='pseudo-r2-McFadden')
+        >>> pseudo_r2_score = model.score(X, y, score_type="pseudo-r2-McFadden")
 
         Notes
         -----
@@ -1273,7 +1275,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         >>> X = jnp.ones((100, 5))
         >>> y = jnp.ones((100,))
         >>> loader = ArrayDataLoader(X, y, batch_size=32, shuffle="full")
-        >>> model = nmo.glm.GLM(solver_name="GradientDescent", solver_kwargs={"stepsize": 0.01, "acceleration" : False})
+        >>> model = nmo.glm.GLM(
+        ...     solver_name="GradientDescent",
+        ...     solver_kwargs={"stepsize": 0.01, "acceleration": False},
+        ... )
         >>> # Stop early when the solver's convergence criterion is met.
         >>> model = model.stochastic_fit(
         ...     loader, n_passes=10, callbacks=SolverConvergenceCallback()
@@ -1380,7 +1385,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
     def _warn_about_estimated_svrg_settings(self):
         """Warn if SVRG settings are estimated on sample data instead of the full dataset."""
-
         if not isinstance(self._solver, (WrappedSVRG, WrappedProxSVRG)):
             return
 
@@ -1858,8 +1862,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
         >>> # Saving and loading a custom inverse link function
         >>> model = nmo.glm.GLM(
-        ...     observation_model="Poisson",
-        ...     inverse_link_function=lambda x: x**2
+        ...     observation_model="Poisson", inverse_link_function=lambda x: x**2
         ... )
         >>> model.save_params("model_params.npz")
         >>> # Provide a mapping for the custom link function when loading.
@@ -1879,7 +1882,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         solver_kwargs: {}
         solver_name: LBFGS
         """
-
         # initialize saving dictionary
         fit_attrs = self._get_fit_state()
         fit_attrs.pop("solver_state_")
@@ -2089,16 +2091,16 @@ class PopulationGLM(GLM):
     >>> X_dict = {"feature_1": feature_1, "feature_2": feature_2}
     >>> weights = dict(
     ...     feature_1=jnp.array([[0.0, 0.5], [0.0, -0.5]]),
-    ...     feature_2=jnp.array([[1.0, 0.0]])
+    ...     feature_2=jnp.array([[1.0, 0.0]]),
     ... )
     >>> rate = np.exp(
-    ...     X_dict["feature_1"].dot(weights["feature_1"]) +
-    ...     X_dict["feature_2"].dot(weights["feature_2"])
+    ...     X_dict["feature_1"].dot(weights["feature_1"])
+    ...     + X_dict["feature_2"].dot(weights["feature_2"])
     ... )
     >>> y = np.random.poisson(rate)
     >>> feature_mask = {
     ...     "feature_1": jnp.array([[0, 1], [0, 1]], dtype=jnp.int32),
-    ...     "feature_2": jnp.array([[1, 0]], dtype=jnp.int32)
+    ...     "feature_2": jnp.array([[1, 0]], dtype=jnp.int32),
     ... }
     >>> model = nmo.glm.PopulationGLM(feature_mask=feature_mask).fit(X_dict, y)
     >>> model.coef_
@@ -2120,8 +2122,7 @@ class PopulationGLM(GLM):
     >>> weights = np.array([[0.5, 0.0], [-0.5, -0.5], [0.0, 1.0]])
     >>> y = np.random.poisson(np.exp(X.dot(weights)))
     >>> model = nmo.glm.PopulationGLM(
-    ...     regularizer="Ridge",
-    ...     regularizer_strength=0.1
+    ...     regularizer="Ridge", regularizer_strength=0.1
     ... ).fit(X, y)
     >>> model.regularizer
     Ridge()
@@ -2280,7 +2281,7 @@ class PopulationGLM(GLM):
         >>> num_samples, num_features, num_neurons = 100, 3, 2
         >>> X = np.random.normal(size=(num_samples, num_features))
         >>> # Weights is defined by how each feature influences the output, shape (num_features, num_neurons)
-        >>> weights = np.array([[ 0.5,  0. ], [-0.5, -0.5], [ 0. ,  1. ]])
+        >>> weights = np.array([[0.5, 0.0], [-0.5, -0.5], [0.0, 1.0]])
         >>> # Output y simulates a Poisson distribution based on a linear model between features X and wegihts
         >>> y = np.random.poisson(np.exp(X.dot(weights)))
         >>> # Define a feature mask, shape (num_features, num_neurons)

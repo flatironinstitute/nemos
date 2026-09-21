@@ -359,22 +359,24 @@ Each $\oplus$ is two $K \times K$ matrix products plus $O(K^2)$ elementwise work
 def cond(M, log_w):
     """Condition a row-stochastic M on log weights per exit state, renormalizing rows."""
     m = jnp.max(log_w, axis=-1, keepdims=True)
-    Mw = M * jnp.exp(log_w - m)[..., None, :]      # diag-free M @ diag(w)
+    Mw = M * jnp.exp(log_w - m)[..., None, :]  # diag-free M @ diag(w)
     r = jnp.sum(Mw, axis=-1)
     return jnp.log(r) + m, Mw / r[..., None]
 
-def combine(x1, x2):                                # x1 earlier, x2 later
+
+def combine(x1, x2):  # x1 earlier, x2 later
     log_l1, L1 = x1
     log_l2, L2 = x2
     log_r, L = cond(L1, log_l2)
     log_l = log_l1 + log_r
     return log_l - jnp.max(log_l, axis=-1, keepdims=True), L @ L2
 
+
 def forward(log_pi, log_A, log_b, session_starts):
     base = jnp.where(session_starts[:, None, None], jnp.exp(log_pi), jnp.exp(log_A))
-    elements = cond(base, log_b)                    # x_t = phi(F_{t:t}), batched over t
+    elements = cond(base, log_b)  # x_t = phi(F_{t:t}), batched over t
     _, L_cum = jax.lax.associative_scan(combine, elements)
-    alphas = L_cum[:, 0, :]                         # rows of L_{0:t} are all equal
+    alphas = L_cum[:, 0, :]  # rows of L_{0:t} are all equal
     return jnp.log(alphas), normalizers(log_pi, log_A, log_b, session_starts, alphas)
 ```
 
@@ -407,25 +409,29 @@ def log_matmul(log_A, log_B):
     b = jnp.max(log_B, axis=-2, keepdims=True)
     return jnp.log(jnp.exp(log_A - a) @ jnp.exp(log_B - b)) + a + b
 
+
 def cond(log_M, log_w):
     """Condition a row-stochastic log_M on log weights per exit state, renormalizing."""
-    log_Mw = log_M + log_w[..., None, :]           # log of M @ diag(w)
-    log_r = logsumexp(log_Mw, axis=-1)             # log row sums, the shift is inside
+    log_Mw = log_M + log_w[..., None, :]  # log of M @ diag(w)
+    log_r = logsumexp(log_Mw, axis=-1)  # log row sums, the shift is inside
     return log_r, log_Mw - log_r[..., None]
 
-def combine(x1, x2):                                # x1 earlier, x2 later
+
+def combine(x1, x2):  # x1 earlier, x2 later
     log_l1, log_L1 = x1
     log_l2, log_L2 = x2
     log_r, log_L = cond(log_L1, log_l2)
     log_l = log_l1 + log_r
     return log_l - jnp.max(log_l, axis=-1, keepdims=True), log_matmul(log_L, log_L2)
 
+
 def forward(log_pi, log_A, log_b, session_starts):
     log_base = jnp.where(session_starts[:, None, None], log_pi, log_A)
-    elements = cond(log_base, log_b)                # x_t = phi(F_{t:t}), batched over t
+    elements = cond(log_base, log_b)  # x_t = phi(F_{t:t}), batched over t
     _, log_L_cum = jax.lax.associative_scan(combine, elements)
-    log_alphas = log_L_cum[:, 0, :]                 # rows of L_{0:t} are all equal
+    log_alphas = log_L_cum[:, 0, :]  # rows of L_{0:t} are all equal
     return log_alphas, normalizers(log_pi, log_A, log_b, session_starts, log_alphas)
+
 
 def normalizers(log_pi, log_A, log_b, session_starts, log_alphas):
     """log c_t, recomputed locally: the scan drops the scale that would carry it."""
@@ -601,21 +607,25 @@ def max_plus_matmul(log_earlier, log_later):
     """out[i, j] = max_k(earlier[i, k] + later[k, j]); fused, not materialized."""
     return jnp.max(log_earlier[..., :, :, None] + log_later[..., None, :, :], axis=-2)
 
+
 def compose_backpointers(later, earlier):
     """(earlier o later)[i] = earlier[later[i]]; reverse=True hands `later` over first."""
     return jnp.take_along_axis(earlier, later, axis=-1)
 
+
 def max_sum(log_pi, log_A, log_b, session_starts):
     log_base = jnp.where(session_starts[:, None, None], log_pi, log_A)
     cumulative = jax.lax.associative_scan(max_plus_matmul, log_base + log_b[:, None, :])
-    deltas = cumulative[:, 0, :]                     # every row equal, index 0 resets
+    deltas = cumulative[:, 0, :]  # every row equal, index 0 resets
 
     backpointers = jnp.argmax(deltas[:-1, :, None] + log_A[None], axis=1)
-    boundary = jnp.argmax(deltas[:-1], axis=-1)      # the previous session's best exit
+    boundary = jnp.argmax(deltas[:-1], axis=-1)  # the previous session's best exit
     backpointers = jnp.where(session_starts[1:, None], boundary[:, None], backpointers)
 
     final = jnp.argmax(deltas[-1])
-    composed = jax.lax.associative_scan(compose_backpointers, backpointers, reverse=True)
+    composed = jax.lax.associative_scan(
+        compose_backpointers, backpointers, reverse=True
+    )
     return jnp.concatenate([composed[:, final], jnp.array([final])])
 ```
 

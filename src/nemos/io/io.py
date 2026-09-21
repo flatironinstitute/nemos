@@ -488,8 +488,8 @@ def get_user_keys_from_nested_dict(nested_dict: dict, filter_keys: bool = True) 
     Examples
     --------
     >>> params = {
-    ...     'regularizer': {'class': 'GroupLasso', 'params': {'mask': None}},
-    ...     'solver_kwargs': {'tol': 1e-7, 'maxiter': 100}
+    ...     "regularizer": {"class": "GroupLasso", "params": {"mask": None}},
+    ...     "solver_kwargs": {"tol": 1e-7, "maxiter": 100},
     ... }
     >>> get_user_keys_from_nested_dict(params)
     ['regularizer', 'regularizer__mask', 'solver_kwargs', 'solver_kwargs__maxiter', 'solver_kwargs__tol']
@@ -553,22 +553,27 @@ def _get_invalid_mappings(mapping_dict: dict | None) -> List:
     >>> import nemos as nmo
     >>> def square(x):
     ...     return x**2
-    ...
     >>> class MyRegularizer(nmo.regularizer.GroupLasso):
     ...     def __init__(self, mask=None, new_param=1):
     ...         super().__init__(mask=mask)
     ...         self.new_param = new_param
-    ...
-    >>> invalid = _get_invalid_mappings({
-    ...     "inverse_link_function": square,
-    ...     "regularizer": {"class": MyRegularizer, "params": {"regularizer__new_param": 10.}}
-    ... })
+    >>> invalid = _get_invalid_mappings(
+    ...     {
+    ...         "inverse_link_function": square,
+    ...         "regularizer": {
+    ...             "class": MyRegularizer,
+    ...             "params": {"regularizer__new_param": 10.0},
+    ...         },
+    ...     }
+    ... )
     >>> invalid
     []
-    >>> invalid = _get_invalid_mappings({
-    ...     "inverse_link_function": square,
-    ...     "regularizer": {"params": {"new_param": 10.}}
-    ... })
+    >>> invalid = _get_invalid_mappings(
+    ...     {
+    ...         "inverse_link_function": square,
+    ...         "regularizer": {"params": {"new_param": 10.0}},
+    ...     }
+    ... )
     >>> invalid
     ['regularizer__new_param']
     """

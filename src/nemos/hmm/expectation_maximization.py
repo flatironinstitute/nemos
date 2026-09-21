@@ -152,8 +152,7 @@ def _forward_pass(
                 log_alphas[t] = log_initial_prob + log_py_z[t]
             else:
                 log_alphas[t] = log_py_z[t] + logsumexp(
-                    log_transition_prob + log_alphas[t - 1][None, :],
-                    axis=1
+                    log_transition_prob + log_alphas[t - 1][None, :], axis=1
                 )
 
             log_c[t] = logsumexp(log_alphas[t])
@@ -338,10 +337,14 @@ def _backward_pass(
             if new_sess[t + 1]:
                 log_betas[t] = np.zeros(n_states)
             else:
-                log_betas[t] = logsumexp(
-                    log_transition_prob + (log_betas[t + 1] + log_py_z[t + 1])[None, :],
-                    axis=1
-                ) - log_c[t + 1]
+                log_betas[t] = (
+                    logsumexp(
+                        log_transition_prob
+                        + (log_betas[t + 1] + log_py_z[t + 1])[None, :],
+                        axis=1,
+                    )
+                    - log_c[t + 1]
+                )
 
     References
     ----------
@@ -605,6 +608,8 @@ def _em_step(
     ],
     e_step_fn: EStepFn,
     session_starts: Array,
+    dirichlet_initial_proba: Array | None = None,
+    dirichlet_transition_proba: Array | None = None,
 ) -> EMCarry:
     """
     Execute a single EM iteration combining E-step and M-step.
@@ -630,6 +635,12 @@ def _em_step(
         Callable that runs the forward-backward algorithm.
     session_starts :
         Boolean array marking session boundaries.
+    dirichlet_initial_proba :
+        Alpha parameters of the Dirichlet prior over the initial state probabilities,
+        shape ``(n_states,)``. If None, a flat (uninformative) prior is assumed.
+    dirichlet_transition_proba :
+        Alpha parameters of the Dirichlet prior over the transition probabilities,
+        shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
 
     Returns
     -------
@@ -643,7 +654,6 @@ def _em_step(
     until convergence criteria are met. The carry structure allows JAX to efficiently
     compile and execute the EM loop.
     """
-
     params, previous_state = carry
 
     log_posteriors, log_joint_posterior, _, new_log_like, _, _ = e_step_fn(
@@ -662,6 +672,8 @@ def _em_step(
         log_joint_posterior=log_joint_posterior,
         session_starts=session_starts,
         m_step_fn_model_params=m_step_fn_model_params,
+        dirichlet_initial_proba=dirichlet_initial_proba,
+        dirichlet_transition_proba=dirichlet_transition_proba,
     )
 
     new_state = EMState(
@@ -686,6 +698,8 @@ def em_step(
     m_step_fn_model_params: Callable,
     e_step_fn: EStepFn,
     session_starts: Array,
+    dirichlet_initial_proba: Array | None = None,
+    dirichlet_transition_proba: Array | None = None,
 ) -> Tuple[ModelParamsT, EMState]:
     """
     Perform a single EM iteration step for an HMM.
@@ -715,6 +729,12 @@ def em_step(
         Callable that runs the forward-backward algorithm.
     session_starts :
         Boolean mask for the first observation of each session.
+    dirichlet_initial_proba :
+        Alpha parameters of the Dirichlet prior over the initial state probabilities,
+        shape ``(n_states,)``. If None, a flat (uninformative) prior is assumed.
+    dirichlet_transition_proba :
+        Alpha parameters of the Dirichlet prior over the transition probabilities,
+        shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
 
     Returns
     -------
@@ -735,6 +755,8 @@ def em_step(
         m_step_fn_model_params=m_step_fn_model_params,
         e_step_fn=e_step_fn,
         session_starts=session_starts,
+        dirichlet_initial_proba=dirichlet_initial_proba,
+        dirichlet_transition_proba=dirichlet_transition_proba,
     )
 
     return params, state
@@ -779,6 +801,8 @@ def em_hmm(
     m_step_fn_model_params: Callable,
     e_step_fn: EStepFn,
     session_starts: Optional[Array] = None,
+    dirichlet_initial_proba: Array | None = None,
+    dirichlet_transition_proba: Array | None = None,
     maxiter: int = 10**3,
     tol: float = 1e-8,
     check_convergence: Callable = check_log_likelihood_increment,
@@ -812,6 +836,12 @@ def em_hmm(
         Callable that runs the forward-backward algorithm.
     session_starts :
         Boolean mask for the first observation of each session.
+    dirichlet_initial_proba :
+        Alpha parameters of the Dirichlet prior over the initial state probabilities,
+        shape ``(n_states,)``. If None, a flat (uninformative) prior is assumed.
+    dirichlet_transition_proba :
+        Alpha parameters of the Dirichlet prior over the transition probabilities,
+        shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
     maxiter :
         Maximum number of EM iterations.
     tol :
@@ -848,6 +878,8 @@ def em_hmm(
         m_step_fn_model_params=m_step_fn_model_params,
         e_step_fn=e_step_fn,
         session_starts=session_starts,
+        dirichlet_initial_proba=dirichlet_initial_proba,
+        dirichlet_transition_proba=dirichlet_transition_proba,
     )
 
     def stopping_condition_while(carry):

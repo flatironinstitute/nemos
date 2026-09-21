@@ -87,10 +87,14 @@ class BaseHMM(
         The number of hidden states in the HMM. Must be a positive integer.
     dirichlet_initial_proba :
         Alpha parameters for the Dirichlet prior over the initial state probabilities.
-        Shape ``(n_states,)``. If None, a flat (uninformative) prior is assumed.
+        Any array-like (list, tuple, NumPy or JAX array) of shape ``(n_states,)``, cast
+        to a JAX array on assignment. All values must be >= 1. If None, a flat
+        (uninformative) prior is assumed.
     dirichlet_transition_proba :
         Alpha parameters for the Dirichlet prior over the transition probabilities.
-        Shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
+        Any array-like (list, tuple, NumPy or JAX array) of shape
+        ``(n_states, n_states)``, cast to a JAX array on assignment. All values must be
+        >= 1. If None, a flat (uninformative) prior is assumed.
     regularizer :
         Regularization to use for model parameter optimization. Defines the regularization scheme
         and related parameters. Default is UnRegularized.
@@ -128,10 +132,8 @@ class BaseHMM(
     def __init__(
         self,
         n_states: int,
-        dirichlet_initial_proba: Union[jnp.ndarray, None] = None,  # (n_state, )
-        dirichlet_transition_proba: Union[
-            jnp.ndarray | None
-        ] = None,  # (n_state, n_state):
+        dirichlet_initial_proba: Optional[ArrayLike] = None,  # (n_state, )
+        dirichlet_transition_proba: Optional[ArrayLike] = None,  # (n_state, n_state):
         regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Optional[
             Any
@@ -215,10 +217,14 @@ class BaseHMM(
 
         An example of a custom initialization function for initial probabilities could be:
         ```
-        def custom_initial_proba_init(n_states, X, y, session_starts, random_key, min_prob=0.05):
+        def custom_initial_proba_init(
+            n_states, X, y, session_starts, random_key, min_prob=0.05
+        ):
             init_prob = jax.random.uniform(random_key, (n_states,), dtype=float)
             init_prob = init_prob / init_prob.sum()  # normalize to sum to 1
-            init_prob = jnp.clip(init_prob, a_min=min_prob)  # enforce minimum probability
+            init_prob = jnp.clip(
+                init_prob, a_min=min_prob
+            )  # enforce minimum probability
             return init_prob / init_prob.sum()  # renormalize after clipping
         ```
 
@@ -368,7 +374,7 @@ class BaseHMM(
         return self._dirichlet_initial_proba
 
     @dirichlet_initial_proba.setter
-    def dirichlet_initial_proba(self, value: jnp.ndarray | None):
+    def dirichlet_initial_proba(self, value: Optional[ArrayLike]):
         """Validate and set the alpha parameters of the Dirichlet prior over the initial probabilities."""
         self._dirichlet_initial_proba = _resolve_dirichlet_priors(
             value, (self._n_states,)
@@ -383,7 +389,7 @@ class BaseHMM(
         return self._dirichlet_transition_proba
 
     @dirichlet_transition_proba.setter
-    def dirichlet_transition_proba(self, value: jnp.ndarray | None):
+    def dirichlet_transition_proba(self, value: Optional[ArrayLike]):
         """Validate and set the alpha parameters of the Dirichlet prior over the transition probabilities."""
         self._dirichlet_transition_proba = _resolve_dirichlet_priors(
             value, (self._n_states, self._n_states)
@@ -577,9 +583,9 @@ class BaseHMM(
         if self._hmm_use_kmeans is not None:
             for param, use_kmeans in self._hmm_use_kmeans.items():
                 if use_kmeans:
-                    self._hmm_initialization_funcs[f"{param}_kwargs"][
-                        "initializer"
-                    ] = initializer
+                    self._hmm_initialization_funcs[f"{param}_kwargs"]["initializer"] = (
+                        initializer
+                    )
         if self._model_use_kmeans is not None:
             for param, use_kmeans in self._model_use_kmeans.items():
                 if use_kmeans:
@@ -718,7 +724,7 @@ class BaseHMM(
         # filter for non-nans, grab data if needed
         data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
         # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+        (params,) = tree_utils.tree_astype(params, dtype=y.dtype)
 
         # make sure session_starts starts with a 1
         session_starts = session_starts.at[0].set(True)
@@ -785,7 +791,7 @@ class BaseHMM(
         data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
 
         # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+        (params,) = tree_utils.tree_astype(params, dtype=y.dtype)
 
         # make sure session_starts starts with a 1
         session_starts = session_starts.at[0].set(True)
@@ -883,7 +889,7 @@ class BaseHMM(
         data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
 
         # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+        (params,) = tree_utils.tree_astype(params, dtype=y.dtype)
 
         # make sure session_starts starts with a 1
         session_starts = session_starts.at[0].set(True)
@@ -983,7 +989,7 @@ class BaseHMM(
         data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
 
         # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+        (params,) = tree_utils.tree_astype(params, dtype=y.dtype)
 
         # make sure session_starts starts with a 1
         session_starts = session_starts.at[0].set(True)
@@ -1094,9 +1100,9 @@ class BaseHMM(
         a model fit on the GPU. Placing the inputs on a CPU device is enough, the
         computation following its data:
 
-        >>> import jax                                              # doctest: +SKIP
-        >>> cpu = jax.devices("cpu")[0]                             # doctest: +SKIP
-        >>> states = model.decode_state(                            # doctest: +SKIP
+        >>> import jax  # doctest: +SKIP
+        >>> cpu = jax.devices("cpu")[0]  # doctest: +SKIP
+        >>> states = model.decode_state(  # doctest: +SKIP
         ...     jax.device_put(X, cpu), jax.device_put(y, cpu)
         ... )
 
@@ -1105,7 +1111,7 @@ class BaseHMM(
         launch overhead paid ``n_samples`` times. ``jax.default_device`` is the
         alternative if several calls should run there:
 
-        >>> with jax.default_device(cpu):                           # doctest: +SKIP
+        >>> with jax.default_device(cpu):  # doctest: +SKIP
         ...     states = model.decode_state(X, y)
         """
         params, X, y, session_starts = self._validate_and_prepare_inputs(

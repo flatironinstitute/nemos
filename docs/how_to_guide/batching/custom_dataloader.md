@@ -318,11 +318,13 @@ def split_intervals(time_support, interval_size):
     Each row is ``(chunk_start, chunk_end, interval_start)``; ``interval_start`` lets the
     loader clip the left context without reaching back into the previous interval.
     """
-    return np.array([
-        (start_chunk, min(start_chunk + interval_size, end), start)
-        for start, end in time_support.values
-        for start_chunk in np.arange(start, end, interval_size)
-    ])
+    return np.array(
+        [
+            (start_chunk, min(start_chunk + interval_size, end), start)
+            for start, end in time_support.values
+            for start_chunk in np.arange(start, end, interval_size)
+        ]
+    )
 ```
 
 It returns the same `(chunk_start, chunk_end, interval_start)` rows the loader expects, so `self._chunks = split_intervals(spike_times.time_support, interval_size)` is a drop-in replacement for those three lines.

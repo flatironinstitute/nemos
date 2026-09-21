@@ -119,9 +119,14 @@ class GLMHMM(
         ``1.0``. Ignored when ``regularizer="UnRegularized"``.
     dirichlet_initial_proba :
         Alpha parameters for the Dirichlet prior over the initial state probabilities.
-        Shape ``(n_states,)``. If None, a flat (uninformative) prior is assumed.
+        Any array-like (list, tuple, NumPy or JAX array) of shape ``(n_states,)``, cast
+        to a JAX array on assignment. All values must be >= 1. If None, a flat
+        (uninformative) prior is assumed.
     dirichlet_transition_proba :
         Alpha parameters for the Dirichlet prior over the transition probabilities.
+        Any array-like (list, tuple, NumPy or JAX array) of shape
+        ``(n_states, n_states)``, cast to a JAX array on assignment. All values must be
+        >= 1. If None, a flat (uninformative) prior is assumed.
         Shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
     estep_type:
       How the forward-backward recursions of the E-step are evaluated. ``"sequential"``
@@ -299,7 +304,9 @@ class GLMHMM(
     >>> is_new_mask[100] = True
     >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(X, y, session_starts=is_new_mask)
     >>> # Equivalent: pass the starts as integer indices.
-    >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(X, y, session_starts=np.array([0, 100]))
+    >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(
+    ...     X, y, session_starts=np.array([0, 100])
+    ... )
 
     **Decode Hidden States**
 
@@ -350,10 +357,8 @@ class GLMHMM(
         regularizer: Union[str, Regularizer] = "Ridge",
         regularizer_strength: Any = 1.0,  # this is used to regularize GLM coef.
         # prior to regularize init prob and transition
-        dirichlet_initial_proba: Union[jnp.ndarray, None] = None,  # (n_state, )
-        dirichlet_transition_proba: Union[
-            jnp.ndarray | None
-        ] = None,  # (n_state, n_state)
+        dirichlet_initial_proba: Optional[ArrayLike] = None,  # (n_state, )
+        dirichlet_transition_proba: Optional[ArrayLike] = None,  # (n_state, n_state)
         estep_type: Literal["sequential", "associative"] = "sequential",
         solver_name: str = None,
         solver_kwargs: Optional[dict] = None,
@@ -495,6 +500,7 @@ class GLMHMM(
 
             from nemos.hmm.initialize_parameters import InitFunctionHMM
             from nemos.glm_hmm.initialize_parameters import InitFunctionGLM
+
             help(InitFunctionHMM)  # or help(InitFunctionGLM)
 
         All arguments must appear in the function signature even when unused, so the
@@ -512,8 +518,13 @@ class GLMHMM(
 
         >>> import jax.numpy as jnp
         >>> def my_glm_init(
-        ...     n_states, X, y, inverse_link_function, observation_model,
-        ...     session_starts, random_key,
+        ...     n_states,
+        ...     X,
+        ...     y,
+        ...     inverse_link_function,
+        ...     observation_model,
+        ...     session_starts,
+        ...     random_key,
         ... ):
         ...     coef = jnp.zeros((X.shape[1], n_states))
         ...     intercept = jnp.zeros((n_states,))
@@ -788,7 +799,9 @@ class GLMHMM(
         Multiple sessions via explicit ``session_starts``:
 
         >>> session_starts = np.array([0, 100])
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(X, y, session_starts=session_starts)
+        >>> model = nmo.glm_hmm.GLMHMM(n_states=2).fit(
+        ...     X, y, session_starts=session_starts
+        ... )
 
         See Also
         --------
@@ -819,11 +832,27 @@ class GLMHMM(
         # set up optimization
         self._initialize_optimizer_and_state(init_params, data, y)
 
+        # the priors were cast to arrays at assignment, before any data was seen, so
+        # their precision comes from the x64 config at that time; match y's instead, or
+        # the EM while_loop carry changes dtype and fails to compile.
+        dirichlet_initial_proba, dirichlet_transition_proba = tree_utils.tree_astype(
+            self._dirichlet_initial_proba,
+            self._dirichlet_transition_proba,
+            dtype=y.dtype,
+        )
+
         # run EM
         (
             fit_params,
             self.solver_state_,
-        ) = self._optimizer_run(init_params, X=data, y=y, session_starts=session_starts)
+        ) = self._optimizer_run(
+            init_params,
+            X=data,
+            y=y,
+            session_starts=session_starts,
+            dirichlet_initial_proba=dirichlet_initial_proba,
+            dirichlet_transition_proba=dirichlet_transition_proba,
+        )
 
         if self.solver_state_.iterations == self.maxiter:
             warnings.warn(
@@ -1172,7 +1201,9 @@ class GLMHMM(
         >>> np.random.seed(123)
         >>> X = np.random.randn(100, 5)
         >>> y = np.random.poisson(2, size=100)
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson").fit(X, y)
+        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson").fit(
+        ...     X, y
+        ... )
         >>> posteriors = model.smooth_proba(X, y)
         >>> posteriors.shape
         (100, 3)
@@ -1269,7 +1300,9 @@ class GLMHMM(
         >>> np.random.seed(123)
         >>> X = np.random.randn(100, 5)
         >>> y = np.random.poisson(2, size=100)
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson").fit(X, y)
+        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson").fit(
+        ...     X, y
+        ... )
         >>> filt = model.filter_proba(X, y)
         >>> filt.shape
         (100, 3)
@@ -1380,7 +1413,9 @@ class GLMHMM(
         >>> np.random.seed(123)
         >>> X = np.random.randn(100, 5)
         >>> y = np.random.poisson(2, size=100)
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson").fit(X, y)
+        >>> model = nmo.glm_hmm.GLMHMM(n_states=3, observation_model="Poisson").fit(
+        ...     X, y
+        ... )
         >>> states = model.decode_state(X, y, state_format="index")
         >>> states.shape
         (100,)
@@ -1443,8 +1478,13 @@ class GLMHMM(
 
         >>> import jax.numpy as jnp
         >>> def my_glm_init(
-        ...     n_states, X, y, inverse_link_function, observation_model,
-        ...     session_starts, random_key,
+        ...     n_states,
+        ...     X,
+        ...     y,
+        ...     inverse_link_function,
+        ...     observation_model,
+        ...     session_starts,
+        ...     random_key,
         ... ):
         ...     return jnp.zeros((X.shape[1], n_states)), jnp.zeros((n_states,))
         >>> model = nmo.glm_hmm.GLMHMM(n_states=2)
@@ -1578,8 +1618,12 @@ class GLMHMM(
         >>> session_starts[0] = True
         >>> model = nmo.glm_hmm.GLMHMM(n_states=2)
         >>> init_params = model.initialize_params(X, y)
-        >>> opt_state = model.initialize_optimizer_and_state(init_params, X, y, session_starts=session_starts)
-        >>> new_params, new_state = model.update(init_params, opt_state, X, y, session_starts=session_starts)
+        >>> opt_state = model.initialize_optimizer_and_state(
+        ...     init_params, X, y, session_starts=session_starts
+        ... )
+        >>> new_params, new_state = model.update(
+        ...     init_params, opt_state, X, y, session_starts=session_starts
+        ... )
         """
         if safe is True:
             # validate inputs and session boundaries
@@ -1602,9 +1646,22 @@ class GLMHMM(
         # `initialize_optimizer_and_state` so the EM step function is in place)
         params = self._validator.to_model_params(params)
 
+        # match the priors' precision to the data's (see the same cast in ``fit``)
+        dirichlet_initial_proba, dirichlet_transition_proba = tree_utils.tree_astype(
+            self._dirichlet_initial_proba,
+            self._dirichlet_transition_proba,
+            dtype=y.dtype,
+        )
+
         # one EM step
         updated_params, updated_state = self._optimizer_update(
-            params, opt_state, data, y, session_starts=session_starts
+            params,
+            opt_state,
+            data,
+            y,
+            session_starts=session_starts,
+            dirichlet_initial_proba=dirichlet_initial_proba,
+            dirichlet_transition_proba=dirichlet_transition_proba,
         )
 
         # persist
@@ -1646,6 +1703,10 @@ class GLMHMM(
 
         # cannot wrap session_starts, that's to be calculated at each update form the provided X and y.
         # for consistency, do not make a partial of that argument in run as well.
+        # the Dirichlet priors are not bound here either: they are traced arrays, not
+        # static configuration, and binding them would tie a change of prior to a new
+        # optimizer setup, which rebuilds the static m-step closure and forces a
+        # retrace. ``fit`` and ``update`` pass them at call time instead.
         self._optimizer_run = eqx.Partial(
             em_hmm,
             log_likelihood_func=self._log_likelihood,

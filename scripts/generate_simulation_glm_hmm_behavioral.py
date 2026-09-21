@@ -153,7 +153,7 @@ for t in range(1, n_timepoints):
 
     true_choices[t] = res[0][0]
     choice_probas[t] = res[1][0]
-    print(f"Simulated timepoint {t+1}/{n_timepoints}", end="\r")
+    print(f"Simulated timepoint {t + 1}/{n_timepoints}", end="\r")
 print("\nSimulation complete.")
 
 ###
@@ -169,8 +169,8 @@ def plot_glm_weights(
     learned_intercept,
     initialization_setting,
 ):
-    ## Plot
-    fig = plt.figure(figsize=(4, 3), dpi=80, facecolor="w", edgecolor="k")
+    # Plot
+    plt.figure(figsize=(4, 3), dpi=80, facecolor="w", edgecolor="k")
     cols = ["#ff7f00", "#4daf4a", "#377eb8"]
     recovered_weights = np.zeros_like(true_projection_weights)
 
