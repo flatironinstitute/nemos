@@ -8,13 +8,14 @@ import jax.numpy as jnp
 import lineax as lx
 import optax
 import optimistix as optx
+from jax.flatten_util import ravel_pytree
 from optimistix._misc import cauchy_termination
 
 from .. import tree_utils
+from ..solvers._hessian_mixins import HessianMixin, LinearSolverTag
 from ..typing import Params
 from ._abstract_solver import OptimizationInfo
 from ._fista import FISTA
-from ._hessian_mixins import HessianMixin
 
 DEFAULT_ATOL = 1e-4
 DEFAULT_RTOL = 0.0
@@ -28,12 +29,144 @@ class NewtonState(eqx.Module):
     # Previous accepted step, for solvers whose convergence test is Cauchy rather than
     # gradient based. Initialized to inf so the first iteration never counts as converged.
     y_diff: Optional[Any] = None
+    identity_shift: Any = None
 
 
 NewtonStepResult = tuple[Params, NewtonState]
 
 
+def _solve_shifted_system(
+    operator,
+    grad,
+    shift,
+    *,
+    solver,
+    tags,
+    throw=True,
+):
+    r"""Solve a shifted Newton system.
+
+    Solves
+
+    .. math::
+        (H + \tau I)d = -g,
+
+    while preserving the PyTree structure of the Hessian operator.
+
+    Parameters
+    ----------
+    operator :
+        Linear operator representing the Hessian.
+    grad :
+        Gradient on the right-hand side of the Newton system.
+    shift :
+        Scalar identity shift.
+    solver :
+        Lineax linear solver.
+    tags :
+        Lineax tags describing the shifted operator.
+    throw :
+        Whether Lineax should raise an exception when the solve fails.
+
+    Returns
+    -------
+    :
+        The result returned by :func:`lineax.linear_solve`.
+    """
+    if shift is not None:
+        identity = lx.IdentityLinearOperator(operator.in_structure())
+        operator = operator + shift * identity
+
+    operator = lx.TaggedLinearOperator(
+        operator,
+        tags=tags,
+    )
+
+    solution = lx.linear_solve(
+        operator,
+        jax.tree.map(jnp.negative, grad),
+        solver=solver,
+        throw=False,
+    )
+
+    if throw:
+        failed = (
+            solution.result != lx.RESULTS.successful
+        ) | ~tree_utils.tree_all_finite(solution.value)
+
+        checked_value = eqx.error_if(
+            solution.value,
+            failed,
+            "Cholesky solve failed; the Hessian may not be positive definite. "
+            "Try using the 'eigh' or 'identity_shift' solver instead.",
+        )
+        solution = eqx.tree_at(
+            lambda result: result.value,
+            solution,
+            checked_value,
+        )
+
+    return solution
+
+
 class Newton(HessianMixin):
+    r"""
+    Newton solver with backtracking and Hessian-aware linear solves.
+
+    At each iteration, the solver computes a Newton direction from
+
+    .. math::
+        H d = -g,
+
+    modifying the Hessian when necessary to obtain a finite descent direction.
+
+    ``linear_solver`` controls how this system is solved:
+
+    ``"auto"``
+
+        Selects a strategy from the resolved Hessian properties. Positive-definite
+        Hessians use Cholesky directly, positive-semidefinite Hessians use Cholesky
+        with a small numerical shift, and Hessians without a positivity guarantee
+        use spectral eigenvalue modification.
+
+    ``"cholesky"``
+
+        Solves the system using a Cholesky factorization. A positive-definite
+        Hessian is used directly. For a positive-semidefinite Hessian, a small
+        dtype-dependent diagonal shift is added to avoid numerical singularity.
+        This is the cheapest strategy when the Hessian is known to be positive.
+
+    ``"eigh"``
+
+        Computes ``H = Q diag(lambda) Q.T`` and replaces each eigenvalue by
+        .. math::
+            \\widetilde{\\lambda}_i
+            = \\max(|\\lambda_i|, \\delta).
+        The direction is then
+        .. math::
+            d = -Q\\widetilde{\\Lambda}^{-1}Q^T g.
+        This handles positive-definite, singular, and indefinite symmetric
+        Hessians in one eigendecomposition. It follows the spectral modification
+        in Nocedal and Wright, 2nd ed., section 3.4, equation (3.49), p. 50.
+
+    ``"identity_shift"``
+
+        Attempts Cholesky factorizations of ``H + tau I`` until one succeeds.
+        The initial shift accounts for the smallest diagonal entry and is
+        warm-started one ladder step below the shift accepted at the preceding
+        iteration. Failed attempts increase the shift by a factor of ten, up to
+        ``identity_shift_max_steps`` retries.
+        This is an adaptation of Nocedal and Wright, Algorithm 3.3, pp. 51--52.
+
+    Block-diagonal Hessians apply the selected strategy independently to each
+    block. Accepted directions are passed through a backtracking line search.
+
+    References
+    ----------
+    Jorge Nocedal and Stephen J. Wright, *Numerical Optimization*, 2nd ed.,
+    Springer, 2006, section 3.4, equation (3.49) and Algorithm 3.3.
+    """
+
     def __init__(
         self,
         unregularized_loss: Callable,
@@ -45,6 +178,9 @@ class Newton(HessianMixin):
         maxiter: int = DEFAULT_MAX_STEPS,
         tol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
+        identity_shift_beta: float = 1e-3,
+        identity_shift_max_steps: int = 20,
+        linear_solver: LinearSolverTag = "auto",
     ):
         if init_params is None:
             raise ValueError(
@@ -58,7 +194,9 @@ class Newton(HessianMixin):
         self.tol = tol
         self.rtol = rtol
 
-        self._init_hessian(regularizer, regularizer_strength, init_params)
+        self._init_hessian(
+            regularizer, regularizer_strength, init_params, linear_solver
+        )
 
         # A proximal solver differentiates the smooth part only and carries the penalty
         # in its proximal operator, so it must not be handed the penalized loss.
@@ -87,8 +225,21 @@ class Newton(HessianMixin):
             max_backtracking_steps=30
         )
 
-        # Cache
         self._gradient: Callable | None = None
+        self._hessian: Callable | None = None
+
+        if identity_shift_beta < 0:
+            raise ValueError(
+                "identity_shift_beta must be nonnegative; "
+                f"received {identity_shift_beta}."
+            )
+        self.identity_shift_beta = identity_shift_beta
+        if identity_shift_max_steps <= 0:
+            raise ValueError(
+                "identity_shift_max_steps must be positive; "
+                f"received {identity_shift_max_steps}."
+            )
+        self.identity_shift_max_steps = identity_shift_max_steps
 
     def _build_cache(self):
         if self._gradient is None:
@@ -104,44 +255,140 @@ class Newton(HessianMixin):
         self._build_cache()
         self._resolve_linear_solver(init_params)
         ls_state = self._line_search.init(init_params)
-
+        fval_shape = jax.eval_shape(self.fun, init_params, *args)
+        scalar_dtype = fval_shape.dtype
+        zero = jnp.zeros((), dtype=scalar_dtype)
         return NewtonState(
-            grad_norm=jnp.inf,
+            grad_norm=jnp.asarray(jnp.inf, dtype=scalar_dtype),
             stats=OptimizationInfo(
-                function_val=jnp.nan,
+                function_val=jnp.asarray(jnp.nan, dtype=scalar_dtype),
                 num_steps=jnp.array(0),
                 converged=jnp.array(False),
                 reached_max_steps=jnp.array(False),
             ),
             ls_state=ls_state,
-            # inf so a Cauchy criterion cannot fire before the first step is taken
-            y_diff=jax.tree.map(lambda x: jnp.full_like(x, jnp.inf), init_params),
+            y_diff=jax.tree.map(
+                lambda x: jnp.full_like(x, jnp.inf),
+                init_params,
+            ),
+            identity_shift=self._init_block_state(init_params, zero),
         )
 
-    def _solve(self, grad, H, params):
-        # ``params`` is unused for the smooth step, which depends only on the local
-        # quadratic. Proximal subclasses need it: their penalty is evaluated at
-        # ``params + d``, not at ``d``.
+    def _solve(self, grad, H, params, previous_shift):
         del params
-        operator = lx.PyTreeLinearOperator(
-            H,
-            jax.eval_shape(lambda: grad),
-            tags=self._operator_tags,
-        )
 
-        return lx.linear_solve(
+        operator = lx.PyTreeLinearOperator(H, jax.eval_shape(lambda: grad))
+
+        # Modify the Hessian eigenvalues, then solve the resulting positive-definite system
+        # This handles symmetric indefinite Hessians in one decomposition
+        # Nocedal and Wright Algorithm equation (3.49)
+        if self._resolved_linear_solver == "eigh":
+            g_flat, unravel = ravel_pytree(grad)
+            H_dense = operator.as_matrix()
+            eigvals, Q = jnp.linalg.eigh(H_dense)
+            lam_mod = jnp.maximum(jnp.abs(eigvals), self._delta)
+            direction = Q @ ((Q.T @ (-g_flat)) / lam_mod)
+            return unravel(direction), previous_shift
+
+        # Add tau * I and increase tau until Cholesky succeeds
+        # Nocedal and Wright Algorithm 3.3
+        if self._resolved_linear_solver == "identity_shift":
+            diag = lx.diagonal(operator)
+            dtype = diag.dtype
+
+            # Beta scales with the matrix so the shift ladder is scale-equivariant;
+            # N&W give 1e-3 as the typical magnitude, here relative to the diagonal
+            eps = jnp.asarray(jnp.finfo(dtype).eps, dtype=dtype)
+            beta = jnp.maximum(
+                jnp.asarray(self.identity_shift_beta, dtype=dtype)
+                * jnp.max(jnp.abs(diag)),
+                eps,
+            )
+
+            min_diag = jnp.min(diag)
+            # N&W seed the ladder from the shift the last iteration accepted.
+            # Decaying it by the factor the ladder climbs by costs at most one extra
+            # factorization when the required shift is stable, and lets tau fall back
+            # to zero once the iterates reach a region where the unshifted Cholesky succeeds.
+            warm_start = jnp.where(
+                previous_shift > beta,
+                jnp.asarray(0.1, dtype=dtype) * previous_shift,  # scale it down of 1/10
+                jnp.zeros((), dtype=dtype),
+            )
+            tau0 = jnp.maximum(
+                jnp.where(min_diag > 0, jnp.zeros((), dtype=dtype), -min_diag + beta),
+                warm_start,
+            )
+
+            cholesky = lx.Cholesky()
+
+            def _solve(tau):
+                result = _solve_shifted_system(
+                    operator,
+                    grad,
+                    tau,
+                    solver=cholesky,
+                    tags=lx.positive_semidefinite_tag,
+                    throw=False,
+                )
+                failed = (
+                    result.result != lx.RESULTS.successful
+                ) | ~tree_utils.tree_all_finite(result.value)
+                return result.value, failed
+
+            direction0, failed0 = _solve(tau0)
+
+            def cond(carry):
+                iteration, _, _, failed = carry
+                return failed & (iteration < self.identity_shift_max_steps)
+
+            def body(carry):
+                iteration, tau, _, _ = carry
+                new_tau = jnp.maximum(jnp.asarray(10.0, dtype=dtype) * tau, beta)
+                direction, failed = _solve(new_tau)
+                return iteration + 1, new_tau, direction, failed
+
+            _, tau, direction, failed = eqx.internal.while_loop(
+                cond,
+                body,
+                (
+                    jnp.asarray(0),
+                    tau0,
+                    direction0,
+                    failed0,
+                ),
+                kind="lax",
+            )
+
+            accepted_shift = jnp.where(failed, previous_shift, tau)
+            return direction, accepted_shift
+
+        # Catch use before init_state has resolved the requested strategy.
+        if self._resolved_linear_solver != "cholesky":
+            raise RuntimeError(
+                "The solver has not been resolved. Call init_state before update."
+            )
+
+        # Solve a positive Hessian with Lineax Cholesky.
+        # For a PSD tag, _shift_fn adds the small numerical shift selected by the tag
+        direction = _solve_shifted_system(
             operator,
-            jax.tree.map(lambda x: -x, grad),
-            self._linear_solver,
+            grad,
+            self._shift_fn(operator),
+            solver=self._linear_solver,
+            tags=self._operator_tags,
         ).value
 
-    def _newton_direction(self, grad, H, params):
-        return self._block_apply(self._solve, grad, H, params)
+        return direction, previous_shift
 
-    def _converged(self, params, state, grad, fval):
-        """Convergence test. ``||grad|| <= tol`` for a smooth objective."""
-        del params, state, fval
-        return jnp.sqrt(lx.internal.tree_dot(grad, grad)) <= self.tol
+    def _newton_direction(self, grad, H, params, identity_shift):
+        return self._block_apply(
+            self._solve,
+            grad,
+            H,
+            params,
+            block_state=identity_shift,
+        )
 
     def _line_search_inputs(self, params, step, grad, fval, *args):
         """Value, slope and objective handed to ``self._line_search``.
@@ -152,6 +399,26 @@ class Newton(HessianMixin):
         """
         del params, step
         return fval, grad, lambda p: self.fun(p, *args)
+
+    def _converged(self, params, state, grad, fval):
+        """Check convergence via a Cauchy criterion on the accepted step size.
+
+        We rely solely on the step-norm arm of :func:`~optimistix.cauchy_termination`
+        and suppress its function-value arm by passing ``f_diff=0``.  The f-diff arm
+        would check ``|f(x_new) - f(x_old)| < atol``, which is an absolute threshold
+        that fails under catastrophic cancellation when the objective is large.  The
+        step-norm criterion ``‖Δx‖ < atol + rtol * ‖x‖`` is scale-invariant provided
+        ``rtol > 0``, so callers should prefer setting ``rtol`` over ``tol`` alone.
+        """
+        return cauchy_termination(
+            self.rtol,
+            self.tol,
+            lx.internal.two_norm,
+            params,
+            state.y_diff,
+            fval,
+            jnp.zeros(()),
+        )
 
     def _apply_or_reject(
         self,
@@ -209,23 +476,28 @@ class Newton(HessianMixin):
 
         def step(_):
             H = self._hessian(params, *args)
-            step = self._newton_direction(grad, H, params)
+            direction, identity_shift = self._newton_direction(
+                grad,
+                H,
+                params,
+                state.identity_shift,
+            )
 
             new_params, new_ls_state = self._apply_or_reject(
                 params,
-                step,
+                direction,
                 grad,
                 state,
                 fval,
                 *args,
             )
 
-            return new_params, new_ls_state
+            return new_params, new_ls_state, identity_shift
 
         def no_step(_):
-            return params, state.ls_state
+            return params, state.ls_state, state.identity_shift
 
-        new_params, new_ls_state = jax.lax.cond(
+        new_params, new_ls_state, identity_shift = jax.lax.cond(
             converged,
             no_step,
             step,
@@ -248,6 +520,7 @@ class Newton(HessianMixin):
             ),
             ls_state=new_ls_state,
             y_diff=tree_utils.tree_sub(new_params, params),
+            identity_shift=identity_shift,
         )
 
         return new_params, new_state, aux
@@ -290,7 +563,15 @@ class Newton(HessianMixin):
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
-        return {"maxiter", "tol", "rtol", "jit"}
+        return {
+            "maxiter",
+            "tol",
+            "rtol",
+            "jit",
+            "linear_solver",
+            "identity_shift_beta",
+            "identity_shift_max_steps",
+        }
 
     def _get_optim_info(
         self,
@@ -409,7 +690,7 @@ class ProximalNewton(Newton):
             H, jax.eval_shape(lambda: d), tags=self._operator_tags
         ).mv(d)
 
-    def _newton_direction(self, grad, H, params):
+    def _newton_direction(self, grad, H, params, identity_shift):
         r"""Minimize :math:`\nabla f^\top (z - \beta) + \frac12 (z - \beta)^\top H (z - \beta) + P(z)`.
 
         Solving for the new parameters :math:`z` rather than the step keeps the penalty
@@ -436,27 +717,7 @@ class ProximalNewton(Newton):
             max_steps=self.inner_iter,
             throw=False,
         ).value
-        # ``_apply_or_reject`` scales and adds the result, so return the step
-        return tree_utils.tree_sub(new_params, params)
-
-    def _converged(self, params, state, grad, fval):
-        """Cauchy criterion on the accepted step, as :class:`~nemos.solvers._fista.FISTA` uses.
-
-        A gradient-based test is unusable here: this solver differentiates the smooth
-        part only, so its gradient does not vanish at the optimum of a composite
-        objective, and any residual built from it inherits the curvature scale -- on
-        badly conditioned data it never falls below ``tol`` even once the iterate has
-        stopped moving.
-        """
-        return cauchy_termination(
-            self.rtol,
-            self.tol,
-            lx.internal.two_norm,
-            params,
-            state.y_diff,
-            fval,
-            fval - state.stats.function_val,
-        )
+        return tree_utils.tree_sub(new_params, params), identity_shift
 
     def _line_search_inputs(self, params, step, grad, fval, *args):
         r"""Feed the composite objective and its slope to the inherited line search.
@@ -486,7 +747,11 @@ class ProximalNewton(Newton):
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
-        return super().get_accepted_arguments() | {
+        return super().get_accepted_arguments() - {
+            "linear_solver",
+            "identity_shift_beta",
+            "identity_shift_max_steps",
+        } | {
             "inner_iter",
             "inner_atol",
             "inner_rtol",
