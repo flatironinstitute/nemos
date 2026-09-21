@@ -119,7 +119,7 @@ def combine_forward(
     r"""Combine in the associative scan.
 
     The combination implements the :math:`\oplus` operator described
-    in section **Get (log(l), L) via scan**  of the note
+    in section **Get (log(l), L) via scan** of the note
     the notes docs/developers_notes/09-associative_estep_hmm.md.
 
     The stable implementation is described from section **Combine** to
