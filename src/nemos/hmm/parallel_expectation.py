@@ -57,7 +57,7 @@ def log_matmul(log_earlier: Array, log_later: Array) -> Array:
     so ``i`` indexes the entry state of the earlier segment and ``j`` the exit state
     of the later one, with the shared boundary state ``k`` contracted away.
 
-    Shifted per row of ``log_A`` and per column of ``log_B``, then run as a GEMM. The
+    Shifted per row of ``log_earlier`` and per column of ``log_later``, then run as a GEMM. The
     broadcast form would materialize a ``(..., K, K, K)`` intermediate, which at
     ``T = 1e6``, ``K = 20`` is 8e9 elements; exponentiating and calling into GEMM is
     ``O(T K^2)`` memory instead. The shifts make the result exact except for entries
