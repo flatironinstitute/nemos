@@ -95,3 +95,169 @@ table.table-center{
 .bd-header .navbar-nav li a.nav-link {
     white-space: nowrap;
 }
+
+/* Landing-page catalogue cards (observation models, regularizers), which hold a
+   class name over a drawing. The title is code, which the code style keeps on
+   one line, so "NegativeBinomial" runs past the edge of a card six to a row:
+   set it smaller and let it break. Centring it sits the name over its figure. */
+.catalogue-card .sd-card-body {
+    text-align: center;
+}
+
+/* The title is a flex container, so the body's text-align leaves the name at
+   its natural width against the left edge; it centres on the main axis. */
+.catalogue-card .sd-card-title {
+    justify-content: center;
+}
+
+.catalogue-card .sd-card-title code {
+    font-size: 0.72em;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+/* Landing-page bands: a card fills the row it sits in, so cards that share a
+   row end level whatever their drawing is shaped like. */
+.landing-band .sd-col > .sd-card {
+    height: 100%;
+}
+
+
+/* Cards that carry a caption: the title stays at the top and the caption at the
+   bottom, and the free space is split above and below the drawing. The captions
+   of a row then sit on one line and the drawings share a centre line. */
+.landing-captioned .sd-card-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.landing-captioned .sd-card-body > .sd-card-title {
+    margin-bottom: auto;
+}
+
+.landing-captioned .sd-card-body > p:last-child {
+    margin-top: auto;
+    margin-bottom: 0;
+    /* a floor under the gap the auto margin leaves, for the cards whose drawing
+       fills them and would otherwise sit on the caption */
+    padding-top: 0.9rem;
+}
+
+/* Air down the middle of the first band. Widening the gutter rather than
+   padding the columns keeps the two halves exactly the same width. The
+   variable has to be set on the row: the grid's own sd-gx-* class declares it
+   there, and that beats a value inherited from the container. */
+.landing-captioned > .sd-row,
+.landing-split > .sd-row {
+    --sd-gutter-x: 4rem;
+}
+
+/* Each card holds a light and a dark copy of its drawing, one of them with its
+   image hidden. Without this the hidden copy still contributes its margins and
+   pushes the visible drawing off the centre line of the row. */
+.landing-band .sd-card-body figure {
+    margin: 0;
+    padding: 0;
+}
+
+/* The basis panels are a drawing of their own rather than a diagram bled to the
+   card edges, so they keep a margin of card around them. */
+.inset-plot img.plot-directive {
+    box-sizing: border-box;
+    padding: 0.6rem;
+}
+
+/* The component cards sit in two blocks of different column widths, so sizing
+   their drawings by width leaves the two blocks a few pixels apart and their
+   rows out of step. Fixing the drawing's height instead makes every card the
+   same height, whatever the width of the block it belongs to. */
+.landing-band .sd-card-body img {
+    height: 120px;
+    width: auto;
+    max-width: 100%;
+    margin: 0 auto;
+}
+
+.landing-captioned .sd-card-body img {
+    height: 130px;
+}
+
+/* The grid container pads itself by 12px, which sets the cards and the band
+   titles in from the headings and body text of the page. */
+.landing-band.sd-container-fluid,
+.landing-split.sd-container-fluid {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+/* The bottom right pair is a grid inside a column, which has to fill that
+   column for its cards to share the height of the row they sit in. The column
+   is stretched rather than of a stated height, so the chain down to the cards
+   is made of flex items instead of percentages. */
+.landing-band .sd-col > .sd-container-fluid {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+}
+
+/* sd-mb-4 on the container and the bottom margin on its columns are space
+   below a grid, which this one does not want: it has a row height to fill.
+   The utility class declares its margin !important, so this has to as well. */
+.landing-band .sd-col > .sd-container-fluid {
+    margin-bottom: 0 !important;
+}
+
+.landing-band .sd-col > .sd-container-fluid > .sd-row > .sd-col {
+    margin-bottom: 0;
+}
+
+.landing-band .sd-col > .sd-container-fluid > .sd-row {
+    flex: 1 1 auto;
+}
+
+/* Above this width the pair is side by side, so the vertical gutter only eats
+   into the height the cards have to fill. Below it they stack and keep it. */
+@media (min-width: 992px) {
+    .landing-band .sd-col > .sd-container-fluid > .sd-row {
+        --sd-gutter-y: 0;
+    }
+}
+
+/* Under the buttons: the space below their columns, the grid's own trailing
+   margin and the heading's leading margin stack up to about twice what the
+   break needs. */
+.landing-buttons {
+    margin-bottom: 0 !important;
+}
+
+.landing-buttons .sd-col {
+    margin-bottom: 0;
+}
+
+.landing-buttons + section > h2 {
+    margin-top: 1.5rem;
+}
+
+/* Under a band's sub-heading: its own trailing margin and the one below its
+   column stack into a gap wider than the one between the card rows. */
+.landing-band p.rubric {
+    margin-bottom: 0.25rem;
+}
+
+.landing-band .sd-col:has(> p.rubric) {
+    margin-bottom: 0;
+}
+
+/* With no heading above the first band, its two rubrics are the headings of
+   that part of the page and carry the weight of the ones below it. */
+.band-title {
+    font-size: var(--pst-font-size-h2);
+    font-weight: 700;
+}
+
+/* This one drawing is a scheme read left to right, so it takes the width of its
+   card and sets its own height, rather than the height the thumbnails share. */
+.inset-plot img.plot-directive {
+    width: 100%;
+    height: auto;
+}

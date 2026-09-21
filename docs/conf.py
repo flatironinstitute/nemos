@@ -137,7 +137,9 @@ html_theme_options = {
         },
     ],
     "show_prev_next": True,
-    "header_links_before_dropdown": 6,
+    # Getting Started through API Reference stay in the bar; Reference and For
+    # Developers fall into the "More" dropdown after them.
+    "header_links_before_dropdown": 5,
     "navigation_depth": 4,
     "show_nav_level": 2,
     "logo": {
@@ -158,7 +160,7 @@ html_sidebars = {
     "index": [],
     "installation": [],
     "quickstart": [],
-    "benchmarking": [],
+    "reference/benchmarking": [],
     "tutorials/README": [],
     "**": ["sidebar-nav-bs.html"],
 }
@@ -406,8 +408,14 @@ except Exception as e:
     ) from e
 
 
+def _widen_landing_page(app, pagename, templatename, context, doctree):
+    """Drop the article-column width cap on the one page that has no sidebars."""
+    if pagename == "index":
+        app.add_css_file("landing.css")
+
+
 def _add_benchmark_assets(app, pagename, templatename, context, doctree):
-    if pagename != "benchmarking":
+    if pagename != "reference/benchmarking":
         return
     app.add_css_file(
         "https://cdn.datatables.net/2.0.0/css/dataTables.dataTables.min.css"
@@ -425,6 +433,7 @@ def setup(app):
     app.connect("source-read", add_download_admonition)
     app.connect("doctree-resolved", drop_body_toctree_captions)
     app.connect("autodoc-process-bases", strip_generic_bases)
+    app.connect("html-page-context", _widen_landing_page)
     app.connect("html-page-context", _add_benchmark_assets)
     app.connect("builder-inited", generate_dark_diagrams)
     app.connect("builder-inited", clear_figure_cache)

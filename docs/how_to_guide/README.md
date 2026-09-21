@@ -31,7 +31,7 @@ pip install nemos[examples]
 
 ```{toctree}
 :maxdepth: 2
-:caption: Fitting Models
+:caption: Using Models
 
 raw_history_feature.md
 ```
@@ -58,6 +58,21 @@ glm_for_classification.md
 :maxdepth: 2
 
 simulate_coupled_population.md
+```
+:::
+
+:::{grid-item-card}
+
+<figure>
+<a href="model_selection.html">
+<img src="../_static/thumbnails/how_to_guide/variable_selection_zero_basis.svg" style="height: 100px", alt="Model Selection."/>
+</a>
+</figure>
+
+```{toctree}
+:maxdepth: 2
+
+model_selection.md
 ```
 :::
 
@@ -108,43 +123,6 @@ custom_predictors.md
 :maxdepth: 2
 
 pytree_predictors.md
-```
-
-:::
-
-::::
-
-## Model Selection
-
-::::{grid} 1 2 3 3
-
-:::{grid-item-card}
-
-<figure>
-<img src="../_static/thumbnails/how_to_guide/variable_selection_zero_basis.svg" style="height: 100px", alt="Model Selection."/>
-</figure>
-
-```{toctree}
-:maxdepth: 2
-:caption: Model Selection
-
-variable_selection_zero_basis.md
-```
-
-:::
-
-:::{grid-item-card}
-
-<figure>
-<a href="variable_selection_group_lasso.html">
-<img src="../_static/thumbnails/how_to_guide/variable_selection_group_lasso.svg" style="height: 100px", alt="Variable selection."/>
-</a>
-</figure>
-
-```{toctree}
-:maxdepth: 2
-
-variable_selection_group_lasso.md
 ```
 
 :::
@@ -223,6 +201,7 @@ manual_batching_loop.md
 
 ```{toctree}
 :maxdepth: 2
+:caption: Extensions and Customizations
 
 custom_solvers.md
 ```

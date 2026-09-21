@@ -14,8 +14,7 @@ User Guide <user_guide/README>
 How-To <how_to_guide/README>
 Tutorials <tutorials/README>
 API Reference <api/index>
-Benchmarking <benchmarking>
-Citation Guide <citation>
+Reference <reference/README>
 For Developers <developers_notes/README>
 ```
 
@@ -24,110 +23,391 @@ For Developers <developers_notes/README>
 
 
 NeMoS (Neural ModelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](https://jax.readthedocs.io/en/latest/).
-It streamlines the process of defining and selecting models, through a collection of easy-to-use methods for feature design.
-
-The core of NeMoS includes GPU-accelerated, well-tested implementations of standard statistical models for systems neuroscience. Our models are compliant with [scikit-learn's API](https://scikit-learn.org/stable/) and so are compatible with their pipelining and cross-validation machinery. Data can be represented as numpy arrays or [pynapple](https://pynapple.org) objects, to make working with neural data even easier.
+The core of NeMoS includes GPU-accelerated, well-tested implementations of standard statistical models for systems neuroscience. Our models are compliant with [scikit-learn's API](https://scikit-learn.org/stable/) for cross-validation and model selection. Data can be represented as numpy arrays or [pynapple](https://pynapple.org) objects, to make working with neural data even easier.
 
 ::::{grid} auto
+:class-container: landing-buttons
 
 :::{grid-item}
-```{button-ref} getting_started
+```{button-ref} installation
 :ref-type: doc
 :color: primary
 :shadow:
 
-Getting Started
+Install
 ```
 :::
 :::{grid-item}
-```{button-ref} user_guide/README
+```{button-ref} quickstart
 :ref-type: doc
 :color: primary
 :shadow:
 
-User Guide
+Quickstart
 ```
 :::
 :::{grid-item}
-```{button-ref} how_to_guide/README
+```{button-ref} reference/benchmarking
 :ref-type: doc
 :color: primary
 :shadow:
 
-How-To Guide
+Benchmarking
 ```
 :::
 :::{grid-item}
-```{button-ref} tutorials/README
+```{button-ref} reference/citation
 :ref-type: doc
 :color: primary
 :shadow:
 
-Tutorials
-```
-:::
-:::{grid-item}
-```{button-ref} api/index
-:ref-type: doc
-:color: primary
-:shadow:
-
-API Reference
+Citation Guide
 ```
 :::
 ::::
 
 
-## __Models__
-
-::::{grid} 1 1 2 2
+::::::{grid} 1 1 2 2
 :gutter: 3
+:class-container: landing-band landing-captioned
 
-:::{grid-item-card} __GLM__
+:::::{grid-item}
+:columns: 12 12 6 6
+
+```{rubric} Models
+:class: band-title
+```
+:::::
+
+:::::{grid-item}
+:columns: 12 12 6 6
+
+```{rubric} Building the features
+:class: band-title
+```
+:::::
+
+:::::{grid-item-card} __GLM__
+:columns: 12 12 6 6
 :link: user_guide/models/glm/README.html
 :link-alt: GLM
 
 ```{image} assets/lnp_model_colscheme.svg
 :alt: Linear-Nonlinear-Poisson diagram.
-:width: 100%
 :class: only-light
 ```
 
 ```{image} assets/lnp_model_colscheme_dark.svg
 :alt: Linear-Nonlinear-Poisson diagram.
-:width: 100%
 :class: only-dark
 ```
 
-:::
 
-:::{grid-item-card} __GLM-HMM__
+Encoding models for single neurons and populations.
+:::::
+
+:::::{grid-item-card} __Basis functions__
+:columns: 12 12 6 6
+:class-card: inset-plot
+:link: user_guide/basis/one_dimensional.html
+:link-alt: Basis functions
+
+```{eval-rst}
+
+.. plot:: scripts/catalogue_figs.py plot_basis_scheme_thumbnail
+   :show-source-link: False
+   :class: only-light
+
+.. plot:: scripts/catalogue_figs.py plot_basis_scheme_thumbnail_dark
+   :show-source-link: False
+   :class: only-dark
+```
+
+B-splines, raised cosines, Fourier, and many more.
+:::::
+
+:::::{grid-item-card} __GLM-HMM__
+:columns: 12 12 6 6
 :link: user_guide/models/glm_hmm/README.html
 :link-alt: GLM-HMM
 
 ```{image} assets/glm_hmm_graphical_model.svg
 :alt: GLM-HMM graphical model.
-:width: 100%
 :class: only-light
 ```
 
 ```{image} assets/glm_hmm_graphical_model_dark.svg
 :alt: GLM-HMM graphical model.
-:width: 100%
 :class: only-dark
+```
+
+
+Latent states, each with its own GLM.
+:::::
+
+:::::{grid-item}
+:columns: 12 12 6 6
+
+% The pair sits in a grid of its own, so the space between the two of them
+% stays tight while the gap down the middle of the band is wide.
+
+::::{grid} 1 2 2 2
+:gutter: 3
+:class-container: landing-band
+
+:::{grid-item-card} __Basis addition__
+:link: user_guide/basis/composing.html
+:link-alt: Multiple predictors
+
+```{eval-rst}
+
+.. plot:: scripts/catalogue_figs.py plot_addition_thumbnail
+   :show-source-link: False
+   :height: 125px
+   :class: only-light
+
+.. plot:: scripts/catalogue_figs.py plot_addition_thumbnail_dark
+   :show-source-link: False
+   :height: 125px
+   :class: only-dark
+```
+
+One block per input.
+:::
+
+:::{grid-item-card} __Basis multiplication__
+:link: user_guide/basis/composing.html
+:link-alt: Higher dimension
+
+```{eval-rst}
+
+.. plot:: scripts/catalogue_figs.py plot_product_thumbnail
+   :show-source-link: False
+   :height: 125px
+   :class: only-light
+
+.. plot:: scripts/catalogue_figs.py plot_product_thumbnail_dark
+   :show-source-link: False
+   :height: 125px
+   :class: only-dark
+```
+
+Joint effects of two inputs.
+:::
+
+::::
+
+:::::
+
+::::::
+
+
+## __Model components__
+
+::::::{grid} 1 1 2 2
+:gutter: 3
+:class-container: landing-split
+
+:::::{grid-item}
+:columns: 12 12 7 7
+
+```{rubric} Observation models
+```
+
+The distribution the response is drawn from.
+
+::::{grid} 2 3 3 3
+:gutter: 2
+:class-container: landing-band
+
+:::{grid-item-card} {class}`Poisson <nemos.observation_models.PoissonObservations>`
+:class-card: catalogue-card
+
+```{eval-rst}
+
+.. plot:: scripts/catalogue_figs.py plot_poisson_thumbnail
+   :show-source-link: False
+   :class: only-light
+
+.. plot:: scripts/catalogue_figs.py plot_poisson_thumbnail_dark
+   :show-source-link: False
+   :class: only-dark
+```
+
+:::
+
+:::{grid-item-card} {class}`NegativeBinomial <nemos.observation_models.NegativeBinomialObservations>`
+:class-card: catalogue-card
+
+```{eval-rst}
+
+.. plot:: scripts/catalogue_figs.py plot_neg_binomial_thumbnail
+   :show-source-link: False
+   :class: only-light
+
+.. plot:: scripts/catalogue_figs.py plot_neg_binomial_thumbnail_dark
+   :show-source-link: False
+   :class: only-dark
+```
+
+:::
+
+:::{grid-item-card} {class}`Gamma <nemos.observation_models.GammaObservations>`
+:class-card: catalogue-card
+
+```{eval-rst}
+
+.. plot:: scripts/catalogue_figs.py plot_gamma_thumbnail
+   :show-source-link: False
+   :class: only-light
+
+.. plot:: scripts/catalogue_figs.py plot_gamma_thumbnail_dark
+   :show-source-link: False
+   :class: only-dark
+```
+
+:::
+
+:::{grid-item-card} {class}`Gaussian <nemos.observation_models.GaussianObservations>`
+:class-card: catalogue-card
+
+```{eval-rst}
+
+.. plot:: scripts/catalogue_figs.py plot_gaussian_thumbnail
+   :show-source-link: False
+   :class: only-light
+
+.. plot:: scripts/catalogue_figs.py plot_gaussian_thumbnail_dark
+   :show-source-link: False
+   :class: only-dark
+```
+
+:::
+
+:::{grid-item-card} {class}`Bernoulli <nemos.observation_models.BernoulliObservations>`
+:class-card: catalogue-card
+
+```{eval-rst}
+
+.. plot:: scripts/catalogue_figs.py plot_bernoulli_thumbnail
+   :show-source-link: False
+   :class: only-light
+
+.. plot:: scripts/catalogue_figs.py plot_bernoulli_thumbnail_dark
+   :show-source-link: False
+   :class: only-dark
+```
+
+:::
+
+:::{grid-item-card} {class}`Categorical <nemos.observation_models.CategoricalObservations>`
+:class-card: catalogue-card
+
+```{eval-rst}
+
+.. plot:: scripts/catalogue_figs.py plot_categorical_thumbnail
+   :show-source-link: False
+   :class: only-light
+
+.. plot:: scripts/catalogue_figs.py plot_categorical_thumbnail_dark
+   :show-source-link: False
+   :class: only-dark
 ```
 
 :::
 
 ::::
 
-Within the same model class, you can configure:
+Categorical responses are the exception: they are fit with {class}`ClassifierGLM <nemos.glm.ClassifierGLM>`, a separate class that fixes {class}`CategoricalObservations <nemos.observation_models.CategoricalObservations>` as its observation model.
 
-- __Observation models__: {class}`Poisson <nemos.observation_models.PoissonObservations>`, {class}`NegativeBinomial <nemos.observation_models.NegativeBinomialObservations>`, {class}`Gamma <nemos.observation_models.GammaObservations>`, {class}`Gaussian <nemos.observation_models.GaussianObservations>`, {class}`Bernoulli <nemos.observation_models.BernoulliObservations>`. Categorical responses are the exception, and are fit with {class}`ClassifierGLM <nemos.glm.ClassifierGLM>`, a separate class that fixes {class}`CategoricalObservations <nemos.observation_models.CategoricalObservations>` as its observation model.
-- __Regularizers__: {class}`UnRegularized <nemos.regularizer.UnRegularized>`, {class}`Ridge <nemos.regularizer.Ridge>`, {class}`Lasso <nemos.regularizer.Lasso>`, {class}`GroupLasso <nemos.regularizer.GroupLasso>`, {class}`ElasticNet <nemos.regularizer.ElasticNet>`.
+:::::
+
+:::::{grid-item}
+:columns: 12 12 5 5
+
+```{rubric} Regularizers
+```
+
+The penalty, drawn as the set of coefficients it admits.
+
+::::{grid} 2 2 2 2
+:gutter: 2
+:class-container: landing-band
+
+:::{grid-item-card} {class}`Ridge <nemos.regularizer.Ridge>`
+:class-card: catalogue-card
+
+```{eval-rst}
+
+.. plot:: scripts/catalogue_figs.py plot_ridge_thumbnail
+   :show-source-link: False
+   :class: only-light
+
+.. plot:: scripts/catalogue_figs.py plot_ridge_thumbnail_dark
+   :show-source-link: False
+   :class: only-dark
+```
+
+:::
+
+:::{grid-item-card} {class}`Lasso <nemos.regularizer.Lasso>`
+:class-card: catalogue-card
+
+```{eval-rst}
+
+.. plot:: scripts/catalogue_figs.py plot_lasso_thumbnail
+   :show-source-link: False
+   :class: only-light
+
+.. plot:: scripts/catalogue_figs.py plot_lasso_thumbnail_dark
+   :show-source-link: False
+   :class: only-dark
+```
+
+:::
+
+:::{grid-item-card} {class}`GroupLasso <nemos.regularizer.GroupLasso>`
+:class-card: catalogue-card
+
+```{eval-rst}
+
+.. plot:: scripts/catalogue_figs.py plot_group_lasso_thumbnail
+   :show-source-link: False
+   :class: only-light
+
+.. plot:: scripts/catalogue_figs.py plot_group_lasso_thumbnail_dark
+   :show-source-link: False
+   :class: only-dark
+```
+
+:::
+
+:::{grid-item-card} {class}`ElasticNet <nemos.regularizer.ElasticNet>`
+:class-card: catalogue-card
+
+```{eval-rst}
+
+.. plot:: scripts/catalogue_figs.py plot_elastic_net_thumbnail
+   :show-source-link: False
+   :class: only-light
+
+.. plot:: scripts/catalogue_figs.py plot_elastic_net_thumbnail_dark
+   :show-source-link: False
+   :class: only-dark
+```
+
+:::
+
+::::
+
+{class}`UnRegularized <nemos.regularizer.UnRegularized>` is the default, and admits every coefficient.
+
+:::::
+
+::::::
 
 
-### __Examples__
+## __Examples__
 
 % The model names below become links to the quick example of each model in the
 % user guide, once those are written.
@@ -226,78 +506,10 @@ ClassifierGLM
 ::::
 
 
-## __Building the features__
-
-::::{grid} 1 1 3 3
-:gutter: 3
-
-:::{grid-item-card} __Building blocks__
-:link: user_guide/basis/one_dimensional.html
-:link-alt: Building blocks
-
-```{eval-rst}
-
-.. plot:: scripts/catalogue_figs.py plot_zoo_thumbnail
-   :show-source-link: False
-   :height: 140px
-   :class: only-light
-
-.. plot:: scripts/catalogue_figs.py plot_zoo_thumbnail_dark
-   :show-source-link: False
-   :height: 140px
-   :class: only-dark
-```
-
-B-splines (regular or cyclic), raised cosines, Fourier, and many more.
-:::
-
-:::{grid-item-card} __Multiple predictors__
-:link: user_guide/basis/composing.html
-:link-alt: Multiple predictors
-
-```{eval-rst}
-
-.. plot:: scripts/catalogue_figs.py plot_addition_thumbnail
-   :show-source-link: False
-   :height: 140px
-   :class: only-light
-
-.. plot:: scripts/catalogue_figs.py plot_addition_thumbnail_dark
-   :show-source-link: False
-   :height: 140px
-   :class: only-dark
-```
-
-Add bases to give each input its own block of the design matrix.
-:::
-
-:::{grid-item-card} __Higher dimension__
-:link: user_guide/basis/composing.html
-:link-alt: Higher dimension
-
-```{eval-rst}
-
-.. plot:: scripts/catalogue_figs.py plot_product_thumbnail
-   :show-source-link: False
-   :height: 140px
-   :class: only-light
-
-.. plot:: scripts/catalogue_figs.py plot_product_thumbnail_dark
-   :show-source-link: False
-   :height: 140px
-   :class: only-dark
-```
-
-Multiply bases to model the joint effect of two inputs.
-:::
-
-::::
-
-
 <div style="text-align: center;">
 
 __Learning Resources:__ [<span class="iconify" data-icon="mdi:book-open-variant-outline"></span> Neuromatch Academy's Lessons](https://compneuro.neuromatch.io/tutorials/W1D3_GeneralizedLinearModels/student/W1D3_Tutorial1.html) | [<span class="iconify" data-icon="mdi:youtube"></span> Cosyne 2018 Tutorial](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s) <br>
-__Useful Links:__ [<span class="iconify" data-icon="mdi:chat-question"></span> Getting Help](getting_help.md) | [<span class="iconify" data-icon="mdi:alert-circle-outline"></span> Issue Tracker](https://github.com/flatironinstitute/nemos/issues) | [<span class="iconify" data-icon="mdi:order-bool-ascending-variant"></span> Contributing Guidelines](https://github.com/flatironinstitute/nemos/blob/main/CONTRIBUTING.md)
+__Useful Links:__ [<span class="iconify" data-icon="mdi:chat-question"></span> Getting Help](getting-help) | [<span class="iconify" data-icon="mdi:alert-circle-outline"></span> Issue Tracker](https://github.com/flatironinstitute/nemos/issues) | [<span class="iconify" data-icon="mdi:order-bool-ascending-variant"></span> Contributing Guidelines](https://github.com/flatironinstitute/nemos/blob/main/CONTRIBUTING.md)
 
 </div>
 
