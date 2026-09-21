@@ -100,39 +100,42 @@ def _reference_solver(regularizer_cls):
     return "LBFGS" if "LBFGS" in allowed else "ProximalGradient"
 
 
-def _block_diagonal_models():
-    """Model classes that declare a block-diagonal Hessian.
-
-    Discovered rather than listed. The block path assembles the penalty Hessian by vmapping
-    the regularizer over neurons, pairing the model's ``batch_axes`` against the strength,
-    so a new block-diagonal model joins the check below on arrival rather than when someone
-    remembers to add it.
-    """
+def _glm_models():
     return sorted(
         (
             cls
             for cls in all_subclasses(BaseRegressor)
             if cls.__module__.startswith("nemos")
             and not is_abstract(cls)
-            and cls._hess_structure is MatrixStructure.BLOCK_DIAGONAL
+            and "GLM" in cls.__name__
+            and "HMM" not in cls.__name__
         ),
         key=lambda cls: cls.__name__,
     )
 
 
-# Data for each block-diagonal model, in both ``coef`` layouts. Only the pytree layout
-# distinguishes a prefix-spelled ``batch_axes`` (``GLMParams(1, 0)``, what every in-tree
-# model uses) from a per-leaf one, and the two are not interchangeable.
-_BLOCK_MODEL_FIXTURES = {
-    PopulationGLM: (
-        "population_poissonGLM_model_instantiation",
-        "population_poissonGLM_model_instantiation_pytree",
-    ),
-    ClassifierPopulationGLM: (
-        "population_classifierGLM_model_instantiation",
-        "population_classifierGLM_model_instantiation_pytree",
-    ),
+def _block_diagonal_models():
+    """Model classes that declare a block-diagonal Hessian."""
+    return [
+        cls
+        for cls in _glm_models()
+        if cls._hess_structure is MatrixStructure.BLOCK_DIAGONAL
+    ]
+
+
+_MODEL_FIXTURES = {
+    GLM: "poissonGLM_model_instantiation",
+    PopulationGLM: "population_poissonGLM_model_instantiation",
+    ClassifierGLM: "classifierGLM_model_instantiation",
+    ClassifierPopulationGLM: "population_classifierGLM_model_instantiation",
 }
+
+_BLOCK_MODEL_FIXTURES = {
+    cls: (fixture_name, f"{fixture_name}_pytree")
+    for cls, fixture_name in _MODEL_FIXTURES.items()
+    if cls._hess_structure is MatrixStructure.BLOCK_DIAGONAL
+}
+
 
 _BLOCK_MODEL_CASES = [
     pytest.param(
@@ -935,15 +938,7 @@ def test_newton_unbatched_model_hessian_matches_differentiated_loss(
     )
 
 
-@pytest.mark.parametrize(
-    "model_instantiation_type",
-    [
-        "poissonGLM_model_instantiation",
-        "population_poissonGLM_model_instantiation",
-        "classifierGLM_model_instantiation",
-        "population_classifierGLM_model_instantiation",
-    ],
-)
+@pytest.mark.parametrize("model_instantiation_type", _MODEL_FIXTURES.values())
 def test_solver_invalidated_after_regularizer_change(request, model_instantiation_type):
     """Changing regularizer should set _solver to None."""
     X, y, model, true_params, _ = request.getfixturevalue(model_instantiation_type)
@@ -959,15 +954,7 @@ def test_solver_invalidated_after_regularizer_change(request, model_instantiatio
     assert model._solver is None, "_solver must be None after regularizer change."
 
 
-@pytest.mark.parametrize(
-    "model_instantiation_type",
-    [
-        "poissonGLM_model_instantiation",
-        "population_poissonGLM_model_instantiation",
-        "classifierGLM_model_instantiation",
-        "population_classifierGLM_model_instantiation",
-    ],
-)
+@pytest.mark.parametrize("model_instantiation_type", _MODEL_FIXTURES.values())
 def test_solver_invalidated_after_strength_change(request, model_instantiation_type):
     """Changing regularizer_strength should set _solver to None."""
     X, y, model, true_params, _ = request.getfixturevalue(model_instantiation_type)
@@ -985,15 +972,7 @@ def test_solver_invalidated_after_strength_change(request, model_instantiation_t
     )
 
 
-@pytest.mark.parametrize(
-    "model_instantiation_type",
-    [
-        "poissonGLM_model_instantiation",
-        "population_poissonGLM_model_instantiation",
-        "classifierGLM_model_instantiation",
-        "population_classifierGLM_model_instantiation",
-    ],
-)
+@pytest.mark.parametrize("model_instantiation_type", _MODEL_FIXTURES.values())
 def test_solver_invalidated_after_observation_model_change(
     request, model_instantiation_type
 ):
@@ -1011,15 +990,7 @@ def test_solver_invalidated_after_observation_model_change(
     assert model._solver is None, "_solver must be None after observation_model change."
 
 
-@pytest.mark.parametrize(
-    "model_instantiation_type",
-    [
-        "poissonGLM_model_instantiation",
-        "population_poissonGLM_model_instantiation",
-        "classifierGLM_model_instantiation",
-        "population_classifierGLM_model_instantiation",
-    ],
-)
+@pytest.mark.parametrize("model_instantiation_type", _MODEL_FIXTURES.values())
 def test_solver_invalidated_after_solver_name_change(request, model_instantiation_type):
     """Changing solver_name should set _solver to None."""
     X, y, model, true_params, _ = request.getfixturevalue(model_instantiation_type)
@@ -1035,15 +1006,7 @@ def test_solver_invalidated_after_solver_name_change(request, model_instantiatio
     assert model._solver is None, "_solver must be None after solver_name change."
 
 
-@pytest.mark.parametrize(
-    "model_instantiation_type",
-    [
-        "poissonGLM_model_instantiation",
-        "population_poissonGLM_model_instantiation",
-        "classifierGLM_model_instantiation",
-        "population_classifierGLM_model_instantiation",
-    ],
-)
+@pytest.mark.parametrize("model_instantiation_type", _MODEL_FIXTURES.values())
 def test_solver_invalidated_after_solver_kwargs_change(
     request, model_instantiation_type
 ):
@@ -1362,16 +1325,21 @@ def test_invalid_linear_solver_raises(poissonGLM_model_instantiation):
         model.fit(X, y)
 
 
+@pytest.mark.metatest
 def test_hessian_solver_cases_cover_every_model_regularizer_pair():
-    fixtures = {
-        "poissonGLM_model_instantiation",
-        "population_poissonGLM_model_instantiation",
-        "classifierGLM_model_instantiation",
-        "population_classifierGLM_model_instantiation",
-    }
+    discovered = set(_glm_models())
+    registered = set(_MODEL_FIXTURES)
+
+    assert discovered == registered, (
+        "Concrete models missing fixture registrations: "
+        f"{sorted(cls.__name__ for cls in discovered - registered)}. "
+        "Registered classes that are no longer concrete models: "
+        f"{sorted(cls.__name__ for cls in registered - discovered)}."
+    )
+
     expected = {
         (fixture_name, regularizer_name)
-        for fixture_name in fixtures
+        for fixture_name in _MODEL_FIXTURES.values()
         for regularizer_name in ("Ridge", "UnRegularized")
     }
     actual = {(case.values[0], case.values[1]) for case in _LINEAR_SOLVER_CASES}
@@ -1379,18 +1347,16 @@ def test_hessian_solver_cases_cover_every_model_regularizer_pair():
     assert actual == expected
 
 
+@pytest.mark.metatest
 def test_every_block_diagonal_model_has_fixtures():
-    """Registry and discovery must agree, so no block-diagonal model goes unchecked.
-    ``test_newton_block_diagonal_matches_full_autodiff_update`` is parametrized from
-    ``_BLOCK_MODEL_FIXTURES``, so a model missing from it would be skipped rather than fail.
-    This test is what turns that silence into a failure.
-    """
-    discovered = {cls.__name__ for cls in _block_diagonal_models()}
-    registered = {cls.__name__ for cls in _BLOCK_MODEL_FIXTURES}
+    discovered = set(_block_diagonal_models())
+    registered = set(_BLOCK_MODEL_FIXTURES)
+
     assert discovered == registered, (
-        f"declare a block-diagonal Hessian but are absent from _BLOCK_MODEL_FIXTURES, so "
-        f"they are never checked against the full Hessian: {sorted(discovered - registered)}. "
-        f"Registered but no longer block-diagonal: {sorted(registered - discovered)}."
+        "Block-diagonal models missing fixture registrations: "
+        f"{sorted(cls.__name__ for cls in discovered - registered)}. "
+        "Registered classes that are no longer block-diagonal: "
+        f"{sorted(cls.__name__ for cls in registered - discovered)}."
     )
 
 
@@ -1447,15 +1413,7 @@ def test_solver_name_respected_when_explicitly_set(glm_class, solver_name):
 
 
 @_SOLVERS
-@pytest.mark.parametrize(
-    "model_instantiation_type",
-    [
-        "poissonGLM_model_instantiation",
-        "population_poissonGLM_model_instantiation",
-        "classifierGLM_model_instantiation",
-        "population_classifierGLM_model_instantiation",
-    ],
-)
+@pytest.mark.parametrize("model_instantiation_type", _MODEL_FIXTURES.values())
 def test_newton_solver_type_after_fit(request, model_instantiation_type, solver_name):
     """After fit(), model._solver should be an instance of the requested solver."""
     X, y, model, _, _ = request.getfixturevalue(model_instantiation_type)
@@ -1468,15 +1426,7 @@ def test_newton_solver_type_after_fit(request, model_instantiation_type, solver_
 
 
 @_SOLVERS
-@pytest.mark.parametrize(
-    "model_instantiation_type",
-    [
-        "poissonGLM_model_instantiation",
-        "population_poissonGLM_model_instantiation",
-        "classifierGLM_model_instantiation",
-        "population_classifierGLM_model_instantiation",
-    ],
-)
+@pytest.mark.parametrize("model_instantiation_type", _MODEL_FIXTURES.values())
 def test_newton_update_increments_step_count(
     request, model_instantiation_type, solver_name
 ):
@@ -1495,15 +1445,7 @@ def test_newton_update_increments_step_count(
 
 
 @_SOLVERS
-@pytest.mark.parametrize(
-    "model_instantiation_type",
-    [
-        "poissonGLM_model_instantiation",
-        "population_poissonGLM_model_instantiation",
-        "classifierGLM_model_instantiation",
-        "population_classifierGLM_model_instantiation",
-    ],
-)
+@pytest.mark.parametrize("model_instantiation_type", _MODEL_FIXTURES.values())
 def test_newton_maxiter_respected(request, model_instantiation_type, solver_name):
     """Setting maxiter=1 should bound the solver to at most 1 step."""
     X, y, model, _, _ = request.getfixturevalue(model_instantiation_type)
