@@ -123,6 +123,18 @@ class BaseHMM(
         included at initialization for scikit-learn compatibility; however, users should set up the
         initialization functions using the :meth:`~nemos.hmm.hmm.BaseHMM.setup` method after model
         instantiation.
+    estep_type:
+        How the forward-backward recursions of the E-step are evaluated. ``"sequential"``
+        steps through the time bins one at a time; ``"associative"`` uses
+        ``jax.lax.associative_scan``, whose depth grows like ``log(n_time_bins)`` rather
+        than ``n_time_bins``.
+
+        Which is faster depends on the hardware. On GPU and TPU the ``"associative"``
+        can be orders of magnitude faster; on CPU it is usually slower, a CPU core being
+        well suited to a tight sequential loop. ``"associative"`` also holds its whole scan
+        in memory, roughly ``4 * n_time_bins * n_states ** 2`` floats against
+        ``n_time_bins * n_states``, which becomes the binding constraint for large
+        ``n_states``.
     """
 
     _validator_class: type[HMMValidatorT]

@@ -65,6 +65,9 @@ def log_matmul(log_earlier: Array, log_later: Array) -> Array:
     """
     row_max = jnp.max(log_earlier, axis=-1, keepdims=True)
     col_max = jnp.max(log_later, axis=-2, keepdims=True)
+    # handles corner case for which a full row or col is -inf
+    row_max = jax.lax.stop_gradient(jnp.where(jnp.isfinite(row_max), row_max, 0.0))
+    col_max = jax.lax.stop_gradient(jnp.where(jnp.isfinite(col_max), col_max, 0.0))
     prod = jnp.exp(log_earlier - row_max) @ jnp.exp(log_later - col_max)
     return jnp.log(prod) + row_max + col_max
 
@@ -113,7 +116,7 @@ def _condition_on(
     return log_l, log_L_unnorm - log_l[..., jnp.newaxis]
 
 
-def combine_forward(
+def _combine_forward(
     earlier: Tuple[Array, Array], later: Tuple[Array, Array]
 ) -> Tuple[Array, Array]:
     r"""Combine in the associative scan.
@@ -241,7 +244,7 @@ def _forward_pass_assoc(
     elements = _condition_on(log_conditional_prob, log_base)
     # the log output of the scan is discarded: combine subtracts out the max that
     # would otherwise accumulate, so it is no longer log(p(y_0:t)).
-    _, log_L_cum = jax.lax.associative_scan(combine_forward, elements)
+    _, log_L_cum = jax.lax.associative_scan(_combine_forward, elements)
     log_alphas = log_L_cum[:, 0, :]
     return log_alphas, _compute_log_normalizers(
         log_initial_prob,
@@ -390,13 +393,6 @@ def _backward_pass_assoc(
     a suffix product of matrices, which is the scan map of section **Scan Map** of the
     note run in reverse.
 
-    Two things differ from the forward pass, both noted in the closing paragraph of the
-    note, which does not derive this pass. The messages are not normalized, so the
-    equal-rows argument that makes sessions free in :func:`_forward_pass_assoc` does not
-    apply and the elements carry an explicit reset flag. And the scale is kept rather
-    than dropped, since a per-element factor would corrupt messages whose absolute scale
-    is what makes ``log_alphas + log_betas`` a posterior.
-
     Parameters
     ----------
     log_transition_prob :
@@ -492,7 +488,7 @@ def forward_backward_assoc(
     log_likelihood :
         Total log-likelihood of the observation sequence under the model.
 
-    log_likelihood_norm :
+    likelihood_norm :
         The normalized total likelihood.
 
     log_alphas :
@@ -565,7 +561,7 @@ def forward_backward_assoc(
     )
 
 
-def max_plus_matmul(log_earlier: Array, log_later: Array) -> Array:
+def _max_plus_matmul(log_earlier: Array, log_later: Array) -> Array:
     r"""Max-plus product of two segments, earlier on the left.
 
     :math:`\text{out}[i,j] = \max_k(\text{earlier}[i,k] + \text{later}[k,j])`, the
@@ -678,7 +674,7 @@ def max_sum_assoc(
         session_starts[:, jnp.newaxis, jnp.newaxis], log_init, log_transition
     )
     cumulative = jax.lax.associative_scan(
-        max_plus_matmul, log_base + log_emission[:, jnp.newaxis, :]
+        _max_plus_matmul, log_base + log_emission[:, jnp.newaxis, :]
     )
     omegas = cumulative[:, 0, :]
 
