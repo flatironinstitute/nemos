@@ -26,7 +26,7 @@ For Developers <developers_notes/README>
 NeMoS (Neural ModelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](https://jax.readthedocs.io/en/latest/).
 It streamlines the process of defining and selecting models, through a collection of easy-to-use methods for feature design.
 
-The core of NeMoS includes GPU-accelerated, well-tested implementations of standard statistical models for systems neuroscience.
+The core of NeMoS includes GPU-accelerated, well-tested implementations of standard statistical models for systems neuroscience. Our models are compliant with [scikit-learn's API](https://scikit-learn.org/stable/) and so are compatible with their pipelining and cross-validation machinery. Data can be represented as numpy arrays or [pynapple](https://pynapple.org) objects, to make working with neural data even easier.
 
 ::::{grid} auto
 
@@ -84,6 +84,8 @@ API Reference
 :gutter: 3
 
 :::{grid-item-card} __GLM__
+:link: user_guide/models/glm/README.html
+:link-alt: GLM
 
 ```{image} assets/lnp_model_colscheme.svg
 :alt: Linear-Nonlinear-Poisson diagram.
@@ -100,6 +102,8 @@ API Reference
 :::
 
 :::{grid-item-card} __GLM-HMM__
+:link: user_guide/models/glm_hmm/README.html
+:link-alt: GLM-HMM
 
 ```{image} assets/glm_hmm_graphical_model.svg
 :alt: GLM-HMM graphical model.

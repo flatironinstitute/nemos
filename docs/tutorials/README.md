@@ -5,6 +5,7 @@ A gallery of fully worked out tutorials analyzing neural recordings from differe
 :::{dropdown} Additional requirements
 :color: warning
 :icon: alert
+:open:
 To run the tutorials, you may need to install some additional packages used for plotting and data fetching.
 You can install all of the required packages with the following command:
 ```

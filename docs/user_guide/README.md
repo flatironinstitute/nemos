@@ -1,14 +1,19 @@
 # User Guide
 
-NeMoS has two core modules: `basis`, which builds model features from inputs such as position, phase, stimuli or spike counts, and the model classes, which relate those features to a measured response — spike counts, calcium traces, behavioral choices. Those two cover most analyses, and the chapters on them come first.
+NeMoS has two core modules:
+- [`basis`](user-guide-feature-design), which builds model features from inputs such as position, phase, stimuli or spike counts
+- the [model classes](user-guide-models), which relate those features to a measured response — spike counts, calcium traces, behavioral choices.
 
-For more advanced use, NeMoS exposes a set of components — observation models, regularizers, solvers — that you can combine to build your own model. Each component defines an interface, so you can supply your own if the ones implemented do not cover your use case.
+Most analyses need only these two, so their chapters come first.
 
-The last chapters cover saving a fitted model, hyperparameter search with scikit-learn, and recordings too large to fit in memory.
+For more advanced use, NeMoS exposes a set of components — observation models, regularizers, solvers — that you can use to customize our models and build your own. Each component defines an interface, so you can supply your own if the ones implemented do not cover your use case.
+
+The remaining chapters cover other useful topics, such as saving a fitted model, interoperating with other packages, and fitting recordings too large to fit in memory.
 
 :::{dropdown} Additional requirements
 :color: warning
 :icon: alert
+:open:
 
 To run the code in these pages, you may need to install some additional packages used for plotting and data fetching.
 You can install all of the required packages with the following command:
@@ -18,6 +23,7 @@ pip install nemos[examples]
 
 :::
 
+(user-guide-feature-design)=
 ## Feature design
 
 Constructing the design matrix, and composing several inputs into one.
@@ -37,6 +43,7 @@ basis/README.md
 
 :::
 
+(user-guide-models)=
 ## Models
 
 The model families and the estimator interface they share.
@@ -81,6 +88,7 @@ Writing a model to disk and reading it back.
 ```{toctree}
 :maxdepth: 2
 :titlesonly:
+:caption: Saving and Loading
 
 saving_and_loading.md
 ```
@@ -115,6 +123,7 @@ Fitting when the data does not fit in memory.
 ```{toctree}
 :maxdepth: 2
 :titlesonly:
+:caption: Stochastic optimization
 
 scalability/README.md
 ```

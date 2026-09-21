@@ -148,15 +148,17 @@ html_theme_options = {
         "[!a]?[!p]?[!i]**": ["page-toc", "sourcelink"],
         "user_guide/README": [],
         "user_guide/basis/README": [],
+        "how_to_guide/README": [],
     },
 }
 
+# The landing pages of the guides keep the left nav, so their sub-pages and the
+# groups they belong to stay visible when moving into them.
 html_sidebars = {
     "index": [],
     "installation": [],
     "quickstart": [],
     "benchmarking": [],
-    "how_to_guide/README": [],
     "tutorials/README": [],
     "**": ["sidebar-nav-bs.html"],
 }
@@ -364,7 +366,11 @@ def add_download_admonition(app, docname, source):
 # toctree sits under a section header that repeats the caption, so the body copy
 # is dropped and the sidebar one kept. Captions render normally everywhere else;
 # add a docname here to opt a page in.
-_SIDEBAR_ONLY_CAPTION_PAGES = ("user_guide/README", "tutorials/README")
+_SIDEBAR_ONLY_CAPTION_PAGES = (
+    "user_guide/README",
+    "how_to_guide/README",
+    "tutorials/README",
+)
 
 
 def drop_body_toctree_captions(app, doctree, docname):

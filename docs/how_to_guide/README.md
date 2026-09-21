@@ -6,6 +6,7 @@ Task-oriented recipes: each page answers a single "how do I ...?" question. The 
 :::{dropdown} Additional requirements
 :color: warning
 :icon: alert
+:open:
 To run these guides, you may need to install some additional packages used for plotting and data fetching.
 You can install all of the required packages with the following command:
 ```
@@ -13,7 +14,10 @@ pip install nemos[examples]
 ```
 :::
 
-## Fitting Models
+% Only the first toctree of each group carries the :caption:, so the sidebar shows one
+% group header per section; conf.py keeps captions out of this page's body.
+
+## Using Models
 
 ::::{grid} 1 2 3 3
 
@@ -27,6 +31,7 @@ pip install nemos[examples]
 
 ```{toctree}
 :maxdepth: 2
+:caption: Fitting Models
 
 raw_history_feature.md
 ```
@@ -73,6 +78,7 @@ simulate_coupled_population.md
 
 ```{toctree}
 :maxdepth: 2
+:caption: Feature Engineering
 
 define_a_custom_basis.md
 ```
@@ -120,6 +126,7 @@ pytree_predictors.md
 
 ```{toctree}
 :maxdepth: 2
+:caption: Model Selection
 
 variable_selection_zero_basis.md
 ```
@@ -158,6 +165,7 @@ variable_selection_group_lasso.md
 
 ```{toctree}
 :maxdepth: 2
+:caption: Performance and Scaling
 
 convolve_large_arrays.md
 ```
@@ -203,6 +211,12 @@ custom_callbacks_and_termination.md
 manual_batching_loop.md
 ```
 :::
+
+::::
+
+## Extensions and Customizations
+
+::::{grid} 1 2 3 3
 
 :::{grid-item-card}
 
