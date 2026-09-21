@@ -110,6 +110,62 @@ def _solve_shifted_system(
 
 
 class Newton(HessianMixin):
+    r"""
+    Newton solver with backtracking and Hessian-aware linear solves.
+
+    At each iteration, the solver computes a Newton direction from
+
+    .. math::
+        H d = -g,
+
+    modifying the Hessian when necessary to obtain a finite descent direction.
+
+    ``linear_solver`` controls how this system is solved:
+
+    ``"auto"``
+        Selects a strategy from the resolved Hessian properties. Positive-definite
+        Hessians use Cholesky directly, positive-semidefinite Hessians use Cholesky
+        with a small numerical shift, and Hessians without a positivity guarantee
+        use spectral eigenvalue modification.
+
+    ``"cholesky"``
+        Solves the system using a Cholesky factorization. A positive-definite
+        Hessian is used directly. For a positive-semidefinite Hessian, a small
+        dtype-dependent diagonal shift is added to avoid numerical singularity.
+        This is the cheapest strategy when the Hessian is known to be positive.
+
+    ``"eigh"``
+        Computes ``H = Q diag(lambda) Q.T`` and replaces each eigenvalue by
+        .. math::
+            \\widetilde{\\lambda}_i
+            = \\max(|\\lambda_i|, \\delta).
+        The direction is then
+        .. math::
+            d = -Q\\widetilde{\\Lambda}^{-1}Q^T g.
+        This handles positive-definite, singular, and indefinite symmetric
+        Hessians in one eigendecomposition. It follows the spectral modification
+        in Nocedal and Wright, 2nd ed., section 3.4, equation (3.49), p. 50.
+
+    ``"identity_shift"``
+        Attempts Cholesky factorizations of ``H + tau I`` until one succeeds.
+        The initial shift accounts for the smallest diagonal entry and is
+        warm-started one ladder step below the shift accepted at the preceding
+        iteration. Failed attempts increase the shift by a factor of ten, up to
+        ``identity_shift_max_steps`` retries.
+        This is an adaptation of Nocedal and Wright, Algorithm 3.3, pp. 51--52.
+        The scale-dependent ``identity_shift_beta``, factor-ten ladder, and
+        decayed warm start are implementation choices; the book presents the
+        underlying added-multiple-of-the-identity Cholesky scheme.
+
+    Block-diagonal Hessians apply the selected strategy independently to each
+    block. Accepted directions are passed through a backtracking line search.
+
+    References
+    ----------
+    Jorge Nocedal and Stephen J. Wright, *Numerical Optimization*, 2nd ed.,
+    Springer, 2006, section 3.4, equation (3.49) and Algorithm 3.3.
+    """
+
     def __init__(
         self,
         unregularized_loss: Callable,
