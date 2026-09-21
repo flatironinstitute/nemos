@@ -141,7 +141,11 @@ html_theme_options = {
     # Developers fall into the "More" dropdown after them.
     "header_links_before_dropdown": 5,
     "navigation_depth": 4,
-    "show_nav_level": 2,
+    # Landing pages carry sections with several pages each, so only the first
+    # level is open and the pages under it sit behind a closed dropdown.
+    # collapse_navigation would drop those pages from the tree altogether,
+    # leaving nothing to open, so it stays off.
+    "show_nav_level": 1,
     "logo": {
         "image_light": "_static/NeMoS_Logo_CMYK_Full.svg",
         "image_dark": "_static/NeMoS_Logo_CMYK_White.svg",
