@@ -1344,8 +1344,10 @@ def test_every_linear_solver_reaches_the_same_fit(
     reference = fit_with("auto")
     fitted = fit_with(linear_solver)
 
-    np.testing.assert_allclose(fitted.coef_, reference.coef_, atol=1e-5)
-    np.testing.assert_allclose(fitted.intercept_, reference.intercept_, atol=1e-5)
+    np.testing.assert_allclose(fitted.coef_, reference.coef_, rtol=1e-12, atol=0.0)
+    np.testing.assert_allclose(
+        fitted.intercept_, reference.intercept_, rtol=1e-12, atol=0.0
+    )
 
 
 def test_invalid_linear_solver_raises(poissonGLM_model_instantiation):

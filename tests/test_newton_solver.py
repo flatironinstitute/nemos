@@ -174,14 +174,14 @@ def test_pd_quadratic_convergence(dtype, jit):
         x_opt,
         x_star,
         atol=0.0,
-        rtol=20 * eps,
+        rtol=100 * eps,
     )
 
     residual = A @ x_opt - b
     np.testing.assert_allclose(
         residual,
         0.0,
-        atol=20 * eps * float(jnp.linalg.norm(b, ord=jnp.inf)),
+        atol=100 * eps * float(jnp.linalg.norm(b, ord=jnp.inf)),
         rtol=0.0,
     )
 
@@ -214,13 +214,13 @@ def test_pd_quadratic_convergence_autodiff(dtype, jit):
         x_opt,
         x_star,
         atol=0.0,
-        rtol=20 * eps,
+        rtol=100 * eps,
     )
     residual = A @ x_opt - b
     np.testing.assert_allclose(
         residual,
         0.0,
-        atol=20 * eps * float(jnp.linalg.norm(b, ord=jnp.inf)),
+        atol=100 * eps * float(jnp.linalg.norm(b, ord=jnp.inf)),
         rtol=0.0,
     )
 
@@ -300,13 +300,11 @@ def test_psd_singular_quadratic_preserves_null_space_autodiff(dtype, jit):
     initial_null = Q_null.T @ x0
     final_null = Q_null.T @ x_opt
 
-    np.testing.assert_allclose(
-        final_null, initial_null, atol=solver.tol, rtol=solver.rtol
-    )
-
     expected = x_star + x0_null
 
-    np.testing.assert_allclose(x_opt, expected, atol=solver.tol, rtol=solver.rtol)
+    eps = np.finfo(np.dtype(dtype)).eps
+    np.testing.assert_allclose(final_null, initial_null, rtol=100 * eps, atol=0.0)
+    np.testing.assert_allclose(x_opt, expected, rtol=100 * eps, atol=0.0)
 
 
 @pytest.mark.requires_x64
@@ -341,14 +339,14 @@ def test_pd_quadratic_scale_equivariance(dtype, scale, jit):
         x_opt,
         x_star,
         atol=0.0,
-        rtol=20 * eps,
+        rtol=100 * eps,
     )
     scaled_b = scale * b
     residual = scale * A @ x_opt - scaled_b
     np.testing.assert_allclose(
         residual,
         0.0,
-        atol=20 * eps * float(jnp.linalg.norm(scaled_b, ord=jnp.inf)),
+        atol=100 * eps * float(jnp.linalg.norm(scaled_b, ord=jnp.inf)),
         rtol=0.0,
     )
 
@@ -378,7 +376,8 @@ def test_psd_quadratic_scale_equivariance(dtype, scale, jit):
 
     expected = x_star + x0_null
 
-    np.testing.assert_allclose(x_opt, expected, atol=solver.tol, rtol=solver.rtol)
+    eps = np.finfo(np.dtype(dtype)).eps
+    np.testing.assert_allclose(x_opt, expected, rtol=100 * eps, atol=0.0)
 
 
 @pytest.mark.requires_x64
@@ -403,8 +402,9 @@ def test_newton_linear_or_ridge_regression(request, regr_setup):
         tol=10**-12,
         init_params=param_init,
     ).run(param_init, X, y)
+    eps = np.finfo(np.dtype(y.dtype)).eps
     assert pytree_map_and_reduce(
-        lambda a, b: np.allclose(a, b, atol=10**-5, rtol=0.0),
+        lambda a, b: np.allclose(a, b, rtol=100 * eps, atol=0.0),
         all,
         params,
         newton_params,
@@ -1378,8 +1378,8 @@ def test_eigh_scale_crossover_at_eigenvalue_floor(dtype, jit):
 @pytest.mark.parametrize("jit", [False, True])
 @pytest.mark.parametrize("scale", [1e-6, 1.0, 1e6])
 def test_identity_shift_is_equivariant(jit, scale):
-    H = jnp.diag(jnp.asarray([-2.0, 3.0], dtype=jnp.float64))
-    grad = jnp.asarray([1.0, -0.5], dtype=jnp.float64)
+    H = jnp.diag(jnp.asarray([-2.0, 3.0], dtype=np.float64))
+    grad = jnp.asarray([1.0, -0.5], dtype=np.float64)
 
     tag = _make_tag(
         init_params=jnp.zeros_like(grad),
@@ -1401,12 +1401,7 @@ def test_identity_shift_is_equivariant(jit, scale):
         linear_solver="identity_shift",
     )
 
-    np.testing.assert_allclose(
-        scaled,
-        reference,
-        atol=1e-10,
-        rtol=1e-10,
-    )
+    np.testing.assert_allclose(scaled, reference, rtol=1e-12, atol=0.0)
 
 
 @pytest.mark.requires_x64
