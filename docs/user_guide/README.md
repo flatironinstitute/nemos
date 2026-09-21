@@ -4,24 +4,8 @@ NeMoS has two core modules:
 - [`basis`](user-guide-feature-design), which builds model features from inputs such as position, phase, stimuli or spike counts
 - the [model classes](user-guide-models), which relate those features to a measured response — spike counts, calcium traces, behavioral choices.
 
-Most analyses need only these two, so their chapters come first.
 
-For more advanced use, NeMoS exposes a set of components — observation models, regularizers, solvers — that you can use to customize our models and build your own. Each component defines an interface, so you can supply your own if the ones implemented do not cover your use case.
 
-The remaining chapters cover other useful topics, such as saving a fitted model, interoperating with other packages, and fitting recordings too large to fit in memory.
-
-:::{dropdown} Additional requirements
-:color: warning
-:icon: alert
-:open:
-
-To run the code in these pages, you may need to install some additional packages used for plotting and data fetching.
-You can install all of the required packages with the following command:
-```
-pip install nemos[examples]
-```
-
-:::
 
 (user-guide-feature-design)=
 ## Feature design
@@ -61,7 +45,7 @@ models/glm_hmm/README.md
 
 :::
 
-## Model components
+## Model configurations
 
 Advanced usage: what each component does, how they combine into a model, and the interface to implement your own.
 
