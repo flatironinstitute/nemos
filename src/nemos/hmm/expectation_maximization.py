@@ -600,6 +600,8 @@ def _em_step(
         [ModelParamsT, Array, Array, Array], Tuple[ModelParamsT, SolverState, Aux]
     ],
     session_starts: Array,
+    dirichlet_initial_proba: Array | None = None,
+    dirichlet_transition_proba: Array | None = None,
 ) -> EMCarry:
     """
     Execute a single EM iteration combining E-step and M-step.
@@ -623,6 +625,12 @@ def _em_step(
         M-step update function for GLM coefficients and intercepts.
     session_starts :
         Boolean array marking session boundaries.
+    dirichlet_initial_proba :
+        Alpha parameters of the Dirichlet prior over the initial state probabilities,
+        shape ``(n_states,)``. If None, a flat (uninformative) prior is assumed.
+    dirichlet_transition_proba :
+        Alpha parameters of the Dirichlet prior over the transition probabilities,
+        shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
 
     Returns
     -------
@@ -654,6 +662,8 @@ def _em_step(
         log_joint_posterior=log_joint_posterior,
         session_starts=session_starts,
         m_step_fn_model_params=m_step_fn_model_params,
+        dirichlet_initial_proba=dirichlet_initial_proba,
+        dirichlet_transition_proba=dirichlet_transition_proba,
     )
 
     new_state = EMState(
@@ -677,6 +687,8 @@ def em_step(
     log_likelihood_func: Callable,
     m_step_fn_model_params: Callable,
     session_starts: Array,
+    dirichlet_initial_proba: Array | None = None,
+    dirichlet_transition_proba: Array | None = None,
 ) -> Tuple[ModelParamsT, EMState]:
     """
     Perform a single EM iteration step for an HMM.
@@ -704,6 +716,12 @@ def em_step(
         Callable that performs the M-step update for model parameters.
     session_starts :
         Boolean mask for the first observation of each session.
+    dirichlet_initial_proba :
+        Alpha parameters of the Dirichlet prior over the initial state probabilities,
+        shape ``(n_states,)``. If None, a flat (uninformative) prior is assumed.
+    dirichlet_transition_proba :
+        Alpha parameters of the Dirichlet prior over the transition probabilities,
+        shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
 
     Returns
     -------
@@ -723,6 +741,8 @@ def em_step(
         log_likelihood_func=log_likelihood_func,
         m_step_fn_model_params=m_step_fn_model_params,
         session_starts=session_starts,
+        dirichlet_initial_proba=dirichlet_initial_proba,
+        dirichlet_transition_proba=dirichlet_transition_proba,
     )
 
     return params, state
@@ -765,6 +785,8 @@ def em_hmm(
     log_likelihood_func: Callable,
     m_step_fn_model_params: Callable,
     session_starts: Optional[Array] = None,
+    dirichlet_initial_proba: Array | None = None,
+    dirichlet_transition_proba: Array | None = None,
     maxiter: int = 10**3,
     tol: float = 1e-8,
     check_convergence: Callable = check_log_likelihood_increment,
@@ -796,6 +818,12 @@ def em_hmm(
         Typically created by configuring a solver with the appropriate regularizer/prior.
     session_starts :
         Boolean mask for the first observation of each session.
+    dirichlet_initial_proba :
+        Alpha parameters of the Dirichlet prior over the initial state probabilities,
+        shape ``(n_states,)``. If None, a flat (uninformative) prior is assumed.
+    dirichlet_transition_proba :
+        Alpha parameters of the Dirichlet prior over the transition probabilities,
+        shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
     maxiter :
         Maximum number of EM iterations.
     tol :
@@ -831,6 +859,8 @@ def em_hmm(
         log_likelihood_func=log_likelihood_func,
         m_step_fn_model_params=m_step_fn_model_params,
         session_starts=session_starts,
+        dirichlet_initial_proba=dirichlet_initial_proba,
+        dirichlet_transition_proba=dirichlet_transition_proba,
     )
 
     def stopping_condition_while(carry):
