@@ -84,7 +84,7 @@ def _condition_on(
         :math:`p(y_{v:t} | z_{v-1}=k)` (during the scan). Shape (n_samples, n_states).
     log_row_stochastic:
         Log of either :math:`p(z_t=i | z_{t-1}=j)` (when computing initial elements) or
-        :math:`p(z_{v-1}=k | z_{u-1}=j, y_{u:v-1})$` (during the scan). Shape (n_samples, n_states, n_states).
+        :math:`p(z_{v-1}=k | z_{u-1}=j, y_{u:v-1})` (during the scan). Shape (n_samples, n_states, n_states).
 
     Returns
     -------
