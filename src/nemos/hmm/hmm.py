@@ -67,10 +67,14 @@ class BaseHMM(
         The number of hidden states in the HMM. Must be a positive integer.
     dirichlet_initial_proba :
         Alpha parameters for the Dirichlet prior over the initial state probabilities.
-        Shape ``(n_states,)``. If None, a flat (uninformative) prior is assumed.
+        Any array-like (list, tuple, NumPy or JAX array) of shape ``(n_states,)``, cast
+        to a JAX array on assignment. All values must be >= 1. If None, a flat
+        (uninformative) prior is assumed.
     dirichlet_transition_proba :
         Alpha parameters for the Dirichlet prior over the transition probabilities.
-        Shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
+        Any array-like (list, tuple, NumPy or JAX array) of shape
+        ``(n_states, n_states)``, cast to a JAX array on assignment. All values must be
+        >= 1. If None, a flat (uninformative) prior is assumed.
     regularizer :
         Regularization to use for model parameter optimization. Defines the regularization scheme
         and related parameters. Default is UnRegularized.
@@ -108,10 +112,8 @@ class BaseHMM(
     def __init__(
         self,
         n_states: int,
-        dirichlet_initial_proba: Union[jnp.ndarray, None] = None,  # (n_state, )
-        dirichlet_transition_proba: Union[
-            jnp.ndarray | None
-        ] = None,  # (n_state, n_state):
+        dirichlet_initial_proba: Optional[ArrayLike] = None,  # (n_state, )
+        dirichlet_transition_proba: Optional[ArrayLike] = None,  # (n_state, n_state):
         regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Optional[
             Any
@@ -331,7 +333,7 @@ class BaseHMM(
         return self._dirichlet_initial_proba
 
     @dirichlet_initial_proba.setter
-    def dirichlet_initial_proba(self, value: jnp.ndarray | None):
+    def dirichlet_initial_proba(self, value: Optional[ArrayLike]):
         """Validate and set the alpha parameters of the Dirichlet prior over the initial probabilities."""
         self._dirichlet_initial_proba = _resolve_dirichlet_priors(
             value, (self._n_states,)
@@ -346,7 +348,7 @@ class BaseHMM(
         return self._dirichlet_transition_proba
 
     @dirichlet_transition_proba.setter
-    def dirichlet_transition_proba(self, value: jnp.ndarray | None):
+    def dirichlet_transition_proba(self, value: Optional[ArrayLike]):
         """Validate and set the alpha parameters of the Dirichlet prior over the transition probabilities."""
         self._dirichlet_transition_proba = _resolve_dirichlet_priors(
             value, (self._n_states, self._n_states)
@@ -681,7 +683,7 @@ class BaseHMM(
         # filter for non-nans, grab data if needed
         data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
         # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+        (params,) = tree_utils.tree_astype(params, dtype=y.dtype)
 
         # make sure session_starts starts with a 1
         session_starts = session_starts.at[0].set(True)
@@ -748,7 +750,7 @@ class BaseHMM(
         data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
 
         # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+        (params,) = tree_utils.tree_astype(params, dtype=y.dtype)
 
         # make sure session_starts starts with a 1
         session_starts = session_starts.at[0].set(True)
@@ -846,7 +848,7 @@ class BaseHMM(
         data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
 
         # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+        (params,) = tree_utils.tree_astype(params, dtype=y.dtype)
 
         # make sure session_starts starts with a 1
         session_starts = session_starts.at[0].set(True)
@@ -946,7 +948,7 @@ class BaseHMM(
         data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
 
         # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+        (params,) = tree_utils.tree_astype(params, dtype=y.dtype)
 
         # make sure session_starts starts with a 1
         session_starts = session_starts.at[0].set(True)
