@@ -1,7 +1,7 @@
 """Newton-based optimization solvers."""
 
 import abc
-from typing import Any, Callable, ClassVar, Generic, Optional, Tuple, TypeVar
+from typing import Any, Callable, ClassVar, Generic, Tuple, TypeVar
 
 import equinox as eqx
 import jax
@@ -10,12 +10,12 @@ import lineax as lx
 import optax
 import optimistix as optx
 from jax.flatten_util import ravel_pytree
-from jaxtyping import Array, Float, PyTree
+from jaxtyping import Array, Bool, Scalar
 from optimistix._misc import cauchy_termination
 
 from .. import tree_utils
 from ..solvers._hessian_mixins import HessianMixin, HessianSolverMixin, LinearSolverTag
-from ..typing import Params
+from ..typing import Params, StepResult
 from ._abstract_solver import OptimizationInfo
 from ._fista import FISTA
 
@@ -24,23 +24,34 @@ DEFAULT_RTOL = 0.0
 DEFAULT_MAX_STEPS = 100
 
 
-T = TypeVar("T")  # structure of the parameters
-S = TypeVar("S")  # generic state
-type Y[T] = PyTree[Array, T]
-type Scalar[T] = PyTree[Float[Array, ""], T]
+# The parameter pytree. The state follows it, so a ``GLMParams`` fit and a
+# ``PopulationGLM`` fit are distinct instantiations rather than ``Any``.
+Y = TypeVar("Y")
+# The state a solver carries. Each solver pins it to its own class, which is what keeps
+# ``Newton``'s identity shift out of the states that have no ladder to seed.
+S = TypeVar("S", bound="BaseNewtonState")
 
 
-class NewtonState(eqx.Module):
-    grad_norm: jax.Array
+class BaseNewtonState(eqx.Module, Generic[Y]):
+    """What every solver built on :class:`BaseNewtonSolver` carries between iterations."""
+
+    grad_norm: Scalar
     stats: OptimizationInfo
-    ls_state: Optional[Any] = None
-    # Previous accepted step, for solvers whose convergence test is Cauchy rather than
-    # gradient based. Initialized to inf so the first iteration never counts as converged.
-    y_diff: Optional[Any] = None
-    identity_shift: Any = None
+    # optax's line-search state, whose type is private to the chosen transformation.
+    ls_state: Any
+    # Previous accepted step, read by the Cauchy convergence test. Infinite at init so
+    # the test cannot fire before a step is taken.
+    y_diff: Y
 
 
-NewtonStepResult = tuple[Params, NewtonState]
+class NewtonState(BaseNewtonState[Y]):
+    """Adds the shift the ``identity_shift`` ladder last accepted, one per Hessian block.
+
+    The Hessian itself is rebuilt from the data every iteration, so none of it is
+    carried; the shift is, because it seeds the next iteration's ladder.
+    """
+
+    identity_shift: Array
 
 
 def _solve_shifted_system(
@@ -117,7 +128,7 @@ def _solve_shifted_system(
     return solution
 
 
-class BaseNewtonSolver(Generic[T, S], HessianMixin):
+class BaseNewtonSolver(Generic[Y, S], HessianMixin):
     def __init__(
         self,
         unregularized_loss: Callable,
@@ -175,10 +186,10 @@ class BaseNewtonSolver(Generic[T, S], HessianMixin):
 
     def update(
         self,
-        params,
-        state: NewtonState,
-        *args,
-    ) -> Tuple[Y[T], S]:
+        params: Y,
+        state: S,
+        *args: Any,
+    ) -> StepResult:
         (fval, aux), grad = self._gradient(params, *args)
         gnorm = jnp.sqrt(lx.internal.tree_dot(grad, grad))
         converged = self._converged(params, state, grad, fval)
@@ -220,24 +231,30 @@ class BaseNewtonSolver(Generic[T, S], HessianMixin):
             state.stats.num_steps,
             state.stats.num_steps + 1,
         )
-        update = NewtonState(
-            grad_norm=gnorm,
-            stats=OptimizationInfo(
-                function_val=fval,
-                num_steps=new_iter,
-                converged=converged,
-                reached_max_steps=new_iter >= self.maxiter,
+        # Written onto whatever state the subclass carries, so the loop never names a
+        # concrete state class and a solver is free to add fields to it.
+        new_state = eqx.tree_at(
+            lambda s: (s.grad_norm, s.stats, s.y_diff),
+            new_state,
+            (
+                gnorm,
+                OptimizationInfo(
+                    function_val=fval,
+                    num_steps=new_iter,
+                    converged=converged,
+                    reached_max_steps=new_iter >= self.maxiter,
+                ),
+                tree_utils.tree_sub(new_params, params),
             ),
-            y_diff=tree_utils.tree_sub(new_params, params),
         )
 
-        return new_params, eqx.combine(update, new_state), aux
+        return new_params, new_state, aux
 
     def run(
         self,
-        init_params,
-        *args,
-    ):
+        init_params: Y,
+        *args: Any,
+    ) -> StepResult:
         state = self.init_state(init_params, *args)
         params = init_params
 
@@ -280,26 +297,29 @@ class BaseNewtonSolver(Generic[T, S], HessianMixin):
             self._hessian = jax.hessian(self.fun)
 
     @abc.abstractmethod
-    def _newton_direction(
-        self, grad: Y[T], H, params: Y[T], state: NewtonState
-    ) -> Tuple[Y[T], S]:
-        pass
+    def _newton_direction(self, grad: Y, H: Any, params: Y, state: S) -> Tuple[Y, S]:
+        """The step before the line search scales it, and the state after reading it.
+
+        A solver whose direction comes from an adaptive scheme -- ``Newton``'s
+        identity-shift ladder -- returns what that scheme settled on, so the next
+        iteration starts from it. One with nothing to record returns ``state``.
+        """
 
     @abc.abstractmethod
     def _line_search_inputs(
-        self, params: Y[T], step: Float, grad: Y[T], fval: Float, *args
-    ) -> Tuple[Float, Y[T], Callable]:
-        pass
+        self, params: Y, step: Y, grad: Y, fval: Scalar, *args: Any
+    ) -> Tuple[Scalar, Y, Callable[[Y], Scalar]]:
+        """Value, slope and objective handed to ``self._line_search``."""
 
     def _apply_or_reject(
         self,
-        params,
-        step,
-        grad,
-        state: NewtonState,
-        fval,
-        *args,
-    ):
+        params: Y,
+        step: Y,
+        grad: Y,
+        state: S,
+        fval: Scalar,
+        *args: Any,
+    ) -> Tuple[Y, Any]:
         """Accept or reject step based on descent condition and line search."""
         value, slope, value_fn = self._line_search_inputs(
             params, step, grad, fval, *args
@@ -334,13 +354,18 @@ class BaseNewtonSolver(Generic[T, S], HessianMixin):
         new_params, new_ls_state = jax.lax.cond(take_step, accept, reject, None)
         return new_params, new_ls_state
 
-    def init_state(self, init_params, *args):
+    def _scalar_dtype(self, init_params: Y, *args: Any):
+        """The objective's dtype, which the state's scalars must already carry.
+
+        The ``while_loop`` carry fails to typecheck otherwise.
+        """
+        return jax.eval_shape(self.fun, init_params, *args).dtype
+
+    def _common_state_fields(self, init_params: Y, *args: Any) -> dict[str, Any]:
+        """The :class:`BaseNewtonState` fields, ready to splat into any subclass of it."""
         self._build_cache()
-        ls_state = self._line_search.init(init_params)
-        fval_shape = jax.eval_shape(self.fun, init_params, *args)
-        scalar_dtype = fval_shape.dtype
-        zero = jnp.zeros((), dtype=scalar_dtype)
-        return NewtonState(
+        scalar_dtype = self._scalar_dtype(init_params, *args)
+        return dict(
             grad_norm=jnp.asarray(jnp.inf, dtype=scalar_dtype),
             stats=OptimizationInfo(
                 function_val=jnp.asarray(jnp.nan, dtype=scalar_dtype),
@@ -348,15 +373,17 @@ class BaseNewtonSolver(Generic[T, S], HessianMixin):
                 converged=jnp.array(False),
                 reached_max_steps=jnp.array(False),
             ),
-            ls_state=ls_state,
+            ls_state=self._line_search.init(init_params),
             y_diff=jax.tree.map(
                 lambda x: jnp.full_like(x, jnp.inf),
                 init_params,
             ),
-            identity_shift=self._init_block_state(init_params, zero),
         )
 
-    def _converged(self, params, state, grad, fval):
+    def init_state(self, init_params: Y, *args: Any) -> BaseNewtonState[Y]:
+        return BaseNewtonState(**self._common_state_fields(init_params, *args))
+
+    def _converged(self, params: Y, state: S, grad: Y, fval: Scalar) -> Bool[Array, ""]:
         """Check convergence via a Cauchy criterion on the accepted step size.
 
         We rely solely on the step-norm arm of :func:`~optimistix.cauchy_termination`
@@ -385,8 +412,15 @@ class BaseNewtonSolver(Generic[T, S], HessianMixin):
             "jit",
         }
 
+    def _get_optim_info(
+        self,
+        state: BaseNewtonState[Y],
+        **kwargs,
+    ) -> OptimizationInfo:
+        return state.stats
 
-class Newton(BaseNewtonSolver[T, NewtonState], HessianSolverMixin, Generic[T]):
+
+class Newton(BaseNewtonSolver[Y, NewtonState[Y]], HessianSolverMixin, Generic[Y]):
     r"""
     Newton solver with backtracking and Hessian-aware linear solves.
 
@@ -485,11 +519,17 @@ class Newton(BaseNewtonSolver[T, NewtonState], HessianSolverMixin, Generic[T]):
             )
         self.identity_shift_max_steps = identity_shift_max_steps
 
-    def init_state(self, init_params, *args):
+    def init_state(self, init_params: Y, *args: Any) -> NewtonState[Y]:
         self._resolve_linear_solver(init_params)
-        return super().init_state(init_params, *args)
+        zero = jnp.zeros((), dtype=self._scalar_dtype(init_params, *args))
+        return NewtonState(
+            **self._common_state_fields(init_params, *args),
+            identity_shift=self._init_block_state(init_params, zero),
+        )
 
-    def _solve(self, grad, H, params, previous_shift) -> Tuple[Y[T], Scalar[T]]:
+    def _solve(
+        self, grad: Y, H: Any, params: Y, previous_shift: Array
+    ) -> Tuple[Y, Array]:
         del params
 
         operator = lx.PyTreeLinearOperator(H, jax.eval_shape(lambda: grad))
@@ -597,8 +637,8 @@ class Newton(BaseNewtonSolver[T, NewtonState], HessianSolverMixin, Generic[T]):
         return direction, previous_shift
 
     def _newton_direction(
-        self, grad: Y, H, params, state: NewtonState
-    ) -> Tuple[Y[T], NewtonState]:
+        self, grad: Y, H: Any, params: Y, state: NewtonState[Y]
+    ) -> Tuple[Y, NewtonState[Y]]:
         identity_shift = state.identity_shift
         direction, identity_shift = self._block_apply(
             self._solve,
@@ -610,8 +650,8 @@ class Newton(BaseNewtonSolver[T, NewtonState], HessianSolverMixin, Generic[T]):
         return direction, eqx.tree_at(lambda s: s.identity_shift, state, identity_shift)
 
     def _line_search_inputs(
-        self, params, step, grad, fval, *args
-    ) -> Tuple[Float, Y[T], Callable]:
+        self, params: Y, step: Y, grad: Y, fval: Scalar, *args: Any
+    ) -> Tuple[Scalar, Y, Callable[[Y], Scalar]]:
         """Value, slope and objective handed to ``self._line_search``.
 
         ``optax``'s backtracking search forms the slope as ``vdot(updates, grad)``; the
@@ -635,15 +675,8 @@ class Newton(BaseNewtonSolver[T, NewtonState], HessianSolverMixin, Generic[T]):
             )
         )
 
-    def _get_optim_info(
-        self,
-        state: NewtonState,
-        **kwargs,
-    ) -> OptimizationInfo:
-        return state.stats
 
-
-class ProximalNewton(BaseNewtonSolver[T, NewtonState], Generic[T]):
+class ProximalNewton(BaseNewtonSolver[Y, BaseNewtonState[Y]], Generic[Y]):
     r"""Proximal Newton solver for composite objectives.
 
     Minimizes :math:`f(\beta) + P(\beta)` with :math:`f` the smooth loss and :math:`P`
@@ -745,12 +778,14 @@ class ProximalNewton(BaseNewtonSolver[T, NewtonState], Generic[T]):
             while_loop_kind="lax",
         )
 
-    def _hvp_block(self, grad, H, d):
+    def _hvp_block(self, grad: Y, H: Any, d: Y) -> Y:
         """Hessian-vector product for a single block."""
         del grad
         return lx.PyTreeLinearOperator(H, jax.eval_shape(lambda: d)).mv(d)
 
-    def _newton_direction(self, grad, H, params, state):
+    def _newton_direction(
+        self, grad: Y, H: Any, params: Y, state: BaseNewtonState[Y]
+    ) -> Tuple[Y, BaseNewtonState[Y]]:
         r"""Minimize :math:`\nabla f^\top (z - \beta) + \frac12 (z - \beta)^\top H (z - \beta) + P(z)`.
 
         Solving for the new parameters :math:`z` rather than the step keeps the penalty
@@ -780,8 +815,8 @@ class ProximalNewton(BaseNewtonSolver[T, NewtonState], Generic[T]):
         return tree_utils.tree_sub(new_params, params), state
 
     def _line_search_inputs(
-        self, params, step, grad, fval, *args
-    ) -> Tuple[Float, Y[T], Callable]:
+        self, params: Y, step: Y, grad: Y, fval: Scalar, *args: Any
+    ) -> Tuple[Scalar, Y, Callable[[Y], Scalar]]:
         r"""Feed the composite objective and its slope to the inherited line search.
 
         Tseng & Yun (2009) require the sufficient-decrease slope of a composite

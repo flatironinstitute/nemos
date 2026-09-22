@@ -175,6 +175,15 @@ class HessianMixin:
             return fn(grad, H, other, block_state)
         return fn(grad, H, other)
 
+
+class HessianSolverMixin:
+    """Resolve and hold the strategy for solving :math:`Hd = -g`.
+
+    Reads ``_hess_tag`` off :class:`HessianMixin`, which a host must carry as well, and
+    exposes nothing back to it: a solver that only multiplies by its curvature model
+    inherits :class:`HessianMixin` alone and gets none of the state below.
+    """
+
     def _init_block_state(self, params, value: jax.Array) -> jax.Array:
         """Broadcast a scalar to one value per Hessian block."""
         if self._hess_tag.structure is MatrixStructure.BLOCK_DIAGONAL:
@@ -185,8 +194,6 @@ class HessianMixin:
             )(params)
         return value
 
-
-class HessianSolverMixin:
     def _init_solver(
         self,
         linear_solver: LinearSolverTag = "auto",
