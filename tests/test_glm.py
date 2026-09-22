@@ -2578,12 +2578,74 @@ class TestGLMObservationModel:
 
     @staticmethod
     def _assert_params_match(
-        sklearn_coef, sklearn_intercept, nemos_coef, nemos_intercept, atol=1e-6
+        sklearn_coef,
+        sklearn_intercept,
+        nemos_coef,
+        nemos_intercept,
+        is_classifier=False,
+        atol=1e-6,
     ):
         """Assert that sklearn and nemos parameters match within tolerance."""
+        if is_classifier:
+            # Softmax parameters are invariant to a common shift across classes.
+            sklearn_intercept = sklearn_intercept - np.mean(
+                sklearn_intercept, axis=-1, keepdims=True
+            )
+            nemos_intercept = nemos_intercept - np.mean(
+                nemos_intercept, axis=-1, keepdims=True
+            )
         np.testing.assert_allclose(sklearn_coef, nemos_coef, atol=atol, rtol=0.0)
         np.testing.assert_allclose(
             sklearn_intercept, nemos_intercept, atol=atol, rtol=0.0
+        )
+
+    @staticmethod
+    def _assert_loss_match(
+        model,
+        nemos_coef,
+        nemos_intercept,
+        X,
+        y,
+        sklearn_coef,
+        sklearn_intercept,
+        is_classifier,
+        atol=1e-6,
+    ):
+        """Compare NeMoS' penalized loss at the NeMoS and sklearn solutions."""
+        nemos_params = GLMParams(
+            coef=nemos_coef,
+            intercept=nemos_intercept,
+        )
+        sklearn_params = GLMParams(
+            coef=jnp.asarray(sklearn_coef),
+            intercept=jnp.asarray(sklearn_intercept),
+        )
+        if is_classifier:
+            y = model._label_encoder.encode(y, safe=False)
+            y = jax.nn.one_hot(y, model.n_classes)
+        penalized_loss = model.regularizer.penalized_loss(
+            model._compute_loss,
+            params=nemos_params,
+            strength=model.regularizer_strength,
+        )
+        nemos_loss = penalized_loss(nemos_params, X, y)
+        sklearn_loss = penalized_loss(sklearn_params, X, y)
+        np.testing.assert_allclose(
+            nemos_loss,
+            sklearn_loss,
+            atol=atol,
+            rtol=0.0,
+        )
+        ridge = model.regularizer.penalized_loss(
+            lambda *args, **kw: 0,
+            nemos_params,
+            model.regularizer_strength,
+        )
+        np.testing.assert_allclose(
+            ridge(nmo.tree_utils.tree_sub(nemos_params, sklearn_params)),
+            0,
+            atol=atol,
+            rtol=0,
         )
 
     def _fit_and_compare_to_sklearn(self, model, sklearn_model, X, y, atol=1e-6):
@@ -2596,20 +2658,53 @@ class TestGLMObservationModel:
         intercepts are zero and the comparison still holds.
         """
         model.fit(X, y)
+        is_classifier = is_classifier_model(model)
         if is_population_model(model):
             for n in range(y.shape[1]):
                 sklearn_model.fit(X, y[:, n])
                 sk_coef, sk_intercept = self._format_sklearn_params(
                     sklearn_model, model
                 )
+                self._assert_loss_match(
+                    model,
+                    model.coef_[:, n],
+                    model.intercept_[n],
+                    X,
+                    y[:, n],
+                    sk_coef,
+                    sk_intercept,
+                    is_classifier,
+                    atol,
+                )
                 self._assert_params_match(
-                    sk_coef, sk_intercept, model.coef_[:, n], model.intercept_[n], atol
+                    sk_coef,
+                    sk_intercept,
+                    model.coef_[:, n],
+                    model.intercept_[n],
+                    is_classifier,
+                    atol,
                 )
         else:
             sklearn_model.fit(X, y)
             sk_coef, sk_intercept = self._format_sklearn_params(sklearn_model, model)
+            self._assert_loss_match(
+                model,
+                model.coef_,
+                model.intercept_,
+                X,
+                y,
+                sk_coef,
+                sk_intercept,
+                is_classifier,
+                atol,
+            )
             self._assert_params_match(
-                sk_coef, sk_intercept, model.coef_, model.intercept_, atol
+                sk_coef,
+                sk_intercept,
+                model.coef_,
+                model.intercept_,
+                is_classifier,
+                atol,
             )
 
     @staticmethod

@@ -7,7 +7,6 @@ from typing import Any, Callable, Optional
 import jax
 import jax.numpy as jnp
 from jax.core import Tracer
-from jax.flatten_util import ravel_pytree
 
 
 def _get_not_inf(array: jnp.ndarray) -> jnp.ndarray:
@@ -369,27 +368,51 @@ def drop_nans(*trees):
     ]
 
 
-def ravel_pytree_nest(pytree):
-    """Batch-last pytree ravel that also supports non-batched pytrees."""
-    leaves = jax.tree.leaves(pytree)
-    batch_dims = [x.shape[-1] for x in leaves if x.ndim > 0]
-    if not batch_dims or not all(b == batch_dims[0] for b in batch_dims):
-        return ravel_pytree(pytree)
+def tree_all_finite(
+    pytree: Any,
+    is_leaf: Optional[Callable[[Any], bool]] = None,
+) -> jnp.ndarray:
+    """
+    Check whether every value in a PyTree is finite.
 
-    N = batch_dims[0]
-    in_axes = jax.tree.map(lambda x: -1 if x.ndim > 0 else None, pytree)
-    sample0 = jax.tree.map(
-        lambda x: jnp.take(x, 0, axis=-1) if x.ndim > 0 else x, pytree
+    A value is finite when it is neither NaN nor positive or negative
+    infinity. This function checks every element of every leaf and returns a
+    scalar JAX boolean. It can be used inside JAX transformations such as
+    ``jax.jit``.
+    An empty PyTree is considered finite.
+
+    Parameters
+    ----------
+    pytree :
+        PyTree with numeric array-like leaves.
+    is_leaf :
+        Optional predicate used to identify custom PyTree leaves.
+
+    Returns
+    -------
+    :
+        A scalar boolean array that is ``True`` when every value in every leaf
+        is finite.
+
+    Examples
+    --------
+    >>> import jax
+    >>> import jax.numpy as jnp
+    >>> from nemos.tree_utils import tree_all_finite
+    >>> tree_all_finite({"a": jnp.array([1.0, 2.0]), "b": jnp.array([3.0])})
+    Array(True, dtype=bool)
+    >>> tree_all_finite({"a": jnp.array([1.0, jnp.nan])})
+    Array(False, dtype=bool)
+    >>> jax.jit(tree_all_finite)({"a": jnp.array([1.0, jnp.inf])})
+    Array(False, dtype=bool)
+    """
+    finite = jax.tree.map(
+        lambda leaf: jnp.all(jnp.isfinite(leaf)),
+        pytree,
+        is_leaf=is_leaf,
     )
-    _, unravel_one = ravel_pytree(sample0)
-
-    flat = jax.vmap(lambda t: ravel_pytree(t)[0], in_axes=(in_axes,))(pytree).reshape(
-        -1
+    return jax.tree.reduce(
+        jnp.logical_and,
+        finite,
+        initializer=jnp.asarray(True),
     )
-
-    out_axes = jax.tree.map(lambda x: -1 if x.ndim > 0 else 0, sample0)
-
-    def unravel(x_flat):
-        return jax.vmap(unravel_one, out_axes=out_axes)(x_flat.reshape(N, -1))
-
-    return flat, unravel
