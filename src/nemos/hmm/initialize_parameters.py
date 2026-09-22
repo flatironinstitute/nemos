@@ -258,8 +258,12 @@ def dirichlet_transition_proba_init(
     >>>
     >>> # Generate transition probabilities for 3 states with Dirichlet initialization
     >>> n_states = 3
-    >>> alphas = jnp.array([[5.0, 1.0, 1.0],[1.0, 5.0, 1.0],[1.0, 1.0, 5.0]])  # favor self-transitions
-    >>> transition_matrix = dirichlet_transition_proba_init(n_states, alphas=alphas, random_key=jax.random.PRNGKey(0))
+    >>> alphas = jnp.array(
+    ...     [[5.0, 1.0, 1.0], [1.0, 5.0, 1.0], [1.0, 1.0, 5.0]]
+    ... )  # favor self-transitions
+    >>> transition_matrix = dirichlet_transition_proba_init(
+    ...     n_states, alphas=alphas, random_key=jax.random.PRNGKey(0)
+    ... )
     >>> transition_matrix  # doctest: +ELLIPSIS
     Array(...)
     """
@@ -404,7 +408,9 @@ def dirichlet_initial_proba_init(
     >>> # Generate initial state probabilities for 3 states with Dirichlet initialization
     >>> n_states = 3
     >>> alphas = jnp.array([5.0, 1.0, 1.0])  # favor first state
-    >>> init_prob = dirichlet_initial_proba_init(n_states, alphas=alphas, random_key=jax.random.PRNGKey(0))
+    >>> init_prob = dirichlet_initial_proba_init(
+    ...     n_states, alphas=alphas, random_key=jax.random.PRNGKey(0)
+    ... )
     >>> init_prob  # doctest: +ELLIPSIS
     Array(...)
     """

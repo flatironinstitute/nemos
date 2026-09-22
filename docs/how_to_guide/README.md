@@ -1,61 +1,25 @@
 
 # How-To Guide
 
-Familiarize with NeMoS modules and learn how to take advantage of the `pynapple` and `scikit-learn` compatibility.
+Task-oriented recipes: each page answers a single "how do I ...?" question. The concepts behind them are covered in the [user guide](../user_guide/README.md).
 
 :::{dropdown} Additional requirements
 :color: warning
 :icon: alert
-To run the tutorials, you may need to install some additional packages used for plotting and data fetching.
+:open:
+To run these guides, you may need to install some additional packages used for plotting and data fetching.
 You can install all of the required packages with the following command:
 ```
 pip install nemos[examples]
 ```
 :::
 
-## GLM Fundamentals
+% Only the first toctree of each group carries the :caption:, so the sidebar shows one
+% group header per section; conf.py keeps captions out of this page's body.
+
+## Using Models
 
 ::::{grid} 1 2 3 3
-
-:::{grid-item-card}
-
-<figure>
-<img src="../_static/thumbnail_save_load.svg" style="height: 100px", alt="Save and Load."/>
-</figure>
-
-```{toctree}
-:maxdepth: 2
-
-save_and_load.md
-```
-
-:::
-
-:::{grid-item-card}
-
-<figure>
-<img src="../_static/thumbnails/how_to_guide/plot_02_glm_demo.svg" style="height: 100px", alt="GLM demo."/>
-</figure>
-
-```{toctree}
-:maxdepth: 2
-
-plot_02_glm_demo.md
-```
-:::
-
-:::{grid-item-card}
-
-<figure>
-<img src="../_static/thumbnails/how_to_guide/plot_03_population_glm.svg" style="height: 100px", alt="Population GLM."/>
-</figure>
-
-```{toctree}
-:maxdepth: 2
-
-plot_03_population_glm.md
-```
-:::
 
 :::{grid-item-card}
 
@@ -67,6 +31,7 @@ plot_03_population_glm.md
 
 ```{toctree}
 :maxdepth: 2
+:caption: Using Models
 
 raw_history_feature.md
 ```
@@ -92,9 +57,23 @@ glm_for_classification.md
 ```{toctree}
 :maxdepth: 2
 
-finegrained_regularization.md
+simulate_coupled_population.md
 ```
+:::
 
+:::{grid-item-card}
+
+<figure>
+<a href="model_selection.html">
+<img src="../_static/thumbnails/how_to_guide/variable_selection_zero_basis.svg" style="height: 100px", alt="Model Selection."/>
+</a>
+</figure>
+
+```{toctree}
+:maxdepth: 2
+
+model_selection.md
+```
 :::
 
 ::::
@@ -102,17 +81,6 @@ finegrained_regularization.md
 ## Feature Engineering
 
 ::::{grid} 1 2 3 3
-
-:::{grid-item-card}
-
-
-```{toctree}
-:maxdepth: 2
-
-handling_composite_bases.md
-```
-
-:::
 
 :::{grid-item-card}
 
@@ -125,31 +93,12 @@ handling_composite_bases.md
 
 ```{toctree}
 :maxdepth: 2
+:caption: Feature Engineering
 
 define_a_custom_basis.md
 ```
 
 :::
-
-:::{grid-item-card}
-
-```{eval-rst}
-
-.. plot:: scripts/glm_predictors.py plot_categorical_var_design_matrix
-   :show-source-link: False
-   :height: 100px
-
-```
-
-```{toctree}
-:maxdepth: 2
-
-categorical_predictors/README.md
-```
-
-:::
-
-
 
 :::{grid-item-card}
 
@@ -168,67 +117,12 @@ custom_predictors.md
 
 :::
 
-::::
-
-## Model Selection and `scikit-learn` Integration
-
-::::{grid} 1 2 3 3
-
 :::{grid-item-card}
-
-<figure>
-<img src="../_static/nemos_sklearn.svg" style="height: 100px", alt="NeMoS vs sklearn."/>
-</figure>
 
 ```{toctree}
 :maxdepth: 2
 
-plot_05_transformer_basis.md
-```
-:::
-
-:::{grid-item-card}
-
-<figure>
-<a href="plot_06_sklearn_pipeline_cv_demo.html">
-<img src="../_static/thumbnails/how_to_guide/plot_06_sklearn_pipeline_cv_demo.svg" style="height: 100px", alt="PyTrees."/>
-</a>
-</figure>
-
-```{toctree}
-:maxdepth: 2
-
-plot_06_sklearn_pipeline_cv_demo.md
-```
-
-:::
-
-:::{grid-item-card}
-
-<figure>
-<img src="../_static/thumbnails/how_to_guide/variable_selection_zero_basis.svg" style="height: 100px", alt="Model Selection."/>
-</figure>
-
-```{toctree}
-:maxdepth: 2
-
-variable_selection_zero_basis.md
-```
-
-:::
-
-:::{grid-item-card}
-
-<figure>
-<a href="variable_selection_group_lasso.html">
-<img src="../_static/thumbnails/how_to_guide/variable_selection_group_lasso.svg" style="height: 100px", alt="Variable selection."/>
-</a>
-</figure>
-
-```{toctree}
-:maxdepth: 2
-
-variable_selection_group_lasso.md
+pytree_predictors.md
 ```
 
 :::
@@ -249,12 +143,30 @@ variable_selection_group_lasso.md
 
 ```{toctree}
 :maxdepth: 2
+:caption: Performance and Scaling
 
 convolve_large_arrays.md
 ```
 
 :::
 
+:::{grid-item-card}
+
+```{toctree}
+:maxdepth: 2
+
+stochastic_fit.md
+```
+:::
+
+:::{grid-item-card}
+
+```{toctree}
+:maxdepth: 2
+
+custom_dataloader.md
+```
+:::
 
 :::{grid-item-card}
 
@@ -265,15 +177,31 @@ convolve_large_arrays.md
 ```{toctree}
 :maxdepth: 2
 
-batching/README.md
+custom_callbacks_and_termination.md
 ```
 :::
+
+:::{grid-item-card}
+
+```{toctree}
+:maxdepth: 2
+
+manual_batching_loop.md
+```
+:::
+
+::::
+
+## Extensions and Customizations
+
+::::{grid} 1 2 3 3
 
 :::{grid-item-card}
 
 
 ```{toctree}
 :maxdepth: 2
+:caption: Extensions and Customizations
 
 custom_solvers.md
 ```

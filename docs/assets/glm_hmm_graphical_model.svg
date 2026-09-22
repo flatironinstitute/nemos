@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1330 455" width="1330" height="455" font-family="Helvetica, Arial, sans-serif" role="img" aria-label="Graphical model of a GLM-HMM driving mouse choices">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1530 455" width="1530" height="455" font-family="Helvetica, Arial, sans-serif" role="img" aria-label="Graphical model of a GLM-HMM driving mouse choices">
 <title>GLM-HMM graphical model with mouse actions</title>
 <style>
     .ink { fill: #000000; }
@@ -284,4 +284,7 @@ d="m 97.73,84.8 c 0,0 6.93,-3.78 3.34,-9.89 m -2,10.62 c 0,0 10.59,0.62 13.39,-7
 <text class="ink" x="1284" y="84" text-anchor="middle" font-size="34" font-weight="bold">…</text>
 <text class="ink" x="1284" y="271.0" text-anchor="middle" font-size="34" font-weight="bold">…</text>
 <text class="ink" x="1284" y="394.05882135735914" text-anchor="middle" font-size="34" font-weight="bold">…</text>
+<text class="ink" x="1326" y="84" font-size="40">latent</text>
+<text class="ink" x="1326" y="271" font-size="40">GLM</text>
+<text class="ink" x="1326" y="394" font-size="40">observations</text>
 </svg>

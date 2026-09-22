@@ -6,23 +6,30 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-import sys, os, urllib.request
+import os
+import re
+import shutil
+import sys
 import typing
+import urllib.request
+from importlib.metadata import version
 from pathlib import Path
 
-from importlib.metadata import version
+from sphinx import addnodes
+
 release: str = version("nemos")
 # this will grab major.minor.patch (excluding any .devN afterwards, which should only
 # show up when building locally during development)
-version: str = ".".join(release.split('.')[:3])
+version: str = ".".join(release.split(".")[:3])
 
-sys.path.insert(0, str(Path('..', 'src').resolve()))
-sys.path.insert(0, os.path.abspath('sphinxext'))
+sys.path.insert(0, str(Path("..", "src").resolve()))
+sys.path.insert(0, os.path.abspath("sphinxext"))
+sys.path.insert(0, os.path.abspath("scripts"))
 
 
-project = 'nemos'
-copyright = '2024'
-author = 'E Balzani'
+project = "nemos"
+copyright = "2024"
+author = "E Balzani"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -31,24 +38,24 @@ author = 'E Balzani'
 root_doc = "index"
 
 extensions = [
-    'sphinx.ext.autodoc',
-    'nemos_autodoc_skip_member',  # skip custom members from autodoc
-                                  # Prioritize custom logic by listing just after autodoc.
-    'sphinx.ext.napoleon',
-    'sphinx.ext.autosummary',
-    'sphinx.ext.coverage',
-    'sphinx.ext.viewcode',  # Links to source code
-    'sphinx.ext.doctest',
-    'sphinx_copybutton',  # Adds copy button to code blocks
-    'sphinx_design',  # For layout components
-    'myst_nb',
-    'sphinx_contributors',
+    "sphinx.ext.autodoc",
+    "nemos_autodoc_skip_member",  # skip custom members from autodoc
+    # Prioritize custom logic by listing just after autodoc.
+    "sphinx.ext.napoleon",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.coverage",
+    "sphinx.ext.viewcode",  # Links to source code
+    "sphinx.ext.doctest",
+    "sphinx_copybutton",  # Adds copy button to code blocks
+    "sphinx_design",  # For layout components
+    "myst_nb",
+    "sphinx_contributors",
     "sphinxcontrib.bibtex",
-    'sphinx_code_tabs',
-    'sphinx.ext.mathjax',
-    'sphinx_autodoc_typehints',
-    'sphinx_togglebutton',
-    'matplotlib.sphinxext.plot_directive',
+    "sphinx_code_tabs",
+    "sphinx.ext.mathjax",
+    "sphinx_autodoc_typehints",
+    "sphinx_togglebutton",
+    "matplotlib.sphinxext.plot_directive",
     "matplotlib.sphinxext.mathmpl",
     "sphinx.ext.intersphinx",
 ]
@@ -62,9 +69,8 @@ myst_enable_extensions = [
     "html_image",
 ]
 
-templates_path = ['_templates']
-exclude_patterns = ['_build', "docstrings", 'Thumbs.db', 'nextgen', '.DS_Store']
-
+templates_path = ["_templates"]
+exclude_patterns = ["_build", "docstrings", "Thumbs.db", "nextgen", ".DS_Store"]
 
 
 # -- Options for HTML output -------------------------------------------------
@@ -75,11 +81,11 @@ exclude_patterns = ['_build', "docstrings", 'Thumbs.db', 'nextgen', '.DS_Store']
 autosummary_generate = True
 numpydoc_show_class_members = True
 autodoc_default_options = {
-    'members': True,
-    'inherited-members': True,
-    'undoc-members': True,
-    'show-inheritance': True,
-    'special-members': ' __add__, __mul__, __pow__'
+    "members": True,
+    "inherited-members": True,
+    "undoc-members": True,
+    "show-inheritance": True,
+    "special-members": " __add__, __mul__, __pow__",
 }
 
 # # napolean configs
@@ -110,7 +116,7 @@ autodoc_typehints_format = "short"
 
 numfig = True
 
-html_theme = 'pydata_sphinx_theme'
+html_theme = "pydata_sphinx_theme"
 
 html_favicon = "assets/NeMoS_favicon.ico"
 
@@ -131,37 +137,44 @@ html_theme_options = {
         },
     ],
     "show_prev_next": True,
-    "header_links_before_dropdown": 6,
-    "navigation_depth": 3,
+    # Getting Started through API Reference stay in the bar; Reference and For
+    # Developers fall into the "More" dropdown after them.
+    "header_links_before_dropdown": 5,
+    "navigation_depth": 4,
+    # Landing pages carry sections with several pages each, so only the first
+    # level is open and the pages under it sit behind a closed dropdown.
+    # collapse_navigation would drop those pages from the tree altogether,
+    # leaving nothing to open, so it stays off.
+    "show_nav_level": 1,
     "logo": {
-      "image_light": "_static/NeMoS_Logo_CMYK_Full.svg",
-      "image_dark": "_static/NeMoS_Logo_CMYK_White.svg",
-   },
+        "image_light": "_static/NeMoS_Logo_CMYK_Full.svg",
+        "image_dark": "_static/NeMoS_Logo_CMYK_White.svg",
+    },
     "secondary_sidebar_items": {
         "[!a]?[!p]?[!i]**": ["page-toc", "sourcelink"],
-        "background/basis/README": [],
+        "user_guide/README": [],
+        "user_guide/basis/README": [],
+        "how_to_guide/README": [],
     },
 }
 
+# The landing pages of the guides keep the left nav, so their sub-pages and the
+# groups they belong to stay visible when moving into them.
 html_sidebars = {
     "index": [],
-    "installation":[],
+    "installation": [],
     "quickstart": [],
-    "benchmarking": [],
-    "background/README": [],
-    "how_to_guide/README": [],
+    "reference/benchmarking": [],
     "tutorials/README": [],
-    "**": ["search-field.html", "sidebar-nav-bs.html"],
+    "**": ["sidebar-nav-bs.html"],
 }
 
 
 # Path for static files (custom stylesheets or JavaScript)
-html_static_path = ['assets/stylesheets', "assets", "javascripts"]
-html_css_files = ['custom.css']
+html_static_path = ["assets/stylesheets", "assets", "javascripts"]
+html_css_files = ["custom.css"]
 
-html_js_files = [
-    "https://code.iconify.design/2/2.2.1/iconify.min.js"
-]
+html_js_files = ["https://code.iconify.design/2/2.2.1/iconify.min.js"]
 
 # Copybutton settings (to hide prompt)
 # Exclude prompts/output via Pygments CSS classes rather than a text regex.
@@ -170,7 +183,7 @@ html_js_files = [
 # https://sphinx-copybutton.readthedocs.io/en/latest/use.html#automatic-exclusion-of-prompts-from-the-copies
 copybutton_exclude = ".linenos, .gp, .go"
 
-sphinxemoji_style = 'twemoji'
+sphinxemoji_style = "twemoji"
 
 nb_execution_timeout = 60 * 15  # Set timeout in seconds (e.g., 15 minutes)
 
@@ -187,11 +200,74 @@ if exclude_tutorials:
     _docs_root = Path(__file__).parent
     nb_execution_excludepatterns = [
         path.relative_to(_docs_root).as_posix()
-        for root in ("tutorials", "how_to_guide", "background")
+        for root in ("tutorials", "how_to_guide", "user_guide")
         for path in sorted((_docs_root / root).rglob("*.md"))
     ]
 
 viewcode_follow_imported_members = True
+
+# Sphinx only re-reads a page whose own source changed, so editing a figure
+# script under scripts/ leaves the pages holding its plot directives untouched
+# and the previously drawn images in place. REBUILD_FIGURES=true re-reads every
+# page carrying a plot directive and clears the cache the directive draws into,
+# which redraws the figures without the full clean a notebook rebuild would cost.
+rebuild_figures = os.environ.get("REBUILD_FIGURES", "false").lower() == "true"
+
+_PLOT_DIRECTIVE = re.compile(r"^\s*\.\.\s+plot::", re.MULTILINE)
+
+
+def generate_dark_diagrams(app):
+    """Derive the dark variant of each diagram from its light source.
+
+    Done on every build rather than checked in, so the two can never fall out of
+    step after someone edits a light diagram.
+    """
+    import make_dark_svgs
+
+    make_dark_svgs.main()
+
+
+def clear_figure_cache(app):
+    """Drop the drawn figures, before the builder has taken stock of them.
+
+    This runs on ``builder-inited`` rather than alongside the re-read below: the
+    builder records which image belongs to which page while reading, so deleting
+    the files at that point leaves entries pointing at paths that no longer
+    exist, and every one of them is reported as a failed copy.
+    """
+    if not rebuild_figures:
+        return
+    # Where plot_directive writes its rendered figures, alongside the doctrees.
+    cache = Path(app.doctreedir).parent / "plot_directive"
+    if not cache.exists():
+        return
+    # The copies the builder already made have to go as well: sphinx's copyfile
+    # refuses to overwrite an existing destination, so a redrawn figure would
+    # stay in the cache and never reach the output.
+    images = Path(app.outdir) / "_images"
+    for drawn in cache.rglob("*.*"):
+        images.joinpath(drawn.name).unlink(missing_ok=True)
+    shutil.rmtree(cache)
+
+
+def force_figure_rebuild(app, env, added, changed, removed):
+    """Re-read every page holding a plot directive, so the figures are drawn again."""
+    if not rebuild_figures:
+        return []
+    outdated = set()
+    for docname in env.found_docs:
+        source = Path(env.doc2path(docname))
+        if source.is_file() and _PLOT_DIRECTIVE.search(
+            source.read_text(encoding="utf-8")
+        ):
+            outdated.add(docname)
+    return outdated.difference(added, changed, removed)
+
+
+# A scaled image is wrapped in a link to the full-size file by default, which on
+# the thumbnail cards just navigates to a bare png. The pages carrying one are
+# all card galleries, so the link is dropped everywhere rather than per image.
+html_scaled_image_link = False
 
 # option for mpl extension
 plot_html_show_formats = False
@@ -261,7 +337,7 @@ for api_rst in api_order:
 # notebook. We inject the admonition just after the jupytext frontmatter so all
 # runnable tutorials/how-to/background pages get a download link automatically,
 # without editing the source files.
-_NB_DOC_ROOTS = ("tutorials/", "how_to_guide/", "background/")
+_NB_DOC_ROOTS = ("tutorials/", "how_to_guide/", "user_guide/")
 
 
 def add_download_admonition(app, docname, source):
@@ -290,6 +366,32 @@ def add_download_admonition(app, docname, source):
     source[0] = "".join(lines)
 
 
+# ---- Toctree captions in the sidebar only, on listed pages ----
+# A toctree ``:caption:`` is printed twice: once above the list in the page body,
+# once as the group header of the left sidebar nav. On the pages below, each
+# toctree sits under a section header that repeats the caption, so the body copy
+# is dropped and the sidebar one kept. Captions render normally everywhere else;
+# add a docname here to opt a page in.
+_SIDEBAR_ONLY_CAPTION_PAGES = (
+    "user_guide/README",
+    "how_to_guide/README",
+    "tutorials/README",
+)
+
+
+def drop_body_toctree_captions(app, doctree, docname):
+    """Clear the caption of every toctree in the body of a listed page.
+
+    ``doctree-resolved`` fires before the body toctrees are resolved, so clearing
+    the attribute here only affects the body; the sidebar nav is resolved later
+    from the stored doctree and keeps its captions.
+    """
+    if docname not in _SIDEBAR_ONLY_CAPTION_PAGES:
+        return
+    for toctree in doctree.findall(addnodes.toctree):
+        toctree["caption"] = None
+
+
 def strip_generic_bases(app, name, obj, options, bases):
     """Render ``Base[...]`` as bare ``Base`` in the Bases: line (drops generic clutter)."""
     for i, base in enumerate(bases):
@@ -310,18 +412,33 @@ except Exception as e:
     ) from e
 
 
+def _widen_landing_page(app, pagename, templatename, context, doctree):
+    """Drop the article-column width cap on the one page that has no sidebars."""
+    if pagename == "index":
+        app.add_css_file("landing.css")
+
+
 def _add_benchmark_assets(app, pagename, templatename, context, doctree):
-    if pagename != "benchmarking":
+    if pagename != "reference/benchmarking":
         return
-    app.add_css_file("https://cdn.datatables.net/2.0.0/css/dataTables.dataTables.min.css")
+    app.add_css_file(
+        "https://cdn.datatables.net/2.0.0/css/dataTables.dataTables.min.css"
+    )
     app.add_js_file("https://code.jquery.com/jquery-3.7.0.js")
     app.add_js_file("https://cdn.datatables.net/2.0.0/js/dataTables.min.js")
-    app.add_js_file("https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js")
+    app.add_js_file(
+        "https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"
+    )
     app.add_js_file("https://cdn.plot.ly/plotly-2.35.2.min.js")
     app.add_js_file("benchmark-table.js")
 
 
 def setup(app):
     app.connect("source-read", add_download_admonition)
+    app.connect("doctree-resolved", drop_body_toctree_captions)
     app.connect("autodoc-process-bases", strip_generic_bases)
+    app.connect("html-page-context", _widen_landing_page)
     app.connect("html-page-context", _add_benchmark_assets)
+    app.connect("builder-inited", generate_dark_diagrams)
+    app.connect("builder-inited", clear_figure_cache)
+    app.connect("env-get-outdated", force_figure_rebuild)

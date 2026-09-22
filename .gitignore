@@ -165,3 +165,7 @@ docs/api/generated/*
 # Benchmarking results copied from ceph
 benchmarking_results/
 /docs/generated
+
+# Dark variants of the landing page diagrams, derived at build time
+# by docs/scripts/make_dark_svgs.py
+docs/assets/*_dark.svg

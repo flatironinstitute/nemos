@@ -434,8 +434,9 @@ class TestSetupHMMInitialization:
         "init_func, expectation",
         [
             (
-                lambda n_states, X, y, session_starts, random_key: jnp.ones((n_states,))
-                / n_states,
+                lambda n_states, X, y, session_starts, random_key: (
+                    jnp.ones((n_states,)) / n_states
+                ),
                 does_not_raise(),
             ),
             (
@@ -475,10 +476,9 @@ class TestSetupHMMInitialization:
         "init_func, expectation",
         [
             (
-                lambda n_states, X, y, session_starts, random_key: jnp.ones(
-                    (n_states, n_states)
-                )
-                / n_states,
+                lambda n_states, X, y, session_starts, random_key: (
+                    jnp.ones((n_states, n_states)) / n_states
+                ),
                 does_not_raise(),
             ),
             (
@@ -506,8 +506,8 @@ class TestSetupHMMInitialization:
     @pytest.fixture
     def custom_init_func(self, init_func, key):
         if init_func:
-            return (
-                lambda n_states, X, y, session_starts, random_key, extra_key=2: jnp.ones(
+            return lambda n_states, X, y, session_starts, random_key, extra_key=2: (
+                jnp.ones(
                     shape=((n_states, n_states) if "transition" in key else (n_states,))
                 )
                 / n_states
@@ -576,19 +576,17 @@ class TestSetupHMMInitialization:
             ),
             (
                 "initial_proba_init",
-                lambda n_states, X, y, session_starts, random_key, extra_kwarg=1: jnp.ones(
-                    (n_states,)
-                )
-                / n_states,
+                lambda n_states, X, y, session_starts, random_key, extra_kwarg=1: (
+                    jnp.ones((n_states,)) / n_states
+                ),
                 "initial_proba_init_kwargs",
                 {"extra_kwarg": 2},
             ),
             (
                 "transition_proba_init",
-                lambda n_states, X, y, session_starts, random_key, extra_kwarg=1: jnp.ones(
-                    (n_states, n_states)
-                )
-                / n_states,
+                lambda n_states, X, y, session_starts, random_key, extra_kwarg=1: (
+                    jnp.ones((n_states, n_states)) / n_states
+                ),
                 "transition_proba_init_kwargs",
                 {"extra_kwarg": 2},
             ),
@@ -619,15 +617,15 @@ class TestSetupHMMInitialization:
             ),
             (
                 "initial_proba_init",
-                lambda n_states, X, y, session_starts, random_key: jnp.ones((n_states,))
-                / n_states,
+                lambda n_states, X, y, session_starts, random_key: (
+                    jnp.ones((n_states,)) / n_states
+                ),
             ),
             (
                 "transition_proba_init",
-                lambda n_states, X, y, session_starts, random_key: jnp.ones(
-                    (n_states, n_states)
-                )
-                / n_states,
+                lambda n_states, X, y, session_starts, random_key: (
+                    jnp.ones((n_states, n_states)) / n_states
+                ),
             ),
         ],
     )

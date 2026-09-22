@@ -14,6 +14,7 @@ import jax.numpy as jnp
 import numpy as np
 import pynapple as nap
 import pytest
+from tests.conftest import instantiate_glm_hmm_func
 
 import nemos as nmo
 from nemos.glm.params import GLMParams
@@ -25,7 +26,6 @@ from nemos.hmm.hmm import BaseHMM
 from nemos.hmm.params import HMMParams
 from nemos.regularizer import Ridge, UnRegularized
 from nemos.utils import _get_name
-from tests.conftest import instantiate_glm_hmm_func
 
 # ---------------------------------------------------------------------------
 # Parametrize lists: GLMHMM only, single obs_model (Bernoulli).
@@ -1474,9 +1474,9 @@ def _assert_params_equal(a, b, path=""):
         assert a == b, f"{path}: {a!r} != {b!r}"
     else:
         # callables and class instances (e.g. observation model objects): compare by name
-        assert _get_name(a) == _get_name(
-            b
-        ), f"{path}: name mismatch {_get_name(a)} != {_get_name(b)}"
+        assert _get_name(a) == _get_name(b), (
+            f"{path}: name mismatch {_get_name(a)} != {_get_name(b)}"
+        )
 
 
 def _collect_params(model, *, skip_solver_state=True):

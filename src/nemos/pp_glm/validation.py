@@ -322,7 +322,6 @@ class PopulationPPGLMValidator(PPGLMValidator):
         For population PP-GLM, validates both feature consistency with X and
         neuron count consistency with y.
         """
-
         # First validate X consistency (features) using parent implementation
         super().validate_consistency(params, X=X, y=None)
 
