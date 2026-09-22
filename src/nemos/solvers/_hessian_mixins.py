@@ -49,28 +49,15 @@ class HessianMixin:
         regularizer,
         regularizer_strength,
         init_params,
-        linear_solver: LinearSolverTag = "auto",
     ) -> None:
         """Store what ``setup_hessian`` needs and default the resolved solver state."""
-        if linear_solver not in VALID_SOLVERS:
-            raise ValueError(
-                f"Unknown linear solver {linear_solver!r}. "
-                f"Expected one of {sorted(VALID_SOLVERS)}."
-            )
-
         self._regularizer = regularizer
         self._regularizer_strength = regularizer_strength
         self._init_params = init_params
 
         self._hess_tag: HessianTag | None = None
         self._hessian: Callable | None = None
-
-        self.linear_solver: LinearSolverTag = linear_solver
-        self._resolved_linear_solver: ResolvedLinearSolverTag | None = None
-        # overwritten in _resolve_linear_solver once the tag is known
-        self._linear_solver: lx.AbstractLinearSolver | None = None
-        self._operator_tags = ()
-        self._shift_fn: Callable | None = None
+        self._operator_tags = ()  # lineax tags
 
     def setup_hessian(
         self,
@@ -147,16 +134,69 @@ class HessianMixin:
 
         return penalized_hessian
 
-    def _resolve_linear_solver(self, init_params) -> None:
-        """Resolve the Hessian solution strategy from the tag and user request."""
+    def _block_apply(self, fn, grad, H, other, block_state=None) -> Any:
+        """Apply ``fn(grad, H, other)`` once per Hessian block.
+
+        The one place that reads ``_hess_tag`` for block structure, shared by the Newton
+        solve and by any subclass' Hessian-vector product.
+        """
+        if self._hess_tag.structure is MatrixStructure.BLOCK_DIAGONAL:
+            axes = self._hess_tag.batch_axes
+            if block_state is not None:
+                return jax.vmap(
+                    fn,
+                    in_axes=(axes, 0, axes, 0),
+                    out_axes=(axes, 0),
+                )(grad, H, other, block_state)
+            return jax.vmap(
+                fn,
+                in_axes=(axes, 0, axes),
+                out_axes=axes,
+            )(grad, H, other)
+        if block_state is not None:
+            return fn(grad, H, other, block_state)
+        return fn(grad, H, other)
+
+    def _init_block_state(self, params, value: jax.Array) -> jax.Array:
+        """Broadcast a scalar to one value per Hessian block."""
+        if self._hess_tag.structure is MatrixStructure.BLOCK_DIAGONAL:
+            return jax.vmap(
+                lambda _: value,
+                in_axes=(self._hess_tag.batch_axes,),
+                out_axes=0,
+            )(params)
+        return value
+
+    def get_hess_tag(self, params: Any):
         if self._hess_tag is None:
-            self._hess_tag = HessianTag(
+            return HessianTag(
                 structure=MatrixStructure.FULL,
                 property=MatrixProperty.SYMMETRIC,
-                flat_on=mask_claim_none(init_params),
-                definite_on=mask_claim_none(init_params),
+                flat_on=mask_claim_none(params),
+                definite_on=mask_claim_none(params),
             )
+        return self._hess_tag
 
+
+class HessianSolverMixin:
+    def _init_solver(
+        self,
+        linear_solver: LinearSolverTag = "auto",
+    ):
+        if linear_solver not in VALID_SOLVERS:
+            raise ValueError(
+                f"Unknown linear solver {linear_solver!r}. "
+                f"Expected one of {sorted(VALID_SOLVERS)}."
+            )
+        self.linear_solver: LinearSolverTag = linear_solver
+        self._resolved_linear_solver: ResolvedLinearSolverTag | None = None
+        # overwritten in _resolve_linear_solver once the tag is known
+        self._linear_solver: lx.AbstractLinearSolver | None = None
+        self._operator_tags = ()
+        self._shift_fn: Callable | None = None
+
+    def _resolve_linear_solver(self, init_params) -> None:
+        """Resolve the Hessian solution strategy from the tag and user request."""
         positive_properties = {
             MatrixProperty.POSITIVE_DEFINITE,
             MatrixProperty.POSITIVE_SEMI_DEFINITE,
@@ -166,8 +206,8 @@ class HessianMixin:
             MatrixProperty.NEGATIVE_DEFINITE,
             MatrixProperty.NEGATIVE_SEMI_DEFINITE,
         }
-
-        matrix_property = self._hess_tag.property
+        hess_tag = self.get_hess_tag(init_params)
+        matrix_property = hess_tag.property
 
         if matrix_property not in positive_properties | symmetric_properties:
             raise ValueError(
@@ -229,36 +269,3 @@ class HessianMixin:
             self._linear_solver = None
             self._operator_tags = ()
             self._shift_fn = lambda _: 0.0
-
-    def _block_apply(self, fn, grad, H, other, block_state=None) -> Any:
-        """Apply ``fn(grad, H, other)`` once per Hessian block.
-
-        The one place that reads ``_hess_tag`` for block structure, shared by the Newton
-        solve and by any subclass' Hessian-vector product.
-        """
-        if self._hess_tag.structure is MatrixStructure.BLOCK_DIAGONAL:
-            axes = self._hess_tag.batch_axes
-            if block_state is not None:
-                return jax.vmap(
-                    fn,
-                    in_axes=(axes, 0, axes, 0),
-                    out_axes=(axes, 0),
-                )(grad, H, other, block_state)
-            return jax.vmap(
-                fn,
-                in_axes=(axes, 0, axes),
-                out_axes=axes,
-            )(grad, H, other)
-        if block_state is not None:
-            return fn(grad, H, other, block_state)
-        return fn(grad, H, other)
-
-    def _init_block_state(self, params, value: jax.Array) -> jax.Array:
-        """Broadcast a scalar to one value per Hessian block."""
-        if self._hess_tag.structure is MatrixStructure.BLOCK_DIAGONAL:
-            return jax.vmap(
-                lambda _: value,
-                in_axes=(self._hess_tag.batch_axes,),
-                out_axes=0,
-            )(params)
-        return value

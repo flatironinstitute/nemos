@@ -1,6 +1,7 @@
 """Newton-based optimization solvers."""
 
-from typing import Any, Callable, ClassVar, Optional
+import abc
+from typing import Any, Callable, ClassVar, Generic, Optional, Tuple, TypeVar
 
 import equinox as eqx
 import jax
@@ -9,10 +10,11 @@ import lineax as lx
 import optax
 import optimistix as optx
 from jax.flatten_util import ravel_pytree
+from jaxtyping import Array, Float, PyTree
 from optimistix._misc import cauchy_termination
 
 from .. import tree_utils
-from ..solvers._hessian_mixins import HessianMixin, LinearSolverTag
+from ..solvers._hessian_mixins import HessianMixin, HessianSolverMixin, LinearSolverTag
 from ..typing import Params
 from ._abstract_solver import OptimizationInfo
 from ._fista import FISTA
@@ -20,6 +22,12 @@ from ._fista import FISTA
 DEFAULT_ATOL = 1e-4
 DEFAULT_RTOL = 0.0
 DEFAULT_MAX_STEPS = 100
+
+
+T = TypeVar("T")  # structure of the parameters
+S = TypeVar("S")  # generic state
+type Y[T] = PyTree[Array, T]
+type Scalar[T] = PyTree[Float[Array, ""], T]
 
 
 class NewtonState(eqx.Module):
@@ -109,7 +117,276 @@ def _solve_shifted_system(
     return solution
 
 
-class Newton(HessianMixin):
+class BaseNewtonSolver(Generic[T, S], HessianMixin):
+    def __init__(
+        self,
+        unregularized_loss: Callable,
+        regularizer,
+        regularizer_strength: float | None,
+        has_aux: bool,
+        init_params: Params | None = None,
+        jit: bool = True,
+        maxiter: int = DEFAULT_MAX_STEPS,
+        tol: float = DEFAULT_ATOL,
+        rtol: float = DEFAULT_RTOL,
+    ):
+        if init_params is None:
+            raise ValueError(
+                "init_params is required for Newton solver. "
+                "It is needed to determine the parameter structure for regularization."
+            )
+
+        self.has_aux = has_aux
+        self.jit = jit
+        self.maxiter = maxiter
+        self.tol = tol
+        self.rtol = rtol
+
+        # A proximal solver differentiates the smooth part only and carries the penalty
+        # in its proximal operator, so it must not be handed the penalized loss.
+        if self._proximal:
+            loss_fn = unregularized_loss
+            self.prox = regularizer.get_proximal_operator(
+                params=init_params, strength=regularizer_strength
+            )
+        else:
+            loss_fn = regularizer.penalized_loss(
+                unregularized_loss,
+                params=init_params,
+                strength=regularizer_strength,
+            )
+            self.prox = None
+
+        # split scalar vs aux
+        if has_aux:
+            self.fun_with_aux = loss_fn
+            self.fun = lambda p, *a: loss_fn(p, *a)[0]
+        else:
+            self.fun = loss_fn
+            self.fun_with_aux = lambda p, *a: (loss_fn(p, *a), None)
+
+        self._line_search = optax.scale_by_backtracking_linesearch(
+            max_backtracking_steps=30
+        )
+
+        self._gradient: Callable | None = None
+        self._hessian: Callable | None = None
+        self._init_hessian(regularizer, regularizer_strength, init_params)
+
+    def update(
+        self,
+        params,
+        state: NewtonState,
+        *args,
+    ) -> Tuple[Y[T], S]:
+        (fval, aux), grad = self._gradient(params, *args)
+        gnorm = jnp.sqrt(lx.internal.tree_dot(grad, grad))
+        converged = self._converged(params, state, grad, fval)
+
+        def step(_):
+            H = self._hessian(params, *args)
+            direction, new_state = self._newton_direction(
+                grad,
+                H,
+                params,
+                state,
+            )
+
+            new_params, new_ls_state = self._apply_or_reject(
+                params,
+                direction,
+                grad,
+                state,
+                fval,
+                *args,
+            )
+
+            return new_params, eqx.tree_at(
+                lambda x: x.ls_state, new_state, new_ls_state
+            )
+
+        def no_step(_):
+            return params, state
+
+        new_params, new_state = jax.lax.cond(
+            converged,
+            no_step,
+            step,
+            None,
+        )
+
+        new_iter = jnp.where(
+            converged,
+            state.stats.num_steps,
+            state.stats.num_steps + 1,
+        )
+        update = NewtonState(
+            grad_norm=gnorm,
+            stats=OptimizationInfo(
+                function_val=fval,
+                num_steps=new_iter,
+                converged=converged,
+                reached_max_steps=new_iter >= self.maxiter,
+            ),
+            y_diff=tree_utils.tree_sub(new_params, params),
+        )
+
+        return new_params, eqx.combine(update, new_state), aux
+
+    def run(
+        self,
+        init_params,
+        *args,
+    ):
+        state = self.init_state(init_params, *args)
+        params = init_params
+
+        def cond(carry):
+            p, s = carry
+            return (~s.stats.converged) & (s.stats.num_steps < self.maxiter)
+
+        def body(carry):
+            p, s = carry
+            return self.update(
+                p,
+                s,
+                *args,
+            )[:2]  # Discard aux; convergence only needs params and state
+
+        if self.jit:
+            final_params, final_state = eqx.internal.while_loop(
+                cond,
+                body,
+                (params, state),
+                kind="lax",
+            )
+        else:
+            carry = (params, state)
+            while cond(carry):
+                carry = body(carry)
+            final_params, final_state = carry
+
+        _, aux = self.fun_with_aux(final_params, *args)
+        return final_params, final_state, aux
+
+    def _build_cache(self):
+        if self._gradient is None:
+            self._gradient = jax.value_and_grad(
+                self.fun_with_aux,
+                has_aux=True,
+            )
+
+        if self._hessian is None:
+            self._hessian = jax.hessian(self.fun)
+
+    @abc.abstractmethod
+    def _newton_direction(
+        self, grad: Y[T], H, params: Y[T], state: NewtonState
+    ) -> Tuple[Y[T], S]:
+        pass
+
+    @abc.abstractmethod
+    def _line_search_inputs(
+        self, params: Y[T], step: Float, grad: Y[T], fval: Float, *args
+    ) -> Tuple[Float, Y[T], Callable]:
+        pass
+
+    def _apply_or_reject(
+        self,
+        params,
+        step,
+        grad,
+        state: NewtonState,
+        fval,
+        *args,
+    ):
+        """Accept or reject step based on descent condition and line search."""
+        value, slope, value_fn = self._line_search_inputs(
+            params, step, grad, fval, *args
+        )
+        descent = lx.internal.tree_dot(slope, step)
+
+        def accept(_):
+            updates, new_ls_state = self._line_search.update(
+                step,
+                state.ls_state,
+                params,
+                value=value,
+                grad=slope,
+                value_fn=value_fn,
+            )
+
+            new_params = jax.tree_util.tree_map(
+                lambda p, u: p + u,
+                params,
+                updates,
+            )
+
+            return new_params, new_ls_state
+
+        def reject(_):
+            return params, state.ls_state
+
+        # A NaN slope is not a stationary point: rejecting it would leave a zero step
+        # behind for the Cauchy criterion to report as convergence, so it is stepped on
+        # and the iterate goes non-finite instead.
+        take_step = jnp.isnan(descent) | (descent < 0)
+        new_params, new_ls_state = jax.lax.cond(take_step, accept, reject, None)
+        return new_params, new_ls_state
+
+    def init_state(self, init_params, *args):
+        self._build_cache()
+        ls_state = self._line_search.init(init_params)
+        fval_shape = jax.eval_shape(self.fun, init_params, *args)
+        scalar_dtype = fval_shape.dtype
+        zero = jnp.zeros((), dtype=scalar_dtype)
+        return NewtonState(
+            grad_norm=jnp.asarray(jnp.inf, dtype=scalar_dtype),
+            stats=OptimizationInfo(
+                function_val=jnp.asarray(jnp.nan, dtype=scalar_dtype),
+                num_steps=jnp.array(0),
+                converged=jnp.array(False),
+                reached_max_steps=jnp.array(False),
+            ),
+            ls_state=ls_state,
+            y_diff=jax.tree.map(
+                lambda x: jnp.full_like(x, jnp.inf),
+                init_params,
+            ),
+            identity_shift=self._init_block_state(init_params, zero),
+        )
+
+    def _converged(self, params, state, grad, fval):
+        """Check convergence via a Cauchy criterion on the accepted step size.
+
+        We rely solely on the step-norm arm of :func:`~optimistix.cauchy_termination`
+        and suppress its function-value arm by passing ``f_diff=0``.  The f-diff arm
+        would check ``|f(x_new) - f(x_old)| < atol``, which is an absolute threshold
+        that fails under catastrophic cancellation when the objective is large.  The
+        step-norm criterion ``‖Δx‖ < atol + rtol * ‖x‖`` is scale-invariant provided
+        ``rtol > 0``, so callers should prefer setting ``rtol`` over ``tol`` alone.
+        """
+        return cauchy_termination(
+            self.rtol,
+            self.tol,
+            lx.internal.two_norm,
+            params,
+            state.y_diff,
+            fval,
+            jnp.zeros(()),
+        )
+
+    @classmethod
+    def get_accepted_arguments(cls) -> set[str]:
+        return {
+            "maxiter",
+            "tol",
+            "rtol",
+            "jit",
+        }
+
+
+class Newton(BaseNewtonSolver[T, NewtonState], HessianSolverMixin, Generic[T]):
     r"""
     Newton solver with backtracking and Hessian-aware linear solves.
 
@@ -182,51 +459,18 @@ class Newton(HessianMixin):
         identity_shift_max_steps: int = 20,
         linear_solver: LinearSolverTag = "auto",
     ):
-        if init_params is None:
-            raise ValueError(
-                "init_params is required for Newton solver. "
-                "It is needed to determine the parameter structure for regularization."
-            )
-
-        self.has_aux = has_aux
-        self.jit = jit
-        self.maxiter = maxiter
-        self.tol = tol
-        self.rtol = rtol
-
-        self._init_hessian(
-            regularizer, regularizer_strength, init_params, linear_solver
+        self._init_solver(linear_solver)
+        super().__init__(
+            unregularized_loss,
+            regularizer,
+            regularizer_strength,
+            has_aux,
+            init_params=init_params,
+            jit=jit,
+            maxiter=maxiter,
+            tol=tol,
+            rtol=rtol,
         )
-
-        # A proximal solver differentiates the smooth part only and carries the penalty
-        # in its proximal operator, so it must not be handed the penalized loss.
-        if self._proximal:
-            loss_fn = unregularized_loss
-            self.prox = regularizer.get_proximal_operator(
-                params=init_params, strength=regularizer_strength
-            )
-        else:
-            loss_fn = regularizer.penalized_loss(
-                unregularized_loss,
-                params=init_params,
-                strength=regularizer_strength,
-            )
-            self.prox = None
-
-        # split scalar vs aux
-        if has_aux:
-            self.fun_with_aux = loss_fn
-            self.fun = lambda p, *a: loss_fn(p, *a)[0]
-        else:
-            self.fun = loss_fn
-            self.fun_with_aux = lambda p, *a: (loss_fn(p, *a), None)
-
-        self._line_search = optax.scale_by_backtracking_linesearch(
-            max_backtracking_steps=30
-        )
-
-        self._gradient: Callable | None = None
-        self._hessian: Callable | None = None
 
         if identity_shift_beta < 0:
             raise ValueError(
@@ -241,40 +485,11 @@ class Newton(HessianMixin):
             )
         self.identity_shift_max_steps = identity_shift_max_steps
 
-    def _build_cache(self):
-        if self._gradient is None:
-            self._gradient = jax.value_and_grad(
-                self.fun_with_aux,
-                has_aux=True,
-            )
-
-        if self._hessian is None:
-            self._hessian = jax.hessian(self.fun)
-
     def init_state(self, init_params, *args):
-        self._build_cache()
         self._resolve_linear_solver(init_params)
-        ls_state = self._line_search.init(init_params)
-        fval_shape = jax.eval_shape(self.fun, init_params, *args)
-        scalar_dtype = fval_shape.dtype
-        zero = jnp.zeros((), dtype=scalar_dtype)
-        return NewtonState(
-            grad_norm=jnp.asarray(jnp.inf, dtype=scalar_dtype),
-            stats=OptimizationInfo(
-                function_val=jnp.asarray(jnp.nan, dtype=scalar_dtype),
-                num_steps=jnp.array(0),
-                converged=jnp.array(False),
-                reached_max_steps=jnp.array(False),
-            ),
-            ls_state=ls_state,
-            y_diff=jax.tree.map(
-                lambda x: jnp.full_like(x, jnp.inf),
-                init_params,
-            ),
-            identity_shift=self._init_block_state(init_params, zero),
-        )
+        return super().init_state(init_params, *args)
 
-    def _solve(self, grad, H, params, previous_shift):
+    def _solve(self, grad, H, params, previous_shift) -> Tuple[Y[T], Scalar[T]]:
         del params
 
         operator = lx.PyTreeLinearOperator(H, jax.eval_shape(lambda: grad))
@@ -381,16 +596,22 @@ class Newton(HessianMixin):
 
         return direction, previous_shift
 
-    def _newton_direction(self, grad, H, params, identity_shift):
-        return self._block_apply(
+    def _newton_direction(
+        self, grad: Y, H, params, state: NewtonState
+    ) -> Tuple[Y[T], NewtonState]:
+        identity_shift = state.identity_shift
+        direction, identity_shift = self._block_apply(
             self._solve,
             grad,
             H,
             params,
             block_state=identity_shift,
         )
+        return direction, eqx.tree_at(lambda s: s.identity_shift, state, identity_shift)
 
-    def _line_search_inputs(self, params, step, grad, fval, *args):
+    def _line_search_inputs(
+        self, params, step, grad, fval, *args
+    ) -> Tuple[Float, Y[T], Callable]:
         """Value, slope and objective handed to ``self._line_search``.
 
         ``optax``'s backtracking search forms the slope as ``vdot(updates, grad)``; the
@@ -400,178 +621,19 @@ class Newton(HessianMixin):
         del params, step
         return fval, grad, lambda p: self.fun(p, *args)
 
-    def _converged(self, params, state, grad, fval):
-        """Check convergence via a Cauchy criterion on the accepted step size.
-
-        We rely solely on the step-norm arm of :func:`~optimistix.cauchy_termination`
-        and suppress its function-value arm by passing ``f_diff=0``.  The f-diff arm
-        would check ``|f(x_new) - f(x_old)| < atol``, which is an absolute threshold
-        that fails under catastrophic cancellation when the objective is large.  The
-        step-norm criterion ``‖Δx‖ < atol + rtol * ‖x‖`` is scale-invariant provided
-        ``rtol > 0``, so callers should prefer setting ``rtol`` over ``tol`` alone.
-        """
-        return cauchy_termination(
-            self.rtol,
-            self.tol,
-            lx.internal.two_norm,
-            params,
-            state.y_diff,
-            fval,
-            jnp.zeros(()),
-        )
-
-    def _apply_or_reject(
-        self,
-        params,
-        step,
-        grad,
-        state: NewtonState,
-        fval,
-        *args,
-    ):
-        """Accept or reject step based on descent condition and line search."""
-        value, slope, value_fn = self._line_search_inputs(
-            params, step, grad, fval, *args
-        )
-        descent = lx.internal.tree_dot(slope, step)
-
-        def accept(_):
-            updates, new_ls_state = self._line_search.update(
-                step,
-                state.ls_state,
-                params,
-                value=value,
-                grad=slope,
-                value_fn=value_fn,
-            )
-
-            new_params = jax.tree_util.tree_map(
-                lambda p, u: p + u,
-                params,
-                updates,
-            )
-
-            return new_params, new_ls_state
-
-        def reject(_):
-            return params, state.ls_state
-
-        # A NaN slope is not a stationary point: rejecting it would leave a zero step
-        # behind for the Cauchy criterion to report as convergence, so it is stepped on
-        # and the iterate goes non-finite instead.
-        take_step = jnp.isnan(descent) | (descent < 0)
-        new_params, new_ls_state = jax.lax.cond(take_step, accept, reject, None)
-        return new_params, new_ls_state
-
-    def update(
-        self,
-        params,
-        state: NewtonState,
-        *args,
-    ) -> NewtonStepResult:
-
-        (fval, aux), grad = self._gradient(params, *args)
-        gnorm = jnp.sqrt(lx.internal.tree_dot(grad, grad))
-        converged = self._converged(params, state, grad, fval)
-
-        def step(_):
-            H = self._hessian(params, *args)
-            direction, identity_shift = self._newton_direction(
-                grad,
-                H,
-                params,
-                state.identity_shift,
-            )
-
-            new_params, new_ls_state = self._apply_or_reject(
-                params,
-                direction,
-                grad,
-                state,
-                fval,
-                *args,
-            )
-
-            return new_params, new_ls_state, identity_shift
-
-        def no_step(_):
-            return params, state.ls_state, state.identity_shift
-
-        new_params, new_ls_state, identity_shift = jax.lax.cond(
-            converged,
-            no_step,
-            step,
-            None,
-        )
-
-        new_iter = jnp.where(
-            converged,
-            state.stats.num_steps,
-            state.stats.num_steps + 1,
-        )
-
-        new_state = NewtonState(
-            grad_norm=gnorm,
-            stats=OptimizationInfo(
-                function_val=fval,
-                num_steps=new_iter,
-                converged=converged,
-                reached_max_steps=new_iter >= self.maxiter,
-            ),
-            ls_state=new_ls_state,
-            y_diff=tree_utils.tree_sub(new_params, params),
-            identity_shift=identity_shift,
-        )
-
-        return new_params, new_state, aux
-
-    def run(
-        self,
-        init_params,
-        *args,
-    ):
-        state = self.init_state(init_params, *args)
-        params = init_params
-
-        def cond(carry):
-            p, s = carry
-            return (~s.stats.converged) & (s.stats.num_steps < self.maxiter)
-
-        def body(carry):
-            p, s = carry
-            return self.update(
-                p,
-                s,
-                *args,
-            )[:2]  # Discard aux; convergence only needs params and state
-
-        if self.jit:
-            final_params, final_state = eqx.internal.while_loop(
-                cond,
-                body,
-                (params, state),
-                kind="lax",
-            )
-        else:
-            carry = (params, state)
-            while cond(carry):
-                carry = body(carry)
-            final_params, final_state = carry
-
-        _, aux = self.fun_with_aux(final_params, *args)
-        return final_params, final_state, aux
-
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
-        return {
-            "maxiter",
-            "tol",
-            "rtol",
-            "jit",
-            "linear_solver",
-            "identity_shift_beta",
-            "identity_shift_max_steps",
-        }
+        return (
+            super()
+            .get_accepted_arguments()
+            .union(
+                {
+                    "linear_solver",
+                    "identity_shift_beta",
+                    "identity_shift_max_steps",
+                }
+            )
+        )
 
     def _get_optim_info(
         self,
@@ -581,7 +643,7 @@ class Newton(HessianMixin):
         return state.stats
 
 
-class ProximalNewton(Newton):
+class ProximalNewton(BaseNewtonSolver[T, NewtonState], Generic[T]):
     r"""Proximal Newton solver for composite objectives.
 
     Minimizes :math:`f(\beta) + P(\beta)` with :math:`f` the smooth loss and :math:`P`
@@ -690,7 +752,7 @@ class ProximalNewton(Newton):
             H, jax.eval_shape(lambda: d), tags=self._operator_tags
         ).mv(d)
 
-    def _newton_direction(self, grad, H, params, identity_shift):
+    def _newton_direction(self, grad, H, params, state):
         r"""Minimize :math:`\nabla f^\top (z - \beta) + \frac12 (z - \beta)^\top H (z - \beta) + P(z)`.
 
         Solving for the new parameters :math:`z` rather than the step keeps the penalty
@@ -717,9 +779,11 @@ class ProximalNewton(Newton):
             max_steps=self.inner_iter,
             throw=False,
         ).value
-        return tree_utils.tree_sub(new_params, params), identity_shift
+        return tree_utils.tree_sub(new_params, params), state
 
-    def _line_search_inputs(self, params, step, grad, fval, *args):
+    def _line_search_inputs(
+        self, params, step, grad, fval, *args
+    ) -> Tuple[Float, Y[T], Callable]:
         r"""Feed the composite objective and its slope to the inherited line search.
 
         Tseng & Yun (2009) require the sufficient-decrease slope of a composite
@@ -747,12 +811,14 @@ class ProximalNewton(Newton):
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
-        return super().get_accepted_arguments() - {
-            "linear_solver",
-            "identity_shift_beta",
-            "identity_shift_max_steps",
-        } | {
-            "inner_iter",
-            "inner_atol",
-            "inner_rtol",
-        }
+        return (
+            super()
+            .get_accepted_arguments()
+            .union(
+                {
+                    "inner_iter",
+                    "inner_atol",
+                    "inner_rtol",
+                }
+            )
+        )
