@@ -192,7 +192,6 @@ class HessianSolverMixin:
         self._resolved_linear_solver: ResolvedLinearSolverTag | None = None
         # overwritten in _resolve_linear_solver once the tag is known
         self._linear_solver: lx.AbstractLinearSolver | None = None
-        self._operator_tags = ()
         self._shift_fn: Callable | None = None
 
     def _resolve_linear_solver(self, init_params) -> None:
