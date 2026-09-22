@@ -493,19 +493,9 @@ class Newton(BaseNewtonSolver[Y, NewtonState[Y]], HessianSolverMixin, Generic[Y]
         identity_shift_max_steps: int = 20,
         linear_solver: LinearSolverTag = "auto",
     ):
+        # Before ``super().__init__``, which builds the loss, the proximal operator, the
+        # line search and the Hessian wiring: a rejected argument should cost none of it.
         self._init_solver(linear_solver)
-        super().__init__(
-            unregularized_loss,
-            regularizer,
-            regularizer_strength,
-            has_aux,
-            init_params=init_params,
-            jit=jit,
-            maxiter=maxiter,
-            tol=tol,
-            rtol=rtol,
-        )
-
         if identity_shift_beta < 0:
             raise ValueError(
                 "identity_shift_beta must be nonnegative; "
@@ -518,6 +508,18 @@ class Newton(BaseNewtonSolver[Y, NewtonState[Y]], HessianSolverMixin, Generic[Y]
                 f"received {identity_shift_max_steps}."
             )
         self.identity_shift_max_steps = identity_shift_max_steps
+
+        super().__init__(
+            unregularized_loss,
+            regularizer,
+            regularizer_strength,
+            has_aux,
+            init_params=init_params,
+            jit=jit,
+            maxiter=maxiter,
+            tol=tol,
+            rtol=rtol,
+        )
 
     def init_state(self, init_params: Y, *args: Any) -> NewtonState[Y]:
         self._resolve_linear_solver(init_params)
