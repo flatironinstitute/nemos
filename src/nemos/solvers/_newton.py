@@ -507,7 +507,7 @@ class Newton(BaseNewtonSolver[T, NewtonState], HessianSolverMixin, Generic[T]):
 
         # Add tau * I and increase tau until Cholesky succeeds
         # Nocedal and Wright Algorithm 3.3
-        if self._resolved_linear_solver == "identity_shift":
+        elif self._resolved_linear_solver == "identity_shift":
             diag = lx.diagonal(operator)
             dtype = diag.dtype
 
@@ -579,7 +579,7 @@ class Newton(BaseNewtonSolver[T, NewtonState], HessianSolverMixin, Generic[T]):
             return direction, accepted_shift
 
         # Catch use before init_state has resolved the requested strategy.
-        if self._resolved_linear_solver != "cholesky":
+        elif self._resolved_linear_solver != "cholesky":
             raise RuntimeError(
                 "The solver has not been resolved. Call init_state before update."
             )
@@ -591,7 +591,7 @@ class Newton(BaseNewtonSolver[T, NewtonState], HessianSolverMixin, Generic[T]):
             grad,
             self._shift_fn(operator),
             solver=self._linear_solver,
-            tags=self._operator_tags,
+            tags=lx.positive_semidefinite_tag,  # it has to be otherwise it'll raise
         ).value
 
         return direction, previous_shift
@@ -748,9 +748,7 @@ class ProximalNewton(BaseNewtonSolver[T, NewtonState], Generic[T]):
     def _hvp_block(self, grad, H, d):
         """Hessian-vector product for a single block."""
         del grad
-        return lx.PyTreeLinearOperator(
-            H, jax.eval_shape(lambda: d), tags=self._operator_tags
-        ).mv(d)
+        return lx.PyTreeLinearOperator(H, jax.eval_shape(lambda: d)).mv(d)
 
     def _newton_direction(self, grad, H, params, state):
         r"""Minimize :math:`\nabla f^\top (z - \beta) + \frac12 (z - \beta)^\top H (z - \beta) + P(z)`.

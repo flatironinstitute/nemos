@@ -21,6 +21,16 @@ ResolvedLinearSolverTag = Literal["cholesky", "eigh", "identity_shift"]
 
 VALID_SOLVERS = {"auto", "cholesky", "eigh", "identity_shift"}
 
+POSITIVE_PROPERTIES = {
+    MatrixProperty.POSITIVE_DEFINITE,
+    MatrixProperty.POSITIVE_SEMI_DEFINITE,
+}
+SYMMETRIC_PROPERTIES = {
+    MatrixProperty.SYMMETRIC,
+    MatrixProperty.NEGATIVE_DEFINITE,
+    MatrixProperty.NEGATIVE_SEMI_DEFINITE,
+}
+
 
 class HessianMixin:
     """
@@ -55,9 +65,13 @@ class HessianMixin:
         self._regularizer_strength = regularizer_strength
         self._init_params = init_params
 
-        self._hess_tag: HessianTag | None = None
+        self._hess_tag = HessianTag(
+            structure=MatrixStructure.FULL,
+            property=MatrixProperty.SYMMETRIC,
+            flat_on=mask_claim_none(init_params),
+            definite_on=mask_claim_none(init_params),
+        )
         self._hessian: Callable | None = None
-        self._operator_tags = ()  # lineax tags
 
     def setup_hessian(
         self,
@@ -94,7 +108,11 @@ class HessianMixin:
                 definite_on=tag.definite_on,
                 batch_axes=tag.batch_axes,
             )
-        self._hess_tag = tag
+        # A model with no analytic Hessian sends no tag, and ``combine_hessian_tags``
+        # returns None as soon as one of its arguments is None. Keep the unstructured
+        # symmetric default in that case rather than dropping back to None.
+        if tag is not None:
+            self._hess_tag = tag
         self._hessian = hess_fn
 
     def _penalize_hessian(self, hess_fn, model_tag):
@@ -167,16 +185,6 @@ class HessianMixin:
             )(params)
         return value
 
-    def get_hess_tag(self, params: Any):
-        if self._hess_tag is None:
-            return HessianTag(
-                structure=MatrixStructure.FULL,
-                property=MatrixProperty.SYMMETRIC,
-                flat_on=mask_claim_none(params),
-                definite_on=mask_claim_none(params),
-            )
-        return self._hess_tag
-
 
 class HessianSolverMixin:
     def _init_solver(
@@ -196,19 +204,9 @@ class HessianSolverMixin:
 
     def _resolve_linear_solver(self, init_params) -> None:
         """Resolve the Hessian solution strategy from the tag and user request."""
-        positive_properties = {
-            MatrixProperty.POSITIVE_DEFINITE,
-            MatrixProperty.POSITIVE_SEMI_DEFINITE,
-        }
-        symmetric_properties = {
-            MatrixProperty.SYMMETRIC,
-            MatrixProperty.NEGATIVE_DEFINITE,
-            MatrixProperty.NEGATIVE_SEMI_DEFINITE,
-        }
-        hess_tag = self.get_hess_tag(init_params)
-        matrix_property = hess_tag.property
+        matrix_property = self._hess_tag.property
 
-        if matrix_property not in positive_properties | symmetric_properties:
+        if matrix_property not in POSITIVE_PROPERTIES | SYMMETRIC_PROPERTIES:
             raise ValueError(
                 f"Hessian has unsupported matrix property: {matrix_property}"
             )
@@ -224,12 +222,12 @@ class HessianSolverMixin:
 
         if requested == "auto":
             resolved: ResolvedLinearSolverTag = (
-                "cholesky" if matrix_property in positive_properties else "eigh"
+                "cholesky" if matrix_property in POSITIVE_PROPERTIES else "eigh"
             )
         else:
             resolved = requested
 
-        if resolved == "cholesky" and matrix_property not in positive_properties:
+        if resolved == "cholesky" and matrix_property not in POSITIVE_PROPERTIES:
             warnings.warn(
                 "linear_solver='cholesky' was requested, but the Hessian tag "
                 f"reports {matrix_property}. Cholesky generally requires a "
@@ -243,7 +241,6 @@ class HessianSolverMixin:
 
         if resolved == "cholesky":
             self._linear_solver = lx.Cholesky()
-            self._operator_tags = lx.positive_semidefinite_tag
             # Continue using the tag to distinguish the PSD and PD branches
             if matrix_property is MatrixProperty.POSITIVE_SEMI_DEFINITE:
 
@@ -258,7 +255,6 @@ class HessianSolverMixin:
                 self._shift_fn = lambda _: None
         elif resolved == "eigh":
             self._linear_solver = None
-            self._operator_tags = ()
             self._shift_fn = lambda _: 0.0
             dtype = jnp.result_type(*jax.tree_util.tree_leaves(init_params))
             self._delta = jnp.sqrt(jnp.finfo(dtype).eps)
@@ -266,5 +262,4 @@ class HessianSolverMixin:
             # Nocedal and Wright Algorithm 3.3: add tau * I until Cholesky
             # succeeds. The actual retry loop runs in Newton._solve.
             self._linear_solver = None
-            self._operator_tags = ()
             self._shift_fn = lambda _: 0.0
