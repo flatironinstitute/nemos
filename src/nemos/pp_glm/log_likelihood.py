@@ -5,7 +5,6 @@ from typing import Callable
 
 import jax
 import jax.numpy as jnp
-from pynapple import IntervalSet
 
 from ..glm.params import GLMParams
 from . import utils
@@ -232,7 +231,8 @@ def _compute_mc_estimate(
         )
         lam = inverse_link_function(A @ weights + bias)
 
-        return lam_sum + jnp.sum(jnp.where(is_valid, jnp.sum(lam, axis=-1), 0.0)), None
+        weighted = samples.widths * jnp.sum(lam, axis=-1)
+        return lam_sum + jnp.sum(jnp.where(is_valid, weighted, 0.0)), None
 
     init = jnp.zeros((), dtype=X.times.dtype)
     mc_estimate, _ = jax.lax.scan(body, init, (chunked, valid))
@@ -244,8 +244,8 @@ def _draw_mc_sample(
     X: PredictorsPPGLM,
     random_key: jnp.ndarray,
     M_samples: int,
-    T: float,
-    M_grid,
+    M_grid: jnp.ndarray,
+    M_widths: jnp.ndarray,
 ) -> MCSamplePPGLM:
     """
     Draw stratified sample time points for Monte Carlo estimate of the conditional intensity function.
@@ -267,13 +267,10 @@ def _draw_mc_sample(
         Monte Carlo samples with fields ``times`` (sampled timestamps) and
         ``timestamp_idx`` (indices into event times).
     """
-    dt = T / M_samples
-    epsilon_m = jax.random.uniform(
-        random_key, shape=(M_samples,), minval=0.0, maxval=dt
-    )
+    epsilon_m = jax.random.uniform(random_key, shape=(M_samples,)) * M_widths
     tau_m = M_grid + epsilon_m
     tau_m_idx = jnp.searchsorted(X.times, tau_m)
-    mc_sample_pts = MCSamplePPGLM(times=tau_m, timestamp_idx=tau_m_idx)
+    mc_sample_pts = MCSamplePPGLM(times=tau_m, timestamp_idx=tau_m_idx, widths=M_widths)
 
     return mc_sample_pts
 
@@ -286,7 +283,7 @@ def _negative_log_likelihood(
     inverse_link_function: Callable,
     M_samples: int,
     M_grid: jnp.ndarray,
-    recording_time: IntervalSet,
+    M_widths: jnp.ndarray,
     n_basis_funcs: int,
     scan_size: int,
     max_window: int,
@@ -321,8 +318,8 @@ def _negative_log_likelihood(
         Number of Monte Carlo samples for the integral estimate.
     M_grid :
         Stratified grid for MC integration. Shape (M_samples,).
-    recording_time :
-        pynapple IntervalSet defining the recording epochs.
+    M_widths :
+        Stratum width at each grid point. Shape (M_samples,).
     n_basis_funcs :
         Number of basis functions.
     scan_size :
@@ -357,8 +354,8 @@ def _negative_log_likelihood(
         X,
         random_key,
         M_samples,
-        recording_time.tot_length(),
         M_grid,
+        M_widths,
     )
 
     mc_estimate = _compute_mc_estimate(
@@ -373,7 +370,7 @@ def _negative_log_likelihood(
         scan_size,
     )
 
-    nll_sum = ((recording_time.tot_length() / M_samples) * mc_estimate) - log_lambda_y
+    nll_sum = mc_estimate - log_lambda_y
 
     return nll_sum / y.times.shape[0]
 

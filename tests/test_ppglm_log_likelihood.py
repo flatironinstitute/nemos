@@ -16,7 +16,7 @@ NLL_KWARG_NAMES = (
     "inverse_link_function",
     "M_samples",
     "M_grid",
-    "recording_time",
+    "M_widths",
     "n_basis_funcs",
     "scan_size",
     "max_window",
@@ -56,8 +56,8 @@ def create_dataset_constant_rate(recording_time, n_neurons=3, **kwargs):
     dataset["y"] = jax.tree_util.tree_map(lambda arr: arr[in_epoch], dataset["y"])
     dataset["params"] = to_glm_params((coef, intercept))
     dataset["recording_time"] = recording_time
-    dataset["M_grid"] = utils.build_mc_sampling_grid(
-        recording_time, dataset["M_samples"]
+    dataset["M_grid"], dataset["M_widths"] = utils.build_mc_sampling_grid(
+        recording_time.values, dataset["M_samples"]
     )
     return dataset
 
@@ -108,7 +108,7 @@ def create_dataset(
     all-to-one coupled model. Returns preprocessed inputs, model hyperparams and arbitrary PP-GLM params
     """
     recording_time = IntervalSet(0, sim_time)
-    M_grid = utils.build_mc_sampling_grid(recording_time, M_samples)
+    M_grid, M_widths = utils.build_mc_sampling_grid(recording_time.values, M_samples)
     eval_function = create_basis(n_basis_funcs, history_window)
 
     np.random.seed(seed)
@@ -147,6 +147,7 @@ def create_dataset(
         recording_time=recording_time,
         M_samples=M_samples,
         M_grid=M_grid,
+        M_widths=M_widths,
         n_basis_funcs=n_basis_funcs,
         scan_size=scan_size,
         max_window=max_window,
@@ -166,7 +167,7 @@ def create_dataset_single_spike(
     n_neurons = 1
     sim_time = spike_time + 1.0
     recording_time = IntervalSet(0, sim_time)
-    M_grid = utils.build_mc_sampling_grid(recording_time, M_samples)
+    M_grid, M_widths = utils.build_mc_sampling_grid(recording_time.values, M_samples)
     eval_function = create_basis(n_basis_funcs, history_window)
 
     spike_times = jnp.array([spike_time])
@@ -203,6 +204,7 @@ def create_dataset_single_spike(
         recording_time=recording_time,
         M_samples=M_samples,
         M_grid=M_grid,
+        M_widths=M_widths,
         n_basis_funcs=n_basis_funcs,
         scan_size=1,
         max_window=max_window,
@@ -238,7 +240,9 @@ class TestUtils:
         """Test that reshaping works properly and that the validity mask marks the padding"""
         # when divisible, padding length is 0, all valid
         times = MCSamplePPGLM(
-            times=jnp.ones(8), timestamp_idx=jnp.arange(8).astype(int)
+            times=jnp.ones(8),
+            timestamp_idx=jnp.arange(8).astype(int),
+            widths=jnp.ones(8),
         )
 
         reshaped, valid = utils._reshape_and_pad_eval_points(times, chunk_size=2)
@@ -253,7 +257,9 @@ class TestUtils:
 
         # when not divisible, padding fills to next multiple
         times = MCSamplePPGLM(
-            times=jnp.ones(9), timestamp_idx=jnp.arange(9).astype(int)
+            times=jnp.ones(9),
+            timestamp_idx=jnp.arange(9).astype(int),
+            widths=jnp.ones(9),
         )
         reshaped, valid = utils._reshape_and_pad_eval_points(times, chunk_size=2)
         jax.tree_util.tree_map(
@@ -269,7 +275,9 @@ class TestUtils:
 
         # test that padding is the last value and that the mask lines up with it
         times = MCSamplePPGLM(
-            times=jnp.ones(4), timestamp_idx=jnp.arange(4).astype(int)
+            times=jnp.ones(4),
+            timestamp_idx=jnp.arange(4).astype(int),
+            widths=jnp.ones(4),
         )
         reshaped, valid = utils._reshape_and_pad_eval_points(times, chunk_size=3)
         pad_len = -4 % 3
@@ -292,7 +300,7 @@ class TestUtils:
     def test_build_mc_sampling_grid(self):
         """test that the grid is built correctly with multiple epochs"""
         recording_time = IntervalSet(start=[0.0, 6.0], end=[4.0, 10.0])
-        grid = utils.build_mc_sampling_grid(recording_time, M_samples=100)
+        grid, _ = utils.build_mc_sampling_grid(recording_time.values, 100)
 
         # assert grid size is exactly M_samples
         assert grid.shape[0] == 100
@@ -315,7 +323,7 @@ class TestUtils:
         recording_time = IntervalSet(start=starts, end=ends)
 
         with pytest.raises(ValueError):
-            utils.build_mc_sampling_grid(recording_time, M_samples=3)
+            utils.build_mc_sampling_grid(recording_time.values, 3)
 
     @pytest.mark.requires_x64
     def test_adjust_indices_and_spike_times(self):
@@ -497,7 +505,6 @@ class TestLogLikelihood:
         inverse_link_function = dataset["inverse_link_function"]
         M_samples = dataset["M_samples"]
         M_grid = dataset["M_grid"]
-        recording_time = dataset["recording_time"]
         n_basis_funcs = dataset["n_basis_funcs"]
         scan_size = dataset["scan_size"]
         max_window = dataset["max_window"]
@@ -512,7 +519,7 @@ class TestLogLikelihood:
             inverse_link_function=inverse_link_function,
             M_samples=M_samples,
             M_grid=M_grid,
-            recording_time=recording_time,
+            M_widths=dataset["M_widths"],
             n_basis_funcs=n_basis_funcs,
             scan_size=scan_size,
             max_window=max_window,
@@ -557,7 +564,6 @@ class TestLogLikelihood:
         inverse_link_function = dataset["inverse_link_function"]
         M_samples = dataset["M_samples"]
         M_grid = dataset["M_grid"]
-        recording_time = dataset["recording_time"]
         n_basis_funcs = dataset["n_basis_funcs"]
         scan_size = dataset["scan_size"]
         max_window = dataset["max_window"]
@@ -606,8 +612,8 @@ class TestLogLikelihood:
             X,
             dataset["random_key"],
             M_samples,
-            recording_time.tot_length(),
             M_grid,
+            dataset["M_widths"],
         )
 
         # chunked lax.scan for all postsynaptic neurons
@@ -636,7 +642,9 @@ class TestLogLikelihood:
             lam_tilde = (
                 np.sum(basis_at_dts[:, :, None] * selected_w, axis=(0, 1)) + bias
             )
-            mc_est_loop += inverse_link_function(lam_tilde).sum()
+            mc_est_loop += (
+                dataset["M_widths"][sp] * inverse_link_function(lam_tilde).sum()
+            )
 
         np.testing.assert_almost_equal(mc_est_scan, mc_est_loop)
 
@@ -649,7 +657,7 @@ class TestLogLikelihood:
             inverse_link_function=inverse_link_function,
             M_samples=M_samples,
             M_grid=M_grid,
-            recording_time=recording_time,
+            M_widths=dataset["M_widths"],
             n_basis_funcs=n_basis_funcs,
             scan_size=scan_size,
             max_window=max_window,
@@ -657,9 +665,7 @@ class TestLogLikelihood:
         )
 
         # nll from loop results
-        loss_loop = (
-            (recording_time.tot_length() / M_samples) * mc_est_loop
-        ) - log_lam_y_loop
+        loss_loop = mc_est_loop - log_lam_y_loop
         loss_loop /= n_spikes
 
         np.testing.assert_almost_equal(loss_loop, loss_scan)
@@ -683,7 +689,7 @@ class TestLogLikelihood:
             inverse_link_function=dataset["inverse_link_function"],
             M_samples=dataset["M_samples"],
             M_grid=dataset["M_grid"],
-            recording_time=dataset["recording_time"],
+            M_widths=dataset["M_widths"],
             n_basis_funcs=dataset["n_basis_funcs"],
             scan_size=scan_size,
             max_window=dataset["max_window"],
@@ -699,7 +705,7 @@ class TestLogLikelihood:
             inverse_link_function=reference["inverse_link_function"],
             M_samples=reference["M_samples"],
             M_grid=reference["M_grid"],
-            recording_time=reference["recording_time"],
+            M_widths=reference["M_widths"],
             n_basis_funcs=reference["n_basis_funcs"],
             scan_size=3,
             max_window=reference["max_window"],
@@ -744,8 +750,8 @@ class TestLogLikelihood:
             dataset["X"],
             dataset["random_key"],
             dataset["M_samples"],
-            recording_time.tot_length(),
             dataset["M_grid"],
+            dataset["M_widths"],
         )
         mc_estimate = log_likelihood._compute_mc_estimate(
             dataset["X"],
@@ -758,7 +764,7 @@ class TestLogLikelihood:
             n_predictors,
             dataset["scan_size"],
         )
-        mc_term = (recording_time.tot_length() / dataset["M_samples"]) * mc_estimate
+        mc_term = mc_estimate
         np.testing.assert_allclose(
             mc_term, recording_time.tot_length() * jnp.sum(jnp.exp(bias)), rtol=1e-10
         )
@@ -860,8 +866,8 @@ class TestLogLikelihood:
             dataset["X"],
             dataset["random_key"],
             dataset["M_samples"],
-            dataset["recording_time"].tot_length(),
             dataset["M_grid"],
+            dataset["M_widths"],
         )
         args = (
             weights,
@@ -1027,7 +1033,7 @@ class TestMCSampling:
     )
     def test_grid_points_lie_inside_the_epochs(self, recording_time):
         """Every stratification point belongs to a recording epoch."""
-        grid = np.asarray(utils.build_mc_sampling_grid(recording_time, M_samples=10))
+        grid = np.asarray(utils.build_mc_sampling_grid(recording_time.values, 10)[0])
 
         inside = np.any(
             [
@@ -1043,7 +1049,7 @@ class TestMCSampling:
         """No recording epoch is left without a stratification point."""
         recording_time = IntervalSet(start=[0.0, 50.0], end=[49.0, 50.2])
 
-        grid = np.asarray(utils.build_mc_sampling_grid(recording_time, M_samples=10))
+        grid = np.asarray(utils.build_mc_sampling_grid(recording_time.values, 10)[0])
 
         counts = [
             int(np.sum((grid >= s) & (grid <= e)))
@@ -1059,16 +1065,14 @@ class TestMCSampling:
     def test_jittered_samples_lie_inside_the_epochs(self, recording_time):
         """Jittering a stratification point never moves it out of the recording."""
         M_samples = 10
-        grid = utils.build_mc_sampling_grid(recording_time, M_samples)
+        grid, widths = utils.build_mc_sampling_grid(recording_time.values, M_samples)
         X = PredictorsPPGLM(
             times=jnp.linspace(0.0, 11.0, 20), predictor_ids=jnp.zeros(20, dtype=int)
         )
 
         draw = jax.vmap(
             lambda key: (
-                log_likelihood._draw_mc_sample(
-                    X, key, M_samples, recording_time.tot_length(), grid
-                ).times
+                log_likelihood._draw_mc_sample(X, key, M_samples, grid, widths).times
             )
         )
         samples = np.asarray(draw(jax.random.split(jax.random.PRNGKey(0), 200))).ravel()
@@ -1087,7 +1091,7 @@ class TestMCSampling:
         recording_time = IntervalSet(0, 1.0)
         M_samples, n_keys = 10, 20000
         T = recording_time.tot_length()
-        grid = utils.build_mc_sampling_grid(recording_time, M_samples)
+        grid, widths = utils.build_mc_sampling_grid(recording_time.values, M_samples)
         X = PredictorsPPGLM(
             times=jnp.linspace(0.0, 1.0, 20), predictor_ids=jnp.zeros(20, dtype=int)
         )
@@ -1095,11 +1099,9 @@ class TestMCSampling:
         # g(t) = t, so the estimator must average to the integral T ** 2 / 2;
         # 20000 keys put the standard error at 6.5e-5, well inside the tolerance
         estimate = jax.vmap(
-            lambda key: (
-                (T / M_samples)
-                * jnp.sum(
-                    log_likelihood._draw_mc_sample(X, key, M_samples, T, grid).times
-                )
+            lambda key: jnp.sum(
+                widths
+                * log_likelihood._draw_mc_sample(X, key, M_samples, grid, widths).times
             )
         )(jax.random.split(jax.random.PRNGKey(0), n_keys))
 
@@ -1109,7 +1111,6 @@ class TestMCSampling:
 STATIC_ARGNAMES = (
     "inverse_link_function",
     "M_samples",
-    "recording_time",
     "n_basis_funcs",
     "scan_size",
     "max_window",
@@ -1148,20 +1149,11 @@ class TestJit:
         dataset = create_dataset()
         args = (dataset["params"], dataset["X"], dataset["y"], dataset["random_key"])
         kwargs = nll_kwargs(dataset)
-        # closed over, so that the IntervalSet does not fail the compilation first
-        recording_time = kwargs.pop("recording_time")
-
-        def nll(params, X, y, random_key, **kw):
-            return log_likelihood._negative_log_likelihood(
-                params, X, y, random_key, recording_time=recording_time, **kw
-            )
 
         jitted = jax.jit(
-            nll,
+            log_likelihood._negative_log_likelihood,
             static_argnames=tuple(
-                name
-                for name in STATIC_ARGNAMES
-                if name not in (traced_argname, "recording_time")
+                name for name in STATIC_ARGNAMES if name != traced_argname
             ),
         )
 
@@ -1172,13 +1164,11 @@ class TestJit:
         """The nll compiles once it takes the recording length instead of the IntervalSet."""
         dataset = create_dataset()
         args = (dataset["params"], dataset["X"], dataset["y"], dataset["random_key"])
-        kwargs = nll_kwargs(
-            dataset, recording_time=dataset["recording_time"].tot_length()
-        )
+        kwargs = nll_kwargs(dataset)
 
         jitted = jax.jit(
             log_likelihood._negative_log_likelihood,
-            static_argnames=tuple(n for n in STATIC_ARGNAMES if n != "recording_time"),
+            static_argnames=STATIC_ARGNAMES,
         )
 
         assert jnp.isfinite(jitted(*args, **kwargs))

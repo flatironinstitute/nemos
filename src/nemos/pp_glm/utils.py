@@ -5,7 +5,6 @@ from typing import List, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-import pynapple as nap
 from numpy.typing import ArrayLike
 
 from .data import MCSamplePPGLM, PredictorsPPGLM, SpikesPPGLM
@@ -103,7 +102,20 @@ def _reshape_and_pad_eval_points(
     return chunked, valid.reshape(-1, chunk_size)
 
 
-def build_mc_sampling_grid(recording_time: nap.IntervalSet, M_samples: int):
+def _allocate_samples(lengths: jnp.ndarray, M_samples: int) -> jnp.ndarray:
+    """Apportion M_samples over the epochs, one each and the rest by largest remainder."""
+    remaining = M_samples - lengths.shape[0]  # after reserving one sample per epoch
+    proportional_share = remaining * lengths / lengths.sum()
+    whole_share = jnp.floor(proportional_share).astype(int)
+    # rank the epochs by the fraction of a sample they were docked, largest first
+    remainder_rank = jnp.argsort(jnp.argsort(whole_share - proportional_share))
+    leftover = remaining - whole_share.sum()
+    # the reserved sample, the whole ones, and one more for each of the epochs that
+    # lost the most to the floor; leftover is below n_epochs, so it is always exhausted
+    return 1 + whole_share + jnp.where(remainder_rank < leftover, 1, 0)
+
+
+def build_mc_sampling_grid(epochs: jnp.ndarray, M_samples: int):
     """
     Build a stratified sampling grid for Monte Carlo integration.
 
@@ -112,28 +124,33 @@ def build_mc_sampling_grid(recording_time: nap.IntervalSet, M_samples: int):
 
     Parameters
     ----------
-    recording_time :
-        pynapple IntervalSet defining the recording epochs.
+    epochs :
+        Epoch boundaries, ``nap.IntervalSet.values``. Shape (n_epochs, 2).
     M_samples :
         Total number of Monte Carlo sample points.
 
     Returns
     -------
-    :
-        Concatenated grid of bin midpoints across all epochs. Shape (M_samples,).
+    grid :
+        Left edge of every stratum across all epochs. Shape (M_samples,).
+    widths :
+        Stratum width at each grid point. Shape (M_samples,).
     """
-    if M_samples < len(recording_time.start):
+    if M_samples < epochs.shape[0]:
         raise ValueError(
             f"The number of MC samples ({M_samples}) must be equal or greater than the number of recording "
-            f"epochs {len(recording_time.start)})."
+            f"epochs {epochs.shape[0]})."
         )
-    dt = recording_time.tot_length() / M_samples
-    starts, ends = recording_time.start, recording_time.end
-    M_sub = jnp.floor((ends - starts) / dt).astype(int)
-    M_sub = M_sub.at[-1].set(M_samples - jnp.sum(M_sub[:-1]))
-    return jnp.concatenate(
-        [jnp.linspace(s + dt, e, m) - dt / 2 for s, e, m in zip(starts, ends, M_sub)]
+    lengths = jnp.diff(epochs, axis=-1).ravel()
+    M_sub = _allocate_samples(lengths, M_samples)
+    widths = lengths / M_sub  # per-epoch stratum width
+    epoch_of_point = jnp.repeat(
+        jnp.arange(epochs.shape[0]), M_sub, total_repeat_length=M_samples
     )
+    offset = jnp.concatenate([jnp.zeros(1, int), jnp.cumsum(M_sub)[:-1]])
+    within = jnp.arange(M_samples) - offset[epoch_of_point]
+    grid = epochs[epoch_of_point, 0] + within * widths[epoch_of_point]  # left edges
+    return grid, widths[epoch_of_point]
 
 
 # DATA PREPROCESSING UTILS
