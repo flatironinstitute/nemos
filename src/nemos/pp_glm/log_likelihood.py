@@ -7,9 +7,9 @@ import jax
 import jax.numpy as jnp
 from pynapple import IntervalSet
 
+from ..glm.params import GLMParams
 from . import utils
 from .data import MCSamplePPGLM, PredictorsPPGLM, SpikesPPGLM
-from .params import GLMParams
 
 
 def _eval_point(
