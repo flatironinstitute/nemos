@@ -12,18 +12,8 @@ from ..base_validator import RegressorValidator
 from ..glm.params import GLMParams, GLMUserParams
 from ..glm.validation import GLMValidator, from_glm_params, to_glm_params
 from .data import PredictorsPPGLM, SpikesPPGLM
-from .params import PPGLMParamsWithKey
 
 TimeSeriesInput: TypeAlias = "Union[np.ndarray, jnp.ndarray, list, dict, Ts, TsGroup]"
-
-
-def to_pp_glm_params_with_key(params: GLMParams, random_key: jnp.array):
-    """Map from PPGLMParams to PPGLMParamsWithKey.
-
-     Map from PPGLMParams to PPGLMParamsWithKey by appending a jax random key.
-    The key is converted from uint32 to float to avoid solver initialization error
-    """
-    return PPGLMParamsWithKey(params, random_key.astype(params.coef.dtype))
 
 
 @dataclass(frozen=True, repr=False)
@@ -41,7 +31,6 @@ class PPGLMValidator(GLMValidator):
     """
 
     n_basis_funcs: int = field(kw_only=True)
-    # random_key: jnp.array = field(kw_only=True)
     expected_param_dims: Tuple[int] = (
         1,
         1,
@@ -60,31 +49,13 @@ class PPGLMValidator(GLMValidator):
                 err_message_format="Invalid parameter dimensionality. coef must be an array "
                 "or nemos.pytree.FeaturePytree with array leafs of shape "
                 "(n_features, ). intercept must be of shape (1,)."
-                "\nThe provided coef, intercept and random_key have shapes ``{}`` and ``{}`` "
+                "\nThe provided coef and intercept have shapes ``{}`` and ``{}`` "
                 "instead."
             ),
         ),
         *RegressorValidator.params_validation_sequence[3:],
         ("validate_intercept_shape", None),
     )
-
-    def validate_random_key(self, random_key: jax.Array, dtype: type = jnp.uint32):
-        """Validate random key dtype and shape.
-
-        Parameters
-        ----------
-        random_key :
-            The random key to validate.
-        dtype :
-            Expected dtype — ``jnp.uint32`` for user-facing keys,
-            ``jnp.float64`` for solver-internal keys.
-        """
-        key = jnp.asarray(random_key)
-        if key.dtype != dtype or key.shape != (2,):
-            raise ValueError(
-                f"random_key must be a {dtype} array with shape (2,). "
-                f"Got shape {key.shape}, dtype {key.dtype}."
-            )
 
     def validate_consistency(
         self,
@@ -303,7 +274,7 @@ class PopulationPPGLMValidator(PPGLMValidator):
                 "coef must be an array or pytree "
                 "with array leaves of shape (n_features, n_neurons). "
                 "intercept must be of shape (n_neurons,)."
-                "\nThe provided coef, intercept and random_key have shapes ``{}`` and ``{}`` "
+                "\nThe provided coef and intercept have shapes ``{}`` and ``{}`` "
                 "instead."
             ),
         ),
