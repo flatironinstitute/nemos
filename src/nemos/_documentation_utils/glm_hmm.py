@@ -544,7 +544,7 @@ def plot_accuracy_and_occupancy(frac_occupancy, accuracies_to_plot):
         col = "grey" if z == 0 else cols[z - 1]
         ax.bar(z, acc * 100, width=0.8, color=col)
         ax.text(
-            z, acc * 100 + 1, f"{acc*100:.2f}", ha="center", va="bottom", fontsize=10
+            z, acc * 100 + 1, f"{acc * 100:.2f}", ha="center", va="bottom", fontsize=10
         )
 
     ax.set_ylim(50, 100)
@@ -600,7 +600,7 @@ def plot_param_recovery(
     )  # (n_features+1, n_states)
     rec_vals = np.vstack([rec_coef, rec_intercept[None, :]])
     n_params = true_vals.shape[0]
-    param_labels = [f"stim w{i+1}" for i in range(true_coef.shape[0])] + ["bias"]
+    param_labels = [f"stim w{i + 1}" for i in range(true_coef.shape[0])] + ["bias"]
 
     fig, axes = plt.subplots(1, 3, figsize=(13, 4))
 
@@ -616,7 +616,7 @@ def plot_param_recovery(
             true_vals[:, k],
             width,
             color=palette[k % len(palette)],
-            label=f"state {k+1} true",
+            label=f"state {k + 1} true",
         )
         ax.bar(
             x + offset + width,
@@ -625,7 +625,7 @@ def plot_param_recovery(
             color=palette[k % len(palette)],
             alpha=0.45,
             hatch="//",
-            label=f"state {k+1} recovered",
+            label=f"state {k + 1} recovered",
         )
     ax.set_xticks(x)
     ax.set_xticklabels(param_labels)

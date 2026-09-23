@@ -1228,9 +1228,9 @@ class TestGLM:
         loaded_params.update(fit_state)
 
         # Assert matching keys and values
-        assert (
-            initial_params.keys() == loaded_params.keys()
-        ), "Parameter keys mismatch after load."
+        assert initial_params.keys() == loaded_params.keys(), (
+            "Parameter keys mismatch after load."
+        )
 
         for key in initial_params:
             init_val = initial_params[key]
@@ -1238,31 +1238,31 @@ class TestGLM:
             if isinstance(init_val, (int, float, str, type(None))):
                 assert init_val == load_val, f"{key} mismatch: {init_val} != {load_val}"
             elif isinstance(init_val, dict):
-                assert (
-                    init_val == load_val
-                ), f"{key} dict mismatch: {init_val} != {load_val}"
+                assert init_val == load_val, (
+                    f"{key} dict mismatch: {init_val} != {load_val}"
+                )
             elif isinstance(init_val, (np.ndarray, jnp.ndarray)):
-                assert np.allclose(
-                    np.array(init_val), np.array(load_val)
-                ), f"{key} array mismatch"
+                assert np.allclose(np.array(init_val), np.array(load_val)), (
+                    f"{key} array mismatch"
+                )
             elif isinstance(init_val, tuple):
                 # e.g. ``fix_params``: compare leafwise, keeping ``None`` a leaf so a
                 # dropped one cannot pass as an empty pytree node
                 is_none = lambda leaf: leaf is None
                 init_leaves = jax.tree_util.tree_leaves(init_val, is_leaf=is_none)
                 load_leaves = jax.tree_util.tree_leaves(load_val, is_leaf=is_none)
-                assert len(init_leaves) == len(
-                    load_leaves
-                ), f"{key} structure mismatch: {init_val} != {load_val}"
+                assert len(init_leaves) == len(load_leaves), (
+                    f"{key} structure mismatch: {init_val} != {load_val}"
+                )
                 for init_leaf, load_leaf in zip(init_leaves, load_leaves):
                     if init_leaf is None:
                         assert load_leaf is None, f"{key} lost a None leaf"
                     else:
                         np.testing.assert_allclose(load_leaf, init_leaf)
             elif isinstance(init_val, Callable):
-                assert _get_name(init_val) == _get_name(
-                    load_val
-                ), f"{key} function mismatch: {_get_name(init_val)} != {_get_name(load_val)}"
+                assert _get_name(init_val) == _get_name(load_val), (
+                    f"{key} function mismatch: {_get_name(init_val)} != {_get_name(load_val)}"
+                )
 
     @pytest.mark.parametrize("regularizer", ["Ridge"])
     @pytest.mark.parametrize(
@@ -1421,9 +1421,9 @@ class TestGLM:
             loaded_params.update(fit_state)
 
             # Assert matching keys and values
-            assert (
-                initial_params.keys() == loaded_params.keys()
-            ), "Parameter keys mismatch after load."
+            assert initial_params.keys() == loaded_params.keys(), (
+                "Parameter keys mismatch after load."
+            )
 
             unexpected_keys = set(mapping_dict) - set(initial_params)
             raise_exception = bool(unexpected_keys)
@@ -1450,44 +1450,44 @@ class TestGLM:
                             )
                         else:
                             mapping_obs = mapping_dict[key]
-                        assert _get_name(mapping_obs) == _get_name(
-                            load_val
-                        ), f"{key} observation model mismatch: {mapping_dict[key]} != {load_val}"
+                        assert _get_name(mapping_obs) == _get_name(load_val), (
+                            f"{key} observation model mismatch: {mapping_dict[key]} != {load_val}"
+                        )
                     elif key == "regularizer":
                         if isinstance(mapping_dict[key], str):
                             mapping_reg = instantiate_regularizer(mapping_dict[key])
                         else:
                             mapping_reg = mapping_dict[key]
-                        assert _get_name(mapping_reg) == _get_name(
-                            load_val
-                        ), f"{key} regularizer mismatch: {mapping_dict[key]} != {load_val}"
+                        assert _get_name(mapping_reg) == _get_name(load_val), (
+                            f"{key} regularizer mismatch: {mapping_dict[key]} != {load_val}"
+                        )
                     elif key == "solver_name":
-                        assert (
-                            mapping_dict[key] == load_val
-                        ), f"{key} solver name mismatch: {mapping_dict[key]} != {load_val}"
+                        assert mapping_dict[key] == load_val, (
+                            f"{key} solver name mismatch: {mapping_dict[key]} != {load_val}"
+                        )
                     elif key == "regularizer_strength":
-                        assert (
-                            mapping_dict[key] == load_val
-                        ), f"{key} regularizer strength mismatch: {mapping_dict[key]} != {load_val}"
+                        assert mapping_dict[key] == load_val, (
+                            f"{key} regularizer strength mismatch: {mapping_dict[key]} != {load_val}"
+                        )
                     continue
 
             if isinstance(init_val, (int, float, str, type(None))):
                 assert init_val == load_val, f"{key} mismatch: {init_val} != {load_val}"
 
             elif isinstance(init_val, dict):
-                assert (
-                    init_val == load_val
-                ), f"{key} dict mismatch: {init_val} != {load_val}"
+                assert init_val == load_val, (
+                    f"{key} dict mismatch: {init_val} != {load_val}"
+                )
 
             elif isinstance(init_val, (np.ndarray, jnp.ndarray)):
-                assert np.allclose(
-                    np.array(init_val), np.array(load_val)
-                ), f"{key} array mismatch"
+                assert np.allclose(np.array(init_val), np.array(load_val)), (
+                    f"{key} array mismatch"
+                )
 
             elif isinstance(init_val, Callable):
-                assert _get_name(init_val) == _get_name(
-                    load_val
-                ), f"{key} function mismatch: {_get_name(init_val)} != {_get_name(load_val)}"
+                assert _get_name(init_val) == _get_name(load_val), (
+                    f"{key} function mismatch: {_get_name(init_val)} != {_get_name(load_val)}"
+                )
 
     def test_save_and_load_nested_class(
         self, nested_regularizer, tmp_path, glm_class_type
@@ -2578,12 +2578,74 @@ class TestGLMObservationModel:
 
     @staticmethod
     def _assert_params_match(
-        sklearn_coef, sklearn_intercept, nemos_coef, nemos_intercept, atol=1e-6
+        sklearn_coef,
+        sklearn_intercept,
+        nemos_coef,
+        nemos_intercept,
+        is_classifier=False,
+        atol=1e-6,
     ):
         """Assert that sklearn and nemos parameters match within tolerance."""
+        if is_classifier:
+            # Softmax parameters are invariant to a common shift across classes.
+            sklearn_intercept = sklearn_intercept - np.mean(
+                sklearn_intercept, axis=-1, keepdims=True
+            )
+            nemos_intercept = nemos_intercept - np.mean(
+                nemos_intercept, axis=-1, keepdims=True
+            )
         np.testing.assert_allclose(sklearn_coef, nemos_coef, atol=atol, rtol=0.0)
         np.testing.assert_allclose(
             sklearn_intercept, nemos_intercept, atol=atol, rtol=0.0
+        )
+
+    @staticmethod
+    def _assert_loss_match(
+        model,
+        nemos_coef,
+        nemos_intercept,
+        X,
+        y,
+        sklearn_coef,
+        sklearn_intercept,
+        is_classifier,
+        atol=1e-6,
+    ):
+        """Compare NeMoS' penalized loss at the NeMoS and sklearn solutions."""
+        nemos_params = GLMParams(
+            coef=nemos_coef,
+            intercept=nemos_intercept,
+        )
+        sklearn_params = GLMParams(
+            coef=jnp.asarray(sklearn_coef),
+            intercept=jnp.asarray(sklearn_intercept),
+        )
+        if is_classifier:
+            y = model._label_encoder.encode(y, safe=False)
+            y = jax.nn.one_hot(y, model.n_classes)
+        penalized_loss = model.regularizer.penalized_loss(
+            model._compute_loss,
+            params=nemos_params,
+            strength=model.regularizer_strength,
+        )
+        nemos_loss = penalized_loss(nemos_params, X, y)
+        sklearn_loss = penalized_loss(sklearn_params, X, y)
+        np.testing.assert_allclose(
+            nemos_loss,
+            sklearn_loss,
+            atol=atol,
+            rtol=0.0,
+        )
+        ridge = model.regularizer.penalized_loss(
+            lambda *args, **kw: 0,
+            nemos_params,
+            model.regularizer_strength,
+        )
+        np.testing.assert_allclose(
+            ridge(nmo.tree_utils.tree_sub(nemos_params, sklearn_params)),
+            0,
+            atol=atol,
+            rtol=0,
         )
 
     def _fit_and_compare_to_sklearn(self, model, sklearn_model, X, y, atol=1e-6):
@@ -2596,20 +2658,53 @@ class TestGLMObservationModel:
         intercepts are zero and the comparison still holds.
         """
         model.fit(X, y)
+        is_classifier = is_classifier_model(model)
         if is_population_model(model):
             for n in range(y.shape[1]):
                 sklearn_model.fit(X, y[:, n])
                 sk_coef, sk_intercept = self._format_sklearn_params(
                     sklearn_model, model
                 )
+                self._assert_loss_match(
+                    model,
+                    model.coef_[:, n],
+                    model.intercept_[n],
+                    X,
+                    y[:, n],
+                    sk_coef,
+                    sk_intercept,
+                    is_classifier,
+                    atol,
+                )
                 self._assert_params_match(
-                    sk_coef, sk_intercept, model.coef_[:, n], model.intercept_[n], atol
+                    sk_coef,
+                    sk_intercept,
+                    model.coef_[:, n],
+                    model.intercept_[n],
+                    is_classifier,
+                    atol,
                 )
         else:
             sklearn_model.fit(X, y)
             sk_coef, sk_intercept = self._format_sklearn_params(sklearn_model, model)
+            self._assert_loss_match(
+                model,
+                model.coef_,
+                model.intercept_,
+                X,
+                y,
+                sk_coef,
+                sk_intercept,
+                is_classifier,
+                atol,
+            )
             self._assert_params_match(
-                sk_coef, sk_intercept, model.coef_, model.intercept_, atol
+                sk_coef,
+                sk_intercept,
+                model.coef_,
+                model.intercept_,
+                is_classifier,
+                atol,
             )
 
     @staticmethod
@@ -2659,7 +2754,7 @@ class TestGLMObservationModel:
 
         return model
 
-    @pytest.mark.parametrize("solver_name", ["BFGS"])
+    @pytest.mark.parametrize("solver_name", ["BFGS", "Newton", "ProximalNewton"])
     @pytest.mark.solver_related
     @pytest.mark.requires_x64
     @pytest.mark.filterwarnings("ignore:Setting penalty=None will ignore:UserWarning")
@@ -2679,7 +2774,7 @@ class TestGLMObservationModel:
         )
         self._fit_and_compare_to_sklearn(model, sklearn_model, X, y, atol=1e-6)
 
-    @pytest.mark.parametrize("solver_name", ["LBFGS", "Newton"])
+    @pytest.mark.parametrize("solver_name", ["LBFGS", "Newton", "ProximalNewton"])
     @pytest.mark.solver_related
     @pytest.mark.requires_x64
     @pytest.mark.filterwarnings("ignore:Setting penalty=None will ignore:UserWarning")
@@ -2709,7 +2804,9 @@ class TestGLMObservationModel:
         )
         assert jnp.all(model.intercept_ == 0.0)
 
-    @pytest.mark.parametrize("solver_name", ["GradientDescent", "LBFGS", "Newton"])
+    @pytest.mark.parametrize(
+        "solver_name", ["GradientDescent", "LBFGS", "Newton", "ProximalNewton"]
+    )
     @pytest.mark.solver_related
     @pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
     def test_fit_intercept_false_leaves_intercept_zero(
@@ -3097,9 +3194,9 @@ def test_grouplasso_mask_wrapping_and_refit(
     model.fit(X, y)
 
     # After first fit, mask must be wrapped into the internal GLMParams structure.
-    assert isinstance(
-        model.regularizer.mask, nmo.glm.params.GLMParams
-    ), "mask must be a GLMParams pytree after fit"
+    assert isinstance(model.regularizer.mask, nmo.glm.params.GLMParams), (
+        "mask must be a GLMParams pytree after fit"
+    )
     assert model.regularizer.mask.intercept is None
     assert check_coef(model.regularizer.mask.coef, n_groups, n_features)
     mask_coef_after_first = model.regularizer.mask.coef
@@ -4269,9 +4366,9 @@ class TestPoissonGLM:
         )
         assert isinstance(func1, expected_type_solver)
         assert isinstance(func2, expected_type_link)
-        assert isinstance(
-            convexity, expected_type_convexity
-        ), f"convexity type: {type(convexity)}, expected type: {expected_type_convexity}"
+        assert isinstance(convexity, expected_type_convexity), (
+            f"convexity type: {type(convexity)}, expected type: {expected_type_convexity}"
+        )
 
     @pytest.mark.parametrize("glm_type", ["", "population_"])
     @pytest.mark.parametrize("regr_setup", ["", "_pytree"])

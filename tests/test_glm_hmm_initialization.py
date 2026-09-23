@@ -661,8 +661,8 @@ class TestSetupGLMHMMInitialization:
         "init_func, expectation",
         [
             (
-                lambda n_states, X, y, inverse_link_function, observation_model, session_starts, random_key: jnp.ones(
-                    n_states
+                lambda n_states, X, y, inverse_link_function, observation_model, session_starts, random_key: (
+                    jnp.ones(n_states)
                 ),
                 does_not_raise(),
             ),

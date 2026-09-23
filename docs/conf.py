@@ -6,23 +6,25 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-import sys, os, urllib.request
+import os
+import sys
 import typing
+import urllib.request
+from importlib.metadata import version
 from pathlib import Path
 
-from importlib.metadata import version
 release: str = version("nemos")
 # this will grab major.minor.patch (excluding any .devN afterwards, which should only
 # show up when building locally during development)
-version: str = ".".join(release.split('.')[:3])
+version: str = ".".join(release.split(".")[:3])
 
-sys.path.insert(0, str(Path('..', 'src').resolve()))
-sys.path.insert(0, os.path.abspath('sphinxext'))
+sys.path.insert(0, str(Path("..", "src").resolve()))
+sys.path.insert(0, os.path.abspath("sphinxext"))
 
 
-project = 'nemos'
-copyright = '2024'
-author = 'E Balzani'
+project = "nemos"
+copyright = "2024"
+author = "E Balzani"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -31,24 +33,24 @@ author = 'E Balzani'
 root_doc = "index"
 
 extensions = [
-    'sphinx.ext.autodoc',
-    'nemos_autodoc_skip_member',  # skip custom members from autodoc
-                                  # Prioritize custom logic by listing just after autodoc.
-    'sphinx.ext.napoleon',
-    'sphinx.ext.autosummary',
-    'sphinx.ext.coverage',
-    'sphinx.ext.viewcode',  # Links to source code
-    'sphinx.ext.doctest',
-    'sphinx_copybutton',  # Adds copy button to code blocks
-    'sphinx_design',  # For layout components
-    'myst_nb',
-    'sphinx_contributors',
+    "sphinx.ext.autodoc",
+    "nemos_autodoc_skip_member",  # skip custom members from autodoc
+    # Prioritize custom logic by listing just after autodoc.
+    "sphinx.ext.napoleon",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.coverage",
+    "sphinx.ext.viewcode",  # Links to source code
+    "sphinx.ext.doctest",
+    "sphinx_copybutton",  # Adds copy button to code blocks
+    "sphinx_design",  # For layout components
+    "myst_nb",
+    "sphinx_contributors",
     "sphinxcontrib.bibtex",
-    'sphinx_code_tabs',
-    'sphinx.ext.mathjax',
-    'sphinx_autodoc_typehints',
-    'sphinx_togglebutton',
-    'matplotlib.sphinxext.plot_directive',
+    "sphinx_code_tabs",
+    "sphinx.ext.mathjax",
+    "sphinx_autodoc_typehints",
+    "sphinx_togglebutton",
+    "matplotlib.sphinxext.plot_directive",
     "matplotlib.sphinxext.mathmpl",
     "sphinx.ext.intersphinx",
 ]
@@ -62,9 +64,8 @@ myst_enable_extensions = [
     "html_image",
 ]
 
-templates_path = ['_templates']
-exclude_patterns = ['_build', "docstrings", 'Thumbs.db', 'nextgen', '.DS_Store']
-
+templates_path = ["_templates"]
+exclude_patterns = ["_build", "docstrings", "Thumbs.db", "nextgen", ".DS_Store"]
 
 
 # -- Options for HTML output -------------------------------------------------
@@ -75,11 +76,11 @@ exclude_patterns = ['_build', "docstrings", 'Thumbs.db', 'nextgen', '.DS_Store']
 autosummary_generate = True
 numpydoc_show_class_members = True
 autodoc_default_options = {
-    'members': True,
-    'inherited-members': True,
-    'undoc-members': True,
-    'show-inheritance': True,
-    'special-members': ' __add__, __mul__, __pow__'
+    "members": True,
+    "inherited-members": True,
+    "undoc-members": True,
+    "show-inheritance": True,
+    "special-members": " __add__, __mul__, __pow__",
 }
 
 # # napolean configs
@@ -110,7 +111,7 @@ autodoc_typehints_format = "short"
 
 numfig = True
 
-html_theme = 'pydata_sphinx_theme'
+html_theme = "pydata_sphinx_theme"
 
 html_favicon = "assets/NeMoS_favicon.ico"
 
@@ -134,9 +135,9 @@ html_theme_options = {
     "header_links_before_dropdown": 6,
     "navigation_depth": 3,
     "logo": {
-      "image_light": "_static/NeMoS_Logo_CMYK_Full.svg",
-      "image_dark": "_static/NeMoS_Logo_CMYK_White.svg",
-   },
+        "image_light": "_static/NeMoS_Logo_CMYK_Full.svg",
+        "image_dark": "_static/NeMoS_Logo_CMYK_White.svg",
+    },
     "secondary_sidebar_items": {
         "[!a]?[!p]?[!i]**": ["page-toc", "sourcelink"],
         "background/basis/README": [],
@@ -145,7 +146,7 @@ html_theme_options = {
 
 html_sidebars = {
     "index": [],
-    "installation":[],
+    "installation": [],
     "quickstart": [],
     "benchmarking": [],
     "background/README": [],
@@ -156,12 +157,10 @@ html_sidebars = {
 
 
 # Path for static files (custom stylesheets or JavaScript)
-html_static_path = ['assets/stylesheets', "assets", "javascripts"]
-html_css_files = ['custom.css']
+html_static_path = ["assets/stylesheets", "assets", "javascripts"]
+html_css_files = ["custom.css"]
 
-html_js_files = [
-    "https://code.iconify.design/2/2.2.1/iconify.min.js"
-]
+html_js_files = ["https://code.iconify.design/2/2.2.1/iconify.min.js"]
 
 # Copybutton settings (to hide prompt)
 # Exclude prompts/output via Pygments CSS classes rather than a text regex.
@@ -170,7 +169,7 @@ html_js_files = [
 # https://sphinx-copybutton.readthedocs.io/en/latest/use.html#automatic-exclusion-of-prompts-from-the-copies
 copybutton_exclude = ".linenos, .gp, .go"
 
-sphinxemoji_style = 'twemoji'
+sphinxemoji_style = "twemoji"
 
 nb_execution_timeout = 60 * 15  # Set timeout in seconds (e.g., 15 minutes)
 
@@ -209,6 +208,8 @@ intersphinx_mapping = {
     "jax": ("https://jax.readthedocs.io/en/latest/", None),
     "scipy": ("https://docs.scipy.org/doc/scipy/", None),
 }
+
+full_api = os.environ.get("NEMOS_FULL_API", "false").lower() == "true"
 
 # ---- API index generation ----
 api_order = [
@@ -252,6 +253,43 @@ for api_rst in api_order:
         if not c.strip().startswith(".. _") and not c.strip().startswith(":toctree:")
     ]
     api_index += "\n".join(contents)
+
+if full_api:
+    autodoc_default_options["private-members"] = True
+    nitpicky = False
+
+    # A handful of modules (utils, observation_models, regularizer) define a
+    # module-level ``__dir__`` returning ``__all__``. autodoc discovers module
+    # members through ``dir()``, so those modules would expose only their public
+    # names no matter what options we pass -- ``:ignore-module-all:`` does not
+    # help, since it is ``__all__`` via ``__dir__`` that hides them. Import the
+    # package eagerly and drop the overrides so ``dir()`` falls back to the
+    # module ``__dict__``. Safe here because no nemos module pairs ``__dir__``
+    # with a lazy ``__getattr__``.
+    import importlib
+    import pkgutil
+
+    import nemos
+
+    for _mod_info in pkgutil.walk_packages(nemos.__path__, prefix="nemos."):
+        try:
+            importlib.import_module(_mod_info.name)
+        except ImportError as e:
+            print(f"full API: could not import {_mod_info.name}: {e}")
+    for _mod in list(sys.modules.values()):
+        if getattr(_mod, "__name__", "").startswith("nemos") and "__dir__" in vars(
+            _mod
+        ):
+            del _mod.__dir__
+
+    # add full API page without stripping toctree
+    api_rst = api_dir / "full.rst"
+    contents = api_rst.read_text().split("\n")
+    api_index += "\n".join(contents)
+
+else:
+    exclude_patterns += ["api/full.rst", "api/generated/full/**"]
+
 
 (api_dir / "index.rst").write_text(api_index)
 
@@ -313,10 +351,14 @@ except Exception as e:
 def _add_benchmark_assets(app, pagename, templatename, context, doctree):
     if pagename != "benchmarking":
         return
-    app.add_css_file("https://cdn.datatables.net/2.0.0/css/dataTables.dataTables.min.css")
+    app.add_css_file(
+        "https://cdn.datatables.net/2.0.0/css/dataTables.dataTables.min.css"
+    )
     app.add_js_file("https://code.jquery.com/jquery-3.7.0.js")
     app.add_js_file("https://cdn.datatables.net/2.0.0/js/dataTables.min.js")
-    app.add_js_file("https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js")
+    app.add_js_file(
+        "https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"
+    )
     app.add_js_file("https://cdn.plot.ly/plotly-2.35.2.min.js")
     app.add_js_file("benchmark-table.js")
 

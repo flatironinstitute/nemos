@@ -14,6 +14,7 @@
 06-regularizer.md
 07-solvers.md
 08-hessian_tagging.md
+09-associative_estep_hmm.md
 ```
 
 ## Introduction

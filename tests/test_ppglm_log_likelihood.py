@@ -1,5 +1,6 @@
 from typing import Any
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -11,8 +12,6 @@ from nemos.glm.validation import to_glm_params
 from nemos.pp_glm import log_likelihood, utils
 from nemos.pp_glm.data import MCSamplePPGLM, PredictorsPPGLM, SpikesPPGLM
 from nemos.pp_glm.validation import to_pp_glm_params_with_key
-import equinox as eqx
-
 
 NLL_KWARG_NAMES = (
     "inverse_link_function",
@@ -48,7 +47,8 @@ def create_dataset_constant_rate(recording_time, n_neurons=3, **kwargs):
         )
     in_epoch = np.any(
         [
-            (np.asarray(dataset["y"].times) >= s) & (np.asarray(dataset["y"].times) <= e)
+            (np.asarray(dataset["y"].times) >= s)
+            & (np.asarray(dataset["y"].times) <= e)
             for s, e in zip(recording_time.start, recording_time.end)
         ],
         axis=0,
@@ -62,6 +62,7 @@ def create_dataset_constant_rate(recording_time, n_neurons=3, **kwargs):
         recording_time, dataset["M_samples"]
     )
     return dataset
+
 
 def create_basis(n_basis_funcs=4, history_window=0.01):
     """Use nemos RC Eval basis and return the evaluate method"""
@@ -699,7 +700,10 @@ class TestLogLikelihood:
         dataset = create_dataset(n_neurons=3, n_spikes=60, M_samples=40)
 
         grad = jax.grad(log_likelihood._compute_loss)(
-            dataset["params_with_key"], dataset["X"], dataset["y"], **nll_kwargs(dataset)
+            dataset["params_with_key"],
+            dataset["X"],
+            dataset["y"],
+            **nll_kwargs(dataset),
         )
 
         np.testing.assert_array_equal(grad.random_key, 0.0)
@@ -772,8 +776,8 @@ class TestLogLikelihood:
         )
 
         for term, eval_pts in (
-                (log_likelihood._compute_log_lambda_y, dataset["y"]),
-                (log_likelihood._compute_mc_estimate, mc_samples),
+            (log_likelihood._compute_log_lambda_y, dataset["y"]),
+            (log_likelihood._compute_mc_estimate, mc_samples),
         ):
             np.testing.assert_allclose(
                 term(dataset["X"], eval_pts, *args, scan_size),

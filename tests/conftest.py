@@ -832,6 +832,7 @@ class MockHMM(
         dirichlet_transition_proba: Union[
             jnp.ndarray | None
         ] = None,  # (n_state, n_state):
+        estep_type="sequential",
         maxiter: int = 1000,
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
@@ -847,6 +848,7 @@ class MockHMM(
             tol=tol,
             seed=seed,
             hmm_initialization_funcs=hmm_initialization_funcs,
+            estep_type=estep_type,
         )
         self.param_: jnp.ndarray | None = None
         self.model_initialization_funcs = model_initialization_funcs
@@ -2223,6 +2225,7 @@ _common_solvers = [
     nmo.solvers.SolverSpec("SVRG", "nemos", nmo.solvers.WrappedSVRG),
     nmo.solvers.SolverSpec("ProxSVRG", "nemos", nmo.solvers.WrappedProxSVRG),
     nmo.solvers.SolverSpec("Newton", "nemos", nmo.solvers.Newton),
+    nmo.solvers.SolverSpec("ProximalNewton", "nemos", nmo.solvers.ProximalNewton),
 ]
 _solvers_per_backend = {
     "optimistix": [

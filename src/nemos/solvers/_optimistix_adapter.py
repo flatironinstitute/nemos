@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Callable, ClassVar, Type, TypeAlias
 
 import equinox as eqx
 import lazy_loader as lazy
+import lineax as lx
 import optimistix as optx
 from packaging.version import Version
 
@@ -61,7 +62,7 @@ class OptimistixConfig:
     # sets if the minimisation throws an error if an iterative solver runs out of steps
     throw: bool = False
     # norm used in the Cauchy convergence criterion. Required by all Optimistix solvers.
-    norm: Callable = optx.two_norm
+    norm: Callable = lx.internal.two_norm
     # way of autodifferentiation: https://docs.kidger.site/optimistix/api/adjoints/
     adjoint: optx.AbstractAdjoint = optx.ImplicitAdjoint()
 
@@ -255,9 +256,7 @@ class OptimistixAdapter(SolverAdapter[OptimistixAdapterState]):
         state: OptimistixSolverState,
         num_steps: jax.numpy.ndarray = jax.numpy.array(0),
     ) -> OptimizationInfo:
-        function_val = (
-            state.f if hasattr(state, "f") else state.f_info.f
-        )  # pyright: ignore
+        function_val = state.f if hasattr(state, "f") else state.f_info.f  # pyright: ignore
 
         return OptimizationInfo(
             function_val=function_val,
