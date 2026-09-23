@@ -164,6 +164,8 @@ VALID_PAIRS = [
     {"claim", "claims"},
     # ppglm params
     {"M_samples", "n_samples"},
+    {"mc_samples", "M_samples"},
+    {"mc_samples", "n_samples"},
     {"bias", "bas"},
     {"M_grid", "grid"},
 ]

@@ -1,7 +1,7 @@
 """PP-GLM core log-likelihood computation."""
 
 from functools import partial
-from typing import Callable, Dict, Union
+from typing import Callable
 
 import jax
 import jax.numpy as jnp
@@ -14,45 +14,239 @@ from .params import GLMParams, PPGLMParamsWithKey
 jax.config.update("jax_enable_x64", True)
 
 
-def _compute_lam_tilde(
-    dts: jnp.ndarray,
-    weights: Union[jnp.ndarray, Dict],
-    bias: jnp.ndarray,
-    eval_function,
+def _eval_point(
+    t: jnp.ndarray,
+    idx: jnp.ndarray,
+    X: PredictorsPPGLM,
+    eval_function: Callable,
+    max_window: int,
+    n_predictors: int,
 ) -> jnp.ndarray:
     """
-    Evaluate the non-rectified firing rate (lambda tilde) at a single time point.
+    Build the feature vector for a single evaluation time point.
 
-     Selects the coefficients for the predictors present in the history
-     window, evaluates the basis functions at the lag times, and accumulates
-     their weighted sum plus the bias for the target neuron(s).
+    Slices the max_window events preceding the eval time point, evaluates the basis
+    at the resulting lag times, and accumulates the basis values per presynaptic neuron
+    with a segment sum. The result is the row of the design matrix for this time
+    point for all features.
 
     Parameters
     ----------
-    dts :
-        Lag times between the reference time point and each event in the history
-        window. Shape (max_window,).
-    weights :
-        Model coefficients selected for neurons present in the history window.
-        Shape (max_window, n_basis_funcs, n_neurons).
-    bias :
-        Intercept for each target neuron. Shape (n_neurons,).
+    t :
+        Timestamp for evaluation.
+    idx :
+        Index of the evaluation point into the event time array X.
+    X :
+        Preprocessed predictors with fields ``times`` (event timestamps) and
+        ``predictor_ids``.
+    eval_function :
+        Basis evaluation function mapping lag times to basis values.
+    max_window :
+        Number of past events to include in the history window.
+    n_predictors :
+        Number of predictors that defines the number of segments.
 
     Returns
     -------
     :
-        Non-rectified firing rate for all target neurons. Shape (n_neurons,).
+        Feature vector. Shape (n_predictors * n_basis_funcs,).
     """
-    fx = eval_function(dts)  # shape (max_window, n_basis_funcs)
+    ts = utils.slice_array(X.times, idx, max_window)
+    ids = utils.slice_array(X.predictor_ids, idx, max_window)
 
-    return jnp.einsum("hjn,hj->n", weights, fx) + bias
+    fx = eval_function(t - ts)  # shape (max_window, n_basis_funcs)
+
+    # shape (n_predictors * n_basis_funcs)
+    return jax.ops.segment_sum(fx, ids, num_segments=n_predictors).reshape(-1)
+
+
+def _compute_design_matrix(
+    timestamps: jnp.ndarray,
+    timestamp_idx: jnp.ndarray,
+    X: PredictorsPPGLM,
+    eval_function: Callable,
+    max_window: int,
+    n_predictors: int,
+) -> jnp.ndarray:
+    """
+    Build the design matrix for a chunk of evaluation time points.
+
+    Maps `_eval_point` over the chunk, so that every row is the feature
+    vector at one evaluation point.
+
+    Parameters
+    ----------
+    timestamps :
+        Evaluation timestamps for this chunk. Shape (chunk_size,).
+    timestamp_idx :
+        Indices of the evaluation points into the event time array X.
+        Shape (chunk_size,).
+    X :
+        Preprocessed predictors with fields ``times`` and ``predictor_ids``.
+    eval_function :
+        Basis evaluation function mapping lag times to basis values.
+    max_window :
+        Number of past events to include in the history window.
+    n_predictors :
+        Number of predictors that defines the number of segments.
+
+    Returns
+    -------
+    :
+        Design matrix. Shape (chunk_size, n_predictors * n_basis_funcs).
+    """
+    eval_point = partial(
+        _eval_point,
+        X=X,
+        eval_function=eval_function,
+        max_window=max_window,
+        n_predictors=n_predictors,
+    )
+    return jax.vmap(eval_point, in_axes=(0, 0))(timestamps, timestamp_idx)
+
+
+def _compute_log_lambda_y(
+    X: PredictorsPPGLM,
+    y: SpikesPPGLM,
+    weights: jnp.ndarray,
+    bias: jnp.ndarray,
+    inverse_link_function: Callable,
+    eval_function: Callable,
+    max_window: int,
+    n_predictors: int,
+    chunk_size: int,
+) -> jnp.ndarray:
+    """
+    Compute the log-firing rates at the observed spike times.
+
+    Scans over chunks of spikes in y. For each chunk, builds the feature matrix
+    from recent history events, computes and sums log firing rates selecting the
+    neuron that spiked.
+
+    Parameters
+    ----------
+    X :
+        Preprocessed predictors with fields ``times`` and ``predictor_ids``.
+    y :
+        Preprocessed spikes with fields ``times``, ``neuron_ids`` and ``timestamp_idx``.
+    weights :
+        Model coefficients. Shape (n_predictors * n_basis_funcs, n_neurons).
+    bias :
+        Intercept for each target neuron. Shape (n_neurons,).
+    inverse_link_function :
+        Maps the linear predictor to a firing rate.
+    eval_function :
+        Basis evaluation function.
+    max_window :
+        Number of past events to include in the history window.
+    n_predictors :
+        Number of predictors that defines the number of segments.
+    chunk_size :
+        Number of evaluation points processed per scan.
+
+    Returns
+    -------
+    :
+        Sum of log-firing rates at observed spike times.
+    """
+    chunked, valid = utils._reshape_and_pad_eval_points(y, chunk_size)
+
+    def body(lam_sum, chunk):
+        spikes, is_valid = chunk
+
+        A = _compute_design_matrix(
+            spikes.times,
+            spikes.timestamp_idx,
+            X,
+            eval_function,
+            max_window,
+            n_predictors,
+        )
+        lam_tilde = A @ weights + bias
+
+        # select rate of the neuron that actually fired in each row
+        log_lam = jnp.log(
+            inverse_link_function(lam_tilde[jnp.arange(chunk_size), spikes.neuron_ids])
+        )
+        return lam_sum + jnp.sum(jnp.where(is_valid, log_lam, 0.0)), None
+
+    init = jnp.zeros((), dtype=X.times.dtype)
+    log_lambda_y, _ = jax.lax.scan(body, init, (chunked, valid))
+
+    return log_lambda_y
+
+
+def _compute_mc_estimate(
+    X: PredictorsPPGLM,
+    mc_samples: MCSamplePPGLM,
+    weights: jnp.ndarray,
+    bias: jnp.ndarray,
+    inverse_link_function: Callable,
+    eval_function: Callable,
+    max_window: int,
+    n_predictors: int,
+    chunk_size: int,
+) -> jnp.ndarray:
+    """
+    Compute the firing rates at the Monte Carlo sample points.
+
+    Scans over chunks of sample points. For each chunk, builds the feature matrix
+    from recent history events, computes and sums firing rates across all neurons.
+
+    Parameters
+    ----------
+    X :
+        Preprocessed predictors with fields ``times`` and ``predictor_ids``.
+    mc_samples :
+        Monte Carlo samples with fields ``times`` and ``timestamp_idx``.
+    weights :
+        Model coefficients. Shape (n_predictors * n_basis_funcs, n_neurons).
+    bias :
+        Model intercepts. Shape (n_neurons,).
+    inverse_link_function :
+        Maps the linear predictor to a firing rate.
+    eval_function :
+        Basis evaluation function.
+    max_window :
+        Number of past events to include in the history window.
+    n_predictors :
+        Number of predictors that defines the number of segments.
+    chunk_size :
+        Number of evaluation points processed per scan.
+
+    Returns
+    -------
+    :
+        Sum of firing rates at the Monte Carlo sample points.
+    """
+    chunked, valid = utils._reshape_and_pad_eval_points(mc_samples, chunk_size)
+
+    def body(lam_sum, chunk):
+        samples, is_valid = chunk
+
+        A = _compute_design_matrix(
+            samples.times,
+            samples.timestamp_idx,
+            X,
+            eval_function,
+            max_window,
+            n_predictors,
+        )
+        lam = inverse_link_function(A @ weights + bias)
+
+        return lam_sum + jnp.sum(jnp.where(is_valid, jnp.sum(lam, axis=-1), 0.0)), None
+
+    init = jnp.zeros((), dtype=X.times.dtype)
+    mc_estimate, _ = jax.lax.scan(body, init, (chunked, valid))
+
+    return mc_estimate
 
 
 def _draw_mc_sample(
     X: PredictorsPPGLM,
     random_key: jnp.ndarray,
     M_samples: int,
-    recording_time: IntervalSet,
+    T: float,
     M_grid,
 ) -> MCSamplePPGLM:
     """
@@ -75,7 +269,7 @@ def _draw_mc_sample(
         Monte Carlo samples with fields ``times`` (sampled timestamps) and
         ``timestamp_idx`` (indices into event times).
     """
-    dt = recording_time.tot_length() / M_samples
+    dt = T / M_samples
     epsilon_m = jax.random.uniform(
         random_key, shape=(M_samples,), minval=0.0, maxval=dt
     )
@@ -84,195 +278,6 @@ def _draw_mc_sample(
     mc_sample_pts = MCSamplePPGLM(times=tau_m, timestamp_idx=tau_m_idx)
 
     return mc_sample_pts
-
-
-def _scan_fn_log_lam_y(
-    lam_sum: jnp.ndarray,
-    i: SpikesPPGLM,
-    X: PredictorsPPGLM,
-    weights: jnp.ndarray,
-    bias: jnp.ndarray,
-    eval_function: Callable,
-    inverse_link_function: Callable,
-    max_window: int,
-):
-    """
-    Scan body for accumulating log-firing rates at observed spike times.
-
-    Intended to be partially applied over the static arguments before passing
-    to jax.lax.scan via _log_likelihood_scan.
-
-    Parameters
-    ----------
-    lam_sum :
-        Running scalar sum of log-firing rates (scan carry).
-    i :
-        Current eval point with fields ``times`` (spike timestamp), ``neuron_ids``
-        (postsynaptic neuron index), and ``timestamp_idx`` (index into event times).
-
-    Closed over via ``functools.partial``
-    --------------------------------------
-    X :
-         Preprocessed predictors with fields ``times`` (event timestamps) and
-        ``predictor_ids``.
-    weights :
-        Reshaped basis coefficients. Shape (n_predictors, n_basis_funcs, n_neurons).
-    bias :
-        Bias terms. Shape (n_neurons,).
-    eval_function :
-        Basis evaluation function.
-    inverse_link_function :
-        Maps lam_tilde to firing rate.
-    max_window :
-        Number of past events to include in history window.
-
-    Returns
-    -------
-    lam_sum :
-        Updated scalar sum.
-    None
-        No concatenated per-step output (required by jax.lax.scan).
-    """
-    history_slice = jax.tree_util.tree_map(
-        lambda arr: utils.slice_array(arr, i.timestamp_idx, max_window), X
-    )
-
-    dts = i.times - history_slice.times
-    lam_tilde = _compute_lam_tilde(
-        dts,
-        weights[history_slice.predictor_ids, :, i.timestamp_idx, None],
-        bias[i.neuron_ids],
-        eval_function,
-    )
-    lam_sum += jnp.log(inverse_link_function(lam_tilde)).sum()
-
-    return lam_sum, None
-
-
-def _scan_fn_mc_est(
-    lam_sum: jnp.ndarray,
-    i: MCSamplePPGLM,
-    X: PredictorsPPGLM,
-    weights: jnp.ndarray,
-    bias: jnp.ndarray,
-    eval_function: Callable,
-    inverse_link_function: Callable,
-    max_window: int,
-):
-    """
-    Scan body for computing an estimate of the firing rate integral over the recording time.
-
-    Intended to be partially applied over the static arguments before passing
-    to jax.lax.scan via _log_likelihood_scan.
-
-    Parameters
-    ----------
-    lam_sum :
-        Running scalar sum of log-firing rates (scan carry).
-    i :
-        Current eval point with fields ``times`` (sampled timestamps) and
-        ``timestamp_idx`` (indices into event times).
-
-    Closed over via ``functools.partial``
-    --------------------------------------
-    X :
-        Preprocessed predictors with fields ``times`` (event timestamps) and
-        ``predictor_ids``.
-    weights :
-        Reshaped basis coefficients. Shape (n_predictors, n_basis_funcs, n_neurons).
-    bias :
-        Bias terms. Shape (n_neurons,).
-    eval_function :
-        Basis evaluation function.
-    inverse_link_function :
-        Maps lam_tilde to firing rate.
-    max_window :
-        Number of past events to include in history window.
-
-    Returns
-    -------
-    lam_sum : jnp.ndarray
-        Updated scalar sum.
-    None
-        No concatenated per-step output (required by jax.lax.scan).
-    """
-    history_slice = jax.tree_util.tree_map(
-        lambda arr: utils.slice_array(arr, i.timestamp_idx, max_window), X
-    )
-    dts = i.times - history_slice.times
-    lam_tilde = _compute_lam_tilde(
-        dts,
-        weights[history_slice.predictor_ids],
-        bias,
-        eval_function,
-    )
-    lam_sum += inverse_link_function(lam_tilde).sum()
-    return lam_sum, None
-
-
-def _log_likelihood_scan(
-    X: PredictorsPPGLM,
-    eval_pts: SpikesPPGLM | MCSamplePPGLM,
-    params: GLMParams,
-    scan_function: Callable,
-    inverse_link_function,
-    n_basis_funcs,
-    max_window,
-    scan_size,
-    eval_function,
-) -> jnp.ndarray:
-    """
-    Compute the sum of log-firing rates (or firing rates) at a set of time points.
-
-    Uses parallelized JAX scans over batches of events. Iterates over time_points in y, selects
-    the recent history events form X, evaluates the linear combination of predictors via lam_tilde_function,
-    and accumulates the (log-)firing rates. Padding added by reshape_input_for_scan is subtracted out at the end.
-
-    Parameters
-    ----------
-    X :
-        Preprocessed predictors with fields ``times`` (event timestamps) and ``predictor_ids``.
-    eval_pts :
-        Observed spike time series with fields ``times`` (spike timestamps), ``neuron_ids``
-        (postsynaptic neuron indices), and ``timestamp_idx`` (indices into event times) or MC sample points
-        with fields ``times`` (sampled timestamps) and ``timestamp_idx``.
-    params :
-        GLMParams containing the basis coefficients and bias terms.
-    scan_function :
-        Either _scan_fn_log_lam_y for the first NLL term or _scan_fn_mc_est for the second term .
-
-    Returns
-    -------
-    :
-        Scalar sum of log-firing rates (or firing rates) over all eval points,
-        with padding contribution subtracted.
-    """
-    weights, bias = params.coef, params.intercept
-    weights = utils.reshape_coef_for_scan(weights, n_basis_funcs)
-
-    scan_body = partial(
-        scan_function,
-        X=X,
-        weights=weights,
-        bias=bias,
-        eval_function=eval_function,
-        inverse_link_function=inverse_link_function,
-        max_window=max_window,
-    )
-
-    scan_vmap = jax.vmap(
-        lambda pts: jax.lax.scan(scan_body, jnp.array(0), pts), in_axes=0
-    )
-
-    reshaped_spikes_array, padding_val, padding_len = utils.reshape_input_for_scan(
-        eval_pts, scan_size
-    )
-    out, _ = scan_vmap(reshaped_spikes_array)  # shape (n_scans,)
-
-    # compute padding contribution separately to subtract it
-    padding_contrib = scan_body(jnp.array(0.0), padding_val)[0] * padding_len
-
-    return jnp.sum(out) - padding_contrib
 
 
 def _negative_log_likelihood(
@@ -302,7 +307,7 @@ def _negative_log_likelihood(
     Parameters
     ----------
     X :
-        Preprocessed predictors with fields ``times`` (event timestamps) and ``predcitor_ids``.
+        Preprocessed predictors with fields ``times`` (event timestamps) and ``predictor_ids``.
     y :
         Preprocessed spikes with fields ``times`` (spike timestamps), ``neuron_ids``
         (postsynaptic neuron indices), and ``timestamp_idx`` (indices into event times).
@@ -323,7 +328,7 @@ def _negative_log_likelihood(
     n_basis_funcs :
         Number of basis functions.
     scan_size :
-        Number of time points processed per scan.
+        Number of evaluation points processed per loop iteration (chunk size).
     max_window :
         The maximum number of events falling within the history window.
     eval_function :
@@ -334,36 +339,40 @@ def _negative_log_likelihood(
     :
         Scalar negative log-likelihood.
     """
-    log_lambda_y = _log_likelihood_scan(
+    weights = utils._reshape_2d_coef(params.coef)  # (n_pred * n_basis, n_neurons)
+    bias = params.intercept  # (n_neurons,)
+    n_predictors = weights.shape[0] // n_basis_funcs
+
+    log_lambda_y = _compute_log_lambda_y(
         X,
         y,
-        params,
-        _scan_fn_log_lam_y,
+        weights,
+        bias,
         inverse_link_function,
-        n_basis_funcs,
-        max_window,
-        scan_size,
         eval_function,
+        max_window,
+        n_predictors,
+        scan_size,
     )
 
     mc_samples = _draw_mc_sample(
         X,
         random_key,
         M_samples,
-        recording_time,
+        recording_time.tot_length(),
         M_grid,
     )
 
-    mc_estimate = _log_likelihood_scan(
+    mc_estimate = _compute_mc_estimate(
         X,
         mc_samples,
-        params,
-        _scan_fn_mc_est,
+        weights,
+        bias,
         inverse_link_function,
-        n_basis_funcs,
-        max_window,
-        scan_size,
         eval_function,
+        max_window,
+        n_predictors,
+        scan_size,
     )
 
     nll_sum = ((recording_time.tot_length() / M_samples) * mc_estimate) - log_lambda_y

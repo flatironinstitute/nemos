@@ -1,3 +1,5 @@
+from typing import Any
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -37,6 +39,14 @@ def create_params(n_neurons, n_basis_funcs, seed=0, all_to_one=False):
     return to_pp_glm_params_with_key(params, random_key)
 
 
+def unpack_params(params, n_basis_funcs):
+    """Unpack and reshape params, extract n_predictors"""
+    weights = utils._reshape_2d_coef(params.coef)
+    bias = params.intercept
+    n_predictors = weights.shape[0] // n_basis_funcs
+    return weights, bias, n_predictors
+
+
 def create_dataset(
     n_neurons=5,
     n_spikes=400,
@@ -47,7 +57,7 @@ def create_dataset(
     scan_size=3,
     seed=0,
     all_to_one=False,
-):
+) -> dict[str, Any]:
     """Create a fake dataset (without running an actual simulation) for fitting an all-to-all or
     all-to-one coupled model. Returns preprocessed inputs, model hyperparams and arbitrary PP-GLM params
     """
@@ -104,7 +114,7 @@ def create_dataset(
 
 def create_dataset_single_spike(
     spike_time, history_window=0.01, n_basis_funcs=4, M_samples=100, seed=0
-):
+) -> dict[str, Any]:
     """
     Create the minimal dataset for a single-neuron, single-spike scenario.
     """
@@ -161,68 +171,79 @@ def create_dataset_single_spike(
 
 
 class TestUtils:
-    def test_reshape_coef_for_scan(self):
+    def test_reshape_2d_coef(self):
         """Test that reshaping works correctly for 1d and 2d scenarios"""
-        # 1d (single postsynaptic neuron)
+        # 1d (single postsynaptic neuron) gets a trailing dimension
         n_predictors, n_bases = 5, 4
         w = jnp.ones(n_predictors * n_bases)
-        out = utils.reshape_coef_for_scan(w, n_bases)
+        out = utils._reshape_2d_coef(w)
 
-        assert out.shape == (n_predictors, n_bases, 1)
+        assert out.shape == (n_predictors * n_bases, 1)
 
-        # 2d (population)
+        # 2d (population) kept unchanged
         n_predictors, n_bases, n_target = 5, 4, 3
         w = jnp.ones((n_predictors * n_bases, n_target))
-        out = utils.reshape_coef_for_scan(w, n_bases)
+        out = utils._reshape_2d_coef(w)
 
-        assert out.shape == (n_predictors, n_bases, n_target)
+        assert out.shape == (n_predictors * n_bases, n_target)
 
-    def test_reshape_input_for_scan(self):
-        """Test that reshaping works properly and that padding length and value are correct"""
-        # when divisible, padding length is 0
+        # anything else is rejected
+        with pytest.raises(ValueError):
+            utils._reshape_2d_coef(jnp.ones((n_predictors, n_bases, n_target)))
+
+    def test_reshape_and_pad_eval_points(self):
+        """Test that reshaping works properly and that the validity mask marks the padding"""
+        # when divisible, padding length is 0, all valid
         times = MCSamplePPGLM(
             times=jnp.ones(8), timestamp_idx=jnp.arange(8).astype(int)
         )
 
-        reshaped, pad_val, pad_len = utils.reshape_input_for_scan(times, scan_size=2)
+        reshaped, valid = utils._reshape_and_pad_eval_points(times, chunk_size=2)
         jax.tree_util.tree_map(
             lambda arr: np.testing.assert_array_equal(
                 arr.shape, (4, 2)
-            ),  # (n_scans, scan_size)
+            ),  # (n_chunks, chunk_size)
             reshaped,
         )
-        assert pad_len == 0
+        assert valid.shape == (4, 2)
+        assert np.all(valid)
 
         # when not divisible, padding fills to next multiple
         times = MCSamplePPGLM(
             times=jnp.ones(9), timestamp_idx=jnp.arange(9).astype(int)
         )
-        reshaped, pad_val, pad_len = utils.reshape_input_for_scan(times, scan_size=2)
+        reshaped, valid = utils._reshape_and_pad_eval_points(times, chunk_size=2)
         jax.tree_util.tree_map(
             lambda arr: np.testing.assert_array_equal(
                 arr.shape, (5, 2)
-            ),  # (n_scans, scan_size)
+            ),  # (n_chunks, chunk_size)
             reshaped,
         )
-        assert pad_len == 1
+        assert valid.shape == (5, 2)
+        assert valid.sum() == 9
+        # the padded entry is the final one and is the only invalid entry
+        assert not valid[-1, -1]
 
-        # test that padding is the last value and that it's consistent
+        # test that padding is the last value and that the mask lines up with it
         times = MCSamplePPGLM(
             times=jnp.ones(4), timestamp_idx=jnp.arange(4).astype(int)
         )
-        reshaped, pad_val, pad_len = utils.reshape_input_for_scan(times, scan_size=3)
-        # check padding is filled with last value
-        jax.tree_util.tree_map(
-            lambda arr: np.testing.assert_array_equal(arr[-1, -pad_len:], arr[-1, -1]),
-            reshaped,
-        )
+        reshaped, valid = utils._reshape_and_pad_eval_points(times, chunk_size=3)
+        pad_len = -4 % 3
+        assert valid.sum() == 4
 
         # check padding values match last element of original
         jax.tree_util.tree_map(
-            lambda orig, pad: np.testing.assert_array_equal(pad, orig[-1]),
+            lambda orig, resh: np.testing.assert_array_equal(
+                resh.reshape(-1)[-pad_len:], orig[-1]
+            ),
             times,
-            pad_val,
+            reshaped,
         )
+
+        # check the mask marks exactly the padded positions
+        np.testing.assert_array_equal(valid.reshape(-1)[-pad_len:], False)
+        np.testing.assert_array_equal(valid.reshape(-1)[:-pad_len], True)
 
     @pytest.mark.requires_x64
     def test_build_mc_sampling_grid(self):
@@ -370,16 +391,19 @@ class TestLogLikelihood:
 
         # the first term is log(exp(lambda_tilde)) = bias
         bias_contrib = params_with_key.params.intercept
-        log_lam_y = log_likelihood._log_likelihood_scan(
+        weights, bias, n_predictors = unpack_params(
+            params_with_key.params, n_basis_funcs
+        )
+        log_lam_y = log_likelihood._compute_log_lambda_y(
             X,
             y,
-            params_with_key.params,
-            log_likelihood._scan_fn_log_lam_y,
+            weights,
+            bias,
             inverse_link_function,
-            n_basis_funcs,
-            max_window,
-            scan_size,
             eval_function,
+            max_window,
+            n_predictors,
+            scan_size,
         )
 
         np.testing.assert_almost_equal(log_lam_y, bias_contrib)
@@ -391,9 +415,9 @@ class TestLogLikelihood:
         """
         Test the model nll computation against a numpy loop implementation.
 
-        Validates that log-likelihood computed using vmap over multiple lax.scan matches a naive
-        loop implementation. Also validates that the padding added to the vmap input to maintain
-        fixed shape is subtracted correctly.
+        Validates that the log-likelihood computed with a chunked lax.scan over the
+        design matrix matches a naive loop implementation. Also validates that the
+        padding added to keep the scan chunks a fixed size is masked out correctly.
         """
         dataset = create_dataset(all_to_one=all_to_one)
 
@@ -409,27 +433,30 @@ class TestLogLikelihood:
         max_window = dataset["max_window"]
         eval_function = dataset["eval_function"]
 
+        weights, bias, n_predictors = unpack_params(
+            params_with_key.params, n_basis_funcs
+        )
+
         # first ll term
-        # jax lax scan + vmap for a single postsynaptic neuron
-        log_lam_y_scan = log_likelihood._log_likelihood_scan(
+        # chunked lax.scan over the design matrix
+        log_lam_y_scan = log_likelihood._compute_log_lambda_y(
             X,
             y,
-            params_with_key.params,
-            log_likelihood._scan_fn_log_lam_y,
+            weights,
+            bias,
             inverse_link_function,
-            n_basis_funcs,
-            max_window,
-            scan_size,
             eval_function,
+            max_window,
+            n_predictors,
+            scan_size,
         )
 
         # numpy loop
         n_spikes = y.times.shape[0]
-        weights, bias = params_with_key.params.coef, params_with_key.params.intercept
-        if all_to_one:
-            weights = weights.reshape(-1, n_basis_funcs, 1)
-        else:
-            weights = weights.reshape(weights.shape[1], -1, weights.shape[1])
+        n_targets = weights.shape[1]
+        # (n_predictors, n_basis_funcs, n_targets); must match the row order that
+        # _eval_point produces when it flattens the segment sum
+        w = np.asarray(weights).reshape(n_predictors, n_basis_funcs, n_targets)
 
         log_lam_y_loop = 0
         for sp in range(n_spikes):
@@ -439,7 +466,7 @@ class TestLogLikelihood:
             ids_in_window = X.predictor_ids[slice_start:slice_end]
             dts = t - spk_in_window
             basis_at_dts = eval_function(dts)
-            selected_w = weights[ids_in_window, :, id]
+            selected_w = w[ids_in_window, :, id]
             lam_tilde = np.sum(basis_at_dts * selected_w) + bias[id]
             log_lam_y_loop += np.log(inverse_link_function(lam_tilde))
 
@@ -451,21 +478,21 @@ class TestLogLikelihood:
             X,
             params_with_key.random_key.astype(jnp.uint32),
             M_samples,
-            recording_time,
+            recording_time.tot_length(),
             M_grid,
         )
 
-        # jax lax scan + vmap for all postsynaptic neurons
-        mc_est_scan = log_likelihood._log_likelihood_scan(
+        # chunked lax.scan for all postsynaptic neurons
+        mc_est_scan = log_likelihood._compute_mc_estimate(
             X,
             mc_samples,
-            params_with_key.params,
-            log_likelihood._scan_fn_mc_est,
+            weights,
+            bias,
             inverse_link_function,
-            n_basis_funcs,
-            max_window,
-            scan_size,
             eval_function,
+            max_window,
+            n_predictors,
+            scan_size,
         )
 
         # numpy loop
@@ -477,7 +504,7 @@ class TestLogLikelihood:
             ids_in_window = X.predictor_ids[slice_start:slice_end]
             dts = t - spk_in_window
             basis_at_dts = eval_function(dts)
-            selected_w = weights[ids_in_window]
+            selected_w = w[ids_in_window]
             lam_tilde = (
                 np.sum(basis_at_dts[:, :, None] * selected_w, axis=(0, 1)) + bias
             )
@@ -508,3 +535,47 @@ class TestLogLikelihood:
         loss_loop /= n_spikes
 
         np.testing.assert_almost_equal(loss_loop, loss_scan)
+
+    @pytest.mark.parametrize("scan_size", [1, 2, 7, 500])
+    def test_scan_size_invariance(self, scan_size):
+        """
+        Test that the result does not depend on how the evaluation points are chunked.
+
+        Covers chunk sizes that divide the number of points exactly, that leave a
+        partial final chunk, and that exceed the number of points entirely.
+        """
+        # n_spikes = 400
+        dataset = create_dataset(scan_size=scan_size)
+
+        loss = log_likelihood._negative_log_likelihood(
+            dataset["params_with_key"].params,
+            dataset["X"],
+            dataset["y"],
+            dataset["params_with_key"].random_key.astype(jnp.uint32),
+            inverse_link_function=dataset["inverse_link_function"],
+            M_samples=dataset["M_samples"],
+            M_grid=dataset["M_grid"],
+            recording_time=dataset["recording_time"],
+            n_basis_funcs=dataset["n_basis_funcs"],
+            scan_size=scan_size,
+            max_window=dataset["max_window"],
+            eval_function=dataset["eval_function"],
+        )
+
+        reference = create_dataset(scan_size=3)
+        loss_reference = log_likelihood._negative_log_likelihood(
+            reference["params_with_key"].params,
+            reference["X"],
+            reference["y"],
+            reference["params_with_key"].random_key.astype(jnp.uint32),
+            inverse_link_function=reference["inverse_link_function"],
+            M_samples=reference["M_samples"],
+            M_grid=reference["M_grid"],
+            recording_time=reference["recording_time"],
+            n_basis_funcs=reference["n_basis_funcs"],
+            scan_size=3,
+            max_window=reference["max_window"],
+            eval_function=reference["eval_function"],
+        )
+
+        np.testing.assert_almost_equal(loss, loss_reference)

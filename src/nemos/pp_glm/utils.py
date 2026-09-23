@@ -34,66 +34,73 @@ def slice_array(array: jnp.ndarray, i: int, window_size: int):
     return jax.lax.dynamic_slice(array, (i - window_size,), (window_size,))
 
 
-def reshape_coef_for_scan(weights: jnp.ndarray, n_basis_funcs: int):
+def _reshape_2d_coef(coef: jnp.ndarray) -> jnp.ndarray:
     """
-    Reshape weight array into (n_predictors, n_basis_funcs, n_neurons) format expected by the scan loop.
+    Ensure that coef is a 2d array corresponding to the number of features and neurons.
+
+    If the coef vector is 1d, adds a trailing dimension to it.
 
     Parameters
     ----------
-    weights :
+    coef :
         Flat or 2d weight array. Shape (n_predictors * n_basis_funcs,) or
         (n_predictors * n_basis_funcs, n_neurons).
-    n_basis_funcs :
-        Number of basis functions per source neuron.
 
     Returns
     -------
     :
-        Reshaped weights. Shape (n_predictors, n_basis_funcs, n_neurons).
+        Weight matrix. Shape (n_predictors * n_basis_funcs, n_neurons).
     """
-    if len(weights.shape) == 1:
-        return weights.reshape(-1, n_basis_funcs, 1)
-    elif len(weights.shape) == 2:
-        n_target_neurons = weights.shape[1]
-        return weights.reshape(-1, n_basis_funcs, n_target_neurons)
+    if coef.ndim == 1:
+        return coef.reshape(-1, 1)
+    elif coef.ndim == 2:
+        return coef
     else:
         raise ValueError(
-            f"Weights must be either 1d or 2d array, the provided weights have shape {weights.shape}"
+            f"Weights must be either 1d or 2d array, the provided weights have shape {coef.shape}"
         )
 
 
-@partial(jax.jit, static_argnums=1)
-def reshape_input_for_scan(data: SpikesPPGLM | MCSamplePPGLM, scan_size: int):
+def _reshape_and_pad_eval_points(
+    eval_pts: SpikesPPGLM | MCSamplePPGLM,
+    chunk_size: int,
+) -> Tuple[SpikesPPGLM | MCSamplePPGLM, jnp.ndarray]:
     """
-    Reshape time series into scan inputs of equal size. Pad the last input with copies of the last time point if needed.
+    Pad evaluation point time series and reshape into scan chunks of equal size.
+
+    Each field is padded with copies of its last entry. The returned validity mask
+    is False on those padded entries, so that their contribution to
+    the log-likelihood is dropped.
 
     Parameters
     ----------
-    data :
+    eval_pts :
         Preprocessed spike / sample times to scan over.
-    scan_size :
-        the number of time points to process in each scan
+    chunk_size :
+        Number of evaluation points processed per scan.
 
     Returns
     -------
-    reshaped :
-        Reshaped padded input. Each field has shape (n_scans, scan_size).
-    padding_values :
-        The last value of each field.
-    padding_len :
-        Number of padding time points appended to make n_points divisible by scan_size.
+    chunked :
+        The padded time series, with every field reshaped to (n_chunks, chunk_size).
+    valid :
+        False on padded entries, True elsewhere. Shape (n_chunks, chunk_size).
     """
+    n_points = eval_pts.times.shape[0]
+    pad_len = -n_points % chunk_size
 
-    def reshape_one(arr):
-        padding_len = -arr.shape[0] % scan_size
-        padded = jnp.concatenate([arr, jnp.full((padding_len,), arr[-1])])
-        return padded.reshape(-1, scan_size)
+    valid = jnp.ones(n_points, dtype=bool)
+    if pad_len:
+        eval_pts = jax.tree_util.tree_map(
+            lambda arr: jnp.concatenate(
+                [arr, jnp.full(pad_len, arr[-1], dtype=arr.dtype)]
+            ),
+            eval_pts,
+        )
+        valid = jnp.concatenate([valid, jnp.zeros(pad_len, dtype=bool)])
 
-    padding_len = -data.times.shape[0] % scan_size
-    padding_values = jax.tree_util.tree_map(lambda arr: arr[-1], data)
-    reshaped = jax.tree_util.tree_map(reshape_one, data)
-
-    return reshaped, padding_values, padding_len
+    chunked = jax.tree_util.tree_map(lambda arr: arr.reshape(-1, chunk_size), eval_pts)
+    return chunked, valid.reshape(-1, chunk_size)
 
 
 def build_mc_sampling_grid(recording_time: nap.IntervalSet, M_samples: int):
