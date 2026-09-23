@@ -9,7 +9,7 @@ from pynapple import IntervalSet
 
 from . import utils
 from .data import MCSamplePPGLM, PredictorsPPGLM, SpikesPPGLM
-from .params import GLMParams, PPGLMParamsWithKey
+from .params import GLMParams
 
 
 def _eval_point(
@@ -379,39 +379,31 @@ def _negative_log_likelihood(
 
 
 def _compute_loss(
-    params_with_key: PPGLMParamsWithKey,
+    params: GLMParams,
     X: PredictorsPPGLM,
     y: SpikesPPGLM,
+    random_key: jnp.ndarray,
     *args,
     **kwargs,
 ) -> jnp.ndarray:
     """
     Compute the negative log-likelihood loss for stochastic optimization.
 
-    Splits the PRNG key before calling the nll function.
-
     Parameters
     ----------
-    params_with_key :
-        PPGLMParamsWithKey instance combining model params (coef, intercept) and
-        a random key used for MC sampling.
+    params :
+        GLMParams containing the basis coefficients and bias terms.
     X :
         Preprocessed predictors with fields ``times`` (event timestamps) and ``ids`` (predictor neuron indices).
     y :
         Preprocessed spikes with fields ``times`` (spike timestamps), ``ids``
         (postsynaptic neuron indices), and ``idx`` (indices into event times).
+    random_key :
+        JAX PRNG key used for MC sampling, rolled by the solver between steps.
 
     Returns
     -------
     :
         The model negative log-likelihood. Shape (1,).
     """
-    key = params_with_key.random_key.astype(jnp.uint32)
-
-    new_key, _ = jax.random.split(key)
-
-    neg_ll = _negative_log_likelihood(
-        params_with_key.params, X, y, new_key, *args, **kwargs
-    )
-
-    return neg_ll
+    return _negative_log_likelihood(params, X, y, random_key, *args, **kwargs)
