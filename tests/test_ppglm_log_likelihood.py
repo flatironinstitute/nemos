@@ -1,17 +1,16 @@
 from typing import Any
 
-import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from jax.flatten_util import ravel_pytree
 from pynapple import IntervalSet
 
 from nemos.basis import RaisedCosineLogEval
 from nemos.glm.validation import to_glm_params
 from nemos.pp_glm import log_likelihood, utils
 from nemos.pp_glm.data import MCSamplePPGLM, PredictorsPPGLM, SpikesPPGLM
-from nemos.pp_glm.validation import to_pp_glm_params_with_key
 
 NLL_KWARG_NAMES = (
     "inverse_link_function",
@@ -38,12 +37,13 @@ def create_dataset_constant_rate(recording_time, n_neurons=3, **kwargs):
         n_neurons=n_neurons, sim_time=float(recording_time.end[-1]), **kwargs
     )
     n_basis_funcs = dataset["n_basis_funcs"]
+    # intercepts of one sign, so that the spike term does not cancel itself out
     if kwargs.get("all_to_one", False):
-        coef, intercept = jnp.zeros(n_neurons * n_basis_funcs), jnp.atleast_1d(0.7)
+        coef, intercept = jnp.zeros(n_neurons * n_basis_funcs), jnp.atleast_1d(1.5)
     else:
         coef, intercept = (
             jnp.zeros((n_neurons * n_basis_funcs, n_neurons)),
-            jnp.linspace(-1.0, 1.0, n_neurons),
+            jnp.linspace(0.5, 1.5, n_neurons),
         )
     in_epoch = np.any(
         [
@@ -54,9 +54,7 @@ def create_dataset_constant_rate(recording_time, n_neurons=3, **kwargs):
         axis=0,
     )
     dataset["y"] = jax.tree_util.tree_map(lambda arr: arr[in_epoch], dataset["y"])
-    dataset["params_with_key"] = to_pp_glm_params_with_key(
-        to_glm_params((coef, intercept)), dataset["params_with_key"].random_key
-    )
+    dataset["params"] = to_glm_params((coef, intercept))
     dataset["recording_time"] = recording_time
     dataset["M_grid"] = utils.build_mc_sampling_grid(
         recording_time, dataset["M_samples"]
@@ -70,24 +68,21 @@ def create_basis(n_basis_funcs=4, history_window=0.01):
     return lambda pts: basis.evaluate(pts)
 
 
-def create_params(n_neurons, n_basis_funcs, seed=0, all_to_one=False):
+def create_params(n_neurons, n_basis_funcs, all_to_one=False):
     """Use PP-GLM params structures"""
     if all_to_one:
-        params = to_glm_params(
+        return to_glm_params(
             (
                 jnp.ones(n_neurons * n_basis_funcs),
                 jnp.atleast_1d(jnp.zeros(1)),
             )
         )
-    else:
-        params = to_glm_params(
-            (
-                jnp.ones((n_neurons * n_basis_funcs, n_neurons)),
-                jnp.atleast_1d(jnp.zeros(n_neurons)),
-            )
+    return to_glm_params(
+        (
+            jnp.ones((n_neurons * n_basis_funcs, n_neurons)),
+            jnp.atleast_1d(jnp.zeros(n_neurons)),
         )
-    random_key = jax.random.PRNGKey(seed).astype(jnp.float64)
-    return to_pp_glm_params_with_key(params, random_key)
+    )
 
 
 def unpack_params(params, n_basis_funcs):
@@ -144,10 +139,9 @@ def create_dataset(
     )
     X, y = utils.adjust_indices_and_spike_times(X, history_window, max_window, y)
 
-    params_with_key = create_params(n_neurons, n_basis_funcs, seed, all_to_one)
-
     return dict(
-        params_with_key=params_with_key,
+        params=create_params(n_neurons, n_basis_funcs, all_to_one),
+        random_key=jax.random.PRNGKey(seed),
         X=X,
         y=y,
         recording_time=recording_time,
@@ -201,11 +195,9 @@ def create_dataset_single_spike(
             jnp.atleast_1d(0.0),
         )
     )
-    random_key = jax.random.PRNGKey(seed).astype(jnp.float64)
-    params_with_key = to_pp_glm_params_with_key(params, random_key)
-
     return dict(
-        params_with_key=params_with_key,
+        params=params,
+        random_key=jax.random.PRNGKey(seed),
         X=X,
         y=y,
         recording_time=recording_time,
@@ -410,7 +402,7 @@ class TestLogLikelihood:
         """
         dataset = create_dataset_single_spike(5.0)
 
-        params_with_key = dataset["params_with_key"]
+        params = dataset["params"]
         X = dataset["X"]
         y = dataset["y"]
         inverse_link_function = dataset["inverse_link_function"]
@@ -424,10 +416,10 @@ class TestLogLikelihood:
 
         # test that nll returns a finite number
         loss = log_likelihood._negative_log_likelihood(
-            params_with_key.params,
+            params,
             X,
             y,
-            params_with_key.random_key.astype(jnp.uint32),
+            dataset["random_key"],
             inverse_link_function=inverse_link_function,
             M_samples=M_samples,
             M_grid=M_grid,
@@ -441,10 +433,8 @@ class TestLogLikelihood:
         assert jnp.isfinite(loss)
 
         # the first term is log(exp(lambda_tilde)) = bias
-        bias_contrib = params_with_key.params.intercept
-        weights, bias, n_predictors = unpack_params(
-            params_with_key.params, n_basis_funcs
-        )
+        bias_contrib = params.intercept
+        weights, bias, n_predictors = unpack_params(params, n_basis_funcs)
         log_lam_y = log_likelihood._compute_log_lambda_y(
             X,
             y,
@@ -472,7 +462,7 @@ class TestLogLikelihood:
         """
         dataset = create_dataset(all_to_one=all_to_one)
 
-        params_with_key = dataset["params_with_key"]
+        params = dataset["params"]
         X = dataset["X"]
         y = dataset["y"]
         inverse_link_function = dataset["inverse_link_function"]
@@ -484,9 +474,7 @@ class TestLogLikelihood:
         max_window = dataset["max_window"]
         eval_function = dataset["eval_function"]
 
-        weights, bias, n_predictors = unpack_params(
-            params_with_key.params, n_basis_funcs
-        )
+        weights, bias, n_predictors = unpack_params(params, n_basis_funcs)
 
         # first ll term
         # chunked lax.scan over the design matrix
@@ -527,7 +515,7 @@ class TestLogLikelihood:
         # uses the same random key as _negative_log_likelihood below
         mc_samples = log_likelihood._draw_mc_sample(
             X,
-            params_with_key.random_key.astype(jnp.uint32),
+            dataset["random_key"],
             M_samples,
             recording_time.tot_length(),
             M_grid,
@@ -565,10 +553,10 @@ class TestLogLikelihood:
 
         # full nll computation
         loss_scan = log_likelihood._negative_log_likelihood(
-            params_with_key.params,
+            params,
             X,
             y,
-            params_with_key.random_key.astype(jnp.uint32),
+            dataset["random_key"],
             inverse_link_function=inverse_link_function,
             M_samples=M_samples,
             M_grid=M_grid,
@@ -599,10 +587,10 @@ class TestLogLikelihood:
         dataset = create_dataset(scan_size=scan_size)
 
         loss = log_likelihood._negative_log_likelihood(
-            dataset["params_with_key"].params,
+            dataset["params"],
             dataset["X"],
             dataset["y"],
-            dataset["params_with_key"].random_key.astype(jnp.uint32),
+            dataset["random_key"],
             inverse_link_function=dataset["inverse_link_function"],
             M_samples=dataset["M_samples"],
             M_grid=dataset["M_grid"],
@@ -615,10 +603,10 @@ class TestLogLikelihood:
 
         reference = create_dataset(scan_size=3)
         loss_reference = log_likelihood._negative_log_likelihood(
-            reference["params_with_key"].params,
+            reference["params"],
             reference["X"],
             reference["y"],
-            reference["params_with_key"].random_key.astype(jnp.uint32),
+            reference["random_key"],
             inverse_link_function=reference["inverse_link_function"],
             M_samples=reference["M_samples"],
             M_grid=reference["M_grid"],
@@ -643,125 +631,145 @@ class TestLogLikelihood:
     def test_constant_intensity_matches_analytic_nll(self, all_to_one, recording_time):
         """With zero coefficients the rate is constant, so the MC term carries no sampling error."""
         dataset = create_dataset_constant_rate(recording_time, all_to_one=all_to_one)
-        params_with_key = dataset["params_with_key"]
+        params = dataset["params"]
+        weights, bias, n_predictors = unpack_params(params, dataset["n_basis_funcs"])
 
-        loss = log_likelihood._negative_log_likelihood(
-            params_with_key.params,
+        # both terms are asserted separately: summed, they partly cancel, and the
+        # spike term is the smaller one
+        log_lambda_y = log_likelihood._compute_log_lambda_y(
             dataset["X"],
             dataset["y"],
-            params_with_key.random_key.astype(jnp.uint32),
+            weights,
+            bias,
+            dataset["inverse_link_function"],
+            dataset["eval_function"],
+            dataset["max_window"],
+            n_predictors,
+            dataset["scan_size"],
+        )
+        np.testing.assert_allclose(
+            log_lambda_y, jnp.sum(bias[dataset["y"].neuron_ids]), rtol=1e-10
+        )
+
+        mc_samples = log_likelihood._draw_mc_sample(
+            dataset["X"],
+            dataset["random_key"],
+            dataset["M_samples"],
+            recording_time.tot_length(),
+            dataset["M_grid"],
+        )
+        mc_estimate = log_likelihood._compute_mc_estimate(
+            dataset["X"],
+            mc_samples,
+            weights,
+            bias,
+            dataset["inverse_link_function"],
+            dataset["eval_function"],
+            dataset["max_window"],
+            n_predictors,
+            dataset["scan_size"],
+        )
+        mc_term = (recording_time.tot_length() / dataset["M_samples"]) * mc_estimate
+        np.testing.assert_allclose(
+            mc_term, recording_time.tot_length() * jnp.sum(jnp.exp(bias)), rtol=1e-10
+        )
+
+        loss = log_likelihood._negative_log_likelihood(
+            params,
+            dataset["X"],
+            dataset["y"],
+            dataset["random_key"],
             **nll_kwargs(dataset),
         )
 
-        bias = params_with_key.params.intercept
         n_spikes = dataset["y"].times.shape[0]
-        expected = recording_time.tot_length() * jnp.sum(jnp.exp(bias)) - jnp.sum(
-            bias[dataset["y"].neuron_ids]
+        np.testing.assert_allclose(
+            loss, (mc_term - log_lambda_y) / n_spikes, rtol=1e-10
         )
-
-        np.testing.assert_allclose(loss, expected / n_spikes, rtol=1e-10)
 
     @pytest.mark.parametrize(
         "all_to_one", [True, False], ids=["single_neuron", "population"]
     )
     @pytest.mark.requires_x64
     def test_grad_matches_finite_differences(self, all_to_one):
-        """Autodiff gradient of the loss against central differences on every coef and intercept entry."""
+        """Autodiff gradient of the loss against central differences on every parameter entry."""
+        # the history window must be long enough for every coefficient to enter some
+        # window, otherwise most entries of the gradient are trivially zero
         dataset = create_dataset(
-            n_neurons=3, n_spikes=60, M_samples=40, scan_size=7, all_to_one=all_to_one
+            n_neurons=3,
+            n_spikes=200,
+            M_samples=40,
+            scan_size=7,
+            history_window=0.1,
+            all_to_one=all_to_one,
         )
-        params = dataset["params_with_key"].params
-        random_key = dataset["params_with_key"].random_key.astype(jnp.uint32)
         kwargs = nll_kwargs(dataset)
+        flat_params, unravel = ravel_pytree(dataset["params"])
 
-        def loss(params):
+        def loss(flat):
             return log_likelihood._compute_loss(
-                params, dataset["X"], dataset["y"], random_key, **kwargs
+                unravel(flat),
+                dataset["X"],
+                dataset["y"],
+                dataset["random_key"],
+                **kwargs,
             )
 
-        grad = jax.grad(loss)(params)
+        grad = jax.grad(loss)(flat_params)
+        assert jnp.all(grad != 0)
 
-        # measured floor over all entries: 1.4e-7 at eps=1e-5, 7.4e-7 at 1e-6, 8.1e-6 at 1e-7
+        # measured floor over all entries: 6.1e-10 at eps=1e-5, 2.8e-9 at 1e-6, 3.2e-8 at 1e-4
         eps = 1e-5
-        for get_leaf in (lambda p: p.coef, lambda p: p.intercept):
-            leaf = get_leaf(params)
-            for i in np.ndindex(leaf.shape):
-                shifted = [
-                    loss(eqx.tree_at(get_leaf, params, leaf.at[i].add(sign * eps)))
-                    for sign in (1, -1)
-                ]
-                finite_difference = (shifted[0] - shifted[1]) / (2 * eps)
-                np.testing.assert_allclose(
-                    get_leaf(grad)[i], finite_difference, rtol=1e-7
-                )
-
-    def test_grad_leaves_the_random_key_untouched(self):
-        """The random key is a leaf of the params pytree and must receive a zero cotangent."""
-        dataset = create_dataset(n_neurons=3, n_spikes=60, M_samples=40)
-
-        grad = jax.grad(log_likelihood._compute_loss)(
-            dataset["params_with_key"],
-            dataset["X"],
-            dataset["y"],
-            **nll_kwargs(dataset),
+        finite_differences = jnp.array(
+            [
+                (loss(flat_params.at[i].add(eps)) - loss(flat_params.at[i].add(-eps)))
+                / (2 * eps)
+                for i in range(flat_params.size)
+            ]
         )
 
-        np.testing.assert_array_equal(grad.random_key, 0.0)
+        np.testing.assert_allclose(grad, finite_differences, rtol=1e-6)
 
-    def test_compute_loss_key_controls_the_mc_draw(self):
-        """The stored key alone decides the MC sample, so it changes the loss and repeats it exactly."""
+    def test_random_key_controls_the_mc_draw(self):
+        """The key argument alone decides the MC sample, so it changes the loss and repeats it exactly."""
         dataset = create_dataset()
-        params_with_key = dataset["params_with_key"]
+        args = (dataset["params"], dataset["X"], dataset["y"])
         kwargs = nll_kwargs(dataset)
+        # a split key, whose two words are both large, unlike jax.random.PRNGKey(n)
+        rolled_key, _ = jax.random.split(dataset["random_key"])
 
-        loss = log_likelihood._compute_loss(
-            params_with_key, dataset["X"], dataset["y"], **kwargs
-        )
-        same_key = log_likelihood._compute_loss(
-            params_with_key, dataset["X"], dataset["y"], **kwargs
-        )
-        other_key = log_likelihood._compute_loss(
-            eqx.tree_at(
-                lambda p: p.random_key,
-                params_with_key,
-                jax.random.PRNGKey(1).astype(params_with_key.random_key.dtype),
-            ),
-            dataset["X"],
-            dataset["y"],
-            **kwargs,
-        )
+        loss = log_likelihood._compute_loss(*args, dataset["random_key"], **kwargs)
+        same_key = log_likelihood._compute_loss(*args, dataset["random_key"], **kwargs)
+        other_key = log_likelihood._compute_loss(*args, rolled_key, **kwargs)
 
         np.testing.assert_array_equal(loss, same_key)
         assert not np.isclose(loss, other_key)
 
     def test_loss_is_jittable(self):
-        """The loss compiles with params, X and y as the only traced arguments."""
+        """The loss compiles with params, X, y and the key as the only traced arguments."""
         dataset = create_dataset()
         kwargs = nll_kwargs(dataset)
 
-        def loss(params, X, y):
-            return log_likelihood._compute_loss(params, X, y, **kwargs)
+        def loss(params, X, y, random_key):
+            return log_likelihood._compute_loss(params, X, y, random_key, **kwargs)
 
-        params_with_key = dataset["params_with_key"]
-        np.testing.assert_allclose(
-            jax.jit(loss)(params_with_key, dataset["X"], dataset["y"]),
-            loss(params_with_key, dataset["X"], dataset["y"]),
-        )
+        args = (dataset["params"], dataset["X"], dataset["y"], dataset["random_key"])
+        np.testing.assert_allclose(jax.jit(loss)(*args), loss(*args))
 
-        grad = jax.jit(jax.grad(loss))(params_with_key, dataset["X"], dataset["y"])
-        assert jnp.all(jnp.isfinite(grad.params.coef))
+        grad = jax.jit(jax.grad(loss))(*args)
+        assert jnp.all(jnp.isfinite(grad.coef))
 
     @pytest.mark.parametrize("scan_size", [1, 7, 100, 500])
     def test_scan_size_invariance_per_term(self, scan_size):
         """Chunking changes neither term of the log-likelihood."""
         dataset = create_dataset(scan_size=scan_size)
         reference = create_dataset(scan_size=3)
-        weights = utils._reshape_2d_coef(dataset["params_with_key"].params.coef)
-        bias = dataset["params_with_key"].params.intercept
+        weights = utils._reshape_2d_coef(dataset["params"].coef)
+        bias = dataset["params"].intercept
         n_predictors = weights.shape[0] // dataset["n_basis_funcs"]
         mc_samples = log_likelihood._draw_mc_sample(
             dataset["X"],
-            dataset["params_with_key"].random_key.astype(jnp.uint32),
+            dataset["random_key"],
             dataset["M_samples"],
             dataset["recording_time"].tot_length(),
             dataset["M_grid"],
