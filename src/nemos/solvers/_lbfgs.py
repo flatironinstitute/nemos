@@ -17,7 +17,16 @@ here is nested instead, and the search is whichever ``optax`` transformation
 the loop shape, so it is the only part taken.
 """
 
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Generic, Optional, TypeVar
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    ClassVar,
+    Generic,
+    Optional,
+    Tuple,
+    TypeVar,
+)
 
 import equinox as eqx
 import jax
@@ -288,17 +297,24 @@ class ProximalLBFGS(Generic[Y]):
 
     def update_hessian(
         self,
-        y_diff: Y,
-        grad_diff: Y,
-        hessian: lx.FunctionLinearOperator,
-        hessian_update_state: _LBFGSHessianUpdateState[Y],
-    ) -> tuple[lx.FunctionLinearOperator, _LBFGSHessianUpdateState[Y]]:
+        grad: Y,
+        params: Y,
+        state: LBFGSState[Y],
+        *args: Any,
+    ) -> tuple[lx.FunctionLinearOperator, LBFGSState[Y]]:
         """Fold one curvature pair into the compact-form Hessian approximation.
 
-        Takes the pair already differenced, unlike optimistix's version, which takes the
-        two iterates and the two ``FunctionInfo``s: the caller holds ``y_diff`` anyway,
-        for the Cauchy criterion.
+        The pair is read off the state rather than passed in, unlike optimistix's
+        version, which takes the two iterates and the two ``FunctionInfo``s:
+        ``state.y_diff`` is the move that produced ``params``, so it is already the
+        ``s`` of the pair, and ``state.grad_prev`` differences against it.
         """
+        del params, args
+        y_diff = state.y_diff
+        grad_diff = tree_utils.tree_sub(grad, state.grad_prev)
+        hessian = state.hessian
+        hessian_update_state = state.hessian_update_state
+
         # Update only if the inner product is positive, to maintain positive definiteness
         # of the Hessian approximation.
         inner = lx.internal.tree_dot(y_diff, grad_diff)
@@ -404,7 +420,7 @@ class ProximalLBFGS(Generic[Y]):
         # enable downstream checks for equality.
         static_hessian = eqx.filter(hessian, eqx.is_array, inverse=True)
         args = (inner, grad_diff, y_diff, hessian, hessian_update_state)
-        new_dynamic_hessian, new_state = filter_cond(
+        new_dynamic_hessian, new_update_state = filter_cond(
             positive_curvature,
             update,
             no_update,
@@ -412,7 +428,14 @@ class ProximalLBFGS(Generic[Y]):
         )
         new_hessian = eqx.combine(static_hessian, new_dynamic_hessian)
 
-        return new_hessian, new_state  # pyright: ignore
+        # ``grad_prev`` is written here rather than in the loop: this is the point at
+        # which the gradient has been folded into the history, so it is what the next
+        # iteration must difference against.
+        return new_hessian, eqx.tree_at(
+            lambda s: (s.hessian, s.hessian_update_state, s.grad_prev),
+            state,
+            (new_hessian, new_update_state, grad),
+        )
 
     def _build_cache(self) -> None:
         if self._gradient is None:
@@ -425,7 +448,9 @@ class ProximalLBFGS(Generic[Y]):
         self._build_cache()
         return self.init_hessian(init_params)
 
-    def _lbfgs_direction(self, grad: Y, H: lx.FunctionLinearOperator, params: Y) -> Y:
+    def _lbfgs_direction(
+        self, grad: Y, H: lx.FunctionLinearOperator, params: Y, state: LBFGSState
+    ) -> Tuple[Y, LBFGSState]:
         r"""Minimize :math:`\nabla f^\top (z - \beta) + \frac12 (z - \beta)^\top H (z - \beta) + P(z)`.
 
         Solving for the new parameters :math:`z` rather than the step keeps the penalty
@@ -453,7 +478,7 @@ class ProximalLBFGS(Generic[Y]):
             throw=False,
         ).value
         # ``_apply_or_reject`` scales and adds the result, so return the step
-        return tree_utils.tree_sub(new_params, params)
+        return tree_utils.tree_sub(new_params, params), state
 
     def _apply_or_reject(
         self,
@@ -574,18 +599,18 @@ class ProximalLBFGS(Generic[Y]):
 
         gnorm = jnp.sqrt(lx.internal.tree_dot(grad, grad))
         converged = self._converged(params, state, grad, fval)
-        static = eqx.filter(state.hessian_update_state, eqx.is_array, inverse=True)
+        static = eqx.filter(state, eqx.is_array, inverse=True)
 
         def step(_):
-            # ``state.y_diff`` is the move that produced ``params``, so it pairs with the
-            # gradient difference over the same move.
-            new_hessian, new_hess_state = self.update_hessian(
-                state.y_diff,
-                tree_utils.tree_sub(grad, state.grad_prev),
-                state.hessian,
-                state.hessian_update_state,
+            new_hessian, new_state = self.update_hessian(
+                grad,
+                params,
+                state,
+                *args,
             )
-            step = self._lbfgs_direction(grad, new_hessian, params)
+            step, new_state = self._lbfgs_direction(
+                grad, new_hessian, params, new_state
+            )
 
             new_params, new_ls_state = self._apply_or_reject(
                 params,
@@ -598,20 +623,19 @@ class ProximalLBFGS(Generic[Y]):
 
             return (
                 new_params,
-                new_ls_state,
-                new_hessian,
-                eqx.filter(new_hess_state, eqx.is_array),
+                eqx.filter(
+                    eqx.tree_at(lambda x: x.ls_state, new_state, new_ls_state),
+                    eqx.is_array,
+                ),
             )
 
         def no_step(_):
             return (
                 params,
-                state.ls_state,
-                state.hessian,
-                eqx.filter(state.hessian_update_state, eqx.is_array),
+                eqx.filter(state, eqx.is_array),
             )
 
-        new_params, new_ls_state, new_hessian, new_hessian_state = filter_cond(
+        new_params, new_state = filter_cond(
             converged,
             no_step,
             step,
@@ -623,22 +647,21 @@ class ProximalLBFGS(Generic[Y]):
             state.stats.num_steps,
             state.stats.num_steps + 1,
         )
-
-        new_state = LBFGSState(
-            grad_norm=gnorm,
-            stats=OptimizationInfo(
-                function_val=fval,
-                num_steps=new_iter,
-                converged=converged,
-                reached_max_steps=new_iter >= self.maxiter,
+        new_state = eqx.tree_at(
+            lambda s: (s.grad_norm, s.stats, s.y_diff),
+            new_state,
+            (
+                gnorm,
+                OptimizationInfo(
+                    function_val=fval,
+                    num_steps=new_iter,
+                    converged=converged,
+                    reached_max_steps=new_iter >= self.maxiter,
+                ),
+                tree_utils.tree_sub(new_params, params),
             ),
-            ls_state=new_ls_state,
-            y_diff=tree_utils.tree_sub(new_params, params),
-            grad_prev=grad,
-            hessian=new_hessian,
-            hessian_update_state=eqx.combine(new_hessian_state, static),
         )
-
+        new_state = eqx.combine(new_state, static)
         return new_params, new_state, aux
 
     def run(
