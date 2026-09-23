@@ -11,8 +11,6 @@ from . import utils
 from .data import MCSamplePPGLM, PredictorsPPGLM, SpikesPPGLM
 from .params import GLMParams, PPGLMParamsWithKey
 
-jax.config.update("jax_enable_x64", True)
-
 
 def _eval_point(
     t: jnp.ndarray,
