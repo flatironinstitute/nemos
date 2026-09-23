@@ -391,6 +391,95 @@ class TestUtils:
 
         assert max_window == 4
 
+    def test_slice_array(self):
+        """slice_array returns the window_size entries ending at i, exclusive."""
+        array = jnp.arange(10.0)
+
+        np.testing.assert_array_equal(utils.slice_array(array, 7, 3), [4.0, 5.0, 6.0])
+        np.testing.assert_array_equal(utils.slice_array(array, 3, 3), [0.0, 1.0, 2.0])
+
+    @pytest.mark.requires_x64
+    @pytest.mark.parametrize(
+        "dataset_kwargs",
+        [
+            dict(),
+            dict(n_spikes=60, history_window=0.1),
+            dict(all_to_one=True),
+            dict(n_spikes=1000, history_window=0.2),
+        ],
+    )
+    def test_no_window_reaches_past_the_first_event(self, dataset_kwargs):
+        """Every history window starts at a non-negative index, for spikes and for MC samples."""
+        # for MC samples the index comes from searchsorted, which returns 0 for a
+        # sample landing before the first event unless the padding is there
+        dataset = create_dataset(**dataset_kwargs)
+        max_window = dataset["max_window"]
+
+        assert int(dataset["y"].timestamp_idx.min()) >= max_window
+
+        draw = jax.vmap(
+            lambda key: (
+                log_likelihood._draw_mc_sample(
+                    dataset["X"],
+                    key,
+                    dataset["M_samples"],
+                    dataset["recording_time"].tot_length(),
+                    dataset["M_grid"],
+                ).timestamp_idx
+            )
+        )
+        mc_idx = draw(jax.random.split(jax.random.PRNGKey(0), 50))
+
+        assert int(mc_idx.min()) >= max_window
+
+    @pytest.mark.requires_x64
+    def test_padding_prevents_windows_reaching_past_the_first_event(self):
+        """Without the prepended events the first spike's feature vector is nan instead of zero."""
+        dataset = create_dataset()
+        max_window, X = dataset["max_window"], dataset["X"]
+        unpadded = PredictorsPPGLM(
+            times=X.times[max_window:], predictor_ids=X.predictor_ids[max_window:]
+        )
+        first_event = unpadded.times[0]
+
+        def design_row(predictors, timestamp_idx):
+            return log_likelihood._compute_design_matrix(
+                jnp.array([first_event]),
+                jnp.array([timestamp_idx]),
+                predictors,
+                dataset["eval_function"],
+                max_window,
+                dataset["n_neurons"],
+            )
+
+        # the padded window holds only the dummy events, whose lags are far above the
+        # history window; the unpadded one wraps to the end of the recording, whose
+        # lags are negative, and the basis is nan below zero even with fill_value=0
+        np.testing.assert_array_equal(design_row(X, max_window), 0.0)
+        assert not jnp.all(design_row(unpadded, 0) == 0)
+
+    @pytest.mark.requires_x64
+    def test_reshape_and_pad_spikes(self):
+        """Padding replicates the last entry of every field, so padded rows stay in range."""
+        n_points, chunk_size = 5, 2
+        eval_pts = SpikesPPGLM(
+            times=jnp.arange(n_points, dtype=float),
+            neuron_ids=jnp.arange(n_points, dtype=int),
+            timestamp_idx=jnp.arange(n_points, dtype=int),
+        )
+
+        chunked, valid = utils._reshape_and_pad_eval_points(eval_pts, chunk_size)
+
+        assert valid.sum() == n_points
+        jax.tree_util.tree_map(
+            lambda orig, resh: np.testing.assert_array_equal(
+                resh.reshape(-1)[n_points:], orig[-1]
+            ),
+            eval_pts,
+            chunked,
+        )
+        np.testing.assert_array_equal(chunked.neuron_ids.max(), n_points - 1)
+
 
 @pytest.mark.requires_x64
 class TestLogLikelihood:
@@ -792,3 +881,304 @@ class TestLogLikelihood:
                 term(reference["X"], eval_pts, *args, 3),
                 rtol=1e-10,
             )
+
+
+@pytest.mark.requires_x64
+class TestDesignMatrix:
+    def test_row_layout_is_predictor_major(self):
+        """Column p * n_basis_funcs + j of the design matrix holds basis j summed over predictor p."""
+        n_predictors, n_basis_funcs, max_window = 2, 3, 4
+        eval_function = create_basis(n_basis_funcs, history_window=1.0)
+        # lags spread over the whole window, so that no expected entry is zero
+        times = jnp.array([0.1, 0.4, 0.95, 0.98])
+        predictor_ids = jnp.array([0, 1, 1, 0])
+        X = PredictorsPPGLM(times=times, predictor_ids=predictor_ids)
+
+        A = log_likelihood._compute_design_matrix(
+            jnp.array([1.0]),
+            jnp.array([max_window]),
+            X,
+            eval_function,
+            max_window,
+            n_predictors,
+        )
+
+        basis_at_dts = eval_function(1.0 - times)
+        assert jnp.all(A != 0)
+        for p in range(n_predictors):
+            for j in range(n_basis_funcs):
+                np.testing.assert_allclose(
+                    A[0, p * n_basis_funcs + j],
+                    basis_at_dts[predictor_ids == p, j].sum(),
+                )
+
+    def test_empty_window_gives_a_zero_row(self):
+        """An evaluation point with no event in its history window has an all-zero feature vector."""
+        dataset = create_dataset()
+        max_window = dataset["max_window"]
+        assert max_window > 0
+
+        A = log_likelihood._compute_design_matrix(
+            jnp.array([dataset["recording_time"].start[0]]),
+            jnp.array([max_window]),
+            dataset["X"],
+            dataset["eval_function"],
+            max_window,
+            dataset["n_neurons"],
+        )
+
+        np.testing.assert_array_equal(A, 0.0)
+
+    def test_padding_events_do_not_enter_the_design_matrix(self):
+        """Prepending more out-of-window events leaves every feature vector unchanged."""
+        dataset = create_dataset()
+        X, y, max_window = dataset["X"], dataset["y"], dataset["max_window"]
+        # the check is vacuous unless some window actually reaches into the padding
+        assert jnp.any(y.timestamp_idx - max_window < max_window)
+
+        design_matrix = log_likelihood._compute_design_matrix(
+            y.times,
+            y.timestamp_idx,
+            X,
+            dataset["eval_function"],
+            max_window,
+            dataset["n_neurons"],
+        )
+        np.testing.assert_array_equal(design_matrix[0], 0.0)
+
+        padded_X, padded_y = utils.adjust_indices_and_spike_times(
+            X, dataset["history_window"], max_window, y
+        )
+        np.testing.assert_array_equal(
+            design_matrix,
+            log_likelihood._compute_design_matrix(
+                padded_y.times,
+                padded_y.timestamp_idx,
+                padded_X,
+                dataset["eval_function"],
+                max_window,
+                dataset["n_neurons"],
+            ),
+        )
+
+
+@pytest.mark.requires_x64
+class TestLinks:
+    @pytest.mark.parametrize(
+        "inverse_link_function, intercept",
+        [(jnp.exp, 0.0), (jax.nn.softplus, 0.0), (jax.nn.softplus, -3.0)],
+        ids=["exp", "softplus", "softplus_negative_rate"],
+    )
+    @pytest.mark.parametrize(
+        "all_to_one", [True, False], ids=["single_neuron", "population"]
+    )
+    def test_log_lambda_y_matches_loop(
+        self, all_to_one, inverse_link_function, intercept
+    ):
+        """The spike term matches a numpy loop for every inverse link."""
+        dataset = create_dataset(all_to_one=all_to_one)
+        X, y = dataset["X"], dataset["y"]
+        weights, _, n_predictors = unpack_params(
+            dataset["params"], dataset["n_basis_funcs"]
+        )
+        bias = jnp.full(weights.shape[1], intercept)
+        eval_function = dataset["eval_function"]
+        max_window = dataset["max_window"]
+
+        log_lam_y_scan = log_likelihood._compute_log_lambda_y(
+            X,
+            y,
+            weights,
+            bias,
+            inverse_link_function,
+            eval_function,
+            max_window,
+            n_predictors,
+            dataset["scan_size"],
+        )
+
+        w = np.asarray(weights).reshape(
+            n_predictors, dataset["n_basis_funcs"], weights.shape[1]
+        )
+        log_lam_y_loop = 0
+        for sp in range(y.times.shape[0]):
+            t, id, slice_end = y.times[sp], y.neuron_ids[sp], y.timestamp_idx[sp]
+            basis_at_dts = eval_function(
+                t - X.times[slice_end - max_window : slice_end]
+            )
+            selected_w = w[X.predictor_ids[slice_end - max_window : slice_end], :, id]
+            log_lam_y_loop += np.log(
+                inverse_link_function(np.sum(basis_at_dts * selected_w) + bias[id])
+            )
+
+        np.testing.assert_allclose(log_lam_y_scan, log_lam_y_loop, rtol=1e-10)
+
+
+@pytest.mark.requires_x64
+class TestMCSampling:
+    @pytest.mark.parametrize(
+        "recording_time",
+        [
+            IntervalSet(0, 1.0),
+            IntervalSet(start=[0.0, 10.0], end=[1.0, 11.0]),
+            IntervalSet(start=[0.0, 50.0], end=[49.0, 50.2]),
+        ],
+        ids=["one_epoch", "two_epochs", "unequal_epochs"],
+    )
+    def test_grid_points_lie_inside_the_epochs(self, recording_time):
+        """Every stratification point belongs to a recording epoch."""
+        grid = np.asarray(utils.build_mc_sampling_grid(recording_time, M_samples=10))
+
+        inside = np.any(
+            [
+                (grid >= s) & (grid <= e)
+                for s, e in zip(recording_time.start, recording_time.end)
+            ],
+            axis=0,
+        )
+
+        np.testing.assert_array_equal(inside, True)
+
+    def test_every_epoch_receives_a_sample(self):
+        """No recording epoch is left without a stratification point."""
+        recording_time = IntervalSet(start=[0.0, 50.0], end=[49.0, 50.2])
+
+        grid = np.asarray(utils.build_mc_sampling_grid(recording_time, M_samples=10))
+
+        counts = [
+            int(np.sum((grid >= s) & (grid <= e)))
+            for s, e in zip(recording_time.start, recording_time.end)
+        ]
+        assert min(counts) > 0
+
+    @pytest.mark.parametrize(
+        "recording_time",
+        [IntervalSet(0, 1.0), IntervalSet(start=[0.0, 10.0], end=[1.0, 11.0])],
+        ids=["one_epoch", "two_epochs"],
+    )
+    def test_jittered_samples_lie_inside_the_epochs(self, recording_time):
+        """Jittering a stratification point never moves it out of the recording."""
+        M_samples = 10
+        grid = utils.build_mc_sampling_grid(recording_time, M_samples)
+        X = PredictorsPPGLM(
+            times=jnp.linspace(0.0, 11.0, 20), predictor_ids=jnp.zeros(20, dtype=int)
+        )
+
+        draw = jax.vmap(
+            lambda key: (
+                log_likelihood._draw_mc_sample(
+                    X, key, M_samples, recording_time.tot_length(), grid
+                ).times
+            )
+        )
+        samples = np.asarray(draw(jax.random.split(jax.random.PRNGKey(0), 200))).ravel()
+
+        inside = np.any(
+            [
+                (samples >= s) & (samples <= e)
+                for s, e in zip(recording_time.start, recording_time.end)
+            ],
+            axis=0,
+        )
+        np.testing.assert_array_equal(inside, True)
+
+    def test_estimator_integrates_over_the_recording(self):
+        """(T / M) * sum_m g(tau_m) is unbiased for the integral of g over the recording."""
+        recording_time = IntervalSet(0, 1.0)
+        M_samples, n_keys = 10, 20000
+        T = recording_time.tot_length()
+        grid = utils.build_mc_sampling_grid(recording_time, M_samples)
+        X = PredictorsPPGLM(
+            times=jnp.linspace(0.0, 1.0, 20), predictor_ids=jnp.zeros(20, dtype=int)
+        )
+
+        # g(t) = t, so the estimator must average to the integral T ** 2 / 2;
+        # 20000 keys put the standard error at 6.5e-5, well inside the tolerance
+        estimate = jax.vmap(
+            lambda key: (
+                (T / M_samples)
+                * jnp.sum(
+                    log_likelihood._draw_mc_sample(X, key, M_samples, T, grid).times
+                )
+            )
+        )(jax.random.split(jax.random.PRNGKey(0), n_keys))
+
+        np.testing.assert_allclose(jnp.mean(estimate), T**2 / 2, atol=1e-3)
+
+
+STATIC_ARGNAMES = (
+    "inverse_link_function",
+    "M_samples",
+    "recording_time",
+    "n_basis_funcs",
+    "scan_size",
+    "max_window",
+    "eval_function",
+)
+
+
+@pytest.mark.requires_x64
+class TestJit:
+    def test_negative_log_likelihood_is_jittable(self):
+        """The nll compiles with params, X, y and the key as the only traced arguments."""
+        dataset = create_dataset()
+        args = (dataset["params"], dataset["X"], dataset["y"], dataset["random_key"])
+        kwargs = nll_kwargs(dataset)
+
+        jitted = jax.jit(
+            log_likelihood._negative_log_likelihood, static_argnames=STATIC_ARGNAMES
+        )
+
+        np.testing.assert_allclose(
+            jitted(*args, **kwargs),
+            log_likelihood._negative_log_likelihood(*args, **kwargs),
+        )
+
+    @pytest.mark.parametrize(
+        "traced_argname, expectation",
+        [
+            ("M_samples", pytest.raises(TypeError, match="Shapes must be")),
+            ("n_basis_funcs", pytest.raises(jax.errors.ConcretizationTypeError)),
+            ("scan_size", pytest.raises(jax.errors.TracerBoolConversionError)),
+            ("max_window", pytest.raises(ValueError, match="Non-hashable static")),
+        ],
+    )
+    def test_shape_arguments_cannot_be_traced(self, traced_argname, expectation):
+        """Every argument that sets an array shape must reach the nll as a compile-time constant."""
+        dataset = create_dataset()
+        args = (dataset["params"], dataset["X"], dataset["y"], dataset["random_key"])
+        kwargs = nll_kwargs(dataset)
+        # closed over, so that the IntervalSet does not fail the compilation first
+        recording_time = kwargs.pop("recording_time")
+
+        def nll(params, X, y, random_key, **kw):
+            return log_likelihood._negative_log_likelihood(
+                params, X, y, random_key, recording_time=recording_time, **kw
+            )
+
+        jitted = jax.jit(
+            nll,
+            static_argnames=tuple(
+                name
+                for name in STATIC_ARGNAMES
+                if name not in (traced_argname, "recording_time")
+            ),
+        )
+
+        with expectation:
+            jitted(*args, **kwargs)
+
+    def test_jits_once_recording_time_is_an_array(self):
+        """The nll compiles once it takes the recording length instead of the IntervalSet."""
+        dataset = create_dataset()
+        args = (dataset["params"], dataset["X"], dataset["y"], dataset["random_key"])
+        kwargs = nll_kwargs(
+            dataset, recording_time=dataset["recording_time"].tot_length()
+        )
+
+        jitted = jax.jit(
+            log_likelihood._negative_log_likelihood,
+            static_argnames=tuple(n for n in STATIC_ARGNAMES if n != "recording_time"),
+        )
+
+        assert jnp.isfinite(jitted(*args, **kwargs))
