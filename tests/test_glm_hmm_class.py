@@ -1364,8 +1364,8 @@ class TestEMConfiguration:
         )
         assert len(calls) == 1
         args, _ = calls[0]
-        assert args[1] is model._observation_model
-        assert args[2] is model._inverse_link_function
+        assert args[2] is model._observation_model
+        assert args[3] is model._inverse_link_function
 
     def test_is_population_false_for_1d_y(
         self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
