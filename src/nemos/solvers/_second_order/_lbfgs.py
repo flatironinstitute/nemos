@@ -1,10 +1,10 @@
 """Proximal L-BFGS solver for composite objectives.
 
-The limited-memory curvature model is derived from ``optimistix`` (Apache-2.0,
-``optimistix/_solver/limited_memory_bfgs.py``) and modified here: only the direct-Hessian
-branch is kept, ``init_hessian`` and ``update_hessian`` return the ``lineax`` operator
-rather than a ``FunctionInfo``, and ``update_hessian`` receives the curvature pair already
-differenced by the caller. ``_LBFGSHessianUpdateState`` is copied unchanged.
+The limited-memory curvature model lives in :class:`~nemos.solvers._second_order._curvature.LBFGSCurvature`,
+derived from ``optimistix`` (Apache-2.0, ``optimistix/_solver/limited_memory_bfgs.py``):
+only the direct-Hessian branch is kept, the update returns the ring-buffer state rather
+than a ``FunctionInfo``, and it receives the curvature pair already differenced by the
+caller. ``_LBFGSHessianUpdateState`` is copied unchanged.
 
 ``optimistix.LBFGS`` is not reused whole because its loop is flat. One
 ``AbstractQuasiNewton.step`` is a single trial evaluation, and ``update_hessian`` sits in
@@ -24,85 +24,31 @@ from typing import (
     ClassVar,
     Generic,
     Optional,
-    Tuple,
     TypeVar,
 )
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-import jax.tree_util as jtu
 import lineax as lx
 import optax
 import optimistix as optx
-from jaxtyping import Array, Bool, Float, PyTree, Scalar
-from optimistix._misc import cauchy_termination, filter_cond
-from optimistix._solver.limited_memory_bfgs import _lbfgs_hessian_operator_fn
+from jaxtyping import Array, Bool, Scalar
+from optimistix._misc import cauchy_termination
 
-from .. import tree_utils
-from ..typing import Params, StepResult
-from ._abstract_solver import OptimizationInfo
-from ._fista import FISTA
-from ._newton import DEFAULT_ATOL, DEFAULT_MAX_STEPS, DEFAULT_RTOL
+from ... import tree_utils
+from ...typing import Params, StepResult
+from .._abstract_solver import OptimizationInfo
+from .._fista import FISTA
+from .._newton import DEFAULT_ATOL, DEFAULT_MAX_STEPS, DEFAULT_RTOL
+from ._curvature import LBFGSCurvature, _LBFGSHessianUpdateState
 
 if TYPE_CHECKING:
-    from ..regularizer import Regularizer
+    from ...regularizer import Regularizer
 
 # The parameter pytree. Both the state and the solver follow it, so a ``GLMParams`` fit
 # and a ``PopulationGLM`` fit are distinct instantiations rather than ``Any``.
 Y = TypeVar("Y")
-
-
-class _LBFGSHessianUpdateState(eqx.Module, Generic[Y]):
-    r"""
-    State variables for LBFGS.
-
-    State variables for Algorithm 3.2 of:
-
-        Byrd, R. H., Nocedal, J., & Schnabel, R. B. (1994).
-        "Representations of quasi-Newton matrices and their use in limited memory
-        methods." *Mathematical Programming*, 63(1), 129–156.
-
-    This holds a ring buffer of the history of differences in the optimisation variable
-    `y` and the gradients `grad`, at the last `n` accepted steps, where `n` is the
-    history length.
-
-    **Arguments:**
-
-    - `index_start`: Index of the most recent update in the circular buffer.
-    - `y_diff_history`: Circular buffer containing the history of differences in the
-        optimisation variable `y` between consecutive accepted steps. In most textbooks
-        and in the paper above, the difference in the optimisation variable at iteration
-        `k` is denoted as `s_k` and refers to $y_{k+1} - y_k$`. We use the term `y_diff`
-        here to maintain consistency with variable names in Optimistix.
-        The oldest element is at index `index_start % history_len`.
-    - `grad_diff_history`: Circular buffer containing the history of differences in the
-        gradient values. Similarly to `y_diff_history`, we follow the Optimistix
-        nomenclature rather than the textbook one, where the difference in the gradients
-        is usually denoted as `y_k`.
-        Indexation is handled as for `y_diff_history`.
-    - `y_diff_grad_diff_cross_inner`: Lower triangular matrix with the inner products
-        between parameters and gradient difference histories. This parameter corresponds
-        to `L_k` in the paper, see def. (2.18), with
-
-            L[ij] = y_diff[i-1]^T grad_diff[j-1] if i > j, 0 otherwise,
-
-        for each iteration `k` that is part of the history (k omitted for clarity).
-    - `y_diff_grad_diff_inner`: Array containing the inner products of the differences
-        in `y` and the gradients. This parameter corresponds to `diag(D_k)` from the
-        paper, see def. (2.7). `[D_k]_{ii} = s_{i-1}^T \cdot y_{i-1}`.
-    - `y_diff_cross_inner`: outer product of the parameter difference history. In the
-        paper notation, this is equal to `S_{k-1}^T \cdot S_{k-1}`, which is a matrix of
-        shape `(history_length, history_length)`.
-    """
-
-    index_start: Scalar
-    history_length: int
-    y_diff_history: PyTree[Y]
-    grad_diff_history: PyTree[Y]
-    y_diff_grad_diff_cross_inner: Float[Array, " history_length history_length"]
-    y_diff_grad_diff_inner: Float[Array, " history_length"]
-    y_diff_cross_inner: Float[Array, " history_length history_length"]
 
 
 class LBFGSState(eqx.Module, Generic[Y]):
@@ -118,17 +64,9 @@ class LBFGSState(eqx.Module, Generic[Y]):
     grad_prev: Y
     # Curvature model built from the history up to and including ``y_diff``, so it is the
     # one this iteration's subproblem uses.
-    hessian: lx.FunctionLinearOperator
     hessian_update_state: _LBFGSHessianUpdateState[Y]
     # optax's line-search state, whose type is private to the chosen transformation.
     ls_state: Optional[Any] = None
-
-
-def _batched_tree_zeros_like(y, batch_dimension):
-    return jtu.tree_map(lambda y: jnp.zeros((batch_dimension, *y.shape)), y)
-
-
-v_tree_dot = jax.vmap(lx.internal.tree_dot, in_axes=(0, None), out_axes=0)
 
 
 class ProximalLBFGS(Generic[Y]):
@@ -219,7 +157,7 @@ class ProximalLBFGS(Generic[Y]):
         self.maxiter = maxiter
         self.tol = tol
         self.rtol = rtol
-        self.history_length = history_length
+        self._curvature = LBFGSCurvature[Y](history_length=history_length)
 
         # the penalty alone, for the composite line search. self.fun is the smooth
         # loss here, so the composite objective is self.fun + self._penalty, which is
@@ -261,182 +199,6 @@ class ProximalLBFGS(Generic[Y]):
         # Cache
         self._gradient: Callable | None = None
 
-    def init_hessian(self, y: Y) -> LBFGSState[Y]:
-        """Build the identity curvature model and the state that will accumulate it."""
-        hess_state = _LBFGSHessianUpdateState(
-            index_start=jnp.array(0),
-            history_length=self.history_length,
-            y_diff_history=_batched_tree_zeros_like(y, self.history_length),
-            grad_diff_history=_batched_tree_zeros_like(y, self.history_length),
-            y_diff_grad_diff_cross_inner=jnp.zeros(
-                (self.history_length, self.history_length)
-            ),
-            y_diff_grad_diff_inner=jnp.ones(self.history_length),
-            y_diff_cross_inner=jnp.eye(self.history_length),
-        )
-        hessian = lx.FunctionLinearOperator(
-            lambda y: _lbfgs_hessian_operator_fn(y, hess_state),
-            jax.eval_shape(lambda: y),
-            tags=lx.positive_semidefinite_tag,
-        )
-        state = LBFGSState(
-            ls_state=self._line_search.init(y),
-            grad_norm=jnp.array(jnp.inf),
-            stats=OptimizationInfo(
-                function_val=jnp.array(jnp.nan),
-                num_steps=jnp.array(0),
-                converged=jnp.array(False),
-                reached_max_steps=jnp.array(False),
-            ),
-            y_diff=jax.tree.map(jnp.zeros_like, y),
-            grad_prev=jax.tree.map(jnp.zeros_like, y),
-            hessian=hessian,
-            hessian_update_state=hess_state,
-        )
-        return state  # pyright: ignore
-
-    def update_hessian(
-        self,
-        grad: Y,
-        params: Y,
-        state: LBFGSState[Y],
-        *args: Any,
-    ) -> tuple[lx.FunctionLinearOperator, LBFGSState[Y]]:
-        """Fold one curvature pair into the compact-form Hessian approximation.
-
-        The pair is read off the state rather than passed in, unlike optimistix's
-        version, which takes the two iterates and the two ``FunctionInfo``s:
-        ``state.y_diff`` is the move that produced ``params``, so it is already the
-        ``s`` of the pair, and ``state.grad_prev`` differences against it.
-        """
-        del params, args
-        y_diff = state.y_diff
-        grad_diff = tree_utils.tree_sub(grad, state.grad_prev)
-        hessian = state.hessian
-        hessian_update_state = state.hessian_update_state
-
-        # Update only if the inner product is positive, to maintain positive definiteness
-        # of the Hessian approximation.
-        inner = lx.internal.tree_dot(y_diff, grad_diff)
-        positive_curvature = inner > jnp.finfo(inner.dtype).eps
-
-        def no_update(args):
-            *_, hessian, _ = args
-            return eqx.filter(hessian, eqx.is_array), hessian_update_state
-
-        def update(args):
-            inner, grad_diff, y_diff, hessian, state = args
-            updated_y_diff_history = jtu.tree_map(
-                lambda x, z: x.at[state.index_start % self.history_length].set(z),
-                state.y_diff_history,
-                y_diff,
-            )
-            updated_grad_diff_history = jtu.tree_map(
-                lambda x, z: x.at[state.index_start % self.history_length].set(z),
-                state.grad_diff_history,
-                grad_diff,
-            )
-
-            # Here we gradually fill in the lower-triangular matrix of inner
-            # products between the history of gradient differences and the current
-            # difference in the optimisation variable `y`. This matrix has a zero
-            # diagonal, it corresponds to `L_k` in the paper, where it is defined by
-            # (2.18). At the start of the optimisation, parts of the lower triangle
-            # will still be zero. We catch this before computing the Cholesky
-            # factorisation by setting the diagonal to 1.0 in the affected rows, and
-            # mapping the solution for these elements to a zero vector. (This
-            # happens in the operator function.)
-            y_diff_grad_diff_cross_inner = state.y_diff_grad_diff_cross_inner.at[
-                state.index_start % self.history_length
-            ].set(v_tree_dot(state.grad_diff_history, y_diff))
-            y_diff_grad_diff_cross_inner = y_diff_grad_diff_cross_inner.at[
-                :, state.index_start % self.history_length
-            ].set(0)
-            assert y_diff_grad_diff_cross_inner.shape == (
-                self.history_length,
-                self.history_length,
-            )
-
-            # Here we update the history of inner products in the circular buffer.
-            y_diff_grad_diff_inner = state.y_diff_grad_diff_inner.at[
-                state.index_start % self.history_length
-            ].set(
-                lx.internal.tree_dot(
-                    jtu.tree_map(
-                        lambda x: x[state.index_start % self.history_length],
-                        updated_grad_diff_history,
-                    ),
-                    y_diff,
-                )
-            )
-            assert y_diff_grad_diff_inner.shape == (self.history_length,)
-
-            # Update the matrix of inner products of `y_diff` by updating one row
-            # and one column per iteration. This matrix has nonzero elements for
-            # rows up to k and columns up to k, where k is the current iteration
-            # index and may be smaller than the history length. Cholesky
-            # factorisation works because this matrix is initialised as an identity,
-            # and elements > k are mapped to zero by setting the right-hand-side
-            # appropriately in the operator function.
-            cross_inner = v_tree_dot(
-                updated_y_diff_history,
-                jtu.tree_map(
-                    lambda x: x[state.index_start % self.history_length],
-                    updated_y_diff_history,
-                ),
-            )
-            assert cross_inner.shape == (self.history_length,)
-            y_diff_cross_inner = state.y_diff_cross_inner.at[
-                state.index_start % self.history_length
-            ].set(cross_inner)
-            y_diff_cross_inner = y_diff_cross_inner.at[
-                :, state.index_start % self.history_length
-            ].set(cross_inner)
-            assert y_diff_cross_inner.shape == (
-                self.history_length,
-                self.history_length,
-            )
-
-            updated_state = _LBFGSHessianUpdateState(
-                index_start=state.index_start + 1,
-                history_length=self.history_length,
-                y_diff_history=updated_y_diff_history,
-                grad_diff_history=updated_grad_diff_history,
-                y_diff_grad_diff_cross_inner=y_diff_grad_diff_cross_inner,
-                y_diff_grad_diff_inner=y_diff_grad_diff_inner,
-                y_diff_cross_inner=y_diff_cross_inner,
-            )
-
-            hessian = lx.FunctionLinearOperator(
-                lambda y: _lbfgs_hessian_operator_fn(y, updated_state),
-                jax.eval_shape(lambda: y_diff),
-                tags=lx.positive_semidefinite_tag,
-            )
-            # Only return the dynamic part of the operator, keep jaxpr across
-            # iterations
-            return eqx.filter(hessian, eqx.is_array), updated_state
-
-        # We have a jaxpr in the FunctionLinearOperator, which needs to be filtered to
-        # enable downstream checks for equality.
-        static_hessian = eqx.filter(hessian, eqx.is_array, inverse=True)
-        args = (inner, grad_diff, y_diff, hessian, hessian_update_state)
-        new_dynamic_hessian, new_update_state = filter_cond(
-            positive_curvature,
-            update,
-            no_update,
-            args,
-        )
-        new_hessian = eqx.combine(static_hessian, new_dynamic_hessian)
-
-        # ``grad_prev`` is written here rather than in the loop: this is the point at
-        # which the gradient has been folded into the history, so it is what the next
-        # iteration must difference against.
-        return new_hessian, eqx.tree_at(
-            lambda s: (s.hessian, s.hessian_update_state, s.grad_prev),
-            state,
-            (new_hessian, new_update_state, grad),
-        )
-
     def _build_cache(self) -> None:
         if self._gradient is None:
             self._gradient = jax.value_and_grad(
@@ -446,11 +208,25 @@ class ProximalLBFGS(Generic[Y]):
 
     def init_state(self, init_params: Y, *args: Any) -> LBFGSState[Y]:
         self._build_cache()
-        return self.init_hessian(init_params)
+        hessian_state = self._curvature.init(init_params)
+        state = LBFGSState(
+            ls_state=self._line_search.init(init_params),
+            grad_norm=jnp.array(jnp.inf),
+            stats=OptimizationInfo(
+                function_val=jnp.array(jnp.nan),
+                num_steps=jnp.array(0),
+                converged=jnp.array(False),
+                reached_max_steps=jnp.array(False),
+            ),
+            y_diff=jax.tree.map(jnp.zeros_like, init_params),
+            grad_prev=jax.tree.map(jnp.zeros_like, init_params),
+            hessian_update_state=hessian_state,
+        )
+        return state
 
     def _lbfgs_direction(
-        self, grad: Y, H: lx.FunctionLinearOperator, params: Y, state: LBFGSState
-    ) -> Tuple[Y, LBFGSState]:
+        self, params: Y, grad: Y, state: _LBFGSHessianUpdateState[Y]
+    ) -> Y:
         r"""Minimize :math:`\nabla f^\top (z - \beta) + \frac12 (z - \beta)^\top H (z - \beta) + P(z)`.
 
         Solving for the new parameters :math:`z` rather than the step keeps the penalty
@@ -465,7 +241,7 @@ class ProximalLBFGS(Generic[Y]):
 
         def quadratic(z, _):
             step = tree_utils.tree_sub(z, params)
-            hvp = H.mv(step)
+            hvp = self._curvature.hvp(state, params, step)
             return lx.internal.tree_dot(grad, step) + 0.5 * lx.internal.tree_dot(
                 step, hvp
             )
@@ -478,7 +254,7 @@ class ProximalLBFGS(Generic[Y]):
             throw=False,
         ).value
         # ``_apply_or_reject`` scales and adds the result, so return the step
-        return tree_utils.tree_sub(new_params, params), state
+        return tree_utils.tree_sub(new_params, params)
 
     def _apply_or_reject(
         self,
@@ -599,18 +375,16 @@ class ProximalLBFGS(Generic[Y]):
 
         gnorm = jnp.sqrt(lx.internal.tree_dot(grad, grad))
         converged = self._converged(params, state, grad, fval)
-        static = eqx.filter(state, eqx.is_array, inverse=True)
 
         def step(_):
-            new_hessian, new_state = self.update_hessian(
-                grad,
+            new_hessian_state = self._curvature.update(
+                state.hessian_update_state,
                 params,
-                state,
+                state.y_diff,
+                tree_utils.tree_sub(grad, state.grad_prev),
                 *args,
             )
-            step, new_state = self._lbfgs_direction(
-                grad, new_hessian, params, new_state
-            )
+            step = self._lbfgs_direction(params, grad, new_hessian_state)
 
             new_params, new_ls_state = self._apply_or_reject(
                 params,
@@ -621,21 +395,19 @@ class ProximalLBFGS(Generic[Y]):
                 *args,
             )
 
-            return (
-                new_params,
-                eqx.filter(
-                    eqx.tree_at(lambda x: x.ls_state, new_state, new_ls_state),
-                    eqx.is_array,
-                ),
+            # ``grad_prev`` is written here rather than in the loop: this is the point at
+            # which the gradient has been folded into the history, so it is what the next
+            # iteration must difference against.
+            return new_params, eqx.tree_at(
+                lambda x: (x.ls_state, x.hessian_update_state, x.grad_prev),
+                state,
+                (new_ls_state, new_hessian_state, grad),
             )
 
         def no_step(_):
-            return (
-                params,
-                eqx.filter(state, eqx.is_array),
-            )
+            return params, state
 
-        new_params, new_state = filter_cond(
+        new_params, new_state = jax.lax.cond(
             converged,
             no_step,
             step,
@@ -661,7 +433,6 @@ class ProximalLBFGS(Generic[Y]):
                 tree_utils.tree_sub(new_params, params),
             ),
         )
-        new_state = eqx.combine(new_state, static)
         return new_params, new_state, aux
 
     def run(
@@ -670,9 +441,6 @@ class ProximalLBFGS(Generic[Y]):
         *args: Any,
     ) -> StepResult:
         state = self.init_state(init_params, *args)
-        # The curvature model holds a jaxpr, which cannot cross a loop carry. Only the
-        # arrays are carried; the jaxpr is closed over and restored on the way out.
-        dynamic, static = eqx.partition(state, eqx.is_array)
 
         def cond(carry):
             _, s = carry
@@ -680,25 +448,21 @@ class ProximalLBFGS(Generic[Y]):
 
         def body(carry):
             p, s = carry
-            pnew, snew = self.update(
-                p,
-                eqx.combine(s, static),
-                *args,
-            )[:2]  # Discard aux; convergence only needs params and state
-            return pnew, eqx.filter(snew, eqx.is_array)
+            # Discard aux; convergence only needs params and state
+            return self.update(p, s, *args)[:2]
 
         if self.jit:
             final_params, final_state = eqx.internal.while_loop(
                 cond,
                 body,
-                (init_params, dynamic),
+                (init_params, state),
                 kind="lax",
             )
         else:
-            carry = (init_params, dynamic)
+            carry = (init_params, state)
             while cond(carry):
                 carry = body(carry)
             final_params, final_state = carry
 
         _, aux = self.fun_with_aux(final_params, *args)
-        return final_params, eqx.combine(final_state, static), aux
+        return final_params, final_state, aux

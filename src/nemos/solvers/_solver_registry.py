@@ -6,13 +6,13 @@ from typing import Type
 
 from ._abstract_solver import SolverProtocol
 from ._fista import OptimistixFISTA, OptimistixNAG
-from ._lbfgs import ProximalLBFGS
 from ._newton import Newton, ProximalNewton
 from ._optax_optimistix_solvers import (
     OptimistixOptaxGradientDescent,
     OptimistixOptaxLBFGS,
 )
 from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
+from ._second_order._lbfgs import ProximalLBFGS
 from ._svrg import WrappedProxSVRG, WrappedSVRG
 from ._validation import validate_solver_class
 

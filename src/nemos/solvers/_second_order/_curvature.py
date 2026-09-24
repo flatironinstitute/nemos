@@ -1,0 +1,269 @@
+from abc import ABC, abstractmethod
+from typing import Any, Callable, Generic, TypeVar
+
+import equinox as eqx
+import jax
+import jax.numpy as jnp
+import jax.tree_util as jtu
+import lineax as lx
+from jaxtyping import Array, Float, PyTree, Scalar
+from optimistix._solver.limited_memory_bfgs import _lbfgs_hessian_operator_fn
+
+from ..._hess import HessianTag, MatrixStructure
+
+# hessian state
+S = TypeVar("S")
+# parameters
+Y = TypeVar("Y")
+
+
+class _LBFGSHessianUpdateState(eqx.Module, Generic[Y]):
+    r"""
+    State variables for LBFGS.
+
+    State variables for Algorithm 3.2 of:
+
+        Byrd, R. H., Nocedal, J., & Schnabel, R. B. (1994).
+        "Representations of quasi-Newton matrices and their use in limited memory
+        methods." *Mathematical Programming*, 63(1), 129–156.
+
+    This holds a ring buffer of the history of differences in the optimisation variable
+    `y` and the gradients `grad`, at the last `n` accepted steps, where `n` is the
+    history length.
+
+    **Arguments:**
+
+    - `index_start`: Index of the most recent update in the circular buffer.
+    - `y_diff_history`: Circular buffer containing the history of differences in the
+        optimisation variable `y` between consecutive accepted steps. In most textbooks
+        and in the paper above, the difference in the optimisation variable at iteration
+        `k` is denoted as `s_k` and refers to $y_{k+1} - y_k$`. We use the term `y_diff`
+        here to maintain consistency with variable names in Optimistix.
+        The oldest element is at index `index_start % history_len`.
+    - `grad_diff_history`: Circular buffer containing the history of differences in the
+        gradient values. Similarly to `y_diff_history`, we follow the Optimistix
+        nomenclature rather than the textbook one, where the difference in the gradients
+        is usually denoted as `y_k`.
+        Indexation is handled as for `y_diff_history`.
+    - `y_diff_grad_diff_cross_inner`: Lower triangular matrix with the inner products
+        between parameters and gradient difference histories. This parameter corresponds
+        to `L_k` in the paper, see def. (2.18), with
+
+            L[ij] = y_diff[i-1]^T grad_diff[j-1] if i > j, 0 otherwise,
+
+        for each iteration `k` that is part of the history (k omitted for clarity).
+    - `y_diff_grad_diff_inner`: Array containing the inner products of the differences
+        in `y` and the gradients. This parameter corresponds to `diag(D_k)` from the
+        paper, see def. (2.7). `[D_k]_{ii} = s_{i-1}^T \cdot y_{i-1}`.
+    - `y_diff_cross_inner`: outer product of the parameter difference history. In the
+        paper notation, this is equal to `S_{k-1}^T \cdot S_{k-1}`, which is a matrix of
+        shape `(history_length, history_length)`.
+    """
+
+    index_start: Scalar
+    history_length: int = eqx.field(static=True)
+    y_diff_history: PyTree[Y]
+    grad_diff_history: PyTree[Y]
+    y_diff_grad_diff_cross_inner: Float[Array, " history_length history_length"]
+    y_diff_grad_diff_inner: Float[Array, " history_length"]
+    y_diff_cross_inner: Float[Array, " history_length history_length"]
+
+
+class AbstractCurvature(eqx.Module, ABC, Generic[Y, S]):
+    @abstractmethod
+    def init(self, params: Y, *args) -> S: ...
+
+    @abstractmethod
+    def update(
+        self,
+        state: S,
+        params: Y,
+        y_diff: Y,
+        grad_diff: Y,
+        *args: Any,
+    ) -> tuple[Any, S]: ...
+
+    @abstractmethod
+    def hvp(self, state: S, params: Y, v: Y, *args) -> Y: ...
+
+
+def _batched_tree_zeros_like(y, batch_dimension):
+    return jtu.tree_map(lambda y: jnp.zeros((batch_dimension, *y.shape)), y)
+
+
+v_tree_dot = jax.vmap(lx.internal.tree_dot, in_axes=(0, None), out_axes=0)
+
+
+class LBFGSCurvature(AbstractCurvature[Y, _LBFGSHessianUpdateState], Generic[Y]):
+    history_length: int = eqx.field(static=True)
+
+    def init(self, params: Y, *args) -> _LBFGSHessianUpdateState:
+        """Build the identity curvature model and the state that will accumulate it."""
+        hess_state = _LBFGSHessianUpdateState(
+            index_start=jnp.array(0),
+            history_length=self.history_length,
+            y_diff_history=_batched_tree_zeros_like(params, self.history_length),
+            grad_diff_history=_batched_tree_zeros_like(params, self.history_length),
+            y_diff_grad_diff_cross_inner=jnp.zeros(
+                (self.history_length, self.history_length)
+            ),
+            y_diff_grad_diff_inner=jnp.ones(self.history_length),
+            y_diff_cross_inner=jnp.eye(self.history_length),
+        )
+
+        return hess_state  # pyright: ignore
+
+    def update(
+        self,
+        state: S,
+        params: Y,
+        y_diff: Y,
+        grad_diff: Y,
+        *args: Any,
+    ) -> _LBFGSHessianUpdateState[Y]:
+        del params, args
+        history_length = state.history_length
+
+        # Update only if the inner product is positive, to maintain positive definiteness
+        # of the Hessian approximation.
+        inner = lx.internal.tree_dot(y_diff, grad_diff)
+        positive_curvature = inner > jnp.finfo(inner.dtype).eps
+
+        def no_update(_):
+            return state
+
+        def update(_):
+            updated_y_diff_history = jtu.tree_map(
+                lambda x, z: x.at[state.index_start % history_length].set(z),
+                state.y_diff_history,
+                y_diff,
+            )
+            updated_grad_diff_history = jtu.tree_map(
+                lambda x, z: x.at[state.index_start % history_length].set(z),
+                state.grad_diff_history,
+                grad_diff,
+            )
+
+            # Here we gradually fill in the lower-triangular matrix of inner
+            # products between the history of gradient differences and the current
+            # difference in the optimisation variable `y`. This matrix has a zero
+            # diagonal, it corresponds to `L_k` in the paper, where it is defined by
+            # (2.18). At the start of the optimisation, parts of the lower triangle
+            # will still be zero. We catch this before computing the Cholesky
+            # factorisation by setting the diagonal to 1.0 in the affected rows, and
+            # mapping the solution for these elements to a zero vector. (This
+            # happens in the operator function.)
+            y_diff_grad_diff_cross_inner = state.y_diff_grad_diff_cross_inner.at[
+                state.index_start % history_length
+            ].set(v_tree_dot(state.grad_diff_history, y_diff))
+            y_diff_grad_diff_cross_inner = y_diff_grad_diff_cross_inner.at[
+                :, state.index_start % history_length
+            ].set(0)
+            assert y_diff_grad_diff_cross_inner.shape == (
+                history_length,
+                history_length,
+            )
+
+            # Here we update the history of inner products in the circular buffer.
+            y_diff_grad_diff_inner = state.y_diff_grad_diff_inner.at[
+                state.index_start % history_length
+            ].set(
+                lx.internal.tree_dot(
+                    jtu.tree_map(
+                        lambda x: x[state.index_start % history_length],
+                        updated_grad_diff_history,
+                    ),
+                    y_diff,
+                )
+            )
+            assert y_diff_grad_diff_inner.shape == (history_length,)
+
+            # Update the matrix of inner products of `y_diff` by updating one row
+            # and one column per iteration. This matrix has nonzero elements for
+            # rows up to k and columns up to k, where k is the current iteration
+            # index and may be smaller than the history length. Cholesky
+            # factorisation works because this matrix is initialised as an identity,
+            # and elements > k are mapped to zero by setting the right-hand-side
+            # appropriately in the operator function.
+            cross_inner = v_tree_dot(
+                updated_y_diff_history,
+                jtu.tree_map(
+                    lambda x: x[state.index_start % history_length],
+                    updated_y_diff_history,
+                ),
+            )
+            assert cross_inner.shape == (history_length,)
+            y_diff_cross_inner = state.y_diff_cross_inner.at[
+                state.index_start % history_length
+            ].set(cross_inner)
+            y_diff_cross_inner = y_diff_cross_inner.at[
+                :, state.index_start % history_length
+            ].set(cross_inner)
+            assert y_diff_cross_inner.shape == (
+                history_length,
+                history_length,
+            )
+
+            updated_state = _LBFGSHessianUpdateState(
+                index_start=state.index_start + 1,
+                history_length=history_length,
+                y_diff_history=updated_y_diff_history,
+                grad_diff_history=updated_grad_diff_history,
+                y_diff_grad_diff_cross_inner=y_diff_grad_diff_cross_inner,
+                y_diff_grad_diff_inner=y_diff_grad_diff_inner,
+                y_diff_cross_inner=y_diff_cross_inner,
+            )
+
+            return updated_state
+
+        # Both branches return a ``_LBFGSHessianUpdateState`` whose only non-array field
+        # is static, so the state is an ordinary pytree of arrays and ``lax.cond`` applies.
+        return jax.lax.cond(positive_curvature, update, no_update, None)
+
+    def hvp(self, state: _LBFGSHessianUpdateState[Y], params: Y, v: Y, *args) -> Y:
+        return _lbfgs_hessian_operator_fn(v, state)
+
+
+class NewtonCurvature(AbstractCurvature[Y, None], Generic[Y]):
+    """Newton curvature model.
+
+    Note that the state here IS the hessian.
+    """
+
+    hessian_tag: HessianTag
+    hessian_fn: Callable
+
+    def map_blocks(self, fn, H: Any, trees: tuple[Y], block_state=None, *args):
+        """Run ``fn(H_blk, *tree_blks, state_blk)`` once per block and restack.
+
+        ``trees`` are parameter-shaped and map along ``batch_axes``; ``block_state``
+        maps along 0 and comes back along 0.
+        """
+        inps = (H, *trees) if block_state is None else (H, *trees, block_state)
+        if self.hessian_tag.structure is not MatrixStructure.BLOCK_DIAGONAL:
+            return fn(*inps)
+
+        axes = self.hessian_tag.batch_axes
+        batch_axes = [0] + [axes for _ in range(len(trees))]
+        if block_state is not None:
+            batch_axes = batch_axes.append(0)
+        return jax.vmap(fn, in_axes=batch_axes, out_axes=0)(*inps)
+
+    def init(self, params: Y, *args) -> Any:
+        return self.hessian_fn(params, *args)
+
+    def update(
+        self,
+        state: S,
+        params: Y,
+        y_diff: Y,
+        grad_diff: Y,
+        *args,
+    ) -> Any:
+        return self.init(params, *args)
+
+    def hvp(self, state: Any, params: Y, v: Y, *args) -> Y:
+        def apply_operator(H_b, v_b):
+            return lx.PyTreeLinearOperator(H_b, jax.eval_shape(lambda: v_b)).mv(v_b)
+
+        return self.map_blocks(apply_operator, state, (v,))
