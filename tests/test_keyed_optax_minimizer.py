@@ -181,10 +181,9 @@ class TestKeySplitting:
         for _ in range(n_steps):
             y, state, _ = solver.step(fn, y, args, OPTIONS, state, TAGS)
 
-        assert len(fn.keys) == n_steps
         assert all(
             _same_key(seen, expected)
-            for seen, expected in zip(fn.keys, expected_subkeys)
+            for seen, expected in zip(fn.keys, expected_subkeys, strict=True)
         )
         assert _same_key(state.key, expected_key)
 
