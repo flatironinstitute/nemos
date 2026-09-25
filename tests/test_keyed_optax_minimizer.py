@@ -17,8 +17,6 @@ import pytest
 
 from nemos.solvers._keyed_optax_minimizer import KeyedOptaxMinimiser, _KeyedOptaxState
 
-pytestmark = pytest.mark.solver_related
-
 OPTIONS = {}
 TAGS = frozenset()
 
@@ -108,7 +106,7 @@ class TestState:
         state = _init(solver, fn, y, args)
 
         assert isinstance(state, _KeyedOptaxState)
-        assert type(state.inner) is type(_init(plain, fn, y, args))
+        assert type(state.solver_state) is type(_init(plain, fn, y, args))
 
     @pytest.mark.parametrize("key_factory", KEY_FACTORIES)
     def test_init_picks_the_key_out_of_args(self, solver, key_factory):
