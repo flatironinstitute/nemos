@@ -80,6 +80,10 @@ has to be an indexable pytree whose last element is a key.
 The position is fixed by ``_key_index`` and is not configurable: this class
 inherits ``optx.OptaxMinimiser.__init__``, which does not take it.
 
+The intended use case is a compiled optimization loop requiring independent random
+draws, for example a loss that estimates an integral by Monte Carlo and needs fresh
+samples at each iteration.
+
 """
     + OptaxMinimiser.__init__.__doc__
 )
