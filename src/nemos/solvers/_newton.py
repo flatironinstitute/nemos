@@ -1,6 +1,5 @@
 """Newton-based optimization solvers."""
 
-import abc
 from typing import Any, Callable, ClassVar, Generic, Tuple, TypeVar
 
 import equinox as eqx
@@ -18,6 +17,7 @@ from ..typing import Params, StepResult
 from ._abstract_solver import OptimizationInfo
 from ._fista import FISTA
 from ._second_order import ProxQuadraticDirection
+from ._second_order._linesearches import ArmijoBacktracking, TsengYunBacktracking
 
 DEFAULT_ATOL = 1e-4
 DEFAULT_RTOL = 0.0
@@ -136,6 +136,7 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         self,
         unregularized_loss: Callable,
         regularizer,
+        line_search: ArmijoBacktracking | TsengYunBacktracking,
         regularizer_strength: float | None,
         has_aux: bool,
         init_params: Params | None = None,
@@ -179,13 +180,10 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
             self.fun = loss_fn
             self.fun_with_aux = lambda p, *a: (loss_fn(p, *a), None)
 
-        self._line_search = optax.scale_by_backtracking_linesearch(
-            max_backtracking_steps=30
-        )
-
         self._gradient: Callable | None = None
         self._hessian: Callable | None = None
         self._init_hessian(regularizer, regularizer_strength, init_params)
+        self._line_search = line_search
 
     def update(
         self,
@@ -313,21 +311,6 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         if self._hessian is None:
             self._hessian = jax.hessian(self.fun)
 
-    # @abc.abstractmethod
-    # def _newton_direction(self, grad: Y, H: Any, params: Y, state: S) -> Tuple[Y, S]:
-    #     """The step before the line search scales it, and the state after reading it.
-    #
-    #     A solver whose direction comes from an adaptive scheme -- ``Newton``'s
-    #     identity-shift ladder -- returns what that scheme settled on, so the next
-    #     iteration starts from it. One with nothing to record returns ``state``.
-    #     """
-
-    @abc.abstractmethod
-    def _line_search_inputs(
-        self, params: Y, step: Y, grad: Y, fval: Scalar, *args: Any
-    ) -> Tuple[Scalar, Y, Callable[[Y], Scalar]]:
-        """Value, slope and objective handed to ``self._line_search``."""
-
     def _apply_or_reject(
         self,
         params: Y,
@@ -342,47 +325,15 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         Returns the value of :attr:`BaseNewtonState.no_step_found` for this iteration:
         true when no step was taken and the iterate is not stationary.
         """
-        value, slope, value_fn = self._line_search_inputs(
-            params, step, grad, fval, *args
+        updates, new_ls_state = self._line_search.update(
+            params, step, grad, fval, state.ls_state, *args
         )
-        descent = lx.internal.tree_dot(slope, step)
-
-        def accept(_):
-            updates, new_ls_state = self._line_search.update(
-                step,
-                state.ls_state,
-                params,
-                value=value,
-                grad=slope,
-                value_fn=value_fn,
-            )
-
-            # optax returns its last trial even when the sufficient-decrease test was
-            # never met within ``max_backtracking_steps``, and that trial can be worse
-            # than where it started. A positive ``decrease_error`` is its report.
-            found = new_ls_state.info.decrease_error <= 0
-            new_params = jax.tree_util.tree_map(
-                lambda p, u: jnp.where(found, p + u, p),
-                params,
-                updates,
-            )
-
-            return new_params, new_ls_state, found
-
-        def reject(_):
-            return params, state.ls_state, jnp.array(False)
-
-        # A positive slope means the direction is unusable and a NaN one that the
-        # subproblem diverged; neither is stepped on.
-        new_params, new_ls_state, stepped = jax.lax.cond(
-            descent < 0, accept, reject, None
-        )
-
-        # A failed search at a slope this small means the iterate is stationary rather
-        # than broken, so the zero step is left for the convergence test to read.
+        value = new_ls_state.loss_value
+        descent = new_ls_state.descent
+        step_taken = new_ls_state.step_taken
         eps = jnp.finfo(jnp.asarray(value).dtype).eps
         stationary = jnp.abs(descent) <= eps * jnp.abs(value)
-        return new_params, new_ls_state, ~stepped & ~stationary
+        return updates, new_ls_state, ~step_taken & ~stationary
 
     def _scalar_dtype(self, init_params: Y, *args: Any):
         """The objective's dtype, which the state's scalars must already carry.
@@ -539,12 +490,17 @@ class Newton(BaseNewtonSolver[Y, NewtonState[Y]], HessianSolverMixin, Generic[Y]
                 f"received {identity_shift_max_steps}."
             )
         self.identity_shift_max_steps = identity_shift_max_steps
-
+        penalized_loss = regularizer.penalized_loss(
+            unregularized_loss, init_params, strength=regularizer_strength
+        )
         super().__init__(
             unregularized_loss,
             regularizer,
-            regularizer_strength,
-            has_aux,
+            line_search=ArmijoBacktracking(
+                optax.scale_by_backtracking_linesearch(30), penalized_loss
+            ),
+            regularizer_strength=regularizer_strength,
+            has_aux=has_aux,
             init_params=init_params,
             jit=jit,
             maxiter=maxiter,
@@ -682,18 +638,6 @@ class Newton(BaseNewtonSolver[Y, NewtonState[Y]], HessianSolverMixin, Generic[Y]
         )
         return direction, eqx.tree_at(lambda s: s.identity_shift, state, identity_shift)
 
-    def _line_search_inputs(
-        self, params: Y, step: Y, grad: Y, fval: Scalar, *args: Any
-    ) -> Tuple[Scalar, Y, Callable[[Y], Scalar]]:
-        """Value, slope and objective handed to ``self._line_search``.
-
-        ``optax``'s backtracking search forms the slope as ``vdot(updates, grad)``; the
-        vector is an argument it never differentiates, so a composite subclass can
-        supply a slope accounting for its nonsmooth term without a bespoke search.
-        """
-        del params, step
-        return fval, grad, lambda p: self.fun(p, *args)
-
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
         return (
@@ -778,22 +722,28 @@ class ProximalNewton(BaseNewtonSolver[Y, BaseNewtonState[Y]], Generic[Y]):
         inner_atol: float = 1e-8,
         inner_rtol: float = 1e-8,
     ):
+        # the penalty alone, for the composite line search. self.fun is the smooth
+        # loss here, so the composite objective is fun + penalty_fn, which is
+        # exactly what ``regularizer.penalized_loss`` builds from the same accessor.
+        penalty_fn = regularizer.penalty_fn(
+            params=init_params, strength=regularizer_strength
+        )
+        penalized_loss = regularizer.penalized_loss(
+            unregularized_loss, init_params, strength=regularizer_strength
+        )
         super().__init__(
             unregularized_loss,
             regularizer,
-            regularizer_strength,
-            has_aux,
+            line_search=TsengYunBacktracking(
+                optax.scale_by_backtracking_linesearch(30), penalized_loss, penalty_fn
+            ),
+            regularizer_strength=regularizer_strength,
+            has_aux=has_aux,
             init_params=init_params,
             jit=jit,
             maxiter=maxiter,
             tol=tol,
             rtol=rtol,
-        )
-        # the penalty alone, for the composite line search. self.fun is the smooth
-        # loss here, so the composite objective is self.fun + self._penalty, which is
-        # exactly what ``regularizer.penalized_loss`` builds from the same accessor.
-        self._penalty = regularizer.penalty_fn(
-            params=init_params, strength=regularizer_strength
         )
 
         self.inner_atol = inner_atol
@@ -811,34 +761,6 @@ class ProximalNewton(BaseNewtonSolver[Y, BaseNewtonState[Y]], Generic[Y]):
         )
         self.direction = ProxQuadraticDirection(inner_solver, inner_iter)
         self.curvature = None
-
-    def _line_search_inputs(
-        self, params: Y, step: Y, grad: Y, fval: Scalar, *args: Any
-    ) -> Tuple[Scalar, Y, Callable[[Y], Scalar]]:
-        r"""Feed the composite objective and its slope to the inherited line search.
-
-        Tseng & Yun (2009) require the sufficient-decrease slope of a composite
-        objective to be
-
-        .. math::
-            \Delta = \nabla f^\top d + P(\beta + d) - P(\beta),
-
-        the :math:`P` difference being what makes :math:`\Delta < 0` a descent
-        certificate when :math:`F` is nonsmooth. Since the search only ever forms
-        ``vdot(step, slope)``, adding the penalty difference along ``step`` reproduces
-        :math:`\Delta` exactly, and the stock Armijo search then applies unchanged.
-        """
-        penalty = self._penalty(params)
-        penalty_diff = self._penalty(tree_utils.tree_add(params, step)) - penalty
-        sq_norm = lx.internal.tree_dot(step, step)
-        slope = tree_utils.tree_add_scalar_mul(
-            grad, jnp.where(sq_norm > 0.0, penalty_diff / sq_norm, 0.0), step
-        )
-        return (
-            fval + penalty,
-            slope,
-            lambda p: self.fun(p, *args) + self._penalty(p),
-        )
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:

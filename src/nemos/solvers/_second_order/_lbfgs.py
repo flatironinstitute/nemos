@@ -42,6 +42,7 @@ from .._abstract_solver import OptimizationInfo
 from .._fista import FISTA
 from ._curvature import LBFGSCurvature, _LBFGSHessianUpdateState
 from ._direction import ProxQuadraticDirection
+from ._linesearches import TsengYunBacktracking
 
 if TYPE_CHECKING:
     from ...regularizer import Regularizer
@@ -169,13 +170,6 @@ class ProximalLBFGS(Generic[Y]):
         self.rtol = rtol
         self.curvature = LBFGSCurvature[Y](history_length=history_length)
 
-        # the penalty alone, for the composite line search. self.fun is the smooth
-        # loss here, so the composite objective is self.fun + self._penalty, which is
-        # exactly what ``regularizer.penalized_loss`` builds from the same accessor.
-        self._penalty = regularizer.penalty_fn(
-            params=init_params, strength=regularizer_strength
-        )
-
         self.inner_iter = inner_iter
         self.inner_atol = inner_atol
         self.inner_rtol = inner_rtol
@@ -202,9 +196,17 @@ class ProximalLBFGS(Generic[Y]):
             self.fun = unregularized_loss
             self.fun_with_aux = lambda p, *a: (unregularized_loss(p, *a), None)
 
-        self._line_search = optax.scale_by_backtracking_linesearch(
-            max_backtracking_steps=30
+        # the penalty alone, for the composite line search. self.fun is the smooth
+        # loss here, so the composite objective is self.fun + self._penalty, which is
+        # exactly what ``regularizer.penalized_loss`` builds from the same accessor.
+        penalty_fn = regularizer.penalty_fn(
+            params=init_params, strength=regularizer_strength
         )
+        penalized_loss = regularizer.penalized_loss(
+            self.fun, init_params, strength=regularizer_strength
+        )
+        backtrack = optax.scale_by_backtracking_linesearch(30)
+        self._line_search = TsengYunBacktracking(backtrack, penalized_loss, penalty_fn)
 
         # Cache
         self._gradient: Callable | None = None
@@ -258,47 +260,17 @@ class ProximalLBFGS(Generic[Y]):
         Returns the value of :attr:`LBFGSState.no_step_found` for this iteration: true
         when no step was taken and the iterate is not stationary.
         """
-        value, slope, value_fn = self._line_search_inputs(
-            params, step, grad, fval, *args
+        updates, new_ls_state = self._line_search.update(
+            params, step, grad, fval, state.ls_state, *args
         )
-        descent = lx.internal.tree_dot(slope, step)
-
-        def accept(_):
-            updates, new_ls_state = self._line_search.update(
-                step,
-                state.ls_state,
-                params,
-                value=value,
-                grad=slope,
-                value_fn=value_fn,
-            )
-
-            # optax returns its last trial even when the sufficient-decrease test was
-            # never met within ``max_backtracking_steps``, and that trial can be worse
-            # than where it started. A positive ``decrease_error`` is its report.
-            found = new_ls_state.info.decrease_error <= 0
-            new_params = jax.tree_util.tree_map(
-                lambda p, u: jnp.where(found, p + u, p),
-                params,
-                updates,
-            )
-
-            return new_params, new_ls_state, found
-
-        def reject(_):
-            return params, state.ls_state, jnp.array(False)
-
-        # A positive slope means the direction is unusable and a NaN one that the
-        # subproblem diverged; neither is stepped on.
-        new_params, new_ls_state, stepped = jax.lax.cond(
-            descent < 0, accept, reject, None
-        )
-
+        value = new_ls_state.loss_value
+        descent = new_ls_state.descent
+        step_taken = new_ls_state.step_taken
         # A failed search at a slope this small means the iterate is stationary rather
         # than broken, so the zero step is left for the convergence test to read.
         eps = jnp.finfo(jnp.asarray(value).dtype).eps
         stationary = jnp.abs(descent) <= eps * jnp.abs(value)
-        return new_params, new_ls_state, ~stepped & ~stationary
+        return updates, new_ls_state, ~step_taken & ~stationary
 
     def _converged(
         self, params: Y, state: LBFGSState[Y], grad: Y, fval: Scalar
@@ -319,34 +291,6 @@ class ProximalLBFGS(Generic[Y]):
             state.y_diff,
             fval,
             fval - state.stats.function_val,
-        )
-
-    def _line_search_inputs(
-        self, params: Y, step: Y, grad: Y, fval: Scalar, *args: Any
-    ) -> tuple[Scalar, Y, Callable[[Y], Scalar]]:
-        r"""Feed the composite objective and its slope to the inherited line search.
-
-        Tseng & Yun (2009) require the sufficient-decrease slope of a composite
-        objective to be
-
-        .. math::
-            \Delta = \nabla f^\top d + P(\beta + d) - P(\beta),
-
-        the :math:`P` difference being what makes :math:`\Delta < 0` a descent
-        certificate when :math:`F` is nonsmooth. Since the search only ever forms
-        ``vdot(step, slope)``, adding the penalty difference along ``step`` reproduces
-        :math:`\Delta` exactly, and the stock Armijo search then applies unchanged.
-        """
-        penalty = self._penalty(params)
-        penalty_diff = self._penalty(tree_utils.tree_add(params, step)) - penalty
-        sq_norm = lx.internal.tree_dot(step, step)
-        slope = tree_utils.tree_add_scalar_mul(
-            grad, jnp.where(sq_norm > 0.0, penalty_diff / sq_norm, 0.0), step
-        )
-        return (
-            fval + penalty,
-            slope,
-            lambda p: self.fun(p, *args) + self._penalty(p),
         )
 
     @classmethod
