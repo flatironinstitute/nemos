@@ -4,7 +4,8 @@ The limited-memory curvature model lives in :class:`~nemos.solvers._second_order
 derived from ``optimistix`` (Apache-2.0, ``optimistix/_solver/limited_memory_bfgs.py``):
 only the direct-Hessian branch is kept, the update returns the ring-buffer state rather
 than a ``FunctionInfo``, and it receives the curvature pair already differenced by the
-caller. ``_LBFGSHessianUpdateState`` is copied unchanged.
+caller. ``_LBFGSHessianUpdateState`` is copied with one field added, ``initial_scale``,
+which carries the scale of :math:`B_0` while the history is empty.
 
 ``optimistix.LBFGS`` is not reused whole because its loop is flat. One
 ``AbstractQuasiNewton.step`` is a single trial evaluation, and ``update_hessian`` sits in
@@ -95,8 +96,10 @@ class ProximalLBFGS(Generic[Y]):
     :math:`(s, y) = (\beta_k - \beta_{k-1},\, \nabla f_k - \nabla f_{k-1})`, keeping only
     those with :math:`s^\top y > \varepsilon` so that :math:`B_k \succ 0` and the
     subproblem stays convex. A rejected step leaves :math:`s = 0` and so leaves the
-    history untouched. With an empty history :math:`B_0 = I`, making the first iteration a
-    unit-stepsize proximal-gradient step whose scale the line search has to supply.
+    history untouched. With an empty history :math:`B_0 = \|\nabla f\| I`, making the first
+    iteration a unit-length proximal-gradient step; see
+    :meth:`~nemos.solvers._second_order._curvature.LBFGSCurvature.hvp` for why it is not
+    left at :math:`I`.
 
     The subproblem consumes :math:`B_k v` only and never factorizes :math:`B_k`, so this
     solver needs no Hessian from the model and carries no
@@ -213,14 +216,22 @@ class ProximalLBFGS(Generic[Y]):
                 has_aux=True,
             )
 
+    def _scalar_dtype(self, init_params: Y, *args: Any):
+        """The objective's dtype, which the state's scalars must already carry.
+
+        The ``while_loop`` carry fails to typecheck otherwise.
+        """
+        return jax.eval_shape(self.fun, init_params, *args).dtype
+
     def init_state(self, init_params: Y, *args: Any) -> LBFGSState[Y]:
         self._build_cache()
         hessian_state = self._curvature.init(init_params)
+        scalar_dtype = self._scalar_dtype(init_params, *args)
         state = LBFGSState(
             ls_state=self._line_search.init(init_params),
-            grad_norm=jnp.array(jnp.inf),
+            grad_norm=jnp.asarray(jnp.inf, dtype=scalar_dtype),
             stats=OptimizationInfo(
-                function_val=jnp.array(jnp.nan),
+                function_val=jnp.asarray(jnp.nan, dtype=scalar_dtype),
                 num_steps=jnp.array(0),
                 converged=jnp.array(False),
                 reached_max_steps=jnp.array(False),

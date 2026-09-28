@@ -58,6 +58,8 @@ class _LBFGSHessianUpdateState(eqx.Module, Generic[Y]):
     - `y_diff_cross_inner`: outer product of the parameter difference history. In the
         paper notation, this is equal to `S_{k-1}^T \cdot S_{k-1}`, which is a matrix of
         shape `(history_length, history_length)`.
+    - `initial_scale`: NeMoS addition, not part of the paper's state. The `B_0 = c I`
+        used while the history is empty; see :meth:`LBFGSCurvature.hvp`.
     """
 
     index_start: Scalar
@@ -67,6 +69,7 @@ class _LBFGSHessianUpdateState(eqx.Module, Generic[Y]):
     y_diff_grad_diff_cross_inner: Float[Array, " history_length history_length"]
     y_diff_grad_diff_inner: Float[Array, " history_length"]
     y_diff_cross_inner: Float[Array, " history_length history_length"]
+    initial_scale: Scalar
 
 
 class AbstractCurvature(eqx.Module, ABC, Generic[Y, S]):
@@ -109,6 +112,11 @@ class LBFGSCurvature(AbstractCurvature[Y, _LBFGSHessianUpdateState], Generic[Y])
             ),
             y_diff_grad_diff_inner=jnp.ones(self.history_length),
             y_diff_cross_inner=jnp.eye(self.history_length),
+            # ``update`` recomputes this from the gradient, so it has to carry the
+            # parameter dtype from the start or the two ``lax.cond`` branches disagree.
+            initial_scale=jnp.array(
+                1.0, dtype=jnp.result_type(*jtu.tree_leaves(params))
+            ),
         )
 
         return hess_state  # pyright: ignore
@@ -212,16 +220,63 @@ class LBFGSCurvature(AbstractCurvature[Y, _LBFGSHessianUpdateState], Generic[Y])
                 y_diff_grad_diff_cross_inner=y_diff_grad_diff_cross_inner,
                 y_diff_grad_diff_inner=y_diff_grad_diff_inner,
                 y_diff_cross_inner=y_diff_cross_inner,
+                initial_scale=state.initial_scale,
             )
 
             return updated_state
 
         # Both branches return a ``_LBFGSHessianUpdateState`` whose only non-array field
         # is static, so the state is an ordinary pytree of arrays and ``lax.cond`` applies.
-        return jax.lax.cond(positive_curvature, update, no_update, None)
+        new_state = jax.lax.cond(positive_curvature, update, no_update, None)
+
+        # While the history is empty ``hvp`` needs a scale of its own, and this is the
+        # only place with a gradient in hand to set one from. On the first call
+        # ``grad_diff`` is the gradient itself, the previous one being zero. The floor
+        # plays the part of SciPy's ``stpmx`` cap on ``1 / ||d||``, bounding the step a
+        # vanishing gradient can ask for; SciPy's is the f64 constant ``1e10``, so it is
+        # taken here from the dtype, as ``HessianSolverMixin`` takes its ``_delta``.
+        empty_history = state.index_start == 0
+        grad_norm = jnp.sqrt(lx.internal.tree_dot(grad_diff, grad_diff))
+        floor = jnp.sqrt(jnp.finfo(grad_norm.dtype).eps)
+        return eqx.tree_at(
+            lambda s: s.initial_scale,
+            new_state,
+            jnp.where(
+                empty_history, jnp.maximum(grad_norm, floor), state.initial_scale
+            ),
+        )
 
     def hvp(self, state: _LBFGSHessianUpdateState[Y], params: Y, v: Y, *args) -> Y:
-        return _lbfgs_hessian_operator_fn(v, state)
+        r"""Apply :math:`B_k`, scaling it by hand while there is no history to scale it.
+
+        With a pair stored, :func:`_lbfgs_hessian_operator_fn` scales itself by
+        :math:`\gamma_k = y^\top y / s^\top y`. With none it falls back to
+        :math:`\gamma_k = 1` over zero histories, so it returns ``v`` unchanged and
+        :math:`B_0 = I`. The first step is then :math:`-\nabla f`, whose norm is the
+        gradient's, and a backtracking line search with a bounded number of halvings
+        cannot always shorten it enough: on a badly scaled problem the iterate overflows
+        on iteration one.
+
+        ``initial_scale`` is :math:`\|\nabla f\|`, making that step a unit-length one.
+        This matches SciPy, whose L-BFGS-B [1]_ takes ``stp = 1.0`` at every iteration
+        except the first, where it takes ``min(1 / ||d||, stpmx)`` with ``stpmx = 1e10``
+        unconstrained (``lnsrlb``, ``scipy/optimize/src/lbfgsb.c``). That cap is an f64
+        constant; ``initial_scale`` is floored at ``sqrt(eps)`` of the parameter dtype
+        instead, so the bound it puts on the first step follows the working precision.
+
+        References
+        ----------
+        .. [1] Byrd, R. H., Lu, P., Nocedal, J., & Zhu, C. (1995).
+            "A Limited Memory Algorithm for Bound Constrained Optimization."
+            *SIAM Journal on Scientific Computing*, 16(5), 1190-1208.
+            https://doi.org/10.1137/0916069
+        """
+        scaled = _lbfgs_hessian_operator_fn(v, state)
+        return jax.tree.map(
+            lambda s, u: jnp.where(state.index_start == 0, state.initial_scale * u, s),
+            scaled,
+            v,
+        )
 
 
 class NewtonCurvature(AbstractCurvature[Y, None], Generic[Y]):
