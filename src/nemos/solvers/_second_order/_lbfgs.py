@@ -69,6 +69,9 @@ class LBFGSState(eqx.Module, Generic[Y]):
     # Curvature model built from the history up to and including ``y_diff``, so it is the
     # one this iteration's subproblem uses.
     hessian_update_state: _LBFGSHessianUpdateState[Y]
+    # Set when an iteration produced no usable step: the direction was not a descent
+    # direction, or it was not finite. It ends the run, and it is not convergence.
+    no_step_found: Bool[Array, ""]
     # optax's line-search state, whose type is private to the chosen transformation.
     ls_state: Optional[Any] = None
 
@@ -225,6 +228,7 @@ class ProximalLBFGS(Generic[Y]):
             y_diff=jax.tree.map(jnp.zeros_like, init_params),
             grad_prev=jax.tree.map(jnp.zeros_like, init_params),
             hessian_update_state=hessian_state,
+            no_step_found=jnp.array(False),
         )
         return state
 
@@ -268,8 +272,12 @@ class ProximalLBFGS(Generic[Y]):
         state: LBFGSState[Y],
         fval: Scalar,
         *args: Any,
-    ) -> tuple[Y, Any]:
-        """Accept or reject step based on descent condition and line search."""
+    ) -> tuple[Y, Any, Bool[Array, ""]]:
+        """Accept or reject step based on descent condition and line search.
+
+        Returns whether the step was taken, so the caller can tell a rejection from a
+        null step; see :attr:`LBFGSState.no_step_found`.
+        """
         value, slope, value_fn = self._line_search_inputs(
             params, step, grad, fval, *args
         )
@@ -296,12 +304,12 @@ class ProximalLBFGS(Generic[Y]):
         def reject(_):
             return params, state.ls_state
 
-        # A NaN slope is not a stationary point: rejecting it would leave a zero step
-        # behind for the Cauchy criterion to report as convergence, so it is stepped on
-        # and the iterate goes non-finite instead.
-        take_step = jnp.isnan(descent) | (descent < 0)
+        # A zero slope means the iterate is stationary, a positive one that the direction
+        # is unusable, and a NaN one that the subproblem diverged. Report
+        # ``no_step_found``.
+        take_step = descent < 0
         new_params, new_ls_state = jax.lax.cond(take_step, accept, reject, None)
-        return new_params, new_ls_state
+        return new_params, new_ls_state, take_step
 
     def _converged(
         self, params: Y, state: LBFGSState[Y], grad: Y, fval: Scalar
@@ -390,7 +398,7 @@ class ProximalLBFGS(Generic[Y]):
             )
             step = self._lbfgs_direction(params, grad, new_hessian_state)
 
-            new_params, new_ls_state = self._apply_or_reject(
+            new_params, new_ls_state, took_step = self._apply_or_reject(
                 params,
                 step,
                 grad,
@@ -402,16 +410,20 @@ class ProximalLBFGS(Generic[Y]):
             # ``grad_prev`` is written here rather than in the loop: this is the point at
             # which the gradient has been folded into the history, so it is what the next
             # iteration must difference against.
-            return new_params, eqx.tree_at(
-                lambda x: (x.ls_state, x.hessian_update_state, x.grad_prev),
-                state,
-                (new_ls_state, new_hessian_state, grad),
+            return (
+                new_params,
+                eqx.tree_at(
+                    lambda x: (x.ls_state, x.hessian_update_state, x.grad_prev),
+                    state,
+                    (new_ls_state, new_hessian_state, grad),
+                ),
+                took_step,
             )
 
         def no_step(_):
-            return params, state
+            return params, state, jnp.array(False)
 
-        new_params, new_state = jax.lax.cond(
+        new_params, new_state, took_step = jax.lax.cond(
             converged,
             no_step,
             step,
@@ -439,6 +451,7 @@ class ProximalLBFGS(Generic[Y]):
         )
         return new_params, new_state, aux
 
+    @eqx.filter_jit
     def run(
         self,
         init_params: Y,

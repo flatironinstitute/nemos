@@ -42,6 +42,9 @@ class BaseNewtonState(eqx.Module, Generic[Y]):
     # Previous accepted step, read by the Cauchy convergence test. Infinite at init so
     # the test cannot fire before a step is taken.
     y_diff: Y
+    # Set when an iteration produced no usable step: the direction was not a descent
+    # direction, or it was not finite. It ends the run, and it is not convergence.
+    no_step_found: Bool[Array, ""]
 
 
 class NewtonState(BaseNewtonState[Y]):
@@ -209,7 +212,7 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
                     state,
                 )
 
-            new_params, new_ls_state = self._apply_or_reject(
+            new_params, new_ls_state, took_step = self._apply_or_reject(
                 params,
                 direction,
                 grad,
@@ -218,14 +221,16 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
                 *args,
             )
 
-            return new_params, eqx.tree_at(
-                lambda x: x.ls_state, new_state, new_ls_state
+            return (
+                new_params,
+                eqx.tree_at(lambda x: x.ls_state, new_state, new_ls_state),
+                took_step,
             )
 
         def no_step(_):
-            return params, state
+            return params, state, jnp.array(False)
 
-        new_params, new_state = jax.lax.cond(
+        new_params, new_state, took_step = jax.lax.cond(
             converged,
             no_step,
             step,
@@ -240,7 +245,7 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         # Written onto whatever state the subclass carries, so the loop never names a
         # concrete state class and a solver is free to add fields to it.
         new_state = eqx.tree_at(
-            lambda s: (s.grad_norm, s.stats, s.y_diff),
+            lambda s: (s.grad_norm, s.stats, s.y_diff, s.no_step_found),
             new_state,
             (
                 gnorm,
@@ -251,11 +256,13 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
                     reached_max_steps=new_iter >= self.maxiter,
                 ),
                 tree_utils.tree_sub(new_params, params),
+                (~converged) & (~took_step),
             ),
         )
 
         return new_params, new_state, aux
 
+    @eqx.filter_jit
     def run(
         self,
         init_params: Y,
@@ -266,7 +273,11 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
 
         def cond(carry):
             p, s = carry
-            return (~s.stats.converged) & (s.stats.num_steps < self.maxiter)
+            return (
+                (~s.stats.converged)
+                & (~s.no_step_found)
+                & (s.stats.num_steps < self.maxiter)
+            )
 
         def body(carry):
             p, s = carry
@@ -325,8 +336,12 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         state: S,
         fval: Scalar,
         *args: Any,
-    ) -> Tuple[Y, Any]:
-        """Accept or reject step based on descent condition and line search."""
+    ) -> Tuple[Y, Any, Bool[Array, ""]]:
+        """Accept or reject step based on descent condition and line search.
+
+        Returns whether the step was taken, so the caller can tell a rejection from a
+        null step; see :attr:`BaseNewtonState.no_step_found`.
+        """
         value, slope, value_fn = self._line_search_inputs(
             params, step, grad, fval, *args
         )
@@ -353,12 +368,12 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         def reject(_):
             return params, state.ls_state
 
-        # A NaN slope is not a stationary point: rejecting it would leave a zero step
-        # behind for the Cauchy criterion to report as convergence, so it is stepped on
-        # and the iterate goes non-finite instead.
-        take_step = jnp.isnan(descent) | (descent < 0)
+        # A zero slope means the iterate is stationary, a positive one that the direction
+        # is unusable, and a NaN one that the subproblem diverged. Report
+        # ``no_step_found``.
+        take_step = descent < 0
         new_params, new_ls_state = jax.lax.cond(take_step, accept, reject, None)
-        return new_params, new_ls_state
+        return new_params, new_ls_state, take_step
 
     def _scalar_dtype(self, init_params: Y, *args: Any):
         """The objective's dtype, which the state's scalars must already carry.
@@ -384,6 +399,7 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
                 lambda x: jnp.full_like(x, jnp.inf),
                 init_params,
             ),
+            no_step_found=jnp.array(False),
         )
 
     def init_state(self, init_params: Y, *args: Any) -> BaseNewtonState[Y]:
