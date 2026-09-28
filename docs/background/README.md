@@ -70,4 +70,17 @@ plot_03_1D_convolution.md
 ```
 :::
 
+:::{grid-item-card}
+
+<figure>
+<img src="../_static/hmm_transition_matrix.svg" style="height: 100px", alt="Hidden Markov model transition probabilities."/>
+</figure>
+
+```{toctree}
+:maxdepth: 3
+
+glm_hmm/README.md
+```
+:::
+
 ::::

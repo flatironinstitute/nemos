@@ -8,10 +8,14 @@ from .glm_hmm import (
     plot_param_recovery,
     plot_posteriors,
     plot_proba_left,
+    plot_simulated_session,
+    plot_state_weights,
     plot_state_inference,
     plot_transition_matrix,
     relabel,
+    relabel_by_bias,
     select_sessions,
+    simulate_glm_hmm,
 )
 from .plotting import (
     PlotSlidingWindow,
