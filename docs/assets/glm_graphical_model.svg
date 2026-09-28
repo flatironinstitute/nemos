@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 990 300" width="990" height="300" font-family="Helvetica, Arial, sans-serif" role="img" aria-label="Graphical model of a GLM: each trial's input drives a per-trial GLM that emits an observation, with one weight vector shared across all trials">
+<title>The GLM as a graphical model</title>
+<style>
+    .ink { fill: #000000; }
+    .wire { stroke: #000000; stroke-width: 2.5; fill: none; }
+    .bus { stroke: #000000; stroke-width: 5; fill: none; }
+    .var { font-size: 24px; font-style: italic; }
+    .sub { font-size: 15px; }
+</style>
+<defs>
+<marker id="tip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path fill="#000000" d="M0 0 L10 5 L0 10 z"/></marker>
+</defs>
+
+<!-- shared weight vector, broadcast along the bus to every trial's GLM -->
+<circle cx="56" cy="90" r="28" fill="#FFFFFF" stroke="#000000" stroke-width="4"/>
+<text class="ink var" x="56" y="99" text-anchor="middle">w</text>
+<path class="bus" d="M84 90 H900" marker-end="url(#tip)"/>
+
+<!-- trial 1 -->
+<circle cx="116" cy="171" r="6" class="ink"/>
+<text class="ink" x="116" y="152" text-anchor="middle"><tspan class="var" font-weight="bold">x</tspan><tspan class="sub" font-weight="bold" dy="5">1</tspan></text>
+<path class="wire" d="M122 171 H152" marker-end="url(#tip)"/>
+<path class="wire" d="M200 90 V150" marker-end="url(#tip)"/>
+<rect x="152" y="150" width="96" height="42" rx="4" fill="#D9D9D9" stroke="#000000" stroke-width="2.5"/>
+<text class="ink" x="200" y="178" text-anchor="middle" font-size="22" font-weight="bold">GLM</text>
+<path class="wire" d="M200 192 V224" marker-end="url(#tip)"/>
+<circle cx="200" cy="252" r="28" fill="#D9D9D9" stroke="#000000" stroke-width="2.5"/>
+<text class="ink" x="200" y="260" text-anchor="middle"><tspan class="var">y</tspan><tspan class="sub" dy="5">1</tspan></text>
+
+<!-- trial 2 -->
+<circle cx="316" cy="171" r="6" class="ink"/>
+<text class="ink" x="316" y="152" text-anchor="middle"><tspan class="var" font-weight="bold">x</tspan><tspan class="sub" font-weight="bold" dy="5">2</tspan></text>
+<path class="wire" d="M322 171 H352" marker-end="url(#tip)"/>
+<path class="wire" d="M400 90 V150" marker-end="url(#tip)"/>
+<rect x="352" y="150" width="96" height="42" rx="4" fill="#D9D9D9" stroke="#000000" stroke-width="2.5"/>
+<text class="ink" x="400" y="178" text-anchor="middle" font-size="22" font-weight="bold">GLM</text>
+<path class="wire" d="M400 192 V224" marker-end="url(#tip)"/>
+<circle cx="400" cy="252" r="28" fill="#D9D9D9" stroke="#000000" stroke-width="2.5"/>
+<text class="ink" x="400" y="260" text-anchor="middle"><tspan class="var">y</tspan><tspan class="sub" dy="5">2</tspan></text>
+
+<!-- trial 3 -->
+<circle cx="516" cy="171" r="6" class="ink"/>
+<text class="ink" x="516" y="152" text-anchor="middle"><tspan class="var" font-weight="bold">x</tspan><tspan class="sub" font-weight="bold" dy="5">3</tspan></text>
+<path class="wire" d="M522 171 H552" marker-end="url(#tip)"/>
+<path class="wire" d="M600 90 V150" marker-end="url(#tip)"/>
+<rect x="552" y="150" width="96" height="42" rx="4" fill="#D9D9D9" stroke="#000000" stroke-width="2.5"/>
+<text class="ink" x="600" y="178" text-anchor="middle" font-size="22" font-weight="bold">GLM</text>
+<path class="wire" d="M600 192 V224" marker-end="url(#tip)"/>
+<circle cx="600" cy="252" r="28" fill="#D9D9D9" stroke="#000000" stroke-width="2.5"/>
+<text class="ink" x="600" y="260" text-anchor="middle"><tspan class="var">y</tspan><tspan class="sub" dy="5">3</tspan></text>
+
+<!-- trial 4 -->
+<circle cx="716" cy="171" r="6" class="ink"/>
+<text class="ink" x="716" y="152" text-anchor="middle"><tspan class="var" font-weight="bold">x</tspan><tspan class="sub" font-weight="bold" dy="5">4</tspan></text>
+<path class="wire" d="M722 171 H752" marker-end="url(#tip)"/>
+<path class="wire" d="M800 90 V150" marker-end="url(#tip)"/>
+<rect x="752" y="150" width="96" height="42" rx="4" fill="#D9D9D9" stroke="#000000" stroke-width="2.5"/>
+<text class="ink" x="800" y="178" text-anchor="middle" font-size="22" font-weight="bold">GLM</text>
+<path class="wire" d="M800 192 V224" marker-end="url(#tip)"/>
+<circle cx="800" cy="252" r="28" fill="#D9D9D9" stroke="#000000" stroke-width="2.5"/>
+<text class="ink" x="800" y="260" text-anchor="middle"><tspan class="var">y</tspan><tspan class="sub" dy="5">4</tspan></text>
+
+<text class="ink" x="930" y="100" text-anchor="middle" font-size="26" font-weight="bold">…</text>
+<text class="ink" x="930" y="262" text-anchor="middle" font-size="26" font-weight="bold">…</text>
+</svg>

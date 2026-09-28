@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 430" width="940" height="430" font-family="Helvetica, Arial, sans-serif" role="img" aria-label="Two panels: a first-order Markov chain over the observations, and a hidden Markov model where the chain runs over a latent state that emits the observations">
+<title>From a Markov chain over observations to a hidden Markov model</title>
+<style>
+    .ink { fill: #000000; }
+    .wire { stroke: #000000; stroke-width: 2.5; fill: none; }
+    .var { font-size: 24px; font-style: italic; }
+    .sub { font-size: 15px; }
+    .panel { font-size: 20px; font-weight: bold; }
+    .cap { font-size: 17px; font-style: italic; fill: #333333; }
+    .tag { font-size: 17px; font-style: italic; }
+</style>
+<defs>
+<marker id="tip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path fill="#000000" d="M0 0 L10 5 L0 10 z"/></marker>
+</defs>
+
+<!-- ============ panel a: chain over the observations ============ -->
+<text class="ink panel" x="16" y="34">a</text>
+<text class="cap" x="42" y="34">a first-order Markov chain over the observations</text>
+
+<circle cx="200" cy="100" r="28" fill="#D9D9D9" stroke="#000000" stroke-width="2.5"/>
+<text class="ink" x="200" y="108" text-anchor="middle"><tspan class="var">y</tspan><tspan class="sub" dy="5">1</tspan></text>
+<path class="wire" d="M228 100 H352" marker-end="url(#tip)"/>
+<circle cx="380" cy="100" r="28" fill="#D9D9D9" stroke="#000000" stroke-width="2.5"/>
+<text class="ink" x="380" y="108" text-anchor="middle"><tspan class="var">y</tspan><tspan class="sub" dy="5">2</tspan></text>
+<path class="wire" d="M408 100 H532" marker-end="url(#tip)"/>
+<circle cx="560" cy="100" r="28" fill="#D9D9D9" stroke="#000000" stroke-width="2.5"/>
+<text class="ink" x="560" y="108" text-anchor="middle"><tspan class="var">y</tspan><tspan class="sub" dy="5">3</tspan></text>
+<path class="wire" d="M588 100 H712" marker-end="url(#tip)"/>
+<circle cx="740" cy="100" r="28" fill="#D9D9D9" stroke="#000000" stroke-width="2.5"/>
+<text class="ink" x="740" y="108" text-anchor="middle"><tspan class="var">y</tspan><tspan class="sub" dy="5">4</tspan></text>
+<path class="wire" d="M768 100 H830" marker-end="url(#tip)"/>
+<text class="ink" x="868" y="110" text-anchor="middle" font-size="26" font-weight="bold">…</text>
+
+<!-- ============ panel b: the chain moves onto a latent state ============ -->
+<text class="ink panel" x="16" y="214">b</text>
+<text class="cap" x="42" y="214">the chain moves onto a hidden state, which emits the observations</text>
+
+<path class="wire" d="M118 280 H172" marker-end="url(#tip)"/>
+<text class="ink tag" x="140" y="266" text-anchor="middle">initial</text>
+
+<circle cx="200" cy="280" r="28" fill="#FFFFFF" stroke="#000000" stroke-width="2.5"/>
+<text class="ink" x="200" y="288" text-anchor="middle"><tspan class="var">z</tspan><tspan class="sub" dy="5">1</tspan></text>
+<path class="wire" d="M228 280 H352" marker-end="url(#tip)"/>
+<text class="ink tag" x="290" y="266" text-anchor="middle">transition</text>
+<circle cx="380" cy="280" r="28" fill="#FFFFFF" stroke="#000000" stroke-width="2.5"/>
+<text class="ink" x="380" y="288" text-anchor="middle"><tspan class="var">z</tspan><tspan class="sub" dy="5">2</tspan></text>
+<path class="wire" d="M408 280 H532" marker-end="url(#tip)"/>
+<circle cx="560" cy="280" r="28" fill="#FFFFFF" stroke="#000000" stroke-width="2.5"/>
+<text class="ink" x="560" y="288" text-anchor="middle"><tspan class="var">z</tspan><tspan class="sub" dy="5">3</tspan></text>
+<path class="wire" d="M588 280 H712" marker-end="url(#tip)"/>
+<circle cx="740" cy="280" r="28" fill="#FFFFFF" stroke="#000000" stroke-width="2.5"/>
+<text class="ink" x="740" y="288" text-anchor="middle"><tspan class="var">z</tspan><tspan class="sub" dy="5">4</tspan></text>
+<path class="wire" d="M768 280 H830" marker-end="url(#tip)"/>
+<text class="ink" x="868" y="290" text-anchor="middle" font-size="26" font-weight="bold">…</text>
+
+<path class="wire" d="M200 308 V348" marker-end="url(#tip)"/>
+<text class="ink tag" x="214" y="334">emission</text>
+<circle cx="200" cy="378" r="28" fill="#D9D9D9" stroke="#000000" stroke-width="2.5"/>
+<text class="ink" x="200" y="386" text-anchor="middle"><tspan class="var">y</tspan><tspan class="sub" dy="5">1</tspan></text>
+
+<path class="wire" d="M380 308 V348" marker-end="url(#tip)"/>
+<circle cx="380" cy="378" r="28" fill="#D9D9D9" stroke="#000000" stroke-width="2.5"/>
+<text class="ink" x="380" y="386" text-anchor="middle"><tspan class="var">y</tspan><tspan class="sub" dy="5">2</tspan></text>
+
+<path class="wire" d="M560 308 V348" marker-end="url(#tip)"/>
+<circle cx="560" cy="378" r="28" fill="#D9D9D9" stroke="#000000" stroke-width="2.5"/>
+<text class="ink" x="560" y="386" text-anchor="middle"><tspan class="var">y</tspan><tspan class="sub" dy="5">3</tspan></text>
+
+<path class="wire" d="M740 308 V348" marker-end="url(#tip)"/>
+<circle cx="740" cy="378" r="28" fill="#D9D9D9" stroke="#000000" stroke-width="2.5"/>
+<text class="ink" x="740" y="386" text-anchor="middle"><tspan class="var">y</tspan><tspan class="sub" dy="5">4</tspan></text>
+</svg>
