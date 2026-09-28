@@ -212,7 +212,7 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
                     state,
                 )
 
-            new_params, new_ls_state, took_step = self._apply_or_reject(
+            new_params, new_ls_state, no_step_found = self._apply_or_reject(
                 params,
                 direction,
                 grad,
@@ -224,13 +224,13 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
             return (
                 new_params,
                 eqx.tree_at(lambda x: x.ls_state, new_state, new_ls_state),
-                took_step,
+                no_step_found,
             )
 
         def no_step(_):
             return params, state, jnp.array(False)
 
-        new_params, new_state, took_step = jax.lax.cond(
+        new_params, new_state, no_step_found = jax.lax.cond(
             converged,
             no_step,
             step,
@@ -256,7 +256,7 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
                     reached_max_steps=new_iter >= self.maxiter,
                 ),
                 tree_utils.tree_sub(new_params, params),
-                (~converged) & (~took_step),
+                (~converged) & no_step_found,
             ),
         )
 
@@ -339,8 +339,8 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
     ) -> Tuple[Y, Any, Bool[Array, ""]]:
         """Accept or reject step based on descent condition and line search.
 
-        Returns whether the step was taken, so the caller can tell a rejection from a
-        null step; see :attr:`BaseNewtonState.no_step_found`.
+        Returns the value of :attr:`BaseNewtonState.no_step_found` for this iteration:
+        true when no step was taken and the iterate is not stationary.
         """
         value, slope, value_fn = self._line_search_inputs(
             params, step, grad, fval, *args
@@ -372,14 +372,17 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         def reject(_):
             return params, state.ls_state, jnp.array(False)
 
-        # A zero slope means the iterate is stationary, a positive one that the direction
-        # is unusable, and a NaN one that the subproblem diverged. Report
-        # ``no_step_found``.
-        take_step = descent < 0
-        new_params, new_ls_state, took_step = jax.lax.cond(
-            take_step, accept, reject, None
+        # A positive slope means the direction is unusable and a NaN one that the
+        # subproblem diverged; neither is stepped on.
+        new_params, new_ls_state, stepped = jax.lax.cond(
+            descent < 0, accept, reject, None
         )
-        return new_params, new_ls_state, took_step
+
+        # A failed search at a slope this small means the iterate is stationary rather
+        # than broken, so the zero step is left for the convergence test to read.
+        eps = jnp.finfo(jnp.asarray(value).dtype).eps
+        stationary = jnp.abs(descent) <= eps * jnp.abs(value)
+        return new_params, new_ls_state, ~stepped & ~stationary
 
     def _scalar_dtype(self, init_params: Y, *args: Any):
         """The objective's dtype, which the state's scalars must already carry.
@@ -808,42 +811,6 @@ class ProximalNewton(BaseNewtonSolver[Y, BaseNewtonState[Y]], Generic[Y]):
         )
         self.direction = ProxQuadraticDirection(inner_solver, inner_iter)
         self.curvature = None
-
-    def _hvp_block(self, grad: Y, H: Any, d: Y) -> Y:
-        """Hessian-vector product for a single block."""
-        del grad
-        return lx.PyTreeLinearOperator(H, jax.eval_shape(lambda: d)).mv(d)
-
-    # def _newton_direction(
-    #     self, grad: Y, H: Any, params: Y, state: BaseNewtonState[Y]
-    # ) -> Tuple[Y, BaseNewtonState[Y]]:
-    #     r"""Minimize :math:`\nabla f^\top (z - \beta) + \frac12 (z - \beta)^\top H (z - \beta) + P(z)`.
-    #
-    #     Solving for the new parameters :math:`z` rather than the step keeps the penalty
-    #     where it is defined, so ``self.prox`` applies unchanged and the inner solver does
-    #     not depend on the current iterate.
-    #
-    #     The proximal operator carries metadata defined on the whole parameter tree --
-    #     ``GroupLasso``'s mask, or a per-feature strength -- so the subproblem is solved
-    #     on the full tree and only the Hessian-vector product is split per block. That
-    #     keeps every regularizer usable without slicing each one's penalty metadata.
-    #     """
-    #
-    #     def quadratic(z, _):
-    #         step = tree_utils.tree_sub(z, params)
-    #         hvp = self._block_apply(self._hvp_block, grad, H, step)
-    #         return lx.internal.tree_dot(grad, step) + 0.5 * lx.internal.tree_dot(
-    #             step, hvp
-    #         )
-    #
-    #     new_params = optx.minimise(
-    #         quadratic,
-    #         self._inner_solver,
-    #         y0=params,
-    #         max_steps=self.inner_iter,
-    #         throw=False,
-    #     ).value
-    #     return tree_utils.tree_sub(new_params, params), state
 
     def _line_search_inputs(
         self, params: Y, step: Y, grad: Y, fval: Scalar, *args: Any
