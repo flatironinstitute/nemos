@@ -40,7 +40,6 @@ from ... import tree_utils
 from ...typing import Params, StepResult
 from .._abstract_solver import OptimizationInfo
 from .._fista import FISTA
-from .._newton import DEFAULT_ATOL, DEFAULT_MAX_STEPS, DEFAULT_RTOL
 from ._curvature import LBFGSCurvature, _LBFGSHessianUpdateState
 
 if TYPE_CHECKING:
@@ -49,6 +48,11 @@ if TYPE_CHECKING:
 # The parameter pytree. Both the state and the solver follow it, so a ``GLMParams`` fit
 # and a ``PopulationGLM`` fit are distinct instantiations rather than ``Any``.
 Y = TypeVar("Y")
+
+
+DEFAULT_ATOL = 1e-4
+DEFAULT_RTOL = 0.0
+DEFAULT_MAX_STEPS = 100
 
 
 class LBFGSState(eqx.Module, Generic[Y]):

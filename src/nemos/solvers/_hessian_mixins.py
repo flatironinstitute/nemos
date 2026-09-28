@@ -15,6 +15,7 @@ from .._hess import (
     combine_hessian_tags,
     mask_claim_none,
 )
+from ._second_order import NewtonCurvature
 
 LinearSolverTag = Literal["auto", "cholesky", "eigh", "identity_shift"]
 ResolvedLinearSolverTag = Literal["cholesky", "eigh", "identity_shift"]
@@ -113,7 +114,12 @@ class HessianMixin:
         # symmetric default in that case rather than dropping back to None.
         if tag is not None:
             self._hess_tag = tag
+
+        # TODO: Tag and Hessian fn should live only in curvature, not as attr.
         self._hessian = hess_fn
+        if self._hessian is None:
+            self._hessian = jax.hessian(self.fun)
+        self.curvature = NewtonCurvature(self._hess_tag, self._hessian)
 
     def _penalize_hessian(self, hess_fn, model_tag):
         """Add the regularizer's penalty Hessian to the model's likelihood Hessian.

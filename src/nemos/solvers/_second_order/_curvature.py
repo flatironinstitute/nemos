@@ -245,9 +245,11 @@ class NewtonCurvature(AbstractCurvature[Y, None], Generic[Y]):
 
         axes = self.hessian_tag.batch_axes
         batch_axes = [0] + [axes for _ in range(len(trees))]
+        out_axes = axes
         if block_state is not None:
             batch_axes = batch_axes.append(0)
-        return jax.vmap(fn, in_axes=batch_axes, out_axes=0)(*inps)
+            out_axes = (out_axes, 0)
+        return jax.vmap(fn, in_axes=batch_axes, out_axes=out_axes)(*inps)
 
     def init(self, params: Y, *args) -> Any:
         return self.hessian_fn(params, *args)

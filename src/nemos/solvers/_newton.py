@@ -8,7 +8,6 @@ import jax
 import jax.numpy as jnp
 import lineax as lx
 import optax
-import optimistix as optx
 from jax.flatten_util import ravel_pytree
 from jaxtyping import Array, Bool, Scalar
 from optimistix._misc import cauchy_termination
@@ -18,6 +17,7 @@ from ..solvers._hessian_mixins import HessianMixin, HessianSolverMixin, LinearSo
 from ..typing import Params, StepResult
 from ._abstract_solver import OptimizationInfo
 from ._fista import FISTA
+from ._second_order import ProxQuadraticDirection
 
 DEFAULT_ATOL = 1e-4
 DEFAULT_RTOL = 0.0
@@ -195,13 +195,19 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         converged = self._converged(params, state, grad, fval)
 
         def step(_):
-            H = self._hessian(params, *args)
-            direction, new_state = self._newton_direction(
-                grad,
-                H,
-                params,
-                state,
-            )
+            # grad diff is unused.
+            H = self.curvature.update(None, params, None, None, *args)
+            comp_direction = getattr(self, "direction", None)
+            if isinstance(comp_direction, ProxQuadraticDirection):
+                direction = comp_direction.direction(params, grad, H, self.curvature)
+                new_state = state
+            else:
+                direction, new_state = self._newton_direction(
+                    grad,
+                    H,
+                    params,
+                    state,
+                )
 
             new_params, new_ls_state = self._apply_or_reject(
                 params,
@@ -296,14 +302,14 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         if self._hessian is None:
             self._hessian = jax.hessian(self.fun)
 
-    @abc.abstractmethod
-    def _newton_direction(self, grad: Y, H: Any, params: Y, state: S) -> Tuple[Y, S]:
-        """The step before the line search scales it, and the state after reading it.
-
-        A solver whose direction comes from an adaptive scheme -- ``Newton``'s
-        identity-shift ladder -- returns what that scheme settled on, so the next
-        iteration starts from it. One with nothing to record returns ``state``.
-        """
+    # @abc.abstractmethod
+    # def _newton_direction(self, grad: Y, H: Any, params: Y, state: S) -> Tuple[Y, S]:
+    #     """The step before the line search scales it, and the state after reading it.
+    #
+    #     A solver whose direction comes from an adaptive scheme -- ``Newton``'s
+    #     identity-shift ladder -- returns what that scheme settled on, so the next
+    #     iteration starts from it. One with nothing to record returns ``state``.
+    #     """
 
     @abc.abstractmethod
     def _line_search_inputs(
@@ -765,56 +771,57 @@ class ProximalNewton(BaseNewtonSolver[Y, BaseNewtonState[Y]], Generic[Y]):
             params=init_params, strength=regularizer_strength
         )
 
-        self.inner_iter = inner_iter
         self.inner_atol = inner_atol
         self.inner_rtol = inner_rtol
 
         # The subproblem is solved for the new parameters, so the prox is the
         # regularizer's own and the solver does not depend on the current iterate:
         # build it once rather than per outer iteration.
-        self._inner_solver = FISTA(
+        inner_solver = FISTA(
             atol=inner_atol,
             rtol=inner_rtol,
             norm=lx.internal.two_norm,
             prox=self.prox,
             while_loop_kind="lax",
         )
+        self.direction = ProxQuadraticDirection(inner_solver, inner_iter)
+        self.curvature = None
 
     def _hvp_block(self, grad: Y, H: Any, d: Y) -> Y:
         """Hessian-vector product for a single block."""
         del grad
         return lx.PyTreeLinearOperator(H, jax.eval_shape(lambda: d)).mv(d)
 
-    def _newton_direction(
-        self, grad: Y, H: Any, params: Y, state: BaseNewtonState[Y]
-    ) -> Tuple[Y, BaseNewtonState[Y]]:
-        r"""Minimize :math:`\nabla f^\top (z - \beta) + \frac12 (z - \beta)^\top H (z - \beta) + P(z)`.
-
-        Solving for the new parameters :math:`z` rather than the step keeps the penalty
-        where it is defined, so ``self.prox`` applies unchanged and the inner solver does
-        not depend on the current iterate.
-
-        The proximal operator carries metadata defined on the whole parameter tree --
-        ``GroupLasso``'s mask, or a per-feature strength -- so the subproblem is solved
-        on the full tree and only the Hessian-vector product is split per block. That
-        keeps every regularizer usable without slicing each one's penalty metadata.
-        """
-
-        def quadratic(z, _):
-            step = tree_utils.tree_sub(z, params)
-            hvp = self._block_apply(self._hvp_block, grad, H, step)
-            return lx.internal.tree_dot(grad, step) + 0.5 * lx.internal.tree_dot(
-                step, hvp
-            )
-
-        new_params = optx.minimise(
-            quadratic,
-            self._inner_solver,
-            y0=params,
-            max_steps=self.inner_iter,
-            throw=False,
-        ).value
-        return tree_utils.tree_sub(new_params, params), state
+    # def _newton_direction(
+    #     self, grad: Y, H: Any, params: Y, state: BaseNewtonState[Y]
+    # ) -> Tuple[Y, BaseNewtonState[Y]]:
+    #     r"""Minimize :math:`\nabla f^\top (z - \beta) + \frac12 (z - \beta)^\top H (z - \beta) + P(z)`.
+    #
+    #     Solving for the new parameters :math:`z` rather than the step keeps the penalty
+    #     where it is defined, so ``self.prox`` applies unchanged and the inner solver does
+    #     not depend on the current iterate.
+    #
+    #     The proximal operator carries metadata defined on the whole parameter tree --
+    #     ``GroupLasso``'s mask, or a per-feature strength -- so the subproblem is solved
+    #     on the full tree and only the Hessian-vector product is split per block. That
+    #     keeps every regularizer usable without slicing each one's penalty metadata.
+    #     """
+    #
+    #     def quadratic(z, _):
+    #         step = tree_utils.tree_sub(z, params)
+    #         hvp = self._block_apply(self._hvp_block, grad, H, step)
+    #         return lx.internal.tree_dot(grad, step) + 0.5 * lx.internal.tree_dot(
+    #             step, hvp
+    #         )
+    #
+    #     new_params = optx.minimise(
+    #         quadratic,
+    #         self._inner_solver,
+    #         y0=params,
+    #         max_steps=self.inner_iter,
+    #         throw=False,
+    #     ).value
+    #     return tree_utils.tree_sub(new_params, params), state
 
     def _line_search_inputs(
         self, params: Y, step: Y, grad: Y, fval: Scalar, *args: Any
