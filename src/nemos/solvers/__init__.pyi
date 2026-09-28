@@ -25,6 +25,7 @@ from ._optax_optimistix_solvers import (
     OptimistixOptaxLBFGS,
 )
 from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
+from ._second_order import NewtonCurvature, ProximalLBFGS
 from ._solver_doc_helper import get_solver_documentation
 from ._solver_registry import (
     SolverSpec,
@@ -62,7 +63,9 @@ __all__ = [
     "JaxoptProximalGradient",
     "KeyedOptaxMinimiser",
     "Newton",
+    "NewtonCurvature",
     "ProximalNewton",
+    "ProximalLBFGS",
     "OptimistixOptaxGradientDescent",
     "OptimistixOptaxLBFGS",
     "OptimistixBFGS",

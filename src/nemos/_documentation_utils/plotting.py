@@ -55,9 +55,9 @@ def lnp_schematic(
     - Requires len(weights) == len(intercepts).
     - plot_nonlinear=False and plot_spikes=True will look weird.
     """
-    assert len(weights) == len(intercepts), (
-        "weights and intercepts must have same length!"
-    )
+    assert len(weights) == len(
+        intercepts
+    ), "weights and intercepts must have same length!"
 
     n_weights = len(weights)
     fig, axes = plt.subplots(

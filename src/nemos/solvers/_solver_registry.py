@@ -12,6 +12,7 @@ from ._optax_optimistix_solvers import (
     OptimistixOptaxLBFGS,
 )
 from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
+from ._second_order._lbfgs import ProximalLBFGS
 from ._svrg import WrappedProxSVRG, WrappedSVRG
 from ._validation import validate_solver_class
 
@@ -405,6 +406,7 @@ register("ProximalNewton", ProximalNewton, "nemos", default=True)
 register(
     "GradientDescent", OptimistixOptaxGradientDescent, "optax+optimistix", default=False
 )
+register("ProximalLBFGS", ProximalLBFGS, "nemos", default=True)
 
 if JAXOPT_AVAILABLE:
     from ._jaxopt_solvers import (

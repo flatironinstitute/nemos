@@ -1,6 +1,7 @@
 import itertools
 import warnings
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -141,7 +142,7 @@ def _compute_direction(solver, grad, H, params):
         grad,
         H,
         params,
-        state.identity_shift,
+        state,
     )
     return direction
 
@@ -442,7 +443,9 @@ def test_newton_init_state_default(request, regr_setup, regularizer):
     assert state.stats.converged == jnp.array(False)
     assert jnp.isnan(state.stats.function_val)
     assert state.stats.reached_max_steps == jnp.array(False)
-    assert isinstance(state.ls_state, optax.ScaleByBacktrackingLinesearchState)
+    assert isinstance(
+        state.ls_state.linesearch_state, optax.ScaleByBacktrackingLinesearchState
+    )
     np.testing.assert_array_equal(state.identity_shift, 0.0)
 
 
@@ -951,7 +954,7 @@ def test_modified_direction_is_computed_blockwise(linear_solver, jit):
         grad,
         H,
         params,
-        state.identity_shift,
+        state,
     )
 
     # Compare the blockwise result with solving each block separately.
@@ -1428,11 +1431,11 @@ def test_identity_shift_returns_accepted_shift(jit):
     )
     state = solver.init_state(params)
 
-    direction, identity_shift = solver._newton_direction(
+    direction, new_state = solver._newton_direction(
         grad,
         H,
         params,
-        state.identity_shift,
+        state,
     )
 
     expected_shift = jnp.asarray(2.0, dtype=H.dtype)
@@ -1442,7 +1445,7 @@ def test_identity_shift_returns_accepted_shift(jit):
     )
 
     np.testing.assert_allclose(direction, expected, atol=1e-12, rtol=1e-12)
-    np.testing.assert_allclose(identity_shift, expected_shift)
+    np.testing.assert_allclose(new_state.identity_shift, expected_shift)
 
 
 @pytest.mark.requires_x64
@@ -1468,13 +1471,16 @@ def test_identity_shift_uses_previous_accepted_shift(jit):
         linear_solver="identity_shift",
         identity_shift_beta=0.2,
     )
-    solver.init_state(params)
+    state = solver.init_state(params)
+    # the ladder seeds from the shift the previous iteration accepted, which the state
+    # carries; write it there rather than passing it alongside
+    state = eqx.tree_at(lambda s: s.identity_shift, state, previous_shift)
 
-    direction, identity_shift = solver._newton_direction(
+    direction, new_state = solver._newton_direction(
         grad,
         H,
         params,
-        previous_shift,
+        state,
     )
 
     expected = jnp.linalg.solve(
@@ -1483,4 +1489,4 @@ def test_identity_shift_uses_previous_accepted_shift(jit):
     )
 
     np.testing.assert_allclose(direction, expected, atol=1e-12, rtol=1e-12)
-    np.testing.assert_allclose(identity_shift, previous_shift)
+    np.testing.assert_allclose(new_state.identity_shift, previous_shift)

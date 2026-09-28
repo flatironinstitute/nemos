@@ -168,12 +168,17 @@ a Hessian tag or a linear solver and should not inherit them.
 ### Step acceptance
 
 Both second-order solvers scale their step with `optax.scale_by_backtracking_linesearch`, and
-`Newton._apply_or_reject` decides whether that search runs at all. It gates on the slope contracted
-with the step, `tree_dot(slope, step)`: the step is taken when that is negative, or when it is NaN.
-A zero slope means the iterate is stationary and a positive one that the direction is unusable, so
-both are rejected. The NaN case is deliberate rather than an oversight -- a subproblem that diverged
-has to surface as a non-finite iterate, where rejecting it would leave a zero step behind and the
-Cauchy criterion would report convergence.
+`_apply_or_reject` decides whether that search runs at all. It computes `tree_dot(slope, step)`,
+how fast the objective changes along the step, and takes the step only when that is negative: zero
+means the iterate is stationary, positive that the step goes uphill, and NaN that the subproblem
+diverged.
+
+A rejection cannot simply leave the iterate where it was. That leaves `y_diff` at zero, and
+`cauchy_termination` reads a zero step with a zero function change as convergence, so the failure
+would be reported as success. `_apply_or_reject` therefore returns whether it stepped, and an
+iteration that did not step while not converged sets `no_step_found` on the state. `run` stops on
+it, and `OptimizationInfo` then reports neither `converged` nor `reached_max_steps`: that is how a
+caller tells a stalled run from a solved one and from an exhausted budget.
 
 ### Proximal second-order solvers
 
