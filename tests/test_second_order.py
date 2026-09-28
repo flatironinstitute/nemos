@@ -14,9 +14,7 @@ import lineax as lx
 import numpy as np
 import optax
 import pytest
-from optimistix._solver.limited_memory_bfgs import (
-    _lbfgs_hessian_operator_fn,
-)
+from optimistix._solver.limited_memory_bfgs import _lbfgs_hessian_operator_fn
 
 from nemos.regularizer import Lasso, Ridge
 from nemos.solvers._newton import Newton, ProximalNewton
