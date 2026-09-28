@@ -33,7 +33,6 @@ import jax
 import jax.numpy as jnp
 import lineax as lx
 import optax
-import optimistix as optx
 from jaxtyping import Array, Bool, Scalar
 from optimistix._misc import cauchy_termination
 
@@ -42,6 +41,7 @@ from ...typing import Params, StepResult
 from .._abstract_solver import OptimizationInfo
 from .._fista import FISTA
 from ._curvature import LBFGSCurvature, _LBFGSHessianUpdateState
+from ._direction import ProxQuadraticDirection
 
 if TYPE_CHECKING:
     from ...regularizer import Regularizer
@@ -167,7 +167,7 @@ class ProximalLBFGS(Generic[Y]):
         self.maxiter = maxiter
         self.tol = tol
         self.rtol = rtol
-        self._curvature = LBFGSCurvature[Y](history_length=history_length)
+        self.curvature = LBFGSCurvature[Y](history_length=history_length)
 
         # the penalty alone, for the composite line search. self.fun is the smooth
         # loss here, so the composite objective is self.fun + self._penalty, which is
@@ -208,6 +208,7 @@ class ProximalLBFGS(Generic[Y]):
 
         # Cache
         self._gradient: Callable | None = None
+        self.direction = ProxQuadraticDirection(self._inner_solver, inner_iter)
 
     def _build_cache(self) -> None:
         if self._gradient is None:
@@ -225,7 +226,7 @@ class ProximalLBFGS(Generic[Y]):
 
     def init_state(self, init_params: Y, *args: Any) -> LBFGSState[Y]:
         self._build_cache()
-        hessian_state = self._curvature.init(init_params)
+        hessian_state = self.curvature.init(init_params)
         scalar_dtype = self._scalar_dtype(init_params, *args)
         state = LBFGSState(
             ls_state=self._line_search.init(init_params),
@@ -243,38 +244,6 @@ class ProximalLBFGS(Generic[Y]):
         )
         return state
 
-    def _lbfgs_direction(
-        self, params: Y, grad: Y, state: _LBFGSHessianUpdateState[Y]
-    ) -> Y:
-        r"""Minimize :math:`\nabla f^\top (z - \beta) + \frac12 (z - \beta)^\top H (z - \beta) + P(z)`.
-
-        Solving for the new parameters :math:`z` rather than the step keeps the penalty
-        where it is defined, so ``self.prox`` applies unchanged and the inner solver does
-        not depend on the current iterate.
-
-        The proximal operator carries metadata defined on the whole parameter tree --
-        ``GroupLasso``'s mask, or a per-feature strength -- so the subproblem is solved
-        on the full tree and only the Hessian-vector product is split per block. That
-        keeps every regularizer usable without slicing each one's penalty metadata.
-        """
-
-        def quadratic(z, _):
-            step = tree_utils.tree_sub(z, params)
-            hvp = self._curvature.hvp(state, params, step)
-            return lx.internal.tree_dot(grad, step) + 0.5 * lx.internal.tree_dot(
-                step, hvp
-            )
-
-        new_params = optx.minimise(
-            quadratic,
-            self._inner_solver,
-            y0=params,
-            max_steps=self.inner_iter,
-            throw=False,
-        ).value
-        # ``_apply_or_reject`` scales and adds the result, so return the step
-        return tree_utils.tree_sub(new_params, params)
-
     def _apply_or_reject(
         self,
         params: Y,
@@ -286,8 +255,8 @@ class ProximalLBFGS(Generic[Y]):
     ) -> tuple[Y, Any, Bool[Array, ""]]:
         """Accept or reject step based on descent condition and line search.
 
-        Returns whether the step was taken, so the caller can tell a rejection from a
-        null step; see :attr:`LBFGSState.no_step_found`.
+        Returns the value of :attr:`LBFGSState.no_step_found` for this iteration: true
+        when no step was taken and the iterate is not stationary.
         """
         value, slope, value_fn = self._line_search_inputs(
             params, step, grad, fval, *args
@@ -319,14 +288,17 @@ class ProximalLBFGS(Generic[Y]):
         def reject(_):
             return params, state.ls_state, jnp.array(False)
 
-        # A zero slope means the iterate is stationary, a positive one that the direction
-        # is unusable, and a NaN one that the subproblem diverged. Report
-        # ``no_step_found``.
-        take_step = descent < 0
-        new_params, new_ls_state, took_step = jax.lax.cond(
-            take_step, accept, reject, None
+        # A positive slope means the direction is unusable and a NaN one that the
+        # subproblem diverged; neither is stepped on.
+        new_params, new_ls_state, stepped = jax.lax.cond(
+            descent < 0, accept, reject, None
         )
-        return new_params, new_ls_state, took_step
+
+        # A failed search at a slope this small means the iterate is stationary rather
+        # than broken, so the zero step is left for the convergence test to read.
+        eps = jnp.finfo(jnp.asarray(value).dtype).eps
+        stationary = jnp.abs(descent) <= eps * jnp.abs(value)
+        return new_params, new_ls_state, ~stepped & ~stationary
 
     def _converged(
         self, params: Y, state: LBFGSState[Y], grad: Y, fval: Scalar
@@ -406,16 +378,19 @@ class ProximalLBFGS(Generic[Y]):
         converged = self._converged(params, state, grad, fval)
 
         def step(_):
-            new_hessian_state = self._curvature.update(
+            new_hessian_state = self.curvature.update(
                 state.hessian_update_state,
                 params,
                 state.y_diff,
                 tree_utils.tree_sub(grad, state.grad_prev),
                 *args,
             )
-            step = self._lbfgs_direction(params, grad, new_hessian_state)
 
-            new_params, new_ls_state, took_step = self._apply_or_reject(
+            step = self.direction.direction(
+                params, grad, new_hessian_state, self.curvature
+            )
+
+            new_params, new_ls_state, no_step_found = self._apply_or_reject(
                 params,
                 step,
                 grad,
@@ -434,13 +409,13 @@ class ProximalLBFGS(Generic[Y]):
                     state,
                     (new_ls_state, new_hessian_state, grad),
                 ),
-                took_step,
+                no_step_found,
             )
 
         def no_step(_):
             return params, state, jnp.array(False)
 
-        new_params, new_state, took_step = jax.lax.cond(
+        new_params, new_state, no_step_found = jax.lax.cond(
             converged,
             no_step,
             step,
@@ -464,7 +439,7 @@ class ProximalLBFGS(Generic[Y]):
                     reached_max_steps=new_iter >= self.maxiter,
                 ),
                 tree_utils.tree_sub(new_params, params),
-                (~converged) & (~took_step),
+                (~converged) & no_step_found,
             ),
         )
         return new_params, new_state, aux
