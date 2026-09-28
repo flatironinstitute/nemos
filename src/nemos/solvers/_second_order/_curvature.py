@@ -229,14 +229,13 @@ class LBFGSCurvature(AbstractCurvature[Y, _LBFGSHessianUpdateState], Generic[Y])
         # is static, so the state is an ordinary pytree of arrays and ``lax.cond`` applies.
         new_state = jax.lax.cond(positive_curvature, update, no_update, None)
 
-        # While the history is empty ``hvp`` needs a scale of its own, and this is the
-        # only place with a gradient in hand to set one from. On the first call
-        # ``grad_diff`` is the gradient itself, the previous one being zero. The floor
-        # plays the part of SciPy's ``stpmx`` cap on ``1 / ||d||``, bounding the step a
-        # vanishing gradient can ask for; SciPy's is the f64 constant ``1e10``, so it is
-        # taken here from the dtype, as ``HessianSolverMixin`` takes its ``_delta``.
+        # Set the scale ``hvp`` uses while there is no history to scale it; this is the
+        # only place holding a gradient to set it from.
         empty_history = state.index_start == 0
+        # on the first call ``grad_diff`` is the gradient itself, ``grad_prev`` being zero
         grad_norm = jnp.sqrt(lx.internal.tree_dot(grad_diff, grad_diff))
+        # SciPy's ``stpmx`` cap on ``1 / ||d||``, but read off the dtype rather than its
+        # f64 constant ``1e10``, as ``HessianSolverMixin`` reads its ``_delta``
         floor = jnp.sqrt(jnp.finfo(grad_norm.dtype).eps)
         return eqx.tree_at(
             lambda s: s.initial_scale,
