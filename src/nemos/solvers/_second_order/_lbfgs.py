@@ -436,7 +436,7 @@ class ProximalLBFGS(Generic[Y]):
             state.stats.num_steps + 1,
         )
         new_state = eqx.tree_at(
-            lambda s: (s.grad_norm, s.stats, s.y_diff),
+            lambda s: (s.grad_norm, s.stats, s.y_diff, s.no_step_found),
             new_state,
             (
                 gnorm,
@@ -447,6 +447,7 @@ class ProximalLBFGS(Generic[Y]):
                     reached_max_steps=new_iter >= self.maxiter,
                 ),
                 tree_utils.tree_sub(new_params, params),
+                (~converged) & (~took_step),
             ),
         )
         return new_params, new_state, aux
@@ -461,7 +462,11 @@ class ProximalLBFGS(Generic[Y]):
 
         def cond(carry):
             _, s = carry
-            return (~s.stats.converged) & (s.stats.num_steps < self.maxiter)
+            return (
+                (~s.stats.converged)
+                & (~s.no_step_found)
+                & (s.stats.num_steps < self.maxiter)
+            )
 
         def body(carry):
             p, s = carry
