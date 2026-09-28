@@ -388,8 +388,30 @@ class ProximalLBFGS(Generic[Y]):
         )
         return new_params, new_state, aux
 
-    @eqx.filter_jit
     def run(
+        self,
+        init_params: Y,
+        *args: Any,
+    ) -> StepResult:
+        """Iterate to convergence, to a stall, or to ``maxiter``.
+
+        ``jit`` picks which of the two loops in :meth:`_run` executes, so the compiled
+        path has to be reached through a separate method: decorating this one would trace
+        the Python loop and fail on its data-dependent condition.
+        """
+        if self.jit:
+            return self._run_jit(init_params, *args)
+        return self._run(init_params, *args)
+
+    @eqx.filter_jit
+    def _run_jit(
+        self,
+        init_params: Y,
+        *args: Any,
+    ) -> StepResult:
+        return self._run(init_params, *args)
+
+    def _run(
         self,
         init_params: Y,
         *args: Any,

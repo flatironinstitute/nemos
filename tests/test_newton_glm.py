@@ -473,7 +473,9 @@ def test_newton_glm_initialize_state(
     assert jnp.isnan(state.stats.function_val)
     assert state.stats.converged == jnp.array(False)
     assert state.stats.reached_max_steps == jnp.array(False)
-    assert isinstance(state.ls_state, optax.ScaleByBacktrackingLinesearchState)
+    assert isinstance(
+        state.ls_state.linesearch_state, optax.ScaleByBacktrackingLinesearchState
+    )
 
 
 @pytest.mark.requires_x64
@@ -1177,21 +1179,18 @@ def _positive_shift(shift_fn):
 _CHOLESKY_PD = {
     "_resolved_linear_solver": lambda _: "cholesky",
     "_linear_solver": lambda _: lx.Cholesky,
-    "_operator_tags": lambda _: lx.positive_semidefinite_tag,
     "_shift_fn": lambda _: _zero_shift,
 }
 
 _CHOLESKY_PSD = {
     "_resolved_linear_solver": lambda _: "cholesky",
     "_linear_solver": lambda _: lx.Cholesky,
-    "_operator_tags": lambda _: lx.positive_semidefinite_tag,
     "_shift_fn": lambda _: _positive_shift,
 }
 
 _EIGH = {
     "_resolved_linear_solver": lambda _: "eigh",
     "_linear_solver": lambda _: None,
-    "_operator_tags": lambda _: (),
     "_shift_fn": lambda _: _zero_shift,
     "_delta": lambda params: jnp.sqrt(
         jnp.finfo(jnp.result_type(*jax.tree_util.tree_leaves(params))).eps
@@ -1991,7 +1990,9 @@ def test_prox_newton_backtracking_matches_tseng_yun_reference(
     # the search reads its previous stepsize off the state; setting it directly keeps the
     # warm start a parametrized axis instead of a by-product of a trajectory
     state = eqx.tree_at(
-        lambda s: s.ls_state.learning_rate, state, jnp.asarray(prev_stepsize)
+        lambda s: s.ls_state.linesearch_state.learning_rate,
+        state,
+        jnp.asarray(prev_stepsize),
     )
 
     (fval, _), grad = solver._gradient(params, X, y)
@@ -2011,8 +2012,12 @@ def test_prox_newton_backtracking_matches_tseng_yun_reference(
         objective, start, np.asarray(step), delta, prev_stepsize
     )
 
-    np.testing.assert_allclose(ls_state.learning_rate, expected_stepsize, rtol=1e-12)
-    assert int(ls_state.info.num_linesearch_steps) == expected_evaluations
+    np.testing.assert_allclose(
+        ls_state.linesearch_state.learning_rate, expected_stepsize, rtol=1e-12
+    )
+    assert (
+        int(ls_state.linesearch_state.info.num_linesearch_steps) == expected_evaluations
+    )
     np.testing.assert_allclose(
         new_params, start + expected_stepsize * np.asarray(step), rtol=1e-12, atol=1e-15
     )

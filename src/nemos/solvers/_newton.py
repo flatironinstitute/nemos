@@ -181,7 +181,7 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
             self.fun_with_aux = lambda p, *a: (loss_fn(p, *a), None)
 
         self._gradient: Callable | None = None
-        self._hessian: Callable | None = None
+        # sets ``_hessian`` and ``curvature``, so there is nothing to seed here
         self._init_hessian(regularizer, regularizer_strength, init_params)
         self._line_search = line_search
 
@@ -260,8 +260,30 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
 
         return new_params, new_state, aux
 
-    @eqx.filter_jit
     def run(
+        self,
+        init_params: Y,
+        *args: Any,
+    ) -> StepResult:
+        """Iterate to convergence, to a stall, or to ``maxiter``.
+
+        ``jit`` picks which of the two loops in :meth:`_run` executes, so the compiled
+        path has to be reached through a separate method: decorating this one would trace
+        the Python loop and fail on its data-dependent condition.
+        """
+        if self.jit:
+            return self._run_jit(init_params, *args)
+        return self._run(init_params, *args)
+
+    @eqx.filter_jit
+    def _run_jit(
+        self,
+        init_params: Y,
+        *args: Any,
+    ) -> StepResult:
+        return self._run(init_params, *args)
+
+    def _run(
         self,
         init_params: Y,
         *args: Any,
@@ -307,9 +329,6 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
                 self.fun_with_aux,
                 has_aux=True,
             )
-
-        if self._hessian is None:
-            self._hessian = jax.hessian(self.fun)
 
     def _apply_or_reject(
         self,
@@ -760,7 +779,6 @@ class ProximalNewton(BaseNewtonSolver[Y, BaseNewtonState[Y]], Generic[Y]):
             while_loop_kind="lax",
         )
         self.direction = ProxQuadraticDirection(inner_solver, inner_iter)
-        self.curvature = None
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:

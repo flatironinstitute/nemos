@@ -72,7 +72,11 @@ class HessianMixin:
             flat_on=mask_claim_none(init_params),
             definite_on=mask_claim_none(init_params),
         )
-        self._hessian: Callable | None = None
+        # ``setup_hessian`` is optional -- ``AbstractSolver`` defaults it to a no-op --
+        # so a solver that never receives an analytic Hessian has to arrive with one
+        # that differentiates the objective, and with the curvature model built on it.
+        self._hessian: Callable = jax.hessian(self.fun)
+        self.curvature = NewtonCurvature(self._hess_tag, self._hessian)
 
     def setup_hessian(
         self,
@@ -116,9 +120,10 @@ class HessianMixin:
             self._hess_tag = tag
 
         # TODO: Tag and Hessian fn should live only in curvature, not as attr.
-        self._hessian = hess_fn
-        if self._hessian is None:
-            self._hessian = jax.hessian(self.fun)
+        # ``hess_fn`` is None when the model has no analytic Hessian to offer, and the
+        # autodiff one built in ``_init_hessian`` already stands in for it.
+        if hess_fn is not None:
+            self._hessian = hess_fn
         self.curvature = NewtonCurvature(self._hess_tag, self._hessian)
 
     def _penalize_hessian(self, hess_fn, model_tag):
