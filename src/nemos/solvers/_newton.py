@@ -357,23 +357,29 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
                 value_fn=value_fn,
             )
 
+            # optax returns its last trial even when the sufficient-decrease test was
+            # never met within ``max_backtracking_steps``, and that trial can be worse
+            # than where it started. A positive ``decrease_error`` is its report.
+            found = new_ls_state.info.decrease_error <= 0
             new_params = jax.tree_util.tree_map(
-                lambda p, u: p + u,
+                lambda p, u: jnp.where(found, p + u, p),
                 params,
                 updates,
             )
 
-            return new_params, new_ls_state
+            return new_params, new_ls_state, found
 
         def reject(_):
-            return params, state.ls_state
+            return params, state.ls_state, jnp.array(False)
 
         # A zero slope means the iterate is stationary, a positive one that the direction
         # is unusable, and a NaN one that the subproblem diverged. Report
         # ``no_step_found``.
         take_step = descent < 0
-        new_params, new_ls_state = jax.lax.cond(take_step, accept, reject, None)
-        return new_params, new_ls_state, take_step
+        new_params, new_ls_state, took_step = jax.lax.cond(
+            take_step, accept, reject, None
+        )
+        return new_params, new_ls_state, took_step
 
     def _scalar_dtype(self, init_params: Y, *args: Any):
         """The objective's dtype, which the state's scalars must already carry.
