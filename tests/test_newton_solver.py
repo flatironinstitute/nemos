@@ -18,8 +18,8 @@ from nemos._hess import (
 )
 from nemos.regularizer import Ridge, UnRegularized
 from nemos.solvers._abstract_solver import OptimizationInfo
-from nemos.solvers._hessian_mixins import LinearSolverTag
-from nemos.solvers._newton import Newton, NewtonState
+from nemos.solvers._second_order._hessian_mixins import LinearSolverTag
+from nemos.solvers._second_order._newton import Newton, NewtonState
 from nemos.tree_utils import pytree_map_and_reduce
 
 N = 8

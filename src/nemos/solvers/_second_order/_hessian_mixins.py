@@ -7,15 +7,15 @@ import jax
 import jax.numpy as jnp
 import lineax as lx
 
-from .. import tree_utils
-from .._hess import (
+from ... import tree_utils
+from ..._hess import (
     HessianTag,
     MatrixProperty,
     MatrixStructure,
     combine_hessian_tags,
     mask_claim_none,
 )
-from ._second_order import NewtonCurvature
+from .._second_order import NewtonCurvature
 
 LinearSolverTag = Literal["auto", "cholesky", "eigh", "identity_shift"]
 ResolvedLinearSolverTag = Literal["cholesky", "eigh", "identity_shift"]

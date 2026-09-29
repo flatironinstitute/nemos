@@ -11,13 +11,13 @@ from jax.flatten_util import ravel_pytree
 from jaxtyping import Array, Bool, Scalar
 from optimistix._misc import cauchy_termination
 
-from .. import tree_utils
-from ..solvers._hessian_mixins import HessianMixin, HessianSolverMixin, LinearSolverTag
-from ..typing import Params, StepResult
-from ._abstract_solver import OptimizationInfo
-from ._fista import FISTA
-from ._second_order import ProxQuadraticDirection
-from ._second_order._linesearches import ArmijoBacktracking, TsengYunBacktracking
+from ... import tree_utils
+from ...typing import Params, StepResult
+from .._abstract_solver import OptimizationInfo
+from .._fista import FISTA
+from . import ProxQuadraticDirection
+from ._hessian_mixins import HessianMixin, HessianSolverMixin, LinearSolverTag
+from ._linesearches import ArmijoBacktracking, TsengYunBacktracking
 
 DEFAULT_ATOL = 1e-4
 DEFAULT_RTOL = 0.0

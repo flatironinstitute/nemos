@@ -18,13 +18,12 @@ from ._jaxopt_solvers import (
     JaxoptNonlinearCG,
     JaxoptProximalGradient,
 )
-from ._newton import Newton, ProximalNewton
 from ._optax_optimistix_solvers import (
     OptimistixOptaxGradientDescent,
     OptimistixOptaxLBFGS,
 )
 from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
-from ._second_order import NewtonCurvature, ProximalLBFGS
+from ._second_order import Newton, NewtonCurvature, ProximalLBFGS, ProximalNewton
 from ._solver_doc_helper import get_solver_documentation
 from ._solver_registry import (
     SolverSpec,

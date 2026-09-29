@@ -4,3 +4,5 @@ from ._direction import ProxQuadraticDirection as ProxQuadraticDirection
 from ._lbfgs import ProximalLBFGS as ProximalLBFGS
 from ._linesearches import ArmijoBacktracking as ArmijoBacktracking
 from ._linesearches import TsengYunBacktracking as TsengYunBacktracking
+from ._newton import Newton as Newton
+from ._newton import ProximalNewton as ProximalNewton

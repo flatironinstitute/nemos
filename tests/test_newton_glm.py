@@ -26,7 +26,7 @@ from nemos.glm.classifier_glm import ClassifierGLM, ClassifierPopulationGLM
 from nemos.glm.params import GLMParams
 from nemos.regularizer import GroupLasso, Lasso, Regularizer, Ridge, UnRegularized
 from nemos.solvers._abstract_solver import OptimizationInfo
-from nemos.solvers._newton import (
+from nemos.solvers._second_order._newton import (
     BaseNewtonState,
     Newton,
     NewtonState,
