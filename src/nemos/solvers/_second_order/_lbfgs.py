@@ -76,6 +76,8 @@ class LBFGSState(eqx.Module, Generic[Y]):
     no_step_found: Bool[Array, ""]
     # optax's line-search state, whose type is private to the chosen transformation.
     ls_state: Optional[Any] = None
+    # direction state (shift_index for Newton, None for the ProxNewton & ProxLBFGS)
+    direction_state: Optional[Any] = None
 
 
 class ProximalLBFGS(Generic[Y]):
@@ -329,9 +331,8 @@ class ProximalLBFGS(Generic[Y]):
                 tree_utils.tree_sub(grad, state.grad_prev),
                 *args,
             )
-
-            step = self.direction.direction(
-                params, grad, new_hessian_state, self.curvature
+            step, dir_state = self.direction.update(
+                params, grad, None, new_hessian_state, self.curvature
             )
 
             new_params, new_ls_state, no_step_found = self._apply_or_reject(
@@ -349,9 +350,14 @@ class ProximalLBFGS(Generic[Y]):
             return (
                 new_params,
                 eqx.tree_at(
-                    lambda x: (x.ls_state, x.hessian_update_state, x.grad_prev),
+                    lambda x: (
+                        x.ls_state,
+                        x.hessian_update_state,
+                        x.grad_prev,
+                        x.direction_state,
+                    ),
                     state,
-                    (new_ls_state, new_hessian_state, grad),
+                    (new_ls_state, new_hessian_state, grad, dir_state),
                 ),
                 no_step_found,
             )

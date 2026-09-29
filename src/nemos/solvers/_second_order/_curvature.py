@@ -6,10 +6,12 @@ import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import lineax as lx
+from jax.flatten_util import ravel_pytree
 from jaxtyping import Array, Float, PyTree, Scalar
 from optimistix._solver.limited_memory_bfgs import _lbfgs_hessian_operator_fn
 
-from ..._hess import HessianTag, MatrixStructure
+from ..._hess import HessianTag
+from ._utils import map_blocks
 
 # hessian state
 S = TypeVar("S")
@@ -84,10 +86,13 @@ class AbstractCurvature(eqx.Module, ABC, Generic[Y, S]):
         y_diff: Y,
         grad_diff: Y,
         *args: Any,
-    ) -> tuple[Any, S]: ...
+    ) -> S: ...
 
     @abstractmethod
     def hvp(self, state: S, params: Y, v: Y, *args) -> Y: ...
+
+    @abstractmethod
+    def as_hessian_tree(self, params: Y, state: S) -> lx.AbstractLinearOperator: ...
 
 
 def _batched_tree_zeros_like(y, batch_dimension):
@@ -270,12 +275,30 @@ class LBFGSCurvature(AbstractCurvature[Y, _LBFGSHessianUpdateState], Generic[Y])
             *SIAM Journal on Scientific Computing*, 16(5), 1190-1208.
             https://doi.org/10.1137/0916069
         """
+        del params
         scaled = _lbfgs_hessian_operator_fn(v, state)
         return jax.tree.map(
             lambda s, u: jnp.where(state.index_start == 0, state.initial_scale * u, s),
             scaled,
             v,
         )
+
+    def as_hessian_tree(self, params: Y, state: S):
+        """Return the hessian pytree.
+
+        Notes
+        -----
+        The full hessian is size N^2, where N is the number of parameters.
+        The method is here for consistency with the NewtonCurvature, and
+        can be used for debugging.
+        """
+        flat, unravel = ravel_pytree(params)
+        identity = jax.vmap(unravel)(jnp.eye(len(flat)))
+
+        def _hvp(v):
+            return self.hvp(state, params, v)
+
+        return jax.vmap(_hvp)(identity)
 
 
 class NewtonCurvature(AbstractCurvature[Y, None], Generic[Y]):
@@ -286,24 +309,6 @@ class NewtonCurvature(AbstractCurvature[Y, None], Generic[Y]):
 
     hessian_tag: HessianTag
     hessian_fn: Callable
-
-    def map_blocks(self, fn, H: Any, trees: tuple[Y], block_state=None, *args):
-        """Run ``fn(H_blk, *tree_blks, state_blk)`` once per block and restack.
-
-        ``trees`` are parameter-shaped and map along ``batch_axes``; ``block_state``
-        maps along 0 and comes back along 0.
-        """
-        inps = (H, *trees) if block_state is None else (H, *trees, block_state)
-        if self.hessian_tag.structure is not MatrixStructure.BLOCK_DIAGONAL:
-            return fn(*inps)
-
-        axes = self.hessian_tag.batch_axes
-        batch_axes = [0] + [axes for _ in range(len(trees))]
-        out_axes = axes
-        if block_state is not None:
-            batch_axes = batch_axes.append(0)
-            out_axes = (out_axes, 0)
-        return jax.vmap(fn, in_axes=batch_axes, out_axes=out_axes)(*inps)
 
     def init(self, params: Y, *args) -> Any:
         return self.hessian_fn(params, *args)
@@ -322,4 +327,8 @@ class NewtonCurvature(AbstractCurvature[Y, None], Generic[Y]):
         def apply_operator(H_b, v_b):
             return lx.PyTreeLinearOperator(H_b, jax.eval_shape(lambda: v_b)).mv(v_b)
 
-        return self.map_blocks(apply_operator, state, (v,))
+        return map_blocks(apply_operator, state, (v,), self.hessian_tag)
+
+    def as_hessian_tree(self, params: Y, state: S):
+        del params
+        return state

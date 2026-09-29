@@ -7,7 +7,6 @@ import jax
 import jax.numpy as jnp
 import lineax as lx
 import optax
-from jax.flatten_util import ravel_pytree
 from jaxtyping import Array, Bool, Scalar
 from optimistix._misc import cauchy_termination
 
@@ -15,7 +14,7 @@ from ... import tree_utils
 from ...typing import Params, StepResult
 from .._abstract_solver import OptimizationInfo
 from .._fista import FISTA
-from . import ProxQuadraticDirection
+from ._direction import ProxQuadraticDirection
 from ._hessian_mixins import HessianMixin, HessianSolverMixin, LinearSolverTag
 from ._linesearches import ArmijoBacktracking, TsengYunBacktracking
 
@@ -29,10 +28,10 @@ DEFAULT_MAX_STEPS = 100
 Y = TypeVar("Y")
 # The state a solver carries. Each solver pins it to its own class, which is what keeps
 # ``Newton``'s identity shift out of the states that have no ladder to seed.
-S = TypeVar("S", bound="BaseNewtonState")
+S = TypeVar("S", bound="NewtonState")
 
 
-class BaseNewtonState(eqx.Module, Generic[Y]):
+class NewtonState(eqx.Module, Generic[Y]):
     """What every solver built on :class:`BaseNewtonSolver` carries between iterations."""
 
     grad_norm: Scalar
@@ -45,16 +44,7 @@ class BaseNewtonState(eqx.Module, Generic[Y]):
     # Set when an iteration produced no usable step: the direction was not a descent
     # direction, or it was not finite. It ends the run, and it is not convergence.
     no_step_found: Bool[Array, ""]
-
-
-class NewtonState(BaseNewtonState[Y]):
-    """Adds the shift the ``identity_shift`` ladder last accepted, one per Hessian block.
-
-    The Hessian itself is rebuilt from the data every iteration, so none of it is
-    carried; the shift is, because it seeds the next iteration's ladder.
-    """
-
-    identity_shift: Array
+    direction_state: Array | None = None
 
 
 def _solve_shifted_system(
@@ -198,17 +188,15 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         def step(_):
             # grad diff is unused.
             H = self.curvature.update(None, params, None, None, *args)
-            comp_direction = getattr(self, "direction", None)
-            if isinstance(comp_direction, ProxQuadraticDirection):
-                direction = comp_direction.direction(params, grad, H, self.curvature)
-                new_state = state
-            else:
-                direction, new_state = self._newton_direction(
-                    grad,
-                    H,
-                    params,
-                    state,
-                )
+            direction, dir_state = self.direction.update(
+                params, grad, state.direction_state, H, self.curvature
+            )
+            new_state = eqx.tree_at(
+                lambda s: s.direction_state,
+                state,
+                dir_state,
+                is_leaf=lambda x: x is None,
+            )
 
             new_params, new_ls_state, no_step_found = self._apply_or_reject(
                 params,
@@ -362,7 +350,7 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         return jax.eval_shape(self.fun, init_params, *args).dtype
 
     def _common_state_fields(self, init_params: Y, *args: Any) -> dict[str, Any]:
-        """The :class:`BaseNewtonState` fields, ready to splat into any subclass of it."""
+        """The :class:`NewtonState` fields, ready to splat into any subclass of it."""
         self._build_cache()
         scalar_dtype = self._scalar_dtype(init_params, *args)
         return dict(
@@ -381,8 +369,8 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
             no_step_found=jnp.array(False),
         )
 
-    def init_state(self, init_params: Y, *args: Any) -> BaseNewtonState[Y]:
-        return BaseNewtonState(**self._common_state_fields(init_params, *args))
+    def init_state(self, init_params: Y, *args: Any) -> NewtonState[Y]:
+        return NewtonState(**self._common_state_fields(init_params, *args))
 
     def _converged(self, params: Y, state: S, grad: Y, fval: Scalar) -> Bool[Array, ""]:
         """Check convergence via a Cauchy criterion on the accepted step size.
@@ -415,7 +403,7 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
 
     def _get_optim_info(
         self,
-        state: BaseNewtonState[Y],
+        state: NewtonState[Y],
         **kwargs,
     ) -> OptimizationInfo:
         return state.stats
@@ -526,136 +514,14 @@ class Newton(BaseNewtonSolver[Y, NewtonState[Y]], HessianSolverMixin, Generic[Y]
             tol=tol,
             rtol=rtol,
         )
+        self.direction = None
 
     def init_state(self, init_params: Y, *args: Any) -> NewtonState[Y]:
-        self._resolve_linear_solver(init_params)
-        zero = jnp.zeros((), dtype=self._scalar_dtype(init_params, *args))
+        self._setup_linear_solve_direction(init_params)
         return NewtonState(
             **self._common_state_fields(init_params, *args),
-            identity_shift=self._init_block_state(init_params, zero),
+            direction_state=self.direction.init(init_params, self.curvature),
         )
-
-    def _solve(
-        self, grad: Y, H: Any, params: Y, previous_shift: Array
-    ) -> Tuple[Y, Array]:
-        del params
-
-        operator = lx.PyTreeLinearOperator(H, jax.eval_shape(lambda: grad))
-
-        # Modify the Hessian eigenvalues, then solve the resulting positive-definite system
-        # This handles symmetric indefinite Hessians in one decomposition
-        # Nocedal and Wright Algorithm equation (3.49)
-        if self._resolved_linear_solver == "eigh":
-            g_flat, unravel = ravel_pytree(grad)
-            H_dense = operator.as_matrix()
-            eigvals, Q = jnp.linalg.eigh(H_dense)
-            lam_mod = jnp.maximum(jnp.abs(eigvals), self._delta)
-            direction = Q @ ((Q.T @ (-g_flat)) / lam_mod)
-            return unravel(direction), previous_shift
-
-        # Add tau * I and increase tau until Cholesky succeeds
-        # Nocedal and Wright Algorithm 3.3
-        elif self._resolved_linear_solver == "identity_shift":
-            diag = lx.diagonal(operator)
-            dtype = diag.dtype
-
-            # Beta scales with the matrix so the shift ladder is scale-equivariant;
-            # N&W give 1e-3 as the typical magnitude, here relative to the diagonal
-            eps = jnp.asarray(jnp.finfo(dtype).eps, dtype=dtype)
-            beta = jnp.maximum(
-                jnp.asarray(self.identity_shift_beta, dtype=dtype)
-                * jnp.max(jnp.abs(diag)),
-                eps,
-            )
-
-            min_diag = jnp.min(diag)
-            # N&W seed the ladder from the shift the last iteration accepted.
-            # Decaying it by the factor the ladder climbs by costs at most one extra
-            # factorization when the required shift is stable, and lets tau fall back
-            # to zero once the iterates reach a region where the unshifted Cholesky succeeds.
-            warm_start = jnp.where(
-                previous_shift > beta,
-                jnp.asarray(0.1, dtype=dtype) * previous_shift,  # scale it down of 1/10
-                jnp.zeros((), dtype=dtype),
-            )
-            tau0 = jnp.maximum(
-                jnp.where(min_diag > 0, jnp.zeros((), dtype=dtype), -min_diag + beta),
-                warm_start,
-            )
-
-            cholesky = lx.Cholesky()
-
-            def _solve(tau):
-                result = _solve_shifted_system(
-                    operator,
-                    grad,
-                    tau,
-                    solver=cholesky,
-                    tags=lx.positive_semidefinite_tag,
-                    throw=False,
-                )
-                failed = (
-                    result.result != lx.RESULTS.successful
-                ) | ~tree_utils.tree_all_finite(result.value)
-                return result.value, failed
-
-            direction0, failed0 = _solve(tau0)
-
-            def cond(carry):
-                iteration, _, _, failed = carry
-                return failed & (iteration < self.identity_shift_max_steps)
-
-            def body(carry):
-                iteration, tau, _, _ = carry
-                new_tau = jnp.maximum(jnp.asarray(10.0, dtype=dtype) * tau, beta)
-                direction, failed = _solve(new_tau)
-                return iteration + 1, new_tau, direction, failed
-
-            _, tau, direction, failed = eqx.internal.while_loop(
-                cond,
-                body,
-                (
-                    jnp.asarray(0),
-                    tau0,
-                    direction0,
-                    failed0,
-                ),
-                kind="lax",
-            )
-
-            accepted_shift = jnp.where(failed, previous_shift, tau)
-            return direction, accepted_shift
-
-        # Catch use before init_state has resolved the requested strategy.
-        elif self._resolved_linear_solver != "cholesky":
-            raise RuntimeError(
-                "The solver has not been resolved. Call init_state before update."
-            )
-
-        # Solve a positive Hessian with Lineax Cholesky.
-        # For a PSD tag, _shift_fn adds the small numerical shift selected by the tag
-        direction = _solve_shifted_system(
-            operator,
-            grad,
-            self._shift_fn(operator),
-            solver=self._linear_solver,
-            tags=lx.positive_semidefinite_tag,  # it has to be otherwise it'll raise
-        ).value
-
-        return direction, previous_shift
-
-    def _newton_direction(
-        self, grad: Y, H: Any, params: Y, state: NewtonState[Y]
-    ) -> Tuple[Y, NewtonState[Y]]:
-        identity_shift = state.identity_shift
-        direction, identity_shift = self._block_apply(
-            self._solve,
-            grad,
-            H,
-            params,
-            block_state=identity_shift,
-        )
-        return direction, eqx.tree_at(lambda s: s.identity_shift, state, identity_shift)
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
@@ -672,7 +538,7 @@ class Newton(BaseNewtonSolver[Y, NewtonState[Y]], HessianSolverMixin, Generic[Y]
         )
 
 
-class ProximalNewton(BaseNewtonSolver[Y, BaseNewtonState[Y]], Generic[Y]):
+class ProximalNewton(BaseNewtonSolver[Y, NewtonState[Y]], Generic[Y]):
     r"""Proximal Newton solver for composite objectives.
 
     Minimizes :math:`f(\beta) + P(\beta)` with :math:`f` the smooth loss and :math:`P`

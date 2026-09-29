@@ -172,6 +172,7 @@ VALID_PAIRS = [
     {"bias", "bas"},
     {"M_grid", "grid"},
     {"inner_atol", "inner_rtol"},
+    {"hessian_state", "hessian_tag"},
 ]
 
 

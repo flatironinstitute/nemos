@@ -2017,7 +2017,7 @@ def test_prox_newton_backtracking_matches_tseng_yun_reference(
 
     (fval, _), grad = solver._gradient(params, X, y)
     H = solver.curvature.update(None, params, None, None, X, y)
-    direction = solver.direction.direction(params, grad, H, solver.curvature)
+    direction = solver.direction.update(params, grad, H, solver.curvature)
     step = jax.tree.map(lambda d: scale * d, direction)
     _, delta, _ = solver._line_search._slope_descent_value(params, step, grad, fval)
     delta = float(delta)

@@ -1,5 +1,6 @@
 from ._curvature import LBFGSCurvature as LBFGSCurvature
 from ._curvature import NewtonCurvature as NewtonCurvature
+from ._direction import LinearSolveDirection as LinearSolveDirection
 from ._direction import ProxQuadraticDirection as ProxQuadraticDirection
 from ._lbfgs import ProximalLBFGS as ProximalLBFGS
 from ._linesearches import ArmijoBacktracking as ArmijoBacktracking

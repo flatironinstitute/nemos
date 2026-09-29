@@ -15,7 +15,8 @@ from ..._hess import (
     combine_hessian_tags,
     mask_claim_none,
 )
-from .._second_order import NewtonCurvature
+from . import NewtonCurvature
+from ._direction import LinearSolveDirection
 
 LinearSolverTag = Literal["auto", "cholesky", "eigh", "identity_shift"]
 ResolvedLinearSolverTag = Literal["cholesky", "eigh", "identity_shift"]
@@ -81,7 +82,7 @@ class HessianMixin:
     def setup_hessian(
         self,
         hess_fn: Callable | None = None,
-        hess_tag: HessianTag | None = None,
+        hessian_tag: HessianTag | None = None,
         reg_tag: HessianTag | None = None,
         property_override: Optional[type] = None,
     ) -> None:
@@ -102,9 +103,13 @@ class HessianMixin:
             # semidefinite.
             reg_tag = property_override = None
         else:
-            hess_fn = self._penalize_hessian(hess_fn, hess_tag)
+            hess_fn = self._penalize_hessian(hess_fn, hessian_tag)
 
-        tag = hess_tag if reg_tag is None else combine_hessian_tags(hess_tag, reg_tag)
+        tag = (
+            hessian_tag
+            if reg_tag is None
+            else combine_hessian_tags(hessian_tag, reg_tag)
+        )
         if property_override is not None and tag is not None:
             tag = HessianTag(
                 tag.structure,
@@ -220,7 +225,7 @@ class HessianSolverMixin:
         self._linear_solver: lx.AbstractLinearSolver | None = None
         self._shift_fn: Callable | None = None
 
-    def _resolve_linear_solver(self, init_params) -> None:
+    def _setup_linear_solve_direction(self, init_params) -> None:  # noqa: C901
         """Resolve the Hessian solution strategy from the tag and user request."""
         matrix_property = self._hess_tag.property
 
@@ -254,11 +259,9 @@ class HessianSolverMixin:
                 RuntimeWarning,
                 stacklevel=2,
             )
-
-        self._resolved_linear_solver = resolved
-
+        _delta = 0.0
         if resolved == "cholesky":
-            self._linear_solver = lx.Cholesky()
+            _linear_solver = lx.Cholesky()
             # Continue using the tag to distinguish the PSD and PD branches
             if matrix_property is MatrixProperty.POSITIVE_SEMI_DEFINITE:
 
@@ -268,16 +271,31 @@ class HessianSolverMixin:
                         diagonal.size * jnp.finfo(diagonal.dtype).eps * diagonal.max()
                     )
 
-                self._shift_fn = _compute_shift
+                _shift_fn = _compute_shift
             else:
-                self._shift_fn = lambda _: None
+
+                def _shift_fn(_):
+                    return None
         elif resolved == "eigh":
-            self._linear_solver = None
-            self._shift_fn = lambda _: 0.0
+            _linear_solver = None
+
+            def _shift_fn(_):
+                return 0.0
+
             dtype = jnp.result_type(*jax.tree_util.tree_leaves(init_params))
-            self._delta = jnp.sqrt(jnp.finfo(dtype).eps)
+            _delta = jnp.sqrt(jnp.finfo(dtype).eps)
         else:
             # Nocedal and Wright Algorithm 3.3: add tau * I until Cholesky
             # succeeds. The actual retry loop runs in Newton._solve.
-            self._linear_solver = None
-            self._shift_fn = lambda _: 0.0
+            _linear_solver = None
+
+            def _shift_fn(_):
+                return 0.0
+
+        self.direction = LinearSolveDirection(
+            linear_solver=_linear_solver,
+            delta=_delta,
+            resolved_linear_solver=resolved,
+            shift_fn=_shift_fn,
+            identity_shift_max_steps=self.identity_shift_max_steps,
+        )

@@ -131,7 +131,7 @@ def _make_solver(loss_fn, hess_fn, hess_tag, init_params, jit=False, **kwargs):
         jit=jit,
         **kwargs,
     )
-    solver.setup_hessian(hess_fn=hess_fn, hess_tag=hess_tag)
+    solver.setup_hessian(hess_fn=hess_fn, hessian_tag=hess_tag)
     return solver
 
 

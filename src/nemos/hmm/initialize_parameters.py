@@ -37,7 +37,7 @@ class InitFunctionHMM(Protocol):
 
 def _get_protocol_parameters(protocol) -> set[str]:
     """Get the required parameters for the initialization function based on the protocol."""
-    protocol_sig = inspect.signature(protocol.__call__)
+    protocol_sig = inspect.signature(protocol.update)
     return {
         name
         for name, param in protocol_sig.parameters.items()
