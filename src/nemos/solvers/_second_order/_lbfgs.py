@@ -158,7 +158,7 @@ class ProximalLBFGS(Generic[Y]):
         inner_iter: int = 100,
         inner_atol: float = 1e-8,
         inner_rtol: float = 1e-8,
-    ):
+    ) -> None:
 
         if init_params is None:
             raise ValueError(
@@ -230,7 +230,7 @@ class ProximalLBFGS(Generic[Y]):
     def rtol(self) -> float:
         return self.loop.rtol
 
-    def _scalar_dtype(self, init_params: Y, *args: Any):
+    def _scalar_dtype(self, init_params: Y, *args: Any) -> jnp.dtype:
         """The objective's dtype, which the state's scalars must already carry.
 
         The ``while_loop`` carry fails to typecheck otherwise.
@@ -269,7 +269,7 @@ class ProximalLBFGS(Generic[Y]):
             "inner_rtol",
         }
 
-    def _get_optim_info(self, state: LBFGSState[Y], **kwargs) -> OptimizationInfo:
+    def _get_optim_info(self, state: LBFGSState[Y], **kwargs: Any) -> OptimizationInfo:
         return state.stats
 
     def update(

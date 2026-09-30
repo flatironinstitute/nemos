@@ -1,17 +1,23 @@
-from typing import Any
+from typing import Any, Callable
 
 import jax
+from jaxtyping import Array, PyTree
 
 from ..._hess import HessianTag, MatrixStructure
 
 
 def map_blocks(
-    fn, H: Any, trees: tuple[Any], hessian_tag: HessianTag | None, block_state=None
-):
+    fn: Callable[..., Any],
+    H: PyTree[Array],
+    trees: tuple[Any, ...],
+    hessian_tag: HessianTag | None,
+    block_state: PyTree[Array] | None = None,
+) -> Any:
     """Run ``fn(H_blk, *tree_blks, state_blk)`` once per block and restack.
 
     ``trees`` are parameter-shaped and map along ``batch_axes``; ``block_state``
-    maps along 0 and comes back along 0.
+    maps along 0 and comes back along 0. Without a block-diagonal tag there is one
+    block, so ``fn`` is applied once to the whole of each argument.
     """
     inps = (H, *trees) if block_state is None else (H, *trees, block_state)
     if (

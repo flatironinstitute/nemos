@@ -1,6 +1,6 @@
 """Newton-based optimization solvers."""
 
-from typing import Any, Callable, ClassVar, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Generic, TypeVar
 
 import equinox as eqx
 import jax
@@ -13,10 +13,13 @@ from ..._hess import HessianTag
 from ...typing import Params, StepResult
 from .._abstract_solver import OptimizationInfo
 from .._fista import FISTA
-from ._direction import ProxQuadraticDirection
+from ._direction import AbstractDirection, ProxQuadraticDirection
 from ._hessian_mixins import HessianMixin, HessianSolverMixin, LinearSolverTag
 from ._linesearches import ArmijoBacktracking, TsengYunBacktracking
 from ._loop import Loop
+
+if TYPE_CHECKING:
+    from ...regularizer import Regularizer
 
 DEFAULT_ATOL = 1e-4
 DEFAULT_RTOL = 0.0
@@ -52,9 +55,9 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
     def __init__(
         self,
         unregularized_loss: Callable,
-        regularizer,
+        regularizer: "Regularizer",
         line_search: ArmijoBacktracking | TsengYunBacktracking,
-        direction_factory: Callable[[HessianTag, Callable | None], Any],
+        direction_factory: Callable[[HessianTag, Callable | None], AbstractDirection],
         regularizer_strength: float | None,
         has_aux: bool,
         init_params: Params | None = None,
@@ -66,7 +69,7 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         hessian_tag: HessianTag | None = None,
         reg_tag: HessianTag | None = None,
         property_override: type | None = None,
-    ):
+    ) -> None:
         if init_params is None:
             raise ValueError(
                 "init_params is required for Newton solver. "
@@ -187,7 +190,7 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         _, aux = self.fun_with_aux(final_params, *args)
         return final_params, final_state, aux
 
-    def _scalar_dtype(self, init_params: Y, *args: Any):
+    def _scalar_dtype(self, init_params: Y, *args: Any) -> jnp.dtype:
         """The objective's dtype, which the state's scalars must already carry.
 
         The ``while_loop`` carry fails to typecheck otherwise.
@@ -228,7 +231,7 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
     def _get_optim_info(
         self,
         state: NewtonState[Y],
-        **kwargs,
+        **kwargs: Any,
     ) -> OptimizationInfo:
         return state.stats
 
@@ -294,7 +297,7 @@ class Newton(BaseNewtonSolver[Y, NewtonState[Y]], HessianSolverMixin, Generic[Y]
     def __init__(
         self,
         unregularized_loss: Callable,
-        regularizer,
+        regularizer: "Regularizer",
         regularizer_strength: float | None,
         has_aux: bool,
         init_params: Params | None = None,
@@ -309,7 +312,7 @@ class Newton(BaseNewtonSolver[Y, NewtonState[Y]], HessianSolverMixin, Generic[Y]
         hessian_tag: HessianTag | None = None,
         reg_tag: HessianTag | None = None,
         property_override: type | None = None,
-    ):
+    ) -> None:
         # Before ``super().__init__``, which builds the loss, the proximal operator, the
         # line search and the Hessian wiring: a rejected argument should cost none of it.
         self._init_solver(linear_solver)
@@ -426,7 +429,7 @@ class ProximalNewton(BaseNewtonSolver[Y, NewtonState[Y]], Generic[Y]):
     def __init__(
         self,
         unregularized_loss: Callable,
-        regularizer,
+        regularizer: "Regularizer",
         regularizer_strength: float | None,
         has_aux: bool,
         init_params: Params | None = None,
@@ -441,7 +444,7 @@ class ProximalNewton(BaseNewtonSolver[Y, NewtonState[Y]], Generic[Y]):
         hessian_tag: HessianTag | None = None,
         reg_tag: HessianTag | None = None,
         property_override: type | None = None,
-    ):
+    ) -> None:
         # the penalty alone, for the composite line search. self.fun is the smooth
         # loss here, so the composite objective is fun + penalty_fn, which is
         # exactly what ``regularizer.penalized_loss`` builds from the same accessor.

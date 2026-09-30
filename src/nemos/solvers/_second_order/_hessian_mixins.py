@@ -1,11 +1,12 @@
 """Mixin providing the curvature machinery for second-order solvers."""
 
 import warnings
-from typing import Callable, ClassVar, Literal, Optional
+from typing import TYPE_CHECKING, Callable, ClassVar, Literal, Optional
 
 import jax
 import jax.numpy as jnp
 import lineax as lx
+from jaxtyping import Array, PyTree
 
 from ... import tree_utils
 from ..._hess import (
@@ -15,8 +16,12 @@ from ..._hess import (
     combine_hessian_tags,
     mask_claim_none,
 )
+from ...typing import Params
 from . import NewtonCurvature
 from ._direction import LinearSolveDirection
+
+if TYPE_CHECKING:
+    from ...regularizer import Regularizer
 
 LinearSolverTag = Literal["auto", "cholesky", "eigh", "identity_shift"]
 ResolvedLinearSolverTag = Literal["cholesky", "eigh", "identity_shift"]
@@ -59,10 +64,10 @@ class HessianMixin:
 
     def _init_hessian(
         self,
-        regularizer,
-        regularizer_strength,
-        init_params,
-        hess_fn: Callable | None = None,
+        regularizer: "Regularizer",
+        regularizer_strength: float | None,
+        init_params: Params,
+        hess_fn: Callable[..., PyTree[Array]] | None = None,
         hessian_tag: HessianTag | None = None,
         reg_tag: HessianTag | None = None,
         property_override: Optional[type] = None,
@@ -128,8 +133,13 @@ class HessianMixin:
         return default_tag if tag is None else tag
 
     def _penalize_hessian(
-        self, hess_fn, model_tag, regularizer, regularizer_strength, init_params
-    ):
+        self,
+        hess_fn: Callable[..., PyTree[Array]] | None,
+        model_tag: HessianTag | None,
+        regularizer: "Regularizer",
+        regularizer_strength: float | None,
+        init_params: Params,
+    ) -> Callable[..., PyTree[Array]] | None:
         """Add the regularizer's penalty Hessian to the model's likelihood Hessian.
 
         Models supply the second derivative of the likelihood alone. Adding the penalty's
@@ -178,7 +188,7 @@ class HessianSolverMixin:
     def _init_solver(
         self,
         linear_solver: LinearSolverTag = "auto",
-    ):
+    ) -> None:
         if linear_solver not in VALID_SOLVERS:
             raise ValueError(
                 f"Unknown linear solver {linear_solver!r}. "
@@ -188,7 +198,7 @@ class HessianSolverMixin:
 
     def _build_linear_solve_direction(  # noqa: C901
         self,
-        init_params,
+        init_params: Params,
         hessian_tag: HessianTag,
         identity_shift_beta: float,
         identity_shift_max_steps: int,
