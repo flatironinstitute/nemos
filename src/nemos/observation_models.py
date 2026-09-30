@@ -1,6 +1,8 @@
 """Observation model classes for GLMs."""
 
 import abc
+import inspect
+import sys
 from typing import Callable, Literal, Union
 
 import jax
@@ -2210,3 +2212,13 @@ class CategoricalObservations(Observations):
             freq_per_sample, jnp.finfo(freq_per_sample.dtype).eps, 1.0
         )
         return jnp.log(freq_per_sample) * jnp.ones_like(y, dtype=float)
+
+
+# list of all discovered classes. must be at the end
+OBSERVATION_MODELS = [
+    c
+    for _, c in inspect.getmembers(sys.modules[__name__], inspect.isclass)
+    if issubclass(c, Observations)
+    and not inspect.isabstract(c)
+    and c.__module__ == __name__
+]
