@@ -26,7 +26,6 @@ from typing import (
     Callable,
     ClassVar,
     Generic,
-    TypeVar,
 )
 
 import jax
@@ -41,13 +40,10 @@ from ._curvature import LBFGSCurvature
 from ._direction import ProxQuadraticDirection
 from ._linesearches import TsengYunBacktracking
 from ._loop import Loop
+from ._typing import Y
 
 if TYPE_CHECKING:
     from ...regularizer import Regularizer
-
-# The parameter pytree. Both the state and the solver follow it, so a ``GLMParams`` fit
-# and a ``PopulationGLM`` fit are distinct instantiations rather than ``Any``.
-Y = TypeVar("Y")
 
 
 DEFAULT_ATOL = 1e-4

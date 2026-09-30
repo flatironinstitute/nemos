@@ -1,13 +1,10 @@
-"""Mixin providing the curvature machinery for second-order solvers."""
+"""The mixin through which a solver receives the model's analytic Hessian."""
 
 from __future__ import annotations
 
-import warnings
-from typing import TYPE_CHECKING, Callable, ClassVar, Literal, Optional
+from typing import TYPE_CHECKING, Callable, ClassVar, Optional
 
 import jax
-import jax.numpy as jnp
-import lineax as lx
 from jaxtyping import Array, PyTree
 
 from ... import tree_utils
@@ -19,26 +16,10 @@ from ..._hess import (
     mask_claim_none,
 )
 from ...typing import Params
-from . import NewtonCurvature
-from ._direction import LinearSolveDirection
+from ._curvature import NewtonCurvature
 
 if TYPE_CHECKING:
     from ...regularizer import Regularizer
-
-LinearSolverTag = Literal["auto", "cholesky", "eigh", "identity_shift"]
-ResolvedLinearSolverTag = Literal["cholesky", "eigh", "identity_shift"]
-
-VALID_SOLVERS = {"auto", "cholesky", "eigh", "identity_shift"}
-
-POSITIVE_PROPERTIES = {
-    MatrixProperty.POSITIVE_DEFINITE,
-    MatrixProperty.POSITIVE_SEMI_DEFINITE,
-}
-SYMMETRIC_PROPERTIES = {
-    MatrixProperty.SYMMETRIC,
-    MatrixProperty.NEGATIVE_DEFINITE,
-    MatrixProperty.NEGATIVE_SEMI_DEFINITE,
-}
 
 
 class HessianMixin:
@@ -178,107 +159,3 @@ class HessianMixin:
             return tree_utils.tree_add(hess_fn(params, *args), penalty_hess_fn(params))
 
         return penalized_hessian
-
-
-class HessianSolverMixin:
-    """Resolve and hold the strategy for solving :math:`Hd = -g`.
-
-    Reads ``_hess_tag`` off :class:`HessianMixin`, which a host must carry as well, and
-    exposes nothing back to it: a solver that only multiplies by its curvature model
-    inherits :class:`HessianMixin` alone and gets none of the state below.
-    """
-
-    def _init_solver(
-        self,
-        linear_solver: LinearSolverTag = "auto",
-    ) -> None:
-        if linear_solver not in VALID_SOLVERS:
-            raise ValueError(
-                f"Unknown linear solver {linear_solver!r}. "
-                f"Expected one of {sorted(VALID_SOLVERS)}."
-            )
-        self.linear_solver: LinearSolverTag = linear_solver
-
-    def _build_linear_solve_direction(  # noqa: C901
-        self,
-        init_params: Params,
-        hessian_tag: HessianTag,
-        identity_shift_beta: float,
-        identity_shift_max_steps: int,
-    ) -> LinearSolveDirection:
-        """Resolve the Hessian solution strategy from the tag and user request."""
-        matrix_property = hessian_tag.property
-
-        if matrix_property not in POSITIVE_PROPERTIES | SYMMETRIC_PROPERTIES:
-            raise ValueError(
-                f"Hessian has unsupported matrix property: {matrix_property}"
-            )
-
-        requested = self.linear_solver
-
-        # Revalidate in case a caller changed the public field after construction
-        if requested not in VALID_SOLVERS:
-            raise ValueError(
-                f"Unknown linear solver {requested!r}. "
-                f"Expected one of {sorted(VALID_SOLVERS)}."
-            )
-
-        if requested == "auto":
-            resolved: ResolvedLinearSolverTag = (
-                "cholesky" if matrix_property in POSITIVE_PROPERTIES else "eigh"
-            )
-        else:
-            resolved = requested
-
-        if resolved == "cholesky" and matrix_property not in POSITIVE_PROPERTIES:
-            warnings.warn(
-                "linear_solver='cholesky' was requested, but the Hessian tag "
-                f"reports {matrix_property}. Cholesky generally requires a "
-                "positive-definite or positive-semidefinite Hessian. Proceeding "
-                "with Cholesky as requested; the solve may fail.",
-                RuntimeWarning,
-                stacklevel=2,
-            )
-        _delta = 0.0
-        if resolved == "cholesky":
-            _linear_solver = lx.Cholesky()
-            # Continue using the tag to distinguish the PSD and PD branches
-            if matrix_property is MatrixProperty.POSITIVE_SEMI_DEFINITE:
-
-                def _compute_shift(operator):
-                    diagonal = lx.diagonal(operator)
-                    return (
-                        diagonal.size * jnp.finfo(diagonal.dtype).eps * diagonal.max()
-                    )
-
-                _shift_fn = _compute_shift
-            else:
-
-                def _shift_fn(_):
-                    return None
-
-        elif resolved == "eigh":
-            _linear_solver = None
-
-            def _shift_fn(_):
-                return 0.0
-
-            dtype = jnp.result_type(*jax.tree_util.tree_leaves(init_params))
-            _delta = jnp.sqrt(jnp.finfo(dtype).eps)
-        else:
-            # Nocedal and Wright Algorithm 3.3: add tau * I until Cholesky
-            # succeeds. The actual retry loop runs in Newton._solve.
-            _linear_solver = None
-
-            def _shift_fn(_):
-                return 0.0
-
-        return LinearSolveDirection(
-            linear_solver=_linear_solver,
-            delta=_delta,
-            resolved_linear_solver=resolved,
-            shift_fn=_shift_fn,
-            identity_shift_beta=identity_shift_beta,
-            identity_shift_max_steps=identity_shift_max_steps,
-            hessian_tag=hessian_tag,
-        )

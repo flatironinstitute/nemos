@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Generic
 
 import equinox as eqx
 import jax
@@ -14,16 +14,13 @@ from optimistix._misc import cauchy_termination
 from ... import tree_utils
 from ...typing import StepResult
 from .._abstract_solver import OptimizationInfo
-from ._curvature import AbstractCurvature
-from ._direction import AbstractDirection
-from ._linesearches import AbstractLineSearch
+from ._typing import S, Y
 
-# parameters
-Y = TypeVar("Y")
-# the state a solver carries between iterations
-S = TypeVar("S")
-# whatever the objective returns alongside its value
-Aux = TypeVar("Aux")
+if TYPE_CHECKING:
+    from ._curvature import AbstractCurvature
+    from ._direction import AbstractDirection
+    from ._linesearches import AbstractLineSearch
+    from ._typing import Aux
 
 
 class Loop(eqx.Module, Generic[Y, S]):

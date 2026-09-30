@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import warnings
 from abc import ABC, abstractmethod
-from typing import Callable, Generic, Literal, Tuple, TypeVar
+from typing import TYPE_CHECKING, Callable, Generic, Literal, Tuple
 
 import equinox as eqx
 import jax
@@ -13,13 +14,14 @@ from jaxtyping import Array, PyTree
 from lineax import AbstractLinearSolver
 
 from ... import tree_utils
-from ..._hess import HessianTag, MatrixStructure
+from ..._hess import HessianTag, MatrixProperty, MatrixStructure
+from ...typing import Params
 from .._fista import FISTA
-from ._curvature import Y
-from ._utils import map_blocks
+from ._typing import D, Y
 
-# direction state
-D = TypeVar("D")
+if TYPE_CHECKING:
+    from ._typing import HvpFn
+from ._utils import map_blocks
 
 
 class AbstractDirection(eqx.Module, ABC, Generic[Y, D]):
@@ -35,7 +37,7 @@ class AbstractDirection(eqx.Module, ABC, Generic[Y, D]):
         self,
         params: Y,
         grad: Y,
-        hvp_fn: Callable[[Y, HessianTag | None], Y],
+        hvp_fn: HvpFn,
         hessian_tensor: PyTree[Array] | None,
         direction_state: D,
     ) -> Tuple[Y, D]: ...
@@ -136,7 +138,7 @@ class ProxQuadraticDirection(AbstractDirection[Y, None], Generic[Y]):
         self,
         params: Y,
         grad: Y,
-        hvp_fn: Callable[[Y, HessianTag | None], Y],
+        hvp_fn: HvpFn,
         hessian_tensor: PyTree[Array] | None,
         direction_state: None,
     ) -> Tuple[Y, None]:
@@ -168,6 +170,31 @@ class ProxQuadraticDirection(AbstractDirection[Y, None], Generic[Y]):
         return self._inner_solver.prox
 
 
+LinearSolverTag = Literal["auto", "cholesky", "eigh", "identity_shift"]
+ResolvedLinearSolverTag = Literal["cholesky", "eigh", "identity_shift"]
+
+VALID_SOLVERS = {"auto", "cholesky", "eigh", "identity_shift"}
+
+POSITIVE_PROPERTIES = {
+    MatrixProperty.POSITIVE_DEFINITE,
+    MatrixProperty.POSITIVE_SEMI_DEFINITE,
+}
+SYMMETRIC_PROPERTIES = {
+    MatrixProperty.SYMMETRIC,
+    MatrixProperty.NEGATIVE_DEFINITE,
+    MatrixProperty.NEGATIVE_SEMI_DEFINITE,
+}
+
+
+def validate_linear_solver(linear_solver: str) -> None:
+    """Reject an unknown strategy before a caller pays for anything else."""
+    if linear_solver not in VALID_SOLVERS:
+        raise ValueError(
+            f"Unknown linear solver {linear_solver!r}. "
+            f"Expected one of {sorted(VALID_SOLVERS)}."
+        )
+
+
 class LinearSolveDirection(AbstractDirection[Y, Array], Generic[Y]):
     """Solve :math:`Hd = -g`, one block at a time when the tag reports block structure.
 
@@ -185,6 +212,88 @@ class LinearSolveDirection(AbstractDirection[Y, Array], Generic[Y]):
     identity_shift_beta: float
     identity_shift_max_steps: int
     hessian_tag: HessianTag | None = eqx.field(static=True)
+
+    @classmethod
+    def from_tag(  # noqa: C901
+        cls,
+        init_params: Params,
+        hessian_tag: HessianTag,
+        linear_solver: LinearSolverTag,
+        identity_shift_beta: float,
+        identity_shift_max_steps: int,
+    ) -> "LinearSolveDirection":
+        """Resolve the solution strategy from the tag and the user's request.
+
+        Every field below follows from the pair: what the tag claims about the matrix,
+        and which strategy the caller asked for. ``"auto"`` reads the claim, anything
+        else is taken as given and warned about when the claim disagrees.
+        """
+        matrix_property = hessian_tag.property
+        if matrix_property not in POSITIVE_PROPERTIES | SYMMETRIC_PROPERTIES:
+            raise ValueError(
+                f"Hessian has unsupported matrix property: {matrix_property}"
+            )
+        validate_linear_solver(linear_solver)
+
+        if linear_solver == "auto":
+            resolved: ResolvedLinearSolverTag = (
+                "cholesky" if matrix_property in POSITIVE_PROPERTIES else "eigh"
+            )
+        else:
+            resolved = linear_solver
+
+        if resolved == "cholesky" and matrix_property not in POSITIVE_PROPERTIES:
+            warnings.warn(
+                "linear_solver='cholesky' was requested, but the Hessian tag "
+                f"reports {matrix_property}. Cholesky generally requires a "
+                "positive-definite or positive-semidefinite Hessian. Proceeding "
+                "with Cholesky as requested; the solve may fail.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+
+        delta: float | Array = 0.0
+        if resolved == "cholesky":
+            solver = lx.Cholesky()
+            # Continue using the tag to distinguish the PSD and PD branches
+            if matrix_property is MatrixProperty.POSITIVE_SEMI_DEFINITE:
+
+                def shift_fn(operator):
+                    diagonal = lx.diagonal(operator)
+                    return (
+                        diagonal.size * jnp.finfo(diagonal.dtype).eps * diagonal.max()
+                    )
+
+            else:
+
+                def shift_fn(_):
+                    return None
+
+        elif resolved == "eigh":
+            solver = None
+
+            def shift_fn(_):
+                return 0.0
+
+            dtype = jnp.result_type(*jax.tree_util.tree_leaves(init_params))
+            delta = jnp.sqrt(jnp.finfo(dtype).eps)
+        else:
+            # Nocedal and Wright Algorithm 3.3: add tau * I until Cholesky succeeds.
+            # The retry loop itself runs in ``_solve``.
+            solver = None
+
+            def shift_fn(_):
+                return 0.0
+
+        return cls(
+            linear_solver=solver,
+            delta=delta,
+            resolved_linear_solver=resolved,
+            shift_fn=shift_fn,
+            identity_shift_beta=identity_shift_beta,
+            identity_shift_max_steps=identity_shift_max_steps,
+            hessian_tag=hessian_tag,
+        )
 
     def _solve(
         self, H: PyTree[Array], grad: Y, previous_shift: Array
@@ -298,7 +407,7 @@ class LinearSolveDirection(AbstractDirection[Y, Array], Generic[Y]):
         self,
         params: Y,
         grad: Y,
-        hvp_fn: Callable[[Y, HessianTag | None], Y],
+        hvp_fn: HvpFn,
         hessian_tensor: PyTree[Array],
         direction_state: Array,
     ) -> Tuple[Y, Array]:

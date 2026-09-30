@@ -9,7 +9,7 @@ and a composite objective, so that pair is what a subclass supplies.
 from __future__ import annotations
 
 import abc
-from typing import Any, Callable, Generic, Tuple, TypeVar
+from typing import Any, Callable, Generic, Tuple
 
 import equinox as eqx
 import jax
@@ -22,9 +22,7 @@ from optax import (
 )
 
 from ... import tree_utils
-
-# parameters
-Y = TypeVar("Y")
+from ._typing import Y
 
 
 class LineSearchState(eqx.Module):

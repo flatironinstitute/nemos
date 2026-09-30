@@ -13,7 +13,7 @@ the keyword arguments they accept.
 from __future__ import annotations
 
 import abc
-from typing import Any, ClassVar, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, ClassVar, Generic
 
 import equinox as eqx
 import jax
@@ -22,15 +22,13 @@ from jaxtyping import Array, Bool, Scalar
 
 from ...typing import StepResult
 from .._abstract_solver import OptimizationInfo
-from ._curvature import AbstractCurvature
-from ._direction import AbstractDirection
-from ._linesearches import AbstractLineSearch
-from ._loop import Loop
+from ._typing import S, Y
 
-# parameters
-Y = TypeVar("Y")
-# the state the solver carries between iterations
-S = TypeVar("S")
+if TYPE_CHECKING:
+    from ._curvature import AbstractCurvature
+    from ._direction import AbstractDirection
+    from ._linesearches import AbstractLineSearch
+    from ._loop import Loop
 
 
 class SecondOrderState(eqx.Module, Generic[Y]):

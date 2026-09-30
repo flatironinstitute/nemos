@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Generic
 
 import equinox as eqx
 import jax
@@ -13,16 +13,11 @@ from optimistix._solver.limited_memory_bfgs import _lbfgs_hessian_operator_fn
 
 from ... import tree_utils
 from ..._hess import HessianTag
-from ._utils import map_blocks
+from ._typing import R, S, Y
 
-# what a curvature model carries between iterations
-S = TypeVar("S")
-# how B_k is represented at this iterate, which is what ``hvp`` multiplies from: the
-# pair history in the compact representation of Byrd et al. [1]_, or the assembled
-# Hessian. Neither is the curvature; both determine it.
-R = TypeVar("R")
-# parameters
-Y = TypeVar("Y")
+if TYPE_CHECKING:
+    from ._typing import HvpFn
+from ._utils import map_blocks
 
 
 class _LBFGSHessianUpdateState(eqx.Module, Generic[Y]):
@@ -108,7 +103,7 @@ class AbstractCurvature(eqx.Module, ABC, Generic[Y, S, R]):
         y_diff: Y,
         grad: Y,
         *args: Any,
-    ) -> tuple[Callable[[Y, HessianTag | None], Y], PyTree[Array] | None, S]: ...
+    ) -> tuple[HvpFn, PyTree[Array] | None, S]: ...
 
     @abstractmethod
     def hvp(
@@ -157,7 +152,7 @@ class LBFGSCurvature(
         y_diff: Y,
         grad: Y,
         *args: Any,
-    ) -> tuple[Callable[[Y, HessianTag | None], Y], None, _LBFGSHessianUpdateState[Y]]:
+    ) -> tuple[HvpFn, None, _LBFGSHessianUpdateState[Y]]:
 
         history_length = state.history_length
         # The `y` of the curvature pair. ``grad_prev`` is zero until the first accepted
@@ -354,7 +349,7 @@ class NewtonCurvature(AbstractCurvature[Y, None, PyTree[Array]], Generic[Y]):
         y_diff: Y,
         grad: Y,
         *args: Any,
-    ) -> tuple[Callable[[Y, HessianTag | None], Y], PyTree[Array], None]:
+    ) -> tuple[HvpFn, PyTree[Array], None]:
         del state, grad, y_diff
         hessian_tensor = self.hessian_fn(params, *args)
 

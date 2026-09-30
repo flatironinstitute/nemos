@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Generic
 
 import jax
 import jax.numpy as jnp
@@ -13,28 +13,29 @@ from ..._hess import HessianTag
 from ...typing import Params
 from .._fista import FISTA
 from ._base import AbstractSecondOrderSolver, SecondOrderState
-from ._direction import AbstractDirection, ProxQuadraticDirection
-from ._hessian_mixins import HessianMixin, HessianSolverMixin, LinearSolverTag
+from ._direction import (
+    LinearSolveDirection,
+    LinearSolverTag,
+    ProxQuadraticDirection,
+    validate_linear_solver,
+)
+from ._hessian_mixins import HessianMixin
 from ._linesearches import ArmijoBacktracking, TsengYunBacktracking
 from ._loop import Loop
+from ._typing import Y
 
 if TYPE_CHECKING:
     from ...regularizer import Regularizer
+    from ._direction import AbstractDirection
 
 DEFAULT_ATOL = 1e-4
 DEFAULT_RTOL = 0.0
 DEFAULT_MAX_STEPS = 100
 
 
-# The parameter pytree. The state follows it, so a ``GLMParams`` fit and a
-# ``PopulationGLM`` fit are distinct instantiations rather than ``Any``.
-Y = TypeVar("Y")
-# The state a solver carries. Each solver sets it to its own class, which is what keeps
-# ``Newton``'s identity shift out of the states that have no ladder to seed.
-S = TypeVar("S", bound=SecondOrderState)
-
-
-class BaseNewtonSolver(AbstractSecondOrderSolver[Y, S], HessianMixin, Generic[Y, S]):
+class BaseNewtonSolver(
+    AbstractSecondOrderSolver[Y, SecondOrderState[Y]], HessianMixin, Generic[Y]
+):
     def __init__(
         self,
         unregularized_loss: Callable,
@@ -106,7 +107,7 @@ class BaseNewtonSolver(AbstractSecondOrderSolver[Y, S], HessianMixin, Generic[Y,
         return SecondOrderState(**self._common_state_fields(init_params, *args))
 
 
-class Newton(BaseNewtonSolver[Y, SecondOrderState[Y]], HessianSolverMixin, Generic[Y]):
+class Newton(BaseNewtonSolver[Y], Generic[Y]):
     r"""
     Newton solver with backtracking and Hessian-aware linear solves.
 
@@ -185,7 +186,8 @@ class Newton(BaseNewtonSolver[Y, SecondOrderState[Y]], HessianSolverMixin, Gener
     ) -> None:
         # Before ``super().__init__``, which builds the loss, the proximal operator, the
         # line search and the Hessian wiring: a rejected argument should cost none of it.
-        self._init_solver(linear_solver)
+        validate_linear_solver(linear_solver)
+        self.linear_solver: LinearSolverTag = linear_solver
         if identity_shift_beta < 0:
             raise ValueError(
                 "identity_shift_beta must be nonnegative; "
@@ -205,8 +207,12 @@ class Newton(BaseNewtonSolver[Y, SecondOrderState[Y]], HessianSolverMixin, Gener
             line_search=ArmijoBacktracking(
                 optax.scale_by_backtracking_linesearch(30), penalized_loss
             ),
-            direction_factory=lambda tag, _: self._build_linear_solve_direction(
-                init_params, tag, identity_shift_beta, identity_shift_max_steps
+            direction_factory=lambda tag, _: LinearSolveDirection.from_tag(
+                init_params,
+                tag,
+                linear_solver,
+                identity_shift_beta,
+                identity_shift_max_steps,
             ),
             regularizer_strength=regularizer_strength,
             has_aux=has_aux,
@@ -242,7 +248,7 @@ class Newton(BaseNewtonSolver[Y, SecondOrderState[Y]], HessianSolverMixin, Gener
         )
 
 
-class ProximalNewton(BaseNewtonSolver[Y, SecondOrderState[Y]], Generic[Y]):
+class ProximalNewton(BaseNewtonSolver[Y], Generic[Y]):
     r"""Proximal Newton solver for composite objectives.
 
     Minimizes :math:`f(\beta) + P(\beta)` with :math:`f` the smooth loss and :math:`P`
