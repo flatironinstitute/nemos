@@ -11,6 +11,7 @@ from jaxtyping import Array, Bool, Scalar
 from optimistix._misc import cauchy_termination
 
 from ... import tree_utils
+from ..._hess import HessianTag
 from ...typing import Params, StepResult
 from .._abstract_solver import OptimizationInfo
 from .._fista import FISTA
@@ -27,7 +28,7 @@ DEFAULT_MAX_STEPS = 100
 # The parameter pytree. The state follows it, so a ``GLMParams`` fit and a
 # ``PopulationGLM`` fit are distinct instantiations rather than ``Any``.
 Y = TypeVar("Y")
-# The state a solver carries. Each solver pins it to its own class, which is what keeps
+# The state a solver carries. Each solver sets it to its own class, which is what keeps
 # ``Newton``'s identity shift out of the states that have no ladder to seed.
 S = TypeVar("S", bound="NewtonState")
 
@@ -136,6 +137,10 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         maxiter: int = DEFAULT_MAX_STEPS,
         tol: float = DEFAULT_ATOL,
         rtol: float = DEFAULT_RTOL,
+        hess_fn: Callable | None = None,
+        hessian_tag: HessianTag | None = None,
+        reg_tag: HessianTag | None = None,
+        property_override: type | None = None,
     ):
         if init_params is None:
             raise ValueError(
@@ -173,8 +178,17 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
             self.fun_with_aux = lambda p, *a: (loss_fn(p, *a), None)
 
         self._gradient: Callable | None = None
-        # sets ``_hessian`` and ``curvature``, so there is nothing to seed here
-        self._init_hessian(regularizer, regularizer_strength, init_params)
+        # resolves ``_hess_tag``, ``_hessian`` and ``curvature``. A subclass building a
+        # direction from the tag can do so as soon as this returns.
+        self._init_hessian(
+            regularizer,
+            regularizer_strength,
+            init_params,
+            hess_fn=hess_fn,
+            hessian_tag=hessian_tag,
+            reg_tag=reg_tag,
+            property_override=property_override,
+        )
         self._line_search = line_search
         fval_and_grad = jax.value_and_grad(
             self.fun_with_aux,
@@ -195,13 +209,6 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         state: S,
         *args: Any,
     ) -> StepResult:
-        if self.direction is None:
-            if isinstance(self, ProximalNewton) and self.direction is None:
-                self.direction = ProxQuadraticDirection(
-                    _inner_solver=self.inner_solver,
-                    _inner_iter=self.inner_iter,
-                    hessian_tag=self._hess_tag,
-                )
         return self.loop.update(
             params, state, self.curvature, self.direction, self._line_search, *args
         )
@@ -217,12 +224,6 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         path has to be reached through a separate method: decorating this one would trace
         the Python loop and fail on its data-dependent condition.
         """
-        if isinstance(self, ProximalNewton) and not hasattr(self, "direction"):
-            self.direction = ProxQuadraticDirection(
-                _inner_solver=self.inner_solver,
-                _inner_iter=self.inner_iter,
-                hessian_tag=self._hess_tag,
-            )
         if self.jit:
             return self._run_jit(init_params, *args)
         return self._run(init_params, *args)
@@ -423,6 +424,10 @@ class Newton(BaseNewtonSolver[Y, NewtonState[Y]], HessianSolverMixin, Generic[Y]
         identity_shift_beta: float = 1e-3,
         identity_shift_max_steps: int = 20,
         linear_solver: LinearSolverTag = "auto",
+        hess_fn: Callable | None = None,
+        hessian_tag: HessianTag | None = None,
+        reg_tag: HessianTag | None = None,
+        property_override: type | None = None,
     ):
         # Before ``super().__init__``, which builds the loss, the proximal operator, the
         # line search and the Hessian wiring: a rejected argument should cost none of it.
@@ -455,16 +460,20 @@ class Newton(BaseNewtonSolver[Y, NewtonState[Y]], HessianSolverMixin, Generic[Y]
             maxiter=maxiter,
             tol=tol,
             rtol=rtol,
+            hess_fn=hess_fn,
+            hessian_tag=hessian_tag,
+            reg_tag=reg_tag,
+            property_override=property_override,
         )
-        self.direction = None
+        # The solve strategy follows from the resolved tag, which ``super().__init__``
+        # has just fixed.
+        self._setup_linear_solve_direction(init_params)
 
     def init_state(self, init_params: Y, *args: Any) -> NewtonState[Y]:
-        self._setup_linear_solve_direction(init_params)
-        state = NewtonState(
+        return NewtonState(
             **self._common_state_fields(init_params, *args),
             direction_state=self.direction.init(init_params),
         )
-        return state
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
@@ -549,6 +558,10 @@ class ProximalNewton(BaseNewtonSolver[Y, NewtonState[Y]], Generic[Y]):
         inner_iter: int = 100,
         inner_atol: float = 1e-8,
         inner_rtol: float = 1e-8,
+        hess_fn: Callable | None = None,
+        hessian_tag: HessianTag | None = None,
+        reg_tag: HessianTag | None = None,
+        property_override: type | None = None,
     ):
         # the penalty alone, for the composite line search. self.fun is the smooth
         # loss here, so the composite objective is fun + penalty_fn, which is
@@ -572,6 +585,10 @@ class ProximalNewton(BaseNewtonSolver[Y, NewtonState[Y]], Generic[Y]):
             maxiter=maxiter,
             tol=tol,
             rtol=rtol,
+            hess_fn=hess_fn,
+            hessian_tag=hessian_tag,
+            reg_tag=reg_tag,
+            property_override=property_override,
         )
 
         self.inner_atol = inner_atol
@@ -588,6 +605,9 @@ class ProximalNewton(BaseNewtonSolver[Y, NewtonState[Y]], Generic[Y]):
             while_loop_kind="lax",
         )
         self.inner_iter = inner_iter
+        self.direction = ProxQuadraticDirection(
+            self.inner_solver, inner_iter, self._hess_tag
+        )
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
