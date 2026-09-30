@@ -37,26 +37,34 @@ LAYERS = [
 # Drawn on the solvers' rank, but styled as bases rather than as dependencies.
 BASES = {"_base", "_hessian_mixins"}
 
-CONTENTS = {
-    "_typing": ["Y, S, R, D, Aux", "HvpFn"],
-    "_utils": ["map_blocks"],
-    "_curvature": ["AbstractCurvature", "NewtonCurvature", "LBFGSCurvature"],
-    "_direction": [
-        "AbstractDirection",
-        "LinearSolveDirection",
-        "ProxQuadraticDirection",
-    ],
-    "_linesearches": [
-        "AbstractLineSearch",
-        "ArmijoBacktracking",
-        "TsengYunBacktracking",
-    ],
-    "_loop": ["Loop"],
-    "_base": ["AbstractSecondOrderSolver", "SecondOrderState"],
-    "_hessian_mixins": ["HessianMixin", "HessianSolverMixin"],
-    "_newton": ["BaseNewtonSolver", "Newton", "ProximalNewton"],
-    "_lbfgs": ["ProximalLBFGS"],
-}
+
+def contents(mod: str) -> list[str]:
+    """What a module defines, read off the source so the drawing cannot drift.
+
+    Classes for the modules that hold them; type variables and functions for the two
+    that hold neither.
+    """
+    tree = ast.parse((MODULE / f"{mod}.py").read_text())
+    classes = [n.name for n in tree.body if isinstance(n, ast.ClassDef)]
+    if classes:
+        return classes
+    names = [
+        n.targets[0].id
+        for n in tree.body
+        if isinstance(n, ast.Assign)
+        and isinstance(n.value, ast.Call)
+        and getattr(n.value.func, "id", "") == "TypeVar"
+    ]
+    aliases = [
+        n.targets[0].id
+        for n in tree.body
+        if isinstance(n, ast.Assign)
+        and isinstance(n.targets[0], ast.Name)
+        and not isinstance(n.value, ast.Call)
+    ]
+    funcs = [n.name for n in tree.body if isinstance(n, ast.FunctionDef)]
+    return ([", ".join(names)] if names else []) + aliases + funcs
+
 
 THEMES = {
     "": dict(
@@ -150,7 +158,7 @@ def inheritance() -> set[tuple[str, str]]:
 def node_label(mod: str) -> str:
     rows = "".join(
         f'<TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">{name}</FONT></TD></TR>'
-        for name in CONTENTS[mod]
+        for name in contents(mod)
     )
     return (
         '<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="1" CELLPADDING="1">'
