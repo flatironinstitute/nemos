@@ -17,6 +17,17 @@ class TestClassifierGLMHMM:
     Unit tests specific to classifier GLM.
     """
 
+    def test_invalid_observation_model(self):
+        """
+        Ensure that changing the observation model leads to an error.
+        """
+        model = ClassifierGLMHMM(n_states=2)
+        # this should be fine
+        model.observation_model = "Categorical"
+        # this should raise an error
+        with pytest.raises(TypeError, match="observation type is not supported"):
+            model.observation_model = "Poisson"
+
     @pytest.mark.solver_related
     @pytest.mark.parametrize("seed", [0, 123])
     @pytest.mark.parametrize("n_states", [2, 3])

@@ -150,6 +150,10 @@ class TestGLMHMMInit:
         with pytest.raises(ValueError, match="Unknown observation model"):
             GLMHMM(n_states=2, observation_model="InvalidModel")
 
+    def test_observation_model_setter_invalid_type(self):
+        with pytest.raises(TypeError, match="observation type is not supported"):
+            GLMHMM(n_states=2, observation_model="Categorical")
+
     # -------------------------------------------------------------------------
     # inverse_link_function setter
     # -------------------------------------------------------------------------
