@@ -16,21 +16,39 @@ from ._curvature import AbstractCurvature
 from ._direction import AbstractDirection
 from ._linesearches import AbstractLineSearch
 
+# parameters
 Y = TypeVar("Y")
+# the state a solver carries between iterations
 S = TypeVar("S")
+# whatever the objective returns alongside its value
+Aux = TypeVar("Aux")
 
 
 class Loop(eqx.Module, Generic[Y, S]):
+    """Sequence one iteration: curvature, direction, line search, then the stopping test.
+
+    The three callables are what differs between solvers built on it. ``fval_diff_fn``
+    supplies the function-value arm of the Cauchy test, zero for a solver that suppresses
+    it; ``grad_diff_fn`` supplies the gradient difference a curvature model with history
+    needs, ``None`` for one that assembles the Hessian afresh.
+    """
+
     maxiter: int
     atol: float
     rtol: float
     fval_diff_fn: Callable[[Scalar, S], Scalar]
-    fval_and_grad_fn: Callable[[Y, S], tuple[tuple[Scalar, Any], S]]
+    # ``(params, *args) -> ((fval, aux), grad)``
+    fval_and_grad_fn: Callable[..., tuple[tuple[Scalar, Aux], Y]]
     grad_diff_fn: Callable[[Y, S], Y | None]
 
     def _update_state(
-        self, state, new_ls_state, new_hessian_state, grad, new_dir_state
-    ):
+        self,
+        state: S,
+        new_ls_state: Any,
+        new_hessian_state: Any,
+        grad: Y,
+        new_dir_state: Any,
+    ) -> S:
         if hasattr(state, "grad_prev"):
 
             def update_fn(x):
@@ -185,8 +203,17 @@ class Loop(eqx.Module, Generic[Y, S]):
             self.fval_diff_fn(fval, state),
         )
 
-    def run(self, init_params, state, curvature, direction, line_search, jit, *args):
-        def cond(carry):
+    def run(
+        self,
+        init_params: Y,
+        state: S,
+        curvature: AbstractCurvature,
+        direction: AbstractDirection,
+        line_search: AbstractLineSearch,
+        jit: bool,
+        *args: Any,
+    ) -> tuple[Y, S]:
+        def cond(carry: tuple[Y, S]) -> Bool[Array, ""]:
             _, s = carry
             return (
                 (~s.stats.converged)
@@ -194,7 +221,7 @@ class Loop(eqx.Module, Generic[Y, S]):
                 & (s.stats.num_steps < self.maxiter)
             )
 
-        def body(carry):
+        def body(carry: tuple[Y, S]) -> tuple[Y, S]:
             p, s = carry
             # Discard aux; convergence only needs params and state
             return self.update(p, s, curvature, direction, line_search, *args)[:2]
