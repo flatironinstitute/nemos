@@ -35,10 +35,10 @@ import lineax as lx
 import numpy as np
 import optax
 import pytest
+from nemos.solvers._newton import Newton, ProximalNewton
 from optimistix._solver.limited_memory_bfgs import _lbfgs_hessian_operator_fn
 
 from nemos.regularizer import Lasso, Ridge
-from nemos.solvers._newton import Newton, ProximalNewton
 from nemos.solvers._second_order._curvature import LBFGSCurvature
 from nemos.solvers._second_order._lbfgs import ProximalLBFGS
 
@@ -98,7 +98,7 @@ def test_second_order_solvers_step_only_on_a_descent_slope(
         tol=1e-12,
     )
     state = solver.init_state(params, X, y)
-    (fval, _), grad = solver._gradient(params, X, y)
+    (fval, _), grad = solver.loop.fval_and_grad_fn(params, X, y)
     step = make_step(grad)
 
     _, descent, _ = solver._line_search._slope_descent_value(params, step, grad, fval)
@@ -145,7 +145,7 @@ def test_prox_newton_reports_a_nan_slope_as_no_step_found():
         tol=1e-12,
     )
     state = solver.init_state(params, X, y)
-    (fval, _), grad = solver._gradient(params, X, y)
+    (fval, _), grad = solver.loop.fval_and_grad_fn(params, X, y)
     step = jax.tree.map(lambda g: jnp.full_like(g, jnp.nan), grad)
 
     _, descent, _ = solver._line_search._slope_descent_value(params, step, grad, fval)
@@ -182,8 +182,6 @@ def _stall_problem(solver_cls, regularizer_cls, strength, **kwargs):
         tol=1e-12,
         **kwargs,
     )
-    if getattr(solver, "_uses_hessian", False):
-        solver.setup_hessian()
     return solver, X, y, params
 
 
@@ -213,7 +211,7 @@ def test_second_order_solvers_reject_an_exhausted_line_search(
     solver, X, y, params = _stall_problem(solver_cls, regularizer_cls, strength)
     solver._line_search = _starve(solver._line_search)
     state = solver.init_state(params, X, y)
-    (fval, _), grad = solver._gradient(params, X, y)
+    (fval, _), grad = solver.loop.fval_and_grad_fn(params, X, y)
     # far past any stepsize one halving can rescue, and still a descent direction so the
     # slope gate passes and the line search is the only thing that can reject it
     step = jax.tree.map(lambda g: -1e6 * g, grad)
@@ -367,7 +365,7 @@ def test_second_order_solvers_do_not_read_a_flat_optimum_as_a_failed_search(
     solver, X, y, params = _stall_problem(solver_cls, regularizer_cls, strength)
     solver._line_search = _starve(solver._line_search)
     state = solver.init_state(params, X, y)
-    (fval, _), grad = solver._gradient(params, X, y)
+    (fval, _), grad = solver.loop.fval_and_grad_fn(params, X, y)
     # Recreate what the search sees at the optimum: a slope under the rounding scale.
     eps = np.finfo(np.float64).eps
     # ``grad`` is a placeholder step here; ``value`` does not depend on it
@@ -422,7 +420,7 @@ def test_second_order_solvers_converge_at_a_tolerance_below_the_search_noise_flo
     def objective(c):
         return float(solver._line_search.fun(c, X, y))
 
-    (fval, _), grad = solver._gradient(final_params, X, y)
+    (fval, _), grad = solver.loop.fval_and_grad_fn(final_params, X, y)
     for scale in (1e-4, 1e-6, 1e-8):
         trial = jax.tree.map(lambda p, g: p - scale * g, final_params, grad)
         assert objective(trial) >= objective(final_params) - 1e-12

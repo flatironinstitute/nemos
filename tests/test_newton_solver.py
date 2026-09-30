@@ -129,9 +129,10 @@ def _make_solver(loss_fn, hess_fn, hess_tag, init_params, jit=False, **kwargs):
         has_aux=False,
         init_params=init_params,
         jit=jit,
+        hess_fn=hess_fn,
+        hessian_tag=hess_tag,
         **kwargs,
     )
-    solver.setup_hessian(hess_fn=hess_fn, hessian_tag=hess_tag)
     return solver
 
 
@@ -1127,7 +1128,7 @@ def test_linear_solver_auto_resolution(matrix_property, expected):
     )
     solver.init_state(params)
 
-    assert solver._resolved_linear_solver == expected
+    assert solver.direction.resolved_linear_solver == expected
 
 
 @pytest.mark.parametrize("requested", ["eigh", "identity_shift"])
@@ -1155,7 +1156,7 @@ def test_explicit_linear_solver_overrides_tag(requested, matrix_property):
     )
     solver.init_state(params)
 
-    assert solver._resolved_linear_solver == requested
+    assert solver.direction.resolved_linear_solver == requested
 
 
 @pytest.mark.parametrize("matrix_property", _MOD_PROPS)
@@ -1178,7 +1179,7 @@ def test_forced_cholesky_warns_for_nonpositive_tag(matrix_property):
     ):
         solver.init_state(params)
 
-    assert solver._resolved_linear_solver == "cholesky"
+    assert solver.direction.resolved_linear_solver == "cholesky"
 
 
 @pytest.mark.parametrize(
@@ -1327,8 +1328,8 @@ def test_eigh_delta_matches_parameter_dtype(dtype):
 
     expected = jnp.sqrt(jnp.finfo(dtype).eps)
 
-    assert solver._delta.dtype == dtype
-    np.testing.assert_array_equal(solver._delta, expected)
+    assert solver.direction.delta.dtype == dtype
+    np.testing.assert_array_equal(solver.direction.delta, expected)
 
 
 @pytest.mark.requires_x64

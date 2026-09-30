@@ -441,13 +441,23 @@ def test_newton_glm_passes_solver_kwargs(regularizer_name, glm_class, solver_nam
         _init_params_for(glm_class),
     )
 
-    # ``inner_iter`` is consumed by the subproblem solver rather than kept on the solver
-    on_direction = {"inner_iter": "_inner_iter"}
+    # Each kwarg is stored exactly once, by the component that consumes it: the loop
+    # runs the iteration, the direction computes the step, its FISTA solves the
+    # subproblem. Only ``linear_solver`` stays on the solver, because it is the strategy
+    # the user requested and the direction records the one it resolved to instead.
+    stored_by = {
+        "maxiter": lambda s: s.loop.maxiter,
+        "tol": lambda s: s.loop.atol,
+        "rtol": lambda s: s.loop.rtol,
+        "inner_iter": lambda s: s.direction._inner_iter,
+        "inner_atol": lambda s: s.direction._inner_solver.atol,
+        "inner_rtol": lambda s: s.direction._inner_solver.rtol,
+        "identity_shift_beta": lambda s: s.direction.identity_shift_beta,
+        "identity_shift_max_steps": lambda s: s.direction.identity_shift_max_steps,
+    }
     for name, expected in solver_kwargs.items():
-        if name in on_direction:
-            assert getattr(solver.direction, on_direction[name]) == expected
-        else:
-            assert getattr(solver, name) == expected
+        read = stored_by.get(name, lambda s, name=name: getattr(s, name))
+        assert read(solver) == expected, name
 
 
 @_SOLVERS
@@ -669,8 +679,8 @@ def test_newton_population_glm_block_hessian_matches_full(
 
     p = GLMParams(*p0)
 
-    H_full = full_model._solver._hessian(p, X, y)
-    H_block = model._solver._hessian(p, X, y)
+    H_full = full_model._solver.curvature.hessian_fn(p, X, y)
+    H_block = model._solver.curvature.hessian_fn(p, X, y)
 
     n_neurons = p.intercept.shape[0]
     struct_neuron = jax.eval_shape(
@@ -841,8 +851,8 @@ def test_newton_population_classifier_glm_block_hessian_matches_full(
     p = GLMParams(*p0)
 
     # full: nested GLMParams coupling every (neuron, class); block: leading axis batches neurons
-    H_full = full_model._solver._hessian(p, X, y_enc)
-    H_block = model._solver._hessian(p, X, y_enc)
+    H_full = full_model._solver.curvature.hessian_fn(p, X, y_enc)
+    H_block = model._solver.curvature.hessian_fn(p, X, y_enc)
 
     n_neurons = p.intercept.shape[0]
     # single-neuron parameter structure used to flatten each block to a dense matrix
@@ -948,7 +958,7 @@ def test_newton_unbatched_model_hessian_matches_differentiated_loss(
 
     jax.tree.map(
         lambda a, b: np.testing.assert_allclose(a, b, atol=1e-8),
-        model._solver._hessian(p, X, y),
+        model._solver.curvature.hessian_fn(p, X, y),
         jax.hessian(model._solver.fun)(p, X, y),
     )
 
@@ -1107,7 +1117,7 @@ def test_ridge_tag_is_definite_when_the_loss_certifies_the_intercept(
     model.solver_name = "Newton"
 
     solver = model._instantiate_solver(model._compute_loss, params)
-    assert solver._hess_tag.property is expected_property
+    assert solver.direction.hessian_tag.property is expected_property
 
 
 @pytest.mark.parametrize("fixture_name, _", _RIDGE_TAG_CASES)
@@ -1123,7 +1133,9 @@ def test_unregularized_tag_is_not_definite(request, fixture_name, _):
     model.solver_name = "Newton"
 
     solver = model._instantiate_solver(model._compute_loss, params)
-    assert solver._hess_tag.property is MatrixProperty.POSITIVE_SEMI_DEFINITE
+    assert (
+        solver.direction.hessian_tag.property is MatrixProperty.POSITIVE_SEMI_DEFINITE
+    )
 
 
 @pytest.mark.parametrize("regularizer_name", ["Lasso", "GroupLasso"])
@@ -1141,15 +1153,15 @@ def test_non_smooth_penalties_resolve_no_tag(regularizer_name):
 
 
 def _installed_newton(model, X, y):
-    """Return the model's ``Newton``, after ``init_state`` picked the linear solver."""
+    """Return the model's ``Newton``, whose direction records the linear solver."""
     model.initialize_optimizer_and_state(model.initialize_params(X, y), X, y)
     return model._solver
 
 
 def _assert_linear_solver(solver, params, expected):
-    """Check the attributes associated with a resolved Hessian strategy."""
+    """Check the fields the direction records for a resolved Hessian strategy."""
     for attr_name, expected_value in expected.items():
-        actual_value = getattr(solver, attr_name)
+        actual_value = getattr(solver.direction, attr_name)
         expected_value = expected_value(params)
 
         if isinstance(expected_value, type):
@@ -1189,23 +1201,24 @@ def _positive_shift(shift_fn):
     return float(shift_fn(_ProbeOperator())) > 0.0
 
 
+# Keyed by the field of ``LinearSolveDirection`` that records the resolved strategy.
 _CHOLESKY_PD = {
-    "_resolved_linear_solver": lambda _: "cholesky",
-    "_linear_solver": lambda _: lx.Cholesky,
-    "_shift_fn": lambda _: _zero_shift,
+    "resolved_linear_solver": lambda _: "cholesky",
+    "linear_solver": lambda _: lx.Cholesky,
+    "shift_fn": lambda _: _zero_shift,
 }
 
 _CHOLESKY_PSD = {
-    "_resolved_linear_solver": lambda _: "cholesky",
-    "_linear_solver": lambda _: lx.Cholesky,
-    "_shift_fn": lambda _: _positive_shift,
+    "resolved_linear_solver": lambda _: "cholesky",
+    "linear_solver": lambda _: lx.Cholesky,
+    "shift_fn": lambda _: _positive_shift,
 }
 
 _EIGH = {
-    "_resolved_linear_solver": lambda _: "eigh",
-    "_linear_solver": lambda _: None,
-    "_shift_fn": lambda _: _zero_shift,
-    "_delta": lambda params: jnp.sqrt(
+    "resolved_linear_solver": lambda _: "eigh",
+    "linear_solver": lambda _: None,
+    "shift_fn": lambda _: _zero_shift,
+    "delta": lambda params: jnp.sqrt(
         jnp.finfo(jnp.result_type(*jax.tree_util.tree_leaves(params))).eps
     ),
 }
@@ -1722,8 +1735,8 @@ def test_prox_newton_autodiff_hessian_matches_supplied_hessian():
         init_params=init,
         tol=1e-12,
         maxiter=500,
+        hess_fn=lambda params, X, y: (2.0 / n) * X.T @ X,
     )
-    solver.setup_hessian(lambda params, X, y: (2.0 / n) * X.T @ X)
     supplied_params, _, _ = solver.run(init, X, y)
 
     np.testing.assert_allclose(autodiff_params, supplied_params, atol=1e-10)
@@ -1748,6 +1761,9 @@ def test_prox_newton_indefinite_hessian_does_not_report_success():
     y = np.random.normal(size=n)
     init = jnp.zeros(4)
 
+    indefinite = np.diag([2.0, 1.0, 0.5, -1.0])
+    assert np.linalg.eigvalsh(indefinite).min() < 0
+
     solver = ProximalNewton(
         _mse,
         regularizer=Lasso(),
@@ -1756,10 +1772,8 @@ def test_prox_newton_indefinite_hessian_does_not_report_success():
         init_params=init,
         tol=1e-12,
         maxiter=50,
+        hess_fn=lambda params, X, y: indefinite,
     )
-    indefinite = np.diag([2.0, 1.0, 0.5, -1.0])
-    assert np.linalg.eigvalsh(indefinite).min() < 0
-    solver.setup_hessian(lambda params, X, y: indefinite)
 
     params, state, _ = solver.run(init, X, y)
 
@@ -1856,7 +1870,7 @@ def _line_search_inputs_at(regularizer, strength, params, step, X, y):
         tol=1e-12,
     )
     solver.init_state(params, X, y)
-    (fval, _), grad = solver._gradient(params, X, y)
+    (fval, _), grad = solver.loop.fval_and_grad_fn(params, X, y)
     slope, _, value = solver._line_search._slope_descent_value(params, step, grad, fval)
     return grad, (value, slope, lambda p: solver._line_search.fun(p, X, y))
 
@@ -1873,7 +1887,7 @@ def test_prox_newton_line_search_slope_is_the_composite_delta(
     override encodes ``Delta = grad f^T d + P(b + d) - P(b)`` by adding
     ``[P(b + d) - P(b)] / ||d||^2 * d`` to the gradient. It is ``Delta``, not
     ``grad f^T d``, that certifies descent of the nonsmooth objective, so the identity is
-    what makes the stock Armijo search correct here.
+    what makes the unmodified Armijo search correct here.
 
     Every reference is numpy: the penalty formulas, the hand-differentiated gradient of
     ``_mse`` and the composite value. Worst measured relative error over these cases is
@@ -2015,7 +2029,7 @@ def test_prox_newton_backtracking_matches_tseng_yun_reference(
         jnp.asarray(prev_stepsize),
     )
 
-    (fval, _), grad = solver._gradient(params, X, y)
+    (fval, _), grad = solver.loop.fval_and_grad_fn(params, X, y)
     H = solver.curvature.update(None, params, None, None, X, y)
     direction = solver.direction.update(params, grad, H, solver.curvature)
     step = jax.tree.map(lambda d: scale * d, direction)
