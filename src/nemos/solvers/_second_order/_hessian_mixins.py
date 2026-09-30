@@ -66,27 +66,24 @@ class HessianMixin:
         hessian_tag: HessianTag | None = None,
         reg_tag: HessianTag | None = None,
         property_override: Optional[type] = None,
-    ) -> None:
-        """Resolve the Hessian of the smooth objective and the tag describing it.
+    ) -> HessianTag:
+        """Build the curvature model and return the tag describing its matrix.
 
-        The invariant, whichever branch runs: ``self._hessian`` is the Hessian of the
-        smooth objective the solver differentiates, and ``self._hess_tag`` describes that
-        same matrix.
+        The invariant, whichever branch runs: ``curvature.hessian_fn`` is the Hessian of
+        the smooth objective the solver differentiates, and the returned tag describes
+        that same matrix. The caller hands the tag to the direction, which is where it
+        comes to rest.
         """
-        self._regularizer = regularizer
-        self._regularizer_strength = regularizer_strength
-        self._init_params = init_params
-
         # A model with no analytic Hessian sends neither a Hessian nor a tag, so the
         # solver falls back to differentiating its own objective, which the unstructured
         # symmetric tag describes.
-        self._hess_tag = HessianTag(
+        default_tag = HessianTag(
             structure=MatrixStructure.FULL,
             property=MatrixProperty.SYMMETRIC,
             flat_on=mask_claim_none(init_params),
             definite_on=mask_claim_none(init_params),
         )
-        self._hessian: Callable = jax.hessian(self.fun)
+        autodiff_hess_fn: Callable = jax.hessian(self.fun)
 
         if self._proximal:
             # NeMoS splits the *whole* penalty into the proximal operator -- so much so
@@ -99,7 +96,13 @@ class HessianMixin:
             # semidefinite.
             reg_tag = property_override = None
         else:
-            hess_fn = self._penalize_hessian(hess_fn, hessian_tag)
+            hess_fn = self._penalize_hessian(
+                hess_fn,
+                hessian_tag,
+                regularizer,
+                regularizer_strength,
+                init_params,
+            )
 
         tag = (
             hessian_tag
@@ -114,19 +117,19 @@ class HessianMixin:
                 definite_on=tag.definite_on,
                 batch_axes=tag.batch_axes,
             )
-        # A model with no analytic Hessian sends no tag, and ``combine_hessian_tags``
-        # returns None as soon as one of its arguments is None. Keep the unstructured
-        # symmetric default in that case rather than dropping back to None.
-        if tag is not None:
-            self._hess_tag = tag
 
         # ``hess_fn`` is None when the model has no analytic Hessian to offer, and the
-        # autodiff one above already stands in for it.
-        if hess_fn is not None:
-            self._hessian = hess_fn
-        self.curvature = NewtonCurvature(self._hessian)
+        # autodiff one already stands in for it. ``combine_hessian_tags`` likewise
+        # returns None as soon as one of its arguments is None, so keep the unstructured
+        # symmetric default rather than dropping back to None.
+        self.curvature = NewtonCurvature(
+            autodiff_hess_fn if hess_fn is None else hess_fn
+        )
+        return default_tag if tag is None else tag
 
-    def _penalize_hessian(self, hess_fn, model_tag):
+    def _penalize_hessian(
+        self, hess_fn, model_tag, regularizer, regularizer_strength, init_params
+    ):
         """Add the regularizer's penalty Hessian to the model's likelihood Hessian.
 
         Models supply the second derivative of the likelihood alone. Adding the penalty's
@@ -151,8 +154,8 @@ class HessianMixin:
             and model_tag.structure is MatrixStructure.BLOCK_DIAGONAL
             else None
         )
-        penalty_hess_fn = self._regularizer._get_hess_fn(
-            self._init_params, self._regularizer_strength, batch_axes=batch_axes
+        penalty_hess_fn = regularizer._get_hess_fn(
+            init_params, regularizer_strength, batch_axes=batch_axes
         )
         if penalty_hess_fn is None:
             # the regularizer declares no curvature, so the likelihood term is the whole
@@ -169,8 +172,8 @@ class HessianMixin:
         The one place that reads ``_hess_tag`` for block structure, shared by the Newton
         solve and by any subclass' Hessian-vector product.
         """
-        if self._hess_tag.structure is MatrixStructure.BLOCK_DIAGONAL:
-            axes = self._hess_tag.batch_axes
+        if self.direction.hessian_tag.structure is MatrixStructure.BLOCK_DIAGONAL:
+            axes = self.direction.hessian_tag.batch_axes
             if block_state is not None:
                 return jax.vmap(
                     fn,
@@ -197,10 +200,10 @@ class HessianSolverMixin:
 
     def _init_block_state(self, params, value: jax.Array) -> jax.Array:
         """Broadcast a scalar to one value per Hessian block."""
-        if self._hess_tag.structure is MatrixStructure.BLOCK_DIAGONAL:
+        if self.direction.hessian_tag.structure is MatrixStructure.BLOCK_DIAGONAL:
             return jax.vmap(
                 lambda _: value,
-                in_axes=(self._hess_tag.batch_axes,),
+                in_axes=(self.direction.hessian_tag.batch_axes,),
                 out_axes=0,
             )(params)
         return value
@@ -215,14 +218,16 @@ class HessianSolverMixin:
                 f"Expected one of {sorted(VALID_SOLVERS)}."
             )
         self.linear_solver: LinearSolverTag = linear_solver
-        self._resolved_linear_solver: ResolvedLinearSolverTag | None = None
-        # overwritten in _resolve_linear_solver once the tag is known
-        self._linear_solver: lx.AbstractLinearSolver | None = None
-        self._shift_fn: Callable | None = None
 
-    def _setup_linear_solve_direction(self, init_params) -> None:  # noqa: C901
+    def _build_linear_solve_direction(  # noqa: C901
+        self,
+        init_params,
+        hessian_tag: HessianTag,
+        identity_shift_beta: float,
+        identity_shift_max_steps: int,
+    ) -> LinearSolveDirection:
         """Resolve the Hessian solution strategy from the tag and user request."""
-        matrix_property = self._hess_tag.property
+        matrix_property = hessian_tag.property
 
         if matrix_property not in POSITIVE_PROPERTIES | SYMMETRIC_PROPERTIES:
             raise ValueError(
@@ -288,12 +293,12 @@ class HessianSolverMixin:
             def _shift_fn(_):
                 return 0.0
 
-        self.direction = LinearSolveDirection(
+        return LinearSolveDirection(
             linear_solver=_linear_solver,
             delta=_delta,
             resolved_linear_solver=resolved,
             shift_fn=_shift_fn,
-            identity_shift_beta=self.identity_shift_beta,
-            identity_shift_max_steps=self.identity_shift_max_steps,
-            hessian_tag=self._hess_tag,
+            identity_shift_beta=identity_shift_beta,
+            identity_shift_max_steps=identity_shift_max_steps,
+            hessian_tag=hessian_tag,
         )

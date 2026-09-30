@@ -168,29 +168,12 @@ class ProximalLBFGS(Generic[Y]):
 
         self.has_aux = has_aux
         self.jit = jit
-        self.maxiter = maxiter
-        self.tol = tol
-        self.rtol = rtol
         self.curvature = LBFGSCurvature[Y](history_length=history_length)
 
-        self.inner_iter = inner_iter
-        self.inner_atol = inner_atol
-        self.inner_rtol = inner_rtol
-
-        self.prox = regularizer.get_proximal_operator(
+        prox = regularizer.get_proximal_operator(
             params=init_params, strength=regularizer_strength
         )
 
-        # The subproblem is solved for the new parameters, so the prox is the
-        # regularizer's own and the solver does not depend on the current iterate:
-        # build it once rather than per outer iteration.
-        self._inner_solver = FISTA(
-            atol=inner_atol,
-            rtol=inner_rtol,
-            norm=lx.internal.two_norm,
-            prox=self.prox,
-            while_loop_kind="lax",
-        )
         # split scalar vs aux
         if has_aux:
             self.fun_with_aux = unregularized_loss
@@ -211,28 +194,41 @@ class ProximalLBFGS(Generic[Y]):
         backtrack = optax.scale_by_backtracking_linesearch(30)
         self._line_search = TsengYunBacktracking(backtrack, penalized_loss, penalty_fn)
 
-        # Cache
-        self._gradient: Callable | None = None
-        self.direction = ProxQuadraticDirection(self._inner_solver, inner_iter, None)
-        fval_and_grad = jax.value_and_grad(
-            self.fun_with_aux,
-            has_aux=True,
+        # The subproblem is solved for the new parameters, so the prox is the
+        # regularizer's own and the solver does not depend on the current iterate:
+        # build it once rather than per outer iteration. The curvature model is never
+        # assembled, so the direction carries no tag.
+        self.direction = ProxQuadraticDirection(
+            FISTA(
+                atol=inner_atol,
+                rtol=inner_rtol,
+                norm=lx.internal.two_norm,
+                prox=prox,
+                while_loop_kind="lax",
+            ),
+            inner_iter,
+            None,
         )
         self.loop = Loop(
-            atol=self.tol,
-            rtol=self.rtol,
-            maxiter=self.maxiter,
+            atol=tol,
+            rtol=rtol,
+            maxiter=maxiter,
             fval_diff_fn=lambda fx, s: fx - s.stats.function_val,
-            fval_and_grad_fn=fval_and_grad,
+            fval_and_grad_fn=jax.value_and_grad(self.fun_with_aux, has_aux=True),
             grad_diff_fn=lambda g, s: tree_utils.tree_sub(g, s.grad_prev),
         )
 
-    def _build_cache(self) -> None:
-        if self._gradient is None:
-            self._gradient = jax.value_and_grad(
-                self.fun_with_aux,
-                has_aux=True,
-            )
+    @property
+    def maxiter(self) -> int:
+        return self.loop.maxiter
+
+    @property
+    def tol(self) -> float:
+        return self.loop.atol
+
+    @property
+    def rtol(self) -> float:
+        return self.loop.rtol
 
     def _scalar_dtype(self, init_params: Y, *args: Any):
         """The objective's dtype, which the state's scalars must already carry.
@@ -242,7 +238,6 @@ class ProximalLBFGS(Generic[Y]):
         return jax.eval_shape(self.fun, init_params, *args).dtype
 
     def init_state(self, init_params: Y, *args: Any) -> LBFGSState[Y]:
-        self._build_cache()
         hessian_state = self.curvature.init(init_params)
         scalar_dtype = self._scalar_dtype(init_params, *args)
         state = LBFGSState(

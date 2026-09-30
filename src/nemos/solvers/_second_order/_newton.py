@@ -130,6 +130,7 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         unregularized_loss: Callable,
         regularizer,
         line_search: ArmijoBacktracking | TsengYunBacktracking,
+        direction_factory: Callable[[HessianTag, Callable | None], Any],
         regularizer_strength: float | None,
         has_aux: bool,
         init_params: Params | None = None,
@@ -150,15 +151,12 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
 
         self.has_aux = has_aux
         self.jit = jit
-        self.maxiter = maxiter
-        self.tol = tol
-        self.rtol = rtol
 
         # A proximal solver differentiates the smooth part only and carries the penalty
         # in its proximal operator, so it must not be handed the penalized loss.
         if self._proximal:
             loss_fn = unregularized_loss
-            self.prox = regularizer.get_proximal_operator(
+            prox = regularizer.get_proximal_operator(
                 params=init_params, strength=regularizer_strength
             )
         else:
@@ -167,7 +165,7 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
                 params=init_params,
                 strength=regularizer_strength,
             )
-            self.prox = None
+            prox = None
 
         # split scalar vs aux
         if has_aux:
@@ -177,31 +175,41 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
             self.fun = loss_fn
             self.fun_with_aux = lambda p, *a: (loss_fn(p, *a), None)
 
-        self._gradient: Callable | None = None
-        # resolves ``_hess_tag``, ``_hessian`` and ``curvature``. A subclass building a
-        # direction from the tag can do so as soon as this returns.
-        self._init_hessian(
-            regularizer,
-            regularizer_strength,
-            init_params,
-            hess_fn=hess_fn,
-            hessian_tag=hessian_tag,
-            reg_tag=reg_tag,
-            property_override=property_override,
-        )
         self._line_search = line_search
-        fval_and_grad = jax.value_and_grad(
-            self.fun_with_aux,
-            has_aux=True,
-        )
         self.loop = Loop(
-            self.maxiter,
+            maxiter,
             atol=tol,
             rtol=rtol,
             fval_diff_fn=lambda x, s: jnp.zeros(()),
-            fval_and_grad_fn=fval_and_grad,
+            fval_and_grad_fn=jax.value_and_grad(self.fun_with_aux, has_aux=True),
             grad_diff_fn=lambda g, s: None,
         )
+        # Neither the tag nor the prox is stored: both go straight to the direction,
+        # which is the object that uses them, and the properties below read them back.
+        self.direction = direction_factory(
+            self._init_hessian(
+                regularizer,
+                regularizer_strength,
+                init_params,
+                hess_fn=hess_fn,
+                hessian_tag=hessian_tag,
+                reg_tag=reg_tag,
+                property_override=property_override,
+            ),
+            prox,
+        )
+
+    @property
+    def maxiter(self) -> int:
+        return self.loop.maxiter
+
+    @property
+    def tol(self) -> float:
+        return self.loop.atol
+
+    @property
+    def rtol(self) -> float:
+        return self.loop.rtol
 
     def update(
         self,
@@ -254,13 +262,6 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         )
         _, aux = self.fun_with_aux(final_params, *args)
         return final_params, final_state, aux
-
-    def _build_cache(self):
-        if self._gradient is None:
-            self._gradient = jax.value_and_grad(
-                self.fun_with_aux,
-                has_aux=True,
-            )
 
     def _apply_or_reject(
         self,
@@ -437,13 +438,11 @@ class Newton(BaseNewtonSolver[Y, NewtonState[Y]], HessianSolverMixin, Generic[Y]
                 "identity_shift_beta must be nonnegative; "
                 f"received {identity_shift_beta}."
             )
-        self.identity_shift_beta = identity_shift_beta
         if identity_shift_max_steps <= 0:
             raise ValueError(
                 "identity_shift_max_steps must be positive; "
                 f"received {identity_shift_max_steps}."
             )
-        self.identity_shift_max_steps = identity_shift_max_steps
         penalized_loss = regularizer.penalized_loss(
             unregularized_loss, init_params, strength=regularizer_strength
         )
@@ -452,6 +451,9 @@ class Newton(BaseNewtonSolver[Y, NewtonState[Y]], HessianSolverMixin, Generic[Y]
             regularizer,
             line_search=ArmijoBacktracking(
                 optax.scale_by_backtracking_linesearch(30), penalized_loss
+            ),
+            direction_factory=lambda tag, _: self._build_linear_solve_direction(
+                init_params, tag, identity_shift_beta, identity_shift_max_steps
             ),
             regularizer_strength=regularizer_strength,
             has_aux=has_aux,
@@ -465,9 +467,6 @@ class Newton(BaseNewtonSolver[Y, NewtonState[Y]], HessianSolverMixin, Generic[Y]
             reg_tag=reg_tag,
             property_override=property_override,
         )
-        # The solve strategy follows from the resolved tag, which ``super().__init__``
-        # has just fixed.
-        self._setup_linear_solve_direction(init_params)
 
     def init_state(self, init_params: Y, *args: Any) -> NewtonState[Y]:
         return NewtonState(
@@ -578,6 +577,20 @@ class ProximalNewton(BaseNewtonSolver[Y, NewtonState[Y]], Generic[Y]):
             line_search=TsengYunBacktracking(
                 optax.scale_by_backtracking_linesearch(30), penalized_loss, penalty_fn
             ),
+            # The subproblem is solved for the new parameters, so the prox is the
+            # regularizer's own and the solver does not depend on the current iterate:
+            # build it once rather than per outer iteration.
+            direction_factory=lambda tag, prox: ProxQuadraticDirection(
+                FISTA(
+                    atol=inner_atol,
+                    rtol=inner_rtol,
+                    norm=lx.internal.two_norm,
+                    prox=prox,
+                    while_loop_kind="lax",
+                ),
+                inner_iter,
+                tag,
+            ),
             regularizer_strength=regularizer_strength,
             has_aux=has_aux,
             init_params=init_params,
@@ -589,24 +602,6 @@ class ProximalNewton(BaseNewtonSolver[Y, NewtonState[Y]], Generic[Y]):
             hessian_tag=hessian_tag,
             reg_tag=reg_tag,
             property_override=property_override,
-        )
-
-        self.inner_atol = inner_atol
-        self.inner_rtol = inner_rtol
-
-        # The subproblem is solved for the new parameters, so the prox is the
-        # regularizer's own and the solver does not depend on the current iterate:
-        # build it once rather than per outer iteration.
-        self.inner_solver = FISTA(
-            atol=inner_atol,
-            rtol=inner_rtol,
-            norm=lx.internal.two_norm,
-            prox=self.prox,
-            while_loop_kind="lax",
-        )
-        self.inner_iter = inner_iter
-        self.direction = ProxQuadraticDirection(
-            self.inner_solver, inner_iter, self._hess_tag
         )
 
     @classmethod
