@@ -150,6 +150,7 @@ class LinearSolveDirection(AbstractDirection, Generic[Y, S]):
     delta: float
     resolved_linear_solver: Literal["cholesky", "eigh", "identity_shift"] | None
     shift_fn: Callable | None
+    identity_shift_beta: float
     identity_shift_max_steps: int
     hessian_tag: HessianTag | None = eqx.field(static=True)
 
