@@ -611,17 +611,21 @@ class GLMHMM(
         """
         if isinstance(observation, str):
             self._observation_model = instantiate_observation_model(observation)
+            self._validate_observation_class(self.observation_model)
             self._is_categorical_glm = isinstance(
                 self._observation_model, obs.CategoricalObservations
             )
+            self._invalidate_solver()
             return
         # check that the model has the required attributes
         # and that the attribute can be called
         obs.check_observation_model(observation)
         self._observation_model = observation
+        self._validate_observation_class(self.observation_model)
         self._is_categorical_glm = isinstance(
             self._observation_model, obs.CategoricalObservations
         )
+        self._invalidate_solver()
 
     @property
     def inverse_link_function(self):

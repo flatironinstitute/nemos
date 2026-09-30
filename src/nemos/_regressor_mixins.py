@@ -16,10 +16,10 @@ from .observation_models import OBSERVATION_MODELS, CategoricalObservations
 from .type_casting import is_numpy_array_like
 from .typing import (
     DESIGN_INPUT_TYPE,
+    ModelParamsT,
     SolverState,
     UserProvidedParamsT,
 )
-from .params import GLMParams
 
 
 class ClassifierMixin:
@@ -31,8 +31,8 @@ class ClassifierMixin:
     )
 
     def _hess_leaf_claims(
-        self, params: GLMParams[jnp.ndarray], active_spec: GLMParams[bool]
-    ) -> GLMParams[LeafClaim]:
+        self, params: ModelParamsT[jnp.ndarray], active_spec: ModelParamsT[bool]
+    ) -> ModelParamsT[LeafClaim]:
         """Certify nothing, unlike the plain GLM this inherits from.
 
         Adding the same constant to every class's intercept leaves the softmax
