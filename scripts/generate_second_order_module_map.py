@@ -18,16 +18,24 @@ import subprocess
 MODULE = pathlib.Path("src/nemos/solvers/_second_order")
 ASSETS = pathlib.Path("docs/assets")
 
-# Each layer may import only from the layers before it.
+# A module may import only from something earlier in this order: an earlier layer, or,
+# within a layer, an earlier entry. The bases share the solvers' layer rather than
+# sitting under it -- a base is what a solver *is*, not something it depends on -- and
+# come first within it, which is what makes the order total.
 LAYERS = [
     ("shared vocabulary", ["_typing", "_utils"]),
     (
         "the four things a solver assembles",
         ["_curvature", "_direction", "_linesearches", "_loop"],
     ),
-    ("wiring", ["_base", "_hessian_mixins"]),
-    ("solvers", ["_newton", "_lbfgs"]),
+    (
+        "solvers, and the bases they are built on",
+        ["_base", "_hessian_mixins", "_newton", "_lbfgs"],
+    ),
 ]
+
+# Drawn on the solvers' rank, but styled as bases rather than as dependencies.
+BASES = {"_base", "_hessian_mixins"}
 
 CONTENTS = {
     "_typing": ["Y, S, R, D, Aux", "HvpFn"],
@@ -56,16 +64,20 @@ THEMES = {
         fg="#1a1a1a",
         muted="#6b6b6b",
         edge="#8a8a8a",
-        fills=["#f2f2f2", "#e3edf7", "#ece4f5", "#e2f0e6"],
-        strokes=["#b8b8b8", "#7ba3cc", "#9b83c4", "#74ab89"],
+        fills=["#f2f2f2", "#e3edf7", "#e2f0e6"],
+        strokes=["#b8b8b8", "#7ba3cc", "#74ab89"],
+        base_fill="#ece4f5",
+        base_stroke="#9b83c4",
     ),
     "_dark": dict(
         bg="none",
         fg="#e8e8e8",
         muted="#9a9a9a",
         edge="#6f6f6f",
-        fills=["#2a2a2a", "#243642", "#2e2740", "#24382c"],
-        strokes=["#5a5a5a", "#5b8bb8", "#8069ab", "#5c9173"],
+        fills=["#2a2a2a", "#243642", "#24382c"],
+        strokes=["#5a5a5a", "#5b8bb8", "#5c9173"],
+        base_fill="#2e2740",
+        base_stroke="#8069ab",
     ),
 }
 
@@ -94,17 +106,45 @@ def runtime_imports() -> dict[str, set[str]]:
 
 
 def check_layering(graph: dict[str, set[str]]) -> None:
-    rank = {m: i for i, (_, mods) in enumerate(LAYERS) for m in mods}
-    missing = set(graph) - set(rank)
+    """Assert the order the drawing claims is the order the source actually has."""
+    order = {
+        m: (i, j) for i, (_, mods) in enumerate(LAYERS) for j, m in enumerate(mods)
+    }
+    missing = set(graph) - set(order)
     if missing:
         raise SystemExit(f"module(s) not placed in a layer: {sorted(missing)}")
     for mod, deps in graph.items():
         for dep in deps:
-            if rank[dep] >= rank[mod]:
+            if order[dep] >= order[mod]:
                 raise SystemExit(
-                    f"{mod} (layer {rank[mod]}) imports {dep} (layer {rank[dep]}): "
-                    "the drawing claims a layering the code does not have"
+                    f"{mod} {order[mod]} imports {dep} {order[dep]}: "
+                    "the drawing claims an order the code does not have"
                 )
+
+
+def inheritance() -> set[tuple[str, str]]:
+    """``(subclass module, base module)`` for every base imported from this package."""
+    mods = {p.stem for p in MODULE.glob("*.py")}
+    edges = set()
+    for path in sorted(MODULE.glob("*.py")):
+        tree = ast.parse(path.read_text())
+        origin = {
+            alias.asname or alias.name: node.module
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom)
+            and node.level == 1
+            and node.module in mods
+            for alias in node.names
+        }
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                for base in node.bases:
+                    root = base
+                    while isinstance(root, ast.Subscript):
+                        root = root.value
+                    if isinstance(root, ast.Name) and root.id in origin:
+                        edges.add((path.stem, origin[root.id]))
+    return edges
 
 
 def node_label(mod: str) -> str:
@@ -119,18 +159,20 @@ def node_label(mod: str) -> str:
 
 
 def dot_source(graph: dict[str, set[str]], theme: dict) -> str:
-    """One rank per layer, top to bottom, so every arrow points downward."""
-    layer_of = {m: i for i, (_, mods) in enumerate(LAYERS) for m in mods}
+    """One rank per layer, top to bottom, with the bases beside the solvers."""
+    order = {
+        m: (i, j) for i, (_, mods) in enumerate(LAYERS) for j, m in enumerate(mods)
+    }
+    inherits = inheritance()
     out = [
         "digraph second_order {",
         f'  bgcolor="{theme["bg"]}";',
-        "  rankdir=TB; splines=spline; nodesep=0.45; ranksep=0.95;",
+        "  rankdir=TB; splines=spline; nodesep=0.45; ranksep=1.0;",
         '  graph [fontname="Helvetica,Arial,sans-serif"];',
         '  node [shape=box, style="rounded,filled", penwidth=1.3, margin="0.16,0.10",'
         f'        fontname="Helvetica,Arial,sans-serif", fontcolor="{theme["fg"]}"];',
         f'  edge [color="{theme["edge"]}", arrowsize=0.7, penwidth=1.1];',
     ]
-    # top to bottom: solvers first, foundation last
     for i, (title, mods) in reversed(list(enumerate(LAYERS))):
         out.append("  { rank=same;")
         out.append(
@@ -138,28 +180,43 @@ def dot_source(graph: dict[str, set[str]], theme: dict) -> str:
             f'fontsize=10, fontcolor="{theme["muted"]}"];'
         )
         for mod in mods:
+            base = mod in BASES
+            fill = theme["base_fill"] if base else theme["fills"][i]
+            stroke = theme["base_stroke"] if base else theme["strokes"][i]
+            dash = ', style="rounded,filled,dashed"' if base else ""
             out.append(
                 f'    "{mod}" [label={node_label(mod)}, '
-                f'fillcolor="{theme["fills"][i]}", color="{theme["strokes"][i]}"];'
+                f'fillcolor="{fill}", color="{stroke}"{dash}];'
             )
         out.append("  }")
-    # invisible spine keeps the layers stacked and the labels in their gutter
     spine = " -> ".join(f'"L{i}"' for i in reversed(range(len(LAYERS))))
     out.append(f"  {spine} [style=invis];")
     for i, (_, mods) in enumerate(LAYERS):
         out.append(f'  "L{i}" -> "{mods[0]}" [style=invis];')
+    # keep the bases to the left of the solvers on their shared rank
+    for a, b in zip(LAYERS[-1][1], LAYERS[-1][1][1:]):
+        out.append(f'  "{a}" -> "{b}" [style=invis, weight=10];')
 
     for mod, deps in sorted(graph.items()):
         for dep in sorted(deps):
             if dep == "_typing":  # every module imports it; drawing it buries the rest
                 continue
-            same = layer_of[mod] - layer_of[dep] > 1
-            out.append(f'  "{mod}" -> "{dep}"{" [constraint=false]" if same else ""};')
+            if (mod, dep) in inherits:
+                out.append(
+                    f'  "{mod}" -> "{dep}" [arrowhead=onormal, arrowsize=1.0, '
+                    f'constraint=false, color="{theme["base_stroke"]}"];'
+                )
+            else:
+                same = order[mod][0] == order[dep][0]
+                out.append(
+                    f'  "{mod}" -> "{dep}"{" [constraint=false]" if same else ""};'
+                )
     out.append(
         f'  label=<<BR/><FONT POINT-SIZE="10" COLOR="{theme["muted"]}">'
-        "an arrow points from a module to one it imports at runtime; imports made only "
-        "for annotations are not runtime imports and are not drawn, and neither is "
-        "<B>_typing</B>, which every module uses"
+        "a plain arrow points from a module to one it imports at runtime; a hollow one "
+        "from a solver to a base it inherits. Imports made only for annotations are not "
+        "runtime imports and are not drawn, and neither is <B>_typing</B>, which every "
+        "module uses."
         "</FONT>>; labelloc=b;"
     )
     out.append("}")
