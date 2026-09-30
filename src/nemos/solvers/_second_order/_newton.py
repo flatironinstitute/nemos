@@ -195,6 +195,13 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         state: S,
         *args: Any,
     ) -> StepResult:
+        if self.direction is None:
+            if isinstance(self, ProximalNewton) and self.direction is None:
+                self.direction = ProxQuadraticDirection(
+                    _inner_solver=self.inner_solver,
+                    _inner_iter=self.inner_iter,
+                    hessian_tag=self._hess_tag,
+                )
         return self.loop.update(
             params, state, self.curvature, self.direction, self._line_search, *args
         )
@@ -210,6 +217,12 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         path has to be reached through a separate method: decorating this one would trace
         the Python loop and fail on its data-dependent condition.
         """
+        if isinstance(self, ProximalNewton) and not hasattr(self, "direction"):
+            self.direction = ProxQuadraticDirection(
+                _inner_solver=self.inner_solver,
+                _inner_iter=self.inner_iter,
+                hessian_tag=self._hess_tag,
+            )
         if self.jit:
             return self._run_jit(init_params, *args)
         return self._run(init_params, *args)
@@ -449,7 +462,7 @@ class Newton(BaseNewtonSolver[Y, NewtonState[Y]], HessianSolverMixin, Generic[Y]
         self._setup_linear_solve_direction(init_params)
         state = NewtonState(
             **self._common_state_fields(init_params, *args),
-            direction_state=self.direction.init(init_params, self.curvature),
+            direction_state=self.direction.init(init_params),
         )
         return state
 
@@ -567,14 +580,14 @@ class ProximalNewton(BaseNewtonSolver[Y, NewtonState[Y]], Generic[Y]):
         # The subproblem is solved for the new parameters, so the prox is the
         # regularizer's own and the solver does not depend on the current iterate:
         # build it once rather than per outer iteration.
-        inner_solver = FISTA(
+        self.inner_solver = FISTA(
             atol=inner_atol,
             rtol=inner_rtol,
             norm=lx.internal.two_norm,
             prox=self.prox,
             while_loop_kind="lax",
         )
-        self.direction = ProxQuadraticDirection(inner_solver, inner_iter)
+        self.inner_iter = inner_iter
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:

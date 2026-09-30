@@ -7,13 +7,13 @@ import jax.numpy as jnp
 import lineax as lx
 import optimistix as optx
 from jax.flatten_util import ravel_pytree
-from jaxtyping import Array
+from jaxtyping import Array, PyTree
 from lineax import AbstractLinearSolver
 
 from ... import tree_utils
-from ..._hess import MatrixStructure
+from ..._hess import HessianTag, MatrixStructure
 from .._fista import FISTA
-from ._curvature import AbstractCurvature, S, Y
+from ._curvature import S, Y
 from ._utils import map_blocks
 
 # direction state
@@ -26,15 +26,13 @@ class AbstractDirection(eqx.Module, ABC, Generic[Y, D, S]):
         self,
         params: Y,
         grad: Y,
-        hess_op: lx.AbstractLinearOperator,
+        hvp_fn: Callable[[Y, HessianTag], Y],
+        hessian_tensor: PyTree[Array] | None,
         direction_state: D,
-        hessian_state: S,
-        curvature: AbstractCurvature,
-        *args,
     ) -> Tuple[Y, D]: ...
 
     @abstractmethod
-    def init(self, params: Y, curvature: AbstractCurvature[Y, S]) -> D: ...
+    def init(self, params: Y) -> D: ...
 
 
 def _solve_shifted_system(
@@ -114,20 +112,21 @@ def _solve_shifted_system(
 class ProxQuadraticDirection(AbstractDirection, Generic[Y, S]):
     _inner_solver: FISTA
     _inner_iter: int
+    hessian_tag: HessianTag | None = eqx.field(static=True)
 
     def update(
         self,
         params: Y,
         grad: Y,
-        hess_op: lx.AbstractLinearOperator,
+        hvp_fn: Callable[[Y, HessianTag], Y],
+        hessian_tensor: PyTree[Array] | None,
         direction_state: None,
-        hessian_state: S,
-        curvature: AbstractCurvature,
-        *args,
     ) -> Y:
+        del hessian_tensor
+
         def quadratic(z, _):
             step = tree_utils.tree_sub(z, params)
-            hvp = hess_op.mv(step)
+            hvp = hvp_fn(step, self.hessian_tag)
             return lx.internal.tree_dot(grad, step) + 0.5 * lx.internal.tree_dot(
                 step, hvp
             )
@@ -141,8 +140,8 @@ class ProxQuadraticDirection(AbstractDirection, Generic[Y, S]):
         ).value
         return tree_utils.tree_sub(new_params, params), direction_state
 
-    def init(self, params: Y, curvature: AbstractCurvature[Y, S]):
-        del params, curvature
+    def init(self, params: Y):
+        del params
         return None
 
 
@@ -152,6 +151,7 @@ class LinearSolveDirection(AbstractDirection, Generic[Y, S]):
     resolved_linear_solver: Literal["cholesky", "eigh", "identity_shift"] | None
     shift_fn: Callable | None
     identity_shift_max_steps: int
+    hessian_tag: HessianTag | None = eqx.field(static=True)
 
     def _solve(self, H: Any, grad: Y, previous_shift: Array) -> Tuple[Y, Array]:
 
@@ -263,27 +263,24 @@ class LinearSolveDirection(AbstractDirection, Generic[Y, S]):
         self,
         params: Y,
         grad: Y,
-        hess_op: lx.AbstractLinearOperator,
+        hvp_fn: Callable[[Y, HessianTag], Y],
+        hessian_tensor: PyTree[Array],
         direction_state: D,
-        hessian_state: S,
-        curvature: AbstractCurvature,
-        *args,
     ) -> Y:
-        hess = curvature.as_hessian_tree(params, hess_op, *args)
-        tag = getattr(curvature, "hessian_tag", None)
+        del hvp_fn
         direction, accepted_shift = map_blocks(
             self._solve,
-            hess,
+            hessian_tensor,
             (grad,),
-            tag,
+            hessian_tag=self.hessian_tag,
             block_state=direction_state,
         )
         return direction, accepted_shift
 
-    def init(self, params: Y, curvature: AbstractCurvature[Y, S]) -> D:
+    def init(self, params: Y) -> D:
         dtype = jnp.result_type(*jax.tree_util.tree_leaves(params))
         zero = jnp.zeros((), dtype=dtype)
-        tag = getattr(curvature, "hessian_tag", None)
+        tag = self.hessian_tag
         if tag is not None and tag.structure is MatrixStructure.BLOCK_DIAGONAL:
             return jax.vmap(
                 lambda _: zero,

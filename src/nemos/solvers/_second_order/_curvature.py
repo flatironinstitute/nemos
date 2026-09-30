@@ -85,10 +85,10 @@ class AbstractCurvature(eqx.Module, ABC, Generic[Y, S]):
         y_diff: Y,
         grad: Y,
         *args: Any,
-    ) -> tuple[lx.AbstractLinearOperator, S]: ...
+    ) -> tuple[Callable[[Y, HessianTag], Y], PyTree[Array] | None, S]: ...
 
     @abstractmethod
-    def hvp(self, state: S, params: Y, v: Y, *args) -> Y: ...
+    def hvp(self, state: S, params: Y, v: Y, hessian_tag: HessianTag | None) -> Y: ...
 
     def as_hessian_tree(
         self, params: Y, hess_op: lx.AbstractLinearOperator, *args
@@ -133,7 +133,7 @@ class LBFGSCurvature(AbstractCurvature[Y, _LBFGSHessianUpdateState], Generic[Y])
         y_diff: Y,
         grad_diff: Y,
         *args: Any,
-    ) -> tuple[lx.AbstractLinearOperator, _LBFGSHessianUpdateState[Y]]:
+    ) -> tuple[Callable[[Y, HessianTag], Y], None, _LBFGSHessianUpdateState]:
 
         history_length = state.history_length
 
@@ -243,11 +243,10 @@ class LBFGSCurvature(AbstractCurvature[Y, _LBFGSHessianUpdateState], Generic[Y])
         # f64 constant ``1e10``, as ``HessianSolverMixin`` reads its ``_delta``
         floor = jnp.sqrt(jnp.finfo(grad_norm.dtype).eps)
 
-        def _hvp(v):
-            return self.hvp(new_state, params, v, *args)
+        def _hvp(v, tag):
+            return self.hvp(new_state, params, v, tag)
 
-        op = lx.FunctionLinearOperator(_hvp, jax.eval_shape(lambda: params))
-        return op, eqx.tree_at(
+        new_state = eqx.tree_at(
             lambda s: s.initial_scale,
             new_state,
             jnp.where(
@@ -255,7 +254,15 @@ class LBFGSCurvature(AbstractCurvature[Y, _LBFGSHessianUpdateState], Generic[Y])
             ),
         )
 
-    def hvp(self, state: _LBFGSHessianUpdateState[Y], params: Y, v: Y, *args) -> Y:
+        return _hvp, None, new_state
+
+    def hvp(
+        self,
+        state: _LBFGSHessianUpdateState[Y],
+        params: Y,
+        v: Y,
+        hessian_tag: HessianTag | None,
+    ) -> Y:
         r"""Apply :math:`B_k`, scaling it by hand while there is no history to scale it.
 
         With a pair stored, :func:`_lbfgs_hessian_operator_fn` scales itself by
@@ -280,7 +287,7 @@ class LBFGSCurvature(AbstractCurvature[Y, _LBFGSHessianUpdateState], Generic[Y])
             *SIAM Journal on Scientific Computing*, 16(5), 1190-1208.
             https://doi.org/10.1137/0916069
         """
-        del params
+        del params, hessian_tag
         scaled = _lbfgs_hessian_operator_fn(v, state)
         return jax.tree.map(
             lambda s, u: jnp.where(state.index_start == 0, state.initial_scale * u, s),
@@ -308,8 +315,7 @@ class NewtonCurvature(AbstractCurvature[Y, None], Generic[Y]):
     Note that the state here IS the hessian.
     """
 
-    hessian_tag: HessianTag
-    hessian_fn: Callable
+    hessian_fn: Callable[[Y, Any], PyTree[Array]]
 
     def init(self, params: Y, *args) -> Any:
         return None
@@ -321,19 +327,20 @@ class NewtonCurvature(AbstractCurvature[Y, None], Generic[Y]):
         y_diff: Y,
         grad_diff: Y,
         *args,
-    ) -> tuple[lx.AbstractLinearOperator, None]:
+    ) -> tuple[Callable[[Y, HessianTag], Y], PyTree[Array], None]:
         del grad_diff, y_diff
+        hessian_tensor = self.hessian_fn(params, *args)
 
-        def _hvp(v):
-            return self.hvp(self.hessian_fn(params, *args), params, v, *args)
+        def _hvp(v: Y, tag: HessianTag):
+            return self.hvp(hessian_tensor, params, v, tag)
 
-        return lx.FunctionLinearOperator(_hvp, jax.eval_shape(lambda: params)), None
+        return _hvp, hessian_tensor, None
 
-    def hvp(self, state: Any, params: Y, v: Y, *args) -> Y:
+    def hvp(self, state: Any, params: Y, v: Y, hessian_tag: HessianTag | None) -> Y:
         def apply_operator(H_b, v_b):
             return lx.PyTreeLinearOperator(H_b, jax.eval_shape(lambda: v_b)).mv(v_b)
 
-        return map_blocks(apply_operator, state, (v,), self.hessian_tag)
+        return map_blocks(apply_operator, state, (v,), hessian_tag=hessian_tag)
 
     def as_hessian_tree(
         self, params: Y, hess_op: lx.AbstractLinearOperator, *args

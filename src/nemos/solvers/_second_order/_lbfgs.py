@@ -213,7 +213,7 @@ class ProximalLBFGS(Generic[Y]):
 
         # Cache
         self._gradient: Callable | None = None
-        self.direction = ProxQuadraticDirection(self._inner_solver, inner_iter)
+        self.direction = ProxQuadraticDirection(self._inner_solver, inner_iter, None)
         fval_and_grad = jax.value_and_grad(
             self.fun_with_aux,
             has_aux=True,

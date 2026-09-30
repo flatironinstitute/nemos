@@ -77,7 +77,7 @@ class HessianMixin:
         # so a solver that never receives an analytic Hessian has to arrive with one
         # that differentiates the objective, and with the curvature model built on it.
         self._hessian: Callable = jax.hessian(self.fun)
-        self.curvature = NewtonCurvature(self._hess_tag, self._hessian)
+        self.curvature = NewtonCurvature(self._hessian)
 
     def setup_hessian(
         self,
@@ -129,7 +129,7 @@ class HessianMixin:
         # autodiff one built in ``_init_hessian`` already stands in for it.
         if hess_fn is not None:
             self._hessian = hess_fn
-        self.curvature = NewtonCurvature(self._hess_tag, self._hessian)
+        self.curvature = NewtonCurvature(self._hessian)
 
     def _penalize_hessian(self, hess_fn, model_tag):
         """Add the regularizer's penalty Hessian to the model's likelihood Hessian.
@@ -299,4 +299,5 @@ class HessianSolverMixin:
             resolved_linear_solver=resolved,
             shift_fn=_shift_fn,
             identity_shift_max_steps=self.identity_shift_max_steps,
+            hessian_tag=self._hess_tag,
         )

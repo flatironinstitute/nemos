@@ -69,7 +69,7 @@ class Loop(eqx.Module, Generic[Y, S]):
         converged = self.converged(params, state, grad, fval)
 
         def step(_):
-            hess_op, new_hessian_state = curvature.update(
+            hvp_fn, hessian_tensor, new_hessian_state = curvature.update(
                 state.hessian_update_state,
                 params,
                 state.y_diff,
@@ -79,11 +79,9 @@ class Loop(eqx.Module, Generic[Y, S]):
             step, dir_state = direction.update(
                 params,
                 grad,
-                hess_op,
+                hvp_fn,
+                hessian_tensor,
                 state.direction_state,
-                new_hessian_state,
-                curvature,
-                *args,
             )
 
             new_params, new_ls_state, no_step_found = self._apply_or_reject(
