@@ -1,5 +1,7 @@
 """Newton-based optimization solvers."""
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Generic, TypeVar
 
 import equinox as eqx
@@ -55,7 +57,7 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
     def __init__(
         self,
         unregularized_loss: Callable,
-        regularizer: "Regularizer",
+        regularizer: Regularizer,
         line_search: ArmijoBacktracking | TsengYunBacktracking,
         direction_factory: Callable[[HessianTag, Callable | None], AbstractDirection],
         regularizer_strength: float | None,
@@ -297,7 +299,7 @@ class Newton(BaseNewtonSolver[Y, NewtonState[Y]], HessianSolverMixin, Generic[Y]
     def __init__(
         self,
         unregularized_loss: Callable,
-        regularizer: "Regularizer",
+        regularizer: Regularizer,
         regularizer_strength: float | None,
         has_aux: bool,
         init_params: Params | None = None,
@@ -429,7 +431,7 @@ class ProximalNewton(BaseNewtonSolver[Y, NewtonState[Y]], Generic[Y]):
     def __init__(
         self,
         unregularized_loss: Callable,
-        regularizer: "Regularizer",
+        regularizer: Regularizer,
         regularizer_strength: float | None,
         has_aux: bool,
         init_params: Params | None = None,

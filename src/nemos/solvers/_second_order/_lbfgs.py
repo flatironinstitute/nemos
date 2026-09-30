@@ -18,6 +18,8 @@ here is nested instead, and the search is whichever ``optax`` transformation
 the loop shape, so it is the only part taken.
 """
 
+from __future__ import annotations
+
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -146,7 +148,7 @@ class ProximalLBFGS(Generic[Y]):
     def __init__(
         self,
         unregularized_loss: Callable,
-        regularizer: "Regularizer",
+        regularizer: Regularizer,
         regularizer_strength: float | None,
         has_aux: bool,
         init_params: Params | None = None,

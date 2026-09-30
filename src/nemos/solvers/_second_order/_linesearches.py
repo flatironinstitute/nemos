@@ -6,6 +6,8 @@ Only the value being decreased and the slope certifying descent differ between a
 and a composite objective, so that pair is what a subclass supplies.
 """
 
+from __future__ import annotations
+
 import abc
 from typing import Any, Callable, Generic, Tuple, TypeVar
 

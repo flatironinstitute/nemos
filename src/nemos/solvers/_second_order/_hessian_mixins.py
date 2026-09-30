@@ -1,5 +1,7 @@
 """Mixin providing the curvature machinery for second-order solvers."""
 
+from __future__ import annotations
+
 import warnings
 from typing import TYPE_CHECKING, Callable, ClassVar, Literal, Optional
 
@@ -64,7 +66,7 @@ class HessianMixin:
 
     def _init_hessian(
         self,
-        regularizer: "Regularizer",
+        regularizer: Regularizer,
         regularizer_strength: float | None,
         init_params: Params,
         hess_fn: Callable[..., PyTree[Array]] | None = None,
@@ -136,7 +138,7 @@ class HessianMixin:
         self,
         hess_fn: Callable[..., PyTree[Array]] | None,
         model_tag: HessianTag | None,
-        regularizer: "Regularizer",
+        regularizer: Regularizer,
         regularizer_strength: float | None,
         init_params: Params,
     ) -> Callable[..., PyTree[Array]] | None:
