@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Generic
 
-import jax
-import jax.numpy as jnp
 import lineax as lx
 import optax
 
@@ -21,7 +19,6 @@ from ._direction import (
 )
 from ._hessian_mixins import HessianMixin
 from ._linesearches import ArmijoBacktracking, TsengYunBacktracking
-from ._loop import Loop
 from ._typing import Y
 
 if TYPE_CHECKING:
@@ -78,16 +75,8 @@ class BaseNewtonSolver(
             )
             prox = None
 
-        self._set_objective(loss_fn, has_aux)
-
+        self._set_objective(loss_fn, has_aux, maxiter, tol, rtol)
         self._line_search = line_search
-        self.loop = Loop(
-            maxiter,
-            atol=tol,
-            rtol=rtol,
-            fval_diff_fn=lambda x, s: jnp.zeros(()),
-            fval_and_grad_fn=jax.value_and_grad(self.fun_with_aux, has_aux=True),
-        )
         # Neither the tag nor the prox is stored: both go straight to the direction,
         # which is the object that uses them, and the properties below read them back.
         self.direction = direction_factory(

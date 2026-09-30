@@ -32,6 +32,7 @@ import jax
 import jax.numpy as jnp
 import lineax as lx
 import optax
+from jaxtyping import Scalar
 
 from ...typing import Params
 from .._fista import FISTA
@@ -39,7 +40,6 @@ from ._base import AbstractSecondOrderSolver, SecondOrderState
 from ._curvature import LBFGSCurvature
 from ._direction import ProxQuadraticDirection
 from ._linesearches import TsengYunBacktracking
-from ._loop import Loop
 from ._typing import Y
 
 if TYPE_CHECKING:
@@ -145,7 +145,7 @@ class ProximalLBFGS(AbstractSecondOrderSolver[Y, SecondOrderState[Y]], Generic[Y
             params=init_params, strength=regularizer_strength
         )
 
-        self._set_objective(unregularized_loss, has_aux)
+        self._set_objective(unregularized_loss, has_aux, maxiter, tol, rtol)
 
         # the penalty alone, for the composite line search. self.fun is the smooth
         # loss here, so the composite objective is self.fun + self._penalty, which is
@@ -174,13 +174,15 @@ class ProximalLBFGS(AbstractSecondOrderSolver[Y, SecondOrderState[Y]], Generic[Y
             inner_iter,
             None,
         )
-        self.loop = Loop(
-            atol=tol,
-            rtol=rtol,
-            maxiter=maxiter,
-            fval_diff_fn=lambda fx, s: fx - s.stats.function_val,
-            fval_and_grad_fn=jax.value_and_grad(self.fun_with_aux, has_aux=True),
-        )
+
+    def _fval_diff(self, fval: Scalar, state: SecondOrderState[Y]) -> Scalar:
+        """Keep the function-value arm: the step-norm arm cannot fire on its own here.
+
+        This solver differentiates the smooth part only, so on a composite objective a
+        badly conditioned problem leaves the step norm above ``tol`` long after the
+        iterate has stopped moving; see :meth:`_converged` on the class docstring.
+        """
+        return fval - state.stats.function_val
 
     def _initial_y_diff(self, init_params: Y) -> Y:
         """Zero rather than infinite: this is also the ``s`` of the first curvature pair.
