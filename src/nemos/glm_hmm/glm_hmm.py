@@ -320,6 +320,7 @@ class GLMHMM(
     <class 'dict'>
     """
 
+    _invalid_observation_types = (obs.CategoricalObservations,)
     _validator_class = GLMHMMValidator
     _model_default_init_dict = DEFAULT_INIT_FUNCTIONS_GLMHMM
     _kmeans_init_class = KMeansInitializerGLM
@@ -374,6 +375,27 @@ class GLMHMM(
 
         # cache the log-like
         self._log_like_cache = {}
+
+    @classmethod
+    def _validate_observation_class(cls, observation: obs.Observations):
+        if observation.__class__ in cls._invalid_observation_types:
+            model_name = cls.__name__
+            obs_name = observation.__class__.__name__
+            error_msg = f"The ``{obs_name}`` observation type is not supported for ``{model_name}`` models."
+            is_categorical = isinstance(observation, obs.CategoricalObservations)
+            if is_categorical:
+                correct_model = "ClassifierGLMHMM"
+                error_msg += (
+                    f" To use a GLMHMM for classification instantiate a ``{correct_model}`` "
+                    f"object."
+                )
+            else:
+                correct_model = "GLMHMM"
+                error_msg += (
+                    f" To use a GLMHMM with ``{obs_name}`` instantiate a ``{correct_model}`` "
+                    f"object."
+                )
+            raise TypeError(error_msg)
 
     def _log_likelihood(
         self, params: GLMHMMParams, X: DESIGN_INPUT_TYPE, y: ArrayLike
@@ -639,9 +661,6 @@ class GLMHMM(
         self._inverse_link_function = resolve_inverse_link_function(
             inverse_link_function, self._observation_model
         )
-        # if self._is_categorical_glm:
-        #     inverse_link = partial(inverse_link, axis=-2)
-        # self._inverse_link_function = inverse_link
 
     def _check_model_is_fit(self):
         """Ensure the instance has been fitted."""
