@@ -338,12 +338,5 @@ class NewtonCurvature(AbstractCurvature[Y, None], Generic[Y]):
     def as_hessian_tree(
         self, params: Y, hess_op: lx.AbstractLinearOperator, *args
     ) -> PyTree[Array]:
-        """Return the hessian pytree.
-
-        Notes
-        -----
-        The full hessian is size N^2, where N is the number of parameters.
-        The method is here for consistency with the NewtonCurvature, and
-        can be used for debugging.
-        """
+        """Return the hessian pytree."""
         return self.hessian_fn(params, *args)
