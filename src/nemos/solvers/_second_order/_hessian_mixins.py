@@ -38,14 +38,15 @@ class HessianMixin:
     """
     Receive and exploit the model's analytic Hessian.
 
-    ``BaseRegressor`` offers the Hessian to any solver carrying this mixin, so
-    curvature stays out of ``AbstractSolver``: a first-order solver has no use for
-    ``setup_hessian``, a Hessian tag, or a linear solver, and should not inherit them.
+    ``BaseRegressor`` routes the Hessian to any solver carrying this mixin, so
+    curvature stays out of ``AbstractSolver``: a first-order solver has no use for a
+    Hessian, a Hessian tag, or a linear solver, and should not inherit them.
     This mirrors ``StochasticSolverMixin``, which holds the stochastic machinery for
     the solvers that support it.
 
-    Subclasses are expected to call ``_init_hessian`` from their ``__init__`` and
-    ``_resolve_linear_solver`` from their ``init_state``.
+    Subclasses are expected to call ``_init_hessian`` from their ``__init__``, which
+    resolves the tag and the Hessian in one pass; everything downstream of it -- the
+    directions, which hold the tag -- can then be built in ``__init__`` as well.
     """
 
     # Declares the capability to ``BaseRegressor``, mirroring ``_supports_stochastic``.
@@ -61,37 +62,32 @@ class HessianMixin:
         regularizer,
         regularizer_strength,
         init_params,
+        hess_fn: Callable | None = None,
+        hessian_tag: HessianTag | None = None,
+        reg_tag: HessianTag | None = None,
+        property_override: Optional[type] = None,
     ) -> None:
-        """Store what ``setup_hessian`` needs and default the resolved solver state."""
+        """Resolve the Hessian of the smooth objective and the tag describing it.
+
+        The invariant, whichever branch runs: ``self._hessian`` is the Hessian of the
+        smooth objective the solver differentiates, and ``self._hess_tag`` describes that
+        same matrix.
+        """
         self._regularizer = regularizer
         self._regularizer_strength = regularizer_strength
         self._init_params = init_params
 
+        # A model with no analytic Hessian sends neither a Hessian nor a tag, so the
+        # solver falls back to differentiating its own objective, which the unstructured
+        # symmetric tag describes.
         self._hess_tag = HessianTag(
             structure=MatrixStructure.FULL,
             property=MatrixProperty.SYMMETRIC,
             flat_on=mask_claim_none(init_params),
             definite_on=mask_claim_none(init_params),
         )
-        # ``setup_hessian`` is optional -- ``AbstractSolver`` defaults it to a no-op --
-        # so a solver that never receives an analytic Hessian has to arrive with one
-        # that differentiates the objective, and with the curvature model built on it.
         self._hessian: Callable = jax.hessian(self.fun)
-        self.curvature = NewtonCurvature(self._hessian)
 
-    def setup_hessian(
-        self,
-        hess_fn: Callable | None = None,
-        hessian_tag: HessianTag | None = None,
-        reg_tag: HessianTag | None = None,
-        property_override: Optional[type] = None,
-    ) -> None:
-        """Accept the model's analytic Hessian and resolve the tag describing it.
-
-        The invariant, whichever branch runs: ``self._hessian`` is the Hessian of the
-        smooth objective the solver differentiates, and ``self._hess_tag`` describes that
-        same matrix.
-        """
         if self._proximal:
             # NeMoS splits the *whole* penalty into the proximal operator -- so much so
             # that ``prox_elastic_net`` rescales for its own L2 term -- leaving the smooth
@@ -124,9 +120,8 @@ class HessianMixin:
         if tag is not None:
             self._hess_tag = tag
 
-        # TODO: Tag and Hessian fn should live only in curvature, not as attr.
         # ``hess_fn`` is None when the model has no analytic Hessian to offer, and the
-        # autodiff one built in ``_init_hessian`` already stands in for it.
+        # autodiff one above already stands in for it.
         if hess_fn is not None:
             self._hessian = hess_fn
         self.curvature = NewtonCurvature(self._hessian)
@@ -298,6 +293,7 @@ class HessianSolverMixin:
             delta=_delta,
             resolved_linear_solver=resolved,
             shift_fn=_shift_fn,
+            identity_shift_beta=self.identity_shift_beta,
             identity_shift_max_steps=self.identity_shift_max_steps,
             hessian_tag=self._hess_tag,
         )
