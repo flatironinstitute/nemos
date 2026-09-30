@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from nemos.glm_hmm.params import GLMHMMParams
-from nemos.glm_hmm.validation import GLMHMMValidator
+from nemos.glm_hmm.validation import ClassifierGLMHMMValidator, GLMHMMValidator
 
 # ---------------------------------------------------------------------------
 # Constants and shared fixtures
@@ -19,23 +19,38 @@ from nemos.glm_hmm.validation import GLMHMMValidator
 
 N_STATES = 3
 N_FEATURES = 2
+N_CLASSES = 2
 
 
 @pytest.fixture
-def validator():
-    return GLMHMMValidator(n_states=N_STATES)
+def validator(is_classifier):
+    if is_classifier:
+        return ClassifierGLMHMMValidator(
+            extra_params={"n_states": N_STATES, "n_classes": N_CLASSES}
+        )
+    else:
+        return GLMHMMValidator(extra_params={"n_states": N_STATES})
 
 
 @pytest.fixture
-def valid_user_params():
+def valid_user_params(is_classifier):
     """Valid 5-tuple of user params for n_states=3, n_features=2."""
-    return (
-        jnp.zeros((N_FEATURES, N_STATES)),
-        jnp.zeros((N_STATES,)),
-        jnp.ones((N_STATES,)),
-        jnp.ones(N_STATES) / N_STATES,
-        jnp.ones((N_STATES, N_STATES)) / N_STATES,
-    )
+    if is_classifier:
+        return (
+            jnp.zeros((N_FEATURES, N_CLASSES, N_STATES)),
+            jnp.zeros((N_CLASSES, N_STATES)),
+            jnp.ones((N_CLASSES, N_STATES)),
+            jnp.ones(N_STATES) / N_STATES,
+            jnp.ones((N_STATES, N_STATES)) / N_STATES,
+        )
+    else:
+        return (
+            jnp.zeros((N_FEATURES, N_STATES)),
+            jnp.zeros((N_STATES,)),
+            jnp.ones((N_STATES,)),
+            jnp.ones(N_STATES) / N_STATES,
+            jnp.ones((N_STATES, N_STATES)) / N_STATES,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -43,6 +58,7 @@ def valid_user_params():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("is_classifier", [False, True])
 class TestCheckModelParamsShape:
     """Full validate_and_cast_params pipeline; exercises GLMHMM-specific shape checks."""
 
@@ -50,23 +66,33 @@ class TestCheckModelParamsShape:
         validator.validate_and_cast_params(valid_user_params)
 
     @pytest.mark.parametrize("dim", [0, 1, 3])
-    def test_coef_wrong_ndim_raises(self, validator, valid_user_params, dim):
+    def test_coef_wrong_ndim_raises(
+        self, validator, valid_user_params, dim, is_classifier
+    ):
         if dim == 0:
             coef = jnp.array(1.0)
         elif dim == 1:
             coef = jnp.zeros((N_FEATURES,))
         else:
-            coef = jnp.zeros((N_FEATURES, N_STATES, 1))
+            if is_classifier:
+                coef = jnp.zeros((N_FEATURES, N_STATES))
+            else:
+                coef = jnp.zeros((N_FEATURES, N_STATES, 1))
         params = (coef, *valid_user_params[1:])
         with pytest.raises(ValueError, match="dimensionality"):
             validator.validate_and_cast_params(params)
 
     @pytest.mark.parametrize("dim", [0, 2, 3])
-    def test_intercept_wrong_ndim_raises(self, validator, valid_user_params, dim):
+    def test_intercept_wrong_ndim_raises(
+        self, validator, valid_user_params, dim, is_classifier
+    ):
         if dim == 0:
             intercept = jnp.array(1.0)
         elif dim == 2:
-            intercept = jnp.zeros((N_STATES, N_STATES))
+            if is_classifier:
+                intercept = jnp.zeros(N_STATES)
+            else:
+                intercept = jnp.zeros((N_STATES, N_STATES))
         else:
             intercept = jnp.zeros((N_STATES, 1, 1))
         params = (valid_user_params[0], intercept, *valid_user_params[2:])
@@ -92,18 +118,28 @@ class TestCheckModelParamsShape:
         with pytest.raises(ValueError, match="Params must have length 5"):
             validator.validate_and_cast_params(bad_input)
 
-    def test_coef_wrong_n_states_raises(self, validator, valid_user_params):
+    def test_coef_wrong_n_states_raises(
+        self, validator, valid_user_params, is_classifier
+    ):
         # Right ndim (2) but wrong last axis — hits check_model_params_shape, not check_array_dimensions
-        coef = jnp.zeros((N_FEATURES, N_STATES + 1))
+        if is_classifier:
+            coef = jnp.zeros((N_FEATURES, N_CLASSES, N_STATES + 1))
+        else:
+            coef = jnp.zeros((N_FEATURES, N_STATES + 1))
         params = (coef, *valid_user_params[1:])
-        with pytest.raises(ValueError, match="GLM coef must be of shape"):
+        with pytest.raises(ValueError, match="coef must be of shape"):
             validator.validate_and_cast_params(params)
 
-    def test_intercept_wrong_n_states_raises(self, validator, valid_user_params):
+    def test_intercept_wrong_n_states_raises(
+        self, validator, valid_user_params, is_classifier
+    ):
         # Right ndim (1) but wrong size — hits check_model_params_shape, not check_array_dimensions
-        intercept = jnp.zeros((N_STATES + 1,))
+        if is_classifier:
+            intercept = jnp.zeros((N_CLASSES, N_STATES + 1))
+        else:
+            intercept = jnp.zeros((N_STATES + 1,))
         params = (valid_user_params[0], intercept, *valid_user_params[2:])
-        with pytest.raises(ValueError, match="GLM intercept must be of shape"):
+        with pytest.raises(ValueError, match="intercept must be of shape"):
             validator.validate_and_cast_params(params)
 
     def test_string_coef_raises_type_error(self, validator, valid_user_params):
@@ -116,12 +152,33 @@ class TestCheckModelParamsShape:
         with pytest.raises(TypeError):
             validator.validate_and_cast_params(params)
 
+    def test_coef_wrong_n_classes_raises(
+        self, is_classifier, validator, valid_user_params
+    ):
+        if not is_classifier:
+            pytest.skip("Only applicable for classifiers")
+        coef = jnp.zeros((N_FEATURES, N_CLASSES + 1, N_STATES))
+        params = (coef, *valid_user_params[1:])
+        with pytest.raises(ValueError, match="coef must be of shape"):
+            validator.validate_and_cast_params(params)
+
+    def test_intercept_wrong_n_classes_raises(
+        self, is_classifier, validator, valid_user_params
+    ):
+        if not is_classifier:
+            pytest.skip("Only applicable for classifiers")
+        intercept = jnp.zeros((N_CLASSES + 1, N_STATES))
+        params = (valid_user_params[0], intercept, *valid_user_params[2:])
+        with pytest.raises(ValueError, match="intercept must be of shape"):
+            validator.validate_and_cast_params(params)
+
 
 # ---------------------------------------------------------------------------
 # check_init_and_transition_prob_shape
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("is_classifier", [False])
 class TestCheckInitAndTransitionProbShape:
     """Shape checks on initial and transition probability arrays."""
 
@@ -164,6 +221,7 @@ class TestCheckInitAndTransitionProbShape:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("is_classifier", [False])
 class TestCheckInitAndTransitionProbSumTo1:
     """Probability normalization checks."""
 
@@ -196,6 +254,7 @@ class TestCheckInitAndTransitionProbSumTo1:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("is_classifier", [False])
 class TestValidateAndCastIsNewSession:
     """Session boundary array validation and casting."""
 
@@ -295,6 +354,7 @@ class TestValidateAndCastIsNewSession:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("is_classifier", [False])
 class TestValidateAndCastFeatureMask:
     """Feature mask validation and casting (delegates to GLMValidator)."""
 
@@ -331,6 +391,7 @@ class TestValidateAndCastFeatureMask:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("is_classifier", [False])
 class TestValidateConsistency:
     """Consistency checks between model params and inputs."""
 
@@ -370,6 +431,7 @@ class TestValidateConsistency:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("is_classifier", [False, True])
 class TestRoundTrip:
     """Round-trip through to_model_params / from_model_params."""
 
@@ -391,7 +453,7 @@ class TestRoundTrip:
         # from_model_params returns exp(log_scale).
         internal = validator.to_model_params(valid_user_params)
         result = validator.from_model_params(internal)
-        expected_scale = jnp.exp(valid_user_params[2])
+        expected_scale = valid_user_params[2]
         assert jnp.allclose(result[2], expected_scale, atol=1e-5)
 
 
@@ -400,6 +462,7 @@ class TestRoundTrip:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("is_classifier", [False, True])
 class TestGetEmptyParams:
     """get_empty_params returns a GLMHMMParams with correct shapes derived from X, y, and n_states."""
 
@@ -412,11 +475,19 @@ class TestGetEmptyParams:
     def test_returns_glm_hmm_params(self, empty):
         assert isinstance(empty, GLMHMMParams)
 
-    def test_coef_shape(self, empty):
-        assert empty.model_params.coef.shape == (N_FEATURES, N_STATES)
+    def test_coef_shape(self, empty, is_classifier):
+        if is_classifier:
+            expected_shape = (N_FEATURES, N_CLASSES, N_STATES)
+        else:
+            expected_shape = (N_FEATURES, N_STATES)
+        assert empty.model_params.coef.shape == expected_shape
 
-    def test_intercept_shape(self, empty):
-        assert empty.model_params.intercept.shape == (N_STATES,)
+    def test_intercept_shape(self, empty, is_classifier):
+        if is_classifier:
+            expected_shape = (N_CLASSES, N_STATES)
+        else:
+            expected_shape = (N_STATES,)
+        assert empty.model_params.intercept.shape == expected_shape
 
     def test_log_scale_shape(self, empty):
         assert empty.model_params.log_scale.shape == (N_STATES,)

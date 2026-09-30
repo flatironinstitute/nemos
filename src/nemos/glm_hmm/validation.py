@@ -1,15 +1,14 @@
 """Validation classes for GLMHMM and PopulationGLMHMM models."""
 
-from dataclasses import dataclass
-from typing import Any, Callable, Optional, Tuple, Union
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-from jax.typing import DTypeLike
+from jax.typing import ArrayLike, DTypeLike
 
 from ..base_validator import RegressorValidator
-from ..glm.validation import GLMValidator
-from ..hmm.params import HMMParams
+from ..glm.validation import ClassifierGLMValidator, GLMValidator
 from ..hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
 from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMHMMModelParams, GLMHMMParams, GLMHMMUserParams
@@ -22,7 +21,7 @@ def to_glm_hmm_params(user_params: GLMHMMUserParams) -> GLMHMMParams:
     to internal model parameters (log_scale and log probabilities).
     """
     return GLMHMMParams(
-        model_params=GLMHMMModelParams(*user_params[:3]),
+        model_params=GLMHMMModelParams(*user_params[:2], jnp.log(user_params[2])),
         hmm_params=to_hmm_params(user_params[3:]),
     )
 
@@ -74,7 +73,7 @@ class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
                 err_message_format="Invalid parameter dimensionality.\n- coef must be an array "
                 "or any JAX pytree with array leaves of shape "
                 "``(n_features, n_states)``.\n- intercept must be of shape ``(n_states,)``.\n"
-                "- scale must be of shape ``(n_states,)``.\n"
+                "- scale must be of shape ``(n_classes, n_states)``.\n"
                 "- initial_prob must be of shape ``(n_states,)``.\n"
                 "- transition_prob must be of shape ``(n_states, n_states)``.\n"
                 "\nThe provided coef, intercept, scale, initial_prob and transition_prob "
@@ -93,18 +92,18 @@ class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
         coef, intercept = wrapped[:2]
         flat_coef = jax.tree_util.tree_leaves(coef)
         invalid_shapes = jax.tree_util.tree_map(
-            lambda x: x.shape[-1] != self.n_states, flat_coef
+            lambda x: x.shape[-1] != self.extra_params["n_states"], flat_coef
         )
         if any(invalid_shapes):
             raise ValueError(
                 "GLM coef must be of shape ``(n_features, n_states)`` or a dict of arrays "
                 "with shape ``(n_features, n_states)``. "
-                f"n_states is {self.n_states} but coef has shape(s) ``{invalid_shapes}``."
+                f"n_states is {self.extra_params["n_states"]} but coef has shape(s) ``{invalid_shapes}``."
             )
-        if intercept.shape[-1] != self.n_states:
+        if intercept.shape[-1] != self.extra_params["n_states"]:
             raise ValueError(
                 "GLM intercept must be of shape ``(n_states,)``. "
-                f"n_states is {self.n_states} but coef has shape ``{intercept.shape}``."
+                f"n_states is {self.extra_params["n_states"]} but coef has shape ``{intercept.shape}``."
             )
         return params
 
@@ -174,17 +173,111 @@ class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
     def get_empty_params(self, X, y) -> GLMHMMParams:
         """Return the param shape given the input data."""
         empty_coef = jax.tree_util.tree_map(
-            lambda x: jnp.empty((x.shape[1], self.n_states)), X
+            lambda x: jnp.empty((x.shape[1], self.extra_params["n_states"])), X
         )
-        empty_intercept = jnp.empty((self.n_states,))
+        empty_intercept = jnp.empty((self.extra_params["n_states"],))
         empty_scale = jnp.empty_like(empty_intercept)
         model_params = GLMHMMModelParams(
             coef=empty_coef, intercept=empty_intercept, log_scale=empty_scale
         )
-        empty_init_proba = jnp.empty((self.n_states,))
-        empty_transition_proba = jnp.empty((self.n_states, self.n_states))
-        hmm_params = HMMParams(
-            log_initial_prob=empty_init_proba,
-            log_transition_prob=empty_transition_proba,
+        hmm_params = HMMValidator.get_empty_params(self, X, y)
+        return GLMHMMParams(hmm_params=hmm_params, model_params=model_params)
+
+
+@dataclass(frozen=True, repr=False)
+class ClassifierGLMHMMValidator(GLMHMMValidator):
+    """Validate Classifier GLM-HMM parameters and inputs."""
+
+    extra_params: Dict[Literal["n_classes"], int] = field(kw_only=True)
+    model_class: str = "ClassifierGLMHMM"
+    _glm_validator: ClassifierGLMValidator = field(init=False, default=None)
+    expected_param_dims: Tuple[int] = (
+        3,
+        2,
+        2,
+        1,
+        2,
+    )  # (coef.ndim, intercept.ndim, scale.ndim, init_prob.ndim, transition_prob.ndim)
+    params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
+        *GLMHMMValidator.params_validation_sequence[:2],
+        (
+            "check_array_dimensions",
+            dict(
+                err_message_format="Invalid parameter dimensionality.\n- coef must be an array "
+                "or any JAX pytree with array leaves of shape "
+                "``(n_features, n_classes, n_states)``.\n- intercept must be of shape ``(n_classes,n_states)``.\n"
+                "- scale must be of shape ``(n_classes, n_states)``.\n"
+                "- initial_prob must be of shape ``(n_states,)``.\n"
+                "- transition_prob must be of shape ``(n_states, n_states)``.\n"
+                "\nThe provided coef, intercept, scale, initial_prob and transition_prob "
+                "have shape ``{}``, ``{}``, ``{}``, ``{}`` and ``{}`` "
+                "instead."
+            ),
+        ),
+        *GLMHMMValidator.params_validation_sequence[3:],
+    )
+
+    def __post_init__(self):
+        """Update _glm_validator once n_classes is known."""
+        object.__setattr__(
+            self,
+            "_glm_validator",
+            ClassifierGLMValidator(extra_params=self.extra_params),
         )
+
+    def check_model_params_shape(self, params: GLMHMMUserParams) -> GLMHMMUserParams:
+        """Check the length of the glm parameters state axis."""
+        wrapped = self.wrap_user_params(params)
+        coef, intercept = wrapped[:2]
+        flat_coef = jax.tree_util.tree_leaves(coef)
+        invalid_shapes = jax.tree_util.tree_map(
+            lambda x: x.shape[-1] != self.extra_params["n_states"], flat_coef
+        )
+        if any(invalid_shapes):
+            raise ValueError(
+                "Classifier GLM-HMM coef must be of shape ``(n_features, n_classes, n_states)`` or a dict of arrays "
+                "with shape ``(n_features, n_classes, n_states)``. "
+                f"n_states is {self.extra_params["n_states"]} but coef has shape(s) ``{invalid_shapes}``."
+            )
+        if intercept.shape[-1] != self.extra_params["n_states"]:
+            raise ValueError(
+                "Classifier GLM-HMM intercept must be of shape ``(n_classes, n_states)``. "
+                f"n_states is {self.extra_params["n_states"]} but coef has shape ``{intercept.shape}``."
+            )
+
+        # also check n_classes consistency with extra_params
+        invalid_shapes = jax.tree_util.tree_map(
+            lambda x: x.shape[-2] != self.extra_params["n_classes"], flat_coef
+        )
+        if any(invalid_shapes):
+            raise ValueError(
+                "Classifier GLM-HMM coef must be of shape ``(n_features, n_classes, n_states)`` or a dict of arrays "
+                "with shape ``(n_features, n_classes, n_states)``. "
+                f"n_classes is {self.extra_params["n_classes"]} but coef has shape(s) ``{invalid_shapes}``."
+            )
+        if intercept.shape[-2] != self.extra_params["n_classes"]:
+            raise ValueError(
+                "Classifier GLM-HMM intercept must be of shape ``(n_classes, n_states)``. "
+                f"n_classes is {self.extra_params["n_classes"]} but coef has shape ``{intercept.shape}``."
+            )
+        return params
+
+    @staticmethod
+    def check_and_cast_y_to_integer(y: ArrayLike) -> jnp.ndarray:
+        """Check that y is an array of integers."""
+        return ClassifierGLMValidator.check_and_cast_y_to_integer(y)
+
+    def get_empty_params(self, X, y) -> GLMHMMParams:
+        """Return the param shape given the input data."""
+        n_classes = self.extra_params["n_classes"]
+        empty_coef = jax.tree_util.tree_map(
+            lambda x: jnp.empty((x.shape[1], n_classes, self.extra_params["n_states"])),
+            X,
+        )
+        empty_intercept = jnp.empty((n_classes, self.extra_params["n_states"]))
+        empty_scale = jnp.empty(self.extra_params["n_states"])
+        model_params = GLMHMMModelParams(
+            coef=empty_coef, intercept=empty_intercept, log_scale=empty_scale
+        )
+        hmm_params = HMMValidator.get_empty_params(self, X, y)
         return GLMHMMParams(hmm_params=hmm_params, model_params=model_params)

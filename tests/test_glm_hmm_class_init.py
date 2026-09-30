@@ -10,6 +10,7 @@ import pytest
 from sklearn.base import clone
 
 from nemos._inspect_utils import extract_literal_options
+from nemos.glm_hmm.classifier_glm_hmm import ClassifierGLMHMM
 from nemos.glm_hmm.glm_hmm import GLMHMM
 from nemos.glm_hmm.initialize_parameters import (
     AVAIL_INIT_FUNCTIONS_GLM,
@@ -79,10 +80,15 @@ def _get_mock_registry():
     return {fn: _get_mock_func(fn) for fn in FUNC_NAMES}
 
 
-def _get_defining_class_and_prop(attr):
-    for cls in GLMHMM.__mro__[1:]:
-        if attr in cls.__dict__:
-            return cls, cls.__dict__[attr]
+def _get_defining_class_and_prop(attr, is_classifier):
+    if is_classifier:
+        for cls in ClassifierGLMHMM.__mro__[1:]:
+            if attr in cls.__dict__:
+                return cls, cls.__dict__[attr]
+    else:
+        for cls in GLMHMM.__mro__[1:]:
+            if attr in cls.__dict__:
+                return cls, cls.__dict__[attr]
     raise AttributeError(f"No defining class found for {attr!r}")
 
 
@@ -91,6 +97,7 @@ def _get_defining_class_and_prop(attr):
 # =============================================================================
 
 
+@pytest.mark.parametrize("is_classifier", [False, True])
 @pytest.mark.parametrize(
     "attr, init_kwargs",
     [
@@ -102,9 +109,9 @@ def _get_defining_class_and_prop(attr):
         ("dirichlet_transition_proba", {"n_states": 2}),
     ],
 )
-def test_inherited_setter_called(attr, init_kwargs):
+def test_inherited_setter_called(attr, init_kwargs, is_classifier):
     """GLMHMM routes each inherited setter call to the base class setter."""
-    defining_cls, original_prop = _get_defining_class_and_prop(attr)
+    defining_cls, original_prop = _get_defining_class_and_prop(attr, is_classifier)
     mock_fset = MagicMock(wraps=original_prop.fset)
     patched_prop = property(fget=original_prop.fget, fset=mock_fset)
 

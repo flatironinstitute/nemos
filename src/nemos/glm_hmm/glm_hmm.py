@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import warnings
+from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
@@ -342,6 +343,7 @@ class GLMHMM(
     <class 'dict'>
     """
 
+    _invalid_observation_types = (obs.CategoricalObservations,)
     _validator_class = GLMHMMValidator
     _model_default_init_dict = DEFAULT_INIT_FUNCTIONS_GLMHMM
     _kmeans_init_class = KMeansInitializerGLM
@@ -397,6 +399,27 @@ class GLMHMM(
         # cache the log-like
         self._log_like_cache = {}
 
+    @classmethod
+    def _validate_observation_class(cls, observation: obs.Observations):
+        if observation.__class__ in cls._invalid_observation_types:
+            model_name = cls.__name__
+            obs_name = observation.__class__.__name__
+            error_msg = f"The ``{obs_name}`` observation type is not supported for ``{model_name}`` models."
+            is_categorical = isinstance(observation, obs.CategoricalObservations)
+            if is_categorical:
+                correct_model = "ClassifierGLMHMM"
+                error_msg += (
+                    f" To use a GLMHMM for classification instantiate a ``{correct_model}`` "
+                    f"object."
+                )
+            else:
+                correct_model = "GLMHMM"
+                error_msg += (
+                    f" To use a GLMHMM with ``{obs_name}`` instantiate a ``{correct_model}`` "
+                    f"object."
+                )
+            raise TypeError(error_msg)
+
     def _log_likelihood(
         self, params: GLMHMMParams, X: DESIGN_INPUT_TYPE, y: ArrayLike
     ) -> jnp.ndarray:
@@ -404,15 +427,25 @@ class GLMHMM(
 
         Use cached values to avoid unnecessary computations.
         """
+        is_population_glm = (y.ndim > 2) if self._is_categorical_glm else (y.ndim > 1)
         cache_key = (
-            y.ndim > 1,
+            is_population_glm,
+            self._is_categorical_glm,
             self._observation_model,
             self._inverse_link_function,
         )
         ll_func = self._log_like_cache.get(cache_key)
+
         if ll_func is None:
+            if self._is_categorical_glm:
+                inverse_link = partial(self._inverse_link_function, axis=-2)
+            else:
+                inverse_link = self._inverse_link_function
             ll_func = prepare_estep_log_likelihood(
-                y.ndim > 1, self._observation_model, self._inverse_link_function
+                is_population_glm,
+                self._is_categorical_glm,
+                self._observation_model,
+                inverse_link,
             )
             self._log_like_cache[cache_key] = ll_func
         return ll_func(params, X, y)
@@ -607,11 +640,17 @@ class GLMHMM(
         """
         if isinstance(observation, str):
             self._observation_model = instantiate_observation_model(observation)
+            self._is_categorical_glm = isinstance(
+                self._observation_model, obs.CategoricalObservations
+            )
             return
         # check that the model has the required attributes
         # and that the attribute can be called
         obs.check_observation_model(observation)
         self._observation_model = observation
+        self._is_categorical_glm = isinstance(
+            self._observation_model, obs.CategoricalObservations
+        )
 
     @property
     def inverse_link_function(self):
@@ -814,20 +853,20 @@ class GLMHMM(
             X, y, session_starts=session_starts
         )
 
+        # filter for non-nans, grab data if needed
+        data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
+
         # initialize solver
         # initialize params if no params are provided
         if init_params is None:
-            init_params = self._model_specific_initialization(X, y, session_starts)
+            init_params = self._model_specific_initialization(data, y, session_starts)
         else:
             init_params = self._validator.validate_and_cast_params(init_params)
-            self._validator.validate_consistency(init_params, X=X, y=y)
+            self._validator.validate_consistency(init_params, X=data, y=y)
 
         self._validator.feature_mask_consistency(
             getattr(self, "_feature_mask", None), init_params
         )
-
-        # filter for non-nans, grab data if needed
-        data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
 
         # set up optimization
         self._initialize_optimizer_and_state(init_params, data, y)
@@ -1692,11 +1731,17 @@ class GLMHMM(
         entry points but ignored: the GLM-HMM does not support parameter freezing.
         """
         # glm params m-step setup
-        is_population = y.ndim > 1
+        is_population = (y.ndim > 2) if self._is_categorical_glm else (y.ndim > 1)
+        if self._is_categorical_glm:
+            inverse_link = partial(self._inverse_link_function, axis=-2)
+        else:
+            inverse_link = self._inverse_link_function
+
         m_step_update = prepare_mstep_update_fn(
             is_population_glm=is_population,
+            is_categorical_glm=self._is_categorical_glm,
             observation_model=self._observation_model,
-            inverse_link_function=self._inverse_link_function,
+            inverse_link_function=inverse_link,
             setup_solver=self._instantiate_solver,
             init_params=init_params.model_params,
         )
