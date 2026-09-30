@@ -41,20 +41,6 @@ class Loop(eqx.Module, Generic[Y, S]):
     # ``(params, *args) -> ((fval, aux), grad)``
     fval_and_grad_fn: Callable[..., tuple[tuple[Scalar, Aux], Y]]
 
-    def _update_state(
-        self,
-        state: S,
-        new_ls_state: Any,
-        new_hessian_state: Any,
-        new_dir_state: Any,
-    ) -> S:
-        return eqx.tree_at(
-            lambda x: (x.ls_state, x.hessian_update_state, x.direction_state),
-            state,
-            (new_ls_state, new_hessian_state, new_dir_state),
-            is_leaf=lambda x: x is None,
-        )
-
     def update(
         self,
         params: Y,

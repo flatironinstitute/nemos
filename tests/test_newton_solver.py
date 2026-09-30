@@ -18,8 +18,9 @@ from nemos._hess import (
 )
 from nemos.regularizer import Ridge, UnRegularized
 from nemos.solvers._abstract_solver import OptimizationInfo
+from nemos.solvers._second_order._base import SecondOrderState
 from nemos.solvers._second_order._hessian_mixins import LinearSolverTag
-from nemos.solvers._second_order._newton import Newton, NewtonState
+from nemos.solvers._second_order._newton import Newton
 from nemos.tree_utils import pytree_map_and_reduce
 
 N = 8
@@ -437,7 +438,7 @@ def test_newton_init_state_default(request, regr_setup, regularizer):
     )
     state = newton.init_state(param_init, X, y)
 
-    assert isinstance(state, NewtonState)
+    assert isinstance(state, SecondOrderState)
     assert state.grad_norm == jnp.array(jnp.inf)
     assert isinstance(state.stats, OptimizationInfo)
     assert state.stats.num_steps == 0

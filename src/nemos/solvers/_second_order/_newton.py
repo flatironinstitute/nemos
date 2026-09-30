@@ -4,18 +4,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Generic, TypeVar
 
-import equinox as eqx
 import jax
 import jax.numpy as jnp
 import lineax as lx
 import optax
-from jaxtyping import Array, Bool, Scalar
 
 from ..._hess import HessianTag
 from ...typing import Params
-from .._abstract_solver import OptimizationInfo
 from .._fista import FISTA
-from ._base import AbstractSecondOrderSolver
+from ._base import AbstractSecondOrderSolver, SecondOrderState
 from ._direction import AbstractDirection, ProxQuadraticDirection
 from ._hessian_mixins import HessianMixin, HessianSolverMixin, LinearSolverTag
 from ._linesearches import ArmijoBacktracking, TsengYunBacktracking
@@ -34,24 +31,7 @@ DEFAULT_MAX_STEPS = 100
 Y = TypeVar("Y")
 # The state a solver carries. Each solver sets it to its own class, which is what keeps
 # ``Newton``'s identity shift out of the states that have no ladder to seed.
-S = TypeVar("S", bound="NewtonState")
-
-
-class NewtonState(eqx.Module, Generic[Y]):
-    """What every solver built on :class:`BaseNewtonSolver` carries between iterations."""
-
-    grad_norm: Scalar
-    stats: OptimizationInfo
-    # optax's line-search state, whose type is private to the chosen transformation.
-    ls_state: Any
-    # Previous accepted step, read by the Cauchy convergence test. Infinite at init so
-    # the test cannot fire before a step is taken.
-    y_diff: Y
-    # Set when an iteration produced no usable step: the direction was not a descent
-    # direction, or it was not finite. It ends the run, and it is not convergence.
-    no_step_found: Bool[Array, ""]
-    direction_state: Array | None = None
-    hessian_update_state: None = None
+S = TypeVar("S", bound=SecondOrderState)
 
 
 class BaseNewtonSolver(AbstractSecondOrderSolver[Y, S], HessianMixin, Generic[Y, S]):
@@ -106,7 +86,6 @@ class BaseNewtonSolver(AbstractSecondOrderSolver[Y, S], HessianMixin, Generic[Y,
             rtol=rtol,
             fval_diff_fn=lambda x, s: jnp.zeros(()),
             fval_and_grad_fn=jax.value_and_grad(self.fun_with_aux, has_aux=True),
-            grad_diff_fn=lambda g, s: None,
         )
         # Neither the tag nor the prox is stored: both go straight to the direction,
         # which is the object that uses them, and the properties below read them back.
@@ -123,11 +102,11 @@ class BaseNewtonSolver(AbstractSecondOrderSolver[Y, S], HessianMixin, Generic[Y,
             prox,
         )
 
-    def init_state(self, init_params: Y, *args: Any) -> NewtonState[Y]:
-        return NewtonState(**self._common_state_fields(init_params, *args))
+    def init_state(self, init_params: Y, *args: Any) -> SecondOrderState[Y]:
+        return SecondOrderState(**self._common_state_fields(init_params, *args))
 
 
-class Newton(BaseNewtonSolver[Y, NewtonState[Y]], HessianSolverMixin, Generic[Y]):
+class Newton(BaseNewtonSolver[Y, SecondOrderState[Y]], HessianSolverMixin, Generic[Y]):
     r"""
     Newton solver with backtracking and Hessian-aware linear solves.
 
@@ -242,8 +221,8 @@ class Newton(BaseNewtonSolver[Y, NewtonState[Y]], HessianSolverMixin, Generic[Y]
             property_override=property_override,
         )
 
-    def init_state(self, init_params: Y, *args: Any) -> NewtonState[Y]:
-        return NewtonState(
+    def init_state(self, init_params: Y, *args: Any) -> SecondOrderState[Y]:
+        return SecondOrderState(
             **self._common_state_fields(init_params, *args),
             direction_state=self.direction.init(init_params),
         )
@@ -263,7 +242,7 @@ class Newton(BaseNewtonSolver[Y, NewtonState[Y]], HessianSolverMixin, Generic[Y]
         )
 
 
-class ProximalNewton(BaseNewtonSolver[Y, NewtonState[Y]], Generic[Y]):
+class ProximalNewton(BaseNewtonSolver[Y, SecondOrderState[Y]], Generic[Y]):
     r"""Proximal Newton solver for composite objectives.
 
     Minimizes :math:`f(\beta) + P(\beta)` with :math:`f` the smooth loss and :math:`P`

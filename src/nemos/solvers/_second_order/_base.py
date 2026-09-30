@@ -18,6 +18,7 @@ from typing import Any, ClassVar, Generic, TypeVar
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+from jaxtyping import Array, Bool, Scalar
 
 from ...typing import StepResult
 from .._abstract_solver import OptimizationInfo
@@ -30,6 +31,31 @@ from ._loop import Loop
 Y = TypeVar("Y")
 # the state the solver carries between iterations
 S = TypeVar("S")
+
+
+class SecondOrderState(eqx.Module, Generic[Y]):
+    """What every second-order solver carries between iterations.
+
+    There is one class rather than one per solver because the curvature models own
+    whatever else they need: L-BFGS keeps its pair history, including the previous
+    gradient, inside ``hessian_update_state``, and Newton leaves that field ``None``.
+    """
+
+    grad_norm: Scalar
+    stats: OptimizationInfo
+    # Last accepted step, read by the Cauchy convergence test and, for a model that
+    # builds itself from pairs, as the ``s`` of the curvature pair.
+    y_diff: Y
+    # Set when an iteration produced no usable step: the direction was not a descent
+    # direction, or it was not finite. It ends the run, and it is not convergence.
+    no_step_found: Bool[Array, ""]
+    # optax's line-search state, whose type is private to the chosen transformation.
+    ls_state: Any = None
+    # the identity-shift ladder for ``Newton``, ``None`` for the proximal solvers
+    direction_state: Any = None
+    # whatever the curvature model carries; ``None`` for a model that assembles the
+    # Hessian afresh at every iterate
+    hessian_update_state: Any = None
 
 
 class AbstractSecondOrderSolver(abc.ABC, Generic[Y, S]):
@@ -136,7 +162,9 @@ class AbstractSecondOrderSolver(abc.ABC, Generic[Y, S]):
             self.jit,
             *args,
         )
-        _, aux = self.fun_with_aux(final_params, *args)
+        # ``fun_with_aux`` is the objective again: only pay for it when there is an aux
+        # to collect, since without one it returns a ``None`` the caller already knows.
+        aux = self.fun_with_aux(final_params, *args)[1] if self.has_aux else None
         return final_params, final_state, aux
 
     @classmethod

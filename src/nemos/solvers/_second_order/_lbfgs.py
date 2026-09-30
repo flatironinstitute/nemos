@@ -26,23 +26,18 @@ from typing import (
     Callable,
     ClassVar,
     Generic,
-    Optional,
     TypeVar,
 )
 
-import equinox as eqx
 import jax
 import jax.numpy as jnp
 import lineax as lx
 import optax
-from jaxtyping import Array, Bool, Scalar
 
-from ... import tree_utils
 from ...typing import Params
-from .._abstract_solver import OptimizationInfo
 from .._fista import FISTA
-from ._base import AbstractSecondOrderSolver
-from ._curvature import LBFGSCurvature, _LBFGSHessianUpdateState
+from ._base import AbstractSecondOrderSolver, SecondOrderState
+from ._curvature import LBFGSCurvature
 from ._direction import ProxQuadraticDirection
 from ._linesearches import TsengYunBacktracking
 from ._loop import Loop
@@ -60,30 +55,7 @@ DEFAULT_RTOL = 0.0
 DEFAULT_MAX_STEPS = 100
 
 
-class LBFGSState(eqx.Module, Generic[Y]):
-    """State carried between outer iterations of :class:`ProximalLBFGS`."""
-
-    grad_norm: Scalar
-    stats: OptimizationInfo
-    # Last accepted step, read twice per iteration: by the Cauchy criterion, and as the
-    # ``s`` of the curvature pair. Initialized to zero, which the ``s^T y`` guard reads as
-    # "no pair yet"; the first-iteration Cauchy hit is blocked by ``function_val`` being
-    # NaN, since ``cauchy_termination`` requires both the y and the f test.
-    y_diff: Y
-    grad_prev: Y
-    # Curvature model built from the history up to and including ``y_diff``, so it is the
-    # one this iteration's subproblem uses.
-    hessian_update_state: _LBFGSHessianUpdateState[Y]
-    # Set when an iteration produced no usable step: the direction was not a descent
-    # direction, or it was not finite. It ends the run, and it is not convergence.
-    no_step_found: Bool[Array, ""]
-    # optax's line-search state, whose type is private to the chosen transformation.
-    ls_state: Optional[Any] = None
-    # direction state (shift_index for Newton, None for the ProxNewton & ProxLBFGS)
-    direction_state: Optional[Any] = None
-
-
-class ProximalLBFGS(AbstractSecondOrderSolver[Y, LBFGSState[Y]], Generic[Y]):
+class ProximalLBFGS(AbstractSecondOrderSolver[Y, SecondOrderState[Y]], Generic[Y]):
     r"""Proximal L-BFGS solver for composite objectives.
 
     Minimizes :math:`f(\beta) + P(\beta)` with :math:`f` the smooth loss and :math:`P` a
@@ -212,7 +184,6 @@ class ProximalLBFGS(AbstractSecondOrderSolver[Y, LBFGSState[Y]], Generic[Y]):
             maxiter=maxiter,
             fval_diff_fn=lambda fx, s: fx - s.stats.function_val,
             fval_and_grad_fn=jax.value_and_grad(self.fun_with_aux, has_aux=True),
-            grad_diff_fn=lambda g, s: tree_utils.tree_sub(g, s.grad_prev),
         )
 
     def _initial_y_diff(self, init_params: Y) -> Y:
@@ -224,10 +195,9 @@ class ProximalLBFGS(AbstractSecondOrderSolver[Y, LBFGSState[Y]], Generic[Y]):
         """
         return jax.tree.map(jnp.zeros_like, init_params)
 
-    def init_state(self, init_params: Y, *args: Any) -> LBFGSState[Y]:
-        return LBFGSState(
+    def init_state(self, init_params: Y, *args: Any) -> SecondOrderState[Y]:
+        return SecondOrderState(
             **self._common_state_fields(init_params, *args),
-            grad_prev=jax.tree.map(jnp.zeros_like, init_params),
             hessian_update_state=self.curvature.init(init_params),
         )
 
