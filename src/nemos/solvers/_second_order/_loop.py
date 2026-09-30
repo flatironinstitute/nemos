@@ -81,11 +81,15 @@ class Loop(eqx.Module, Generic[Y, S]):
                 *args,
             )
 
-            return (
-                new_params,
-                self._update_state(state, new_ls_state, new_hessian_state, dir_state),
-                no_step_found,
+            # ``is_leaf`` so a field still holding its ``None`` default is written
+            # rather than treated as an empty subtree.
+            new_state = eqx.tree_at(
+                lambda s: (s.ls_state, s.hessian_update_state, s.direction_state),
+                state,
+                (new_ls_state, new_hessian_state, dir_state),
+                is_leaf=lambda x: x is None,
             )
+            return new_params, new_state, no_step_found
 
         def no_step(_):
             return params, state, jnp.array(False)
