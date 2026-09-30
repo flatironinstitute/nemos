@@ -26,12 +26,8 @@ from nemos.glm.classifier_glm import ClassifierGLM, ClassifierPopulationGLM
 from nemos.glm.params import GLMParams
 from nemos.regularizer import GroupLasso, Lasso, Regularizer, Ridge, UnRegularized
 from nemos.solvers._abstract_solver import OptimizationInfo
-from nemos.solvers._second_order._newton import (
-    BaseNewtonState,
-    Newton,
-    NewtonState,
-    ProximalNewton,
-)
+from nemos.solvers._second_order._base import SecondOrderState
+from nemos.solvers._second_order._newton import Newton, ProximalNewton
 
 # Import every submodule so all BaseRegressor subclasses are registered before the
 # parametrizations below are collected (same idiom as test_model_params).
@@ -485,10 +481,14 @@ def test_newton_glm_initialize_state(
     init_params = glm.initialize_params(X, y)
     state = glm.initialize_optimizer_and_state(init_params, X, y)
 
-    # ``NewtonState`` adds the identity-shift ladder, which only ``Newton`` runs;
-    # ``ProximalNewton`` carries the base state
-    expected_state = NewtonState if solver_name == "Newton" else BaseNewtonState
-    assert isinstance(state, expected_state)
+    # Every second-order solver carries the same state class; what distinguishes them
+    # is what the direction puts in ``direction_state``. Only ``Newton`` runs the
+    # identity-shift ladder, so only it seeds one.
+    assert isinstance(state, SecondOrderState)
+    if solver_name == "Newton":
+        assert state.direction_state is not None
+    else:
+        assert state.direction_state is None
     assert state.grad_norm == jnp.array(jnp.inf)
     assert isinstance(state.stats, OptimizationInfo)
     assert state.stats.num_steps == 0
