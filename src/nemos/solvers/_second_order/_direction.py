@@ -34,6 +34,15 @@ class AbstractDirection(eqx.Module, ABC, Generic[Y, D, S]):
     @abstractmethod
     def init(self, params: Y) -> D: ...
 
+    @property
+    def prox(self) -> Callable | None:
+        """The proximal operator this direction applies, or ``None`` if it applies none.
+
+        Declared here rather than discovered, so a caller can ask any direction without
+        knowing which one it holds.
+        """
+        return None
+
 
 def _solve_shifted_system(
     operator,
@@ -143,6 +152,11 @@ class ProxQuadraticDirection(AbstractDirection, Generic[Y, S]):
     def init(self, params: Y):
         del params
         return None
+
+    @property
+    def prox(self) -> Callable:
+        """The subproblem solver's proximal operator, which is the only copy of it."""
+        return self._inner_solver.prox
 
 
 class LinearSolveDirection(AbstractDirection, Generic[Y, S]):
