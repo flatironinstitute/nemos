@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Generic, Literal, Tuple, TypeVar
+from typing import Callable, Generic, Literal, Tuple, TypeVar
 
 import equinox as eqx
 import jax
@@ -13,20 +13,27 @@ from lineax import AbstractLinearSolver
 from ... import tree_utils
 from ..._hess import HessianTag, MatrixStructure
 from .._fista import FISTA
-from ._curvature import S, Y
+from ._curvature import Y
 from ._utils import map_blocks
 
 # direction state
 D = TypeVar("D")
 
 
-class AbstractDirection(eqx.Module, ABC, Generic[Y, D, S]):
+class AbstractDirection(eqx.Module, ABC, Generic[Y, D]):
+    """Turn a curvature model and a gradient into a step.
+
+    A direction reads the curvature in whichever of the two forms it can use -- the
+    Hessian-vector product, or the assembled tensor -- and touches no data, so it takes
+    no ``*args``.
+    """
+
     @abstractmethod
     def update(
         self,
         params: Y,
         grad: Y,
-        hvp_fn: Callable[[Y, HessianTag], Y],
+        hvp_fn: Callable[[Y, HessianTag | None], Y],
         hessian_tensor: PyTree[Array] | None,
         direction_state: D,
     ) -> Tuple[Y, D]: ...
@@ -45,14 +52,14 @@ class AbstractDirection(eqx.Module, ABC, Generic[Y, D, S]):
 
 
 def _solve_shifted_system(
-    operator,
-    grad,
-    shift,
+    operator: lx.AbstractLinearOperator,
+    grad: Y,
+    shift: Array | float | None,
     *,
-    solver,
-    tags,
-    throw=True,
-):
+    solver: AbstractLinearSolver,
+    tags: object,
+    throw: bool = True,
+) -> lx.Solution:
     r"""Solve a shifted Newton system.
 
     Solves
@@ -118,7 +125,7 @@ def _solve_shifted_system(
     return solution
 
 
-class ProxQuadraticDirection(AbstractDirection, Generic[Y, S]):
+class ProxQuadraticDirection(AbstractDirection[Y, None], Generic[Y]):
     _inner_solver: FISTA
     _inner_iter: int
     hessian_tag: HessianTag | None = eqx.field(static=True)
@@ -127,10 +134,10 @@ class ProxQuadraticDirection(AbstractDirection, Generic[Y, S]):
         self,
         params: Y,
         grad: Y,
-        hvp_fn: Callable[[Y, HessianTag], Y],
+        hvp_fn: Callable[[Y, HessianTag | None], Y],
         hessian_tensor: PyTree[Array] | None,
         direction_state: None,
-    ) -> Y:
+    ) -> Tuple[Y, None]:
         del hessian_tensor
 
         def quadratic(z, _):
@@ -149,7 +156,7 @@ class ProxQuadraticDirection(AbstractDirection, Generic[Y, S]):
         ).value
         return tree_utils.tree_sub(new_params, params), direction_state
 
-    def init(self, params: Y):
+    def init(self, params: Y) -> None:
         del params
         return None
 
@@ -159,16 +166,27 @@ class ProxQuadraticDirection(AbstractDirection, Generic[Y, S]):
         return self._inner_solver.prox
 
 
-class LinearSolveDirection(AbstractDirection, Generic[Y, S]):
-    linear_solver: AbstractLinearSolver
-    delta: float
+class LinearSolveDirection(AbstractDirection[Y, Array], Generic[Y]):
+    """Solve :math:`Hd = -g`, one block at a time when the tag reports block structure.
+
+    ``direction_state`` is the identity shift the previous iteration accepted, which
+    seeds the ladder; it is a scalar, or one scalar per block.
+    """
+
+    # ``None`` for the strategies that do not reach Lineax: "eigh" decomposes by hand,
+    # "identity_shift" builds its own Cholesky per attempt.
+    linear_solver: AbstractLinearSolver | None
+    # the eigenvalue floor, an array whose dtype follows the parameters for "eigh"
+    delta: float | Array
     resolved_linear_solver: Literal["cholesky", "eigh", "identity_shift"] | None
-    shift_fn: Callable | None
+    shift_fn: Callable[[lx.AbstractLinearOperator], Array | float | None] | None
     identity_shift_beta: float
     identity_shift_max_steps: int
     hessian_tag: HessianTag | None = eqx.field(static=True)
 
-    def _solve(self, H: Any, grad: Y, previous_shift: Array) -> Tuple[Y, Array]:
+    def _solve(
+        self, H: PyTree[Array], grad: Y, previous_shift: Array
+    ) -> Tuple[Y, Array]:
 
         operator = lx.PyTreeLinearOperator(H, jax.eval_shape(lambda: grad))
 
@@ -278,10 +296,10 @@ class LinearSolveDirection(AbstractDirection, Generic[Y, S]):
         self,
         params: Y,
         grad: Y,
-        hvp_fn: Callable[[Y, HessianTag], Y],
+        hvp_fn: Callable[[Y, HessianTag | None], Y],
         hessian_tensor: PyTree[Array],
-        direction_state: D,
-    ) -> Y:
+        direction_state: Array,
+    ) -> Tuple[Y, Array]:
         del hvp_fn
         direction, accepted_shift = map_blocks(
             self._solve,
@@ -292,7 +310,7 @@ class LinearSolveDirection(AbstractDirection, Generic[Y, S]):
         )
         return direction, accepted_shift
 
-    def init(self, params: Y) -> D:
+    def init(self, params: Y) -> Array:
         dtype = jnp.result_type(*jax.tree_util.tree_leaves(params))
         zero = jnp.zeros((), dtype=dtype)
         tag = self.hessian_tag

@@ -12,8 +12,12 @@ from optimistix._solver.limited_memory_bfgs import _lbfgs_hessian_operator_fn
 from ..._hess import HessianTag
 from ._utils import map_blocks
 
-# hessian state
+# what a curvature model carries between iterations
 S = TypeVar("S")
+# how B_k is represented at this iterate, which is what ``hvp`` multiplies from: the
+# pair history in the compact representation of Byrd et al. [1]_, or the assembled
+# Hessian. Neither is the curvature; both determine it.
+R = TypeVar("R")
 # parameters
 Y = TypeVar("Y")
 
@@ -73,9 +77,20 @@ class _LBFGSHessianUpdateState(eqx.Module, Generic[Y]):
     initial_scale: Scalar
 
 
-class AbstractCurvature(eqx.Module, ABC, Generic[Y, S]):
+class AbstractCurvature(eqx.Module, ABC, Generic[Y, S, R]):
+    """A model of the loss curvature, in whichever form the model has it.
+
+    ``update`` hands back three things: a Hessian-vector product, usable by any
+    direction; the assembled Hessian, or ``None`` when the model never assembles one;
+    and the state to carry into the next iteration.
+
+    ``S`` and ``R`` are separate because they coincide for only one of the two models:
+    L-BFGS represents B_k by the same pair history it carries forward, while Newton
+    carries nothing and represents it by the Hessian it has just assembled.
+    """
+
     @abstractmethod
-    def init(self, params: Y, *args) -> S: ...
+    def init(self, params: Y, *args: Any) -> S: ...
 
     @abstractmethod
     def update(
@@ -83,29 +98,29 @@ class AbstractCurvature(eqx.Module, ABC, Generic[Y, S]):
         state: S,
         params: Y,
         y_diff: Y,
-        grad: Y,
+        grad_diff: Y,
         *args: Any,
-    ) -> tuple[Callable[[Y, HessianTag], Y], PyTree[Array] | None, S]: ...
+    ) -> tuple[Callable[[Y, HessianTag | None], Y], PyTree[Array] | None, S]: ...
 
     @abstractmethod
-    def hvp(self, state: S, params: Y, v: Y, hessian_tag: HessianTag | None) -> Y: ...
-
-    def as_hessian_tree(
-        self, params: Y, hess_op: lx.AbstractLinearOperator, *args
-    ) -> PyTree[Array]: ...
+    def hvp(
+        self, hessian_repr: R, params: Y, v: Y, hessian_tag: HessianTag | None
+    ) -> Y: ...
 
 
-def _batched_tree_zeros_like(y, batch_dimension):
+def _batched_tree_zeros_like(y: Y, batch_dimension: int) -> PyTree[Array]:
     return jtu.tree_map(lambda y: jnp.zeros((batch_dimension, *y.shape)), y)
 
 
 v_tree_dot = jax.vmap(lx.internal.tree_dot, in_axes=(0, None), out_axes=0)
 
 
-class LBFGSCurvature(AbstractCurvature[Y, _LBFGSHessianUpdateState], Generic[Y]):
+class LBFGSCurvature(
+    AbstractCurvature[Y, _LBFGSHessianUpdateState, _LBFGSHessianUpdateState], Generic[Y]
+):
     history_length: int = eqx.field(static=True)
 
-    def init(self, params: Y, *args) -> _LBFGSHessianUpdateState:
+    def init(self, params: Y, *args: Any) -> _LBFGSHessianUpdateState[Y]:
         """Build the identity curvature model and the state that will accumulate it."""
         hess_state = _LBFGSHessianUpdateState(
             index_start=jnp.array(0),
@@ -128,12 +143,12 @@ class LBFGSCurvature(AbstractCurvature[Y, _LBFGSHessianUpdateState], Generic[Y])
 
     def update(
         self,
-        state: _LBFGSHessianUpdateState,
+        state: _LBFGSHessianUpdateState[Y],
         params: Y,
         y_diff: Y,
         grad_diff: Y,
         *args: Any,
-    ) -> tuple[Callable[[Y, HessianTag], Y], None, _LBFGSHessianUpdateState]:
+    ) -> tuple[Callable[[Y, HessianTag | None], Y], None, _LBFGSHessianUpdateState[Y]]:
 
         history_length = state.history_length
 
@@ -243,7 +258,7 @@ class LBFGSCurvature(AbstractCurvature[Y, _LBFGSHessianUpdateState], Generic[Y])
         # f64 constant ``1e10``, as ``HessianSolverMixin`` reads its ``_delta``
         floor = jnp.sqrt(jnp.finfo(grad_norm.dtype).eps)
 
-        def _hvp(v, tag):
+        def _hvp(v: Y, tag: HessianTag | None) -> Y:
             return self.hvp(new_state, params, v, tag)
 
         new_state = eqx.tree_at(
@@ -258,7 +273,7 @@ class LBFGSCurvature(AbstractCurvature[Y, _LBFGSHessianUpdateState], Generic[Y])
 
     def hvp(
         self,
-        state: _LBFGSHessianUpdateState[Y],
+        hessian_repr: _LBFGSHessianUpdateState[Y],
         params: Y,
         v: Y,
         hessian_tag: HessianTag | None,
@@ -288,62 +303,58 @@ class LBFGSCurvature(AbstractCurvature[Y, _LBFGSHessianUpdateState], Generic[Y])
             https://doi.org/10.1137/0916069
         """
         del params, hessian_tag
-        scaled = _lbfgs_hessian_operator_fn(v, state)
+        history = hessian_repr
+        scaled = _lbfgs_hessian_operator_fn(v, history)
         return jax.tree.map(
-            lambda s, u: jnp.where(state.index_start == 0, state.initial_scale * u, s),
+            lambda s, u: jnp.where(
+                history.index_start == 0, history.initial_scale * u, s
+            ),
             scaled,
             v,
         )
 
-    def as_hessian_tree(
-        self, params: Y, hess_op: lx.AbstractLinearOperator, *args
-    ) -> PyTree[Array]:
-        """Return the hessian pytree.
 
-        Notes
-        -----
-        The full hessian is size N^2, where N is the number of parameters.
-        The method is here for consistency with the NewtonCurvature, and
-        can be used for debugging.
-        """
-        return lx.materialise(hess_op)
-
-
-class NewtonCurvature(AbstractCurvature[Y, None], Generic[Y]):
+class NewtonCurvature(AbstractCurvature[Y, None, PyTree[Array]], Generic[Y]):
     """Newton curvature model.
 
-    Note that the state here IS the hessian.
+    The Hessian is assembled afresh at every iteration, so nothing is carried between
+    them and the state is ``None``. What the model multiplies by is the assembled
+    tensor, one block per leading axis of ``hessian_tag.batch_axes`` when the tag
+    reports block structure.
     """
 
-    hessian_fn: Callable[[Y, Any], PyTree[Array]]
+    hessian_fn: Callable[..., PyTree[Array]]
 
-    def init(self, params: Y, *args) -> Any:
+    def init(self, params: Y, *args: Any) -> None:
+        del params, args
         return None
 
     def update(
         self,
-        state: S,
+        state: None,
         params: Y,
         y_diff: Y,
         grad_diff: Y,
-        *args,
-    ) -> tuple[Callable[[Y, HessianTag], Y], PyTree[Array], None]:
-        del grad_diff, y_diff
+        *args: Any,
+    ) -> tuple[Callable[[Y, HessianTag | None], Y], PyTree[Array], None]:
+        del state, grad_diff, y_diff
         hessian_tensor = self.hessian_fn(params, *args)
 
-        def _hvp(v: Y, tag: HessianTag):
+        def _hvp(v: Y, tag: HessianTag | None) -> Y:
             return self.hvp(hessian_tensor, params, v, tag)
 
         return _hvp, hessian_tensor, None
 
-    def hvp(self, state: Any, params: Y, v: Y, hessian_tag: HessianTag | None) -> Y:
+    def hvp(
+        self,
+        hessian_repr: PyTree[Array],
+        params: Y,
+        v: Y,
+        hessian_tag: HessianTag | None,
+    ) -> Y:
+        del params
+
         def apply_operator(H_b, v_b):
             return lx.PyTreeLinearOperator(H_b, jax.eval_shape(lambda: v_b)).mv(v_b)
 
-        return map_blocks(apply_operator, state, (v,), hessian_tag=hessian_tag)
-
-    def as_hessian_tree(
-        self, params: Y, hess_op: lx.AbstractLinearOperator, *args
-    ) -> PyTree[Array]:
-        """Return the hessian pytree."""
-        return self.hessian_fn(params, *args)
+        return map_blocks(apply_operator, hessian_repr, (v,), hessian_tag=hessian_tag)
