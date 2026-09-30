@@ -2037,8 +2037,8 @@ def test_prox_newton_backtracking_matches_tseng_yun_reference(
     delta = float(delta)
     assert delta < 0.0, "the reference only terminates on a descent direction"
 
-    new_params, ls_state, no_step_found = solver._apply_or_reject(
-        params, step, grad, state, fval, X, y
+    new_params, ls_state, no_step_found = solver.loop._apply_or_reject(
+        params, step, grad, state, fval, solver._line_search, X, y
     )
     assert not bool(no_step_found), "a sufficient-decrease step is not a stall"
     expected_stepsize, expected_evaluations = _tseng_yun_backtracking(

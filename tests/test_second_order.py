@@ -41,6 +41,7 @@ from optimistix._solver.limited_memory_bfgs import _lbfgs_hessian_operator_fn
 from nemos.regularizer import Lasso, Ridge
 from nemos.solvers._second_order._curvature import LBFGSCurvature
 from nemos.solvers._second_order._lbfgs import ProximalLBFGS
+from nemos.solvers._second_order._loop import Loop
 
 # A point with both zero and non-zero coefficients: the zeros are where the L1 penalty is
 # not differentiable, which is the whole reason the composite slope is needed.
@@ -104,8 +105,8 @@ def test_second_order_solvers_step_only_on_a_descent_slope(
     _, descent, _ = solver._line_search._slope_descent_value(params, step, grad, fval)
     assert np.sign(float(descent)) == slope_sign
 
-    new_params, new_ls_state, no_step_found = solver._apply_or_reject(
-        params, step, grad, state, fval, X, y
+    new_params, new_ls_state, no_step_found = solver.loop._apply_or_reject(
+        params, step, grad, state, fval, solver._line_search, X, y
     )
     # a stationary slope is not a failure: it is the optimum, and the zero step it leaves
     # behind is what the convergence test is supposed to read
@@ -151,8 +152,8 @@ def test_prox_newton_reports_a_nan_slope_as_no_step_found():
     _, descent, _ = solver._line_search._slope_descent_value(params, step, grad, fval)
     assert np.isnan(float(descent))
 
-    new_params, _, no_step_found = solver._apply_or_reject(
-        params, step, grad, state, fval, X, y
+    new_params, _, no_step_found = solver.loop._apply_or_reject(
+        params, step, grad, state, fval, solver._line_search, X, y
     )
     assert bool(no_step_found)
     np.testing.assert_array_equal(np.asarray(new_params), np.asarray(params))
@@ -221,8 +222,8 @@ def test_second_order_solvers_reject_an_exhausted_line_search(
     )
     assert float(descent) < 0.0
 
-    new_params, new_ls_state, no_step_found = solver._apply_or_reject(
-        params, step, grad, state, fval, X, y
+    new_params, new_ls_state, no_step_found = solver.loop._apply_or_reject(
+        params, step, grad, state, fval, solver._line_search, X, y
     )
 
     assert float(new_ls_state.linesearch_state.info.decrease_error) > 0.0, (
@@ -248,7 +249,7 @@ def test_second_order_solvers_reject_an_exhausted_line_search(
 @pytest.mark.parametrize("solver_cls, regularizer_cls, strength", _STALL_CASES)
 @pytest.mark.requires_x64
 def test_second_order_solvers_end_a_stalled_run_without_claiming_convergence(
-    solver_cls, regularizer_cls, strength
+    solver_cls, regularizer_cls, strength, monkeypatch
 ):
     """A rejected step ends ``run`` as a stall, distinguishable from a solved run.
 
@@ -260,11 +261,17 @@ def test_second_order_solvers_end_a_stalled_run_without_claiming_convergence(
         solver_cls, regularizer_cls, strength, maxiter=50
     )
     # reject unconditionally, whatever direction the solver produces, so the test
-    # covers how the loop handles a rejection and not one particular cause of it
-    solver._apply_or_reject = lambda p, step, grad, state, fval, *args: (
-        p,
-        state.ls_state,
-        jnp.array(True),
+    # covers how the loop handles a rejection and not one particular cause of it.
+    # ``Loop`` is a frozen ``eqx.Module``, so the class is patched rather than the
+    # instance the solver holds.
+    monkeypatch.setattr(
+        Loop,
+        "_apply_or_reject",
+        lambda self, p, step, grad, state, fval, line_search, *args: (
+            p,
+            state.ls_state,
+            jnp.array(True),
+        ),
     )
 
     final_params, final_state, _ = solver.run(params, X, y)
@@ -379,8 +386,8 @@ def test_second_order_solvers_do_not_read_a_flat_optimum_as_a_failed_search(
     assert descent < 0.0
     assert abs(descent) <= eps * abs(float(value))
 
-    new_params, new_ls_state, no_step_found = solver._apply_or_reject(
-        params, step, grad, state, fval, X, y
+    new_params, new_ls_state, no_step_found = solver.loop._apply_or_reject(
+        params, step, grad, state, fval, solver._line_search, X, y
     )
 
     assert float(new_ls_state.linesearch_state.info.decrease_error) > 0.0, (
