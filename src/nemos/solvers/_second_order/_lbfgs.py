@@ -34,7 +34,6 @@ import jax.numpy as jnp
 import lineax as lx
 import optax
 from jaxtyping import Array, Bool, Scalar
-from optimistix._misc import cauchy_termination
 
 from ... import tree_utils
 from ...typing import Params, StepResult
@@ -117,7 +116,8 @@ class ProximalLBFGS(Generic[Y]):
         :math:`O(mpK)` memory and :math:`O(mpK)` work per operator application.
     tol, rtol :
         Absolute and relative tolerances of the outer Cauchy criterion on the accepted
-        step; both are read, see :meth:`_converged`.
+        step; both are read, see
+        :meth:`~nemos.solvers._second_order._loop.Loop.converged`.
     inner_iter :
         Maximum FISTA steps on the subproblem. The subproblem applies the curvature model
         and touches no data, so these steps are cheap.
@@ -255,53 +255,6 @@ class ProximalLBFGS(Generic[Y]):
             no_step_found=jnp.array(False),
         )
         return state
-
-    def _apply_or_reject(
-        self,
-        params: Y,
-        step: Y,
-        grad: Y,
-        state: LBFGSState[Y],
-        fval: Scalar,
-        *args: Any,
-    ) -> tuple[Y, Any, Bool[Array, ""]]:
-        """Accept or reject step based on descent condition and line search.
-
-        Returns the value of :attr:`LBFGSState.no_step_found` for this iteration: true
-        when no step was taken and the iterate is not stationary.
-        """
-        updates, new_ls_state = self._line_search.update(
-            params, step, grad, fval, state.ls_state, *args
-        )
-        value = new_ls_state.loss_value
-        descent = new_ls_state.descent
-        step_taken = new_ls_state.step_taken
-        # A failed search at a slope this small means the iterate is stationary rather
-        # than broken, so the zero step is left for the convergence test to read.
-        eps = jnp.finfo(jnp.asarray(value).dtype).eps
-        stationary = jnp.abs(descent) <= eps * jnp.abs(value)
-        return updates, new_ls_state, ~step_taken & ~stationary
-
-    def _converged(
-        self, params: Y, state: LBFGSState[Y], grad: Y, fval: Scalar
-    ) -> Bool[Array, ""]:
-        """Cauchy criterion on the accepted step, as :class:`~nemos.solvers._fista.FISTA` uses.
-
-        A gradient-based test is unusable here: this solver differentiates the smooth
-        part only, so its gradient does not vanish at the optimum of a composite
-        objective, and any residual built from it inherits the curvature scale -- on
-        badly conditioned data it never falls below ``tol`` even once the iterate has
-        stopped moving.
-        """
-        return cauchy_termination(
-            self.rtol,
-            self.tol,
-            lx.internal.two_norm,
-            params,
-            state.y_diff,
-            fval,
-            fval - state.stats.function_val,
-        )
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:

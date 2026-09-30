@@ -1,6 +1,6 @@
 """Newton-based optimization solvers."""
 
-from typing import Any, Callable, ClassVar, Generic, Tuple, TypeVar
+from typing import Any, Callable, ClassVar, Generic, TypeVar
 
 import equinox as eqx
 import jax
@@ -8,9 +8,7 @@ import jax.numpy as jnp
 import lineax as lx
 import optax
 from jaxtyping import Array, Bool, Scalar
-from optimistix._misc import cauchy_termination
 
-from ... import tree_utils
 from ..._hess import HessianTag
 from ...typing import Params, StepResult
 from .._abstract_solver import OptimizationInfo
@@ -48,80 +46,6 @@ class NewtonState(eqx.Module, Generic[Y]):
     no_step_found: Bool[Array, ""]
     direction_state: Array | None = None
     hessian_update_state: None = None
-
-
-def _solve_shifted_system(
-    operator,
-    grad,
-    shift,
-    *,
-    solver,
-    tags,
-    throw=True,
-):
-    r"""Solve a shifted Newton system.
-
-    Solves
-
-    .. math::
-        (H + \tau I)d = -g,
-
-    while preserving the PyTree structure of the Hessian operator.
-
-    Parameters
-    ----------
-    operator :
-        Linear operator representing the Hessian.
-    grad :
-        Gradient on the right-hand side of the Newton system.
-    shift :
-        Scalar identity shift.
-    solver :
-        Lineax linear solver.
-    tags :
-        Lineax tags describing the shifted operator.
-    throw :
-        Whether Lineax should raise an exception when the solve fails.
-
-    Returns
-    -------
-    :
-        The result returned by :func:`lineax.linear_solve`.
-    """
-    if shift is not None:
-        identity = lx.IdentityLinearOperator(operator.in_structure())
-        operator = operator + shift * identity
-
-    operator = lx.TaggedLinearOperator(
-        operator,
-        tags=tags,
-    )
-
-    solution = lx.linear_solve(
-        operator,
-        jax.tree.map(jnp.negative, grad),
-        solver=solver,
-        throw=False,
-    )
-
-    if throw:
-        failed = (
-            solution.result != lx.RESULTS.successful
-        ) | ~tree_utils.tree_all_finite(solution.value)
-
-        checked_value = eqx.error_if(
-            solution.value,
-            failed,
-            "Cholesky solve failed; the Hessian may not be positive definite. "
-            "Try using the 'eigh' or 'identity_shift' solver instead.",
-        )
-        solution = eqx.tree_at(
-            lambda result: result.value,
-            solution,
-            checked_value,
-        )
-
-    return solution
 
 
 class BaseNewtonSolver(Generic[Y, S], HessianMixin):
@@ -263,30 +187,6 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         _, aux = self.fun_with_aux(final_params, *args)
         return final_params, final_state, aux
 
-    def _apply_or_reject(
-        self,
-        params: Y,
-        step: Y,
-        grad: Y,
-        state: S,
-        fval: Scalar,
-        *args: Any,
-    ) -> Tuple[Y, Any, Bool[Array, ""]]:
-        """Accept or reject step based on descent condition and line search.
-
-        Returns the value of :attr:`BaseNewtonState.no_step_found` for this iteration:
-        true when no step was taken and the iterate is not stationary.
-        """
-        updates, new_ls_state = self._line_search.update(
-            params, step, grad, fval, state.ls_state, *args
-        )
-        value = new_ls_state.loss_value
-        descent = new_ls_state.descent
-        step_taken = new_ls_state.step_taken
-        eps = jnp.finfo(jnp.asarray(value).dtype).eps
-        stationary = jnp.abs(descent) <= eps * jnp.abs(value)
-        return updates, new_ls_state, ~step_taken & ~stationary
-
     def _scalar_dtype(self, init_params: Y, *args: Any):
         """The objective's dtype, which the state's scalars must already carry.
 
@@ -315,26 +215,6 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
 
     def init_state(self, init_params: Y, *args: Any) -> NewtonState[Y]:
         return NewtonState(**self._common_state_fields(init_params, *args))
-
-    def _converged(self, params: Y, state: S, grad: Y, fval: Scalar) -> Bool[Array, ""]:
-        """Check convergence via a Cauchy criterion on the accepted step size.
-
-        We rely solely on the step-norm arm of :func:`~optimistix.cauchy_termination`
-        and suppress its function-value arm by passing ``f_diff=0``.  The f-diff arm
-        would check ``|f(x_new) - f(x_old)| < atol``, which is an absolute threshold
-        that fails under catastrophic cancellation when the objective is large.  The
-        step-norm criterion ``‖Δx‖ < atol + rtol * ‖x‖`` is scale-invariant provided
-        ``rtol > 0``, so callers should prefer setting ``rtol`` over ``tol`` alone.
-        """
-        return cauchy_termination(
-            self.rtol,
-            self.tol,
-            lx.internal.two_norm,
-            params,
-            state.y_diff,
-            fval,
-            jnp.zeros(()),
-        )
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
@@ -521,7 +401,7 @@ class ProximalNewton(BaseNewtonSolver[Y, NewtonState[Y]], Generic[Y]):
     tol, rtol :
         Absolute and relative tolerances of the outer Cauchy criterion on the accepted
         step. Unlike :class:`Newton`, which tests ``||grad|| <= tol``, both are read
-        here: see :meth:`_converged`.
+        here: see :meth:`~nemos.solvers._second_order._loop.Loop.converged`.
     inner_iter :
         Maximum FISTA steps on the subproblem. The subproblem uses the assembled
         Hessian block and touches no data, so these steps are cheap.

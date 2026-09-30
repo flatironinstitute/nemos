@@ -1,7 +1,7 @@
 """Mixin providing the curvature machinery for second-order solvers."""
 
 import warnings
-from typing import Any, Callable, ClassVar, Literal, Optional
+from typing import Callable, ClassVar, Literal, Optional
 
 import jax
 import jax.numpy as jnp
@@ -166,29 +166,6 @@ class HessianMixin:
 
         return penalized_hessian
 
-    def _block_apply(self, fn, grad, H, other, block_state=None) -> Any:
-        """Apply ``fn(grad, H, other)`` once per Hessian block.
-
-        The one place that reads ``_hess_tag`` for block structure, shared by the Newton
-        solve and by any subclass' Hessian-vector product.
-        """
-        if self.direction.hessian_tag.structure is MatrixStructure.BLOCK_DIAGONAL:
-            axes = self.direction.hessian_tag.batch_axes
-            if block_state is not None:
-                return jax.vmap(
-                    fn,
-                    in_axes=(axes, 0, axes, 0),
-                    out_axes=(axes, 0),
-                )(grad, H, other, block_state)
-            return jax.vmap(
-                fn,
-                in_axes=(axes, 0, axes),
-                out_axes=axes,
-            )(grad, H, other)
-        if block_state is not None:
-            return fn(grad, H, other, block_state)
-        return fn(grad, H, other)
-
 
 class HessianSolverMixin:
     """Resolve and hold the strategy for solving :math:`Hd = -g`.
@@ -197,16 +174,6 @@ class HessianSolverMixin:
     exposes nothing back to it: a solver that only multiplies by its curvature model
     inherits :class:`HessianMixin` alone and gets none of the state below.
     """
-
-    def _init_block_state(self, params, value: jax.Array) -> jax.Array:
-        """Broadcast a scalar to one value per Hessian block."""
-        if self.direction.hessian_tag.structure is MatrixStructure.BLOCK_DIAGONAL:
-            return jax.vmap(
-                lambda _: value,
-                in_axes=(self.direction.hessian_tag.batch_axes,),
-                out_axes=0,
-            )(params)
-        return value
 
     def _init_solver(
         self,
