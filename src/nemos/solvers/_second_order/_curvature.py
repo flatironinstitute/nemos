@@ -11,6 +11,7 @@ import lineax as lx
 from jaxtyping import Array, Float, PyTree, Scalar
 from optimistix._solver.limited_memory_bfgs import _lbfgs_hessian_operator_fn
 
+from ... import tree_utils
 from ..._hess import HessianTag
 from ._utils import map_blocks
 
@@ -67,6 +68,10 @@ class _LBFGSHessianUpdateState(eqx.Module, Generic[Y]):
         shape `(history_length, history_length)`.
     - `initial_scale`: NeMoS addition, not part of the paper's state. The `B_0 = c I`
         used while the history is empty; see :meth:`LBFGSCurvature.hvp`.
+    - `grad_prev`: NeMoS addition. The gradient at the previous accepted iterate, which
+        the next `update` differences against to form the `y` of the curvature pair.
+        It lives here rather than on the solver state because it is history of the
+        curvature model, and nothing outside the model reads it.
     """
 
     index_start: Scalar
@@ -77,6 +82,7 @@ class _LBFGSHessianUpdateState(eqx.Module, Generic[Y]):
     y_diff_grad_diff_inner: Float[Array, " history_length"]
     y_diff_cross_inner: Float[Array, " history_length history_length"]
     initial_scale: Scalar
+    grad_prev: PyTree[Y]
 
 
 class AbstractCurvature(eqx.Module, ABC, Generic[Y, S, R]):
@@ -100,7 +106,7 @@ class AbstractCurvature(eqx.Module, ABC, Generic[Y, S, R]):
         state: S,
         params: Y,
         y_diff: Y,
-        grad_diff: Y,
+        grad: Y,
         *args: Any,
     ) -> tuple[Callable[[Y, HessianTag | None], Y], PyTree[Array] | None, S]: ...
 
@@ -139,6 +145,7 @@ class LBFGSCurvature(
             initial_scale=jnp.array(
                 1.0, dtype=jnp.result_type(*jtu.tree_leaves(params))
             ),
+            grad_prev=jtu.tree_map(jnp.zeros_like, params),
         )
 
         return hess_state  # pyright: ignore
@@ -148,11 +155,14 @@ class LBFGSCurvature(
         state: _LBFGSHessianUpdateState[Y],
         params: Y,
         y_diff: Y,
-        grad_diff: Y,
+        grad: Y,
         *args: Any,
     ) -> tuple[Callable[[Y, HessianTag | None], Y], None, _LBFGSHessianUpdateState[Y]]:
 
         history_length = state.history_length
+        # The `y` of the curvature pair. ``grad_prev`` is zero until the first accepted
+        # step, so on the first call this is the gradient itself.
+        grad_diff = tree_utils.tree_sub(grad, state.grad_prev)
 
         # Update only if the inner product is positive, to maintain positive definiteness
         # of the Hessian approximation.
@@ -243,6 +253,7 @@ class LBFGSCurvature(
                 y_diff_grad_diff_inner=y_diff_grad_diff_inner,
                 y_diff_cross_inner=y_diff_cross_inner,
                 initial_scale=state.initial_scale,
+                grad_prev=state.grad_prev,
             )
 
             return updated_state
@@ -254,7 +265,6 @@ class LBFGSCurvature(
         # Set the scale ``hvp`` uses while there is no history to scale it; this is the
         # only place holding a gradient to set it from.
         empty_history = state.index_start == 0
-        # on the first call ``grad_diff`` is the gradient itself, ``grad_prev`` being zero
         grad_norm = jnp.sqrt(lx.internal.tree_dot(grad_diff, grad_diff))
         # SciPy's ``stpmx`` cap on ``1 / ||d||``, but read off the dtype rather than its
         # f64 constant ``1e10``, as ``HessianSolverMixin`` reads its ``_delta``
@@ -263,11 +273,17 @@ class LBFGSCurvature(
         def _hvp(v: Y, tag: HessianTag | None) -> Y:
             return self.hvp(new_state, params, v, tag)
 
+        # ``grad_prev`` is written here rather than by the loop: this is the point at
+        # which the gradient has been folded into the history, so it is what the next
+        # iteration must difference against.
         new_state = eqx.tree_at(
-            lambda s: s.initial_scale,
+            lambda s: (s.initial_scale, s.grad_prev),
             new_state,
-            jnp.where(
-                empty_history, jnp.maximum(grad_norm, floor), state.initial_scale
+            (
+                jnp.where(
+                    empty_history, jnp.maximum(grad_norm, floor), state.initial_scale
+                ),
+                grad,
             ),
         )
 
@@ -336,10 +352,10 @@ class NewtonCurvature(AbstractCurvature[Y, None, PyTree[Array]], Generic[Y]):
         state: None,
         params: Y,
         y_diff: Y,
-        grad_diff: Y,
+        grad: Y,
         *args: Any,
     ) -> tuple[Callable[[Y, HessianTag | None], Y], PyTree[Array], None]:
-        del state, grad_diff, y_diff
+        del state, grad, y_diff
         hessian_tensor = self.hessian_fn(params, *args)
 
         def _hvp(v: Y, tag: HessianTag | None) -> Y:

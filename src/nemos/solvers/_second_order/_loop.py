@@ -29,10 +29,9 @@ Aux = TypeVar("Aux")
 class Loop(eqx.Module, Generic[Y, S]):
     """Sequence one iteration: curvature, direction, line search, then the stopping test.
 
-    The three callables are what differs between solvers built on it. ``fval_diff_fn``
-    supplies the function-value arm of the Cauchy test, zero for a solver that suppresses
-    it; ``grad_diff_fn`` supplies the gradient difference a curvature model with history
-    needs, ``None`` for one that assembles the Hessian afresh.
+    ``fval_diff_fn`` is what differs between solvers built on it: it supplies the
+    function-value arm of the Cauchy test, and returns zero for a solver that suppresses
+    that arm.
     """
 
     maxiter: int
@@ -41,38 +40,20 @@ class Loop(eqx.Module, Generic[Y, S]):
     fval_diff_fn: Callable[[Scalar, S], Scalar]
     # ``(params, *args) -> ((fval, aux), grad)``
     fval_and_grad_fn: Callable[..., tuple[tuple[Scalar, Aux], Y]]
-    grad_diff_fn: Callable[[Y, S], Y | None]
 
     def _update_state(
         self,
         state: S,
         new_ls_state: Any,
         new_hessian_state: Any,
-        grad: Y,
         new_dir_state: Any,
     ) -> S:
-        if hasattr(state, "grad_prev"):
-
-            def update_fn(x):
-                return (
-                    x.ls_state,
-                    x.hessian_update_state,
-                    x.grad_prev,
-                    x.direction_state,
-                )
-
-            updates = (new_ls_state, new_hessian_state, grad, new_dir_state)
-        else:
-
-            def update_fn(x):
-                return (
-                    x.ls_state,
-                    x.hessian_update_state,
-                    x.direction_state,
-                )
-
-            updates = (new_ls_state, new_hessian_state, new_dir_state)
-        return eqx.tree_at(update_fn, state, updates, is_leaf=lambda x: x is None)
+        return eqx.tree_at(
+            lambda x: (x.ls_state, x.hessian_update_state, x.direction_state),
+            state,
+            (new_ls_state, new_hessian_state, new_dir_state),
+            is_leaf=lambda x: x is None,
+        )
 
     def update(
         self,
@@ -93,7 +74,7 @@ class Loop(eqx.Module, Generic[Y, S]):
                 state.hessian_update_state,
                 params,
                 state.y_diff,
-                self.grad_diff_fn(grad, state),
+                grad,
                 *args,
             )
             step, dir_state = direction.update(
@@ -114,15 +95,9 @@ class Loop(eqx.Module, Generic[Y, S]):
                 *args,
             )
 
-            # ``grad_prev`` is written here rather than in the loop: this is the point at
-            # which the gradient has been folded into the history, so it is what the next
-            # iteration must difference against.
-
             return (
                 new_params,
-                self._update_state(
-                    state, new_ls_state, new_hessian_state, grad, dir_state
-                ),
+                self._update_state(state, new_ls_state, new_hessian_state, dir_state),
                 no_step_found,
             )
 
@@ -170,7 +145,7 @@ class Loop(eqx.Module, Generic[Y, S]):
     ) -> tuple[Y, Any, Bool[Array, ""]]:
         """Accept or reject step based on descent condition and line search.
 
-        Returns the value of :attr:`LBFGSState.no_step_found` for this iteration: true
+        Returns ``no_step_found`` for this iteration: true
         when no step was taken and the iterate is not stationary.
         """
         updates, new_ls_state = line_search.update(
