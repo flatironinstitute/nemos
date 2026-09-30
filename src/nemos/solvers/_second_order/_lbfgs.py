@@ -38,9 +38,10 @@ import optax
 from jaxtyping import Array, Bool, Scalar
 
 from ... import tree_utils
-from ...typing import Params, StepResult
+from ...typing import Params
 from .._abstract_solver import OptimizationInfo
 from .._fista import FISTA
+from ._base import AbstractSecondOrderSolver
 from ._curvature import LBFGSCurvature, _LBFGSHessianUpdateState
 from ._direction import ProxQuadraticDirection
 from ._linesearches import TsengYunBacktracking
@@ -82,7 +83,7 @@ class LBFGSState(eqx.Module, Generic[Y]):
     direction_state: Optional[Any] = None
 
 
-class ProximalLBFGS(Generic[Y]):
+class ProximalLBFGS(AbstractSecondOrderSolver[Y, LBFGSState[Y]], Generic[Y]):
     r"""Proximal L-BFGS solver for composite objectives.
 
     Minimizes :math:`f(\beta) + P(\beta)` with :math:`f` the smooth loss and :math:`P` a
@@ -176,13 +177,7 @@ class ProximalLBFGS(Generic[Y]):
             params=init_params, strength=regularizer_strength
         )
 
-        # split scalar vs aux
-        if has_aux:
-            self.fun_with_aux = unregularized_loss
-            self.fun = lambda p, *a: unregularized_loss(p, *a)[0]
-        else:
-            self.fun = unregularized_loss
-            self.fun_with_aux = lambda p, *a: (unregularized_loss(p, *a), None)
+        self._set_objective(unregularized_loss, has_aux)
 
         # the penalty alone, for the composite line search. self.fun is the smooth
         # loss here, so the composite objective is self.fun + self._penalty, which is
@@ -220,107 +215,27 @@ class ProximalLBFGS(Generic[Y]):
             grad_diff_fn=lambda g, s: tree_utils.tree_sub(g, s.grad_prev),
         )
 
-    @property
-    def maxiter(self) -> int:
-        return self.loop.maxiter
+    def _initial_y_diff(self, init_params: Y) -> Y:
+        """Zero rather than infinite: this is also the ``s`` of the first curvature pair.
 
-    @property
-    def tol(self) -> float:
-        return self.loop.atol
-
-    @property
-    def rtol(self) -> float:
-        return self.loop.rtol
-
-    def _scalar_dtype(self, init_params: Y, *args: Any) -> jnp.dtype:
-        """The objective's dtype, which the state's scalars must already carry.
-
-        The ``while_loop`` carry fails to typecheck otherwise.
+        The ``s^T y`` guard reads a zero pair as "no pair yet" and leaves the history
+        untouched. The first-iteration Cauchy hit that a zero step would otherwise cause
+        is blocked by ``function_val`` being NaN, since the criterion needs both arms.
         """
-        return jax.eval_shape(self.fun, init_params, *args).dtype
+        return jax.tree.map(jnp.zeros_like, init_params)
 
     def init_state(self, init_params: Y, *args: Any) -> LBFGSState[Y]:
-        hessian_state = self.curvature.init(init_params)
-        scalar_dtype = self._scalar_dtype(init_params, *args)
-        state = LBFGSState(
-            ls_state=self._line_search.init(init_params),
-            grad_norm=jnp.asarray(jnp.inf, dtype=scalar_dtype),
-            stats=OptimizationInfo(
-                function_val=jnp.asarray(jnp.nan, dtype=scalar_dtype),
-                num_steps=jnp.array(0),
-                converged=jnp.array(False),
-                reached_max_steps=jnp.array(False),
-            ),
-            y_diff=jax.tree.map(jnp.zeros_like, init_params),
+        return LBFGSState(
+            **self._common_state_fields(init_params, *args),
             grad_prev=jax.tree.map(jnp.zeros_like, init_params),
-            hessian_update_state=hessian_state,
-            no_step_found=jnp.array(False),
+            hessian_update_state=self.curvature.init(init_params),
         )
-        return state
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:
-        return {
-            "maxiter",
-            "tol",
-            "rtol",
-            "jit",
+        return super().get_accepted_arguments() | {
             "history_length",
             "inner_iter",
             "inner_atol",
             "inner_rtol",
         }
-
-    def _get_optim_info(self, state: LBFGSState[Y], **kwargs: Any) -> OptimizationInfo:
-        return state.stats
-
-    def update(
-        self,
-        params: Y,
-        state: LBFGSState[Y],
-        *args: Any,
-    ) -> StepResult:
-        return self.loop.update(
-            params, state, self.curvature, self.direction, self._line_search, *args
-        )
-
-    def run(
-        self,
-        init_params: Y,
-        *args: Any,
-    ) -> StepResult:
-        """Iterate to convergence, to a stall, or to ``maxiter``.
-
-        ``jit`` picks which of the two loops in :meth:`_run` executes, so the compiled
-        path has to be reached through a separate method: decorating this one would trace
-        the Python loop and fail on its data-dependent condition.
-        """
-        if self.jit:
-            return self._run_jit(init_params, *args)
-        return self._run(init_params, *args)
-
-    @eqx.filter_jit
-    def _run_jit(
-        self,
-        init_params: Y,
-        *args: Any,
-    ) -> StepResult:
-        return self._run(init_params, *args)
-
-    def _run(
-        self,
-        init_params: Y,
-        *args: Any,
-    ) -> StepResult:
-        state = self.init_state(init_params, *args)
-        final_params, final_state = self.loop.run(
-            init_params,
-            state,
-            self.curvature,
-            self.direction,
-            self._line_search,
-            self.jit,
-            *args,
-        )
-        _, aux = self.fun_with_aux(final_params, *args)
-        return final_params, final_state, aux

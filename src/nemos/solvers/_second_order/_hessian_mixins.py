@@ -59,10 +59,11 @@ class HessianMixin:
     # Declares the capability to ``BaseRegressor``, mirroring ``_supports_stochastic``.
     _uses_hessian: ClassVar[bool] = True
 
-    # Whether the penalty is modelled by the quadratic. False for solvers that reach
-    # the penalty through a proximal operator instead, which must not also add its
-    # curvature here -- ``prox_elastic_net`` already applies the L2 rescale.
-    _proximal: ClassVar[bool] = False
+    # ``_proximal`` is read below and declared by the host, on
+    # ``AbstractSecondOrderSolver``: whether the penalty is modelled by the quadratic.
+    # It is False for solvers that reach the penalty through a proximal operator
+    # instead, which must not also add its curvature here -- ``prox_elastic_net``
+    # already applies the L2 rescale.
 
     def _init_hessian(
         self,

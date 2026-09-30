@@ -12,9 +12,10 @@ import optax
 from jaxtyping import Array, Bool, Scalar
 
 from ..._hess import HessianTag
-from ...typing import Params, StepResult
+from ...typing import Params
 from .._abstract_solver import OptimizationInfo
 from .._fista import FISTA
+from ._base import AbstractSecondOrderSolver
 from ._direction import AbstractDirection, ProxQuadraticDirection
 from ._hessian_mixins import HessianMixin, HessianSolverMixin, LinearSolverTag
 from ._linesearches import ArmijoBacktracking, TsengYunBacktracking
@@ -53,7 +54,7 @@ class NewtonState(eqx.Module, Generic[Y]):
     hessian_update_state: None = None
 
 
-class BaseNewtonSolver(Generic[Y, S], HessianMixin):
+class BaseNewtonSolver(AbstractSecondOrderSolver[Y, S], HessianMixin, Generic[Y, S]):
     def __init__(
         self,
         unregularized_loss: Callable,
@@ -96,13 +97,7 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
             )
             prox = None
 
-        # split scalar vs aux
-        if has_aux:
-            self.fun_with_aux = loss_fn
-            self.fun = lambda p, *a: loss_fn(p, *a)[0]
-        else:
-            self.fun = loss_fn
-            self.fun_with_aux = lambda p, *a: (loss_fn(p, *a), None)
+        self._set_objective(loss_fn, has_aux)
 
         self._line_search = line_search
         self.loop = Loop(
@@ -128,114 +123,8 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
             prox,
         )
 
-    @property
-    def maxiter(self) -> int:
-        return self.loop.maxiter
-
-    @property
-    def tol(self) -> float:
-        return self.loop.atol
-
-    @property
-    def rtol(self) -> float:
-        return self.loop.rtol
-
-    def update(
-        self,
-        params: Y,
-        state: S,
-        *args: Any,
-    ) -> StepResult:
-        return self.loop.update(
-            params, state, self.curvature, self.direction, self._line_search, *args
-        )
-
-    def run(
-        self,
-        init_params: Y,
-        *args: Any,
-    ) -> StepResult:
-        """Iterate to convergence, to a stall, or to ``maxiter``.
-
-        ``jit`` picks which of the two loops in :meth:`_run` executes, so the compiled
-        path has to be reached through a separate method: decorating this one would trace
-        the Python loop and fail on its data-dependent condition.
-        """
-        if self.jit:
-            return self._run_jit(init_params, *args)
-        return self._run(init_params, *args)
-
-    @eqx.filter_jit
-    def _run_jit(
-        self,
-        init_params: Y,
-        *args: Any,
-    ) -> StepResult:
-        return self._run(init_params, *args)
-
-    def _run(
-        self,
-        init_params: Y,
-        *args: Any,
-    ) -> StepResult:
-        state = self.init_state(init_params, *args)
-        params = init_params
-        final_params, final_state = self.loop.run(
-            params,
-            state,
-            self.curvature,
-            self.direction,
-            self._line_search,
-            self.jit,
-            *args,
-        )
-        _, aux = self.fun_with_aux(final_params, *args)
-        return final_params, final_state, aux
-
-    def _scalar_dtype(self, init_params: Y, *args: Any) -> jnp.dtype:
-        """The objective's dtype, which the state's scalars must already carry.
-
-        The ``while_loop`` carry fails to typecheck otherwise.
-        """
-        return jax.eval_shape(self.fun, init_params, *args).dtype
-
-    def _common_state_fields(self, init_params: Y, *args: Any) -> dict[str, Any]:
-        """The :class:`NewtonState` fields, ready to splat into any subclass of it."""
-        scalar_dtype = self._scalar_dtype(init_params, *args)
-        return dict(
-            grad_norm=jnp.asarray(jnp.inf, dtype=scalar_dtype),
-            stats=OptimizationInfo(
-                function_val=jnp.asarray(jnp.nan, dtype=scalar_dtype),
-                num_steps=jnp.array(0),
-                converged=jnp.array(False),
-                reached_max_steps=jnp.array(False),
-            ),
-            ls_state=self._line_search.init(init_params),
-            y_diff=jax.tree.map(
-                lambda x: jnp.full_like(x, jnp.inf),
-                init_params,
-            ),
-            no_step_found=jnp.array(False),
-        )
-
     def init_state(self, init_params: Y, *args: Any) -> NewtonState[Y]:
         return NewtonState(**self._common_state_fields(init_params, *args))
-
-    @classmethod
-    def get_accepted_arguments(cls) -> set[str]:
-        return {
-            "maxiter",
-            "tol",
-            "rtol",
-            "jit",
-        }
-
-    def _get_optim_info(
-        self,
-        state: NewtonState[Y],
-        **kwargs: Any,
-    ) -> OptimizationInfo:
-        return state.stats
 
 
 class Newton(BaseNewtonSolver[Y, NewtonState[Y]], HessianSolverMixin, Generic[Y]):
