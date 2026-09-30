@@ -26,9 +26,11 @@ class AbstractDirection(eqx.Module, ABC, Generic[Y, D, S]):
         self,
         params: Y,
         grad: Y,
+        hess_op: lx.AbstractLinearOperator,
         direction_state: D,
         hessian_state: S,
         curvature: AbstractCurvature,
+        *args,
     ) -> Tuple[Y, D]: ...
 
     @abstractmethod
@@ -117,13 +119,15 @@ class ProxQuadraticDirection(AbstractDirection, Generic[Y, S]):
         self,
         params: Y,
         grad: Y,
+        hess_op: lx.AbstractLinearOperator,
         direction_state: None,
         hessian_state: S,
         curvature: AbstractCurvature,
+        *args,
     ) -> Y:
         def quadratic(z, _):
             step = tree_utils.tree_sub(z, params)
-            hvp = curvature.hvp(hessian_state, params, step)
+            hvp = hess_op.mv(step)
             return lx.internal.tree_dot(grad, step) + 0.5 * lx.internal.tree_dot(
                 step, hvp
             )
@@ -259,11 +263,13 @@ class LinearSolveDirection(AbstractDirection, Generic[Y, S]):
         self,
         params: Y,
         grad: Y,
+        hess_op: lx.AbstractLinearOperator,
         direction_state: D,
         hessian_state: S,
         curvature: AbstractCurvature,
+        *args,
     ) -> Y:
-        hess = curvature.as_hessian_tree(params, hessian_state)
+        hess = curvature.as_hessian_tree(params, hess_op, *args)
         tag = getattr(curvature, "hessian_tag", None)
         direction, accepted_shift = map_blocks(
             self._solve,

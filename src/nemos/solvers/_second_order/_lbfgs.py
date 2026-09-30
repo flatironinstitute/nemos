@@ -43,6 +43,7 @@ from .._fista import FISTA
 from ._curvature import LBFGSCurvature, _LBFGSHessianUpdateState
 from ._direction import ProxQuadraticDirection
 from ._linesearches import TsengYunBacktracking
+from ._loop import Loop
 
 if TYPE_CHECKING:
     from ...regularizer import Regularizer
@@ -213,6 +214,18 @@ class ProximalLBFGS(Generic[Y]):
         # Cache
         self._gradient: Callable | None = None
         self.direction = ProxQuadraticDirection(self._inner_solver, inner_iter)
+        fval_and_grad = jax.value_and_grad(
+            self.fun_with_aux,
+            has_aux=True,
+        )
+        self.loop = Loop(
+            atol=self.tol,
+            rtol=self.rtol,
+            maxiter=self.maxiter,
+            fval_diff_fn=lambda fx, s: fx - s.stats.function_val,
+            fval_and_grad_fn=fval_and_grad,
+            grad_diff_fn=lambda g, s: tree_utils.tree_sub(g, s.grad_prev),
+        )
 
     def _build_cache(self) -> None:
         if self._gradient is None:
@@ -317,82 +330,9 @@ class ProximalLBFGS(Generic[Y]):
         state: LBFGSState[Y],
         *args: Any,
     ) -> StepResult:
-
-        (fval, aux), grad = self._gradient(params, *args)
-
-        gnorm = jnp.sqrt(lx.internal.tree_dot(grad, grad))
-        converged = self._converged(params, state, grad, fval)
-
-        def step(_):
-            new_hessian_state = self.curvature.update(
-                state.hessian_update_state,
-                params,
-                state.y_diff,
-                tree_utils.tree_sub(grad, state.grad_prev),
-                *args,
-            )
-            step, dir_state = self.direction.update(
-                params, grad, None, new_hessian_state, self.curvature
-            )
-
-            new_params, new_ls_state, no_step_found = self._apply_or_reject(
-                params,
-                step,
-                grad,
-                state,
-                fval,
-                *args,
-            )
-
-            # ``grad_prev`` is written here rather than in the loop: this is the point at
-            # which the gradient has been folded into the history, so it is what the next
-            # iteration must difference against.
-            return (
-                new_params,
-                eqx.tree_at(
-                    lambda x: (
-                        x.ls_state,
-                        x.hessian_update_state,
-                        x.grad_prev,
-                        x.direction_state,
-                    ),
-                    state,
-                    (new_ls_state, new_hessian_state, grad, dir_state),
-                ),
-                no_step_found,
-            )
-
-        def no_step(_):
-            return params, state, jnp.array(False)
-
-        new_params, new_state, no_step_found = jax.lax.cond(
-            converged,
-            no_step,
-            step,
-            None,
+        return self.loop.update(
+            params, state, self.curvature, self.direction, self._line_search, *args
         )
-
-        new_iter = jnp.where(
-            converged,
-            state.stats.num_steps,
-            state.stats.num_steps + 1,
-        )
-        new_state = eqx.tree_at(
-            lambda s: (s.grad_norm, s.stats, s.y_diff, s.no_step_found),
-            new_state,
-            (
-                gnorm,
-                OptimizationInfo(
-                    function_val=fval,
-                    num_steps=new_iter,
-                    converged=converged,
-                    reached_max_steps=new_iter >= self.maxiter,
-                ),
-                tree_utils.tree_sub(new_params, params),
-                (~converged) & no_step_found,
-            ),
-        )
-        return new_params, new_state, aux
 
     def run(
         self,
@@ -423,32 +363,14 @@ class ProximalLBFGS(Generic[Y]):
         *args: Any,
     ) -> StepResult:
         state = self.init_state(init_params, *args)
-
-        def cond(carry):
-            _, s = carry
-            return (
-                (~s.stats.converged)
-                & (~s.no_step_found)
-                & (s.stats.num_steps < self.maxiter)
-            )
-
-        def body(carry):
-            p, s = carry
-            # Discard aux; convergence only needs params and state
-            return self.update(p, s, *args)[:2]
-
-        if self.jit:
-            final_params, final_state = eqx.internal.while_loop(
-                cond,
-                body,
-                (init_params, state),
-                kind="lax",
-            )
-        else:
-            carry = (init_params, state)
-            while cond(carry):
-                carry = body(carry)
-            final_params, final_state = carry
-
+        final_params, final_state = self.loop.run(
+            init_params,
+            state,
+            self.curvature,
+            self.direction,
+            self._line_search,
+            self.jit,
+            *args,
+        )
         _, aux = self.fun_with_aux(final_params, *args)
         return final_params, final_state, aux

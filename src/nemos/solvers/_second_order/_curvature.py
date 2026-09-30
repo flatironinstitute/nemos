@@ -6,7 +6,6 @@ import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import lineax as lx
-from jax.flatten_util import ravel_pytree
 from jaxtyping import Array, Float, PyTree, Scalar
 from optimistix._solver.limited_memory_bfgs import _lbfgs_hessian_operator_fn
 
@@ -84,15 +83,16 @@ class AbstractCurvature(eqx.Module, ABC, Generic[Y, S]):
         state: S,
         params: Y,
         y_diff: Y,
-        grad_diff: Y,
+        grad: Y,
         *args: Any,
-    ) -> S: ...
+    ) -> tuple[lx.AbstractLinearOperator, S]: ...
 
     @abstractmethod
     def hvp(self, state: S, params: Y, v: Y, *args) -> Y: ...
 
-    @abstractmethod
-    def as_hessian_tree(self, params: Y, state: S) -> lx.AbstractLinearOperator: ...
+    def as_hessian_tree(
+        self, params: Y, hess_op: lx.AbstractLinearOperator, *args
+    ) -> PyTree[Array]: ...
 
 
 def _batched_tree_zeros_like(y, batch_dimension):
@@ -128,13 +128,13 @@ class LBFGSCurvature(AbstractCurvature[Y, _LBFGSHessianUpdateState], Generic[Y])
 
     def update(
         self,
-        state: S,
+        state: _LBFGSHessianUpdateState,
         params: Y,
         y_diff: Y,
         grad_diff: Y,
         *args: Any,
-    ) -> _LBFGSHessianUpdateState[Y]:
-        del params, args
+    ) -> tuple[lx.AbstractLinearOperator, _LBFGSHessianUpdateState[Y]]:
+
         history_length = state.history_length
 
         # Update only if the inner product is positive, to maintain positive definiteness
@@ -242,7 +242,12 @@ class LBFGSCurvature(AbstractCurvature[Y, _LBFGSHessianUpdateState], Generic[Y])
         # SciPy's ``stpmx`` cap on ``1 / ||d||``, but read off the dtype rather than its
         # f64 constant ``1e10``, as ``HessianSolverMixin`` reads its ``_delta``
         floor = jnp.sqrt(jnp.finfo(grad_norm.dtype).eps)
-        return eqx.tree_at(
+
+        def _hvp(v):
+            return self.hvp(new_state, params, v, *args)
+
+        op = lx.FunctionLinearOperator(_hvp, jax.eval_shape(lambda: params))
+        return op, eqx.tree_at(
             lambda s: s.initial_scale,
             new_state,
             jnp.where(
@@ -283,7 +288,9 @@ class LBFGSCurvature(AbstractCurvature[Y, _LBFGSHessianUpdateState], Generic[Y])
             v,
         )
 
-    def as_hessian_tree(self, params: Y, state: S):
+    def as_hessian_tree(
+        self, params: Y, hess_op: lx.AbstractLinearOperator, *args
+    ) -> PyTree[Array]:
         """Return the hessian pytree.
 
         Notes
@@ -292,13 +299,7 @@ class LBFGSCurvature(AbstractCurvature[Y, _LBFGSHessianUpdateState], Generic[Y])
         The method is here for consistency with the NewtonCurvature, and
         can be used for debugging.
         """
-        flat, unravel = ravel_pytree(params)
-        identity = jax.vmap(unravel)(jnp.eye(len(flat)))
-
-        def _hvp(v):
-            return self.hvp(state, params, v)
-
-        return jax.vmap(_hvp)(identity)
+        return lx.materialise(hess_op)
 
 
 class NewtonCurvature(AbstractCurvature[Y, None], Generic[Y]):
@@ -311,7 +312,7 @@ class NewtonCurvature(AbstractCurvature[Y, None], Generic[Y]):
     hessian_fn: Callable
 
     def init(self, params: Y, *args) -> Any:
-        return self.hessian_fn(params, *args)
+        return None
 
     def update(
         self,
@@ -320,8 +321,13 @@ class NewtonCurvature(AbstractCurvature[Y, None], Generic[Y]):
         y_diff: Y,
         grad_diff: Y,
         *args,
-    ) -> Any:
-        return self.init(params, *args)
+    ) -> tuple[lx.AbstractLinearOperator, None]:
+        del grad_diff, y_diff
+
+        def _hvp(v):
+            return self.hvp(self.hessian_fn(params, *args), params, v, *args)
+
+        return lx.FunctionLinearOperator(_hvp, jax.eval_shape(lambda: params)), None
 
     def hvp(self, state: Any, params: Y, v: Y, *args) -> Y:
         def apply_operator(H_b, v_b):
@@ -329,6 +335,15 @@ class NewtonCurvature(AbstractCurvature[Y, None], Generic[Y]):
 
         return map_blocks(apply_operator, state, (v,), self.hessian_tag)
 
-    def as_hessian_tree(self, params: Y, state: S):
-        del params
-        return state
+    def as_hessian_tree(
+        self, params: Y, hess_op: lx.AbstractLinearOperator, *args
+    ) -> PyTree[Array]:
+        """Return the hessian pytree.
+
+        Notes
+        -----
+        The full hessian is size N^2, where N is the number of parameters.
+        The method is here for consistency with the NewtonCurvature, and
+        can be used for debugging.
+        """
+        return self.hessian_fn(params, *args)

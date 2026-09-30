@@ -173,6 +173,8 @@ VALID_PAIRS = [
     {"M_grid", "grid"},
     {"inner_atol", "inner_rtol"},
     {"hessian_state", "hessian_tag"},
+    {"hessian_state", "new_hessian_state"},
+    {"new_dir_state", "new_ls_state"},
 ]
 
 

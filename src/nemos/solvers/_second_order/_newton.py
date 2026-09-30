@@ -17,6 +17,7 @@ from .._fista import FISTA
 from ._direction import ProxQuadraticDirection
 from ._hessian_mixins import HessianMixin, HessianSolverMixin, LinearSolverTag
 from ._linesearches import ArmijoBacktracking, TsengYunBacktracking
+from ._loop import Loop
 
 DEFAULT_ATOL = 1e-4
 DEFAULT_RTOL = 0.0
@@ -45,6 +46,7 @@ class NewtonState(eqx.Module, Generic[Y]):
     # direction, or it was not finite. It ends the run, and it is not convergence.
     no_step_found: Bool[Array, ""]
     direction_state: Array | None = None
+    hessian_update_state: None = None
 
 
 def _solve_shifted_system(
@@ -174,6 +176,18 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         # sets ``_hessian`` and ``curvature``, so there is nothing to seed here
         self._init_hessian(regularizer, regularizer_strength, init_params)
         self._line_search = line_search
+        fval_and_grad = jax.value_and_grad(
+            self.fun_with_aux,
+            has_aux=True,
+        )
+        self.loop = Loop(
+            self.maxiter,
+            atol=tol,
+            rtol=rtol,
+            fval_diff_fn=lambda x, s: jnp.zeros(()),
+            fval_and_grad_fn=fval_and_grad,
+            grad_diff_fn=lambda g, s: None,
+        )
 
     def update(
         self,
@@ -181,72 +195,9 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
         state: S,
         *args: Any,
     ) -> StepResult:
-        (fval, aux), grad = self._gradient(params, *args)
-        gnorm = jnp.sqrt(lx.internal.tree_dot(grad, grad))
-        converged = self._converged(params, state, grad, fval)
-
-        def step(_):
-            # grad diff is unused.
-            H = self.curvature.update(None, params, None, None, *args)
-            direction, dir_state = self.direction.update(
-                params, grad, state.direction_state, H, self.curvature
-            )
-            new_state = eqx.tree_at(
-                lambda s: s.direction_state,
-                state,
-                dir_state,
-                is_leaf=lambda x: x is None,
-            )
-
-            new_params, new_ls_state, no_step_found = self._apply_or_reject(
-                params,
-                direction,
-                grad,
-                state,
-                fval,
-                *args,
-            )
-
-            return (
-                new_params,
-                eqx.tree_at(lambda x: x.ls_state, new_state, new_ls_state),
-                no_step_found,
-            )
-
-        def no_step(_):
-            return params, state, jnp.array(False)
-
-        new_params, new_state, no_step_found = jax.lax.cond(
-            converged,
-            no_step,
-            step,
-            None,
+        return self.loop.update(
+            params, state, self.curvature, self.direction, self._line_search, *args
         )
-
-        new_iter = jnp.where(
-            converged,
-            state.stats.num_steps,
-            state.stats.num_steps + 1,
-        )
-        # Written onto whatever state the subclass carries, so the loop never names a
-        # concrete state class and a solver is free to add fields to it.
-        new_state = eqx.tree_at(
-            lambda s: (s.grad_norm, s.stats, s.y_diff, s.no_step_found),
-            new_state,
-            (
-                gnorm,
-                OptimizationInfo(
-                    function_val=fval,
-                    num_steps=new_iter,
-                    converged=converged,
-                    reached_max_steps=new_iter >= self.maxiter,
-                ),
-                tree_utils.tree_sub(new_params, params),
-                (~converged) & no_step_found,
-            ),
-        )
-
-        return new_params, new_state, aux
 
     def run(
         self,
@@ -278,36 +229,15 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
     ) -> StepResult:
         state = self.init_state(init_params, *args)
         params = init_params
-
-        def cond(carry):
-            p, s = carry
-            return (
-                (~s.stats.converged)
-                & (~s.no_step_found)
-                & (s.stats.num_steps < self.maxiter)
-            )
-
-        def body(carry):
-            p, s = carry
-            return self.update(
-                p,
-                s,
-                *args,
-            )[:2]  # Discard aux; convergence only needs params and state
-
-        if self.jit:
-            final_params, final_state = eqx.internal.while_loop(
-                cond,
-                body,
-                (params, state),
-                kind="lax",
-            )
-        else:
-            carry = (params, state)
-            while cond(carry):
-                carry = body(carry)
-            final_params, final_state = carry
-
+        final_params, final_state = self.loop.run(
+            params,
+            state,
+            self.curvature,
+            self.direction,
+            self._line_search,
+            self.jit,
+            *args,
+        )
         _, aux = self.fun_with_aux(final_params, *args)
         return final_params, final_state, aux
 
@@ -351,7 +281,6 @@ class BaseNewtonSolver(Generic[Y, S], HessianMixin):
 
     def _common_state_fields(self, init_params: Y, *args: Any) -> dict[str, Any]:
         """The :class:`NewtonState` fields, ready to splat into any subclass of it."""
-        self._build_cache()
         scalar_dtype = self._scalar_dtype(init_params, *args)
         return dict(
             grad_norm=jnp.asarray(jnp.inf, dtype=scalar_dtype),
@@ -518,10 +447,11 @@ class Newton(BaseNewtonSolver[Y, NewtonState[Y]], HessianSolverMixin, Generic[Y]
 
     def init_state(self, init_params: Y, *args: Any) -> NewtonState[Y]:
         self._setup_linear_solve_direction(init_params)
-        return NewtonState(
+        state = NewtonState(
             **self._common_state_fields(init_params, *args),
             direction_state=self.direction.init(init_params, self.curvature),
         )
+        return state
 
     @classmethod
     def get_accepted_arguments(cls) -> set[str]:

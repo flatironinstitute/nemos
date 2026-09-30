@@ -276,6 +276,7 @@ class HessianSolverMixin:
 
                 def _shift_fn(_):
                     return None
+
         elif resolved == "eigh":
             _linear_solver = None
 
