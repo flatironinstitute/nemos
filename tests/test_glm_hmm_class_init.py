@@ -255,7 +255,6 @@ class TestGLMHMMInit:
         assert model.initial_prob_ is None
         assert model.transition_prob_ is None
         assert model.solver_state_ is None
-        assert model.dof_resid_ is None
 
     # -------------------------------------------------------------------------
     # repr

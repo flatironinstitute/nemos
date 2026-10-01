@@ -33,7 +33,7 @@ class ClassifierMixin:
     def _hess_leaf_claims(
         self, params: ModelParamsT[jnp.ndarray], active_spec: ModelParamsT[bool]
     ) -> ModelParamsT[LeafClaim]:
-        """Certify nothing, unlike the plain GLM this inherits from.
+        """Certify nothing, unlike the non-classification models this inherits from.
 
         Adding the same constant to every class's intercept leaves the softmax
         probabilities unchanged, so the intercept block is singular along that direction

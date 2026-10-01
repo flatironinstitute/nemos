@@ -23,8 +23,7 @@ from ..hmm.utils import _check_state_format
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
 from ..pytrees import FeaturePytree
-from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
-from ..tree_utils import pytree_map_and_reduce
+from ..regularizer import Regularizer
 from ..typing import (
     DESIGN_INPUT_TYPE,
     ModelParamsT,
@@ -164,8 +163,6 @@ class GLMHMM(
         State of the solver after fitting. May include details like optimization error.
     scale_ :
         Scale parameter for the observation model, shape ``(n_states,)``.
-    dof_resid_ :
-        Degrees of freedom for the residuals.
 
     Notes
     -----
@@ -371,7 +368,6 @@ class GLMHMM(
         self.intercept_: jnp.ndarray | None = None
         self.solver_state_: NamedTuple | None = None
         self.scale_: jnp.ndarray | None = None
-        self.dof_resid_: int | None = None
 
         # cache the log-like
         self._log_like_cache = {}
@@ -732,7 +728,7 @@ class GLMHMM(
         consecutive iterations falls below ``tol`` or ``maxiter`` is reached.
         Fitted parameters are exposed on the instance as ``coef_``, ``intercept_``,
         ``scale_``, ``initial_prob_``, ``transition_prob_``, plus
-        ``solver_state_`` (EM trace) and ``dof_resid_``.
+        ``solver_state_`` (EM trace).
 
         How parameters are initialized:
 
@@ -862,79 +858,7 @@ class GLMHMM(
 
         # assign fit attributes
         self._set_model_params(fit_params)
-        self.dof_resid_ = self._estimate_resid_degrees_of_freedom(data)
         return self
-
-    def _estimate_resid_degrees_of_freedom(
-        self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None
-    ):
-        """
-        Estimate the degrees of freedom of the residuals.
-
-        Parameters
-        ----------
-        self :
-            A fitted GLM model.
-        X :
-            The design matrix.
-        n_samples :
-            The number of samples observed. If not provided, n_samples is set to ``X.shape[0]``. If the fit is
-            batched, the n_samples could be larger than ``X.shape[0]``.
-
-        Returns
-        -------
-        :
-            An estimate of the degrees of freedom of the residuals.
-        """
-        # Convert a pytree to a design-matrix with pytrees
-        X = jnp.hstack(jax.tree_util.tree_leaves(X))
-
-        if n_samples is None:
-            n_samples = X.shape[0]
-        else:
-            if not isinstance(n_samples, int):
-                raise TypeError(
-                    f"`n_samples` must either `None` or of type `int`. Type {type(n_samples)} provided "
-                    "instead!"
-                )
-
-        params = self._get_model_params()
-        coef = params.model_params.coef
-        coef_leaf = jax.tree_util.tree_leaves(coef)[0]
-        if coef_leaf.ndim == 3:
-            n_neurons = coef_leaf.shape[1]
-        else:
-            n_neurons = 1
-
-        dof_intercept_and_hmm = (
-            self._n_states * n_neurons  # intercept
-            + (
-                self._n_states - 1
-            )  # init prob (n values but sum to 1, so n-1 free values)
-            + (self._n_states - 1) * self._n_states
-        )  # transition n n-dim vectors that sum to 1
-
-        # if the regularizer is lasso use the non-zero
-        # coef as an estimate of the dof
-        # see https://arxiv.org/abs/0712.0881
-        if isinstance(self.regularizer, (GroupLasso, Lasso)):
-            resid_dof = sum(
-                pytree_map_and_reduce(
-                    lambda x: ~jnp.isclose(x, jnp.zeros_like(x)),
-                    lambda x: sum([jnp.sum(i, axis=0) for i in x]),
-                    coef,
-                )
-            )
-            return n_samples - resid_dof - dof_intercept_and_hmm
-        elif isinstance(self.regularizer, Ridge):
-            # for Ridge, use the tot parameters (X.shape[1] + intercept)
-            return (
-                n_samples - (X.shape[1] * self.n_states) - dof_intercept_and_hmm
-            ) * jnp.ones(n_neurons)
-        else:
-            # for UnRegularized, use the rank
-            rank = jnp.linalg.matrix_rank(X)
-            return (n_samples - rank - dof_intercept_and_hmm) * jnp.ones(n_neurons)
 
     def _simulate(
         self,
@@ -1430,9 +1354,9 @@ class GLMHMM(
 
         Persists hyperparameters returned by :meth:`get_params` together with the
         fitted attributes (``coef_``, ``intercept_``, ``scale_``, ``initial_prob_``,
-        ``transition_prob_``, ``dof_resid_``). The ``solver_state_`` is intentionally
-        excluded as it is solver-specific and not needed to reuse the fitted model.
-        The file can be reloaded with :func:`nemos.load_model`.
+        ``transition_prob_``). The ``solver_state_`` is intentionally excluded as it
+        is solver-specific and not needed to reuse the fitted model. The file can be
+        reloaded with :func:`nemos.load_model`.
 
         If the model was configured with custom initialization functions, pass them
         back to :func:`nemos.load_model` via ``mapping_dict`` to restore them (see
@@ -1535,11 +1459,10 @@ class GLMHMM(
 
         Performs one E-step / M-step pair starting from the supplied parameters and
         EM state, updates the model's fitted attributes (``coef_``, ``intercept_``,
-        ``scale_``, ``initial_prob_``, ``transition_prob_``, ``solver_state_``,
-        ``dof_resid_``) in place, and returns the updated parameter tuple and EM
-        state. Intended for callers that need fine-grained control over EM
-        iteration (e.g. checkpointing, custom convergence criteria) instead of the
-        bundled :meth:`fit` loop.
+        ``scale_``, ``initial_prob_``, ``transition_prob_``, ``solver_state_``) in
+        place, and returns the updated parameter tuple and EM state. Intended for
+        callers that need fine-grained control over EM iteration (e.g. checkpointing,
+        custom convergence criteria) instead of the bundled :meth:`fit` loop.
 
         :meth:`initialize_optimizer_and_state` must be called first so that the EM
         step function and initial ``opt_state`` are available.
@@ -1635,9 +1558,6 @@ class GLMHMM(
         # persist
         self._set_model_params(updated_params)
         self.solver_state_ = updated_state
-        self.dof_resid_ = self._estimate_resid_degrees_of_freedom(
-            data, n_samples=n_samples
-        )
 
         return self._validator.from_model_params(updated_params), updated_state
 

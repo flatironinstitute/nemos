@@ -75,7 +75,6 @@ def test_get_fit_attrs(instantiate_base_regressor_subclass, mock_glm_hmm_optimiz
     fixture = instantiate_base_regressor_subclass
     expected_state = {
         "coef_": None,
-        "dof_resid_": None,
         "initial_prob_": None,
         "intercept_": None,
         "scale_": None,
@@ -95,7 +94,6 @@ def test_get_fit_attrs(instantiate_base_regressor_subclass, mock_glm_hmm_optimiz
     assert jnp.allclose(state["initial_prob_"].sum(), 1.0)
     assert state["transition_prob_"].shape == (N_STATES, N_STATES)
     assert jnp.allclose(state["transition_prob_"].sum(axis=-1), jnp.ones(N_STATES))
-    assert float(jnp.squeeze(state["dof_resid_"])) > 0
     # mock returns SimpleNamespace(iterations=1, converged=True)
     assert state["solver_state_"].iterations == 1
     assert state["solver_state_"].converged is True
@@ -158,7 +156,6 @@ class TestGLMHMM:
         assert jnp.allclose(state["initial_prob_"].sum(), 1.0)
         assert state["transition_prob_"].shape == (N_STATES, N_STATES)
         assert jnp.allclose(state["transition_prob_"].sum(axis=-1), jnp.ones(N_STATES))
-        assert float(jnp.squeeze(state["dof_resid_"])) > 0
         assert isinstance(state["solver_state_"], EMState)
 
         # Providing an extra session boundary changes the M-step for initial_prob.
@@ -1003,50 +1000,6 @@ class TestValidationSequence:
         fitted_model.simulate(jax.random.key(0), glm_hmm_data["X"])
 
         assert order == VALIDATION_SEQUENCE
-
-
-# ---------------------------------------------------------------------------
-# TestEstimateResidDegreesOfFreedom — exceptions and Lasso branch
-# ---------------------------------------------------------------------------
-
-
-class TestEstimateResidDegreesOfFreedom:
-    """Cover the exception path and Lasso dof branch of _estimate_resid_degrees_of_freedom."""
-
-    def test_non_int_n_samples_raises(self, glm_hmm_data, mock_glm_hmm_optimizer_run):
-        model = GLMHMM(n_states=glm_hmm_data["n_states"])
-        model.fit(
-            glm_hmm_data["X"],
-            glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
-        )
-        with pytest.raises(
-            TypeError, match="`n_samples` must either `None` or of type `int`"
-        ):
-            model._estimate_resid_degrees_of_freedom(glm_hmm_data["X"], n_samples="bad")
-
-    def test_lasso_dof_uses_nonzero_coef(
-        self, glm_hmm_data, mock_glm_hmm_optimizer_run
-    ):
-        """Lasso branch estimates dof from non-zero coef entries."""
-        model = GLMHMM(
-            n_states=glm_hmm_data["n_states"],
-            regularizer="Lasso",
-            solver_name="ProximalGradient",
-            regularizer_strength=1.0,
-        )
-        model.fit(
-            glm_hmm_data["X"],
-            glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
-        )
-        # Noop optimizer leaves coef at zeros → resid_dof=0.
-        # dof_intercept_and_hmm = n_states*1 + (n_states-1) + (n_states-1)*n_states = 3+2+6 = 11
-        n_states = glm_hmm_data["n_states"]
-        n_samples = glm_hmm_data["X"].shape[0]
-        dof_intercept_and_hmm = n_states + (n_states - 1) + (n_states - 1) * n_states
-        expected = n_samples - 0 - dof_intercept_and_hmm
-        assert model.dof_resid_ == expected
 
 
 # ---------------------------------------------------------------------------

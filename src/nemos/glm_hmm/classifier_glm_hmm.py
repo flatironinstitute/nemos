@@ -120,8 +120,6 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
         State of the solver after fitting. May include details like optimization error.
     scale_ :
         Scale parameter for the observation model, shape ``(n_states,)``.
-    dof_resid_ :
-        Degrees of freedom for the residuals.
 
     Notes
     -----
@@ -309,7 +307,7 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
         consecutive iterations falls below ``tol`` or ``maxiter`` is reached.
         Fitted parameters are exposed on the instance as ``coef_``, ``intercept_``,
         ``scale_``, ``initial_prob_``, ``transition_prob_``, plus
-        ``solver_state_`` (EM trace) and ``dof_resid_``.
+        ``solver_state_`` (EM trace).
 
         How parameters are initialized:
 
@@ -852,11 +850,10 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
 
         Performs one E-step / M-step pair starting from the supplied parameters and
         EM state, updates the model's fitted attributes (``coef_``, ``intercept_``,
-        ``scale_``, ``initial_prob_``, ``transition_prob_``, ``solver_state_``,
-        ``dof_resid_``) in place, and returns the updated parameter tuple and EM
-        state. Intended for callers that need fine-grained control over EM
-        iteration (e.g. checkpointing, custom convergence criteria) instead of the
-        bundled :meth:`fit` loop.
+        ``scale_``, ``initial_prob_``, ``transition_prob_``, ``solver_state_``) in
+        place, and returns the updated parameter tuple and EM state. Intended for
+        callers that need fine-grained control over EM iteration (e.g. checkpointing,
+        custom convergence criteria) instead of the bundled :meth:`fit` loop.
 
         :meth:`initialize_optimizer_and_state` must be called first so that the EM
         step function and initial ``opt_state`` are available.
