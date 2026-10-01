@@ -5,6 +5,7 @@ from __future__ import annotations
 import abc
 import copy
 import inspect
+import numbers
 import re
 from collections import OrderedDict
 from functools import wraps
@@ -873,7 +874,9 @@ class ConvBasisMixin:
         if window_size is None:
             raise ValueError("You must provide a window_size!")
 
-        elif not (isinstance(window_size, int) and window_size > 0):
+        # accept any integer type, including numpy integers such as the
+        # entries of ``np.arange``, which are common in cross-validation grids.
+        elif not (isinstance(window_size, numbers.Integral) and window_size > 0):
             raise ValueError(
                 f"`window_size` must be a positive integer. {window_size} provided instead!"
             )

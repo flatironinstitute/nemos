@@ -1123,12 +1123,50 @@ class TestConvBasis:
                 1.5,
                 pytest.raises(ValueError, match="`window_size` must be a positive "),
             ),
+            (np.int64(5), does_not_raise()),
+            (np.int32(5), does_not_raise()),
+            (np.uint16(5), does_not_raise()),
+            (
+                np.int64(-1),
+                pytest.raises(
+                    ValueError, match="`window_size` must be a positive integer"
+                ),
+            ),
+            (
+                np.float64(5.0),
+                pytest.raises(
+                    ValueError, match="`window_size` must be a positive integer"
+                ),
+            ),
         ],
     )
     def test_init_window_size(self, ws, expectation, cls):
         extra = dict(n_basis_funcs=5) if cls != HistoryConv else {}
         with expectation:
             cls(**extra, window_size=ws, **extra_kwargs(cls, 5))
+
+    @pytest.mark.parametrize("ws", list(np.arange(10, 21, 5)))
+    def test_numpy_integer_window_size(self, ws, cls):
+        # numpy integers (e.g. from np.arange when building a CV grid) are
+        # valid window sizes, both at init and through set_params.
+        n_basis = 5 if cls != HistoryConv else int(ws)
+        extra = dict(n_basis_funcs=5) if cls != HistoryConv else {}
+        bas = cls(**extra, window_size=ws, **extra_kwargs(cls, 5))
+        bas._set_kernel()
+        assert bas.kernel_.shape == (ws, n_basis)
+        out = bas.compute_features(np.random.normal(size=50))
+        assert out.shape == (50, n_basis)
+
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            window_size=8,
+            **extra_kwargs(cls, 5),
+        )
+        bas.set_params(window_size=ws)
+        assert bas.window_size == ws
+        bas._set_kernel()
+        assert bas.kernel_.shape[0] == ws
 
     def test_set_bounds(self, cls):
         kwargs = (

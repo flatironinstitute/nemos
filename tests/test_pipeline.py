@@ -52,6 +52,27 @@ def test_sklearn_transformer_pipeline_cv(
     gridsearch.fit(X[:, : bas._n_inputs] ** 2, y)
 
 
+@pytest.mark.parametrize(
+    "bas",
+    [
+        basis.BSplineConv(5, window_size=10),
+        basis.RaisedCosineLogConv(5, window_size=10),
+        basis.HistoryConv(window_size=10),
+    ],
+)
+def test_sklearn_gridsearch_numpy_window_size(
+    bas, poissonGLM_model_instantiation, mock_glm_fit
+):
+    # a grid built with np.arange holds numpy integers, not python ints
+    X, y, model, _, _ = poissonGLM_model_instantiation
+    bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_inputs))
+    pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
+    param_grid = dict(basis__window_size=np.arange(10, 31, 10))
+    gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv=3, error_score="raise")
+    gridsearch.fit(X[:, : bas._n_inputs], y)
+    assert gridsearch.best_params_["basis__window_size"] in (10, 20, 30)
+
+
 def test_sklearn_cv_clone(population_poissonGLM_model_instantiation, mock_glm_fit):
     X, y, model, _, _ = population_poissonGLM_model_instantiation
     bas = basis.CyclicBSplineEval(5)
