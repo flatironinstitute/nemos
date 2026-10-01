@@ -394,7 +394,7 @@ optical physiology
 ```
 
 Often used with:<br>
-LFP and optical physiology.
+LFP and optical physiology
 :::
 :::{grid-item-card} `Bernoulli`
 :class-card: catalogue-card
@@ -443,7 +443,7 @@ multiple-choices
 ```{rubric} Regularizers
 ```
 
-Swapping one for another is a single argument: `regularizer="Ridge"`, with a `regularizer_strength` to set how hard it bites. {class}`UnRegularized <nemos.regularizer.UnRegularized>` is the default, and each of the others is drawn below as the set of coefficients it admits.
+Swapping one for another is a single argument: `regularizer="Ridge"`.
 
 
 ::::{grid} 2 3 6 6
@@ -467,6 +467,8 @@ Swapping one for another is a single argument: `regularizer="Ridge"`, with a `re
    :class: only-dark
 ```
 
+Promotes:<br>
+shrinkage
 :::
 :::{grid-item-card} `Lasso`
 :class-card: catalogue-card
@@ -485,6 +487,8 @@ Swapping one for another is a single argument: `regularizer="Ridge"`, with a `re
    :class: only-dark
 ```
 
+Promotes:<br>
+sparsity
 :::
 :::{grid-item-card} `GroupLasso`
 :class-card: catalogue-card
@@ -503,6 +507,8 @@ Swapping one for another is a single argument: `regularizer="Ridge"`, with a `re
    :class: only-dark
 ```
 
+Promotes:<br>
+group sparsity
 :::
 :::{grid-item-card} `ElasticNet`
 :class-card: catalogue-card
@@ -521,6 +527,8 @@ Swapping one for another is a single argument: `regularizer="Ridge"`, with a `re
    :class: only-dark
 ```
 
+Promotes:<br>
+sparsity and shrinkage
 :::
 
 ::::

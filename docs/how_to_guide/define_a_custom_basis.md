@@ -8,6 +8,11 @@ kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
   name: python3
+nemos_tags:
+  model: []
+  observation_model: []
+  signal: [continuous]
+  data: simulated
 ---
 
 # How to Define A Custom Basis Class

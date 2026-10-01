@@ -9,6 +9,11 @@ kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
   name: python3
+nemos_tags:
+  model: [GLMHMM]
+  observation_model: [Bernoulli]
+  signal: [behavior-choices]
+  data: recorded
 ---
 
 # Infer behavioral strategies during decision making with GLM-HMMs

@@ -433,7 +433,7 @@ def _penalty_ball(radius, edges=(), figsize=(3, 3)):
         y,
         z,
         # Green, against the orange of the distributions in the grid above.
-        color=PASTEL[GREEN],
+        color=PASTEL[ORANGE],
         alpha=0.55,
         linewidth=0,
         shade=False,
@@ -522,8 +522,8 @@ _DENSITY_FIGSIZE = (4, 2.6)
 def _plot_pmf(support, probabilities):
     """A discrete distribution, as a stem for each outcome it puts mass on."""
     fig, ax = _blank_axes(figsize=_DENSITY_FIGSIZE, keep={"bottom"})
-    ax.vlines(support, 0, probabilities, color=ORANGE, lw=3)
-    ax.plot(support, probabilities, "o", color=ORANGE, ms=7)
+    ax.vlines(support, 0, probabilities, color=GREEN, lw=3)
+    ax.plot(support, probabilities, "o", color=GREEN, ms=7)
     # Half an outcome of margin, so the stems at either end of a short support
     # are not drawn on the edge of the axes.
     ax.set_xlim(support[0] - 0.6, support[-1] + 0.6)
@@ -534,8 +534,8 @@ def _plot_pmf(support, probabilities):
 def _plot_pdf(x, density):
     """A continuous distribution, as a filled curve."""
     fig, ax = _blank_axes(figsize=_DENSITY_FIGSIZE, keep={"bottom"})
-    ax.fill_between(x, density, color=PASTEL[ORANGE])
-    ax.plot(x, density, color=ORANGE, lw=3)
+    ax.fill_between(x, density, color=PASTEL[GREEN])
+    ax.plot(x, density, color=GREEN, lw=3)
     ax.set_xlim(x[0], x[-1])
     ax.set_ylim(0, density.max() * 1.18)
     fig.subplots_adjust(left=0.03, right=0.97, top=0.97, bottom=0.06)

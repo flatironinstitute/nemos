@@ -8,6 +8,11 @@ kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
   name: python3
+nemos_tags:
+  model: [ClassifierGLM]
+  observation_model: [Categorical]
+  signal: [behavior-choices]
+  data: simulated
 ---
 
 # Fit GLM for Classification

@@ -8,6 +8,11 @@ kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
   name: python3
+nemos_tags:
+  model: [PopulationGLM]
+  observation_model: [Poisson]
+  signal: [spike-counts]
+  data: simulated
 ---
 
 # Fit GLMs For Neural Coupling

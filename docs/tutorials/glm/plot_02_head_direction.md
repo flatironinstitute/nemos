@@ -8,6 +8,11 @@ kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
   name: python3
+nemos_tags:
+  model: [GLM, PopulationGLM]
+  observation_model: [Poisson]
+  signal: [spike-counts]
+  data: recorded
 ---
 
 ```{code-cell} ipython3
