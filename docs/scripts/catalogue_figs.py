@@ -321,7 +321,7 @@ def plot_basis_scheme_thumbnail():
             fig.text(
                 middle,
                 height + 0.09,
-                "exp",
+                "f(x)",
                 ha="center",
                 va="bottom",
                 fontsize=13,

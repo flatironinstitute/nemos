@@ -103,7 +103,7 @@ Citation Guide
 ```
 
 
-Encoding models for single neurons and populations.
+For single neurons and populations, with swappable components.
 :::::
 
 :::::{grid-item-card} __Basis functions__
@@ -142,7 +142,7 @@ B-splines, raised cosines, Fourier, and many more.
 ```
 
 
-Encoding models for non-stationary responses.
+For non-stationary responses.
 :::::
 
 :::::{grid-item}
