@@ -183,6 +183,8 @@ model = nmo.glm.PopulationGLM(
     regularizer_strength=0.1,
     solver_kwargs={"linear_solver": "identity_shift"},
 )
+```
+:::
 
 If we print the model coefficients, we can see the effect of the mask.
 
