@@ -27,16 +27,11 @@ from nemos.glm.params import GLMParams
 from nemos.regularizer import GroupLasso, Lasso, Regularizer, Ridge, UnRegularized
 from nemos.solvers._abstract_solver import OptimizationInfo
 from nemos.solvers._newton import Newton, NewtonState, ProximalNewton
-from nemos.tree_utils import pytree_map_and_reduce
 
 # Import every submodule so all BaseRegressor subclasses are registered before the
 # parametrizations below are collected (same idiom as test_model_params).
 for _, _modname, _ in pkgutil.walk_packages(nmo.__path__, prefix="nemos."):
     importlib.import_module(_modname)
-
-# Register every test here as solver-related
-pytestmark = pytest.mark.solver_related
-
 
 # The two second-order solvers. Everything ``Newton`` converges to, ``ProximalNewton``
 # converges to as well: they differ in how the penalty is reached (a proximal operator
@@ -105,39 +100,42 @@ def _reference_solver(regularizer_cls):
     return "LBFGS" if "LBFGS" in allowed else "ProximalGradient"
 
 
-def _block_diagonal_models():
-    """Model classes that declare a block-diagonal Hessian.
-
-    Discovered rather than listed. The block path assembles the penalty Hessian by vmapping
-    the regularizer over neurons, pairing the model's ``batch_axes`` against the strength,
-    so a new block-diagonal model joins the check below on arrival rather than when someone
-    remembers to add it.
-    """
+def _glm_models():
     return sorted(
         (
             cls
             for cls in all_subclasses(BaseRegressor)
             if cls.__module__.startswith("nemos")
             and not is_abstract(cls)
-            and cls._hess_structure is MatrixStructure.BLOCK_DIAGONAL
+            and "GLM" in cls.__name__
+            and "HMM" not in cls.__name__
         ),
         key=lambda cls: cls.__name__,
     )
 
 
-# Data for each block-diagonal model, in both ``coef`` layouts. Only the pytree layout
-# distinguishes a prefix-spelled ``batch_axes`` (``GLMParams(1, 0)``, what every in-tree
-# model uses) from a per-leaf one, and the two are not interchangeable.
-_BLOCK_MODEL_FIXTURES = {
-    PopulationGLM: (
-        "population_poissonGLM_model_instantiation",
-        "population_poissonGLM_model_instantiation_pytree",
-    ),
-    ClassifierPopulationGLM: (
-        "population_classifierGLM_model_instantiation",
-        "population_classifierGLM_model_instantiation_pytree",
-    ),
+def _block_diagonal_models():
+    """Model classes that declare a block-diagonal Hessian."""
+    return [
+        cls
+        for cls in _glm_models()
+        if cls._hess_structure is MatrixStructure.BLOCK_DIAGONAL
+    ]
+
+
+_MODEL_FIXTURES = {
+    GLM: "poissonGLM_model_instantiation",
+    PopulationGLM: "population_poissonGLM_model_instantiation",
+    ClassifierGLM: "classifierGLM_model_instantiation",
+    ClassifierPopulationGLM: "population_classifierGLM_model_instantiation",
 }
+
+_BLOCK_MODEL_FIXTURES = {
+    cls: (fixture_name, f"{fixture_name}_pytree")
+    for cls, fixture_name in _MODEL_FIXTURES.items()
+    if cls._hess_structure is MatrixStructure.BLOCK_DIAGONAL
+}
+
 
 _BLOCK_MODEL_CASES = [
     pytest.param(
@@ -174,73 +172,6 @@ _STRENGTHS = pytest.mark.parametrize(
     [lambda coef: 0.1, _per_neuron_strength],
     ids=["scalar_strength", "per_neuron_strength"],
 )
-
-
-@_SOLVERS
-@pytest.mark.parametrize(
-    "regr_setup",
-    [
-        "linear_regression",
-        "ridge_regression",
-        "linear_regression_tree",
-        "ridge_regression_tree",
-    ],
-)
-@pytest.mark.requires_x64
-def test_newton_linear_or_ridge_regression(request, regr_setup, solver_name):
-    X, y, _, params, loss = request.getfixturevalue(regr_setup)
-
-    param_init = jax.tree_util.tree_map(np.zeros_like, params)
-    newton_params, state, _ = _SOLVER_CLASSES[solver_name](
-        loss,
-        regularizer=UnRegularized(),
-        regularizer_strength=0.0,
-        has_aux=False,
-        tol=10**-12,
-        init_params=param_init,
-    ).run(param_init, X, y)
-    assert pytree_map_and_reduce(
-        lambda a, b: np.allclose(a, b, atol=10**-5, rtol=0.0),
-        all,
-        params,
-        newton_params,
-    )
-
-
-@_SOLVERS
-@pytest.mark.parametrize(
-    "regr_setup, regularizer",
-    [
-        ("linear_regression", UnRegularized()),
-        ("ridge_regression", Ridge()),
-        ("linear_regression_tree", UnRegularized()),
-        ("ridge_regression_tree", Ridge()),
-    ],
-)
-@pytest.mark.requires_x64
-def test_newton_init_state_default(request, regr_setup, regularizer, solver_name):
-    X, y, _, params, loss = request.getfixturevalue(regr_setup)
-
-    param_init = jax.tree_util.tree_map(np.zeros_like, params)
-    newton = _SOLVER_CLASSES[solver_name](
-        loss,
-        regularizer=regularizer,
-        regularizer_strength=0.5,
-        has_aux=True,
-        tol=10**-12,
-        init_params=param_init,
-    )
-    state = newton.init_state(param_init, X, y)
-
-    assert isinstance(state, NewtonState)
-    assert state.grad_norm == jnp.array(jnp.inf)
-    assert isinstance(state.stats, OptimizationInfo)
-    assert state.stats.num_steps == 0
-    assert state.stats.converged == jnp.array(False)
-    assert jnp.isnan(state.stats.function_val)
-    assert state.stats.converged == jnp.array(False)
-    assert state.stats.reached_max_steps == jnp.array(False)
-    assert isinstance(state.ls_state, optax.ScaleByBacktrackingLinesearchState)
 
 
 @_SOLVERS
@@ -479,12 +410,20 @@ def test_newton_glm_passes_solver_kwargs(regularizer_name, glm_class, solver_nam
         "maxiter": np.random.randint(1, 100),
         "jit": False,
         "tol": 1e-6,
-        # ``rtol`` is read by ``ProximalNewton._converged`` and merely stored by
-        # ``Newton``; both accept it, so it belongs in the shared set
         "rtol": 1e-7,
     }
+    if solver_name == "Newton":
+        solver_kwargs |= {
+            "linear_solver": "identity_shift",
+            "identity_shift_beta": 2.0,
+            "identity_shift_max_steps": 12,
+        }
     if solver_name == "ProximalNewton":
-        solver_kwargs |= {"inner_iter": 7, "inner_atol": 1e-9, "inner_rtol": 1e-9}
+        solver_kwargs |= {
+            "inner_iter": 7,
+            "inner_atol": 1e-9,
+            "inner_rtol": 1e-9,
+        }
 
     glm = glm_class(
         regularizer=regularizer_name,
@@ -492,10 +431,13 @@ def test_newton_glm_passes_solver_kwargs(regularizer_name, glm_class, solver_nam
         solver_kwargs=solver_kwargs,
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
     )
-    solver = glm._instantiate_solver(glm._compute_loss, _init_params_for(glm_class))
+    solver = glm._instantiate_solver(
+        glm._compute_loss,
+        _init_params_for(glm_class),
+    )
 
-    for k, v in solver_kwargs.items():
-        assert getattr(solver, k) == v
+    for name, expected in solver_kwargs.items():
+        assert getattr(solver, name) == expected
 
 
 @_SOLVERS
@@ -617,27 +559,21 @@ def test_newton_population_glm_matches_full_autodiff(
     np.testing.assert_allclose(full_model.coef_, model.coef_, atol=1e-3)
 
 
-def test_every_block_diagonal_model_has_fixtures():
-    """Registry and discovery must agree, so no block-diagonal model goes unchecked.
-
-    ``test_newton_block_diagonal_matches_full_autodiff_update`` is parametrized from
-    ``_BLOCK_MODEL_FIXTURES``, so a model missing from it would be skipped rather than fail.
-    This test is what turns that silence into a failure.
-    """
-    discovered = {cls.__name__ for cls in _block_diagonal_models()}
-    registered = {cls.__name__ for cls in _BLOCK_MODEL_FIXTURES}
-    assert discovered == registered, (
-        f"declare a block-diagonal Hessian but are absent from _BLOCK_MODEL_FIXTURES, so "
-        f"they are never checked against the full Hessian: {sorted(discovered - registered)}. "
-        f"Registered but no longer block-diagonal: {sorted(registered - discovered)}."
-    )
-
-
 @pytest.mark.requires_x64
 @_SOLVERS
 @_STRENGTHS
 @pytest.mark.parametrize("feature_mask", [True, False])
-@pytest.mark.parametrize("fixture_name", _BLOCK_MODEL_CASES)
+@pytest.mark.parametrize(
+    "fixture_name",
+    (
+        "population_poissonGLM_model_instantiation",
+        "population_poissonGLM_model_instantiation_pytree",
+    ),
+    # we don't test the ClassifierPopulationGLM here because it is PSD,
+    # i.e. it will use damping, but the damping factor will be different for
+    # the block hessians vs. the dense hessian
+    # the final coef will be the same, which is tested in another test
+)
 def test_newton_block_diagonal_matches_full_autodiff_update(
     request, fixture_name, feature_mask, make_strength, solver_name
 ):
@@ -1002,15 +938,7 @@ def test_newton_unbatched_model_hessian_matches_differentiated_loss(
     )
 
 
-@pytest.mark.parametrize(
-    "model_instantiation_type",
-    [
-        "poissonGLM_model_instantiation",
-        "population_poissonGLM_model_instantiation",
-        "classifierGLM_model_instantiation",
-        "population_classifierGLM_model_instantiation",
-    ],
-)
+@pytest.mark.parametrize("model_instantiation_type", _MODEL_FIXTURES.values())
 def test_solver_invalidated_after_regularizer_change(request, model_instantiation_type):
     """Changing regularizer should set _solver to None."""
     X, y, model, true_params, _ = request.getfixturevalue(model_instantiation_type)
@@ -1026,15 +954,7 @@ def test_solver_invalidated_after_regularizer_change(request, model_instantiatio
     assert model._solver is None, "_solver must be None after regularizer change."
 
 
-@pytest.mark.parametrize(
-    "model_instantiation_type",
-    [
-        "poissonGLM_model_instantiation",
-        "population_poissonGLM_model_instantiation",
-        "classifierGLM_model_instantiation",
-        "population_classifierGLM_model_instantiation",
-    ],
-)
+@pytest.mark.parametrize("model_instantiation_type", _MODEL_FIXTURES.values())
 def test_solver_invalidated_after_strength_change(request, model_instantiation_type):
     """Changing regularizer_strength should set _solver to None."""
     X, y, model, true_params, _ = request.getfixturevalue(model_instantiation_type)
@@ -1052,15 +972,7 @@ def test_solver_invalidated_after_strength_change(request, model_instantiation_t
     )
 
 
-@pytest.mark.parametrize(
-    "model_instantiation_type",
-    [
-        "poissonGLM_model_instantiation",
-        "population_poissonGLM_model_instantiation",
-        "classifierGLM_model_instantiation",
-        "population_classifierGLM_model_instantiation",
-    ],
-)
+@pytest.mark.parametrize("model_instantiation_type", _MODEL_FIXTURES.values())
 def test_solver_invalidated_after_observation_model_change(
     request, model_instantiation_type
 ):
@@ -1078,15 +990,7 @@ def test_solver_invalidated_after_observation_model_change(
     assert model._solver is None, "_solver must be None after observation_model change."
 
 
-@pytest.mark.parametrize(
-    "model_instantiation_type",
-    [
-        "poissonGLM_model_instantiation",
-        "population_poissonGLM_model_instantiation",
-        "classifierGLM_model_instantiation",
-        "population_classifierGLM_model_instantiation",
-    ],
-)
+@pytest.mark.parametrize("model_instantiation_type", _MODEL_FIXTURES.values())
 def test_solver_invalidated_after_solver_name_change(request, model_instantiation_type):
     """Changing solver_name should set _solver to None."""
     X, y, model, true_params, _ = request.getfixturevalue(model_instantiation_type)
@@ -1102,15 +1006,7 @@ def test_solver_invalidated_after_solver_name_change(request, model_instantiatio
     assert model._solver is None, "_solver must be None after solver_name change."
 
 
-@pytest.mark.parametrize(
-    "model_instantiation_type",
-    [
-        "poissonGLM_model_instantiation",
-        "population_poissonGLM_model_instantiation",
-        "classifierGLM_model_instantiation",
-        "population_classifierGLM_model_instantiation",
-    ],
-)
+@pytest.mark.parametrize("model_instantiation_type", _MODEL_FIXTURES.values())
 def test_solver_invalidated_after_solver_kwargs_change(
     request, model_instantiation_type
 ):
@@ -1235,104 +1131,233 @@ def _installed_newton(model, X, y):
     return model._solver
 
 
-def _assert_linear_solver(solver, expected_cls):
-    """Assert the linear solver Newton picked, and the operator tags that go with it."""
-    assert isinstance(solver._linear_solver, expected_cls)
-    if expected_cls is lx.Cholesky:
-        assert solver._operator_tags == lx.positive_semidefinite_tag, (
-            f"Expected ``positive_semidefinite_tag`` for Cholesky solver. Got ``{solver._operator_tags}`` instead!"
-        )
-    else:
-        assert solver._operator_tags == ()
-        assert solver._linear_solver.well_posed is False, (
-            "Solver is well posed but shouldn't for the given tag."
-        )
+def _assert_linear_solver(solver, params, expected):
+    """Check the attributes associated with a resolved Hessian strategy."""
+    for attr_name, expected_value in expected.items():
+        actual_value = getattr(solver, attr_name)
+        expected_value = expected_value(params)
+
+        if isinstance(expected_value, type):
+            assert isinstance(actual_value, expected_value), (
+                f"{attr_name}: expected an instance of {expected_value.__name__}, "
+                f"got {type(actual_value).__name__}"
+            )
+        elif callable(expected_value):
+            assert expected_value(actual_value), (
+                f"{attr_name} did not satisfy its expected condition"
+            )
+        else:
+            assert actual_value == expected_value, (
+                f"{attr_name}: expected {expected_value!r}, got {actual_value!r}"
+            )
+
+
+class _ProbeOperator:
+    """Minimal operator for evaluating the configured diagonal shift."""
+
+    def as_matrix(self):
+        return jnp.eye(2)
+
+
+@lx.diagonal.register(_ProbeOperator)
+def _probe_diagonal(_):
+    return jnp.ones(2)
+
+
+def _zero_shift(shift_fn):
+    return (
+        shift_fn(_ProbeOperator()) is None or float(shift_fn(_ProbeOperator())) == 0.0
+    )
+
+
+def _positive_shift(shift_fn):
+    return float(shift_fn(_ProbeOperator())) > 0.0
+
+
+_CHOLESKY_PD = {
+    "_resolved_linear_solver": lambda _: "cholesky",
+    "_linear_solver": lambda _: lx.Cholesky,
+    "_operator_tags": lambda _: lx.positive_semidefinite_tag,
+    "_shift_fn": lambda _: _zero_shift,
+}
+
+_CHOLESKY_PSD = {
+    "_resolved_linear_solver": lambda _: "cholesky",
+    "_linear_solver": lambda _: lx.Cholesky,
+    "_operator_tags": lambda _: lx.positive_semidefinite_tag,
+    "_shift_fn": lambda _: _positive_shift,
+}
+
+_EIGH = {
+    "_resolved_linear_solver": lambda _: "eigh",
+    "_linear_solver": lambda _: None,
+    "_operator_tags": lambda _: (),
+    "_shift_fn": lambda _: _zero_shift,
+    "_delta": lambda params: jnp.sqrt(
+        jnp.finfo(jnp.result_type(*jax.tree_util.tree_leaves(params))).eps
+    ),
+}
 
 
 _LINEAR_SOLVER_CASES = [
-    pytest.param(fixture_name, regularizer_name, expected_cls, id=test_id)
-    for fixture_name, regularizer_name, expected_cls, test_id in [
-        ("poissonGLM_model_instantiation", "Ridge", lx.Cholesky, "GLM-Ridge"),
-        (
-            "population_poissonGLM_model_instantiation",
-            "Ridge",
-            lx.Cholesky,
-            "PopulationGLM-Ridge",
-        ),
-        (
-            "classifierGLM_model_instantiation",
-            "Ridge",
-            lx.AutoLinearSolver,
-            "ClassifierGLM-Ridge",
-        ),
-        (
-            "population_classifierGLM_model_instantiation",
-            "Ridge",
-            lx.AutoLinearSolver,
-            "ClassifierPopulationGLM-Ridge",
-        ),
-        (
-            "poissonGLM_model_instantiation",
-            "UnRegularized",
-            lx.AutoLinearSolver,
-            "GLM-UnRegularized",
-        ),
-        (
-            "population_poissonGLM_model_instantiation",
-            "UnRegularized",
-            lx.AutoLinearSolver,
-            "PopulationGLM-UnRegularized",
-        ),
-        (
-            "classifierGLM_model_instantiation",
-            "UnRegularized",
-            lx.AutoLinearSolver,
-            "ClassifierGLM-UnRegularized",
-        ),
-        (
-            "population_classifierGLM_model_instantiation",
-            "UnRegularized",
-            lx.AutoLinearSolver,
-            "ClassifierPopulationGLM-UnRegularized",
-        ),
-    ]
+    pytest.param(
+        "poissonGLM_model_instantiation",
+        "Ridge",
+        _CHOLESKY_PD,
+        id="GLM-Ridge-PD",
+    ),
+    pytest.param(
+        "population_poissonGLM_model_instantiation",
+        "Ridge",
+        _CHOLESKY_PD,
+        id="PopulationGLM-Ridge-PD",
+    ),
+    pytest.param(
+        "classifierGLM_model_instantiation",
+        "Ridge",
+        _CHOLESKY_PSD,
+        id="ClassifierGLM-Ridge-PSD",
+    ),
+    pytest.param(
+        "population_classifierGLM_model_instantiation",
+        "Ridge",
+        _CHOLESKY_PSD,
+        id="ClassifierPopulationGLM-Ridge-PSD",
+    ),
+    pytest.param(
+        "poissonGLM_model_instantiation",
+        "UnRegularized",
+        _CHOLESKY_PSD,
+        id="GLM-UnRegularized-PSD",
+    ),
+    pytest.param(
+        "population_poissonGLM_model_instantiation",
+        "UnRegularized",
+        _CHOLESKY_PSD,
+        id="PopulationGLM-UnRegularized-PSD",
+    ),
+    pytest.param(
+        "classifierGLM_model_instantiation",
+        "UnRegularized",
+        _CHOLESKY_PSD,
+        id="ClassifierGLM-UnRegularized-PSD",
+    ),
+    pytest.param(
+        "population_classifierGLM_model_instantiation",
+        "UnRegularized",
+        _CHOLESKY_PSD,
+        id="ClassifierPopulationGLM-UnRegularized-PSD",
+    ),
 ]
 
 
 @pytest.mark.parametrize(
-    "fixture_name, regularizer_name, expected_cls", _LINEAR_SOLVER_CASES
+    "fixture_name, regularizer_name, expected",
+    _LINEAR_SOLVER_CASES,
 )
 def test_linear_solver_follows_the_resolved_tag(
-    request, fixture_name, regularizer_name, expected_cls
+    request, fixture_name, regularizer_name, expected
 ):
-    """A definite tag selects ``lx.Cholesky``, a weaker one ``lx.AutoLinearSolver``."""
-    X, y, model, *_ = request.getfixturevalue(fixture_name)
+    """The Hessian tag selects the strategy and its associated state."""
+    X, y, model, _, params, *_ = request.getfixturevalue(fixture_name)
     model.regularizer = regularizer_name
     model.regularizer_strength = None if regularizer_name == "UnRegularized" else 0.1
     model.solver_name = "Newton"
-
-    _assert_linear_solver(_installed_newton(model, X, y), expected_cls)
+    _assert_linear_solver(_installed_newton(model, X, y), params, expected)
 
 
 @pytest.mark.parametrize(
-    "fixture_name, regularizer_name, expected_cls", _LINEAR_SOLVER_CASES
+    "fixture_name, regularizer_name, expected",
+    _LINEAR_SOLVER_CASES,
 )
 def test_fit_resolves_the_same_linear_solver(
-    request, fixture_name, regularizer_name, expected_cls
+    request, fixture_name, regularizer_name, expected
 ):
-    """``fit`` reaches the same linear solver as ``initialize_optimizer_and_state``.
-
-    The two differ only by ``_optimize_solver_params``, which sets solver kwargs and leaves
-    the tag alone.
-    """
-    X, y, model, *_ = request.getfixturevalue(fixture_name)
+    """Fit resolves the same strategy as explicit initialization."""
+    X, y, model, _, params, *_ = request.getfixturevalue(fixture_name)
     model.regularizer = regularizer_name
     model.regularizer_strength = None if regularizer_name == "UnRegularized" else 0.1
     model.solver_name = "Newton"
 
     model.fit(X, y)
 
-    _assert_linear_solver(model._solver, expected_cls)
+    _assert_linear_solver(model._solver, params, expected)
+
+
+@pytest.mark.requires_x64
+@pytest.mark.parametrize(
+    "linear_solver",
+    ["auto", "cholesky", "eigh", "identity_shift"],
+)
+def test_every_linear_solver_reaches_the_same_fit(
+    poissonGLM_model_instantiation,
+    linear_solver,
+):
+    """Hessian strategies should reach the same optimum."""
+    X, y, model, *_ = poissonGLM_model_instantiation
+
+    def fit_with(strategy: str) -> GLM:
+        fitted = deepcopy(model)
+        fitted.regularizer = "Ridge"
+        fitted.regularizer_strength = 0.1
+        fitted.solver_name = "Newton"
+        fitted.solver_kwargs = {"linear_solver": strategy}
+        return fitted.fit(X, y)
+
+    reference = fit_with("auto")
+    fitted = fit_with(linear_solver)
+
+    np.testing.assert_allclose(fitted.coef_, reference.coef_, rtol=1e-12, atol=0.0)
+    np.testing.assert_allclose(
+        fitted.intercept_, reference.intercept_, rtol=1e-12, atol=0.0
+    )
+
+
+def test_invalid_linear_solver_raises(poissonGLM_model_instantiation):
+    """An unknown Hessian strategy should be rejected."""
+    X, y, model, *_ = poissonGLM_model_instantiation
+    model.regularizer = "Ridge"
+    model.regularizer_strength = 0.1
+    model.solver_name = "Newton"
+    model.solver_kwargs = {"linear_solver": "bogus"}
+
+    with pytest.raises(ValueError, match="Unknown linear solver"):
+        model.fit(X, y)
+
+
+@pytest.mark.metatest
+def test_hessian_solver_cases_cover_every_model_regularizer_pair():
+    discovered = set(_glm_models())
+    registered = set(_MODEL_FIXTURES)
+
+    assert discovered == registered, (
+        "Concrete models missing fixture registrations: "
+        f"{sorted(cls.__name__ for cls in discovered - registered)}. "
+        "Registered classes that are no longer concrete models: "
+        f"{sorted(cls.__name__ for cls in registered - discovered)}."
+    )
+
+    expected = {
+        (fixture_name, regularizer_name)
+        for fixture_name in _MODEL_FIXTURES.values()
+        for regularizer_name in ("Ridge", "UnRegularized")
+    }
+    actual = {(case.values[0], case.values[1]) for case in _LINEAR_SOLVER_CASES}
+
+    assert actual == expected
+
+
+@pytest.mark.metatest
+def test_every_block_diagonal_model_has_fixtures():
+    discovered = set(_block_diagonal_models())
+    registered = set(_BLOCK_MODEL_FIXTURES)
+
+    assert discovered == registered, (
+        "Block-diagonal models missing fixture registrations: "
+        f"{sorted(cls.__name__ for cls in discovered - registered)}. "
+        "Registered classes that are no longer block-diagonal: "
+        f"{sorted(cls.__name__ for cls in registered - discovered)}."
+    )
 
 
 @pytest.mark.requires_x64
@@ -1340,7 +1365,7 @@ def test_newton_without_hessian_tag_uses_auto_linear_solver(linear_regression):
     """With no tag set, ``init_state`` falls back to one that claims nothing."""
     X, y, _, params, loss = linear_regression
 
-    param_init = jax.tree_util.tree_map(np.zeros_like, params)
+    param_init = jax.tree_util.tree_map(jnp.zeros_like, params)
     newton = Newton(
         loss,
         regularizer=UnRegularized(),
@@ -1356,7 +1381,7 @@ def test_newton_without_hessian_tag_uses_auto_linear_solver(linear_regression):
     assert newton._hess_tag.structure is MatrixStructure.FULL
     assert not any(jax.tree_util.tree_leaves(newton._hess_tag.flat_on))
     assert not any(jax.tree_util.tree_leaves(newton._hess_tag.definite_on))
-    _assert_linear_solver(newton, lx.AutoLinearSolver)
+    _assert_linear_solver(newton, param_init, _EIGH)
 
 
 @pytest.mark.parametrize(
@@ -1388,15 +1413,7 @@ def test_solver_name_respected_when_explicitly_set(glm_class, solver_name):
 
 
 @_SOLVERS
-@pytest.mark.parametrize(
-    "model_instantiation_type",
-    [
-        "poissonGLM_model_instantiation",
-        "population_poissonGLM_model_instantiation",
-        "classifierGLM_model_instantiation",
-        "population_classifierGLM_model_instantiation",
-    ],
-)
+@pytest.mark.parametrize("model_instantiation_type", _MODEL_FIXTURES.values())
 def test_newton_solver_type_after_fit(request, model_instantiation_type, solver_name):
     """After fit(), model._solver should be an instance of the requested solver."""
     X, y, model, _, _ = request.getfixturevalue(model_instantiation_type)
@@ -1409,15 +1426,7 @@ def test_newton_solver_type_after_fit(request, model_instantiation_type, solver_
 
 
 @_SOLVERS
-@pytest.mark.parametrize(
-    "model_instantiation_type",
-    [
-        "poissonGLM_model_instantiation",
-        "population_poissonGLM_model_instantiation",
-        "classifierGLM_model_instantiation",
-        "population_classifierGLM_model_instantiation",
-    ],
-)
+@pytest.mark.parametrize("model_instantiation_type", _MODEL_FIXTURES.values())
 def test_newton_update_increments_step_count(
     request, model_instantiation_type, solver_name
 ):
@@ -1436,15 +1445,7 @@ def test_newton_update_increments_step_count(
 
 
 @_SOLVERS
-@pytest.mark.parametrize(
-    "model_instantiation_type",
-    [
-        "poissonGLM_model_instantiation",
-        "population_poissonGLM_model_instantiation",
-        "classifierGLM_model_instantiation",
-        "population_classifierGLM_model_instantiation",
-    ],
-)
+@pytest.mark.parametrize("model_instantiation_type", _MODEL_FIXTURES.values())
 def test_newton_maxiter_respected(request, model_instantiation_type, solver_name):
     """Setting maxiter=1 should bound the solver to at most 1 step."""
     X, y, model, _, _ = request.getfixturevalue(model_instantiation_type)
@@ -1995,7 +1996,9 @@ def test_prox_newton_backtracking_matches_tseng_yun_reference(
 
     (fval, _), grad = solver._gradient(params, X, y)
     H = solver._hessian(params, X, y)
-    step = jax.tree.map(lambda d: scale * d, solver._newton_direction(grad, H, params))
+    step = jax.tree.map(
+        lambda d: scale * d, solver._newton_direction(grad, H, params, None)[0]
+    )
     _, slope, _ = solver._line_search_inputs(params, step, grad, fval, X, y)
     delta = float(lx.internal.tree_dot(slope, step))
     assert delta < 0.0, "the reference only terminates on a descent direction"

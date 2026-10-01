@@ -1,8 +1,10 @@
 """Mixin providing the curvature machinery for second-order solvers."""
 
-from typing import Any, Callable, ClassVar, Optional
+import warnings
+from typing import Any, Callable, ClassVar, Literal, Optional
 
 import jax
+import jax.numpy as jnp
 import lineax as lx
 
 from .. import tree_utils
@@ -13,6 +15,11 @@ from .._hess import (
     combine_hessian_tags,
     mask_claim_none,
 )
+
+LinearSolverTag = Literal["auto", "cholesky", "eigh", "identity_shift"]
+ResolvedLinearSolverTag = Literal["cholesky", "eigh", "identity_shift"]
+
+VALID_SOLVERS = {"auto", "cholesky", "eigh", "identity_shift"}
 
 
 class HessianMixin:
@@ -37,8 +44,20 @@ class HessianMixin:
     # curvature here -- ``prox_elastic_net`` already applies the L2 rescale.
     _proximal: ClassVar[bool] = False
 
-    def _init_hessian(self, regularizer, regularizer_strength, init_params) -> None:
+    def _init_hessian(
+        self,
+        regularizer,
+        regularizer_strength,
+        init_params,
+        linear_solver: LinearSolverTag = "auto",
+    ) -> None:
         """Store what ``setup_hessian`` needs and default the resolved solver state."""
+        if linear_solver not in VALID_SOLVERS:
+            raise ValueError(
+                f"Unknown linear solver {linear_solver!r}. "
+                f"Expected one of {sorted(VALID_SOLVERS)}."
+            )
+
         self._regularizer = regularizer
         self._regularizer_strength = regularizer_strength
         self._init_params = init_params
@@ -46,9 +65,12 @@ class HessianMixin:
         self._hess_tag: HessianTag | None = None
         self._hessian: Callable | None = None
 
-        # Overwritten in _resolve_linear_solver once the tag is known.
-        self._linear_solver = lx.AutoLinearSolver(well_posed=False)
+        self.linear_solver: LinearSolverTag = linear_solver
+        self._resolved_linear_solver: ResolvedLinearSolverTag | None = None
+        # overwritten in _resolve_linear_solver once the tag is known
+        self._linear_solver: lx.AbstractLinearSolver | None = None
         self._operator_tags = ()
+        self._shift_fn: Callable | None = None
 
     def setup_hessian(
         self,
@@ -126,11 +148,7 @@ class HessianMixin:
         return penalized_hessian
 
     def _resolve_linear_solver(self, init_params) -> None:
-        """Pick the linear solver once, from the Hessian tag.
-
-        Cholesky for positive-definite Hessians, otherwise a robust least-squares solve
-        that tolerates rank deficiency.
-        """
+        """Resolve the Hessian solution strategy from the tag and user request."""
         if self._hess_tag is None:
             self._hess_tag = HessianTag(
                 structure=MatrixStructure.FULL,
@@ -139,14 +157,80 @@ class HessianMixin:
                 definite_on=mask_claim_none(init_params),
             )
 
-        if self._hess_tag.property is MatrixProperty.POSITIVE_DEFINITE:
+        positive_properties = {
+            MatrixProperty.POSITIVE_DEFINITE,
+            MatrixProperty.POSITIVE_SEMI_DEFINITE,
+        }
+        symmetric_properties = {
+            MatrixProperty.SYMMETRIC,
+            MatrixProperty.NEGATIVE_DEFINITE,
+            MatrixProperty.NEGATIVE_SEMI_DEFINITE,
+        }
+
+        matrix_property = self._hess_tag.property
+
+        if matrix_property not in positive_properties | symmetric_properties:
+            raise ValueError(
+                f"Hessian has unsupported matrix property: {matrix_property}"
+            )
+
+        requested = self.linear_solver
+
+        # Revalidate in case a caller changed the public field after construction
+        if requested not in VALID_SOLVERS:
+            raise ValueError(
+                f"Unknown linear solver {requested!r}. "
+                f"Expected one of {sorted(VALID_SOLVERS)}."
+            )
+
+        if requested == "auto":
+            resolved: ResolvedLinearSolverTag = (
+                "cholesky" if matrix_property in positive_properties else "eigh"
+            )
+        else:
+            resolved = requested
+
+        if resolved == "cholesky" and matrix_property not in positive_properties:
+            warnings.warn(
+                "linear_solver='cholesky' was requested, but the Hessian tag "
+                f"reports {matrix_property}. Cholesky generally requires a "
+                "positive-definite or positive-semidefinite Hessian. Proceeding "
+                "with Cholesky as requested; the solve may fail.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+
+        self._resolved_linear_solver = resolved
+
+        if resolved == "cholesky":
             self._linear_solver = lx.Cholesky()
             self._operator_tags = lx.positive_semidefinite_tag
-        else:
-            self._linear_solver = lx.AutoLinearSolver(well_posed=False)
-            self._operator_tags = ()
+            # Continue using the tag to distinguish the PSD and PD branches
+            if matrix_property is MatrixProperty.POSITIVE_SEMI_DEFINITE:
 
-    def _block_apply(self, fn, grad, H, other) -> Any:
+                def _compute_shift(operator):
+                    diagonal = lx.diagonal(operator)
+                    return (
+                        diagonal.size * jnp.finfo(diagonal.dtype).eps * diagonal.max()
+                    )
+
+                self._shift_fn = _compute_shift
+            else:
+                self._shift_fn = lambda _: None
+        elif resolved == "eigh":
+            self._linear_solver = None
+            self._operator_tags = ()
+            self._shift_fn = lambda _: 0.0
+            dtype = jnp.result_type(*jax.tree_util.tree_leaves(init_params))
+            self._delta = jnp.sqrt(jnp.finfo(dtype).eps)
+        else:
+            # Nocedal and Wright Algorithm 3.3: add tau * I until Cholesky
+            # succeeds. The actual retry loop runs in Newton._solve.
+            self._linear_solver = None
+            self._operator_tags = ()
+            self._shift_fn = lambda _: 0.0
+
+    def _block_apply(self, fn, grad, H, other, block_state=None) -> Any:
         """Apply ``fn(grad, H, other)`` once per Hessian block.
 
         The one place that reads ``_hess_tag`` for block structure, shared by the Newton
@@ -154,5 +238,27 @@ class HessianMixin:
         """
         if self._hess_tag.structure is MatrixStructure.BLOCK_DIAGONAL:
             axes = self._hess_tag.batch_axes
-            return jax.vmap(fn, in_axes=(axes, 0, axes), out_axes=axes)(grad, H, other)
+            if block_state is not None:
+                return jax.vmap(
+                    fn,
+                    in_axes=(axes, 0, axes, 0),
+                    out_axes=(axes, 0),
+                )(grad, H, other, block_state)
+            return jax.vmap(
+                fn,
+                in_axes=(axes, 0, axes),
+                out_axes=axes,
+            )(grad, H, other)
+        if block_state is not None:
+            return fn(grad, H, other, block_state)
         return fn(grad, H, other)
+
+    def _init_block_state(self, params, value: jax.Array) -> jax.Array:
+        """Broadcast a scalar to one value per Hessian block."""
+        if self._hess_tag.structure is MatrixStructure.BLOCK_DIAGONAL:
+            return jax.vmap(
+                lambda _: value,
+                in_axes=(self._hess_tag.batch_axes,),
+                out_axes=0,
+            )(params)
+        return value

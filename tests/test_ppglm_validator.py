@@ -2,7 +2,6 @@ from contextlib import nullcontext as does_not_raise
 from typing import Any, Optional, Union
 
 import equinox as eqx
-import jax
 import jax.numpy as jnp
 import numpy as np
 import pynapple as nap
@@ -11,7 +10,6 @@ import pytest
 from nemos.base_regressor import BaseRegressor
 from nemos.glm.params import GLMParams
 from nemos.pp_glm.data import PredictorsPPGLM, SpikesPPGLM
-from nemos.pp_glm.params import PPGLMParamsWithKey
 from nemos.pp_glm.validation import PopulationPPGLMValidator, PPGLMValidator
 from nemos.regularizer import Regularizer
 from nemos.typing import UserProvidedParamsT
@@ -120,7 +118,7 @@ class MockPPGLM(BaseRegressor):
 
     def _compute_loss(
         self,
-        params: PPGLMParamsWithKey,
+        params: GLMParams,
         X: PredictorsPPGLM,
         y: SpikesPPGLM,
         *args,
@@ -299,54 +297,6 @@ class TestPPGLMValidator:
         # should not raise if X is None
         params = validator.to_model_params((jnp.zeros(10), jnp.zeros(1)))
         validator.validate_consistency(params, X=None)
-
-    @pytest.mark.parametrize(
-        "key, dtype, expectation",
-        [
-            # valid uint32 PRNGKey
-            (
-                jax.random.PRNGKey(0),
-                jnp.uint32,
-                does_not_raise(),
-            ),
-            # valid float64 (pre-solver form)
-            (
-                None,
-                jnp.float64,
-                does_not_raise(),
-            ),
-            # wrong dtype for uint32 check: passing float64 when uint32 expected
-            (
-                None,
-                jnp.uint32,
-                pytest.raises(ValueError, match="uint32"),
-            ),
-            # wrong dtype for float64 check: passing uint32 when float64 expected
-            (
-                jax.random.PRNGKey(0),
-                jnp.float64,
-                pytest.raises(ValueError, match="float64"),
-            ),
-            # wrong shape
-            (
-                jnp.zeros(3, dtype=jnp.uint32),
-                jnp.uint32,
-                pytest.raises(ValueError, match="shape"),
-            ),
-            # scalar — wrong shape
-            (
-                jnp.array(0, dtype=jnp.uint32),
-                jnp.uint32,
-                pytest.raises(ValueError, match="shape"),
-            ),
-        ],
-    )
-    @pytest.mark.requires_x64
-    def test_validate_random_key(self, validator, key, dtype, expectation):
-        if key is None:
-            key = jax.random.PRNGKey(0).astype(jnp.float64)
-        with expectation:
-            validator.validate_random_key(key, dtype=dtype)
 
     @pytest.mark.parametrize(
         "time_series, expectation",

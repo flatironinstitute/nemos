@@ -11,7 +11,7 @@ from numpy.typing import ArrayLike, NDArray
 from .. import validation
 from ..base_validator import RegressorValidator
 from ..pytrees import FeaturePytree
-from ..tree_utils import pytree_map_and_reduce
+from ..tree_utils import pytree_map_and_reduce, tree_astype
 from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMParams, GLMUserParams
 
@@ -261,9 +261,7 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
             feature_mask = feature_mask.data
 
         # Convert values to jnp.asarray
-        feature_mask = jax.tree_util.tree_map(
-            lambda x: jnp.asarray(x, dtype=data_type), feature_mask
-        )
+        (feature_mask,) = tree_astype(feature_mask, dtype=data_type)
 
         if pytree_map_and_reduce(
             lambda x: jnp.any(jnp.logical_and(x != 0, x != 1)), any, feature_mask

@@ -55,9 +55,9 @@ def lnp_schematic(
     - Requires len(weights) == len(intercepts).
     - plot_nonlinear=False and plot_spikes=True will look weird.
     """
-    assert len(weights) == len(
-        intercepts
-    ), "weights and intercepts must have same length!"
+    assert len(weights) == len(intercepts), (
+        "weights and intercepts must have same length!"
+    )
 
     n_weights = len(weights)
     fig, axes = plt.subplots(
@@ -1180,9 +1180,9 @@ def plot_current_history_features(
     axes[1, 0].plot(features[:, 0])
     axes[1, 0].set_ylabel("Current")
     axes[0, 0].set_title("Feature 1")
-    axes[1, 1].plot(features[:, -1], f"C{basis.shape[1]-1}")
+    axes[1, 1].plot(features[:, -1], f"C{basis.shape[1] - 1}")
     axes[0, 1].plot(time, basis, alpha=0.1)
-    axes[0, 1].plot(time, basis[:, -1], f"C{basis.shape[1]-1}", alpha=1)
+    axes[0, 1].plot(time, basis[:, -1], f"C{basis.shape[1] - 1}", alpha=1)
     axes[0, 1].set_title(f"Feature {basis.shape[1]}")
     axes[0, 2].plot(time, basis)
     axes[1, 2].plot(features)
