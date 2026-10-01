@@ -14,7 +14,8 @@ green and blue of the palette are left exactly as they are.
 
 Labels sitting on a pastel fill are the exception: the fill stays light in the
 dark variant, so flipping their ink would leave white type on pale orange. Those
-keep the colour they had.
+keep the colour they had. Masks are a second exception: their greys are alpha,
+not ink, so flipping them would turn a soft-edged patch inside out.
 """
 
 import pathlib
@@ -29,9 +30,38 @@ DIAGRAMS = ("glm_hmm_graphical_model.svg", "lnp_model_colscheme.svg")
 CHROMA_TOLERANCE = 12
 
 HEX = re.compile(r"#([0-9a-fA-F]{6})\b")
+MASK = re.compile(r"<mask\b.*?</mask>", re.S)
+URL = re.compile(r"url\(#([^)]+)\)")
 CIRCLE = re.compile(r"<circle\b[^>]*>")
 TEXT = re.compile(r"<text\b[^>]*>")
 ATTR = re.compile(r'(\w[\w-]*)="([^"]*)"')
+
+
+def _alpha_spans(svg):
+    """Spans encoding transparency rather than ink: the masks and their paint."""
+    spans = []
+    for mask in MASK.finditer(svg):
+        spans.append(mask.span())
+        for ref in URL.findall(mask.group(0)):
+            paint = re.search(
+                rf"<(\w+)\b[^>]*\bid=\"{re.escape(ref)}\".*?</\1>", svg, re.S
+            )
+            if paint:
+                spans.append(paint.span())
+    return spans
+
+
+def _recolour(svg):
+    """Flip the greys, leaving the spans that drive a mask untouched."""
+    out, cursor = [], 0
+    for start, end in sorted(_alpha_spans(svg)):
+        if start < cursor:
+            continue
+        out.append(HEX.sub(_invert_if_grey, svg[cursor:start]))
+        out.append(svg[start:end])
+        cursor = end
+    out.append(HEX.sub(_invert_if_grey, svg[cursor:]))
+    return "".join(out)
 
 
 def _channels(value):
@@ -91,7 +121,7 @@ def main():
     for name in DIAGRAMS:
         source = ASSETS / name
         light = source.read_text()
-        dark = HEX.sub(_invert_if_grey, light)
+        dark = _recolour(light)
         dark = _restore_labels_on_pastel(light, dark)
         target = source.with_name(f"{source.stem}_dark.svg")
         target.write_text(dark)

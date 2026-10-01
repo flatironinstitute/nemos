@@ -333,6 +333,7 @@ The observation model can be swapped for any of these, with one exception: categ
    :class: only-dark
 ```
 
+Often used with spike counts.
 :::
 :::{grid-item-card} `NegativeBinomial`
 :class-card: catalogue-card
@@ -351,6 +352,7 @@ The observation model can be swapped for any of these, with one exception: categ
    :class: only-dark
 ```
 
+Often used with spike counts.
 :::
 :::{grid-item-card} `Gamma`
 :class-card: catalogue-card
@@ -387,6 +389,7 @@ The observation model can be swapped for any of these, with one exception: categ
    :class: only-dark
 ```
 
+Often used with LFP and optical physiology.
 :::
 :::{grid-item-card} `Bernoulli`
 :class-card: catalogue-card
@@ -405,6 +408,7 @@ The observation model can be swapped for any of these, with one exception: categ
    :class: only-dark
 ```
 
+Often used with binary choices or $\leq$1 ms binned counts.
 :::
 :::{grid-item-card} `Categorical`
 :class-card: catalogue-card
@@ -423,6 +427,7 @@ The observation model can be swapped for any of these, with one exception: categ
    :class: only-dark
 ```
 
+Often used with multiple-choices.
 :::
 
 ::::
