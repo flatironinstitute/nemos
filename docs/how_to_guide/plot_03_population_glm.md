@@ -162,6 +162,30 @@ model.feature_mask = feature_mask
 model.fit(input_features, spikes)
 ```
 
+:::{note}
+If a neuron has no spikes, matching its mean rate with an exponential or softplus
+link would require an intercept of negative infinity. NeMoS warns which outputs
+are affected and uses machine epsilon as their starting mean rate, producing
+finite initial parameters. This changes only the initialization; the observed
+spikes and loss function are unchanged. During fitting, the intercept may
+continue decreasing, and a finite maximum-likelihood solution is not guaranteed
+for a silent neuron.
+
+For partially or fully silent populations, `Newton` with `Ridge` may fail with
+the default Cholesky linear solver because the Hessian may not be positive
+definite. In this case, use `"identity_shift"` or `"eigh"` through
+`solver_kwargs`, for example:
+
+```python
+model = nmo.glm.PopulationGLM(
+    solver_name="Newton",
+    regularizer="Ridge",
+    regularizer_strength=0.1,
+    solver_kwargs={"linear_solver": "identity_shift"},
+)
+```
+:::
+
 If we print the model coefficients, we can see the effect of the mask.
 
 ```{code-cell} ipython3

@@ -1,5 +1,6 @@
 """Initialization of GLM parameters."""
 
+import warnings
 from typing import Callable, Optional, Union
 
 import jax
@@ -175,6 +176,13 @@ def initialize_intercept_matching_mean_rate(
     :
         The initial intercept term, shape (n_neurons,).
 
+    Notes
+    -----
+    For known links whose inverse is negative infinity at zero, zero empirical
+    means are replaced by machine epsilon for initialization only. This gives
+    silent outputs a finite starting intercept without changing the observations
+    or the objective. The maximum-likelihood intercept may still be unbounded.
+
     """
     y = jnp.asarray(y, float)
     # expand tree to match structure
@@ -190,14 +198,32 @@ def initialize_intercept_matching_mean_rate(
 
     means = jnp.atleast_1d(jnp.nanmean(y, axis=0))
     if analytical_inv:
-        out = analytical_inv(means) - mean_frozen
+        inverse_means = analytical_inv(means)
+        silent = (means == 0) & jnp.isneginf(inverse_means)
+        if jnp.any(silent):
+            indices = jnp.flatnonzero(silent).tolist()
+            warnings.warn(
+                f"Output(s) {indices} have zero mean activity in `y` (e.g. no spikes). "
+                "Their mean-matching intercept is -inf; using machine epsilon "
+                "as the initial mean to obtain finite starting parameters. "
+                "A finite maximum-likelihood intercept may not exist for these outputs.",
+                UserWarning,
+                stacklevel=2,
+            )
+            initial_means = jnp.where(silent, jnp.finfo(means.dtype).eps, means)
+            inverse_means = analytical_inv(initial_means)
+        out = inverse_means - mean_frozen
         if jnp.any(jnp.isnan(out)):
             raise ValueError(
                 "Failed to initialize the model intercept as the inverse of the firing rate for "
                 "the provided link function. The mean firing rate has some non-positive values."
             )
         if jnp.any(~jnp.isfinite(out)):
-            raise non_finite_error
+            indices = jnp.flatnonzero(~jnp.isfinite(out)).tolist()
+            raise ValueError(
+                f"{non_finite_error} Affected output indices: {indices}. "
+                "Check that their mean activity is in the range of the provided link function."
+            )
 
         return out
 
