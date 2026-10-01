@@ -2602,303 +2602,303 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         self._n_basis_funcs = window_size
 
 
-class FourierEval(BoundedEvalBasisMixin, FourierBasis):
-    """
-    N-dimensional Fourier basis for feature expansion.
+# class FourierEval(BoundedEvalBasisMixin, FourierBasis):
+#     """
+#     N-dimensional Fourier basis for feature expansion.
 
-    This class generates a set of sine and cosine basis functions defined over
-    an ``n``-dimensional input space. The basis functions are constructed from
-    a Cartesian product of frequencies specified for each input dimension.
-    Each selected frequency combination contributes two basis functions
-    (cosine and sine), except for the all-zero frequency (DC component),
-    which contributes only a cosine term.
+#     This class generates a set of sine and cosine basis functions defined over
+#     an ``n``-dimensional input space. The basis functions are constructed from
+#     a Cartesian product of frequencies specified for each input dimension.
+#     Each selected frequency combination contributes two basis functions
+#     (cosine and sine), except for the all-zero frequency (DC component),
+#     which contributes only a cosine term.
 
-    The class supports flexible frequency specification (integers, ranges, or
-    arrays per dimension) and optional masking to include or exclude specific
-    frequency combinations.
+#     The class supports flexible frequency specification (integers, ranges, or
+#     arrays per dimension) and optional masking to include or exclude specific
+#     frequency combinations.
 
-    Parameters
-    ----------
-    frequencies :
-        Frequency specification(s).
+#     Parameters
+#     ----------
+#     frequencies :
+#         Frequency specification(s).
 
-        Single specification (broadcasted to all dimensions when ``ndim > 1``):
+#         Single specification (broadcasted to all dimensions when ``ndim > 1``):
 
-            * :class:`int`: An integer ``k`` with ``k >= 0``.
+#             * :class:`int`: An integer ``k`` with ``k >= 0``.
 
-            * :class:`tuple`: ``(low, high)``, a 2-element tuple of integers with ``0 <= low < high``.
+#             * :class:`tuple`: ``(low, high)``, a 2-element tuple of integers with ``0 <= low < high``.
 
-            * :class:`~numpy.ndarray`: 1-D NumPy array of non-negative integers. If not sorted ascending,
-              a ``UserWarning`` is issue for non-sorted arrays.
+#             * :class:`~numpy.ndarray`: 1-D NumPy array of non-negative integers. If not sorted ascending,
+#               a ``UserWarning`` is issue for non-sorted arrays.
 
-        Per-dimension container:
+#         Per-dimension container:
 
-            * A :class:`list` of length ``ndim`` whose elements are each a valid single specification.
-              For ``ndim == 1``, a length-1 :class:`list` is also accepted.
+#             * A :class:`list` of length ``ndim`` whose elements are each a valid single specification.
+#               For ``ndim == 1``, a length-1 :class:`list` is also accepted.
 
-    ndim :
-        Dimensionality of the basis. Default is 1.
+#     ndim :
+#         Dimensionality of the basis. Default is 1.
 
-    bounds :
-        Period bounds for each dimension. Unlike other basis classes where bounds define
-        a valid domain (with out-of-bounds samples filled with NaN), for the Fourier basis
-        the bounds define the period of the basis functions. Samples outside these bounds
-        are still valid and will be evaluated using the periodic nature of the basis.
+#     bounds :
+#         Period bounds for each dimension. Unlike other basis classes where bounds define
+#         a valid domain (with out-of-bounds samples filled with NaN), for the Fourier basis
+#         the bounds define the period of the basis functions. Samples outside these bounds
+#         are still valid and will be evaluated using the periodic nature of the basis.
 
-        * :class:`tuple`: ``(low, high)`` of floats: applies to all dimensions.
-        * :class:`list` of :class:`tuple`: ``[(low, high), ...]``, one tuple per dimension, length must match ``ndim``.
-        * :class:`None <NoneType>`: the period is inferred from the input data (minimum to maximum values).
+#         * :class:`tuple`: ``(low, high)`` of floats: applies to all dimensions.
+#         * :class:`list` of :class:`tuple`: ``[(low, high), ...]``, one tuple per dimension, length must match ``ndim``.
+#         * :class:`None <NoneType>`: the period is inferred from the input data (minimum to maximum values).
 
-        In all cases, ``low`` must be strictly less than ``high``, and values must be convertible to floats.
+#         In all cases, ``low`` must be strictly less than ``high``, and values must be convertible to floats.
 
-    frequency_mask :
-        Optional mask specifying which frequency components to include.
-        Can be:
+#     frequency_mask :
+#         Optional mask specifying which frequency components to include.
+#         Can be:
 
-        * :class:`~typing.Literal`: either ``"no-intercept"`` - default - which drops
-          the 0-frequency DC term, or ``"all"`` which keeps all the frequencies -
-          equivalent to :class:`None <NoneType>`. The default excludes the intercept
-          because these basis objects are most commonly used to generate design matrices
-          for NeMoS GLMs, which already include an intercept term by default, making an
-          additional intercept in the design matrix redundant.
+#         * :class:`~typing.Literal`: either ``"no-intercept"`` - default - which drops
+#           the 0-frequency DC term, or ``"all"`` which keeps all the frequencies -
+#           equivalent to :class:`None <NoneType>`. The default excludes the intercept
+#           because these basis objects are most commonly used to generate design matrices
+#           for NeMoS GLMs, which already include an intercept term by default, making an
+#           additional intercept in the design matrix redundant.
 
-        * Array-like of integers {0, 1} or booleans: A 1D mask with one entry
-          per column of ``masked_frequencies``, keeping (1/True) or dropping
-          (0/False) that frequency combination. At construction it filters the
-          combinations left by the default ``"no-intercept"`` selection; print
-          ``masked_frequencies`` to see the combinations in column order.
+#         * Array-like of integers {0, 1} or booleans: A 1D mask with one entry
+#           per column of ``masked_frequencies``, keeping (1/True) or dropping
+#           (0/False) that frequency combination. At construction it filters the
+#           combinations left by the default ``"no-intercept"`` selection; print
+#           ``masked_frequencies`` to see the combinations in column order.
 
-        * :class:`~typing.Callable`: A function applied to each retained frequency
-          combination (one scalar per dimension, signed), returning a single
-          boolean or {0, 1} indicating whether to keep that frequency.
+#         * :class:`~typing.Callable`: A function applied to each retained frequency
+#           combination (one scalar per dimension, signed), returning a single
+#           boolean or {0, 1} indicating whether to keep that frequency.
 
-        * :class:`None <NoneType>`: All frequencies are kept.
+#         * :class:`None <NoneType>`: All frequencies are kept.
 
-        Values must be 0/1 or boolean. Callables must return a single boolean or
-        {0, 1} value for each frequency coordinate.
+#         Values must be 0/1 or boolean. Callables must return a single boolean or
+#         {0, 1} value for each frequency coordinate.
 
-    weights :
-        Optional per-output-column weights, with one entry per basis function
-        (``n_basis_funcs``), applied inside ``evaluate``. The columns are ordered
-        as the cosine terms followed by the sine terms. When ``None`` (default),
-        no reweighting is applied.
+#     weights :
+#         Optional per-output-column weights, with one entry per basis function
+#         (``n_basis_funcs``), applied inside ``evaluate``. The columns are ordered
+#         as the cosine terms followed by the sine terms. When ``None`` (default),
+#         no reweighting is applied.
 
-    label :
-        Descriptive label for the basis (e.g., to use in plots or summaries).
+#     label :
+#         Descriptive label for the basis (e.g., to use in plots or summaries).
 
-    Notes
-    -----
-    - If ``frequency_mask`` is provided, only the selected frequency
-      combinations are used to build the basis.
-    - The output of ``compute_features`` contains both cosine and sine components for
-      each active frequency combination, except that the all-zero frequency
-      includes only a cosine term.
-    - When a :class:`tuple` is provided as a frequency, it is interpreted
-      as a single range specification. Tuples that are not exactly a 2-element
-      tuple of non-negative integers are invalid.
+#     Notes
+#     -----
+#     - If ``frequency_mask`` is provided, only the selected frequency
+#       combinations are used to build the basis.
+#     - The output of ``compute_features`` contains both cosine and sine components for
+#       each active frequency combination, except that the all-zero frequency
+#       includes only a cosine term.
+#     - When a :class:`tuple` is provided as a frequency, it is interpreted
+#       as a single range specification. Tuples that are not exactly a 2-element
+#       tuple of non-negative integers are invalid.
 
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from nemos.basis import FourierEval
-    >>> rng = np.random.default_rng(0)
+#     Examples
+#     --------
+#     >>> import numpy as np
+#     >>> from nemos.basis import FourierEval
+#     >>> rng = np.random.default_rng(0)
 
-    **1D: basic usage**
+#     **1D: basic usage**
 
-    >>> n_freq = 5
-    >>> fourier_1d = FourierEval(n_freq)
-    >>> # cos at 0..4 (5) + sin at 1..4 (4) = 9
-    >>> fourier_1d.n_basis_funcs
-    8
-    >>> x = rng.normal(size=8)
-    >>> X = fourier_1d.compute_features(x)
-    >>> X.shape  # (n_samples, n_basis_funcs)
-    (8, 8)
+#     >>> n_freq = 5
+#     >>> fourier_1d = FourierEval(n_freq)
+#     >>> # cos at 0..4 (5) + sin at 1..4 (4) = 9
+#     >>> fourier_1d.n_basis_funcs
+#     8
+#     >>> x = rng.normal(size=8)
+#     >>> X = fourier_1d.compute_features(x)
+#     >>> X.shape  # (n_samples, n_basis_funcs)
+#     (8, 8)
 
-    **2D: unmasked grid of frequency pairs**
+#     **2D: unmasked grid of frequency pairs**
 
-    >>> fourier_2d = FourierEval(n_freq, ndim=2)
-    >>> # half-space of the 5x5 grid has 41 pairs (incl. DC); DC dropped -> 40; *2
-    >>> fourier_2d.n_basis_funcs
-    80
-    >>> x, y = rng.normal(size=(2, 6))
-    >>> X = fourier_2d.compute_features(x, y)
-    >>> X.shape
-    (6, 80)
+#     >>> fourier_2d = FourierEval(n_freq, ndim=2)
+#     >>> # half-space of the 5x5 grid has 41 pairs (incl. DC); DC dropped -> 40; *2
+#     >>> fourier_2d.n_basis_funcs
+#     80
+#     >>> x, y = rng.normal(size=(2, 6))
+#     >>> X = fourier_2d.compute_features(x, y)
+#     >>> X.shape
+#     (6, 80)
 
-    **2D: masking with an array (drop 3 pairs)**
+#     **2D: masking with an array (drop 3 pairs)**
 
-    >>> # one mask entry per retained pair: the default "no-intercept"
-    >>> # selection drops the DC and leaves 40 pairs
-    >>> fourier_2d.masked_frequencies.shape
-    (2, 40)
-    >>> mask = np.ones(40)
-    >>> mask[:3] = 0  # drop the first 3 pairs
-    >>> fourier_2d_masked = FourierEval(
-    ...     n_freq,
-    ...     ndim=2,
-    ...     frequency_mask=mask
-    ... )
-    >>> # (40 pairs - 3 dropped) * 2 (cos+sin) = 74
-    >>> fourier_2d_masked.n_basis_funcs
-    74
+#     >>> # one mask entry per retained pair: the default "no-intercept"
+#     >>> # selection drops the DC and leaves 40 pairs
+#     >>> fourier_2d.masked_frequencies.shape
+#     (2, 40)
+#     >>> mask = np.ones(40)
+#     >>> mask[:3] = 0  # drop the first 3 pairs
+#     >>> fourier_2d_masked = FourierEval(
+#     ...     n_freq,
+#     ...     ndim=2,
+#     ...     frequency_mask=mask
+#     ... )
+#     >>> # (40 pairs - 3 dropped) * 2 (cos+sin) = 74
+#     >>> fourier_2d_masked.n_basis_funcs
+#     74
 
-    **2D: masking with a callable**
+#     **2D: masking with a callable**
 
-    >>> # keep pairs inside a circle of radius 3.5 in frequency space
-    >>> keep_circle = lambda fx, fy: (fx**2 + fy**2) ** 0.5 < 3.5
-    >>> fourier_2d_funcmask = FourierEval(
-    ...     n_freq,
-    ...     ndim=2,
-    ...     frequency_mask=keep_circle
-    ... )
-    >>> fourier_2d_funcmask.n_basis_funcs
-    37
+#     >>> # keep pairs inside a circle of radius 3.5 in frequency space
+#     >>> keep_circle = lambda fx, fy: (fx**2 + fy**2) ** 0.5 < 3.5
+#     >>> fourier_2d_funcmask = FourierEval(
+#     ...     n_freq,
+#     ...     ndim=2,
+#     ...     frequency_mask=keep_circle
+#     ... )
+#     >>> fourier_2d_funcmask.n_basis_funcs
+#     37
 
-    **Explicit frequency specifications**
+#     **Explicit frequency specifications**
 
-    >>> # mix forms per-dimension: an explicit array
-    >>> # and an inclusive tuple (low, high)
-    >>> fourier_mixed = FourierEval(
-    ...     frequencies=[np.arange(3), (1, 4)],
-    ...     ndim=2
-    ... )
-    >>> # 15 half-space pairs (no DC, since the y-axis omits 0) -> 2*15 = 30
-    >>> fourier_mixed.n_basis_funcs
-    30
+#     >>> # mix forms per-dimension: an explicit array
+#     >>> # and an inclusive tuple (low, high)
+#     >>> fourier_mixed = FourierEval(
+#     ...     frequencies=[np.arange(3), (1, 4)],
+#     ...     ndim=2
+#     ... )
+#     >>> # 15 half-space pairs (no DC, since the y-axis omits 0) -> 2*15 = 30
+#     >>> fourier_mixed.n_basis_funcs
+#     30
 
-    """
+#     """
 
-    # Fourier basis is defined over the entire real line; bounds specify the period,
-    # not a valid domain. No out-of-bounds filling should be applied.
-    _apply_bounds_fill = False
+#     # Fourier basis is defined over the entire real line; bounds specify the period,
+#     # not a valid domain. No out-of-bounds filling should be applied.
+#     _apply_bounds_fill = False
 
-    def __init__(
-        self,
-        frequencies: (
-            int
-            | Tuple[int, int]
-            | List[int]
-            | List[Tuple[int, int]]
-            | NDArray
-            | List[NDArray]
-        ),
-        ndim: int = 1,
-        bounds: Optional[Tuple[float, float] | Tuple[Tuple[float, float]]] = None,
-        frequency_mask: (
-            Literal["all", "no-intercept"] | NDArray[bool] | None
-        ) = "no-intercept",
-        weights: Optional[ArrayLike] = None,
-        label: Optional[str] = "FourierEval",
-    ):
-        FourierBasis.__init__(
-            self,
-            frequencies=frequencies,
-            label=label,
-            frequency_mask=frequency_mask,
-            ndim=ndim,
-            weights=weights,
-        )
-        BoundedEvalBasisMixin.__init__(self, bounds=bounds)
+#     def __init__(
+#         self,
+#         frequencies: (
+#             int
+#             | Tuple[int, int]
+#             | List[int]
+#             | List[Tuple[int, int]]
+#             | NDArray
+#             | List[NDArray]
+#         ),
+#         ndim: int = 1,
+#         bounds: Optional[Tuple[float, float] | Tuple[Tuple[float, float]]] = None,
+#         frequency_mask: (
+#             Literal["all", "no-intercept"] | NDArray[bool] | None
+#         ) = "no-intercept",
+#         weights: Optional[ArrayLike] = None,
+#         label: Optional[str] = "FourierEval",
+#     ):
+#         FourierBasis.__init__(
+#             self,
+#             frequencies=frequencies,
+#             label=label,
+#             frequency_mask=frequency_mask,
+#             ndim=ndim,
+#             weights=weights,
+#         )
+#         BoundedEvalBasisMixin.__init__(self, bounds=bounds)
 
-    @add_docstring("evaluate_on_grid", FourierBasis)
-    def evaluate_on_grid(self, *n_samples: int) -> Tuple[NDArray, NDArray]:
-        """
-        Examples
-        --------
-        .. plot::
-            :include-source: True
-            :caption: FourierEval
+#     @add_docstring("evaluate_on_grid", FourierBasis)
+#     def evaluate_on_grid(self, *n_samples: int) -> Tuple[NDArray, NDArray]:
+#         """
+#         Examples
+#         --------
+#         .. plot::
+#             :include-source: True
+#             :caption: FourierEval
 
-            >>> import numpy as np
-            >>> import matplotlib.pyplot as plt
-            >>> from nemos.basis import FourierEval
-            >>> n_frequencies = 5
-            >>> fourier_basis = FourierEval(n_frequencies)
-            >>> sample_points, basis_values = fourier_basis.evaluate_on_grid(100)
-            >>> plt.plot(sample_points, basis_values)
-            [<matplotlib.lines.Line2D object at ...
-            >>> plt.show()
-        """
-        return super().evaluate_on_grid(*n_samples)
+#             >>> import numpy as np
+#             >>> import matplotlib.pyplot as plt
+#             >>> from nemos.basis import FourierEval
+#             >>> n_frequencies = 5
+#             >>> fourier_basis = FourierEval(n_frequencies)
+#             >>> sample_points, basis_values = fourier_basis.evaluate_on_grid(100)
+#             >>> plt.plot(sample_points, basis_values)
+#             [<matplotlib.lines.Line2D object at ...
+#             >>> plt.show()
+#         """
+#         return super().evaluate_on_grid(*n_samples)
 
-    @add_docstring("_compute_features", BoundedEvalBasisMixin)
-    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
-        """
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from nemos.basis import FourierEval
+#     @add_docstring("_compute_features", BoundedEvalBasisMixin)
+#     def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+#         """
+#         Examples
+#         --------
+#         >>> import numpy as np
+#         >>> from nemos.basis import FourierEval
 
-        >>> # Generate data
-        >>> num_samples = 1000
-        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
-        >>> basis = FourierEval(10)
-        >>> features = basis.compute_features(X)  # basis transformed time series
-        >>> features.shape
-        (1000, 18)
+#         >>> # Generate data
+#         >>> num_samples = 1000
+#         >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+#         >>> basis = FourierEval(10)
+#         >>> features = basis.compute_features(X)  # basis transformed time series
+#         >>> features.shape
+#         (1000, 18)
 
-        """
-        return super().compute_features(*xi)
+#         """
+#         return super().compute_features(*xi)
 
-    @add_docstring("split_by_feature", FourierBasis)
-    def split_by_feature(
-        self,
-        x: NDArray,
-        axis: int = 1,
-    ):
-        r"""
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from nemos.basis import FourierEval
-        >>> from nemos.glm import GLM
-        >>> basis = FourierEval(6, label="one_input")
-        >>> X = basis.compute_features(np.random.randn(20,))
-        >>> split_features_multi = basis.split_by_feature(X, axis=1)
-        >>> for feature, sub_dict in split_features_multi.items():
-        ...        print(f"{feature}, shape {sub_dict.shape}")
-        one_input, shape (20, 10)
+#     @add_docstring("split_by_feature", FourierBasis)
+#     def split_by_feature(
+#         self,
+#         x: NDArray,
+#         axis: int = 1,
+#     ):
+#         r"""
+#         Examples
+#         --------
+#         >>> import numpy as np
+#         >>> from nemos.basis import FourierEval
+#         >>> from nemos.glm import GLM
+#         >>> basis = FourierEval(6, label="one_input")
+#         >>> X = basis.compute_features(np.random.randn(20,))
+#         >>> split_features_multi = basis.split_by_feature(X, axis=1)
+#         >>> for feature, sub_dict in split_features_multi.items():
+#         ...        print(f"{feature}, shape {sub_dict.shape}")
+#         one_input, shape (20, 10)
 
-        """
-        return super().split_by_feature(x, axis=axis)
+#         """
+#         return super().split_by_feature(x, axis=axis)
 
-    @add_docstring("set_input_shape", AtomicBasisMixin)
-    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray):
-        """
-        Examples
-        --------
-        >>> import nemos as nmo
-        >>> import numpy as np
-        >>> basis = nmo.basis.FourierEval(5)
-        >>> # Configure with an integer input:
-        >>> _ = basis.set_input_shape(3)
-        >>> basis.n_output_features
-        24
-        >>> # Configure with a tuple:
-        >>> _ = basis.set_input_shape((4, 5))
-        >>> basis.n_output_features
-        160
-        >>> # Configure with an array:
-        >>> x = np.ones((10, 4, 5))
-        >>> _ = basis.set_input_shape(x)
-        >>> basis.n_output_features
-        160
+#     @add_docstring("set_input_shape", AtomicBasisMixin)
+#     def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray):
+#         """
+#         Examples
+#         --------
+#         >>> import nemos as nmo
+#         >>> import numpy as np
+#         >>> basis = nmo.basis.FourierEval(5)
+#         >>> # Configure with an integer input:
+#         >>> _ = basis.set_input_shape(3)
+#         >>> basis.n_output_features
+#         24
+#         >>> # Configure with a tuple:
+#         >>> _ = basis.set_input_shape((4, 5))
+#         >>> basis.n_output_features
+#         160
+#         >>> # Configure with an array:
+#         >>> x = np.ones((10, 4, 5))
+#         >>> _ = basis.set_input_shape(x)
+#         >>> basis.n_output_features
+#         160
 
-        """
-        return super().set_input_shape(*xi)
+#         """
+#         return super().set_input_shape(*xi)
 
-    @add_docstring("evaluate", FourierBasis)
-    def evaluate(self, *sample_pts: NDArray) -> NDArray:
-        """
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from nemos.basis import FourierEval
-        >>> basis = FourierEval(4)
-        >>> out = basis.evaluate(np.random.randn(100, 5, 2))
-        >>> out.shape
-        (100, 5, 2, 6)
-        """
-        # ruff: noqa: D205, D400
-        return super().evaluate(*sample_pts)
+#     @add_docstring("evaluate", FourierBasis)
+#     def evaluate(self, *sample_pts: NDArray) -> NDArray:
+#         """
+#         Examples
+#         --------
+#         >>> import numpy as np
+#         >>> from nemos.basis import FourierEval
+#         >>> basis = FourierEval(4)
+#         >>> out = basis.evaluate(np.random.randn(100, 5, 2))
+#         >>> out.shape
+#         (100, 5, 2, 6)
+#         """
+#         # ruff: noqa: D205, D400
+#         return super().evaluate(*sample_pts)
