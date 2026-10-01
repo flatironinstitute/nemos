@@ -1153,7 +1153,25 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         # then recombine
         active, frozen = self._partition_active(init_params)
         self._initialize_optimizer_and_state(active, data, y, frozen_params=frozen)
-        params, state, aux = self._optimizer_run(active, data, y)
+        
+        try:
+            params, state, aux = self._optimizer_run(active, data, y)
+        except RuntimeError as exc:
+            if (
+                "Cholesky solve failed; the Hessian may not be positive definite"
+                not in str(exc)
+            ):
+                raise
+
+            raise ValueError(
+                "Cholesky solve failed because the Hessian may not be positive definite. "
+                "This can occur when fitting partially or fully silent populations with "
+                "Newton and Ridge. Try setting "
+                "solver_kwargs={'linear_solver': 'eigh'} or "
+                "solver_kwargs={'linear_solver': 'identity_shift'} "
+                "when constructing the model or via `set_params`."
+            ) from exc
+
         params = eqx.combine(params, frozen)
 
         if tree_utils.pytree_map_and_reduce(
