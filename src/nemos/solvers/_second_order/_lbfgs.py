@@ -88,7 +88,7 @@ class ProximalLBFGS(AbstractSecondOrderSolver[Y, SecondOrderState[Y]], Generic[Y
     tol, rtol :
         Absolute and relative tolerances of the outer Cauchy criterion on the accepted
         step; both are read, see
-        :meth:`~nemos.solvers._second_order._loop.Loop.converged`.
+        :meth:`~nemos.solvers._second_order._base.AbstractSecondOrderSolver.converged`.
     inner_iter :
         Maximum FISTA steps on the subproblem. The subproblem applies the curvature model
         and touches no data, so these steps are cheap.

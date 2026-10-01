@@ -269,7 +269,7 @@ class ProximalNewton(BaseNewtonSolver[Y], Generic[Y]):
     tol, rtol :
         Absolute and relative tolerances of the outer Cauchy criterion on the accepted
         step. Unlike :class:`Newton`, which tests ``||grad|| <= tol``, both are read
-        here: see :meth:`~nemos.solvers._second_order._loop.Loop.converged`.
+        here: see :meth:`~nemos.solvers._second_order._base.AbstractSecondOrderSolver.converged`.
     inner_iter :
         Maximum FISTA steps on the subproblem. The subproblem uses the assembled
         Hessian block and touches no data, so these steps are cheap.

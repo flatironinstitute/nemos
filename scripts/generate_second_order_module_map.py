@@ -25,8 +25,8 @@ ASSETS = pathlib.Path("docs/assets")
 LAYERS = [
     ("shared vocabulary", ["_typing", "_utils"]),
     (
-        "the four things a solver assembles",
-        ["_curvature", "_direction", "_linesearches", "_loop"],
+        "the three things a solver assembles",
+        ["_curvature", "_direction", "_linesearches"],
     ),
     (
         "solvers, and the bases they are built on",
@@ -121,6 +121,9 @@ def check_layering(graph: dict[str, set[str]]) -> None:
     missing = set(graph) - set(order)
     if missing:
         raise SystemExit(f"module(s) not placed in a layer: {sorted(missing)}")
+    stale = set(order) - set(graph)
+    if stale:
+        raise SystemExit(f"layer names a module that no longer exists: {sorted(stale)}")
     for mod, deps in graph.items():
         for dep in deps:
             if order[dep] >= order[mod]:
