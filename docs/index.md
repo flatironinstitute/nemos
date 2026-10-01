@@ -333,7 +333,8 @@ The observation model can be swapped for any of these, with one exception: categ
    :class: only-dark
 ```
 
-Often used with spike counts.
+Often used with:<br>
+spike counts
 :::
 :::{grid-item-card} `NegativeBinomial`
 :class-card: catalogue-card
@@ -352,7 +353,8 @@ Often used with spike counts.
    :class: only-dark
 ```
 
-Often used with spike counts.
+Often used with:<br>
+spike counts
 :::
 :::{grid-item-card} `Gamma`
 :class-card: catalogue-card
@@ -371,6 +373,8 @@ Often used with spike counts.
    :class: only-dark
 ```
 
+Often used with:<br>
+optical physiology
 :::
 :::{grid-item-card} `Gaussian`
 :class-card: catalogue-card
@@ -389,7 +393,8 @@ Often used with spike counts.
    :class: only-dark
 ```
 
-Often used with LFP and optical physiology.
+Often used with:<br>
+LFP and optical physiology.
 :::
 :::{grid-item-card} `Bernoulli`
 :class-card: catalogue-card
@@ -408,7 +413,8 @@ Often used with LFP and optical physiology.
    :class: only-dark
 ```
 
-Often used with binary choices or $\leq$1 ms binned counts.
+Often used with:<br>
+binary choices
 :::
 :::{grid-item-card} `Categorical`
 :class-card: catalogue-card
@@ -427,7 +433,8 @@ Often used with binary choices or $\leq$1 ms binned counts.
    :class: only-dark
 ```
 
-Often used with multiple-choices.
+Often used with:<br>
+multiple-choices
 :::
 
 ::::
