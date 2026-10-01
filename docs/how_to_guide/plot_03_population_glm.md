@@ -162,6 +162,17 @@ model.feature_mask = feature_mask
 model.fit(input_features, spikes)
 ```
 
+:::{note}
+For silent neurons, NeMoS warns and uses machine epsilon as the initial mean
+rate when the link's inverse at zero is negative infinity. Observations and the
+loss are unchanged; a finite maximum-likelihood intercept may not exist.
+
+Newton with Ridge can fail its Cholesky solve for partially or fully silent
+populations. Set `solver_kwargs={"linear_solver": "identity_shift"}` or
+`solver_kwargs={"linear_solver": "eigh"}` on `GLM` or `PopulationGLM` to use an
+alternative linear solver. Check convergence separately.
+:::
+
 If we print the model coefficients, we can see the effect of the mask.
 
 ```{code-cell} ipython3

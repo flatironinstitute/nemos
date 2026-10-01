@@ -1,5 +1,6 @@
 """Initialization of GLM parameters."""
 
+import warnings
 from typing import Callable, Optional, Union
 
 import jax
@@ -175,6 +176,11 @@ def initialize_intercept_matching_mean_rate(
     :
         The initial intercept term, shape (n_neurons,).
 
+    Notes
+    -----
+    Zero means whose inverse is negative infinity use machine epsilon for
+    initialization only. The maximum-likelihood intercept may remain unbounded.
+
     """
     y = jnp.asarray(y, float)
     # expand tree to match structure
@@ -190,14 +196,29 @@ def initialize_intercept_matching_mean_rate(
 
     means = jnp.atleast_1d(jnp.nanmean(y, axis=0))
     if analytical_inv:
-        out = analytical_inv(means) - mean_frozen
+        inverse_means = analytical_inv(means)
+        silent = (means == 0) & jnp.isneginf(inverse_means)
+        if jnp.any(silent):
+            indices = jnp.flatnonzero(silent).tolist()
+            warnings.warn(
+                f"Output(s) {indices} have zero mean activity in `y`. "
+                "Using machine epsilon for initialization to avoid -inf intercepts; "
+                "a finite maximum-likelihood intercept may not exist.",
+                UserWarning,
+                stacklevel=2,
+            )
+            inverse_means = analytical_inv(
+                jnp.where(silent, jnp.finfo(means.dtype).eps, means)
+            )
+        out = inverse_means - mean_frozen
         if jnp.any(jnp.isnan(out)):
             raise ValueError(
                 "Failed to initialize the model intercept as the inverse of the firing rate for "
                 "the provided link function. The mean firing rate has some non-positive values."
             )
         if jnp.any(~jnp.isfinite(out)):
-            raise non_finite_error
+            indices = jnp.flatnonzero(~jnp.isfinite(out)).tolist()
+            raise ValueError(f"{non_finite_error} Affected output indices: {indices}.")
 
         return out
 

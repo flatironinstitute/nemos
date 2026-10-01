@@ -118,6 +118,65 @@ def test_initialization_error_logistic_all_one_output():
         )
 
 
+@pytest.mark.parametrize("non_linearity", [jnp.exp, jax.nn.softplus, jax.lax.logistic])
+@pytest.mark.parametrize("single", [True, False])
+@pytest.mark.parametrize(
+    "precision",
+    [False, pytest.param(True, marks=pytest.mark.requires_x64)],
+    ids=["float32", "float64"],
+)
+def test_silent_outputs_have_finite_intercepts(non_linearity, single, precision):
+    y = np.zeros(10) if single else np.tile([0.25, 0.0, 0.0], (10, 1))
+    with pytest.warns(UserWarning, match=r"Output\(s\).*zero mean activity"):
+        intercept = initialize_intercept_matching_mean_rate(
+            non_linearity, np.zeros((10, 1)), y
+        )
+    assert intercept.dtype == (jnp.float64 if precision else jnp.float32)
+    expected = jnp.atleast_1d(jnp.mean(jnp.asarray(y, float), axis=0))
+    expected = jnp.where(expected == 0, jnp.finfo(expected.dtype).eps, expected)
+    assert jnp.all(jnp.isfinite(intercept))
+    np.testing.assert_allclose(non_linearity(intercept), expected, rtol=1e-5)
+
+
+def test_zero_mean_identity_link_is_not_clipped():
+    from nemos.inverse_link_function_utils import identity
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        intercept = initialize_intercept_matching_mean_rate(
+            identity, np.zeros((4, 1)), np.array([-1.0, 1.0, -1.0, 1.0])
+        )
+    np.testing.assert_array_equal(intercept, [0.0])
+
+
+def test_silent_initialization_accounts_for_frozen_coefficients():
+    X = jnp.ones((10, 2))
+    with pytest.warns(UserWarning, match="zero mean activity"):
+        intercept = initialize_intercept_matching_mean_rate(
+            jnp.exp, X, jnp.zeros(10), frozen_coef=jnp.array([1.0, 2.0])
+        )
+    np.testing.assert_allclose(
+        jnp.exp(intercept + 3), jnp.finfo(intercept.dtype).eps, rtol=1e-5
+    )
+
+
+def test_invalid_link_range_error_identifies_output():
+    with pytest.raises(ValueError, match=r"Affected output indices: \[1\]"):
+        initialize_intercept_matching_mean_rate(
+            jax.lax.logistic, np.zeros((10, 1)), np.tile([0.5, 1.0], (10, 1))
+        )
+
+
+def test_positive_rates_below_epsilon_are_unchanged():
+    y = jnp.full((10,), 1e-10)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        intercept = initialize_intercept_matching_mean_rate(
+            jnp.exp, jnp.zeros((10, 1)), y
+        )
+    np.testing.assert_allclose(jnp.exp(intercept), [1e-10], rtol=1e-5)
+
+
 # ---------------------------------------------------------------------------
 # initialize_constant_coef_matching_mean_rate
 # ---------------------------------------------------------------------------
