@@ -1,5 +1,4 @@
 import inspect
-import os
 from contextlib import nullcontext as does_not_raise
 
 import jax
@@ -383,20 +382,15 @@ def test_maxiter_is_respected(
 ):
     X, y, model, true_params, rate = poissonGLM_model_instantiation
 
-    # set the tolerance such that the solvers never hit their convergence criterion
-    # and run until maxiter is reached
-    backend = os.getenv("NEMOS_SOLVER_BACKEND")
+    # Set the tolerance such that the solvers never hit their convergence criterion and
+    # run until maxiter is reached. jaxopt stops once ``error <= tol`` and its error
+    # reaches exactly zero on these problems, so only a negative tolerance keeps it
+    # running. Which implementation is installed is decided by the registry, which
+    # ``configure_solver_backend`` patches, so read it off the resolved solver rather
+    # than off NEMOS_SOLVER_BACKEND: with jaxopt importable and the variable unset, the
+    # registry still installs the jaxopt solver.
     solver_class_name = str(nmo.solvers.get_solver(solver_name).implementation)
-
-    use_jaxopt_tol = False
-
-    if backend == "jaxopt" and "jaxopt" in solver_class_name.lower():
-        use_jaxopt_tol = True
-
-    if backend == "optimistix" in solver_class_name.lower():
-        use_jaxopt_tol = False
-
-    tol = -1.0 if use_jaxopt_tol else 0.0
+    tol = -1.0 if "jaxopt" in solver_class_name.lower() else 0.0
     solver_kwargs = {"maxiter": maxiter, "tol": tol}
 
     # only pass mask if it's not None
