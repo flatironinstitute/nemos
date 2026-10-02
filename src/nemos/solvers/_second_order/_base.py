@@ -313,7 +313,11 @@ class AbstractSecondOrderSolver(abc.ABC, Generic[Y, S]):
         final_params, final_state = self._iterate(init_params, state, *args)
         # ``fun_with_aux`` is the objective again: only pay for it when there is an aux
         # to collect, since without one it returns a ``None`` the caller already knows.
-        aux = self.fun_with_aux(final_params, *args)[1] if self.has_aux else None
+        aux = (
+            self.fun_with_aux(final_params, *args)[1]
+            if self._line_search.has_aux
+            else None
+        )
         return final_params, final_state, aux
 
     @classmethod

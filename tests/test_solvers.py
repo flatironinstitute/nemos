@@ -703,7 +703,7 @@ def test_all_solvers_accept_every_argument_they_advertise():
     ``TypeError`` at construction -- a failure the user cannot act on, since the name came
     from the solver itself. Two such names existed before this test: ``Newton`` advertised
     ``autodiff``, which no solver accepted, and ``ProximalNewton`` advertised ``rtol``
-    without taking it while ``_converged`` read it.
+    without taking it while ``converged`` read it.
 
     Adapters forwarding ``**kwargs`` to a wrapped solver are exempt: their accepted set is
     deliberately wider than their own signature.

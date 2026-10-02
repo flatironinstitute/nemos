@@ -2061,7 +2061,7 @@ class TestHessianTag:
             model.initialize_optimizer_and_state(model.initialize_params(X, y), X, y)
 
         assert isinstance(model._solver, NoOpSolver)
-        assert not hasattr(model._solver, "_hess_tag")
+        assert not hasattr(model._solver, "direction")
 
 
 @pytest.mark.parametrize(

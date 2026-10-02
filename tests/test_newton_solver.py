@@ -140,12 +140,8 @@ def _make_solver(loss_fn, hess_fn, hess_tag, init_params, jit=False, **kwargs):
 def _compute_direction(solver, grad, H, params):
     """Compute a direction from a freshly initialized solver state."""
     state = solver.init_state(params)
-    direction, _ = solver._newton_direction(
-        grad,
-        H,
-        params,
-        state,
-    )
+    # a direction that solves the assembled system never reads ``hvp_fn``
+    direction, _ = solver.direction.update(params, grad, None, H, state.direction_state)
     return direction
 
 
@@ -448,7 +444,7 @@ def test_newton_init_state_default(request, regr_setup, regularizer):
     assert isinstance(
         state.ls_state.linesearch_state, optax.ScaleByBacktrackingLinesearchState
     )
-    np.testing.assert_array_equal(state.identity_shift, 0.0)
+    np.testing.assert_array_equal(state.direction_state, 0.0)
 
 
 _MOD_PROPS = [
@@ -946,18 +942,13 @@ def test_modified_direction_is_computed_blockwise(linear_solver, jit):
     )
     state = solver.init_state(params)
 
-    assert state.identity_shift.shape == (H.shape[0],)
+    assert state.direction_state.shape == (H.shape[0],)
     np.testing.assert_array_equal(
-        state.identity_shift,
+        state.direction_state,
         jnp.zeros(H.shape[0], dtype=params.dtype),
     )
 
-    direction, _ = solver._newton_direction(
-        grad,
-        H,
-        params,
-        state,
-    )
+    direction, _ = solver.direction.update(params, grad, None, H, state.direction_state)
 
     # Compare the blockwise result with solving each block separately.
     expected = []
@@ -1166,19 +1157,17 @@ def test_forced_cholesky_warns_for_nonpositive_tag(matrix_property):
     H = jnp.eye(2)
     loss = _quadratic_loss(H, jnp.zeros(2))
 
-    solver = _make_solver(
-        loss,
-        lambda params, *args: H,
-        _make_tag(params, property=matrix_property),
-        params,
-        linear_solver="cholesky",
-    )
-
     with pytest.warns(
         RuntimeWarning,
         match="Cholesky generally requires",
     ):
-        solver.init_state(params)
+        solver = _make_solver(
+            loss,
+            lambda params, *args: H,
+            _make_tag(params, property=matrix_property),
+            params,
+            linear_solver="cholesky",
+        )
 
     assert solver.direction.resolved_linear_solver == "cholesky"
 
@@ -1199,16 +1188,15 @@ def test_compatible_linear_solver_emits_no_warning(linear_solver, matrix_propert
     H = jnp.eye(2)
     loss = _quadratic_loss(H, jnp.zeros(2))
 
-    solver = _make_solver(
-        loss,
-        lambda params, *args: H,
-        _make_tag(params, property=matrix_property),
-        params,
-        linear_solver=linear_solver,
-    )
-
     with warnings.catch_warnings():
         warnings.simplefilter("error")
+        solver = _make_solver(
+            loss,
+            lambda params, *args: H,
+            _make_tag(params, property=matrix_property),
+            params,
+            linear_solver=linear_solver,
+        )
         solver.init_state(params)
 
 
@@ -1248,7 +1236,8 @@ def test_negative_identity_shift_beta_raises():
         )
 
 
-def test_mutated_invalid_linear_solver_raises_during_resolution():
+def test_mutated_linear_solver_does_not_reach_the_direction():
+    """The strategy is resolved at construction, so writing the request later is inert."""
     params = jnp.zeros(2)
     H = jnp.eye(2)
     loss = _quadratic_loss(H, jnp.zeros(2))
@@ -1261,8 +1250,9 @@ def test_mutated_invalid_linear_solver_raises_during_resolution():
     )
     solver.linear_solver = "invalid"
 
-    with pytest.raises(ValueError, match="Unknown linear solver"):
-        solver.init_state(params)
+    solver.init_state(params)
+
+    assert solver.direction.resolved_linear_solver == "cholesky"
 
 
 @pytest.mark.requires_x64
@@ -1292,22 +1282,20 @@ def test_cholesky_raises_for_indefinite_matrix_with_positive_tag():
 
 @pytest.mark.requires_x64
 def test_forced_cholesky_on_indefinite_hessian_raise():
-    """A forced Cholesky warns and reports failure rather than raising."""
+    """A forced Cholesky warns while resolving, then fails at the solve."""
     H = jnp.asarray([[1.0, 3.0], [3.0, 1.0]])  # eigenvalues 4 and -2
     params = jnp.asarray([0.3, -0.1])
-    solver = _make_solver(
-        _quadratic_loss(H, jnp.asarray([1.0, 0.5])),
-        lambda params, *args: H,
-        _make_tag(params, property=MatrixProperty.SYMMETRIC),
-        params,
-        linear_solver="cholesky",
-    )
-    with (
-        pytest.warns(RuntimeWarning, match="Cholesky generally requires"),
-        pytest.raises(
-            jax.errors.JaxRuntimeError,
-            match="Cholesky solve failed",
-        ),
+    with pytest.warns(RuntimeWarning, match="Cholesky generally requires"):
+        solver = _make_solver(
+            _quadratic_loss(H, jnp.asarray([1.0, 0.5])),
+            lambda params, *args: H,
+            _make_tag(params, property=MatrixProperty.SYMMETRIC),
+            params,
+            linear_solver="cholesky",
+        )
+    with pytest.raises(
+        jax.errors.JaxRuntimeError,
+        match="Cholesky solve failed",
     ):
         solver.run(params)
 
@@ -1433,11 +1421,8 @@ def test_identity_shift_returns_accepted_shift(jit):
     )
     state = solver.init_state(params)
 
-    direction, new_state = solver._newton_direction(
-        grad,
-        H,
-        params,
-        state,
+    direction, accepted_shift = solver.direction.update(
+        params, grad, None, H, state.direction_state
     )
 
     expected_shift = jnp.asarray(2.0, dtype=H.dtype)
@@ -1447,7 +1432,7 @@ def test_identity_shift_returns_accepted_shift(jit):
     )
 
     np.testing.assert_allclose(direction, expected, atol=1e-12, rtol=1e-12)
-    np.testing.assert_allclose(new_state.identity_shift, expected_shift)
+    np.testing.assert_allclose(accepted_shift, expected_shift)
 
 
 @pytest.mark.requires_x64
@@ -1476,13 +1461,10 @@ def test_identity_shift_uses_previous_accepted_shift(jit):
     state = solver.init_state(params)
     # the ladder seeds from the shift the previous iteration accepted, which the state
     # carries; write it there rather than passing it alongside
-    state = eqx.tree_at(lambda s: s.identity_shift, state, previous_shift)
+    state = eqx.tree_at(lambda s: s.direction_state, state, previous_shift)
 
-    direction, new_state = solver._newton_direction(
-        grad,
-        H,
-        params,
-        state,
+    direction, accepted_shift = solver.direction.update(
+        params, grad, None, H, state.direction_state
     )
 
     expected = jnp.linalg.solve(
@@ -1491,4 +1473,4 @@ def test_identity_shift_uses_previous_accepted_shift(jit):
     )
 
     np.testing.assert_allclose(direction, expected, atol=1e-12, rtol=1e-12)
-    np.testing.assert_allclose(new_state.identity_shift, previous_shift)
+    np.testing.assert_allclose(accepted_shift, previous_shift)

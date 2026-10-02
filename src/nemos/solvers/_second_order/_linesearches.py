@@ -17,6 +17,7 @@ import jax.numpy as jnp
 import lineax as lx
 from jaxtyping import Bool, Float
 from optax import (
+    GradientTransformation,
     GradientTransformationExtraArgs,
     ScaleByBacktrackingLinesearchState,
 )
@@ -43,6 +44,12 @@ class LineSearchState(eqx.Module):
 class AbstractLineSearch(abc.ABC, Generic[Y]):
     """Scale a direction and report whether a step was taken."""
 
+    _line_search: GradientTransformation = eqx.field(static=True)
+    fun: Callable[..., Float[jax.Array, ""] | tuple[Float[jax.Array, ""], Any]] = (
+        eqx.field(static=True)
+    )
+    has_aux: bool = eqx.field(static=True)
+
     @abc.abstractmethod
     def init(self, params: Y) -> LineSearchState: ...
 
@@ -67,7 +74,10 @@ class ArmijoBacktracking(AbstractLineSearch[Y], eqx.Module, Generic[Y]):
     """
 
     _line_search: GradientTransformationExtraArgs = eqx.field(static=True)
-    fun: Callable[..., Float[jax.Array, ""]] = eqx.field(static=True)
+    fun: Callable[..., Float[jax.Array, ""] | tuple[Float[jax.Array, ""], Any]] = (
+        eqx.field(static=True)
+    )
+    has_aux: bool = eqx.field(static=True)
 
     def init(self, params: Y) -> LineSearchState:
         dtype = jnp.result_type(*jax.tree_util.tree_leaves(params))
@@ -88,8 +98,14 @@ class ArmijoBacktracking(AbstractLineSearch[Y], eqx.Module, Generic[Y]):
         slope: Y,
         *args: Any,
     ) -> Tuple[Y, ScaleByBacktrackingLinesearchState, Bool[jax.Array, ""]]:
-        def _fun(p: Y) -> Float[jax.Array, ""]:
-            return self.fun(p, *args)
+        if self.has_aux:
+
+            def _fun(p: Y) -> Float[jax.Array, ""]:
+                return self.fun(p, *args)[0]
+        else:
+
+            def _fun(p: Y) -> Float[jax.Array, ""]:
+                return self.fun(p, *args)
 
         updates, ls_state = self._line_search.update(
             step,

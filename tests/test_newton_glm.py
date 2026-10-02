@@ -437,14 +437,12 @@ def test_newton_glm_passes_solver_kwargs(regularizer_name, glm_class, solver_nam
         _init_params_for(glm_class),
     )
 
-    # Each kwarg is stored exactly once, by the component that consumes it: the loop
-    # runs the iteration, the direction computes the step, its FISTA solves the
-    # subproblem. Only ``linear_solver`` stays on the solver, because it is the strategy
-    # the user requested and the direction records the one it resolved to instead.
+    # Each kwarg is stored exactly once, by the component that consumes it. The
+    # iteration arguments stay on the solver, which runs the loop; the direction holds
+    # what shapes the step and its FISTA what solves the subproblem. ``linear_solver``
+    # is the strategy the user requested, and the direction records the one it resolved
+    # to instead.
     stored_by = {
-        "maxiter": lambda s: s.loop.maxiter,
-        "tol": lambda s: s.loop.atol,
-        "rtol": lambda s: s.loop.rtol,
         "inner_iter": lambda s: s.direction._inner_iter,
         "inner_atol": lambda s: s.direction._inner_solver.atol,
         "inner_rtol": lambda s: s.direction._inner_solver.rtol,
@@ -930,9 +928,9 @@ class _FullHessianGLM(GLM):
 def test_newton_unbatched_model_hessian_matches_differentiated_loss(
     request, regularizer_cls, solver_name
 ):
-    """``_hessian`` must be the Hessian of the smooth objective the solver differentiates.
+    """The curvature must model the smooth objective the solver differentiates.
 
-    That is the single invariant ``setup_hessian`` maintains, and each solver satisfies it
+    That is the single invariant ``_init_hessian`` maintains, and each solver satisfies it
     for the opposite reason: ``Newton`` differentiates the penalized loss, so
     ``_penalize_hessian`` adds the penalty's curvature to the model's likelihood term;
     ``ProximalNewton`` differentiates the unregularized loss and reaches the penalty through
@@ -1398,15 +1396,16 @@ def test_newton_without_hessian_tag_uses_auto_linear_solver(linear_regression):
         has_aux=False,
         init_params=param_init,
     )
-    at_construction = newton._hess_tag
+    at_construction = newton.direction.hessian_tag
 
     newton.init_state(param_init, X, y)
 
-    assert newton._hess_tag is at_construction, "init_state must not invent a tag"
-    assert newton._hess_tag.property is MatrixProperty.SYMMETRIC
-    assert newton._hess_tag.structure is MatrixStructure.FULL
-    assert not any(jax.tree_util.tree_leaves(newton._hess_tag.flat_on))
-    assert not any(jax.tree_util.tree_leaves(newton._hess_tag.definite_on))
+    tag = newton.direction.hessian_tag
+    assert tag is at_construction, "init_state must not invent a tag"
+    assert tag.property is MatrixProperty.SYMMETRIC
+    assert tag.structure is MatrixStructure.FULL
+    assert not any(jax.tree_util.tree_leaves(tag.flat_on))
+    assert not any(jax.tree_util.tree_leaves(tag.definite_on))
     _assert_linear_solver(newton, param_init, _EIGH)
 
 
@@ -1520,7 +1519,8 @@ def test_second_order_solvers_store_rtol(solver_name):
 def test_prox_newton_rtol_loosens_convergence(request):
     """``rtol`` must reach the Cauchy test, not merely sit on the instance.
 
-    ``ProximalNewton._converged`` calls ``cauchy_termination(self.rtol, self.tol, ...)``, so a
+    ``AbstractSecondOrderSolver.converged`` calls ``cauchy_termination(self.rtol, self.tol, ...)``,
+    so a
     relative tolerance well above the absolute one has to stop the run sooner. Being stored
     is not enough: that is exactly what the unreachable ``0.0`` default did before. Measured
     on this problem, 9 steps at ``rtol=0.0`` against 4 at ``rtol=1e-2``.
@@ -1713,9 +1713,9 @@ def test_prox_newton_prox_applies_across_a_pytree():
 
 @pytest.mark.requires_x64
 def test_prox_newton_autodiff_hessian_matches_supplied_hessian():
-    """Without ``setup_hessian`` the solver autodiffs its smooth loss; the two agree.
+    """Without a supplied Hessian the solver autodiffs its smooth loss; the two agree.
 
-    ``_build_cache`` falls back to ``jax.hessian(self.fun)`` when no Hessian was supplied.
+    ``_init_hessian`` falls back to ``jax.hessian(self.fun)`` when no Hessian was supplied.
     For a squared-error loss the analytic Hessian is the constant ``(2/n) X^T X``, so the
     two paths must produce the same iterates, not merely similar ones.
     """
@@ -1870,7 +1870,7 @@ def _line_search_inputs_at(regularizer, strength, params, step, X, y):
         tol=1e-12,
     )
     solver.init_state(params, X, y)
-    (fval, _), grad = solver.loop.fval_and_grad_fn(params, X, y)
+    (fval, _), grad = solver._fval_and_grad(params, X, y)
     slope, _, value = solver._line_search._slope_descent_value(params, step, grad, fval)
     return grad, (value, slope, lambda p: solver._line_search.fun(p, X, y))
 
@@ -2029,16 +2029,18 @@ def test_prox_newton_backtracking_matches_tseng_yun_reference(
         jnp.asarray(prev_stepsize),
     )
 
-    (fval, _), grad = solver.loop.fval_and_grad_fn(params, X, y)
-    H = solver.curvature.update(None, params, None, None, X, y)
-    direction = solver.direction.update(params, grad, H, solver.curvature)
+    (fval, _), grad = solver._fval_and_grad(params, X, y)
+    hvp_fn, hessian_tensor, _ = solver.curvature.update(None, params, None, grad, X, y)
+    direction, _ = solver.direction.update(
+        params, grad, hvp_fn, hessian_tensor, state.direction_state
+    )
     step = jax.tree.map(lambda d: scale * d, direction)
     _, delta, _ = solver._line_search._slope_descent_value(params, step, grad, fval)
     delta = float(delta)
     assert delta < 0.0, "the reference only terminates on a descent direction"
 
-    new_params, ls_state, no_step_found = solver.loop._apply_or_reject(
-        params, step, grad, state, fval, solver._line_search, X, y
+    new_params, ls_state, no_step_found = solver._apply_or_reject(
+        params, step, grad, state, fval, X, y
     )
     assert not bool(no_step_found), "a sufficient-decrease step is not a stall"
     expected_stepsize, expected_evaluations = _tseng_yun_backtracking(
