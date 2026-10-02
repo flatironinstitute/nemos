@@ -807,7 +807,7 @@ class BaseRegressor(
         self._validator.validate_inputs(X, y)
         params = self._validator.validate_and_cast_params(params)
         self._validator.validate_consistency(params, X, y)
-        X, y = self._preprocess_inputs(X, y)
+        X, y, *args = self._preprocess_inputs(X, y, *args)
         return self._compute_loss(params, X, y, *args, **kwargs)
 
     @abc.abstractmethod

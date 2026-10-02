@@ -73,7 +73,7 @@ class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
                 err_message_format="Invalid parameter dimensionality.\n- coef must be an array "
                 "or any JAX pytree with array leaves of shape "
                 "``(n_features, n_states)``.\n- intercept must be of shape ``(n_states,)``.\n"
-                "- scale must be of shape ``(n_classes, n_states)``.\n"
+                "- scale must be of shape ``(n_states,)``.\n"
                 "- initial_prob must be of shape ``(n_states,)``.\n"
                 "- transition_prob must be of shape ``(n_states, n_states)``.\n"
                 "\nThe provided coef, intercept, scale, initial_prob and transition_prob "
@@ -275,7 +275,7 @@ class ClassifierGLMHMMValidator(GLMHMMValidator):
             X,
         )
         empty_intercept = jnp.empty((n_classes, self.extra_params["n_states"]))
-        empty_scale = jnp.empty(self.extra_params["n_states"])
+        empty_scale = jnp.empty((n_classes, self.extra_params["n_states"]))
         model_params = GLMHMMModelParams(
             coef=empty_coef, intercept=empty_intercept, log_scale=empty_scale
         )

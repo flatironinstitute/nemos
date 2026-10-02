@@ -489,8 +489,12 @@ class TestGetEmptyParams:
             expected_shape = (N_STATES,)
         assert empty.model_params.intercept.shape == expected_shape
 
-    def test_log_scale_shape(self, empty):
-        assert empty.model_params.log_scale.shape == (N_STATES,)
+    def test_log_scale_shape(self, empty, is_classifier):
+        if is_classifier:
+            shape = (N_CLASSES, N_STATES)
+        else:
+            shape = (N_STATES,)
+        assert empty.model_params.log_scale.shape == shape
 
     def test_log_initial_prob_shape(self, empty):
         assert empty.hmm_params.log_initial_prob.shape == (N_STATES,)

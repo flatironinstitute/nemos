@@ -684,8 +684,6 @@ class BaseHMM(
         models: returns the unpenalized scalar loss given parameters and data.
         ``score`` negates this to recover the log-likelihood.
         """
-        # filter for non-nans, grab data if needed
-        data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
         # safe conversion to jax arrays of float
         params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
 
@@ -694,7 +692,7 @@ class BaseHMM(
 
         _, log_norm = forward_pass(
             params=params,
-            X=data,
+            X=X,
             y=y,
             session_starts=session_starts,
             log_likelihood_func=self._log_likelihood,

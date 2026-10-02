@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
-from ..glm import GLM, PopulationGLM
+from ..glm import GLM, PopulationGLM, ClassifierGLM, ClassifierPopulationGLM
 from ..glm.initialize_parameters import initialize_intercept_matching_mean_rate
 from ..glm.params import GLMUserParams
 from ..hmm.initialize_parameters import (
@@ -18,7 +18,7 @@ from ..hmm.initialize_parameters import (
     _resolve_init_funcs,
     _validate_init_funcs_kwargs,
 )
-from ..observation_models import Observations
+from ..observation_models import Observations, CategoricalObservations
 from ..pytrees import FeaturePytree
 from ..type_casting import cast_to_jax
 from ..typing import DESIGN_INPUT_TYPE
@@ -167,6 +167,7 @@ class KMeansInitializerGLM(KMeansInitializer):
         self.inverse_link_function = inverse_link_function
         self.observation_model = observation_model
         self.glm_kwargs = glm_kwargs if glm_kwargs is not None else {}
+        self._is_categorical = isinstance(observation_model, CategoricalObservations)
         if self._y.ndim == 1:
             self._glm_models = {
                 i: GLM(
@@ -177,6 +178,25 @@ class KMeansInitializerGLM(KMeansInitializer):
                 for i in range(self.n_states)
             }
             self._is_population = False
+        elif self._is_categorical:
+            if self._y.ndim == 2:
+                self._glm_models = {
+                    i: ClassifierGLM(
+                        inverse_link_function=inverse_link_function,
+                        **self.glm_kwargs,
+                    )
+                    for i in range(self.n_states)
+                }
+                self._is_population = False
+            else:
+                self._glm_models = {
+                    i: ClassifierPopulationGLM(
+                        inverse_link_function=inverse_link_function,
+                        **self.glm_kwargs,
+                    )
+                    for i in range(self.n_states)
+                }
+                self._is_population = True
         else:
             self._glm_models = {
                 i: PopulationGLM(

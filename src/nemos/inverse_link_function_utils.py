@@ -14,16 +14,12 @@ if TYPE_CHECKING:
 from .utils import one_over_x
 
 
-def _make_wrapper(func_exec, name, description):
+def _make_wrapper(func, name, description):
     """Create a wrapper function with combined docstrings."""
-    if isinstance(func_exec, functools.partial):
-        func = func_exec.func
-    else:
-        func = func_exec
 
     @functools.wraps(func)
-    def wrapper(x, **kwargs):
-        return func_exec(x, **kwargs)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
 
     # Combine the custom description with original docstring
     original_doc = func.__doc__ or "No docstring available."
