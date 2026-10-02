@@ -25,6 +25,9 @@ EXPECTED_TAGS = {
 }
 
 
+EXAMPLE_DIRS = ("tutorials", "how_to_guide")
+
+
 def get_tags(md_text):
     metadata = read_metadata(md_text, "md")
     return metadata.get("nemos_tags", None)
@@ -55,20 +58,22 @@ def get_invalid_tag_entries(metadata):
 
 def main():
     docs_dir = Path(__file__).resolve().parent.parent / "docs"
-    print(docs_dir)
     # Find files where jupytext successfully detects a MyST format
     no_tags = []
     invalid_tag_fields = []
     invalid_tag_entries = []
     missing_tag_fields = []
     for p in docs_dir.glob("**/*.md"):
+        if ".ipynb_checkpoints" in p.parts:
+            continue
         with open(p) as f:
             text = f.read()
             fmt = jupytext.guess_format(text, ".md")[0]
             if fmt == "myst":
                 nemos_tags = get_tags(text)
                 if nemos_tags is None:
-                    no_tags.append(p)
+                    if set(p.relative_to(docs_dir).parts) & set(EXAMPLE_DIRS):
+                        no_tags.append(p)
                 else:
                     invalid_fields, missing_fields = get_invalid_and_missing_tag_fields(
                         nemos_tags
@@ -80,7 +85,7 @@ def main():
                         invalid_tag_entries.append((p, invalid_entries))
                     if missing_fields:
                         missing_tag_fields.append((p, missing_fields))
-    return invalid_tag_fields, missing_tag_fields, invalid_tag_entries
+    return no_tags, invalid_tag_fields, missing_tag_fields, invalid_tag_entries
 
 
 if __name__ == "__main__":
@@ -89,8 +94,11 @@ if __name__ == "__main__":
 
     logger = logging.getLogger("check_example_tags")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-    inv_tag_fields, missing_tags_fields, inv_tag_entries = main()
+    no_tag, inv_tag_fields, missing_tags_fields, inv_tag_entries = main()
     msg = ""
+    for path in no_tag:
+        msg += f"{path}\nNo `nemos_tags` found in metadata\n"
+
     for path, fields in inv_tag_fields:
         msg += f"\n{path}:\n\tInvalid `nemos_tag` field names: {fields}\n\tAvailable fields: {list(EXPECTED_TAGS.keys())}\n"
 
