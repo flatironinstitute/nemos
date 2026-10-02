@@ -1,6 +1,7 @@
 import itertools
 import warnings
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -17,8 +18,9 @@ from nemos._hess import (
 )
 from nemos.regularizer import Ridge, UnRegularized
 from nemos.solvers._abstract_solver import OptimizationInfo
-from nemos.solvers._hessian_mixins import LinearSolverTag
-from nemos.solvers._newton import Newton, NewtonState
+from nemos.solvers._second_order._base import SecondOrderState
+from nemos.solvers._second_order._direction import LinearSolverTag
+from nemos.solvers._second_order._newton import Newton
 from nemos.tree_utils import pytree_map_and_reduce
 
 N = 8
@@ -128,9 +130,10 @@ def _make_solver(loss_fn, hess_fn, hess_tag, init_params, jit=False, **kwargs):
         has_aux=False,
         init_params=init_params,
         jit=jit,
+        hess_fn=hess_fn,
+        hessian_tag=hess_tag,
         **kwargs,
     )
-    solver.setup_hessian(hess_fn=hess_fn, hess_tag=hess_tag)
     return solver
 
 
@@ -141,7 +144,7 @@ def _compute_direction(solver, grad, H, params):
         grad,
         H,
         params,
-        state.identity_shift,
+        state,
     )
     return direction
 
@@ -435,14 +438,16 @@ def test_newton_init_state_default(request, regr_setup, regularizer):
     )
     state = newton.init_state(param_init, X, y)
 
-    assert isinstance(state, NewtonState)
+    assert isinstance(state, SecondOrderState)
     assert state.grad_norm == jnp.array(jnp.inf)
     assert isinstance(state.stats, OptimizationInfo)
     assert state.stats.num_steps == 0
     assert state.stats.converged == jnp.array(False)
     assert jnp.isnan(state.stats.function_val)
     assert state.stats.reached_max_steps == jnp.array(False)
-    assert isinstance(state.ls_state, optax.ScaleByBacktrackingLinesearchState)
+    assert isinstance(
+        state.ls_state.linesearch_state, optax.ScaleByBacktrackingLinesearchState
+    )
     np.testing.assert_array_equal(state.identity_shift, 0.0)
 
 
@@ -951,7 +956,7 @@ def test_modified_direction_is_computed_blockwise(linear_solver, jit):
         grad,
         H,
         params,
-        state.identity_shift,
+        state,
     )
 
     # Compare the blockwise result with solving each block separately.
@@ -1124,7 +1129,7 @@ def test_linear_solver_auto_resolution(matrix_property, expected):
     )
     solver.init_state(params)
 
-    assert solver._resolved_linear_solver == expected
+    assert solver.direction.resolved_linear_solver == expected
 
 
 @pytest.mark.parametrize("requested", ["eigh", "identity_shift"])
@@ -1152,7 +1157,7 @@ def test_explicit_linear_solver_overrides_tag(requested, matrix_property):
     )
     solver.init_state(params)
 
-    assert solver._resolved_linear_solver == requested
+    assert solver.direction.resolved_linear_solver == requested
 
 
 @pytest.mark.parametrize("matrix_property", _MOD_PROPS)
@@ -1175,7 +1180,7 @@ def test_forced_cholesky_warns_for_nonpositive_tag(matrix_property):
     ):
         solver.init_state(params)
 
-    assert solver._resolved_linear_solver == "cholesky"
+    assert solver.direction.resolved_linear_solver == "cholesky"
 
 
 @pytest.mark.parametrize(
@@ -1324,8 +1329,8 @@ def test_eigh_delta_matches_parameter_dtype(dtype):
 
     expected = jnp.sqrt(jnp.finfo(dtype).eps)
 
-    assert solver._delta.dtype == dtype
-    np.testing.assert_array_equal(solver._delta, expected)
+    assert solver.direction.delta.dtype == dtype
+    np.testing.assert_array_equal(solver.direction.delta, expected)
 
 
 @pytest.mark.requires_x64
@@ -1428,11 +1433,11 @@ def test_identity_shift_returns_accepted_shift(jit):
     )
     state = solver.init_state(params)
 
-    direction, identity_shift = solver._newton_direction(
+    direction, new_state = solver._newton_direction(
         grad,
         H,
         params,
-        state.identity_shift,
+        state,
     )
 
     expected_shift = jnp.asarray(2.0, dtype=H.dtype)
@@ -1442,7 +1447,7 @@ def test_identity_shift_returns_accepted_shift(jit):
     )
 
     np.testing.assert_allclose(direction, expected, atol=1e-12, rtol=1e-12)
-    np.testing.assert_allclose(identity_shift, expected_shift)
+    np.testing.assert_allclose(new_state.identity_shift, expected_shift)
 
 
 @pytest.mark.requires_x64
@@ -1468,13 +1473,16 @@ def test_identity_shift_uses_previous_accepted_shift(jit):
         linear_solver="identity_shift",
         identity_shift_beta=0.2,
     )
-    solver.init_state(params)
+    state = solver.init_state(params)
+    # the ladder seeds from the shift the previous iteration accepted, which the state
+    # carries; write it there rather than passing it alongside
+    state = eqx.tree_at(lambda s: s.identity_shift, state, previous_shift)
 
-    direction, identity_shift = solver._newton_direction(
+    direction, new_state = solver._newton_direction(
         grad,
         H,
         params,
-        previous_shift,
+        state,
     )
 
     expected = jnp.linalg.solve(
@@ -1483,4 +1491,4 @@ def test_identity_shift_uses_previous_accepted_shift(jit):
     )
 
     np.testing.assert_allclose(direction, expected, atol=1e-12, rtol=1e-12)
-    np.testing.assert_allclose(identity_shift, previous_shift)
+    np.testing.assert_allclose(new_state.identity_shift, previous_shift)
