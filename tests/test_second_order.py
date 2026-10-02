@@ -36,12 +36,12 @@ import numpy as np
 import optax
 import pytest
 from nemos.solvers._newton import Newton, ProximalNewton
+from nemos.solvers._second_order._loop import Loop
 from optimistix._solver.limited_memory_bfgs import _lbfgs_hessian_operator_fn
 
 from nemos.regularizer import Lasso, Ridge
 from nemos.solvers._second_order._curvature import LBFGSCurvature
 from nemos.solvers._second_order._lbfgs import ProximalLBFGS
-from nemos.solvers._second_order._loop import Loop
 
 # A point with both zero and non-zero coefficients: the zeros are where the L1 penalty is
 # not differentiable, which is the whole reason the composite slope is needed.
