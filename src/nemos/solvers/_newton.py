@@ -17,6 +17,11 @@ from ..typing import Params
 from ._abstract_solver import OptimizationInfo
 from ._fista import FISTA
 
+CHOLESKY_ERR_MSG = (
+    "ERROR. Cholesky solve failed; the Hessian may not be positive definite."
+    "Try using the 'eigh' or 'identity_shift' solver instead."
+)
+
 DEFAULT_ATOL = 1e-4
 DEFAULT_RTOL = 0.0
 DEFAULT_MAX_STEPS = 100
@@ -97,8 +102,7 @@ def _solve_shifted_system(
         checked_value = eqx.error_if(
             solution.value,
             failed,
-            "Cholesky solve failed; the Hessian may not be positive definite. "
-            "Try using the 'eigh' or 'identity_shift' solver instead.",
+            CHOLESKY_ERR_MSG,
         )
         solution = eqx.tree_at(
             lambda result: result.value,

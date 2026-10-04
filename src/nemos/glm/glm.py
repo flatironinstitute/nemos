@@ -28,7 +28,12 @@ from ..inverse_link_function_utils import (
 )
 from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
-from ..solvers import WrappedProxSVRG, WrappedSVRG, list_stochastic_solvers
+from ..solvers import (
+    CHOLESKY_ERR_MSG,
+    WrappedProxSVRG,
+    WrappedSVRG,
+    list_stochastic_solvers,
+)
 from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from ..type_casting import cast_to_jax, support_pynapple
 from ..typing import DESIGN_INPUT_TYPE, SolverState, StepResult
@@ -1013,6 +1018,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
                 data,
                 y,
                 frozen_coef=frozen_coef,
+                rate_range=self.observation_model.rate_range,
             )
             initial_coef = jax.tree_util.tree_map(
                 lambda x: jnp.zeros(x.shape), empty_params.coef
@@ -1031,6 +1037,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
                 empty_params.coef,
                 frozen_coef=frozen_coef,
                 frozen_intercept=frozen_intercept,
+                rate_range=self.observation_model.rate_range,
             )
 
         init_params = eqx.tree_at(
@@ -1157,10 +1164,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         try:
             params, state, aux = self._optimizer_run(active, data, y)
         except RuntimeError as exc:
-            if (
-                "Cholesky solve failed; the Hessian may not be positive definite"
-                not in str(exc)
-            ):
+            if CHOLESKY_ERR_MSG not in str(exc):
                 raise
 
             raise ValueError(

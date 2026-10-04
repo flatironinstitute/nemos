@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 import nemos as nmo
+from nemos.solvers import CHOLESKY_ERR_MSG
 
 REGULARIZERS = ["UnRegularized", "Ridge", "Lasso", "GroupLasso", "ElasticNet"]
 SOLVER_REGULARIZER_PAIRS = [
@@ -47,7 +48,7 @@ def test_silent_neurons_fit(solver_name, regularizer_name, case):
         warnings.filterwarnings(
             "ignore", message="The fit did not converge", category=RuntimeWarning
         )
-        with pytest.warns(UserWarning, match="zero mean activity"):
+        with pytest.warns(UserWarning, match="boundary mean activity"):
             model.fit(X, y)
     assert np.isfinite(model.coef_).all()
     assert np.isfinite(model.intercept_).all()
@@ -56,7 +57,7 @@ def test_silent_neurons_fit(solver_name, regularizer_name, case):
     predicted = np.exp(X @ np.asarray(model.coef_) + np.asarray(model.intercept_))
     assert np.isfinite(predicted).all()
     silent_predictions = predicted if case != "partial_population" else predicted[:, 1:]
-    assert np.all(silent_predictions < 1e-4)
+    assert np.all(silent_predictions <= 0.5 / len(y) + 1e-6)
 
 
 @pytest.mark.parametrize("linear_solver", ["eigh", "identity_shift"])
@@ -71,7 +72,7 @@ def test_newton_safe_linear_solvers(linear_solver, population):
         regularizer_strength=0.1,
         solver_kwargs={"linear_solver": linear_solver},
     )
-    with pytest.warns(UserWarning, match="zero mean activity"):
+    with pytest.warns(UserWarning, match="boundary mean activity"):
         model.fit(X, y)
     assert jnp.all(jnp.isfinite(model.intercept_))
 
@@ -91,11 +92,14 @@ def test_newton_cholesky_failure_has_actionable_message():
     with pytest.raises(ValueError, match="solver_kwargs=.*identity_shift") as exc:
         model.fit(X, y, init_params=initial)
     assert "'linear_solver': 'eigh'" in str(exc.value)
-    assert exc.value.__cause__ is not None
+    assert CHOLESKY_ERR_MSG in str(exc.value.__cause__)
 
 
-def test_unrelated_solver_runtime_error_is_preserved(monkeypatch):
-    failure = RuntimeError("unrelated solver failure")
+@pytest.mark.parametrize(
+    "message", ["unrelated solver failure", CHOLESKY_ERR_MSG.split(". ")[0]]
+)
+def test_unrelated_solver_runtime_error_is_preserved(monkeypatch, message):
+    failure = RuntimeError(message)
 
     def fail(*args, **kwargs):
         raise failure

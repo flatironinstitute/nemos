@@ -144,12 +144,42 @@ def compute_frozen_linear_predictor(X, frozen_coef, frozen_intercept):
     )
 
 
+def _initial_mean(y, rate_range):
+    """Move boundary means into the open rate range using a half-observation shift."""
+    means = jnp.atleast_1d(jnp.nanmean(y, axis=0))
+    if rate_range is None:
+        return means
+    lower, upper = rate_range
+    if jnp.any((means < lower) | (means > upper)):
+        raise ValueError(f"Mean activity must lie within rate_range={rate_range}.")
+    boundary = (means == lower) | (means == upper)
+    if jnp.any(boundary):
+        n = jnp.sum(~jnp.isnan(y), axis=0)
+        if rate_range == (0, 1):
+            shifted = (n * means + 0.5) / (n + 1)
+        elif rate_range == (0, float("inf")):
+            shifted = means + 0.5 / n
+        else:
+            raise ValueError(
+                f"Cannot shift boundary means for rate_range={rate_range}."
+            )
+        warnings.warn(
+            f"Output(s) {jnp.flatnonzero(boundary).tolist()} have boundary mean activity "
+            f"in `y`; shifting into rate_range={rate_range} for initialization.",
+            UserWarning,
+            stacklevel=3,
+        )
+        means = jnp.where(boundary, shifted, means)
+    return means
+
+
 def initialize_intercept_matching_mean_rate(
     inverse_link_function: Callable,
     X: Union[Pytree, jnp.ndarray],
     y: jnp.ndarray,
     frozen_coef: Optional[Union[Pytree, jnp.ndarray]] = None,
     frozen_intercept: Optional[jnp.ndarray] = None,
+    rate_range: Optional[tuple[float, float]] = None,
 ) -> jnp.ndarray:
     """
     Compute the initial intercept term for a regression models.
@@ -170,6 +200,8 @@ def initialize_intercept_matching_mean_rate(
          or (n_sample, n_neurons) for multi-variable regressors, such as `PopulaitonGLM`.
     frozen_coef:
         The frozen parameters.
+    rate_range:
+        Open interval of valid observation means. None disables boundary shifts.
 
     Returns
     -------
@@ -178,10 +210,8 @@ def initialize_intercept_matching_mean_rate(
 
     Notes
     -----
-    For known links whose inverse is negative infinity at zero, zero empirical
-    means are replaced by machine epsilon for initialization only. This gives
-    silent outputs a finite starting intercept without changing the observations
-    or the objective. The maximum-likelihood intercept may still be unbounded.
+    Boundary means are shifted into the observation model's rate range before
+    either analytical or numerical inversion. Only initialization is changed.
 
     """
     y = jnp.asarray(y, float)
@@ -196,23 +226,9 @@ def initialize_intercept_matching_mean_rate(
     frozen_lin_pred = compute_frozen_linear_predictor(X, frozen_coef, frozen_intercept)
     mean_frozen = jnp.nanmean(frozen_lin_pred, axis=0)
 
-    means = jnp.atleast_1d(jnp.nanmean(y, axis=0))
+    means = _initial_mean(y, rate_range)
     if analytical_inv:
-        inverse_means = analytical_inv(means)
-        silent = (means == 0) & jnp.isneginf(inverse_means)
-        if jnp.any(silent):
-            indices = jnp.flatnonzero(silent).tolist()
-            warnings.warn(
-                f"Output(s) {indices} have zero mean activity in `y` (e.g. no spikes). "
-                "Their mean-matching intercept is -inf; using machine epsilon "
-                "as the initial mean to obtain finite starting parameters. "
-                "A finite maximum-likelihood intercept may not exist for these outputs.",
-                UserWarning,
-                stacklevel=2,
-            )
-            initial_means = jnp.where(silent, jnp.finfo(means.dtype).eps, means)
-            inverse_means = analytical_inv(initial_means)
-        out = inverse_means - mean_frozen
+        out = analytical_inv(means) - mean_frozen
         if jnp.any(jnp.isnan(out)):
             raise ValueError(
                 "Failed to initialize the model intercept as the inverse of the firing rate for "
@@ -252,6 +268,7 @@ def initialize_constant_coef_matching_mean_rate(
     frozen_coef: Optional[Union[Pytree, jnp.ndarray]] = None,
     frozen_intercept: Optional[jnp.ndarray] = None,
     eps: Optional[float] = None,
+    rate_range: Optional[tuple[float, float]] = None,
 ) -> Union[Pytree, jnp.ndarray]:
     r"""
     Initialize coefficients as a constant matching the mean rate, with no intercept.
@@ -296,6 +313,9 @@ def initialize_constant_coef_matching_mean_rate(
         epsilon of the row-sum dtype, which only intervenes when the design row-sums are
         numerically zero and is otherwise negligible.
 
+    rate_range :
+        Open interval of valid observation means, used before inverse-link initialization.
+
     Returns
     -------
     :
@@ -324,7 +344,9 @@ def initialize_constant_coef_matching_mean_rate(
     if frozen_coef is None:
         frozen_coef = jax.tree_util.tree_map(lambda x: None, X)
     # the linear-predictor target a free intercept would supply, shape (*out,)
-    eta_target = initialize_intercept_matching_mean_rate(inverse_link_function, X, y)
+    eta_target = initialize_intercept_matching_mean_rate(
+        inverse_link_function, X, y, rate_range=rate_range
+    )
 
     # coef is (n_features, *out): out is () for GLM, (n_out,) for population/classifier
     # GLM, (n_neurons, n_classes) for the population classifier. The frozen predictor is

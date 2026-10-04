@@ -163,28 +163,34 @@ model.fit(input_features, spikes)
 ```
 
 :::{note}
-If a neuron has no spikes, matching its mean rate with an exponential or softplus
-link would require an intercept of negative infinity. NeMoS warns which outputs
-are affected and uses machine epsilon as their starting mean rate, producing
-finite initial parameters. This changes only the initialization; the observed
-spikes and loss function are unchanged. During fitting, the intercept may
-continue decreasing, and a finite maximum-likelihood solution is not guaranteed
-for a silent neuron.
+Boundary means are shifted into the observation model's valid rate range before initialization. For positive rates (including categorical weights), zero means become `1 / (2 * n)`. For Bernoulli outputs, means at zero or one become `(n * mean + 0.5) / (n + 1)`, where `n` is the number of valid observations.
+Interior means and Gaussian means are unchanged. This changes starting parameters only, not the data or loss.
 
-For partially or fully silent populations, `Newton` with `Ridge` may fail with
-the default Cholesky linear solver because the Hessian may not be positive
-definite. In this case, use `"identity_shift"` or `"eigh"` through
-`solver_kwargs`, for example:
-
-```python
-model = nmo.glm.PopulationGLM(
-    solver_name="Newton",
-    regularizer="Ridge",
-    regularizer_strength=0.1,
-    solver_kwargs={"linear_solver": "identity_shift"},
-)
-```
+For a silent Poisson neuron, the loss and its gradient approach zero as the intercept decreases. Solvers can therefore meet a numerical stopping tolerance
+even though the exact optimum is approached at an infinite intercept.
 :::
+
+Newton's Cholesky solve can still fail for a singular Hessian. Here, very negative user-supplied intercepts make the silent neurons' rates underflow to zero:
+```{code-cell} ipython3
+:tags: [raises-exception]
+
+X_silent = np.random.default_rng(0).normal(size=(40, 2))
+y_silent = np.zeros((40, 3))
+y_silent[[1, 5, 7], 0] = 1
+init_silent = (np.zeros((2, 3)), np.array([-4.0, -1000.0, -1000.0]))
+silent_model = nmo.glm.PopulationGLM(
+    solver_name="Newton", regularizer="Ridge", regularizer_strength=0.1,
+    solver_kwargs={"linear_solver": "cholesky"},
+)
+silent_model.fit(X_silent, y_silent, init_params=init_silent)
+```
+
+Select `identity_shift` through `solver_kwargs` to stabilize the linear solve (`eigh` is another available option):
+
+```{code-cell} ipython3
+silent_model.solver_kwargs = {"linear_solver": "identity_shift"}
+silent_model.fit(X_silent, y_silent, init_params=init_silent)
+```
 
 If we print the model coefficients, we can see the effect of the mask.
 
