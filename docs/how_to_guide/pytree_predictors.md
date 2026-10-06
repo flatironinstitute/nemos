@@ -12,6 +12,7 @@ nemos_tags:
   model: [GLM]
   observation_model: [Poisson]
   signal: [spike-counts]
+  topic: [feature-design]
   data: simulated
   description: Organize multiple predictors and their coefficients as JAX pytrees.
 ---

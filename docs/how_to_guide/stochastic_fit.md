@@ -12,6 +12,7 @@ nemos_tags:
   model: [PopulationGLM]
   observation_model: [Poisson]
   signal: [spike-counts]
+  topic: [stochastic-fit, scalability]
   data: simulated
   description: Fit a population GLM by mini-batch stochastic optimization on data read from an NWB file.
 ---

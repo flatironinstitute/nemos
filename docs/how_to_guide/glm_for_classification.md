@@ -12,6 +12,7 @@ nemos_tags:
   model: [ClassifierGLM]
   observation_model: [Categorical]
   signal: [behavior-choices]
+  topic: []
   data: simulated
   description: Fit a ClassifierGLM to simulated categorical choices and predict class labels and probabilities.
 ---

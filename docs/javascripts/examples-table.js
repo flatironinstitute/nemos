@@ -6,6 +6,7 @@ document.addEventListener("DOMContentLoaded", function () {
     { id: "model",             label: "Model" },
     { id: "observation_model", label: "Observation model" },
     { id: "signal",            label: "Signal" },
+    { id: "topic",             label: "Topic" },
     { id: "data",              label: "Data" },
   ];
 
@@ -128,6 +129,7 @@ document.addEventListener("DOMContentLoaded", function () {
           { title: "Model",             data: "model",             render: tagList },
           { title: "Observation model", data: "observation_model", render: tagList },
           { title: "Signal",            data: "signal",            render: tagList },
+          { title: "Topic",             data: "topic",             render: tagList },
           { title: "Data",              data: "data",              render: tagList },
         ],
       });

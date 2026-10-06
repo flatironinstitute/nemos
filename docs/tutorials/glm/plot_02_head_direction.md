@@ -12,6 +12,7 @@ nemos_tags:
   model: [GLM, PopulationGLM]
   observation_model: [Poisson]
   signal: [spike-counts]
+  topic: [functional-connectivity, feature-design]
   data: recorded
   description: Fit a population of head-direction cells with spike-history and coupling filters built from a convolutional basis.
 ---

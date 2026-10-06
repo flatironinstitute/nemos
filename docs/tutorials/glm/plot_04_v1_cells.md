@@ -12,6 +12,7 @@ nemos_tags:
   model: [GLM]
   observation_model: [Poisson]
   signal: [spike-counts]
+  topic: [receptive-fields]
   data: recorded
   description: Fit a V1 neuron's response to a white-noise stimulus, starting from its spike-triggered average.
 ---

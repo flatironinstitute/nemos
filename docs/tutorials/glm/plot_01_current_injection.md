@@ -12,6 +12,7 @@ nemos_tags:
   model: [GLM]
   observation_model: [Poisson]
   signal: [spike-counts]
+  topic: [receptive-fields, feature-design]
   data: recorded
   description: Fit a neuron's spiking to the current injected in a patch-clamp recording, then add a filter on the current's history.
 ---

@@ -21,6 +21,19 @@ EXPECTED_TAGS = {
         "Categorical",
     ],
     "model": ["GLM", "PopulationGLM", "GLMHMM", "ClassifierGLM"],
+    "topic": [
+        "feature-design",
+        "variable-selection",
+        "cross-validation",
+        "regularization",
+        "stochastic-fit",
+        "scalability",
+        "functional-connectivity",
+        "simulation",
+        "custom-components",
+        "receptive-fields",
+        "latent-states",
+    ],
     "data": ["recorded", "simulated"],
 }
 

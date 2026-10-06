@@ -47,6 +47,15 @@ Quickstart
 ```
 :::
 :::{grid-item}
+```{button-ref} examples
+:ref-type: doc
+:color: primary
+:shadow:
+
+Example Finder
+```
+:::
+:::{grid-item}
 ```{button-ref} reference/benchmarking
 :ref-type: doc
 :color: primary
@@ -211,7 +220,7 @@ Joint effects of two inputs.
 :gutter: 3
 
 :::{grid-item-card} __Spike counts__
-:link: examples.html?signal=spike-counts&model=GLM
+:link: examples.html?signal=spike-counts&model=GLM,PopulationGLM
 :link-type: url
 :link-alt: Spike-count examples
 

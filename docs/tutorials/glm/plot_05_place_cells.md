@@ -12,6 +12,7 @@ nemos_tags:
   model: [GLM]
   observation_model: [Poisson]
   signal: [spike-counts]
+  topic: [receptive-fields, variable-selection, cross-validation]
   data: recorded
   description: Fit place cells to position, theta phase and speed, and select among these inputs by cross-validation.
 ---

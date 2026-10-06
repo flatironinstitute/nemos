@@ -12,6 +12,7 @@ nemos_tags:
   model: [PopulationGLM]
   observation_model: [Poisson]
   signal: [spike-counts]
+  topic: [stochastic-fit, scalability]
   data: simulated
   description: Custom pre-processing of batches during a stochastic fit.
 ---
