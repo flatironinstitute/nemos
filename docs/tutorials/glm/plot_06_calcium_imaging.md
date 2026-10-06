@@ -11,8 +11,8 @@ kernelspec:
 nemos_tags:
   model: [GLM]
   observation_model: [Gamma, Gaussian]
-  signal: [calcium-imaging]
-  topic: [receptive-fields]
+  signal: [calcium imaging]
+  topic: [receptive fields]
   data: recorded
   description: Fit the calcium transients of postsubiculum head-direction cells with Gamma and Gaussian GLMs.
 ---

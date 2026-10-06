@@ -11,8 +11,8 @@ kernelspec:
 nemos_tags:
   model: [GLM]
   observation_model: [Poisson]
-  signal: [spike-counts]
-  topic: [variable-selection, regularization]
+  signal: [spike counts]
+  topic: [variable selection, regularization]
   data: simulated
   description: Select informative covariates with Group Lasso, which sets whole groups of basis coefficients to zero.
 ---

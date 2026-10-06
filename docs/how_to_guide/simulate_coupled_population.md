@@ -11,8 +11,8 @@ kernelspec:
 nemos_tags:
   model: [GLM]
   observation_model: [Poisson]
-  signal: [spike-counts]
-  topic: [simulation, functional-connectivity]
+  signal: [spike counts]
+  topic: [simulation, functional connectivity]
   data: simulated
   description: Simulate spike trains from a fitted GLM and from a recurrently coupled population.
 ---

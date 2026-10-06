@@ -11,8 +11,8 @@ kernelspec:
 nemos_tags:
   model: [GLM, PopulationGLM]
   observation_model: [Poisson]
-  signal: [spike-counts]
-  topic: [custom-components]
+  signal: [spike counts]
+  topic: [custom components]
   data: simulated
   description: Scipy solvers in NeMoS - wrap a scipy optimizer and register it as a solver.
 ---

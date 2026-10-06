@@ -7,8 +7,8 @@ The lists of examples the landing page links to are generated from it, so a page
 nemos_tags:
   model: [PopulationGLM]
   observation_model: [Poisson]
-  signal: [spike-counts]
-  topic: [stochastic-fit, scalability]
+  signal: [spike counts]
+  topic: [stochastic fit, scalability]
   data: simulated
   description: Fit a population GLM by mini-batch stochastic optimization on data read from an NWB file.
 ```
@@ -17,8 +17,8 @@ nemos_tags:
 | --- |------------------------------------------------------------------------------------------------|
 | `model` | `GLM`, `PopulationGLM`, `GLMHMM`, `ClassifierGLM`                                              |
 | `observation_model` | `Poisson`, `Gamma`, `Gaussian`, `Bernoulli`, `NegativeBinomial`, `Categorical`                 |
-| `signal` | `spike-counts`, `calcium-imaging`, `lfp`, `behavior-choices`, `behavior-tracking`, `continuous` |
-| `topic` | `feature-design`, `variable-selection`, `cross-validation`, `regularization`, `stochastic-fit`, `scalability`, `functional-connectivity`, `simulation`, `custom-components`, `receptive-fields`, `latent-states` |
+| `signal` | `spike counts`, `calcium imaging`, `lfp`, `behavior choices`, `behavior tracking`, `continuous` |
+| `topic` | `feature design`, `variable selection`, `cross-validation`, `regularization`, `stochastic fit`, `scalability`, `functional connectivity`, `simulation`, `custom components`, `receptive fields`, `latent states` |
 | `data` | `recorded`, `simulated`                                                                        |
 | `description` | free text, one sentence                                                                        |
 

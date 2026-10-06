@@ -12,8 +12,8 @@ kernelspec:
 nemos_tags:
   model: [GLMHMM]
   observation_model: [Bernoulli]
-  signal: [behavior-choices]
-  topic: [latent-states]
+  signal: [behavior choices]
+  topic: [latent states]
   data: recorded
   description: Infer latent decision-making strategies from mouse choices in the IBL task with a Bernoulli GLM-HMM.
 ---

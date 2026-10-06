@@ -11,8 +11,8 @@ kernelspec:
 nemos_tags:
   model: [PopulationGLM]
   observation_model: [Poisson]
-  signal: [spike-counts]
-  topic: [stochastic-fit]
+  signal: [spike counts]
+  topic: [stochastic fit]
   data: simulated
   description: Write a custom callback that stops a stochastic fit once the optimization has converged.
 ---

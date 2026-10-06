@@ -11,8 +11,8 @@ kernelspec:
 nemos_tags:
   model: [GLM]
   observation_model: [Poisson]
-  signal: [spike-counts]
-  topic: [receptive-fields, feature-design]
+  signal: [spike counts]
+  topic: [receptive fields, feature design]
   data: recorded
   description: Fit a grid cell's spatial firing with a two-dimensional basis over position.
 ---

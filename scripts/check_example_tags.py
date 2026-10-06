@@ -5,11 +5,11 @@ from jupytext.formats import read_metadata
 
 EXPECTED_TAGS = {
     "signal": [
-        "spike-counts",
-        "calcium-imaging",
+        "spike counts",
+        "calcium imaging",
         "lfp",
-        "behavior-choices",
-        "behavior-tracking",
+        "behavior choices",
+        "behavior tracking",
         "continuous",
     ],
     "observation_model": [
@@ -22,17 +22,17 @@ EXPECTED_TAGS = {
     ],
     "model": ["GLM", "PopulationGLM", "GLMHMM", "ClassifierGLM"],
     "topic": [
-        "feature-design",
-        "variable-selection",
+        "feature design",
+        "variable selection",
         "cross-validation",
         "regularization",
-        "stochastic-fit",
+        "stochastic fit",
         "scalability",
-        "functional-connectivity",
+        "functional connectivity",
         "simulation",
-        "custom-components",
-        "receptive-fields",
-        "latent-states",
+        "custom components",
+        "receptive fields",
+        "latent states",
     ],
     "data": ["recorded", "simulated"],
 }

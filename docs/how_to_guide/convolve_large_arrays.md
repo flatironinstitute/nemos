@@ -12,7 +12,7 @@ nemos_tags:
   model: []
   observation_model: []
   signal: [continuous]
-  topic: [scalability, feature-design]
+  topic: [scalability, feature design]
   data: simulated
   description: Batch convolutions over channels, basis kernels or samples to keep large arrays within GPU memory.
 ---

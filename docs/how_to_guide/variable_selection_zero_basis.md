@@ -11,8 +11,8 @@ kernelspec:
 nemos_tags:
   model: [GLM]
   observation_model: [Poisson]
-  signal: [spike-counts]
-  topic: [variable-selection, cross-validation]
+  signal: [spike counts]
+  topic: [variable selection, cross-validation]
   data: recorded
   description: Cross-validate over combinations of inputs with the Zero basis to find which ones a place cell needs.
 ---

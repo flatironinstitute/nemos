@@ -11,8 +11,8 @@ kernelspec:
 nemos_tags:
   model: [PopulationGLM]
   observation_model: [Poisson]
-  signal: [spike-counts]
-  topic: [functional-connectivity]
+  signal: [spike counts]
+  topic: [functional connectivity]
   data: simulated
   description: Fit a fully coupled population GLM on raw spike history, then reduce its parameters with a basis.
 ---

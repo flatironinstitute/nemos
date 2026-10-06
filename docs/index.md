@@ -220,7 +220,7 @@ Joint effects of two inputs.
 :gutter: 3
 
 :::{grid-item-card} __Spike counts__
-:link: examples.html?signal=spike-counts&model=GLM,PopulationGLM
+:link: examples.html?signal=spike%20counts&model=GLM,PopulationGLM
 :link-type: url
 :link-alt: Spike-count examples
 
@@ -245,7 +245,7 @@ GLM
 :::
 
 :::{grid-item-card} __Continuous signals__
-:link: examples.html?signal=calcium-imaging,continuous&model=GLM
+:link: examples.html?signal=calcium%20imaging,continuous&model=GLM
 :link-type: url
 :link-alt: Continuous-signal examples
 
