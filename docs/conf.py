@@ -6,6 +6,7 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
+import json
 import os
 import re
 import shutil
@@ -228,7 +229,7 @@ def generate_dark_diagrams(app):
 
 
 def clear_figure_cache(app):
-    """Drop the drawn figures, before the builder has taken stock of them.
+    """Drop the drawn figures, before the builder has recorded them.
 
     This runs on ``builder-inited`` rather than alongside the re-read below: the
     builder records which image belongs to which page while reading, so deleting
@@ -472,6 +473,33 @@ def _add_benchmark_assets(app, pagename, templatename, context, doctree):
     app.add_js_file("benchmark-table.js")
 
 
+def write_examples_index(app, exception):
+    """Collect the ``nemos_tags`` of every example into ``_static/examples.json``.
+
+    The examples table reads this file, so it lists exactly the pages carrying a
+    tag block. Written into the build rather than the sources, so it is never
+    out of step with the pages it links to.
+    """
+    if exception is not None:
+        return
+    env = app.env
+    examples = []
+    for docname in sorted(env.found_docs):
+        tags = env.metadata[docname].get("nemos_tags")
+        if tags is None:
+            continue
+        examples.append(
+            {
+                "title": env.titles[docname].astext(),
+                "url": app.builder.get_target_uri(docname),
+                # myst_parser hands nested frontmatter over as a JSON string
+                **json.loads(tags),
+            }
+        )
+    out = Path(app.outdir) / "_static" / "examples.json"
+    out.write_text(json.dumps(examples, indent=2))
+
+
 def setup(app):
     app.connect("source-read", add_download_admonition)
     app.connect("doctree-resolved", drop_body_toctree_captions)
@@ -481,3 +509,4 @@ def setup(app):
     app.connect("builder-inited", generate_dark_diagrams)
     app.connect("builder-inited", clear_figure_cache)
     app.connect("env-get-outdated", force_figure_rebuild)
+    app.connect("build-finished", write_examples_index)
