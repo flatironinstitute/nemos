@@ -13,6 +13,7 @@ nemos_tags:
   observation_model: [Poisson]
   signal: [spike-counts]
   data: recorded
+  description: Fit a grid cell's spatial firing with a two-dimensional basis over position.
 ---
 
 ```{code-cell} ipython3

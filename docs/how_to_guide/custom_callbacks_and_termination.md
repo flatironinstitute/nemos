@@ -13,6 +13,7 @@ nemos_tags:
   observation_model: [Poisson]
   signal: [spike-counts]
   data: simulated
+  description: Write a custom callback that stops a stochastic fit once the optimization has converged.
 ---
 
 ```{code-cell} ipython3

@@ -13,6 +13,7 @@ nemos_tags:
   observation_model: [Poisson]
   signal: [spike-counts]
   data: recorded
+  description: Fit a V1 neuron's response to a white-noise stimulus, starting from its spike-triggered average.
 ---
 
 ```{code-cell} ipython3

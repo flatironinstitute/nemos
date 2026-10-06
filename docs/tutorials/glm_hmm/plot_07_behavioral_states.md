@@ -14,6 +14,7 @@ nemos_tags:
   observation_model: [Bernoulli]
   signal: [behavior-choices]
   data: recorded
+  description: Infer latent decision-making strategies from mouse choices in the IBL task with a Bernoulli GLM-HMM.
 ---
 
 # Infer behavioral strategies during decision making with GLM-HMMs

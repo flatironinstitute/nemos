@@ -13,6 +13,7 @@ nemos_tags:
   observation_model: [Poisson]
   signal: [spike-counts]
   data: simulated
+  description: Write a stochastic gradient descent loop by hand with GLM.update for full control over each step.
 ---
 
 ```{code-cell} ipython3

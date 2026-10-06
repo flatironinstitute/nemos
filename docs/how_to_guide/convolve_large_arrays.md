@@ -13,6 +13,7 @@ nemos_tags:
   observation_model: []
   signal: [continuous]
   data: simulated
+  description: Batch convolutions over channels, basis kernels or samples to keep large arrays within GPU memory.
 ---
 
 # Convolve Large Arrays

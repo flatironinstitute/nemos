@@ -13,6 +13,7 @@ nemos_tags:
   observation_model: [Poisson]
   signal: [spike-counts]
   data: simulated
+  description: Organize multiple predictors and their coefficients as JAX pytrees.
 ---
 
 ```{code-cell} ipython3

@@ -13,6 +13,7 @@ nemos_tags:
   observation_model: [Poisson]
   signal: [spike-counts]
   data: simulated
+  description: Scipy solvers in NeMoS - wrap a scipy optimizer and register it as a solver.
 ---
 
 # Creating custom solvers for use with NeMoS

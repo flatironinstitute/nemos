@@ -24,6 +24,10 @@ EXPECTED_TAGS = {
     "data": ["recorded", "simulated"],
 }
 
+# required alongside EXPECTED_TAGS, but free text rather than a vocabulary
+DESCRIPTION_FIELD = "description"
+TAG_FIELDS = EXPECTED_TAGS.keys() | {DESCRIPTION_FIELD}
+
 
 EXAMPLE_DIRS = ("tutorials", "how_to_guide")
 
@@ -34,9 +38,16 @@ def get_tags(md_text):
 
 
 def get_invalid_and_missing_tag_fields(metadata):
-    invalid = metadata.keys() - EXPECTED_TAGS.keys()
-    missing = EXPECTED_TAGS.keys() - metadata.keys()
+    invalid = metadata.keys() - TAG_FIELDS
+    missing = TAG_FIELDS - metadata.keys()
     return list(invalid), list(missing)
+
+
+def has_empty_description(metadata):
+    if DESCRIPTION_FIELD not in metadata:
+        return False
+    description = metadata[DESCRIPTION_FIELD]
+    return not isinstance(description, str) or not description.strip()
 
 
 def get_invalid_tag_entries(metadata):
@@ -63,6 +74,7 @@ def main():
     invalid_tag_fields = []
     invalid_tag_entries = []
     missing_tag_fields = []
+    empty_description = []
     for p in docs_dir.glob("**/*.md"):
         if ".ipynb_checkpoints" in p.parts:
             continue
@@ -85,7 +97,15 @@ def main():
                         invalid_tag_entries.append((p, invalid_entries))
                     if missing_fields:
                         missing_tag_fields.append((p, missing_fields))
-    return no_tags, invalid_tag_fields, missing_tag_fields, invalid_tag_entries
+                    if has_empty_description(nemos_tags):
+                        empty_description.append(p)
+    return (
+        no_tags,
+        invalid_tag_fields,
+        missing_tag_fields,
+        invalid_tag_entries,
+        empty_description,
+    )
 
 
 if __name__ == "__main__":
@@ -94,13 +114,13 @@ if __name__ == "__main__":
 
     logger = logging.getLogger("check_example_tags")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-    no_tag, inv_tag_fields, missing_tags_fields, inv_tag_entries = main()
+    no_tag, inv_tag_fields, missing_tags_fields, inv_tag_entries, empty_desc = main()
     msg = ""
     for path in no_tag:
         msg += f"{path}\nNo `nemos_tags` found in metadata\n"
 
     for path, fields in inv_tag_fields:
-        msg += f"\n{path}:\n\tInvalid `nemos_tag` field names: {fields}\n\tAvailable fields: {list(EXPECTED_TAGS.keys())}\n"
+        msg += f"\n{path}:\n\tInvalid `nemos_tag` field names: {fields}\n\tAvailable fields: {sorted(TAG_FIELDS)}\n"
 
     for path, fields in missing_tags_fields:
         msg += f"\n{path}:\n\tMissing `nemos_tag` fields: {fields}\n"
@@ -108,6 +128,9 @@ if __name__ == "__main__":
     for path, fields in inv_tag_entries:
         for field_name, entries in fields.items():
             msg += f"\n{path}:\n\tInvalid `nemos_tag` entries for field '{field_name}': {entries}\n\tAvailable entries for '{field_name}': {list(EXPECTED_TAGS[field_name])}\n"
+
+    for path in empty_desc:
+        msg += f"\n{path}:\n\t`nemos_tag` field '{DESCRIPTION_FIELD}' must be a non-empty string\n"
 
     if msg:
         logger.warning(msg)

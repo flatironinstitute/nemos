@@ -13,6 +13,7 @@ nemos_tags:
   observation_model: [Poisson]
   signal: [spike-counts]
   data: simulated
+  description: Custom pre-processing of batches during a stochastic fit.
 ---
 
 ```{code-cell} ipython3

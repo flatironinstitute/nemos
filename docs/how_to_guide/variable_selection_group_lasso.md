@@ -13,6 +13,7 @@ nemos_tags:
   observation_model: [Poisson]
   signal: [spike-counts]
   data: simulated
+  description: Select informative covariates with Group Lasso, which sets whole groups of basis coefficients to zero.
 ---
 
 (variable_selection_group_lasso)=

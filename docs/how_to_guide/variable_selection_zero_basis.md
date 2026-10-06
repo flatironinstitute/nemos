@@ -13,6 +13,7 @@ nemos_tags:
   observation_model: [Poisson]
   signal: [spike-counts]
   data: recorded
+  description: Cross-validate over combinations of inputs with the Zero basis to find which ones a place cell needs.
 ---
 
 ```{code-cell} ipython3

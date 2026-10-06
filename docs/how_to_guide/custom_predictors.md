@@ -13,6 +13,7 @@ nemos_tags:
   observation_model: [Poisson]
   signal: [spike-counts]
   data: simulated
+  description: Add precomputed features, such as principal components, to a GLM design with the IdentityEval basis.
 ---
 
 (custom-features)=

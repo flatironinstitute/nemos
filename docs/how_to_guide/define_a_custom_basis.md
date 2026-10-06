@@ -13,6 +13,7 @@ nemos_tags:
   observation_model: []
   signal: [continuous]
   data: simulated
+  description: Define a basis from a list of functions with CustomBasis, using Laguerre polynomials as the example.
 ---
 
 # How to Define A Custom Basis Class

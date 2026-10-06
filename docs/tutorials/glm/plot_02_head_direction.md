@@ -13,6 +13,7 @@ nemos_tags:
   observation_model: [Poisson]
   signal: [spike-counts]
   data: recorded
+  description: Fit a population of head-direction cells with spike-history and coupling filters built from a convolutional basis.
 ---
 
 ```{code-cell} ipython3

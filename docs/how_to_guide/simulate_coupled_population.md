@@ -13,6 +13,7 @@ nemos_tags:
   observation_model: [Poisson]
   signal: [spike-counts]
   data: simulated
+  description: Simulate spike trains from a fitted GLM and from a recurrently coupled population.
 ---
 
 ```{code-cell} ipython3

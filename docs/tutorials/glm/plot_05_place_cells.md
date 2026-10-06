@@ -13,6 +13,7 @@ nemos_tags:
   observation_model: [Poisson]
   signal: [spike-counts]
   data: recorded
+  description: Fit place cells to position, theta phase and speed, and select among these inputs by cross-validation.
 ---
 
 ```{code-cell} ipython3

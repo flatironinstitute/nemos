@@ -9,6 +9,7 @@ nemos_tags:
   observation_model: [Poisson]
   signal: [spike-counts]
   data: simulated
+  description: Fit a population GLM by mini-batch stochastic optimization on data read from an NWB file.
 ```
 
 | field | values                                                                                         |
@@ -17,8 +18,10 @@ nemos_tags:
 | `observation_model` | `Poisson`, `Gamma`, `Gaussian`, `Bernoulli`, `NegativeBinomial`, `Categorical`                 |
 | `signal` | `spike-counts`, `calcium-imaging`, `lfp`, `behavior-choices`, `behavior-tracking`, `continuous` |
 | `data` | `recorded`, `simulated`                                                                        |
+| `description` | free text, one sentence                                                                        |
 
-- A new example **must** carry all four fields, with `model`, `observation_model` and `signal` as lists, empty where nothing applies — `convolve_large_arrays.md` fits no model and leaves `model` and `observation_model` empty.
+- A new example **must** carry all five fields, with `model`, `observation_model` and `signal` as lists, empty where nothing applies — `convolve_large_arrays.md` fits no model and leaves `model` and `observation_model` empty.
+- `description` **must** be a non-empty string; it is shown next to the example's title in the examples table, so it **should** say what the page fits or builds in one sentence.
 - A new value **should** be added to this note in the same change, so the vocabulary stays discoverable.
 
 Sphinx exposes the block as `env.metadata[docname]["nemos_tags"]`, where `myst_parser` leaves it as a **JSON string**; the generator has to `json.loads` it rather than index it as a dict.

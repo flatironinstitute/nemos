@@ -13,6 +13,7 @@ nemos_tags:
   observation_model: [Gamma, Gaussian]
   signal: [calcium-imaging]
   data: recorded
+  description: Fit the calcium transients of postsubiculum head-direction cells with Gamma and Gaussian GLMs.
 ---
 
 ```{code-cell} ipython3

@@ -13,6 +13,7 @@ nemos_tags:
   observation_model: [Poisson]
   signal: [spike-counts]
   data: simulated
+  description: Fit a fully coupled population GLM on raw spike history, then reduce its parameters with a basis.
 ---
 
 # Fit GLMs For Neural Coupling
