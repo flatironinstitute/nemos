@@ -156,6 +156,7 @@ html_theme_options = {
         "user_guide/README": [],
         "user_guide/basis/README": [],
         "how_to_guide/README": [],
+        "examples": [],
     },
 }
 
@@ -167,6 +168,7 @@ html_sidebars = {
     "quickstart": [],
     "reference/benchmarking": [],
     "tutorials/README": [],
+    "examples": [],
     "**": ["sidebar-nav-bs.html"],
 }
 
@@ -473,6 +475,17 @@ def _add_benchmark_assets(app, pagename, templatename, context, doctree):
     app.add_js_file("benchmark-table.js")
 
 
+def _add_examples_assets(app, pagename, templatename, context, doctree):
+    if pagename != "examples":
+        return
+    app.add_css_file(
+        "https://cdn.datatables.net/2.0.0/css/dataTables.dataTables.min.css"
+    )
+    app.add_js_file("https://code.jquery.com/jquery-3.7.0.js")
+    app.add_js_file("https://cdn.datatables.net/2.0.0/js/dataTables.min.js")
+    app.add_js_file("examples-table.js")
+
+
 def write_examples_index(app, exception):
     """Collect the ``nemos_tags`` of every example into ``_static/examples.json``.
 
@@ -506,6 +519,7 @@ def setup(app):
     app.connect("autodoc-process-bases", strip_generic_bases)
     app.connect("html-page-context", _widen_landing_page)
     app.connect("html-page-context", _add_benchmark_assets)
+    app.connect("html-page-context", _add_examples_assets)
     app.connect("builder-inited", generate_dark_diagrams)
     app.connect("builder-inited", clear_figure_cache)
     app.connect("env-get-outdated", force_figure_rebuild)

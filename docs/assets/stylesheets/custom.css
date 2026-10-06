@@ -259,3 +259,44 @@ table.table-center{
     width: 100%;
     height: auto;
 }
+
+/* Tag filters of the examples table, built by examples-table.js. A chip is
+   filled with the primary colour while its value is selected. */
+.examples-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.5rem;
+}
+
+.examples-filter-label {
+    font-weight: 700;
+    min-width: 10rem;
+}
+
+.examples-chip,
+.examples-clear {
+    border: 1px solid var(--pst-color-border);
+    border-radius: 1rem;
+    padding: 0.1rem 0.75rem;
+    background: var(--pst-color-surface);
+    color: var(--pst-color-text-base);
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.examples-chip[aria-pressed="true"] {
+    background: var(--pst-color-primary);
+    border-color: var(--pst-color-primary);
+    color: var(--pst-color-primary-text);
+}
+
+.examples-clear {
+    margin: 0.5rem 0 1rem;
+}
+
+.examples-description {
+    font-size: 0.9rem;
+    color: var(--pst-color-text-muted);
+}
