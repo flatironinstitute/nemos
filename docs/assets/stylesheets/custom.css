@@ -263,16 +263,21 @@ table.table-center{
 /* Tag filters of the examples table, built by examples-table.js. A chip is
    filled with the primary colour while its value is selected. */
 .examples-filter-row {
+    display: grid;
+    grid-template-columns: 10rem 1fr;
+    align-items: baseline;
+    margin-bottom: 1.5rem;
+}
+
+/* wrapped lines of one field sit closer than the fields do to each other */
+.examples-filter-chips {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
-    gap: 0.4rem;
-    margin-bottom: 0.5rem;
+    gap: 0.2rem 0.4rem;
 }
 
 .examples-filter-label {
     font-weight: 700;
-    min-width: 10rem;
 }
 
 .examples-chip,

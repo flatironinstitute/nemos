@@ -69,6 +69,10 @@ document.addEventListener("DOMContentLoaded", function () {
       label.className = "examples-filter-label";
       label.textContent = f.label;
       row.appendChild(label);
+      // own container, so chips that wrap line up under the first one
+      var chips = document.createElement("div");
+      chips.className = "examples-filter-chips";
+      row.appendChild(chips);
 
       Array.from(values).sort().forEach(function (v) {
         var chip = document.createElement("button");
@@ -82,7 +86,7 @@ document.addEventListener("DOMContentLoaded", function () {
           else selected[f.id].add(v);
           refresh();
         });
-        row.appendChild(chip);
+        chips.appendChild(chip);
       });
       container.appendChild(row);
     });
@@ -129,7 +133,8 @@ document.addEventListener("DOMContentLoaded", function () {
           { title: "Model",             data: "model",             render: tagList },
           { title: "Observation model", data: "observation_model", render: tagList },
           { title: "Signal",            data: "signal",            render: tagList },
-          { title: "Topic",             data: "topic",             render: tagList },
+          // filterable and searchable, but too long to read well as a column
+          { title: "Topic",             data: "topic",             render: tagList, visible: false },
           { title: "Data",              data: "data",              render: tagList },
         ],
       });
