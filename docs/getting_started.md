@@ -1,6 +1,6 @@
 # Getting Started
 
-Install NeMoS, fit a first model, and find us when something goes wrong.
+Install NeMoS, fit a first model, find the example closest to your data, and find us when something goes wrong.
 
 ## Install
 
@@ -32,6 +32,20 @@ Get an overview of NeMoS's features: how to fit models to data, how to construct
 :maxdepth: 2
 
 quickstart.md
+```
+
+:::
+
+## Example Finder
+
+Find the tutorial or how-to guide closest to your data or task, by filtering on model, observation model, signal and topic.
+
+:::{card}
+
+```{toctree}
+:maxdepth: 1
+
+examples.md
 ```
 
 :::

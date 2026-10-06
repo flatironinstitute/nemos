@@ -1,7 +1,3 @@
----
-orphan: true
----
-
 (examples-overview)=
 # Example Finder
 
