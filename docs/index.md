@@ -204,13 +204,16 @@ Joint effects of two inputs.
 
 ## __Examples__
 
-% The model names below become links to the quick example of each model in the
-% user guide, once those are written.
+% Each card opens the examples table filtered to its signal and model; the
+% query string is read by javascripts/examples-table.js.
 
 ::::{grid} 1 2 4 4
 :gutter: 3
 
 :::{grid-item-card} __Spike counts__
+:link: examples.html?signal=spike-counts&model=GLM
+:link-type: url
+:link-alt: Spike-count examples
 
 ```{eval-rst}
 
@@ -233,6 +236,9 @@ GLM
 :::
 
 :::{grid-item-card} __Continuous signals__
+:link: examples.html?signal=calcium-imaging,lfp,continuous,behavior-tracking&model=GLM
+:link-type: url
+:link-alt: Continuous-signal examples
 
 ```{eval-rst}
 
@@ -255,6 +261,9 @@ GLM
 :::
 
 :::{grid-item-card} __Binary outcomes__
+:link: examples.html?observation_model=Bernoulli&model=GLMHMM
+:link-type: url
+:link-alt: Binary-outcome examples
 
 ```{eval-rst}
 
@@ -277,6 +286,9 @@ GLM-HMM
 :::
 
 :::{grid-item-card} __Choices and categories__
+:link: examples.html?observation_model=Categorical&model=ClassifierGLM
+:link-type: url
+:link-alt: Choice and category examples
 
 ```{eval-rst}
 
