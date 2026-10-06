@@ -25,3 +25,6 @@ nemos_tags:
 - A new value **should** be added to this note in the same change, so the vocabulary stays discoverable.
 
 Sphinx exposes the block as `env.metadata[docname]["nemos_tags"]`, where `myst_parser` leaves it as a **JSON string**; the generator has to `json.loads` it rather than index it as a dict.
+
+`write_examples_index` in `conf.py` runs on `build-finished` and writes `_build/html/_static/examples.json`, one entry per tagged page: its tags plus `title` and `url`, the latter relative to the site root.
+It is written into the build and not the sources, so it never needs committing.
