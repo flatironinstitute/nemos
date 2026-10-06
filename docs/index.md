@@ -245,7 +245,7 @@ GLM
 :::
 
 :::{grid-item-card} __Continuous signals__
-:link: examples.html?signal=calcium-imaging,lfp,continuous,behavior-tracking&model=GLM
+:link: examples.html?signal=calcium-imaging,continuous&model=GLM
 :link-type: url
 :link-alt: Continuous-signal examples
 
