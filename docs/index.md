@@ -227,7 +227,7 @@ Joint effects of two inputs.
 
 <div style="text-align: center;">
 
-GLM<br/>GLM-HMM
+GLM
 
 </div>
 :::
@@ -249,7 +249,7 @@ GLM<br/>GLM-HMM
 
 <div style="text-align: center;">
 
-GLM<br/>GLM-HMM
+GLM
 
 </div>
 :::
@@ -271,7 +271,7 @@ GLM<br/>GLM-HMM
 
 <div style="text-align: center;">
 
-GLM<br/>GLM-HMM
+GLM-HMM
 
 </div>
 :::
