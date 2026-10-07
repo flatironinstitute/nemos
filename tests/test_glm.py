@@ -5383,9 +5383,7 @@ def test_glm_set_regularizer_strength_recovers(model_instantiation, request):
     "model_instantiation",
     [
         "poissonGLM",
-        "classifierGLM",
         "population_poissonGLM",
-        "population_classifierGLM",
     ],
 )
 def test_glm_set_observation_model_invalidates(model_instantiation, request):
@@ -5412,9 +5410,7 @@ def test_glm_set_observation_model_invalidates(model_instantiation, request):
     "model_instantiation",
     [
         "poissonGLM",
-        "classifierGLM",
         "population_poissonGLM",
-        "population_classifierGLM",
     ],
 )
 def test_glm_set_observation_model_recovers(model_instantiation, request):

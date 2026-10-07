@@ -148,7 +148,7 @@ class ClassifierMixin:
         Parameters
         ----------
         params
-            Parameter tuple of (coefficients, intercept).
+            Model parameters in the format expected by the specific model.
         X
             Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
         y

@@ -178,7 +178,7 @@ class TestCheckModelParamsShape:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("is_classifier", [False])
+@pytest.mark.parametrize("is_classifier", [False, True])
 class TestCheckInitAndTransitionProbShape:
     """Shape checks on initial and transition probability arrays."""
 
@@ -221,7 +221,7 @@ class TestCheckInitAndTransitionProbShape:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("is_classifier", [False])
+@pytest.mark.parametrize("is_classifier", [False, True])
 class TestCheckInitAndTransitionProbSumTo1:
     """Probability normalization checks."""
 
@@ -254,7 +254,7 @@ class TestCheckInitAndTransitionProbSumTo1:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("is_classifier", [False])
+@pytest.mark.parametrize("is_classifier", [False, True])
 class TestValidateAndCastIsNewSession:
     """Session boundary array validation and casting."""
 
@@ -354,7 +354,7 @@ class TestValidateAndCastIsNewSession:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("is_classifier", [False])
+@pytest.mark.parametrize("is_classifier", [False, True])
 class TestValidateAndCastFeatureMask:
     """Feature mask validation and casting (delegates to GLMValidator)."""
 
@@ -391,7 +391,7 @@ class TestValidateAndCastFeatureMask:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("is_classifier", [False])
+@pytest.mark.parametrize("is_classifier", [False, True])
 class TestValidateConsistency:
     """Consistency checks between model params and inputs."""
 
@@ -410,16 +410,26 @@ class TestValidateConsistency:
     def test_consistent_params_no_error(self, validator, model_params, X, y):
         validator.validate_consistency(model_params, X=X, y=y)
 
-    def test_n_features_mismatch_raises(self, validator, valid_user_params, y):
-        bad_coef = jnp.zeros((N_FEATURES + 1, N_STATES))
+    def test_n_features_mismatch_raises(
+        self, validator, valid_user_params, y, is_classifier
+    ):
+        if is_classifier:
+            bad_coef = jnp.zeros((N_FEATURES + 1, N_CLASSES, N_STATES))
+        else:
+            bad_coef = jnp.zeros((N_FEATURES + 1, N_STATES))
         params = (bad_coef, *valid_user_params[1:])
         model_params = validator.validate_and_cast_params(params)
         X_wrong = np.ones((20, N_FEATURES))
         with pytest.raises(ValueError, match="Inconsistent number of features"):
             validator.validate_consistency(model_params, X=X_wrong, y=y)
 
-    def test_scale_shape_mismatch_raises(self, validator, valid_user_params):
-        bad_scale = jnp.ones((N_STATES + 1,))
+    def test_scale_shape_mismatch_raises(
+        self, validator, valid_user_params, is_classifier
+    ):
+        if is_classifier:
+            bad_scale = jnp.ones((N_CLASSES, N_STATES + 1))
+        else:
+            bad_scale = jnp.ones((N_STATES + 1,))
         params = (*valid_user_params[:2], bad_scale, *valid_user_params[3:])
         model_params = validator.validate_and_cast_params(params)
         with pytest.raises(ValueError):

@@ -684,6 +684,9 @@ class BaseHMM(
         models: returns the unpenalized scalar loss given parameters and data.
         ``score`` negates this to recover the log-likelihood.
         """
+        # filter for non-nans, grab data if needed
+        data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
+
         # safe conversion to jax arrays of float
         params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
 
@@ -692,12 +695,59 @@ class BaseHMM(
 
         _, log_norm = forward_pass(
             params=params,
-            X=X,
+            X=data,
             y=y,
             session_starts=session_starts,
             log_likelihood_func=self._log_likelihood,
         )
         return -jnp.sum(log_norm)
+
+    def compute_loss(
+        self,
+        params: HMMUserProvidedParamsT,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        session_starts: Optional[ArrayLike] = None,
+    ) -> jnp.ndarray:
+        """Compute the loss function for an HMM model.
+
+        This method validates inputs and converts user-provided parameters to the internal
+        representation before computing the loss.
+
+        Parameters
+        ----------
+        params
+            Parameter tuple of (coefficients, intercept, scale, initial_proba, transition_proba).
+        X
+            Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
+        y :
+            Observations, shape ``(n_time_bins,)`` for single observation or
+            ``(n_time_bins, n_observations)`` for population.
+        session_starts :
+            Optional array indicating user-provided session boundaries. Can be:
+            - a boolean array indicating session starts, shape ``(n_samples,)``
+            - an integer array of indices marking session starts, shape ``(n_sessions,)``
+            - a pynapple.IntervalSet marking session epochs (requires either X or y to be a
+            pynapple Tsd or TsdFrame to get timestamps)
+            If None, creates a default array treating all data as one session.
+
+        Returns
+        -------
+        loss
+            The loss value (negative log-likelihood).
+
+        Raises
+        ------
+        ValueError
+            If inputs or parameters have incompatible shapes or invalid values.
+        """
+        # validate inputs and session boundaries
+        session_starts = self._validator.validate_and_cast_inputs(
+            X=X, y=y, session_starts=session_starts
+        )
+        params = self._validator.validate_and_cast_params(params)
+        self._validator.validate_consistency(params, X=X, y=y)
+        return self._compute_loss(params, X, y, session_starts)
 
     def score(
         self,

@@ -211,6 +211,7 @@ class TestClassifierGLMHMMLabeling:
             "filter_proba",
             "simulate",
             "update",
+            "compute_loss",
         ],
     )
     def test_must_set_classes_before_calling(
@@ -256,13 +257,35 @@ class TestClassifierGLMHMMLabeling:
         np.testing.assert_allclose(model_int.intercept_, model_str.intercept_)
 
     @pytest.mark.parametrize(
-        "method_name", ["score", "decode_state", "smooth_proba", "filter_proba"]
+        "method_name",
+        ["score", "decode_state", "smooth_proba", "filter_proba"],
     )
     def test_method_from_label(self, method_name, classifier_glm_hmm_labeled):
         """Methods that only encode y are invariant to the label representation."""
         X, y, labels, model_int, model_str = classifier_glm_hmm_labeled
         out_int = getattr(model_int, method_name)(X, y)
         out_str = getattr(model_str, method_name)(X, labels[y])
+        np.testing.assert_allclose(out_int, out_str)
+
+    def test_compute_loss_from_label(self, classifier_glm_hmm_labeled):
+        """Methods that only encode y are invariant to the label representation."""
+        X, y, labels, model_int, model_str = classifier_glm_hmm_labeled
+        params_int = (
+            model_int.coef_,
+            model_int.intercept_,
+            model_int.scale_,
+            model_int.initial_prob_,
+            model_int.transition_prob_,
+        )
+        out_int = model_int.compute_loss(params_int, X, y)
+        params_str = (
+            model_str.coef_,
+            model_str.intercept_,
+            model_str.scale_,
+            model_str.initial_prob_,
+            model_str.transition_prob_,
+        )
+        out_str = model_str.compute_loss(params_str, X, labels[y])
         np.testing.assert_allclose(out_int, out_str)
 
     def test_simulate_from_label(self, classifier_glm_hmm_labeled):
