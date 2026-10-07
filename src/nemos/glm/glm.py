@@ -1160,7 +1160,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         # then recombine
         active, frozen = self._partition_active(init_params)
         self._initialize_optimizer_and_state(active, data, y, frozen_params=frozen)
-        
+
         try:
             params, state, aux = self._optimizer_run(active, data, y)
         except RuntimeError as exc:
