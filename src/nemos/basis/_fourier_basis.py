@@ -1375,3 +1375,105 @@ class FourierGP(BoundedEvalBasisMixin, FourierBasis):
         """Produce equispaced samples over the construction domain."""
         t0, t1 = self.bounds
         return (np.linspace(t0, t1, n_samples[0]),)
+
+    @add_docstring("evaluate_on_grid", FourierBasis)
+    def evaluate_on_grid(self, *n_samples: int) -> Tuple[NDArray, NDArray]:
+        """
+        Examples
+        --------
+        .. plot::
+            :include-source: True
+            :caption: FourierGP
+
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from nemos.basis import FourierGP
+            >>> gp_basis = FourierGP(lengthscale=0.2, bounds=(0.0, 1.0), eps=1e-4)
+            >>> sample_points, basis_values = gp_basis.evaluate_on_grid(100)
+            >>> plt.plot(sample_points, basis_values)
+            [<matplotlib.lines.Line2D object at ...
+            >>> plt.show()
+        """
+        return super().evaluate_on_grid(*n_samples)
+
+    @add_docstring("_compute_features", BoundedEvalBasisMixin)
+    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import FourierGP
+
+        >>> # Generate data
+        >>> num_samples = 1000
+        >>> X = np.random.uniform(size=(num_samples,))  # raw time series
+        >>> basis = FourierGP(lengthscale=0.2, bounds=(0.0, 1.0), eps=1e-4)
+        >>> features = basis.compute_features(X)  # basis transformed time series
+        >>> features.shape
+        (1000, 17)
+
+        """
+        return super().compute_features(*xi)
+
+    @add_docstring("split_by_feature", FourierBasis)
+    def split_by_feature(
+        self,
+        x: NDArray,
+        axis: int = 1,
+    ):
+        r"""
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import FourierGP
+        >>> basis = FourierGP(
+        ...     lengthscale=0.2, bounds=(0.0, 1.0), eps=1e-4, label="one_input"
+        ... )
+        >>> X = basis.compute_features(np.random.uniform(size=(20,)))
+        >>> split_features_multi = basis.split_by_feature(X, axis=1)
+        >>> for feature, sub_dict in split_features_multi.items():
+        ...     print(f"{feature}, shape {sub_dict.shape}")
+        one_input, shape (20, 17)
+
+        """
+        return super().split_by_feature(x, axis=axis)
+
+    @add_docstring("set_input_shape", AtomicBasisMixin)
+    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> basis = nmo.basis.FourierGP(lengthscale=0.2, bounds=(0.0, 1.0), eps=1e-4)
+        >>> # Configure with an integer input:
+        >>> _ = basis.set_input_shape(3)
+        >>> basis.n_output_features
+        51
+        >>> # Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        340
+        >>> # Configure with an array:
+        >>> x = np.ones((10, 4, 5))
+        >>> _ = basis.set_input_shape(x)
+        >>> basis.n_output_features
+        340
+
+        """
+        return super().set_input_shape(*xi)
+
+    @add_docstring("evaluate", FourierBasis)
+    def evaluate(self, *sample_pts: NDArray) -> NDArray:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import FourierGP
+        >>> basis = FourierGP(lengthscale=0.2, bounds=(0.0, 1.0), eps=1e-4)
+        >>> out = basis.evaluate(np.random.uniform(size=(100, 5, 2)))
+        >>> out.shape
+        (100, 5, 2, 17)
+        """
+        # ruff: noqa: D205, D400
+        return super().evaluate(*sample_pts)
