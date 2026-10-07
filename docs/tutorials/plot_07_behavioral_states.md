@@ -147,7 +147,7 @@ First we configure the `ONE` object with `ONE.setup`, specifying that we want to
 ```{code-cell} ipython3
 # Instantiate the ONE object
 ONE.setup(base_url='https://openalyx.internationalbrainlab.org', silent=True)
-one = ONE(password='international')
+one = ONE(username="intbrainlab" , password='international')
 
 # Then we need to choose our subject and run load_aggregate
 subject = "CSHL_008"
