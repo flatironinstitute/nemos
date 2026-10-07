@@ -99,7 +99,6 @@ Fitting when the data does not fit in memory, and how fast each solver fits.
 
 Stochastic fit <scalability/README>
 Custom update <scalability/custom_update>
-Benchmarking <scalability/benchmarking>
 ```
 
 :::
