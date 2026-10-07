@@ -220,6 +220,9 @@ class KMeansInitializerGLM(KMeansInitializer):
                     f"KMeans assigned 0 samples to state {i}. Try reducing n_states "
                     f"or using a different initialization method."
                 )
+            if self._is_categorical:
+                y_state = jnp.argmax(y_state, axis=1)
+                model.n_classes = len(jnp.unique(y_state))
             model.fit(X_state, y_state)
         return self
 

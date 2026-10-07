@@ -10,6 +10,7 @@ import pytest
 
 from nemos.glm import ClassifierGLM
 from nemos.glm_hmm import GLMHMM, ClassifierGLMHMM
+from nemos.observation_models import CategoricalObservations
 
 
 class TestClassifierGLMHMM:
@@ -17,16 +18,34 @@ class TestClassifierGLMHMM:
     Unit tests specific to classifier GLM.
     """
 
+    def test_observation_model_at_init_raises(self):
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            ClassifierGLMHMM(n_states=2, observation_model="Categorical")
+
     def test_invalid_observation_model(self):
         """
         Ensure that changing the observation model leads to an error.
         """
         model = ClassifierGLMHMM(n_states=2)
+
         # this should be fine
         model.observation_model = "Categorical"
+
+        # this should be fine
+        model.observation_model = CategoricalObservations()
+
         # this should raise an error
         with pytest.raises(TypeError, match="observation type is not supported"):
             model.observation_model = "Poisson"
+
+    def test_repr(self):
+        model = ClassifierGLMHMM(n_states=3)
+        repr_str = repr(model)
+        assert repr_str.startswith("ClassifierGLMHMM(")
+        # obs model not settable and should not appear
+        assert "Categorical" not in repr_str
+        assert "n_states" in repr_str
+        assert "n_classes" in repr_str
 
     @pytest.mark.solver_related
     @pytest.mark.parametrize("seed", [0, 123])
@@ -35,7 +54,6 @@ class TestClassifierGLMHMM:
     def test_fit_glmhmm_matches_bernoulli(self, seed, n_states):
         """
         Ensure that the model fit matches the Bernoulli GLMHMM.
-        Since it needs to be unregularized, we only check n_states=2 to reduce chance of numerical instability.
         """
         np.random.seed(seed)
         n_classes = 2
@@ -86,8 +104,7 @@ class TestClassifierGLMHMM:
     @pytest.mark.requires_x64
     def test_fit_glmhmm_matches_glm(self, seed, n_classes):
         """
-        Ensure that the model fit matches the Bernoulli GLMHMM.
-        Since it needs to be unregularized, we only check n_states=2 to reduce chance of numerical instability.
+        Ensure that the model fit matches the Bernoulli GLM.
         """
         np.random.seed(seed)
         X = np.random.normal(size=(100, 5))
