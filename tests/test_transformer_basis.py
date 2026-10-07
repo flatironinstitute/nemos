@@ -13,6 +13,7 @@ from sklearn.pipeline import Pipeline
 
 import nemos as nmo
 from conftest import (
+    ARRAY_ATTRIBUTES,
     CombinedBasis,
     basis_with_add_kwargs,
     list_all_basis_classes,
@@ -23,6 +24,7 @@ from nemos._inspect_utils import get_subclass_methods, list_abstract_methods
 from nemos.basis import (
     AdditiveBasis,
     CustomBasis,
+    FourierGP,
     HistoryConv,
     IdentityEval,
     MultiplicativeBasis,
@@ -104,15 +106,11 @@ def test_to_transformer_and_constructor_are_equivalent(
         == {"_basis", "_wrapped_methods"}
     )
     # and those bases are the same
-    assert np.all(
-        trans_bas_a.basis.__dict__.pop("_decay_rates", 1)
-        == trans_bas_b.basis.__dict__.pop("_decay_rates", 1)
-    )
-
-    assert np.all(
-        trans_bas_a.basis.__dict__.pop("_freq_combinations", 1)
-        == trans_bas_b.basis.__dict__.pop("_freq_combinations", 1)
-    )
+    for key in ARRAY_ATTRIBUTES:
+        np.testing.assert_array_equal(
+            trans_bas_a.basis.__dict__.pop(key, 1),
+            trans_bas_b.basis.__dict__.pop(key, 1),
+        )
 
     freqs_a = trans_bas_a.basis.__dict__.pop("_frequencies", [1])
     freqs_b = trans_bas_b.basis.__dict__.pop("_frequencies", [1])
@@ -183,6 +181,18 @@ def test_basis_to_transformer_makes_a_copy(
         trans_bas_b = bas_b.to_transformer()
         trans_bas_b.basis.basis1.n_basis_funcs = 100
         assert bas_b.basis1.n_basis_funcs == 5
+    elif basis_cls is FourierGP:
+        # the width follows from lengthscale; 0.1 gives 13 basis functions instead of 5
+        bas_a.lengthscale = 0.1
+        assert trans_bas_a.n_basis_funcs == 5
+
+        # changing an attribute in the transformer basis should not change the original
+        bas_b = CombinedBasis().instantiate_basis(
+            5, basis_cls, basis_class_specific_params, window_size=10
+        )
+        trans_bas_b = bas_b.set_input_shape(*([1] * bas_b._n_inputs)).to_transformer()
+        trans_bas_b.lengthscale = 0.1
+        assert bas_b.n_basis_funcs == 5
     elif issubclass(basis_cls, FourierBasis):
         bas_a.frequencies = np.arange(7, 11)
 
@@ -277,6 +287,10 @@ def test_transformerbasis_set_params(
         trans_basis.set_params(basis_kwargs=basis_kwargs)
         trans_basis.basis_kwargs == basis_kwargs
         trans_basis.basis.basis_kwargs == basis_kwargs
+    elif isinstance(bas, FourierGP):
+        trans_basis.set_params(lengthscale=0.1)
+        assert trans_basis.lengthscale == 0.1
+        assert trans_basis.basis.lengthscale == 0.1
     elif isinstance(bas, FourierBasis):
         trans_basis.set_params(frequencies=np.arange(1, 8))
         assert np.all(trans_basis.frequencies[0] == np.arange(1, 8))
@@ -337,6 +351,10 @@ def test_transformerbasis_setattr_basis_attribute(
         trans_bas.basis_kwargs = {"add": 20}
         assert trans_bas.basis_kwargs == {"add": 20}
         assert trans_bas.basis.basis_kwargs == {"add": 20}
+    elif basis_cls is FourierGP:
+        trans_bas.lengthscale = 0.1
+        assert trans_bas.lengthscale == 0.1
+        assert trans_bas.basis.lengthscale == 0.1
     elif issubclass(basis_cls, FourierBasis):
         trans_bas.frequencies = np.arange(1, 8)
         assert np.all(trans_bas.frequencies[0] == np.arange(1, 8))
@@ -375,6 +393,11 @@ def test_transformerbasis_copy_basis_on_construct(
         assert orig_bas.basis_kwargs == {}
         assert trans_bas.basis_kwargs == {"add": 20}
         assert trans_bas.basis.basis_kwargs == {"add": 20}
+    elif isinstance(orig_bas, FourierGP):
+        setattr(trans_bas, "lengthscale", 0.1)
+        assert orig_bas.n_basis_funcs == nbas
+        assert trans_bas.lengthscale == 0.1
+        assert trans_bas.basis.lengthscale == 0.1
     elif isinstance(orig_bas, FourierBasis):
         setattr(trans_bas, "frequencies", np.arange(1, 8))
         assert np.all(len(orig_bas.frequencies[0]) != len(trans_bas.frequencies[0]))
@@ -423,7 +446,12 @@ def test_transformerbasis_setattr_illegal_attribute(
 )
 def test_transformerbasis_addition(basis_cls, basis_class_specific_params):
 
-    if basis_cls in [nmo.basis.IdentityEval, nmo.basis.HistoryConv, nmo.basis.Zero]:
+    if basis_cls in [
+        nmo.basis.IdentityEval,
+        nmo.basis.HistoryConv,
+        nmo.basis.Zero,
+        FourierGP,
+    ]:
         return
 
     n_basis_funcs_a = 5
@@ -866,6 +894,8 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
         cv_attr = "window_size"
     elif basis_cls is CustomBasis:
         cv_attr = "basis_kwargs"
+    elif basis_cls is FourierGP:
+        cv_attr = "lengthscale"
     elif issubclass(basis_cls, FourierBasis):
         cv_attr = "frequencies"
     elif basis_cls is nmo.basis.Category:
@@ -1158,6 +1188,7 @@ def test_check_input(inp, expectation, basis_cls, basis_class_specific_params, m
             basis.AdditiveBasis: "Transformer('(MSplineEval + RaisedCosineLinearConv)': AdditiveBasis(\n    basis1=MSplineEval(n_basis_funcs=5, order=4),\n    basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n))",
             basis.MultiplicativeBasis: "Transformer('(MSplineEval * RaisedCosineLinearConv)': MultiplicativeBasis(\n    basis1=MSplineEval(n_basis_funcs=5, order=4),\n    basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n))",
             basis.FourierEval: "Transformer(FourierEval(frequencies=[Array([0., 1., 2.], dtype=float64)], ndim=1, frequency_mask='all'))",
+            basis.FourierGP: "Transformer(FourierGP(lengthscale=1.0, bounds=(0.0, 1.0), eps=0.3, variance=1.0))",
             basis.Zero: "Transformer(Zero())",
             basis.Category: "Transformer(Category(out_of_category=True))",
         }
@@ -1351,6 +1382,9 @@ BOUNDS_UNGATED_ATOMIC = [
     basis.CustomBasis,
 ]
 
+# Bounds are a required argument, so the basis cannot reach the gate unbounded.
+BOUNDS_REQUIRED = [basis.FourierGP]
+
 # Composite bases inherit the gate from their components. ``instantiate_basis`` builds them from an
 # MSplineEval (gated) and a Conv, so unbounded they raise and bounded they pass.
 BOUNDS_COMPOSITE = [basis.AdditiveBasis, basis.MultiplicativeBasis]
@@ -1358,7 +1392,9 @@ BOUNDS_COMPOSITE = [basis.AdditiveBasis, basis.MultiplicativeBasis]
 
 def test_bounds_gating_covers_all_bases():
     """Guard the hardcoded behavior lists against drift as bases are added."""
-    labeled = BOUNDS_GATED_EVAL + BOUNDS_UNGATED_ATOMIC + BOUNDS_COMPOSITE
+    labeled = (
+        BOUNDS_GATED_EVAL + BOUNDS_UNGATED_ATOMIC + BOUNDS_REQUIRED + BOUNDS_COMPOSITE
+    )
     assert len(labeled) == len(set(labeled)), (
         "A basis is labeled in more than one bucket."
     )
@@ -1386,7 +1422,9 @@ class TestBoundsGating:
         with pytest.raises(RuntimeError, match="bounds"):
             _run_bounds_gating(basis_cls, basis_class_specific_params, None, method)
 
-    @pytest.mark.parametrize("basis_cls", BOUNDS_GATED_EVAL + BOUNDS_COMPOSITE)
+    @pytest.mark.parametrize(
+        "basis_cls", BOUNDS_GATED_EVAL + BOUNDS_REQUIRED + BOUNDS_COMPOSITE
+    )
     def test_set_bounds_passes(self, basis_cls, method, basis_class_specific_params):
         with does_not_raise():
             _run_bounds_gating(basis_cls, basis_class_specific_params, (0, 1), method)

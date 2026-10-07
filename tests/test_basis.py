@@ -19,6 +19,7 @@ import nemos.basis._basis_mixin as _basis_mixin
 import nemos.convolve as convolve
 from conftest import (
     _BASIS_BEHAVIOUR_MIXINS,
+    ARRAY_ATTRIBUTES,
     CLASS_DEFAULT_KWARGS,
     DEFAULT_KWARGS,
     BasisFuncsTesting,
@@ -417,10 +418,6 @@ def jit_composite_inputs(*bases, n_samples=20):
 
 def filter_attributes(obj, exclude_keys):
     return {key: val for key, val in obj.__dict__.items() if key not in exclude_keys}
-
-
-# Array-valued basis attributes, which ``==`` cannot compare inside a dict.
-ARRAY_ATTRIBUTES = ("_decay_rates", "_freq_combinations", "_weights", "_xis")
 
 
 def compare_basis(b1, b2):

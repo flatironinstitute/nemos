@@ -363,6 +363,10 @@ CLASS_DEFAULT_KWARGS = {
 }
 
 
+# Array-valued basis attributes, which ``==`` cannot compare inside a dict.
+ARRAY_ATTRIBUTES = ("_decay_rates", "_freq_combinations", "_weights", "_xis")
+
+
 def default_kwargs_for(basis_cls, **overrides) -> dict:
     """Constructor arguments for any basis: shared table, class overrides, then filtered."""
     kwargs = {

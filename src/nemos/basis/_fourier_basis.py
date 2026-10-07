@@ -964,8 +964,8 @@ class FourierEval(BoundedEvalBasisMixin, FourierBasis):
             The retained frequency combinations, shape
             ``(ndim, n_frequency_combinations)``. Column ``i`` is the frequency
             multi-index of the i-th combination; each column contributes a
-            cosine and a sine feature (cosine only for the DC term). Read-only:
-            assign ``frequency_mask`` to change it.
+            cosine and a sine feature (cosine only for the DC term). It cannot be
+            set directly; assign ``frequency_mask`` to change it.
 
         """
         return self._freq_combinations
