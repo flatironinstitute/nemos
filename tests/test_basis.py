@@ -108,9 +108,9 @@ def test_behaviour_mixins_match_the_mixin_module():
         f"{sorted(undeclared)}"
     )
     stale = _NON_BEHAVIOUR_MIXINS - defined
-    assert (
-        not stale
-    ), f"declared non-behaviour but no longer in the module: {sorted(stale)}"
+    assert not stale, (
+        f"declared non-behaviour but no longer in the module: {sorted(stale)}"
+    )
 
     assert not (behaviour - defined), (
         "behaviour mixins defined outside nemos/basis/_basis_mixin.py, so this guard cannot "
@@ -215,9 +215,9 @@ def test_every_basis_is_atomic_or_declared():
         f"every atomic parametrization without saying so: {sorted(undeclared)}"
     )
     stale = _NON_ATOMIC_BASIS & atomic
-    assert (
-        not stale
-    ), f"declared non-atomic but now carrying AtomicBasisMixin: {sorted(stale)}"
+    assert not stale, (
+        f"declared non-atomic but now carrying AtomicBasisMixin: {sorted(stale)}"
+    )
     gone = _NON_ATOMIC_BASIS - all_basis
     assert not gone, f"declared but no such basis exists: {sorted(gone)}"
 
@@ -265,22 +265,22 @@ def test_eval_conv_mixins_agree_with_the_name_convention():
     for cls in list_all_basis_classes():
         by_mixin_eval = issubclass(cls, EvalBasisMixin)
         by_mixin_conv = issubclass(cls, ConvBasisMixin)
-        assert not (
-            by_mixin_eval and by_mixin_conv
-        ), f"{cls.__name__} carries both EvalBasisMixin and ConvBasisMixin"
+        assert not (by_mixin_eval and by_mixin_conv), (
+            f"{cls.__name__} carries both EvalBasisMixin and ConvBasisMixin"
+        )
         if cls.__name__.endswith("Eval"):
-            assert (
-                by_mixin_eval
-            ), f"{cls.__name__} is named Eval but lacks EvalBasisMixin"
+            assert by_mixin_eval, (
+                f"{cls.__name__} is named Eval but lacks EvalBasisMixin"
+            )
         if cls.__name__.endswith("Conv"):
-            assert (
-                by_mixin_conv
-            ), f"{cls.__name__} is named Conv but lacks ConvBasisMixin"
+            assert by_mixin_conv, (
+                f"{cls.__name__} is named Conv but lacks ConvBasisMixin"
+            )
         # every atomic basis must land in exactly one of the two parametrizations
         if issubclass(cls, AtomicBasisMixin):
-            assert is_eval_basis(cls) != is_conv_basis(
-                cls
-            ), f"{cls.__name__} is atomic but is neither exactly Eval nor exactly Conv"
+            assert is_eval_basis(cls) != is_conv_basis(cls), (
+                f"{cls.__name__} is atomic but is neither exactly Eval nor exactly Conv"
+            )
 
 
 class EvalBasis2D(BoundedEvalBasisMixin, AtomicBasisMixin, Basis):
@@ -2642,9 +2642,9 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             corr[idx] = (lin_ev.flatten() @ log_ev.flatten()) / (
                 np.linalg.norm(lin_ev.flatten()) * np.linalg.norm(log_ev.flatten())
             )
-        assert np.all(
-            np.diff(corr) < 0
-        ), "As time scales increases, deviation from linearity should increase!"
+        assert np.all(np.diff(corr) < 0), (
+            "As time scales increases, deviation from linearity should increase!"
+        )
 
     @pytest.mark.parametrize(
         "time_scaling, expectation",
@@ -7345,7 +7345,7 @@ class TestMultiplicativeBasis(CombinedBasis):
 @pytest.mark.parametrize("basis_class", list_all_real_basis_classes())
 def test_power_of_basis(exponent, basis_class, basis_class_specific_params):
     """Test if the power behaves as expected."""
-    raise_exception_type = not type(exponent) is int
+    raise_exception_type = type(exponent) is not int
 
     if not raise_exception_type:
         raise_exception_value = exponent <= 0

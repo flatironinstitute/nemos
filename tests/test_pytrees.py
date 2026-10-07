@@ -29,7 +29,6 @@ def test_featurepytree_removed_at_target_version():
 
 @pytest.mark.filterwarnings("ignore:FeaturePytree is deprecated:FutureWarning")
 class TestFeaturePytree:
-
     def test_key_error_init(self):
         """Ensure TypeError is raised if non-string keys are used during initialization."""
         with pytest.raises(TypeError, match="keywords must be strings"):

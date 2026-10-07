@@ -12,9 +12,9 @@ from numpy.typing import ArrayLike, NDArray
 
 from .. import observation_models as obs
 from .. import tree_utils
+from .._hess import LeafClaim, MatrixStructure, claim_nothing
 from ..label_encoder import LabelEncoder
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
-from ..solvers._hess import BlockDiagonal, Full, HessianTag, PositiveSemiDefinite
 from ..type_casting import is_numpy_array_like, support_pynapple
 from ..typing import (
     DESIGN_INPUT_TYPE,
@@ -38,11 +38,30 @@ class ClassifierMixin:
     # observation model inferred
     _invalid_observation_types = ()
 
-    def _hess_property_override(self) -> type | None:
-        # The softmax loss is singular along the (unregularized) uniform intercept
-        # shift, so Ridge does not make the penalized Hessian positive definite. Unlike
-        # a plain GLM, this loss certifies nothing extra -- no override.
-        return None
+    def _hess_leaf_claims(
+        self, params: GLMParams[jnp.ndarray], active_spec: GLMParams[bool]
+    ) -> GLMParams[LeafClaim]:
+        """Certify nothing, unlike the plain GLM this inherits from.
+
+        Adding the same constant to every class's intercept leaves the softmax
+        probabilities unchanged, so the intercept block is singular along that direction
+        rather than definite.
+
+        Parameters
+        ----------
+        params :
+            The parameters being fitted.
+        active_spec :
+            The filter spec ``params`` was partitioned with. Unused: nothing is certified
+            whether or not a leaf is being fitted.
+
+        Returns
+        -------
+        :
+            A tree shaped like ``params`` carrying ``LeafClaim.UNCLAIMED``
+            everywhere.
+        """
+        return claim_nothing(params)
 
     def set_classes(self, y: ArrayLike) -> ClassifierMixin:
         """
@@ -98,7 +117,9 @@ class ClassifierMixin:
         >>> model.set_classes(y_all_classes)
         ClassifierGLM(...)
         >>> init_params = model.initialize_params(X_batch1, y_batch1)
-        >>> state = model.initialize_optimizer_and_state(init_params, X_batch1, y_batch1)
+        >>> state = model.initialize_optimizer_and_state(
+        ...     init_params, X_batch1, y_batch1
+        ... )
 
         Now batches with any subset of classes work with :meth:`update`:
 
@@ -713,7 +734,9 @@ class ClassifierGLM(ClassifierMixin, GLM):
 
     Classify into more than two classes:
 
-    >>> X = jnp.array([[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]])
+    >>> X = jnp.array(
+    ...     [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]]
+    ... )
     >>> y = jnp.array([0, 0, 1, 1, 2, 2])
     >>> model = nmo.glm.ClassifierGLM(n_classes=3).fit(X, y)
     >>> model.coef_.shape
@@ -724,9 +747,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
     Change regularization strength:
 
     >>> model = nmo.glm.ClassifierGLM(
-    ...     n_classes=2,
-    ...     regularizer="Ridge",
-    ...     regularizer_strength=0.5
+    ...     n_classes=2, regularizer="Ridge", regularizer_strength=0.5
     ... )
     >>> model.regularizer
     Ridge()
@@ -744,7 +765,6 @@ class ClassifierGLM(ClassifierMixin, GLM):
     """
 
     _validator_class = ClassifierGLMValidator
-    _hess_tag: HessianTag = HessianTag(structure=Full, property=PositiveSemiDefinite)
 
     def __init__(
         self,
@@ -968,7 +988,9 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     >>> import jax.numpy as jnp
     >>> import numpy as np
     >>> import nemos as nmo
-    >>> X = jnp.array([[1., 2.], [2., 3.], [3., 4.], [4., 5.], [5., 6.], [6., 7.]])
+    >>> X = jnp.array(
+    ...     [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]]
+    ... )
     >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
     >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X, y)
     >>> model.coef_.shape
@@ -994,7 +1016,9 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
     Class labels can be strings or any hashable type:
 
-    >>> y_str = np.array([["a", "a"], ["a", "b"], ["b", "a"], ["b", "c"], ["c", "b"], ["c", "c"]])
+    >>> y_str = np.array(
+    ...     [["a", "a"], ["a", "b"], ["b", "a"], ["b", "c"], ["c", "b"], ["c", "c"]]
+    ... )
     >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X, y_str)
     >>> model.classes_
     array(['a', 'b', 'c'], dtype='<U1')
@@ -1008,8 +1032,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     >>> feature_mask = jnp.array([[1, 0], [1, 1]])
     >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
     >>> model = nmo.glm.ClassifierPopulationGLM(
-    ...     n_classes=3,
-    ...     feature_mask=feature_mask
+    ...     n_classes=3, feature_mask=feature_mask
     ... ).fit(X, y)
     >>> model.coef_
     Array(...)
@@ -1019,9 +1042,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     Change regularization strength:
 
     >>> model = nmo.glm.ClassifierPopulationGLM(
-    ...     n_classes=3,
-    ...     regularizer="Ridge",
-    ...     regularizer_strength=0.5
+    ...     n_classes=3, regularizer="Ridge", regularizer_strength=0.5
     ... )
     >>> model.regularizer
     Ridge()
@@ -1038,11 +1059,9 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     """
 
     _validator_class = PopulationClassifierGLMValidator
-    _hess_tag: HessianTag = HessianTag(
-        structure=BlockDiagonal,
-        property=PositiveSemiDefinite,
-        batch_axes=GLMParams(1, 0),
-    )
+    # One block per neuron, as in ``PopulationGLM``.
+    _hess_structure = MatrixStructure.BLOCK_DIAGONAL
+    _hess_batch_axes = GLMParams(1, 0)
 
     def __init__(
         self,
@@ -1141,7 +1160,9 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         --------
         >>> import jax.numpy as jnp
         >>> import nemos as nmo
-        >>> X = jnp.array([[1., 2.], [2., 3.], [3., 4.], [4., 5.], [5., 6.], [6., 7.]])
+        >>> X = jnp.array(
+        ...     [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]]
+        ... )
         >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
         >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3)
         >>> model = model.fit(X, y)
@@ -1190,7 +1211,9 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         --------
         >>> import jax.numpy as jnp
         >>> import nemos as nmo
-        >>> X = jnp.array([[1., 2.], [2., 3.], [3., 4.], [4., 5.], [5., 6.], [6., 7.]])
+        >>> X = jnp.array(
+        ...     [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]]
+        ... )
         >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
         >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X, y)
         >>> score = model.score(X, y)

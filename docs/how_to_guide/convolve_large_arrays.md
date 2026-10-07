@@ -8,6 +8,13 @@ kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
   name: python3
+nemos_tags:
+  model: []
+  observation_model: []
+  signal: [continuous]
+  topic: [scalability, feature design]
+  data: simulated
+  description: Batch convolutions over channels, basis kernels or samples to keep large arrays within GPU memory.
 ---
 
 # Convolve Large Arrays

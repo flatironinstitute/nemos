@@ -24,9 +24,9 @@ class GLMHMMParams(ModelParams):
     hmm_params: HMMParams
 
     @staticmethod
-    def regularizable_subtrees() -> (
-        list[Callable[["GLMHMMParams"], jnp.ndarray | dict]]
-    ):
+    def regularizable_subtrees() -> list[
+        Callable[["GLMHMMParams"], jnp.ndarray | dict]
+    ]:
         """Filter regularizable subtrees."""
         return [lambda p: p.model_params.coef]
 

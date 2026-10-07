@@ -1,27 +1,15 @@
 exclude: ^src/nemos/third_party/
 
 repos:
-- repo: https://github.com/psf/black
-  rev: 26.1.0
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.16.8
   hooks:
-    - id: black
-      args: [ "--check" ]
-      # Only include src/, but exclude third_party/
-      files: ^src/(?!nemos/third_party)
-
-- repo: https://github.com/pycqa/isort
-  rev: 6.0.1
-  hooks:
-    - id: isort
-      args: ["--profile", "black", "--check-only"]
-      files: ^src/(?!nemos/third_party)|^docs/how_to_guide/|^docs/background/|^docs/tutorials/
-
-- repo: https://github.com/pycqa/flake8
-  rev: 7.2.0
-  hooks:
-    - id: flake8
-      args: ["--config=tox.ini"]
-      files: ^(src|tests)/(?!nemos/third_party)
+    # Run the formatter.
+    - id: ruff-format
+      args: [--config=pyproject.toml]
+    # Run the linter.
+    - id: ruff
+      args: [--config=pyproject.toml]
 
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v5.0.0
@@ -43,13 +31,6 @@ repos:
   # Removes trailing whitespace characters from files.
   - id: trailing-whitespace
 
-- repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.11.5
-  hooks:
-    - id: ruff
-      args: ["--fix", "--config=pyproject.toml"]
-      files: ^src/
-
 - repo: local
   hooks:
     - id: check-parameter-naming
@@ -65,5 +46,11 @@ repos:
     - id: fix-notebook-metadata
       name: Fix notebook metadata
       entry: python scripts/check_notebook_metadata.py --fix
+      language: system
+      files: ^docs/.*\.md$
+
+    - id: check-example-tags
+      name: Check that examples are tagged appropriately
+      entry: python scripts/check_example_tags.py
       language: system
       files: ^docs/.*\.md$

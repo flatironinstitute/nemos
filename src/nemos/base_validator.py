@@ -75,6 +75,7 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
             y_dimensionality: int = 1  # Instance field
             model_class: str = "MyModel"  # Instance field
 
+
         # Incorrect - without type annotations:
         class MyValidator(RegressorValidator[UserParams, ModelParams]):
             expected_array_dims = (1, 1)  # Class attribute, won't override!

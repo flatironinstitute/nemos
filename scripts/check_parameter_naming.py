@@ -161,6 +161,17 @@ VALID_PAIRS = [
     {"true_intercept", "fit_intercept"},
     {"frozen_intercept", "rec_intercept"},
     {"frozen_intercept", "true_intercept"},
+    {"claim", "claims"},
+    {"initial_prob", "initial_proba_init"},
+    {"transition_prob", "transition_proba_init"},
+    {"identity_shift", "identity_shift_beta"},
+    # ppglm params
+    {"M_samples", "n_samples"},
+    {"mc_samples", "M_samples"},
+    {"mc_samples", "n_samples"},
+    {"bias", "bas"},
+    {"M_grid", "grid"},
+    {"inner_atol", "inner_rtol"},
 ]
 
 

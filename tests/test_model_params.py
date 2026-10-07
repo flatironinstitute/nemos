@@ -1,10 +1,10 @@
 """Meta-tests for ``ModelParams`` containers.
 
-``Regularizer.resolve_hess_tag`` decides regularizer coverage by comparing leaf
-ids between ``where(params)`` (for each ``where`` in ``regularizable_subtrees``)
-and the full parameter tree. A ``where`` that returns transformed copies instead
-of the stored leaves silently downgrades the Hessian tag to ``General``, forcing
-the Newton solver onto the SVD path instead of Cholesky. The tests below walk
+``Regularizer._resolve_hess_tag`` labels each leaf and writes the labels back into
+a tree shaped like the parameters, using ``eqx.tree_at`` with the ``where``
+functions from ``regularizable_subtrees``. ``eqx.tree_at`` locates a subtree by
+identity, so a ``where`` that returns transformed copies instead of the stored
+leaves cannot be located and the tag cannot be built at all. The tests below walk
 every ``ModelParams`` subclass and assert the identity-preservation invariant,
 so any future params class that breaks it fails loudly here.
 """
@@ -21,11 +21,11 @@ import pytest
 
 import nemos
 from conftest import all_subclasses
+from nemos._hess import HessianTag, MatrixProperty, MatrixStructure
 from nemos._inspect_utils import is_abstract
 from nemos.glm.params import GLMParams
 from nemos.params import ModelParams
 from nemos.regularizer import Ridge, UnRegularized
-from nemos.solvers._hess import Diagonal, General, HessianTag, PositiveDefinite
 
 # Import every submodule so all ModelParams subclasses are registered before the
 # parametrizations below are collected (same idiom as test_hmm_validator).
@@ -95,8 +95,8 @@ def test_regularizable_subtrees_preserve_leaf_identity(params_cls):
         assert not missing, (
             f"{params_cls.__name__}.regularizable_subtrees returned leaves that are "
             f"not identical (by id) to the stored params ({missing}); "
-            "Regularizer.resolve_hess_tag coverage detection relies on identity "
-            "preservation."
+            "Regularizer._resolve_hess_tag writes the per-leaf claims back with "
+            "eqx.tree_at, which relies on identity preservation."
         )
 
 
@@ -111,22 +111,95 @@ class _FullyCoveredParams(ModelParams):
 
 
 @pytest.mark.parametrize(
-    "params_cls, expected_property",
+    "params_cls, flat_on, definite_on",
     [
         pytest.param(
-            _FullyCoveredParams, PositiveDefinite, id="full-coverage-keeps-tag"
+            _FullyCoveredParams,
+            _FullyCoveredParams(weights=False),
+            _FullyCoveredParams(weights=True),
+            id="full-coverage",
         ),
-        pytest.param(GLMParams, General, id="partial-coverage-downgrades"),
+        pytest.param(
+            GLMParams,
+            GLMParams(coef=False, intercept=True),
+            GLMParams(coef=True, intercept=False),
+            id="partial-coverage",
+        ),
     ],
 )
-def test_resolve_hess_tag_coverage(params_cls, expected_property):
-    """Ridge's tag survives full coverage and downgrades on partial coverage."""
+def test_ridge_certifies_the_leaves_its_penalty_reaches(
+    params_cls, flat_on, definite_on
+):
+    """Ridge curves the leaves its subtrees reach and is flat on the rest.
+
+    Coverage is what the two cases differ in: a params class whose subtrees reach every
+    leaf leaves nothing flat, while one that skips a leaf reports that leaf flat, since
+    the penalty does not depend on it.
+    """
     params = _dummy_instance(params_cls)
-    tag = Ridge().resolve_hess_tag(params)
-    assert tag == HessianTag(structure=Diagonal, property=expected_property)
+    tag = Ridge()._resolve_hess_tag(params, 0.1)
+    assert tag == HessianTag(
+        structure=MatrixStructure.DIAGONAL,
+        property=MatrixProperty.POSITIVE_SEMI_DEFINITE,
+        flat_on=flat_on,
+        definite_on=definite_on,
+    )
 
 
-def test_resolve_hess_tag_unregularized_is_none():
-    """A regularizer without a Hessian tag resolves to None."""
+@pytest.mark.parametrize(
+    "strength, flat_on, definite_on",
+    [
+        pytest.param(
+            0.1,
+            GLMParams(coef=False, intercept=True),
+            GLMParams(coef=True, intercept=False),
+            id="positive-scalar",
+        ),
+        pytest.param(
+            jnp.array([1.0, 2.0, 3.0]),
+            GLMParams(coef=False, intercept=True),
+            GLMParams(coef=True, intercept=False),
+            id="positive-array",
+        ),
+        pytest.param(
+            0.0,
+            GLMParams(coef=True, intercept=True),
+            GLMParams(coef=False, intercept=False),
+            id="zero-scalar",
+        ),
+        pytest.param(
+            jnp.array([1.0, 0.0, 2.0]),
+            GLMParams(coef=False, intercept=True),
+            GLMParams(coef=False, intercept=False),
+            id="array-with-a-zero",
+        ),
+    ],
+)
+def test_ridge_claims_follow_the_strength(strength, flat_on, definite_on):
+    """A strictly positive strength curves the leaf, a zero one flattens it, a mix of the
+    two claims nothing."""
     params = _dummy_instance(GLMParams)
-    assert UnRegularized().resolve_hess_tag(params) is None
+    tag = Ridge()._resolve_hess_tag(params, strength)
+    assert tag == HessianTag(
+        structure=MatrixStructure.DIAGONAL,
+        property=MatrixProperty.POSITIVE_SEMI_DEFINITE,
+        flat_on=flat_on,
+        definite_on=definite_on,
+    )
+
+
+def test_unregularized_resolves_the_zero_tag():
+    """An unregularized penalty is identically zero: flat on every leaf, definite on none.
+
+    Not ``None``, which is reserved for a penalty whose curvature is not described. The
+    difference matters at the solver, where ``None`` propagates through
+    ``combine_hessian_tags`` and leaves the sum unclaimed while this tag leaves the model's
+    own claims untouched.
+    """
+    params = _dummy_instance(GLMParams)
+    assert UnRegularized()._resolve_hess_tag(params, None) == HessianTag(
+        structure=MatrixStructure.DIAGONAL,
+        property=MatrixProperty.POSITIVE_SEMI_DEFINITE,
+        flat_on=GLMParams(coef=True, intercept=True),
+        definite_on=GLMParams(coef=False, intercept=False),
+    )

@@ -434,8 +434,9 @@ class TestSetupHMMInitialization:
         "init_func, expectation",
         [
             (
-                lambda n_states, X, y, session_starts, random_key: jnp.ones((n_states,))
-                / n_states,
+                lambda n_states, X, y, session_starts, random_key: (
+                    jnp.ones((n_states,)) / n_states
+                ),
                 does_not_raise(),
             ),
             (
@@ -475,10 +476,9 @@ class TestSetupHMMInitialization:
         "init_func, expectation",
         [
             (
-                lambda n_states, X, y, session_starts, random_key: jnp.ones(
-                    (n_states, n_states)
-                )
-                / n_states,
+                lambda n_states, X, y, session_starts, random_key: (
+                    jnp.ones((n_states, n_states)) / n_states
+                ),
                 does_not_raise(),
             ),
             (
@@ -506,8 +506,8 @@ class TestSetupHMMInitialization:
     @pytest.fixture
     def custom_init_func(self, init_func, key):
         if init_func:
-            return (
-                lambda n_states, X, y, session_starts, random_key, extra_key=2: jnp.ones(
+            return lambda n_states, X, y, session_starts, random_key, extra_key=2: (
+                jnp.ones(
                     shape=((n_states, n_states) if "transition" in key else (n_states,))
                 )
                 / n_states
@@ -576,19 +576,17 @@ class TestSetupHMMInitialization:
             ),
             (
                 "initial_proba_init",
-                lambda n_states, X, y, session_starts, random_key, extra_kwarg=1: jnp.ones(
-                    (n_states,)
-                )
-                / n_states,
+                lambda n_states, X, y, session_starts, random_key, extra_kwarg=1: (
+                    jnp.ones((n_states,)) / n_states
+                ),
                 "initial_proba_init_kwargs",
                 {"extra_kwarg": 2},
             ),
             (
                 "transition_proba_init",
-                lambda n_states, X, y, session_starts, random_key, extra_kwarg=1: jnp.ones(
-                    (n_states, n_states)
-                )
-                / n_states,
+                lambda n_states, X, y, session_starts, random_key, extra_kwarg=1: (
+                    jnp.ones((n_states, n_states)) / n_states
+                ),
                 "transition_proba_init_kwargs",
                 {"extra_kwarg": 2},
             ),
@@ -619,15 +617,15 @@ class TestSetupHMMInitialization:
             ),
             (
                 "initial_proba_init",
-                lambda n_states, X, y, session_starts, random_key: jnp.ones((n_states,))
-                / n_states,
+                lambda n_states, X, y, session_starts, random_key: (
+                    jnp.ones((n_states,)) / n_states
+                ),
             ),
             (
                 "transition_proba_init",
-                lambda n_states, X, y, session_starts, random_key: jnp.ones(
-                    (n_states, n_states)
-                )
-                / n_states,
+                lambda n_states, X, y, session_starts, random_key: (
+                    jnp.ones((n_states, n_states)) / n_states
+                ),
             ),
         ],
     )
@@ -739,10 +737,14 @@ class TestResolveDirichletPriors:
             (np.array([1.0, 1.0, 1.0]), (3,)),
             (np.array([2.0, 3.0]), (2,)),
             (jnp.array([[1.0, 2.0], [3.0, 4.0]]), (2, 2)),
+            ([1.0, 1.0, 1.0], (3,)),
+            ((2.0, 3.0), (2,)),
+            ([[1.0, 2.0], [3.0, 4.0]], (2, 2)),
+            ([1, 1, 1], (3,)),
         ],
     )
     def test_valid_array_input(self, alphas, expected_shape):
-        """Test that valid array inputs are converted to JAX arrays."""
+        """Test that valid array-like inputs are converted to JAX arrays."""
         result = _resolve_dirichlet_priors(alphas, expected_shape)
         assert isinstance(result, jnp.ndarray)
         assert result.shape == expected_shape
@@ -763,9 +765,14 @@ class TestResolveDirichletPriors:
         with pytest.raises(ValueError, match="must be >= 1"):
             _resolve_dirichlet_priors(alphas, expected_shape)
 
-    def test_invalid_type_raises_type_error(self):
-        """Test that invalid types raise TypeError."""
-        alphas = "invalid"
+    def test_sequence_values_less_than_one_raises_value_error(self):
+        """Test that lists are validated like arrays, not silently accepted."""
+        with pytest.raises(ValueError, match="must be >= 1"):
+            _resolve_dirichlet_priors([1.0, 0.5, 2.0], (3,))
+
+    @pytest.mark.parametrize("alphas", ["invalid", {"a": 1}, object(), ["a", "b"]])
+    def test_invalid_type_raises_type_error(self, alphas):
+        """Test that types that cannot be cast to a numeric array raise TypeError."""
         expected_shape = (3,)
 
         with pytest.raises(TypeError, match="Invalid type"):

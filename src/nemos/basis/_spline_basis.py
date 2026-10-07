@@ -587,7 +587,9 @@ def mspline(
     >>> from numpy import linspace
     >>> from nemos.basis._spline_basis import mspline
     >>> sample_points = linspace(0, 1, 100)
-    >>> mspline_eval = mspline(x=sample_points, k=3, i=2, T=np.random.rand(7)) # define a cubic M-spline
+    >>> mspline_eval = mspline(
+    ...     x=sample_points, k=3, i=2, T=np.random.rand(7)
+    ... )  # define a cubic M-spline
     >>> mspline_eval.shape
     (100,)
     """
@@ -668,7 +670,7 @@ def bspline(
     >>> from nemos.basis._spline_basis import bspline
     >>> sample_points = linspace(0, 1, 100)
     >>> knots = np.array([0, 0, 0, 0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 1, 1, 1, 1])
-    >>> bspline_eval = bspline(sample_points, knots) # define a cubic B-spline
+    >>> bspline_eval = bspline(sample_points, knots)  # define a cubic B-spline
     >>> bspline_eval.shape
     (100, 10)
     """
@@ -684,9 +686,9 @@ def bspline(
     need_outer = any(sample_pts < knots[order - 1]) or any(
         sample_pts > knots[nk - order]
     )
-    assert (
-        not need_outer
-    ) | outer_ok, 'sample points must lie within the B-spline knots range unless "outer_ok==True".'
+    assert (not need_outer) | outer_ok, (
+        'sample points must lie within the B-spline knots range unless "outer_ok==True".'
+    )
 
     # select knots that are within the knots range (this takes care of eventual NaNs)
     in_sample = (sample_pts >= knots[0]) & (sample_pts <= knots[-1])
@@ -780,7 +782,7 @@ def bspline_jax(
     >>> from nemos.basis._spline_basis import bspline_jax
     >>> sample_points = linspace(0, 1, 100)
     >>> knots = np.array([0, 0, 0, 0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 1, 1, 1, 1])
-    >>> bspline_eval = bspline_jax(sample_points, knots) # define a cubic B-spline
+    >>> bspline_eval = bspline_jax(sample_points, knots)  # define a cubic B-spline
     >>> bspline_eval.shape
     (100, 10)
     """

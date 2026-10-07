@@ -96,6 +96,9 @@ When devising a new model subclass based on the `BaseRegressor` abstract class, 
 - **Should not** overwrite the `get_params` and `set_params` methods, inherited from `Base`.
 - **May** introduce auxiliary methods for added utility.
 - **May** re-implement the `__sklearn_tags__` method to add metadata that is relevant to the specific estimator implemented. See the [`scikit-learn` documentation](https://scikit-learn.org/stable/modules/generated/sklearn.utils.Tags.html#sklearn.utils.Tags) for the available tagging options.
+- **May** certify something about the curvature of its loss, by overriding `_resolve_hess_property` (the sign), `_definite_on` (the leaves whose block is definite), `_hess_structure` and `_hess_batch_axes`. Every default certifies nothing, so a subclass that overrides none of them still gets a correct tag and a solver that assumes the least about the Hessian. See [Hessian tagging](08-hessian_tagging.md).
+
+TODO: the tag has no hook for a loss that is *flat* on a leaf, because no model here has one. Two situations would need it, and they are worth settling before a subclass runs into either: a parameter the loss never references, which only the penalty curves on, and a Lagrange multiplier, whose diagonal block is structurally zero. The second also needs the tag to stay unsigned, since a flat claim implies nothing about the null space of an indefinite matrix.
 
 :::{admonition} Tags
 :class: note

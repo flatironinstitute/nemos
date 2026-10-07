@@ -134,9 +134,10 @@ def test_to_transformer_and_constructor_are_equivalent(
 
     assert wrapped_methods_a == wrapped_methods_b
     if basis_cls == CustomBasis:
-        f1, f2 = trans_bas_a.basis.__dict__.pop(
-            "_funcs", [True]
-        ), trans_bas_b.basis.__dict__.pop("_funcs", [True])
+        f1, f2 = (
+            trans_bas_a.basis.__dict__.pop("_funcs", [True]),
+            trans_bas_b.basis.__dict__.pop("_funcs", [True]),
+        )
         # the functions will not have the same id,
         # but the __repr__ will show that they point to the same function address with the same parameters
         assert all(fi.__repr__() == fj.__repr__() for fi, fj in zip(f1, f2))
@@ -586,7 +587,6 @@ def test_transformerbasis_pickle(
     assert isinstance(trans_bas2, basis.TransformerBasis)
     if basis_cls in [basis.AdditiveBasis, basis.MultiplicativeBasis]:
         for basi in [getattr(trans_bas2.basis, attr) for attr in ("basis1", "basis2")]:
-
             assert basi.n_basis_funcs == bas.basis1.n_basis_funcs
     else:
         assert trans_bas2.n_basis_funcs == bas.n_basis_funcs
@@ -1317,9 +1317,9 @@ def test_double_transformer():
     tbas2 = nmo.basis.TransformerBasis(tbas)
     assert isinstance(tbas2.basis, nmo.basis.MSplineEval)
     tbas3 = tbas.to_transformer()
-    assert (
-        id(tbas.basis) != id(tbas2.basis) != id(tbas3)
-    ), "The basis was shallow copied!"
+    assert id(tbas.basis) != id(tbas2.basis) != id(tbas3), (
+        "The basis was shallow copied!"
+    )
 
 
 # Behavior buckets for the transformer bounds gate. Hardcoded rather than derived from
@@ -1359,16 +1359,16 @@ BOUNDS_COMPOSITE = [basis.AdditiveBasis, basis.MultiplicativeBasis]
 def test_bounds_gating_covers_all_bases():
     """Guard the hardcoded behavior lists against drift as bases are added."""
     labeled = BOUNDS_GATED_EVAL + BOUNDS_UNGATED_ATOMIC + BOUNDS_COMPOSITE
-    assert len(labeled) == len(
-        set(labeled)
-    ), "A basis is labeled in more than one bucket."
+    assert len(labeled) == len(set(labeled)), (
+        "A basis is labeled in more than one bucket."
+    )
     implemented = set(list_all_basis_classes())
-    assert not implemented - set(
-        labeled
-    ), f"Unlabeled basis classes: {implemented - set(labeled)}"
-    assert (
-        not set(labeled) - implemented
-    ), f"Labeled non-bases: {set(labeled) - implemented}"
+    assert not implemented - set(labeled), (
+        f"Unlabeled basis classes: {implemented - set(labeled)}"
+    )
+    assert not set(labeled) - implemented, (
+        f"Labeled non-bases: {set(labeled) - implemented}"
+    )
 
 
 def _run_bounds_gating(basis_cls, params, bounds, method):
