@@ -2,7 +2,7 @@
 """Helper functions for the GLM-HMM behavioral-states tutorial.
 
 These functions handle the IBL-specific preprocessing and plotting used in
-``docs/tutorials/plot_07_behavioral_states``. They are documentation-only
+``docs/tutorials/glm_hmm/plot_07_behavioral_states``. They are documentation-only
 utilities and are not part of the public NeMoS API.
 """
 

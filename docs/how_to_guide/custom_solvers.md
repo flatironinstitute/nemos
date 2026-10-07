@@ -8,6 +8,13 @@ kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
   name: python3
+nemos_tags:
+  model: [GLM, PopulationGLM]
+  observation_model: [Poisson]
+  signal: [spike counts]
+  topic: [custom components]
+  data: simulated
+  description: Scipy solvers in NeMoS - wrap a scipy optimizer and register it as a solver.
 ---
 
 # Creating custom solvers for use with NeMoS

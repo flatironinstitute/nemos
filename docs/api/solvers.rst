@@ -58,4 +58,4 @@ Classes useful for creating completely custom solvers.
 
 .. seealso::
 
-    :doc:`The developer notes <developers_notes/07-solvers>` explain the solver contract and expected types in more detail.
+    :doc:`The developer notes </developers_notes/07-solvers>` explain the solver contract and expected types in more detail.

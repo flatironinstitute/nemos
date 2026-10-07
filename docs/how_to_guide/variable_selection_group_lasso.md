@@ -8,6 +8,13 @@ kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
   name: python3
+nemos_tags:
+  model: [GLM]
+  observation_model: [Poisson]
+  signal: [spike counts]
+  topic: [variable selection, regularization]
+  data: simulated
+  description: Select informative covariates with Group Lasso, which sets whole groups of basis coefficients to zero.
 ---
 
 (variable_selection_group_lasso)=
@@ -147,7 +154,7 @@ While the automatic grouping (one group per leaf feature) is convenient for cova
 - Working with multi-neuron recordings where you want to enforce joint sparsity across neurons
 - Defining hierarchical or overlapping group structures
 
-For details on specifying custom masks, see the [GroupLasso API documentation](nemos.regularizer.GroupLasso) and the [Group Lasso regularizer tutorial](k-fold-selection).
+For details on specifying custom masks, see the [GroupLasso API documentation](nemos.regularizer.GroupLasso) and the [regularization user guide](finegrained_regularization).
 
 ## Summary
 
