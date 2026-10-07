@@ -12,7 +12,6 @@ NeMoS provides some functionality to make fitting GLMs this way easier:
 
 The recipes live in the how-to guide:
 
-- [Stochastic optimization basics](../../how_to_guide/stochastic_fit.md)
-- [Creating a custom `DataLoader`](../../how_to_guide/custom_dataloader.md)
-- [Stopping on convergence and custom callbacks](../../how_to_guide/custom_callbacks_and_termination.md)
-- [Manual update loop for more control](../../how_to_guide/manual_batching_loop.md)
+```{nemos-examples}
+:topic: stochastic fit
+```

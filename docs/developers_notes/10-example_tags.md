@@ -28,5 +28,13 @@ nemos_tags:
 
 Sphinx exposes the block as `env.metadata[docname]["nemos_tags"]`, where `myst_parser` leaves it as a **JSON string**; the generator has to `json.loads` it rather than index it as a dict.
 
-`write_examples_index` in `conf.py` runs on `build-finished` and writes `_build/html/_static/examples.json`, one entry per tagged page: its tags plus `title` and `url`, the latter relative to the site root.
-It is written into the build and not the sources, so it never needs committing.
+The extension `sphinxext/nemos_examples.py` reads the tags back:
+
+- `write_examples_index` runs on `build-finished` and writes `_build/html/_static/examples.json`, one entry per tagged page: its tags plus `title` and `url`, the latter relative to the site root. It is written into the build and not the sources, so it never needs committing.
+- The `nemos-examples` directive renders a link to the Example Finder with its options as filters; values within a field are comma-separated. A page linking to its examples **should** use it, so the link is resolved relative to the page:
+
+````md
+```{nemos-examples}
+:model: GLM, PopulationGLM
+```
+````

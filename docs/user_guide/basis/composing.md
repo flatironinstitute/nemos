@@ -1,4 +1,5 @@
 ---
+orphan: true
 jupytext:
   text_representation:
     extension: .md
@@ -112,6 +113,7 @@ In this scenario, the stimuli are the 2D coordinates (x, y) that represent the a
 
 
 
+(basis-addition)=
 ### Additive Basis Object
 One way to model the response to our 2D stimuli is to hypothesize that it decomposes into two factors:
 one due to the x-coordinate and another due to the y-coordinate. We can express this relationship as:
@@ -226,6 +228,7 @@ And then index directly the splitted array.
 element_a, element_b = Z_split["a"][basis_a_element], Z_split["b"][basis_b_element]
 ```
 
+(basis-multiplication)=
 ### Multiplicative Basis Object
 
 If the aim is to capture interactions between the coordinates, the response function can be modeled as the external

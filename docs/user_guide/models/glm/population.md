@@ -290,3 +290,9 @@ pytree_mask = {
 }
 ```
 :::
+
+## Examples
+
+```{nemos-examples}
+:model: PopulationGLM
+```

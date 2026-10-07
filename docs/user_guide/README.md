@@ -8,7 +8,7 @@ NeMoS has two core modules:
 
 
 (user-guide-feature-design)=
-## Feature design
+## Feature Design
 
 Constructing the design matrix, and composing several inputs into one.
 
@@ -20,9 +20,15 @@ Constructing the design matrix, and composing several inputs into one.
 ```{toctree}
 :maxdepth: 2
 :titlesonly:
-:caption: Feature design
+:caption: Feature Design
 
-basis/README.md
+Background <basis/README>
+Pynapple Compatibility <pynapple>
+Basis types: eval vs conv <basis/eval_vs_conv>
+Handling disjoint epochs <basis/disjoint_epochs>
+Multiple predictors: basis addition <basis/addition>
+Multi-dim predictors: basis multiplication <basis/multiplication>
+Advanced <basis/advanced>
 ```
 
 :::
@@ -39,15 +45,14 @@ The model families and the estimator interface they share.
 :titlesonly:
 :caption: Models
 
-models/glm/README.md
-models/glm_hmm/README.md
+GLM <models/glm/README>
 ```
 
 :::
 
-## Model configurations
+## Model components
 
-Advanced usage: what each component does, how they combine into a model, and the interface to implement your own.
+The observation models, regularizers and solvers a model is configured with.
 
 :::{card}
 
@@ -56,60 +61,45 @@ Advanced usage: what each component does, how they combine into a model, and the
 :titlesonly:
 :caption: Model components
 
-observation_models.md
-regularizers.md
-solvers.md
+Observation models <observation_models>
+Regularizers <regularizers>
+Solvers <solvers>
 ```
 
 :::
 
-## Saving and Loading
+## Model selection and pipelining with sklearn
 
-Writing a model to disk and reading it back.
+Bases as transformers, pipelines of bases and models, and searching their hyperparameters.
 
 :::{card}
 
 ```{toctree}
 :maxdepth: 2
 :titlesonly:
-:caption: Saving and Loading
+:caption: Model selection and pipelining with sklearn
 
-saving_and_loading.md
+Transformers <sklearn_compatibility/basis_transformer>
+Pipeline <sklearn_compatibility/pipeline>
+Grid searches <sklearn_compatibility/cross_validation>
 ```
 
 :::
 
-## Interactions with other packages
+## Scalability & Performance
 
-Every basis and model implements the scikit-learn estimator API, so they drop into the tools built around it. Bases and models also take pynapple time-aware objects as inputs and preserve them in their outputs.
+Fitting when the data does not fit in memory, and how fast each solver fits.
 
 :::{card}
 
 ```{toctree}
 :maxdepth: 2
 :titlesonly:
-:caption: Interactions with other packages
+:caption: Scalability & Performance
 
-sklearn_compatibility/basis_transformer.md
-sklearn_compatibility/pipeline.md
-sklearn_compatibility/cross_validation.md
-pynapple.md
-```
-
-:::
-
-## Stochastic optimization
-
-Fitting when the data does not fit in memory.
-
-:::{card}
-
-```{toctree}
-:maxdepth: 2
-:titlesonly:
-:caption: Stochastic optimization
-
-scalability/README.md
+Stochastic fit <scalability/README>
+Custom update <scalability/custom_update>
+Benchmarking <scalability/benchmarking>
 ```
 
 :::
