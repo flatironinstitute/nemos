@@ -7,7 +7,14 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 
-from ..typing import Aux, ModelParamsT, SolverState
+from ..typing import (
+    Aux,
+    EStepFn,
+    EStepOutput,
+    LogLikelihoodFn,
+    ModelParamsT,
+    SolverState,
+)
 from .m_step_analytical_updates import (
     _analytical_m_step_log_initial_prob,
     _analytical_m_step_log_transition_prob,
@@ -145,8 +152,7 @@ def _forward_pass(
                 log_alphas[t] = log_initial_prob + log_py_z[t]
             else:
                 log_alphas[t] = log_py_z[t] + logsumexp(
-                    log_transition_prob + log_alphas[t - 1][None, :],
-                    axis=1
+                    log_transition_prob + log_alphas[t - 1][None, :], axis=1
                 )
 
             log_c[t] = logsumexp(log_alphas[t])
@@ -196,7 +202,7 @@ def forward_pass(
     params: ModelParamsT,
     X: Array,
     y: Array,
-    log_likelihood_func: Callable[[Array, Array, Array], Array],
+    log_likelihood_func: LogLikelihoodFn,
     session_starts: Array | None = None,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
@@ -260,7 +266,7 @@ def forward_pass(
     session_starts = (
         session_starts
         if session_starts is not None
-        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
+        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(True)
     )
 
     # Compute log-likelihoods
@@ -331,10 +337,14 @@ def _backward_pass(
             if new_sess[t + 1]:
                 log_betas[t] = np.zeros(n_states)
             else:
-                log_betas[t] = logsumexp(
-                    log_transition_prob + (log_betas[t + 1] + log_py_z[t + 1])[None, :],
-                    axis=1
-                ) - log_c[t + 1]
+                log_betas[t] = (
+                    logsumexp(
+                        log_transition_prob
+                        + (log_betas[t + 1] + log_py_z[t + 1])[None, :],
+                        axis=1,
+                    )
+                    - log_c[t + 1]
+                )
 
     References
     ----------
@@ -384,9 +394,9 @@ def forward_backward(
     params: ModelParamsT,
     X: Array,
     y: Array,
-    log_likelihood_func: Callable[[Array, Array, Array], Array],
+    log_likelihood_func: LogLikelihoodFn,
     session_starts: Array | None = None,
-):
+) -> EStepOutput:
     """
     Run the forward-backward Baum-Welch algorithm.
 
@@ -451,7 +461,7 @@ def forward_backward(
     session_starts = (
         session_starts
         if session_starts is not None
-        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
+        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(True)
     )
 
     # Compute log-likelihoods
@@ -592,11 +602,14 @@ def _em_step(
     carry: EMCarry,
     X: Array,
     y: Array,
-    log_likelihood_func: Callable[[Array, Array, Array], Array],
+    log_likelihood_func: LogLikelihoodFn,
     m_step_fn_model_params: Callable[
         [ModelParamsT, Array, Array, Array], Tuple[ModelParamsT, SolverState, Aux]
     ],
+    e_step_fn: EStepFn,
     session_starts: Array,
+    dirichlet_initial_proba: Array | None = None,
+    dirichlet_transition_proba: Array | None = None,
 ) -> EMCarry:
     """
     Execute a single EM iteration combining E-step and M-step.
@@ -618,8 +631,16 @@ def _em_step(
         Log-likelihood function for the E-step.
     m_step_fn_model_params :
         M-step update function for GLM coefficients and intercepts.
+    e_step_fn:
+        Callable that runs the forward-backward algorithm.
     session_starts :
         Boolean array marking session boundaries.
+    dirichlet_initial_proba :
+        Alpha parameters of the Dirichlet prior over the initial state probabilities,
+        shape ``(n_states,)``. If None, a flat (uninformative) prior is assumed.
+    dirichlet_transition_proba :
+        Alpha parameters of the Dirichlet prior over the transition probabilities,
+        shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
 
     Returns
     -------
@@ -633,10 +654,9 @@ def _em_step(
     until convergence criteria are met. The carry structure allows JAX to efficiently
     compile and execute the EM loop.
     """
-
     params, previous_state = carry
 
-    log_posteriors, log_joint_posterior, _, new_log_like, _, _ = forward_backward(
+    log_posteriors, log_joint_posterior, _, new_log_like, _, _ = e_step_fn(
         params,
         X,
         y,
@@ -652,6 +672,8 @@ def _em_step(
         log_joint_posterior=log_joint_posterior,
         session_starts=session_starts,
         m_step_fn_model_params=m_step_fn_model_params,
+        dirichlet_initial_proba=dirichlet_initial_proba,
+        dirichlet_transition_proba=dirichlet_transition_proba,
     )
 
     new_state = EMState(
@@ -672,9 +694,12 @@ def em_step(
     state: EMState,
     X: Array,
     y: Array,
-    log_likelihood_func: Callable,
+    log_likelihood_func: LogLikelihoodFn,
     m_step_fn_model_params: Callable,
+    e_step_fn: EStepFn,
     session_starts: Array,
+    dirichlet_initial_proba: Array | None = None,
+    dirichlet_transition_proba: Array | None = None,
 ) -> Tuple[ModelParamsT, EMState]:
     """
     Perform a single EM iteration step for an HMM.
@@ -700,8 +725,16 @@ def em_step(
         Function computing the log-likelihood or log emissions probability.
     m_step_fn_model_params :
         Callable that performs the M-step update for model parameters.
+    e_step_fn:
+        Callable that runs the forward-backward algorithm.
     session_starts :
         Boolean mask for the first observation of each session.
+    dirichlet_initial_proba :
+        Alpha parameters of the Dirichlet prior over the initial state probabilities,
+        shape ``(n_states,)``. If None, a flat (uninformative) prior is assumed.
+    dirichlet_transition_proba :
+        Alpha parameters of the Dirichlet prior over the transition probabilities,
+        shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
 
     Returns
     -------
@@ -720,7 +753,10 @@ def em_step(
         y=y,
         log_likelihood_func=log_likelihood_func,
         m_step_fn_model_params=m_step_fn_model_params,
+        e_step_fn=e_step_fn,
         session_starts=session_starts,
+        dirichlet_initial_proba=dirichlet_initial_proba,
+        dirichlet_transition_proba=dirichlet_transition_proba,
     )
 
     return params, state
@@ -751,6 +787,7 @@ def check_log_likelihood_increment(state: EMState, tol: float) -> Array:
     static_argnames=[
         "log_likelihood_func",
         "m_step_fn_model_params",
+        "e_step_fn",
         "maxiter",
         "check_convergence",
         "tol",
@@ -760,9 +797,12 @@ def em_hmm(
     params: ModelParamsT,
     X: Array,
     y: Array,
-    log_likelihood_func: Callable,
+    log_likelihood_func: LogLikelihoodFn,
     m_step_fn_model_params: Callable,
+    e_step_fn: EStepFn,
     session_starts: Optional[Array] = None,
+    dirichlet_initial_proba: Array | None = None,
+    dirichlet_transition_proba: Array | None = None,
     maxiter: int = 10**3,
     tol: float = 1e-8,
     check_convergence: Callable = check_log_likelihood_increment,
@@ -792,8 +832,16 @@ def em_hmm(
         Callable that performs the M-step update for the model parameters.
         Should have signature: ``f(model_params, X, y, posteriors) -> (updated_params, state)``.
         Typically created by configuring a solver with the appropriate regularizer/prior.
+    e_step_fn:
+        Callable that runs the forward-backward algorithm.
     session_starts :
         Boolean mask for the first observation of each session.
+    dirichlet_initial_proba :
+        Alpha parameters of the Dirichlet prior over the initial state probabilities,
+        shape ``(n_states,)``. If None, a flat (uninformative) prior is assumed.
+    dirichlet_transition_proba :
+        Alpha parameters of the Dirichlet prior over the transition probabilities,
+        shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
     maxiter :
         Maximum number of EM iterations.
     tol :
@@ -811,7 +859,7 @@ def em_hmm(
     session_starts = (
         session_starts
         if session_starts is not None
-        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
+        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(True)
     )
 
     state = EMState(
@@ -828,7 +876,10 @@ def em_hmm(
         y=y,
         log_likelihood_func=log_likelihood_func,
         m_step_fn_model_params=m_step_fn_model_params,
+        e_step_fn=e_step_fn,
         session_starts=session_starts,
+        dirichlet_initial_proba=dirichlet_initial_proba,
+        dirichlet_transition_proba=dirichlet_transition_proba,
     )
 
     def stopping_condition_while(carry):
@@ -862,7 +913,7 @@ def max_sum(
     params: ModelParamsT,
     X: Array,
     y: Array,
-    log_likelihood_func: Callable[[Array, Array, Array], Array],
+    log_likelihood_func: LogLikelihoodFn,
     session_starts: Array | None = None,
     return_index: bool = False,
 ):
@@ -912,7 +963,7 @@ def max_sum(
     session_starts = (
         session_starts
         if session_starts is not None
-        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(1)
+        else jnp.zeros(y.shape[0], dtype=bool).at[0].set(True)
     )
 
     log_emission = log_likelihood_func(model_params, X, y)

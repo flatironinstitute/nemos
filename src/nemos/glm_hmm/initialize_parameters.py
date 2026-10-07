@@ -100,12 +100,13 @@ def random_glm_params_init(
         X = X.data
     # small random noisy coef
     coef = jax.tree_util.tree_map(
-        lambda x: std_dev
-        * jax.random.normal(random_key, (x.shape[1], n_neurons, n_states)),
+        lambda x: (
+            std_dev * jax.random.normal(random_key, (x.shape[1], n_neurons, n_states))
+        ),
         X,
     )
     # mean-rate
-    intercept = initialize_intercept_matching_mean_rate(inverse_link_function, y)
+    intercept = initialize_intercept_matching_mean_rate(inverse_link_function, X, y)
     intercept = jnp.tile(intercept[:, jnp.newaxis], (1, n_states))
     if is_one_dim:
         coef = jax.tree_util.tree_map(lambda x: jnp.squeeze(x, axis=1), coef)
@@ -478,7 +479,6 @@ def setup_glm_hmm_initialization(
     init_funcs :
         Updated dictionary of initialization functions based on provided inputs.
     """
-
     if init_funcs is None:
         glm_init_funcs = DEFAULT_INIT_FUNCTIONS_GLMHMM.copy()
     else:

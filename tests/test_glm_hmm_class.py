@@ -14,6 +14,7 @@ import jax.numpy as jnp
 import numpy as np
 import pynapple as nap
 import pytest
+from tests.conftest import instantiate_glm_hmm_func
 
 import nemos as nmo
 from nemos.glm.params import GLMParams
@@ -21,11 +22,10 @@ from nemos.glm_hmm.glm_hmm import GLMHMM
 from nemos.glm_hmm.params import GLMHMMModelParams, GLMHMMParams
 from nemos.glm_hmm.validation import GLMHMMValidator
 from nemos.hmm.expectation_maximization import EMState
-from nemos.hmm.hmm import BaseHMM
+from nemos.hmm.hmm import FORWARD_BACKWARD, BaseHMM
 from nemos.hmm.params import HMMParams
 from nemos.regularizer import Ridge, UnRegularized
 from nemos.utils import _get_name
-from tests.conftest import instantiate_glm_hmm_func
 
 # ---------------------------------------------------------------------------
 # Parametrize lists: GLMHMM only, single obs_model (Bernoulli).
@@ -233,6 +233,7 @@ def glm_hmm_data():
     n, k, s = 100, 2, 3
     X = np.ones((n, k))
     y = np.zeros(n)
+    session_starts = jnp.zeros(n, dtype=bool).at[0].set(True)
     y[rng.choice(n, n // 3, replace=False)] = 1.0
     coef = jnp.zeros((k, s))
     intercept = jnp.zeros((s,))
@@ -242,6 +243,7 @@ def glm_hmm_data():
     return dict(
         X=X,
         y=y,
+        session_starts=session_starts,
         init_params=(coef, intercept, scale, init_prob, trans_prob),
         n_states=s,
     )
@@ -664,6 +666,7 @@ class TestSolverConfiguration:
         rng = np.random.default_rng(0)
         X = {"p1": rng.standard_normal((n, 2)), "p2": rng.standard_normal((n, 3))}
         y = y_factory(n)
+        session_starts = jnp.zeros(y.shape[0], dtype=bool).at[0].set(True)
 
         captured = {}
         real_initialize_mask = nmo.regularizer.GroupLasso.initialize_mask
@@ -688,7 +691,7 @@ class TestSolverConfiguration:
         opt_state = model.initialize_optimizer_and_state(init_params, X, y)
         params = init_params
         for _ in range(3):
-            params, opt_state = model.update(params, opt_state, X, y)
+            params, opt_state = model.update(params, opt_state, X, y, session_starts)
 
         assert model.coef_ is not None
         assert "mask" in captured
@@ -961,18 +964,22 @@ class TestValidationSequence:
 
     def test_update(self, glm_hmm_data, patch_optimizer_update, monkeypatch):
         patch_optimizer_update(GLMHMM)
-        X, y, init_params = (
+        X, y, session_starts, init_params = (
             glm_hmm_data["X"],
             glm_hmm_data["y"],
+            glm_hmm_data["session_starts"],
             glm_hmm_data["init_params"],
         )
         model = GLMHMM(n_states=glm_hmm_data["n_states"])
-        opt_state = model.initialize_optimizer_and_state(init_params, X, y)
 
-        # spy after the setup calls, so that only update() is recorded
+        # spy before initialize_optimizer_and_state, where validate_inputs is called
         order = _spy_call_order(monkeypatch, GLMHMMValidator, *VALIDATION_SEQUENCE)
-        model.update(init_params, opt_state, X, y)
+        opt_state = model.initialize_optimizer_and_state(init_params, X, y)
+        assert order == ["validate_inputs"]
 
+        # spy again after the setup calls, where no validation is expected
+        order = _spy_call_order(monkeypatch, GLMHMMValidator, *VALIDATION_SEQUENCE)
+        model.update(init_params, opt_state, X, y, session_starts)
         assert order == VALIDATION_SEQUENCE
 
     @pytest.mark.parametrize(
@@ -1063,13 +1070,12 @@ class TestSimulate:
         model = GLMHMM(n_states=glm_hmm_data["n_states"])
         model.fit(X, glm_hmm_data["y"], init_params=glm_hmm_data["init_params"])
 
-        session_starts = jnp.zeros(n, dtype=bool).at[0].set(True)
         mock_vapi = MagicMock(
             return_value=(
                 model._get_model_params(),
                 jnp.asarray(X),
                 None,
-                session_starts,
+                glm_hmm_data["session_starts"],
             )
         )
         monkeypatch.setattr(GLMHMM, "_validate_and_prepare_inputs", mock_vapi)
@@ -1448,6 +1454,305 @@ class TestEMConfiguration:
 
 
 # ---------------------------------------------------------------------------
+# TestDirichletPriorRouting — integration: model attribute -> setup -> EM -> M-step
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.filterwarnings("ignore:The fit did not converge:RuntimeWarning")
+class TestDirichletPriorRouting:
+    """The Dirichlet priors must survive every hop from the constructor to the M-step.
+
+    Each hop already has unit coverage (the setters in test_hmm_base_class.py, the
+    analytic updates in test_glm_hmm_analytic_mstep.py), but a prior silently dropped
+    *between* the model and ``em_hmm``/``em_step`` passes all of them. These tests spy
+    the GLM-HMM optimizer setup and the EM entry points in the same run, then check the
+    end of the chain numerically.
+    """
+
+    ALPHAS_INIT = np.array([4.0, 1.0, 1.0])
+    ALPHAS_TRANS = np.eye(3) * 3.0 + 1.0
+
+    def _model(self, glm_hmm_data, with_priors=True, **kwargs):
+        """GLMHMM with a few EM iterations, with or without the Dirichlet priors."""
+        priors = (
+            dict(
+                dirichlet_initial_proba=self.ALPHAS_INIT,
+                dirichlet_transition_proba=self.ALPHAS_TRANS,
+            )
+            if with_priors
+            else {}
+        )
+        return GLMHMM(n_states=glm_hmm_data["n_states"], maxiter=3, **priors, **kwargs)
+
+    def test_setup_does_not_bake_priors_into_the_em_partials(
+        self, glm_hmm_data, monkeypatch
+    ):
+        """The priors stay out of the optimizer setup: they are data, not configuration.
+
+        Binding them into ``_optimizer_run``/``_optimizer_update`` would make a change
+        of prior require a new setup, which rebuilds the *static* m-step closure and
+        forces a retrace (see test_changing_a_prior_does_not_retrace).
+        """
+        captured = {}
+        real_init = GLMHMM._initialize_optimizer_and_state
+
+        def capturing_init(self, init_params, data, y):
+            result = real_init(self, init_params, data, y)
+            captured["run"] = self._optimizer_run
+            captured["update"] = self._optimizer_update
+            self._optimizer_run = lambda p, *a, **kw: (
+                p,
+                SimpleNamespace(iterations=1, converged=True),
+            )
+            return result
+
+        monkeypatch.setattr(GLMHMM, "_initialize_optimizer_and_state", capturing_init)
+
+        model = self._model(glm_hmm_data)
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+
+        for partial_fn in (captured["run"], captured["update"]):
+            assert "dirichlet_initial_proba" not in partial_fn.keywords
+            assert "dirichlet_transition_proba" not in partial_fn.keywords
+        # the static configuration does stay bound
+        assert captured["run"].keywords["maxiter"] == model.maxiter
+
+    def test_fit_forwards_priors_to_em_hmm(self, glm_hmm_data, monkeypatch):
+        """fit() reaches em_hmm with the priors as stored on the model."""
+        from nemos.glm_hmm import glm_hmm as glm_hmm_module
+
+        calls = _spy_calls(monkeypatch, glm_hmm_module, "em_hmm")
+        model = self._model(glm_hmm_data)
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+
+        assert len(calls) == 1
+        _, kwargs = calls[0]
+        np.testing.assert_array_equal(
+            kwargs["dirichlet_initial_proba"], self.ALPHAS_INIT
+        )
+        np.testing.assert_array_equal(
+            kwargs["dirichlet_transition_proba"], self.ALPHAS_TRANS
+        )
+
+    def test_update_forwards_priors_to_em_step(self, glm_hmm_data, monkeypatch):
+        """A manual EM iteration reaches em_step with the same priors as fit()."""
+        from nemos.glm_hmm import glm_hmm as glm_hmm_module
+
+        calls = _spy_calls(monkeypatch, glm_hmm_module, "em_step")
+        model = self._model(glm_hmm_data)
+        params = glm_hmm_data["init_params"]
+        state = model.initialize_optimizer_and_state(
+            params, glm_hmm_data["X"], glm_hmm_data["y"]
+        )
+        model.update(params, state, glm_hmm_data["X"], glm_hmm_data["y"])
+
+        assert len(calls) == 1
+        _, kwargs = calls[0]
+        np.testing.assert_array_equal(
+            kwargs["dirichlet_initial_proba"], self.ALPHAS_INIT
+        )
+        np.testing.assert_array_equal(
+            kwargs["dirichlet_transition_proba"], self.ALPHAS_TRANS
+        )
+
+    def test_flat_prior_forwards_none(self, glm_hmm_data, monkeypatch):
+        """Without priors the EM receives None, i.e. the flat-prior branch of the M-step."""
+        from nemos.glm_hmm import glm_hmm as glm_hmm_module
+
+        calls = _spy_calls(monkeypatch, glm_hmm_module, "em_hmm")
+        model = self._model(glm_hmm_data, with_priors=False)
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+
+        assert len(calls) == 1
+        _, kwargs = calls[0]
+        assert kwargs["dirichlet_initial_proba"] is None
+        assert kwargs["dirichlet_transition_proba"] is None
+
+    def test_priors_reach_the_analytical_m_step(self, glm_hmm_data, monkeypatch):
+        """The priors cross the jit boundary and land in the analytic M-step updates.
+
+        Inside ``em_hmm`` the alphas are traced, so only their presence and shape can
+        be asserted here; the values are checked by the numerical test below.
+        """
+        from nemos.hmm import expectation_maximization as em_module
+
+        init_calls = _spy_calls(
+            monkeypatch, em_module, "_analytical_m_step_log_initial_prob"
+        )
+        trans_calls = _spy_calls(
+            monkeypatch, em_module, "_analytical_m_step_log_transition_prob"
+        )
+
+        n_states = glm_hmm_data["n_states"]
+        model = self._model(glm_hmm_data)
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+
+        # each log holds one (args, kwargs) pair per call, in call order
+        assert init_calls and trans_calls
+        _, first_init_kwargs = init_calls[0]  # first EM iteration
+        _, first_trans_kwargs = trans_calls[0]
+        for kwargs, expected_shape in (
+            (first_init_kwargs, (n_states,)),
+            (first_trans_kwargs, (n_states, n_states)),
+        ):
+            alphas = kwargs["dirichlet_prior_alphas"]
+            assert alphas is not None
+            assert alphas.shape == expected_shape
+
+    @pytest.mark.parametrize("entry_point", ["fit", "update"])
+    def test_priors_are_recast_to_the_observation_dtype(
+        self, entry_point, glm_hmm_data, monkeypatch
+    ):
+        """The priors reach EM in y's precision, whatever they were stored in.
+
+        The setters convert the alphas at assignment, before any data exists, so their
+        dtype comes from the x64 config at that moment — enabling x64 afterwards leaves
+        float32 priors against a float64 y. The EM while_loop needs an invariant carry
+        dtype, so a mismatch breaks compilation. float16 stands in here for "stored
+        under a different configuration".
+        """
+        from nemos.glm_hmm import glm_hmm as glm_hmm_module
+
+        spied = "em_hmm" if entry_point == "fit" else "em_step"
+        calls = _spy_calls(monkeypatch, glm_hmm_module, spied)
+
+        model = self._model(glm_hmm_data)
+        model._dirichlet_initial_proba = jnp.asarray(self.ALPHAS_INIT, jnp.float16)
+        model._dirichlet_transition_proba = jnp.asarray(self.ALPHAS_TRANS, jnp.float16)
+
+        X, y, params = (
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            glm_hmm_data["init_params"],
+        )
+        if entry_point == "fit":
+            model.fit(X, y, init_params=params)
+        else:
+            state = model.initialize_optimizer_and_state(params, X, y)
+            model.update(params, state, X, y)
+
+        assert len(calls) == 1
+        args, kwargs = calls[0]
+        # em_hmm receives y as a keyword, em_step positionally
+        y_dtype = (kwargs["y"] if "y" in kwargs else args[3]).dtype
+        assert y_dtype != jnp.float16  # otherwise the test proves nothing
+        for key in ("dirichlet_initial_proba", "dirichlet_transition_proba"):
+            assert kwargs[key].dtype == y_dtype
+        # the cast preserves the values
+        np.testing.assert_allclose(
+            kwargs["dirichlet_initial_proba"], self.ALPHAS_INIT, rtol=1e-3
+        )
+
+    def test_prior_changed_after_setup_takes_effect_on_next_update(
+        self, glm_hmm_data, monkeypatch
+    ):
+        """A prior set after initialize_optimizer_and_state reaches the next update().
+
+        Passing the priors at call time is what makes this work: bound into the setup
+        partials, the second update would silently keep using the stale prior.
+        """
+        from nemos.glm_hmm import glm_hmm as glm_hmm_module
+
+        calls = _spy_calls(monkeypatch, glm_hmm_module, "em_step")
+        model = self._model(glm_hmm_data, with_priors=False)
+        params = glm_hmm_data["init_params"]
+        state = model.initialize_optimizer_and_state(
+            params, glm_hmm_data["X"], glm_hmm_data["y"]
+        )
+        model.update(params, state, glm_hmm_data["X"], glm_hmm_data["y"])
+
+        # change the prior without re-running the optimizer setup
+        model.dirichlet_initial_proba = self.ALPHAS_INIT
+        model.update(params, state, glm_hmm_data["X"], glm_hmm_data["y"])
+
+        # _spy_calls logs one (args, kwargs) pair per call, in call order
+        assert len(calls) == 2
+        (_, before_kwargs), (_, after_kwargs) = calls
+        assert before_kwargs["dirichlet_initial_proba"] is None
+        np.testing.assert_array_equal(
+            after_kwargs["dirichlet_initial_proba"], self.ALPHAS_INIT
+        )
+
+    def test_changing_a_prior_does_not_retrace(self, glm_hmm_data):
+        """Varying the prior values across update() calls costs no recompilation.
+
+        The alphas are traced arguments, so only their shape/dtype key the jit cache.
+        This is the reason they are passed per call instead of bound at setup: re-running
+        the setup to pick up a new prior would rebuild the static m-step closure and
+        retrace the whole M-step.
+        """
+        from nemos.hmm.expectation_maximization import run_m_step
+
+        if not hasattr(run_m_step, "_cache_size"):  # pragma: no cover - jax internal
+            pytest.skip("jax build does not expose the jit cache size")
+
+        model = self._model(glm_hmm_data)
+        params = glm_hmm_data["init_params"]
+        state = model.initialize_optimizer_and_state(
+            params, glm_hmm_data["X"], glm_hmm_data["y"]
+        )
+        model.update(params, state, glm_hmm_data["X"], glm_hmm_data["y"])
+
+        traces_after_first = run_m_step._cache_size()
+        for multiplier in (2.0, 3.0, 4.0):
+            model.dirichlet_initial_proba = self.ALPHAS_INIT * multiplier
+            model.dirichlet_transition_proba = self.ALPHAS_TRANS * multiplier
+            model.update(params, state, glm_hmm_data["X"], glm_hmm_data["y"])
+
+        assert run_m_step._cache_size() == traces_after_first
+
+    def test_strong_prior_dominates_fitted_hmm_params(self, glm_hmm_data):
+        """A prior heavy enough to swamp the data drives the fitted HMM parameters.
+
+        This is the end of the chain: the priors are not merely forwarded, they change
+        the numbers coming out of the M-step.
+        """
+        n_states = glm_hmm_data["n_states"]
+        strong = 1.0 + 1e6
+        alphas_init = np.ones(n_states)
+        alphas_init[0] = strong
+        alphas_trans = np.eye(n_states) * strong + 1.0
+
+        fit_kwargs = dict(
+            X=glm_hmm_data["X"],
+            y=glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+        )
+        model = GLMHMM(
+            n_states=n_states,
+            maxiter=5,
+            dirichlet_initial_proba=alphas_init,
+            dirichlet_transition_proba=alphas_trans,
+        ).fit(**fit_kwargs)
+        flat = GLMHMM(n_states=n_states, maxiter=5).fit(**fit_kwargs)
+
+        # the prior mode: all initial mass on state 0, self-transitions only
+        assert model.initial_prob_[0] > 0.99
+        np.testing.assert_allclose(
+            np.diag(model.transition_prob_), np.ones(n_states), atol=1e-3
+        )
+        # and the data alone does not land there
+        assert flat.initial_prob_[0] < 0.99
+        assert np.diag(flat.transition_prob_).mean() < 0.99
+
+
+# ---------------------------------------------------------------------------
 # save_params / load_model round-trip
 # ---------------------------------------------------------------------------
 
@@ -1468,9 +1773,9 @@ def _assert_params_equal(a, b, path=""):
         assert a == b, f"{path}: {a!r} != {b!r}"
     else:
         # callables and class instances (e.g. observation model objects): compare by name
-        assert _get_name(a) == _get_name(
-            b
-        ), f"{path}: name mismatch {_get_name(a)} != {_get_name(b)}"
+        assert _get_name(a) == _get_name(b), (
+            f"{path}: name mismatch {_get_name(a)} != {_get_name(b)}"
+        )
 
 
 def _collect_params(model, *, skip_solver_state=True):
@@ -1573,6 +1878,7 @@ class TestUpdateFitEquivalence:
         n, k, s = 80, 3, 2
         X = rng.standard_normal((n, k))
         y = rng.binomial(1, 0.4, size=n)
+        session_starts = jnp.zeros(n, dtype=bool).at[0].set(True)
 
         # shared init params so both paths start from exactly the same point
         seed = jax.random.PRNGKey(7)
@@ -1600,7 +1906,9 @@ class TestUpdateFitEquivalence:
         opt_state = model_update.initialize_optimizer_and_state(init_params, X, y)
         params = init_params
         for _ in range(n_steps):
-            params, opt_state = model_update.update(params, opt_state, X, y)
+            params, opt_state = model_update.update(
+                params, opt_state, X, y, session_starts
+            )
 
         np.testing.assert_allclose(model_fit.coef_, model_update.coef_)
         np.testing.assert_allclose(model_fit.intercept_, model_update.intercept_)
@@ -1635,24 +1943,69 @@ class TestUpdate:
         model = GLMHMM(n_states=d["n_states"], solver_kwargs={"maxiter": 1})
         init_params, opt_state = self._prepare(model, d["X"], d["y"])
 
-        params, _ = model.update(init_params, opt_state, d["X"], d["y"])
+        params, _ = model.update(
+            init_params, opt_state, d["X"], d["y"], d["session_starts"]
+        )
 
         assert len(params) == 5
         assert all(v is not None for v in model._get_fit_state().values())
 
-    def test_update_calls_validate_inputs(self, glm_hmm_data, monkeypatch):
-        """update() forwards X and y to GLMHMMValidator.validate_inputs exactly once."""
+    def test_update_safe_calls_validate_inputs(self, glm_hmm_data, monkeypatch):
+        """update() forwards X and y to GLMHMMValidator.validate_inputs exactly zero times."""
         d = glm_hmm_data
         model = GLMHMM(n_states=d["n_states"], solver_kwargs={"maxiter": 1})
         init_params, opt_state = self._prepare(model, d["X"], d["y"])
 
         calls = _spy_calls(monkeypatch, GLMHMMValidator, "validate_inputs")
-        model.update(init_params, opt_state, d["X"], d["y"])
+        model.update(
+            init_params, opt_state, d["X"], d["y"], session_starts=d["session_starts"]
+        )
 
         assert len(calls) == 1
         _, kwargs = calls[0]
         assert kwargs["X"] is d["X"]
         assert kwargs["y"] is d["y"]
+
+    def test_update_unsafe_no_calls_validate_inputs(self, glm_hmm_data, monkeypatch):
+        """update() forwards X and y to GLMHMMValidator.validate_inputs exactly zero times."""
+        d = glm_hmm_data
+        model = GLMHMM(n_states=d["n_states"], solver_kwargs={"maxiter": 1})
+        init_params, opt_state = self._prepare(model, d["X"], d["y"])
+
+        calls = _spy_calls(monkeypatch, GLMHMMValidator, "validate_inputs")
+        model.update(
+            init_params,
+            opt_state,
+            d["X"],
+            d["y"],
+            sesison_starts=d["session_starts"],
+            safe=False,
+        )
+
+        assert len(calls) == 0
+
+    @pytest.mark.parametrize("safe", [True, False])
+    def test_update_default_session_starts(self, safe, glm_hmm_data, monkeypatch):
+        """With no session_starts, update() builds a single-session indicator array."""
+        d = glm_hmm_data
+        n = d["X"].shape[0]
+        model = GLMHMM(n_states=d["n_states"], solver_kwargs={"maxiter": 1})
+        init_params, opt_state = self._prepare(model, d["X"], d["y"])
+
+        captured = {}
+        real_update = model._optimizer_update
+
+        def capturing(params, state, data, y, *, session_starts, **kwargs):
+            captured["session_starts"] = session_starts
+            return real_update(
+                params, state, data, y, session_starts=session_starts, **kwargs
+            )
+
+        monkeypatch.setattr(model, "_optimizer_update", capturing)
+        model.update(init_params, opt_state, d["X"], d["y"], safe=safe)
+
+        session_starts = captured["session_starts"]
+        assert np.array_equal(session_starts, jnp.zeros(n, dtype=bool).at[0].set(True))
 
     def test_update_forces_first_bin_new_session(self, glm_hmm_data, monkeypatch):
         """update() marks the first sample as a session start before the EM step,
@@ -1721,6 +2074,74 @@ class TestUpdate:
         assert (
             bool(captured["session_starts"][second_session_row - n_leading_nan]) is True
         )
+
+    # a boundary far enough from the edges
+    SECOND_SESSION_ROW = 30
+
+    @pytest.mark.parametrize(
+        "nan_rows, expected_second_start, expectation",
+        [
+            # NaN before either boundary: the marker on it moves to the next valid
+            # sample, and every later row shifts left by one
+            (0, SECOND_SESSION_ROW - 1, does_not_raise()),
+            # NaN on the last row of the first session, i.e. a trailing border
+            (SECOND_SESSION_ROW - 1, SECOND_SESSION_ROW - 1, does_not_raise()),
+            # NaN on the boundary row itself: the marker must move to the next valid
+            # sample rather than be dropped along with the row it sits on
+            (SECOND_SESSION_ROW, SECOND_SESSION_ROW, does_not_raise()),
+            # NaN strictly inside the second session: dropping it would splice bins
+            # that are not adjacent in time
+            (
+                SECOND_SESSION_ROW + 10,
+                None,
+                pytest.raises(ValueError, match="requires continuous time-series data"),
+            ),
+            # no valid sample left to run the EM step on
+            (
+                slice(None),
+                None,
+                pytest.raises(ValueError, match="At least a NaN or an Inf"),
+            ),
+        ],
+    )
+    def test_update_nan_placement_preserves_session_structure(
+        self,
+        nan_rows,
+        expected_second_start,
+        expectation,
+        glm_hmm_data,
+        monkeypatch,
+    ):
+        """update() hands the EM step the session partition fit() would hand it.
+
+        Each NaN placement is a distinct behaviour of the preamble: a NaN at a session
+        border is dropped and the boundary re-indexed, a NaN inside a session is
+        refused because dropping it would make two non-adjacent bins consecutive, and
+        an all-NaN input leaves nothing to iterate on.
+        """
+        d = glm_hmm_data
+        n = d["X"].shape[0]
+        model = GLMHMM(n_states=d["n_states"], solver_kwargs={"maxiter": 1})
+        init_params, opt_state = self._prepare(model, d["X"], d["y"])
+
+        X_nan = d["X"].copy().astype(float)
+        X_nan[nan_rows] = np.nan
+        session_starts = np.zeros(n, dtype=bool)
+        session_starts[0] = True
+        session_starts[self.SECOND_SESSION_ROW] = True
+
+        calls = _spy_calls(monkeypatch, model, "_optimizer_update")
+        with expectation:
+            model.update(
+                init_params, opt_state, X_nan, d["y"], session_starts=session_starts
+            )
+
+        if expected_second_start is not None:
+            data, passed_starts = calls[0][0][2], calls[0][1]["session_starts"]
+            assert data.shape[0] == n - 1
+            np.testing.assert_array_equal(
+                np.flatnonzero(np.asarray(passed_starts)), [0, expected_second_start]
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -1859,3 +2280,130 @@ def test_get_optimal_solver_params_config():
         None,
         None,
     )
+
+
+# ---------------------------------------------------------------------------
+# E-step routing
+# ---------------------------------------------------------------------------
+
+# Derived from the registry rather than written out, so a third E-step reaches
+# every test below without touching this file. The guard in TestEStepRouting
+# keeps the two registries and the setter from drifting apart from each other.
+ESTEP_TYPES = tuple(FORWARD_BACKWARD)
+
+
+def _spy_registry(monkeypatch, registry, key):
+    """Wrap ``registry[key]`` with a spy that forwards to the real callable.
+
+    The dict counterpart of ``_spy_calls``: the E-step implementations are selected
+    by ``registry[self._estep_type]`` rather than by attribute, so the entry has to
+    be replaced with ``setitem``. Patching the item rather than rebinding the module
+    attribute is also what makes this visible from ``glm_hmm.py``, which imports
+    ``FORWARD_BACKWARD`` by name and so holds a reference to the same dict.
+
+    Returns a list of ``(args, kwargs)`` tuples per call.
+    """
+    calls = []
+    real = registry[key]
+
+    def spy(*args, **kwargs):
+        calls.append((args, kwargs))
+        return real(*args, **kwargs)
+
+    monkeypatch.setitem(registry, key, spy)
+    return calls
+
+
+class TestEStepRouting:
+    """``estep_type`` selects which registry entry every E-step call site reaches."""
+
+    @staticmethod
+    def _spy_both(monkeypatch, registry):
+        return {key: _spy_registry(monkeypatch, registry, key) for key in ESTEP_TYPES}
+
+    @staticmethod
+    def _fit_model(glm_hmm_data, estep_type, **kwargs):
+        """Fit on the small fixture for one iteration, the least that leaves a model fitted."""
+        model = GLMHMM(
+            n_states=glm_hmm_data["n_states"],
+            observation_model="Bernoulli",
+            estep_type=estep_type,
+            maxiter=1,
+            **kwargs,
+        )
+        model.fit(
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
+            init_params=glm_hmm_data["init_params"],
+            session_starts=glm_hmm_data["session_starts"],
+        )
+        return model
+
+    @pytest.mark.parametrize("estep_type", ESTEP_TYPES)
+    def test_fit_routes_to_selected_estep(self, monkeypatch, glm_hmm_data, estep_type):
+        """``fit`` reaches the forward-backward implementation ``estep_type`` names."""
+        calls = self._spy_both(monkeypatch, FORWARD_BACKWARD)
+        self._fit_model(glm_hmm_data, estep_type)
+
+        other = next(key for key in ESTEP_TYPES if key != estep_type)
+        assert calls[estep_type]
+        assert calls[other] == []
+
+    @pytest.mark.parametrize(
+        "method, base_method",
+        [
+            pytest.param("smooth_proba", "_smooth_proba", id="smooth_proba"),
+            pytest.param("filter_proba", "_filter_proba", id="filter_proba"),
+        ],
+    )
+    def test_inference_delegates_to_the_base(
+        self, monkeypatch, glm_hmm_data, method, base_method, mock_glm_hmm_optimizer_run
+    ):
+        """The overrides here add documentation only, and reach the base implementation.
+
+        Which E-step each base method then selects is checked in
+        ``tests/test_hmm_base_class.py``, alongside the methods themselves.
+        """
+        model = self._fit_model(glm_hmm_data, "sequential")
+        calls = _spy_calls(monkeypatch, BaseHMM, base_method)
+
+        getattr(model, method)(glm_hmm_data["X"], glm_hmm_data["y"])
+
+        assert len(calls) == 1
+
+    def test_setting_estep_type_invalidates_the_solver(self, glm_hmm_data):
+        """The optimizer partials are dropped, the E-step being bound into them."""
+        model = GLMHMM(n_states=glm_hmm_data["n_states"], observation_model="Bernoulli")
+        model.initialize_optimizer_and_state(
+            glm_hmm_data["init_params"], glm_hmm_data["X"], glm_hmm_data["y"]
+        )
+        assert model._optimizer_run is not None
+
+        model.estep_type = "associative"
+        assert model._optimizer_run is None
+        assert model._optimizer_update is None
+
+    def test_update_follows_a_change_of_estep_type(self, monkeypatch, glm_hmm_data):
+        """``update`` after switching runs the new algorithm, not the bound one.
+
+        Regression test: the E-step is bound into ``_optimizer_update`` by
+        ``eqx.Partial`` when the solver is instantiated, so without invalidation the
+        switch would be silently ignored here.
+        """
+        X, y = glm_hmm_data["X"], glm_hmm_data["y"]
+        init_params, session_starts = (
+            glm_hmm_data["init_params"],
+            glm_hmm_data["session_starts"],
+        )
+        model = GLMHMM(n_states=glm_hmm_data["n_states"], observation_model="Bernoulli")
+        model.initialize_optimizer_and_state(init_params, X, y)  # binds sequential
+
+        model.estep_type = "associative"
+        # the spies must be installed before the solver is rebuilt: the E-step is
+        # bound into the partials there, not looked up when update runs.
+        calls = self._spy_both(monkeypatch, FORWARD_BACKWARD)
+        opt_state = model.initialize_optimizer_and_state(init_params, X, y)
+        model.update(init_params, opt_state, X, y, session_starts)
+
+        assert calls["associative"]
+        assert calls["sequential"] == []

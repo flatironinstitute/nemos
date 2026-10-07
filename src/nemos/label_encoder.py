@@ -270,7 +270,7 @@ class LabelEncoder:
                 valid = list(self._class_to_index_.keys())
                 invalid = [lab for lab in unq_labels if lab not in valid]
                 raise ValueError(
-                    f"Unrecognized label(s) {invalid}. " f"Valid labels are {valid}."
+                    f"Unrecognized label(s) {invalid}. Valid labels are {valid}."
                 ) from e
             return cast_fn(y)
         else:

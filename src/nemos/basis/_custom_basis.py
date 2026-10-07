@@ -102,7 +102,6 @@ def apply_f_vectorized(
     func: Callable[[NDArray], NDArray], *xi: NDArray, ndim_input: int = 1, **kwargs
 ):
     """Iterate over the output dim and apply the function to all input combination."""
-
     # check if no dimension needs vectorization
     if all(x.ndim == ndim_input for x in xi):
         return func(*xi, **kwargs)[..., np.newaxis]
@@ -195,7 +194,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
     >>> from functools import partial
     >>> # Define a function
     >>> def decay_exp(x, rate, shift=0):
-    ...     return np.exp(-rate * (x + shift)**2)
+    ...     return np.exp(-rate * (x + shift) ** 2)
     >>> # Define a list of basis functions
     >>> funcs = [partial(decay_exp, rate=r) for r in np.linspace(0, 1, 10)]
     >>> bas = nmo.basis.CustomBasis(funcs=funcs, basis_kwargs=dict(shift=1))
@@ -223,7 +222,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
     sample-wise function transforms a given row the same way regardless of the other rows:
 
     >>> x = np.array([1.0, 2.0, 3.0])
-    >>> safe = nmo.basis.CustomBasis([lambda x: x ** 2])
+    >>> safe = nmo.basis.CustomBasis([lambda x: x**2])
     >>> np.array_equal(safe.compute_features(x)[0], safe.compute_features(x[:1])[0])
     True
 
@@ -418,8 +417,10 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         >>> import numpy as np
         >>> from functools import partial
         >>> def power_func(n, x):
-        ...     return x ** n
-        >>> bas = nmo.basis.CustomBasis([partial(power_func, 1), partial(power_func, 2)])
+        ...     return x**n
+        >>> bas = nmo.basis.CustomBasis(
+        ...     [partial(power_func, 1), partial(power_func, 2)]
+        ... )
         >>> bas.compute_features(np.arange(1, 4))
         array([[1., 1.],
                [2., 4.],
@@ -624,8 +625,10 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         >>> import numpy as np
         >>> from functools import partial
         >>> def power_func(n, x):
-        ...     return x ** n
-        >>> bas = nmo.basis.CustomBasis([partial(power_func, 1), partial(power_func, 2)])
+        ...     return x**n
+        >>> bas = nmo.basis.CustomBasis(
+        ...     [partial(power_func, 1), partial(power_func, 2)]
+        ... )
         >>> # define a 3 x 2 input
         >>> inp = np.arange(1, 7).reshape(3, 2)
         >>> X = bas.compute_features(inp)
@@ -680,7 +683,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         >>> from functools import partial
         >>> # Basis with one input only
         >>> def power_func(n, x):
-        ...     return x ** n
+        ...     return x**n
         >>> basis = nmo.basis.CustomBasis([partial(power_func, n) for n in range(1, 6)])
         >>> # Configure with an integer input:
         >>> _ = basis.set_input_shape(3)
@@ -697,8 +700,10 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         100
         >>> # basis with 2 inputs
         >>> def power_add_func(n, x, y):
-        ...     return x ** n + y ** n
-        >>> basis = nmo.basis.CustomBasis([partial(power_add_func, n) for n in range(1, 6)])
+        ...     return x**n + y**n
+        >>> basis = nmo.basis.CustomBasis(
+        ...     [partial(power_add_func, n) for n in range(1, 6)]
+        ... )
         >>> _ = basis.set_input_shape(3, 3)
         >>> basis.n_output_features
         15

@@ -1,16 +1,16 @@
-"""GLM parameter definitions and type aliases."""
+"""Model parameter definitions and type aliases."""
 
 from typing import Callable
 
 import equinox as eqx
-import jax.numpy as jnp
+from jaxtyping import PyTree
 
 
-class ModelParams(eqx.Module):
+class ModelParams[LeafT](eqx.Module):
     """Shared methods for model parameter containers."""
 
     @staticmethod
-    def regularizable_subtrees() -> list[Callable[["ModelParams"], jnp.ndarray | dict]]:
+    def regularizable_subtrees() -> list[Callable[["ModelParams"], PyTree]]:
         """
         Filter regularizable subtrees.
 

@@ -14,7 +14,7 @@
     { "pattern": "^https://www.taylorfrancis.com/books/mono/10.4324/9780203774441/applied-multiple-regression-correlation-analysis-behavioral-sciences-jacob-cohen-patricia-cohen-stephen-west-leona-aiken" },
     { "pattern": "^https://news\\.ycombinator\\.com/item\\?id=41901475" }
   ],
-  "aliveStatusCodes": [200, 202, 206, 302, 400, 403, 503, 504, 0],
+  "aliveStatusCodes": [200, 202, 203, 206, 302, 400, 403, 503, 504, 0],
   "timeout": "20s",
   "retryOn429": true,
   "retryCount": 5,

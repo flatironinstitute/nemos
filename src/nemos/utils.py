@@ -492,8 +492,15 @@ def format_repr(
     all_params = obj.get_params(deep=False)
     label = all_params.pop("label", None)
     for k, v in all_params.items():
+        # a pytree of only None leaves (e.g. the default fix_params spec) is "unset"
+        all_none = pytree_map_and_reduce(
+            lambda x: x is None, all, v, is_leaf=lambda x: x is None
+        )
         repr_param = (
-            k not in exclude_keys and not hasattr(v, "shape") and (v or v in (0, False))
+            k not in exclude_keys
+            and not hasattr(v, "shape")
+            and not all_none
+            and (v or v in (0, False))
         )
         if repr_param:
             if k in use_name_keys:
@@ -634,7 +641,6 @@ def _flatten_dict(
     dict :
         A flattened dictionary where the hierarchy is represented by concatenated keys (using __ as a separator).
     """
-
     sep = "::"
     items = []
     # Iterate over key-value pairs in the dictionary
@@ -824,7 +830,6 @@ def _unpack_params(params_dict: dict, string_attrs: list = None) -> dict:
     dict :
         Serializable dictionary with class names and nested parameters.
     """
-
     out = dict()
     for key, value in params_dict.items():
         # if the parameter is an objet with get_params/set_params,

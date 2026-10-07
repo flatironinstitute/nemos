@@ -197,11 +197,7 @@ class TestCallbackSystem:
         """Past ``N_CHAR_MAX`` the repr breaks to one field per line."""
         ctx = TrainingContext(pass_idx=1, batch_idx=3, n_passes=5)
         assert ctx.__repr__(N_CHAR_MAX=10) == (
-            "TrainingContext(\n"
-            "    pass_idx=1,\n"
-            "    batch_idx=3,\n"
-            "    n_passes=5,\n"
-            ")"
+            "TrainingContext(\n    pass_idx=1,\n    batch_idx=3,\n    n_passes=5,\n)"
         )
 
     def test_repr_shows_recombined_params(self):

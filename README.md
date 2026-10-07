@@ -83,7 +83,6 @@ X = basis.compute_features(input_1, input_2, input_3)
 #### GLM
 
 ```python
-
 # Fit the model mapping X to the spike count
 # time-series y
 glm = nmo.glm.GLM().fit(X, y)
@@ -115,8 +114,7 @@ import nemos as nmo
 
 # generate 5 basis functions of 100 time-bins,
 # and convolve the counts with the basis.
-X = nmo.basis.RaisedCosineLogConv(5, window_size=100
-    ).compute_features(spike_counts)
+X = nmo.basis.RaisedCosineLogConv(5, window_size=100).compute_features(spike_counts)
 ```
 #### Population GLM
 

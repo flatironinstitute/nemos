@@ -1,3 +1,4 @@
+import inspect
 import os
 from contextlib import nullcontext as does_not_raise
 
@@ -9,6 +10,8 @@ import pytest
 import nemos as nmo
 from nemos.glm.params import GLMParams
 from nemos.proximal_operator import prox_lasso, prox_none, prox_ridge
+from nemos.solvers._abstract_solver import AbstractSolver
+from nemos.solvers._no_op import NoOpSolver
 from nemos.solvers._svrg import SVRG, ProxSVRG, SVRGState
 from nemos.tree_utils import (
     pytree_map_and_reduce,
@@ -325,6 +328,7 @@ def test_svrg_glm_update(
     assert state.solver_state.iter_num == 1
 
 
+@pytest.mark.requires_x64
 @pytest.mark.parametrize(
     "regularizer_name, solver_name, mask",
     [
@@ -385,13 +389,11 @@ def test_maxiter_is_respected(
     solver_class_name = str(nmo.solvers.get_solver(solver_name).implementation)
 
     use_jaxopt_tol = False
-    if backend == "jaxopt":
+
+    if backend == "jaxopt" and "jaxopt" in solver_class_name.lower():
         use_jaxopt_tol = True
 
-    if "jaxopt" in solver_class_name.lower():
-        use_jaxopt_tol = True
-
-    if "optimistix" in solver_class_name.lower():
+    if backend == "optimistix" in solver_class_name.lower():
         use_jaxopt_tol = False
 
     tol = -1.0 if use_jaxopt_tol else 0.0
@@ -693,6 +695,38 @@ def test_all_solvers_accept_maxiter_and_not_max_steps():
         assert "max_steps" not in spec.implementation.get_accepted_arguments()
 
 
+def test_all_solvers_accept_every_argument_they_advertise():
+    """Every name in ``get_accepted_arguments`` must be a real ``__init__`` parameter.
+
+    ``BaseRegressor._check_solver_kwargs`` validates ``solver_kwargs`` against this set and
+    nothing else, so a name advertised but not accepted passes validation and then raises
+    ``TypeError`` at construction -- a failure the user cannot act on, since the name came
+    from the solver itself. Two such names existed before this test: ``Newton`` advertised
+    ``autodiff``, which no solver accepted, and ``ProximalNewton`` advertised ``rtol``
+    without taking it while ``_converged`` read it.
+
+    Adapters forwarding ``**kwargs`` to a wrapped solver are exempt: their accepted set is
+    deliberately wider than their own signature.
+    """
+    offenders = {}
+    for spec in nmo.solvers.list_available_solvers():
+        solver_class = spec.implementation
+        signature = inspect.signature(solver_class.__init__)
+        if any(
+            param.kind is inspect.Parameter.VAR_KEYWORD
+            for param in signature.parameters.values()
+        ):
+            continue
+        missing = solver_class.get_accepted_arguments() - set(signature.parameters)
+        if missing:
+            offenders[spec.algo_name] = sorted(missing)
+
+    assert not offenders, (
+        "solvers advertise arguments their __init__ cannot accept, so passing them via "
+        f"solver_kwargs clears validation and then raises TypeError: {offenders}"
+    )
+
+
 @pytest.mark.requires_x64
 @pytest.mark.parametrize(
     "aux_gen_fn",
@@ -943,3 +977,20 @@ def test_jaxopt_adapter_rejects_none_stepsize(request, solver_name):
             has_aux=False,
             stepsize=None,
         )
+
+
+def test_no_op_solver_covers_the_solver_interface():
+    """``NoOpSolver`` replaces any configured solver, so it must implement all of it.
+
+    The model reaches for solver methods after initialization — ``stochastic_run`` is one
+    — and a missing one only shows up as an ``AttributeError`` mid-fit. Comparing the
+    public surface catches that when the interface grows, e.g. a Hessian mixin.
+    """
+    expected = {
+        name
+        for name in dir(AbstractSolver)
+        if not name.startswith("_") and callable(getattr(AbstractSolver, name, None))
+    }
+
+    missing = sorted(name for name in expected if not hasattr(NoOpSolver, name))
+    assert missing == []

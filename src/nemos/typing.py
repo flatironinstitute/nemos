@@ -69,6 +69,35 @@ ProximalOperator = Callable[
     Tuple[jnp.ndarray, jnp.ndarray],
 ]
 
+LogLikelihoodFn = Callable[
+    [
+        Params,  # model parameters, excluding the HMM ones
+        jnp.ndarray,  # Predictors (i.e. model design for GLM)
+        jnp.ndarray,
+    ],  # Output (neural activity)
+    jnp.ndarray,
+]  # Elementwise log-likelihood, shape (n_time_bins, n_states)
+
+EStepOutput = Tuple[
+    jnp.ndarray,  # log_posteriors, (n_time_bins, n_states)
+    jnp.ndarray,  # log_joint_posterior, summed over time, (n_states, n_states)
+    jnp.ndarray,  # log_likelihood of the observations, scalar
+    jnp.ndarray,  # likelihood_norm, the per-sample normalized likelihood, scalar
+    jnp.ndarray,  # log_alphas, (n_time_bins, n_states)
+    jnp.ndarray,  # log_betas, (n_time_bins, n_states)
+]
+
+EStepFn = Callable[
+    [
+        Params,  # HMM and model parameters
+        jnp.ndarray,  # Predictors (i.e. model design for GLM)
+        jnp.ndarray,  # Output (neural activity)
+        LogLikelihoodFn,  # static, closes over the observation model
+        jnp.ndarray,
+    ],  # Boolean session starts
+    EStepOutput,
+]
+
 FeatureMatrix: TypeAlias = "nap.TsdFrame | NDArray | jnp.ndarray"
 
 # A concrete (non-pynapple) array, either NumPy or JAX.

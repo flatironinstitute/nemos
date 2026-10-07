@@ -59,7 +59,7 @@ Default method implementations in `SolverAdapter`:
 
 ## List of available solvers
 
-The following diagram shows the solver class hierarchy. Solvers marked with `[S]` support stochastic optimization via `stochastic_run`.
+The following diagram shows the solver class hierarchy. Solvers marked with `[S]` support stochastic optimization via `stochastic_run`; those marked with `[H]` consume the model's analytic Hessian via `setup_hessian` (see [second-order optimization](#second-order-optimization)).
 
 ```
 Abstract Class AbstractSolver
@@ -87,7 +87,17 @@ Abstract Class AbstractSolver
 │   │
 │   ├─ Concrete Subclass WrappedSVRG [S]
 │   └─ Concrete Subclass WrappedProxSVRG [S]
+
+Mixin HessianMixin
+│
+└─ Concrete Subclass Newton [H]
+  │
+  └─ Concrete Subclass ProximalNewton [H]
 ```
+
+`Newton` and `ProximalNewton` sit outside the adapter tree: they are not backed by an external
+optimization library, so they implement `SolverProtocol` structurally rather than subclassing
+`AbstractSolver`. What they do inherit is `HessianMixin`, which supplies the curvature machinery.
 
 `OptaxOptimistixSolver` is an adapter for Optax solvers, relying on `optimistix.OptaxMinimiser` to run the full optimization loop. If there is a need, this can be used to wrap adaptive solvers (e.g. Adam).
 
@@ -123,6 +133,68 @@ There are also options in [`nemos.solvers.register`](nemos.solvers.register) to 
 To validate a solver without registering, the [`nemos.solvers.validate_solver_class`](nemos.solvers.validate_solver_class) can be used.
 While it is not necessary, a way to ensure adherence to the interface is subclassing `AbstractSolver`.
 
+(second-order-optimization)=
+## Second-order optimization
+
+Some solvers can exploit the second derivative of the loss. Rather than autodiffing it, models
+supply an analytic Hessian: `BaseRegressor._instantiate_solver` offers it to the solver through
+`setup_hessian`, along with tags describing the matrix (see `nemos._hess`).
+
+### Solver-level interface
+
+Only solvers with `_uses_hessian = True` are offered the Hessian; every other solver is left
+untouched, exactly as `_supports_stochastic` gates `stochastic_run`. Currently:
+
+- `Newton`
+- `ProximalNewton`
+
+### Implementation details
+
+The machinery lives in `HessianMixin` (`nemos.solvers._hessian_mixins`), which sets
+`_uses_hessian = True` and provides:
+
+- `setup_hessian`: accept the model's Hessian function and resolve the `HessianTag` describing it,
+  combining the model's tag with the regularizer's (`Regularizer.resolve_hess_tag`).
+- `_penalize_hessian`: add the penalty's curvature to the likelihood's, valid because
+  `penalized_loss` is a sum and the second derivative of a sum is the sum of second derivatives.
+- `_resolve_linear_solver`: pick the linear solver once from the tag -- Cholesky when the Hessian is
+  positive definite, otherwise a least-squares solve tolerating rank deficiency.
+- `_block_apply`: apply a function once per Hessian block, the single place reading the tag's
+  block structure. `PopulationGLM` supplies one block per neuron.
+
+It is deliberately a mixin rather than part of `AbstractSolver`: a first-order solver has no use for
+a Hessian tag or a linear solver and should not inherit them.
+
+### Step acceptance
+
+Both second-order solvers scale their step with `optax.scale_by_backtracking_linesearch`, and
+`Newton._apply_or_reject` decides whether that search runs at all. It gates on the slope contracted
+with the step, `tree_dot(slope, step)`: the step is taken when that is negative, or when it is NaN.
+A zero slope means the iterate is stationary and a positive one that the direction is unusable, so
+both are rejected. The NaN case is deliberate rather than an oversight -- a subproblem that diverged
+has to surface as a non-finite iterate, where rejecting it would leave a zero step behind and the
+Cauchy criterion would report convergence.
+
+### Proximal second-order solvers
+
+`ProximalNewton` minimizes a composite objective `f + P`, with `P` reached through its proximal
+operator. Setting `_proximal = True` changes four things:
+
+- the solver receives the **unregularized** loss and the regularizer's proximal operator, the same
+  convention `OptimistixAdapter._proximal` uses;
+- the penalty contributes neither curvature nor tag to the Hessian, since the prox already applies
+  it -- adding it would double-count;
+- convergence is a Cauchy criterion on the step rather than `||grad|| <= tol`, because the gradient
+  of the smooth part does not vanish at the optimum of a nonsmooth objective;
+- the line search is handed the composite objective and the Tseng & Yun (2009) slope
+  `Delta = grad f^T d + P(b + d) - P(b)`, since `grad F^T d` does not exist where `P` has its kink.
+  `optax`'s search only ever contracts the vector it is given with the step, so
+  `ProximalNewton._line_search_inputs` folds `Delta` into that contraction and the stock Armijo
+  search applies unchanged.
+
+Each iteration solves the penalized quadratic subproblem with `FISTA`. The Hessian is never
+inverted, only multiplied, so a singular smooth Hessian is not by itself a problem.
+
 ## Stochastic optimization
 
 NeMoS provides a high-level interface for stochastic (mini-batch) optimization through the `stochastic_fit` method on GLM models and the `stochastic_run` method on solvers.
@@ -148,7 +220,6 @@ model = nmo.glm.GLM(
     solver_kwargs={"stepsize": 0.01, "acceleration": False},
 )
 model.stochastic_fit(loader, n_passes=10)
-
 ```
 
 ### DataLoader protocol
