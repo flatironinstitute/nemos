@@ -25,6 +25,12 @@ For Developers <developers_notes/README>
 NeMoS (Neural ModelS) is a statistical modeling framework for systems neuroscience, powered by [JAX](https://jax.readthedocs.io/en/latest/).
 At its core are GPU-accelerated, well-tested implementations of the standard models. They follow [scikit-learn's API](https://scikit-learn.org/stable/), so they work with its cross-validation and model-selection tools, and they take data as numpy arrays or as [pynapple](https://pynapple.org) objects.
 
+:::{admonition} Example Finder
+:class: tip
+
+Every tutorial and how-to guide is listed in the [Example Finder](examples-overview), filterable by model, observation model, signal, topic and data source.
+:::
+
 ::::{grid} auto
 :class-container: landing-buttons
 
@@ -44,15 +50,6 @@ Install
 :shadow:
 
 Quickstart
-```
-:::
-:::{grid-item}
-```{button-ref} examples
-:ref-type: doc
-:color: primary
-:shadow:
-
-Example Finder
 ```
 :::
 :::{grid-item}
@@ -213,14 +210,15 @@ Joint effects of two inputs.
 
 ## __Examples__
 
-% Each card opens the examples table filtered to its signal and model; the
-% query string is read by javascripts/examples-table.js.
+% Each card opens the examples table filtered to its signal and model, and to
+% recorded data where such an example exists; javascripts/examples-table.js
+% parses the query string.
 
 ::::{grid} 1 2 4 4
 :gutter: 3
 
 :::{grid-item-card} __Spike counts__
-:link: examples.html?signal=spike%20counts&model=GLM,PopulationGLM
+:link: examples.html?signal=spike%20counts&model=GLM,PopulationGLM&data=recorded
 :link-type: url
 :link-alt: Spike-count examples
 
@@ -245,7 +243,7 @@ GLM
 :::
 
 :::{grid-item-card} __Continuous signals__
-:link: examples.html?signal=calcium%20imaging,continuous&model=GLM
+:link: examples.html?signal=calcium%20imaging,continuous&model=GLM&data=recorded
 :link-type: url
 :link-alt: Continuous-signal examples
 
@@ -270,7 +268,7 @@ GLM
 :::
 
 :::{grid-item-card} __Binary outcomes__
-:link: examples.html?observation_model=Bernoulli&model=GLMHMM
+:link: examples.html?observation_model=Bernoulli&model=GLMHMM&data=recorded
 :link-type: url
 :link-alt: Binary-outcome examples
 

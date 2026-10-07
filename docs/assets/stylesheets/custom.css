@@ -305,3 +305,18 @@ table.table-center{
     font-size: 0.9rem;
     color: var(--pst-color-text-muted);
 }
+
+.examples-topics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.25rem;
+}
+
+.examples-topic {
+    border: 1px solid var(--pst-color-border);
+    border-radius: 1rem;
+    padding: 0 0.5rem;
+    font-size: 0.75rem;
+    color: var(--pst-color-text-muted);
+}

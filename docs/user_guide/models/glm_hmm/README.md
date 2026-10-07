@@ -1,7 +1,3 @@
----
-orphan: true
----
-
 # GLM-HMM
 
 :::{note}

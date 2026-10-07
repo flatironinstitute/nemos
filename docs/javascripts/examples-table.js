@@ -126,8 +126,12 @@ document.addEventListener("DOMContentLoaded", function () {
             data: "title",
             render: function (title, type, example) {
               if (type !== "display") return title + " " + example.description;
+              var topics = asList(example.topic).map(function (t) {
+                return '<span class="examples-topic">' + t + "</span>";
+              }).join("");
               return '<a href="' + example.url + '">' + title + "</a>" +
-                     '<div class="examples-description">' + example.description + "</div>";
+                     '<div class="examples-description">' + example.description + "</div>" +
+                     '<div class="examples-topics">' + topics + "</div>";
             },
           },
           { title: "Model",             data: "model",             render: tagList },

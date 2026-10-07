@@ -1,6 +1,6 @@
 # Tutorials
 
-A gallery of fully worked out tutorials analyzing neural recordings from different brain regions and recording modalities.
+Each tutorial is a complete analysis of a neural recording, across brain regions and recording modalities. The building blocks they use are explained in the [user guide](../user_guide/README.md); for answers to specific questions, such as how to fit a dataset that does not fit in memory, see the [how-to guides](../how_to_guide/README.md). The [Example Finder](examples-overview) lists both, filterable by model, signal and topic.
 
 :::{dropdown} Additional requirements
 :color: warning

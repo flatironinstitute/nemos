@@ -4,6 +4,6 @@
 :maxdepth: 1
 
 Performance: JIT-compilation <jit_performance>
-Custom <custom>
-Transformers <transformers>
+Custom basis object <custom>
+sklearn transformers <transformers>
 ```

@@ -1,7 +1,7 @@
 
 # How-To Guide
 
-Task-oriented recipes: each page answers a single "how do I ...?" question. The concepts behind them are covered in the [user guide](../user_guide/README.md).
+Each how-to guide answers one specific question, such as how to fit a dataset that does not fit in memory, or how to select variables with a group Lasso. The building blocks they use are explained in the [user guide](../user_guide/README.md); for complete analyses of real recordings, see the [tutorials](../tutorials/README.md). The [Example Finder](examples-overview) lists both, filterable by model, signal and topic.
 
 :::{dropdown} Additional requirements
 :color: warning
