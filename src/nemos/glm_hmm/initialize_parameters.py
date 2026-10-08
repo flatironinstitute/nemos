@@ -109,7 +109,7 @@ def random_glm_params_init(
         inverse_link_function,
         X,
         y,
-        rate_range=getattr(observation_model, "rate_range", None),
+        rate_range = observation_model.rate_range,
     )
     intercept = jnp.tile(intercept[:, jnp.newaxis], (1, n_states))
     if is_one_dim:
