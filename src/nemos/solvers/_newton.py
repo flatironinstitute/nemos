@@ -17,10 +17,10 @@ from ..typing import Params
 from ._abstract_solver import OptimizationInfo
 from ._fista import FISTA
 
-CHOLESKY_ERR_MSG = (
-    "ERROR. Cholesky solve failed; the Hessian may not be positive definite."
-    "Try using the 'eigh' or 'identity_shift' solver instead."
-)
+CHOLESKY_ERR_MSG = (                                                                                                                                                                        
+    "Cholesky solve failed; the Hessian may not be positive definite. "                                                                                                                     
+    "Try using the 'eigh' or 'identity_shift' solver instead."                                                                                                                              
+)   
 
 DEFAULT_ATOL = 1e-4
 DEFAULT_RTOL = 0.0
