@@ -118,6 +118,72 @@ def test_initialization_error_logistic_all_one_output():
         )
 
 
+@pytest.mark.parametrize("non_linearity", [jnp.exp, jax.nn.softplus, jax.lax.logistic])
+@pytest.mark.parametrize("single", [True, False])
+@pytest.mark.parametrize(
+    "precision",
+    [False, pytest.param(True, marks=pytest.mark.requires_x64)],
+    ids=["float32", "float64"],
+)
+def test_silent_outputs_have_finite_intercepts(non_linearity, single, precision):
+    y = np.zeros(10) if single else np.tile([0.25, 0.0, 0.0], (10, 1))
+    with pytest.warns(UserWarning, match=r"Output\(s\).*boundary mean activity"):
+        intercept = initialize_intercept_matching_mean_rate(
+            non_linearity,
+            np.zeros((10, 1)),
+            y,
+            rate_range=(0, 1)
+            if non_linearity is jax.lax.logistic
+            else (0, float("inf")),
+        )
+    expected = jnp.atleast_1d(jnp.mean(jnp.asarray(y, float), axis=0))
+    shifted = 0.5 / 11 if non_linearity is jax.lax.logistic else 0.5 / 10
+    expected = jnp.where(expected == 0, shifted, expected)
+    assert jnp.all(jnp.isfinite(intercept))
+    np.testing.assert_allclose(non_linearity(intercept), expected, rtol=1e-5)
+
+
+def test_zero_mean_identity_link_is_not_clipped():
+    from nemos.inverse_link_function_utils import identity
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        intercept = initialize_intercept_matching_mean_rate(
+            identity, np.zeros((4, 1)), np.array([-1.0, 1.0, -1.0, 1.0])
+        )
+    np.testing.assert_array_equal(intercept, [0.0])
+
+
+def test_silent_initialization_accounts_for_frozen_coefficients():
+    X = jnp.ones((10, 2))
+    with pytest.warns(UserWarning, match="boundary mean activity"):
+        intercept = initialize_intercept_matching_mean_rate(
+            jnp.exp,
+            X,
+            jnp.zeros(10),
+            frozen_coef=jnp.array([1.0, 2.0]),
+            rate_range=(0, float("inf")),
+        )
+    np.testing.assert_allclose(jnp.exp(intercept + 3), 0.5 / 10, rtol=1e-5)
+
+
+def test_invalid_link_range_error_identifies_output():
+    with pytest.raises(ValueError, match=r"Affected output indices: \[1\]"):
+        initialize_intercept_matching_mean_rate(
+            jax.lax.logistic, np.zeros((10, 1)), np.tile([0.5, 1.0], (10, 1))
+        )
+
+
+def test_positive_rates_below_epsilon_are_unchanged():
+    y = jnp.full((10,), 1e-10)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        intercept = initialize_intercept_matching_mean_rate(
+            jnp.exp, jnp.zeros((10, 1)), y
+        )
+    np.testing.assert_allclose(jnp.exp(intercept), [1e-10], rtol=1e-5)
+
+
 # ---------------------------------------------------------------------------
 # initialize_constant_coef_matching_mean_rate
 # ---------------------------------------------------------------------------
@@ -358,3 +424,119 @@ def test_fit_with_frozen_intercept(setup_solver, fit_models):
 
     # loss decreased
     assert loss_on_diff(diff_fit, X, y) <= loss_init
+
+
+@pytest.mark.parametrize(
+    "distribution", ["Poisson", "Gamma", "NegativeBinomial", "Bernoulli", "Gaussian"]
+)
+@pytest.mark.parametrize("numerical", [False, True], ids=["analytic", "numerical"])
+@pytest.mark.parametrize("population", [False, True])
+def test_distribution_boundary_initialization(distribution, numerical, population):
+    """Both inverse paths receive a valid mean for every scalar distribution."""
+    model_class = nmo.glm.PopulationGLM if population else nmo.glm.GLM
+    model = model_class(distribution)
+    link = model.inverse_link_function
+    if numerical:
+        model.inverse_link_function = lambda x: link(x)
+    y = np.zeros((10, 3)) if population else np.zeros(10)
+    if distribution == "Bernoulli":
+        y[...] = 1
+        if population:
+            y[:, 0] = 0
+            y[:, 1] = np.tile([0, 1], 5)
+    elif population:
+        y[:, 0] = 0.25
+        if distribution == "Gaussian":
+            y[:, 1] = -1
+    X = np.ones((10, 2))
+    with warnings.catch_warnings(record=True) as caught:
+        params = model.initialize_params(X, y)
+    coef, intercept = params
+    assert np.isfinite(coef).all()
+    assert np.isfinite(intercept).all()
+    expected = np.atleast_1d(y.mean(axis=0))
+    if distribution == "Bernoulli":
+        expected = np.where(
+            (expected == 0) | (expected == 1), (10 * expected + 0.5) / 11, expected
+        )
+    elif distribution != "Gaussian":
+        expected = np.where(expected == 0, 0.05, expected)
+    np.testing.assert_allclose(
+        model.inverse_link_function(intercept), expected, atol=1e-4
+    )
+    boundary_warnings = [
+        w for w in caught if "boundary mean activity" in str(w.message)
+    ]
+    assert bool(boundary_warnings) == (distribution != "Gaussian")
+
+
+@pytest.mark.parametrize("population", [False, True])
+def test_categorical_missing_classes_initialization(population):
+    """Missing categories get positive starting probabilities on the simplex."""
+    from nemos.observation_models import CategoricalObservations
+
+    observation = CategoricalObservations()
+    y = np.tile([1.0, 0.0, 0.0], (10, 1))
+    if population:
+        y = np.stack([y, y[:, ::-1]], axis=1)
+    with pytest.warns(UserWarning, match="boundary mean activity"):
+        intercept = initialize_intercept_matching_mean_rate(
+            observation.default_inverse_link_function,
+            np.ones((10, 2)),
+            y,
+            rate_range=observation.rate_range,
+        )
+    weights = np.where(y.mean(axis=0) == 0, 0.05, y.mean(axis=0))
+    probabilities = np.exp(observation.default_inverse_link_function(intercept))
+    np.testing.assert_allclose(
+        probabilities, weights / weights.sum(axis=-1, keepdims=True), rtol=1e-5
+    )
+    assert np.isfinite(intercept).all()
+
+
+@pytest.mark.parametrize(
+    "rate_range,expected",
+    [((0, float("inf")), [0.05, 0.1]), ((0, 1), [0.5 / 11, 0.5 / 6])],
+)
+def test_boundary_shift_counts_nonmissing_observations(rate_range, expected):
+    from nemos.glm.initialize_parameters import _initial_mean
+
+    y = np.zeros((10, 2))
+    y[:5, 1] = np.nan
+    with pytest.warns(UserWarning, match="boundary mean activity"):
+        actual = _initial_mean(jnp.asarray(y), rate_range)
+    np.testing.assert_allclose(actual, expected)
+
+
+@pytest.mark.parametrize("rate_range,y", [((0, float("inf")), [-1.0]), ((0, 1), [2.0])])
+def test_invalid_mean_is_not_silently_shifted(rate_range, y):
+    from nemos.glm.initialize_parameters import _initial_mean
+
+    with pytest.raises(ValueError, match="Mean activity must lie within"):
+        _initial_mean(jnp.asarray(y), rate_range)
+
+
+def test_observation_rate_ranges():
+    from nemos import observation_models as obs
+
+    assert obs.Observations.rate_range is None
+    for name in ["Poisson", "Gamma", "NegativeBinomial", "Categorical"]:
+        assert getattr(obs, name + "Observations").rate_range == (0, float("inf"))
+    assert obs.BernoulliObservations.rate_range == (0, 1)
+    assert obs.GaussianObservations.rate_range == (-float("inf"), float("inf"))
+
+
+@pytest.mark.parametrize(
+    "distribution", ["Poisson", "Gamma", "NegativeBinomial", "Bernoulli"]
+)
+def test_boundary_initialization_without_intercept(distribution):
+    model = nmo.glm.GLM(distribution, fit_intercept=False)
+    X = np.ones((10, 2))
+    y = np.ones(10) if distribution == "Bernoulli" else np.zeros(10)
+    with pytest.warns(UserWarning, match="boundary mean activity"):
+        coef, intercept = model.initialize_params(X, y)
+    assert np.isfinite(coef).all()
+    expected = 10.5 / 11 if distribution == "Bernoulli" else 0.05
+    np.testing.assert_allclose(
+        model.inverse_link_function(X @ coef + intercept), expected, rtol=1e-5
+    )
