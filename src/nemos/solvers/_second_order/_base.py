@@ -8,7 +8,7 @@ live here.
 
 Subclasses supply their ``__init__``, their state through :meth:`init_state`, the
 keyword arguments they accept, and, where they differ from the defaults here, the two
-seams :meth:`_initial_y_diff` and :meth:`_fval_diff`.
+override points :meth:`_initial_y_diff` and :meth:`_fval_diff`.
 """
 
 from __future__ import annotations
@@ -44,8 +44,8 @@ class SecondOrderState(eqx.Module, Generic[Y]):
 
     grad_norm: Scalar
     stats: OptimizationInfo
-    # Last accepted step, read by the Cauchy convergence test and, for a model that
-    # builds itself from pairs, as the ``s`` of the curvature pair.
+    # Last accepted step. The Cauchy convergence test compares it against ``tol`` and
+    # ``rtol``, and a curvature model built from pairs takes it as the ``s`` of a pair.
     y_diff: Y
     # Set when an iteration produced no usable step: the direction was not a descent
     # direction, or it was not finite. It ends the run, and it is not convergence.
@@ -117,10 +117,10 @@ class AbstractSecondOrderSolver(abc.ABC, Generic[Y, S]):
         return jax.eval_shape(self.fun, init_params, *args).dtype
 
     def _initial_y_diff(self, init_params: Y) -> Y:
-        """The step the first convergence test reads, before any step has been taken.
+        """The step the first convergence test sees, before any step has been taken.
 
         Infinite, so a Cauchy criterion on the step alone cannot fire on iteration one.
-        A solver whose curvature model reads ``y_diff`` as a curvature pair overrides
+        A solver whose curvature model takes ``y_diff`` as a curvature pair overrides
         this: see :meth:`~nemos.solvers._second_order._lbfgs.ProximalLBFGS._initial_y_diff`.
         """
         return jax.tree.map(lambda x: jnp.full_like(x, jnp.inf), init_params)
