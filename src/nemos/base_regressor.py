@@ -509,9 +509,9 @@ class BaseRegressor(
         actively optimized, this returns *what* the remaining leaves are held at
         (tree-prefix with ``None`` on active leaves; ``None`` when nothing is frozen).
         Derived from ``_fix_params`` alone here — its array leaves are the fixed
-        values. Subclasses fold model-specific settings in (e.g. the GLM pins the
+        values. Subclasses fold model-specific settings in (e.g. the GLM holds the
         intercept at zero when ``fit_intercept=False``); ``X`` and ``y`` let them
-        infer the shape of a pinned leaf.
+        infer the shape of a held leaf.
         """
         return self._fix_params
 
@@ -526,7 +526,7 @@ class BaseRegressor(
         User-facing entry points (``fit``, ``initialize_optimizer_and_state``) accept
         parameters in a convenient, possibly *incomplete* form: leaves that the model
         will not learn may be omitted (passed as ``None``) so the user does not have to
-        supply a value for something that is held fixed. This hook is the single seam
+        supply a value for something that is held fixed. This hook is the single place
         where such input is turned into a complete, concrete parameter set, filling in
         the omitted leaves with their fixed defaults (and warning if the user supplied a
         value for a leaf that will not be estimated).
@@ -642,24 +642,30 @@ class BaseRegressor(
         else:
             _loss = loss
 
+        # Offer the analytic Hessian to any solver declaring it can use curvature, the
+        # same way ``_supports_stochastic`` declares stochastic support. ``getattr``
+        # covers duck-typed custom solvers that subclass nothing. These are routed
+        # arguments rather than user ones, so they bypass ``_check_solver_kwargs``.
+        if getattr(solver_cls, "_uses_hessian", False):
+            hessian_kwargs = dict(
+                hess_fn=self._get_hess_fn(frozen=frozen_params),
+                hessian_tag=self._resolve_hess_tag(init_params),
+                reg_tag=regularizer._resolve_hess_tag(
+                    init_params, self.regularizer_strength
+                ),
+            )
+        else:
+            hessian_kwargs = {}
+
         solver = solver_cls(
             _loss,
             regularizer,
             regularizer_strength,
             has_aux=self._has_aux,
             init_params=init_params,
+            **hessian_kwargs,
             **solver_kwargs,
         )
-
-        # Offer the analytic Hessian to any solver declaring it can use curvature,
-        # the same way ``_supports_stochastic`` declares stochastic support. ``getattr``
-        # covers duck-typed custom solvers that subclass nothing.
-        if getattr(solver, "_uses_hessian", False):
-            solver.setup_hessian(
-                self._get_hess_fn(frozen=frozen_params),
-                self._resolve_hess_tag(init_params),
-                regularizer._resolve_hess_tag(init_params, self.regularizer_strength),
-            )
 
         # nemos's solvers store a .fun attribute, but it's not necessary for a solver to work.
         # A test relies on having _solver_loss_fun saved, so still check and save it if possible.

@@ -1983,7 +1983,7 @@ class TestHessianTag:
         model.initialize_optimizer_and_state(model.initialize_params(X, y), X, y)
 
         expected = signed_property if convexity_preserving else MatrixProperty.SYMMETRIC
-        assert model._solver._hess_tag.property is expected
+        assert model._solver.direction.hessian_tag.property is expected
 
     @pytest.mark.parametrize(
         "link, convexity_preserving", [(exp, True), (identity, False)]
@@ -2015,7 +2015,7 @@ class TestHessianTag:
         model.initialize_optimizer_and_state(model.initialize_params(X, y), X, y)
 
         expected = signed_property if convexity_preserving else MatrixProperty.SYMMETRIC
-        assert model._solver._hess_tag.property is expected
+        assert model._solver.direction.hessian_tag.property is expected
 
     def test_tag_follows_a_regularizer_change(self, poissonGLM_model_instantiation):
         """Changing the regularizer drops the solver, so the next tag is the new one's."""
@@ -2024,12 +2024,18 @@ class TestHessianTag:
         params = model.initialize_params(X, y)
 
         model.initialize_optimizer_and_state(params, X, y)
-        assert model._solver._hess_tag.property is MatrixProperty.POSITIVE_DEFINITE
+        assert (
+            model._solver.direction.hessian_tag.property
+            is MatrixProperty.POSITIVE_DEFINITE
+        )
 
         model.regularizer = "UnRegularized"
         model.regularizer_strength = None
         model.initialize_optimizer_and_state(params, X, y)
-        assert model._solver._hess_tag.property is MatrixProperty.POSITIVE_SEMI_DEFINITE
+        assert (
+            model._solver.direction.hessian_tag.property
+            is MatrixProperty.POSITIVE_SEMI_DEFINITE
+        )
 
     def test_zero_strength_claims_nothing(self, poissonGLM_model_instantiation):
         """A Ridge strength of zero curves no leaf, leaving the same tag as no penalty."""
@@ -2038,7 +2044,10 @@ class TestHessianTag:
 
         model.initialize_optimizer_and_state(model.initialize_params(X, y), X, y)
 
-        assert model._solver._hess_tag.property is MatrixProperty.POSITIVE_SEMI_DEFINITE
+        assert (
+            model._solver.direction.hessian_tag.property
+            is MatrixProperty.POSITIVE_SEMI_DEFINITE
+        )
 
     @pytest.mark.parametrize("regularizer_name", ["UnRegularized", "Ridge"])
     def test_no_tag_when_every_parameter_is_pinned(
@@ -2052,7 +2061,7 @@ class TestHessianTag:
             model.initialize_optimizer_and_state(model.initialize_params(X, y), X, y)
 
         assert isinstance(model._solver, NoOpSolver)
-        assert not hasattr(model._solver, "_hess_tag")
+        assert not hasattr(model._solver, "direction")
 
 
 @pytest.mark.parametrize(

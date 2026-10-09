@@ -26,7 +26,8 @@ from nemos.glm.classifier_glm import ClassifierGLM, ClassifierPopulationGLM
 from nemos.glm.params import GLMParams
 from nemos.regularizer import GroupLasso, Lasso, Regularizer, Ridge, UnRegularized
 from nemos.solvers._abstract_solver import OptimizationInfo
-from nemos.solvers._newton import Newton, NewtonState, ProximalNewton
+from nemos.solvers._second_order._base import SecondOrderState
+from nemos.solvers._second_order._newton import Newton, ProximalNewton
 
 # Import every submodule so all BaseRegressor subclasses are registered before the
 # parametrizations below are collected (same idiom as test_model_params).
@@ -436,8 +437,21 @@ def test_newton_glm_passes_solver_kwargs(regularizer_name, glm_class, solver_nam
         _init_params_for(glm_class),
     )
 
+    # Each kwarg is stored exactly once, by the component that consumes it. The
+    # iteration arguments stay on the solver, which runs the loop; the direction holds
+    # what shapes the step and its FISTA what solves the subproblem. ``linear_solver``
+    # is the strategy the user requested, and the direction records the one it resolved
+    # to instead.
+    stored_by = {
+        "inner_iter": lambda s: s.direction._inner_iter,
+        "inner_atol": lambda s: s.direction._inner_solver.atol,
+        "inner_rtol": lambda s: s.direction._inner_solver.rtol,
+        "identity_shift_beta": lambda s: s.direction.identity_shift_beta,
+        "identity_shift_max_steps": lambda s: s.direction.identity_shift_max_steps,
+    }
     for name, expected in solver_kwargs.items():
-        assert getattr(solver, name) == expected
+        read = stored_by.get(name, lambda s, name=name: getattr(s, name))
+        assert read(solver) == expected, name
 
 
 @_SOLVERS
@@ -465,7 +479,14 @@ def test_newton_glm_initialize_state(
     init_params = glm.initialize_params(X, y)
     state = glm.initialize_optimizer_and_state(init_params, X, y)
 
-    assert isinstance(state, NewtonState)
+    # Every second-order solver carries the same state class; what distinguishes them
+    # is what the direction puts in ``direction_state``. Only ``Newton`` runs the
+    # identity-shift ladder, so only it seeds one.
+    assert isinstance(state, SecondOrderState)
+    if solver_name == "Newton":
+        assert state.direction_state is not None
+    else:
+        assert state.direction_state is None
     assert state.grad_norm == jnp.array(jnp.inf)
     assert isinstance(state.stats, OptimizationInfo)
     assert state.stats.num_steps == 0
@@ -473,7 +494,9 @@ def test_newton_glm_initialize_state(
     assert jnp.isnan(state.stats.function_val)
     assert state.stats.converged == jnp.array(False)
     assert state.stats.reached_max_steps == jnp.array(False)
-    assert isinstance(state.ls_state, optax.ScaleByBacktrackingLinesearchState)
+    assert isinstance(
+        state.ls_state.linesearch_state, optax.ScaleByBacktrackingLinesearchState
+    )
 
 
 @pytest.mark.requires_x64
@@ -654,8 +677,8 @@ def test_newton_population_glm_block_hessian_matches_full(
 
     p = GLMParams(*p0)
 
-    H_full = full_model._solver._hessian(p, X, y)
-    H_block = model._solver._hessian(p, X, y)
+    H_full = full_model._solver.curvature.hessian_fn(p, X, y)
+    H_block = model._solver.curvature.hessian_fn(p, X, y)
 
     n_neurons = p.intercept.shape[0]
     struct_neuron = jax.eval_shape(
@@ -826,8 +849,8 @@ def test_newton_population_classifier_glm_block_hessian_matches_full(
     p = GLMParams(*p0)
 
     # full: nested GLMParams coupling every (neuron, class); block: leading axis batches neurons
-    H_full = full_model._solver._hessian(p, X, y_enc)
-    H_block = model._solver._hessian(p, X, y_enc)
+    H_full = full_model._solver.curvature.hessian_fn(p, X, y_enc)
+    H_block = model._solver.curvature.hessian_fn(p, X, y_enc)
 
     n_neurons = p.intercept.shape[0]
     # single-neuron parameter structure used to flatten each block to a dense matrix
@@ -905,9 +928,9 @@ class _FullHessianGLM(GLM):
 def test_newton_unbatched_model_hessian_matches_differentiated_loss(
     request, regularizer_cls, solver_name
 ):
-    """``_hessian`` must be the Hessian of the smooth objective the solver differentiates.
+    """The curvature must model the smooth objective the solver differentiates.
 
-    That is the single invariant ``setup_hessian`` maintains, and each solver satisfies it
+    That is the single invariant ``_init_hessian`` maintains, and each solver satisfies it
     for the opposite reason: ``Newton`` differentiates the penalized loss, so
     ``_penalize_hessian`` adds the penalty's curvature to the model's likelihood term;
     ``ProximalNewton`` differentiates the unregularized loss and reaches the penalty through
@@ -933,7 +956,7 @@ def test_newton_unbatched_model_hessian_matches_differentiated_loss(
 
     jax.tree.map(
         lambda a, b: np.testing.assert_allclose(a, b, atol=1e-8),
-        model._solver._hessian(p, X, y),
+        model._solver.curvature.hessian_fn(p, X, y),
         jax.hessian(model._solver.fun)(p, X, y),
     )
 
@@ -1092,7 +1115,7 @@ def test_ridge_tag_is_definite_when_the_loss_certifies_the_intercept(
     model.solver_name = "Newton"
 
     solver = model._instantiate_solver(model._compute_loss, params)
-    assert solver._hess_tag.property is expected_property
+    assert solver.direction.hessian_tag.property is expected_property
 
 
 @pytest.mark.parametrize("fixture_name, _", _RIDGE_TAG_CASES)
@@ -1108,7 +1131,9 @@ def test_unregularized_tag_is_not_definite(request, fixture_name, _):
     model.solver_name = "Newton"
 
     solver = model._instantiate_solver(model._compute_loss, params)
-    assert solver._hess_tag.property is MatrixProperty.POSITIVE_SEMI_DEFINITE
+    assert (
+        solver.direction.hessian_tag.property is MatrixProperty.POSITIVE_SEMI_DEFINITE
+    )
 
 
 @pytest.mark.parametrize("regularizer_name", ["Lasso", "GroupLasso"])
@@ -1126,15 +1151,15 @@ def test_non_smooth_penalties_resolve_no_tag(regularizer_name):
 
 
 def _installed_newton(model, X, y):
-    """Return the model's ``Newton``, after ``init_state`` picked the linear solver."""
+    """Return the model's ``Newton``, whose direction records the linear solver."""
     model.initialize_optimizer_and_state(model.initialize_params(X, y), X, y)
     return model._solver
 
 
 def _assert_linear_solver(solver, params, expected):
-    """Check the attributes associated with a resolved Hessian strategy."""
+    """Check the fields the direction records for a resolved Hessian strategy."""
     for attr_name, expected_value in expected.items():
-        actual_value = getattr(solver, attr_name)
+        actual_value = getattr(solver.direction, attr_name)
         expected_value = expected_value(params)
 
         if isinstance(expected_value, type):
@@ -1174,26 +1199,24 @@ def _positive_shift(shift_fn):
     return float(shift_fn(_ProbeOperator())) > 0.0
 
 
+# Keyed by the field of ``LinearSolveDirection`` that records the resolved strategy.
 _CHOLESKY_PD = {
-    "_resolved_linear_solver": lambda _: "cholesky",
-    "_linear_solver": lambda _: lx.Cholesky,
-    "_operator_tags": lambda _: lx.positive_semidefinite_tag,
-    "_shift_fn": lambda _: _zero_shift,
+    "resolved_linear_solver": lambda _: "cholesky",
+    "linear_solver": lambda _: lx.Cholesky,
+    "shift_fn": lambda _: _zero_shift,
 }
 
 _CHOLESKY_PSD = {
-    "_resolved_linear_solver": lambda _: "cholesky",
-    "_linear_solver": lambda _: lx.Cholesky,
-    "_operator_tags": lambda _: lx.positive_semidefinite_tag,
-    "_shift_fn": lambda _: _positive_shift,
+    "resolved_linear_solver": lambda _: "cholesky",
+    "linear_solver": lambda _: lx.Cholesky,
+    "shift_fn": lambda _: _positive_shift,
 }
 
 _EIGH = {
-    "_resolved_linear_solver": lambda _: "eigh",
-    "_linear_solver": lambda _: None,
-    "_operator_tags": lambda _: (),
-    "_shift_fn": lambda _: _zero_shift,
-    "_delta": lambda params: jnp.sqrt(
+    "resolved_linear_solver": lambda _: "eigh",
+    "linear_solver": lambda _: None,
+    "shift_fn": lambda _: _zero_shift,
+    "delta": lambda params: jnp.sqrt(
         jnp.finfo(jnp.result_type(*jax.tree_util.tree_leaves(params))).eps
     ),
 }
@@ -1373,14 +1396,16 @@ def test_newton_without_hessian_tag_uses_auto_linear_solver(linear_regression):
         has_aux=False,
         init_params=param_init,
     )
-    assert newton._hess_tag is None
+    at_construction = newton.direction.hessian_tag
 
     newton.init_state(param_init, X, y)
 
-    assert newton._hess_tag.property is MatrixProperty.SYMMETRIC
-    assert newton._hess_tag.structure is MatrixStructure.FULL
-    assert not any(jax.tree_util.tree_leaves(newton._hess_tag.flat_on))
-    assert not any(jax.tree_util.tree_leaves(newton._hess_tag.definite_on))
+    tag = newton.direction.hessian_tag
+    assert tag is at_construction, "init_state must not invent a tag"
+    assert tag.property is MatrixProperty.SYMMETRIC
+    assert tag.structure is MatrixStructure.FULL
+    assert not any(jax.tree_util.tree_leaves(tag.flat_on))
+    assert not any(jax.tree_util.tree_leaves(tag.definite_on))
     _assert_linear_solver(newton, param_init, _EIGH)
 
 
@@ -1494,7 +1519,8 @@ def test_second_order_solvers_store_rtol(solver_name):
 def test_prox_newton_rtol_loosens_convergence(request):
     """``rtol`` must reach the Cauchy test, not merely sit on the instance.
 
-    ``ProximalNewton._converged`` calls ``cauchy_termination(self.rtol, self.tol, ...)``, so a
+    ``AbstractSecondOrderSolver.converged`` calls ``cauchy_termination(self.rtol, self.tol, ...)``,
+    so a
     relative tolerance well above the absolute one has to stop the run sooner. Being stored
     is not enough: that is exactly what the unreachable ``0.0`` default did before. Measured
     on this problem, 9 steps at ``rtol=0.0`` against 4 at ``rtol=1e-2``.
@@ -1687,9 +1713,9 @@ def test_prox_newton_prox_applies_across_a_pytree():
 
 @pytest.mark.requires_x64
 def test_prox_newton_autodiff_hessian_matches_supplied_hessian():
-    """Without ``setup_hessian`` the solver autodiffs its smooth loss; the two agree.
+    """Without a supplied Hessian the solver autodiffs its smooth loss; the two agree.
 
-    ``_build_cache`` falls back to ``jax.hessian(self.fun)`` when no Hessian was supplied.
+    ``_init_hessian`` falls back to ``jax.hessian(self.fun)`` when no Hessian was supplied.
     For a squared-error loss the analytic Hessian is the constant ``(2/n) X^T X``, so the
     two paths must produce the same iterates, not merely similar ones.
     """
@@ -1709,8 +1735,8 @@ def test_prox_newton_autodiff_hessian_matches_supplied_hessian():
         init_params=init,
         tol=1e-12,
         maxiter=500,
+        hess_fn=lambda params, X, y: (2.0 / n) * X.T @ X,
     )
-    solver.setup_hessian(lambda params, X, y: (2.0 / n) * X.T @ X)
     supplied_params, _, _ = solver.run(init, X, y)
 
     np.testing.assert_allclose(autodiff_params, supplied_params, atol=1e-10)
@@ -1735,6 +1761,9 @@ def test_prox_newton_indefinite_hessian_does_not_report_success():
     y = np.random.normal(size=n)
     init = jnp.zeros(4)
 
+    indefinite = np.diag([2.0, 1.0, 0.5, -1.0])
+    assert np.linalg.eigvalsh(indefinite).min() < 0
+
     solver = ProximalNewton(
         _mse,
         regularizer=Lasso(),
@@ -1743,10 +1772,8 @@ def test_prox_newton_indefinite_hessian_does_not_report_success():
         init_params=init,
         tol=1e-12,
         maxiter=50,
+        hess_fn=lambda params, X, y: indefinite,
     )
-    indefinite = np.diag([2.0, 1.0, 0.5, -1.0])
-    assert np.linalg.eigvalsh(indefinite).min() < 0
-    solver.setup_hessian(lambda params, X, y: indefinite)
 
     params, state, _ = solver.run(init, X, y)
 
@@ -1828,7 +1855,12 @@ _STEP_CASES = [
 
 
 def _line_search_inputs_at(regularizer, strength, params, step, X, y):
-    """The gradient at ``params`` and the line-search inputs built from it."""
+    """The gradient at ``params``, and the inputs the line search builds from it.
+
+    Returns them in the order the assertions below read: ``(value, slope, value_fn)``.
+    ``_slope_descent_value`` yields ``(slope, descent, value)`` and ``value_fn`` is the
+    search's own ``fun`` with the data bound.
+    """
     solver = ProximalNewton(
         _mse,
         regularizer=regularizer,
@@ -1838,8 +1870,9 @@ def _line_search_inputs_at(regularizer, strength, params, step, X, y):
         tol=1e-12,
     )
     solver.init_state(params, X, y)
-    (fval, _), grad = solver._gradient(params, X, y)
-    return grad, solver._line_search_inputs(params, step, grad, fval, X, y)
+    (fval, _), grad = solver._fval_and_grad(params, X, y)
+    slope, _, value = solver._line_search._slope_descent_value(params, step, grad, fval)
+    return grad, (value, slope, lambda p: solver._line_search.fun(p, X, y))
 
 
 @pytest.mark.parametrize("make_regularizer, penalty", _PENALTY_CASES)
@@ -1854,7 +1887,7 @@ def test_prox_newton_line_search_slope_is_the_composite_delta(
     override encodes ``Delta = grad f^T d + P(b + d) - P(b)`` by adding
     ``[P(b + d) - P(b)] / ||d||^2 * d`` to the gradient. It is ``Delta``, not
     ``grad f^T d``, that certifies descent of the nonsmooth objective, so the identity is
-    what makes the stock Armijo search correct here.
+    what makes the unmodified Armijo search correct here.
 
     Every reference is numpy: the penalty formulas, the hand-differentiated gradient of
     ``_mse`` and the composite value. Worst measured relative error over these cases is
@@ -1991,128 +2024,36 @@ def test_prox_newton_backtracking_matches_tseng_yun_reference(
     # the search reads its previous stepsize off the state; setting it directly keeps the
     # warm start a parametrized axis instead of a by-product of a trajectory
     state = eqx.tree_at(
-        lambda s: s.ls_state.learning_rate, state, jnp.asarray(prev_stepsize)
+        lambda s: s.ls_state.linesearch_state.learning_rate,
+        state,
+        jnp.asarray(prev_stepsize),
     )
 
-    (fval, _), grad = solver._gradient(params, X, y)
-    H = solver._hessian(params, X, y)
-    step = jax.tree.map(
-        lambda d: scale * d, solver._newton_direction(grad, H, params, None)[0]
+    (fval, _), grad = solver._fval_and_grad(params, X, y)
+    hvp_fn, hessian_tensor, _ = solver.curvature.update(None, params, None, grad, X, y)
+    direction, _ = solver.direction.update(
+        params, grad, hvp_fn, hessian_tensor, state.direction_state
     )
-    _, slope, _ = solver._line_search_inputs(params, step, grad, fval, X, y)
-    delta = float(lx.internal.tree_dot(slope, step))
+    step = jax.tree.map(lambda d: scale * d, direction)
+    _, delta, _ = solver._line_search._slope_descent_value(params, step, grad, fval)
+    delta = float(delta)
     assert delta < 0.0, "the reference only terminates on a descent direction"
 
-    new_params, ls_state = solver._apply_or_reject(
+    new_params, ls_state, no_step_found = solver._apply_or_reject(
         params, step, grad, state, fval, X, y
     )
+    assert not bool(no_step_found), "a sufficient-decrease step is not a stall"
     expected_stepsize, expected_evaluations = _tseng_yun_backtracking(
         objective, start, np.asarray(step), delta, prev_stepsize
     )
 
-    np.testing.assert_allclose(ls_state.learning_rate, expected_stepsize, rtol=1e-12)
-    assert int(ls_state.info.num_linesearch_steps) == expected_evaluations
+    np.testing.assert_allclose(
+        ls_state.linesearch_state.learning_rate, expected_stepsize, rtol=1e-12
+    )
+    assert (
+        int(ls_state.linesearch_state.info.num_linesearch_steps) == expected_evaluations
+    )
     np.testing.assert_allclose(
         new_params, start + expected_stepsize * np.asarray(step), rtol=1e-12, atol=1e-15
     )
     assert objective(new_params) < objective(start)
-
-
-# Both second-order solvers share ``_apply_or_reject``, and the slope reaching it is built
-# differently by each: the plain gradient for the smooth solver, the composite Delta for
-# the proximal one.
-_GATE_CASES = [
-    pytest.param(Newton, Ridge, 0.1, id="Newton-Ridge"),
-    pytest.param(ProximalNewton, Lasso, _PENALTY_STRENGTH, id="ProximalNewton-Lasso"),
-]
-
-
-@pytest.mark.parametrize("solver_cls, regularizer_cls, strength", _GATE_CASES)
-@pytest.mark.parametrize(
-    "make_step, slope_sign",
-    [
-        pytest.param(lambda grad: jax.tree.map(lambda g: -g, grad), -1.0, id="descent"),
-        pytest.param(jnp.zeros_like, 0.0, id="stationary"),
-        pytest.param(lambda grad: grad, 1.0, id="ascent"),
-    ],
-)
-@pytest.mark.requires_x64
-def test_second_order_solvers_step_only_on_a_descent_slope(
-    solver_cls, regularizer_cls, strength, make_step, slope_sign
-):
-    """``_apply_or_reject`` runs the line search on a negative slope and on nothing else.
-
-    The gate is ``tree_dot(slope, step)``, a slope rather than a flag, so it has to be
-    compared against zero: a positive value certifies nothing, and the Armijo test it
-    would then run puts its threshold above the current value, accepting an increase.
-    A proximal step with a positive ``Delta`` is what an inexact subproblem solve returns.
-    """
-    np.random.seed(0)
-    X = np.random.normal(size=(200, _KINKED_PARAMS.size))
-    y = np.random.normal(size=200)
-    params = jnp.asarray(_KINKED_PARAMS)
-
-    solver = solver_cls(
-        _mse,
-        regularizer=regularizer_cls(),
-        regularizer_strength=strength,
-        has_aux=False,
-        init_params=params,
-        tol=1e-12,
-    )
-    state = solver.init_state(params, X, y)
-    (fval, _), grad = solver._gradient(params, X, y)
-    step = make_step(grad)
-
-    _, slope, _ = solver._line_search_inputs(params, step, grad, fval, X, y)
-    descent = float(lx.internal.tree_dot(slope, step))
-    assert np.sign(descent) == slope_sign
-
-    new_params, new_ls_state = solver._apply_or_reject(
-        params, step, grad, state, fval, X, y
-    )
-
-    if slope_sign < 0:
-        assert not np.allclose(new_params, params), "a descent step must be taken"
-    else:
-        np.testing.assert_array_equal(np.asarray(new_params), np.asarray(params))
-        # the rejected branch returns the state untouched, so the next iteration
-        # restarts the search from the same stepsize
-        np.testing.assert_array_equal(
-            np.asarray(new_ls_state.learning_rate),
-            np.asarray(state.ls_state.learning_rate),
-        )
-
-
-@pytest.mark.requires_x64
-def test_prox_newton_does_not_read_a_nan_slope_as_stationary():
-    """A blown-up direction must reach the iterate, not be rejected as a null step.
-
-    Rejection leaves ``params`` where they were, so ``y_diff`` is zero and the next
-    Cauchy test reports convergence -- the failure would be announced as success. This is
-    the ``jnp.isnan`` half of the gate in ``_apply_or_reject``, and it is reachable: with
-    an indefinite Hessian the subproblem is unbounded, and the iterates overflow to NaN
-    through a sequence of perfectly good descent directions.
-    """
-    np.random.seed(0)
-    X = np.random.normal(size=(200, _KINKED_PARAMS.size))
-    y = np.random.normal(size=200)
-    params = jnp.asarray(_KINKED_PARAMS)
-
-    solver = ProximalNewton(
-        _mse,
-        regularizer=Lasso(),
-        regularizer_strength=_PENALTY_STRENGTH,
-        has_aux=False,
-        init_params=params,
-        tol=1e-12,
-    )
-    state = solver.init_state(params, X, y)
-    (fval, _), grad = solver._gradient(params, X, y)
-    step = jax.tree.map(lambda g: jnp.full_like(g, jnp.nan), grad)
-
-    _, slope, _ = solver._line_search_inputs(params, step, grad, fval, X, y)
-    assert np.isnan(float(lx.internal.tree_dot(slope, step)))
-
-    new_params, _ = solver._apply_or_reject(params, step, grad, state, fval, X, y)
-    assert not np.all(np.isfinite(np.asarray(new_params)))

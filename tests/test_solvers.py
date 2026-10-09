@@ -1,5 +1,4 @@
 import inspect
-import os
 from contextlib import nullcontext as does_not_raise
 
 import jax
@@ -15,7 +14,7 @@ from nemos.solvers._no_op import NoOpSolver
 from nemos.solvers._svrg import SVRG, ProxSVRG, SVRGState
 from nemos.tree_utils import (
     pytree_map_and_reduce,
-    tree_full_like,
+    tree_filled_with,
     tree_l2_norm,
     tree_slice,
     tree_sub,
@@ -383,20 +382,15 @@ def test_maxiter_is_respected(
 ):
     X, y, model, true_params, rate = poissonGLM_model_instantiation
 
-    # set the tolerance such that the solvers never hit their convergence criterion
-    # and run until maxiter is reached
-    backend = os.getenv("NEMOS_SOLVER_BACKEND")
+    # Set the tolerance such that the solvers never hit their convergence criterion and
+    # run until maxiter is reached. jaxopt stops once ``error <= tol`` and its error
+    # reaches exactly zero on these problems, so only a negative tolerance keeps it
+    # running. Which implementation is installed is decided by the registry, which
+    # ``configure_solver_backend`` patches, so read it off the resolved solver rather
+    # than off NEMOS_SOLVER_BACKEND: with jaxopt importable and the variable unset, the
+    # registry still installs the jaxopt solver.
     solver_class_name = str(nmo.solvers.get_solver(solver_name).implementation)
-
-    use_jaxopt_tol = False
-
-    if backend == "jaxopt" and "jaxopt" in solver_class_name.lower():
-        use_jaxopt_tol = True
-
-    if backend == "optimistix" in solver_class_name.lower():
-        use_jaxopt_tol = False
-
-    tol = -1.0 if use_jaxopt_tol else 0.0
+    tol = -1.0 if "jaxopt" in solver_class_name.lower() else 0.0
     solver_kwargs = {"maxiter": maxiter, "tol": tol}
 
     # only pass mask if it's not None
@@ -571,7 +565,7 @@ def test_svrg_xk_update_step(request, regr_setup, to_tuple, prox, prox_lambda):
     def prox_op(params, hyperparams, scaling=1.0):
         return prox(params, prox_lambda, scaling)
 
-    prox_lambda = tree_full_like(true_params, prox_lambda)
+    prox_lambda = tree_filled_with(true_params, prox_lambda)
 
     # set the initial parameters to zero and
     # set the anchor point to a random value that's not just zeros
@@ -703,7 +697,7 @@ def test_all_solvers_accept_every_argument_they_advertise():
     ``TypeError`` at construction -- a failure the user cannot act on, since the name came
     from the solver itself. Two such names existed before this test: ``Newton`` advertised
     ``autodiff``, which no solver accepted, and ``ProximalNewton`` advertised ``rtol``
-    without taking it while ``_converged`` read it.
+    without taking it while ``converged`` read it.
 
     Adapters forwarding ``**kwargs`` to a wrapped solver are exempt: their accepted set is
     deliberately wider than their own signature.

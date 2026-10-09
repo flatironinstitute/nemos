@@ -317,9 +317,14 @@ def tree_zeros_like(pytree_x):
     return jax.tree_util.tree_map(jnp.zeros_like, pytree_x)
 
 
-def tree_full_like(pytree_x, fill_value):
+def tree_filled_with(pytree_x, fill_value):
     """Create a tree with the same structure as pytree_x and fill it with fill_value."""
     return jax.tree_util.tree_map(lambda _: fill_value, pytree_x)
+
+
+def tree_full_like(pytree_x, fill_value):
+    """Create a tree of fill_value arrays with the shapes and dtypes of pytree_x."""
+    return jax.tree_util.tree_map(lambda x: jnp.full_like(x, fill_value), pytree_x)
 
 
 def tree_astype(*trees, dtype=None):

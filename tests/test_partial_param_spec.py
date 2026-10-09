@@ -359,7 +359,7 @@ class TestEveryParameterFixed:
     ):
         """Newton needs a Hessian the stand-in never supplies, and still short-circuits.
 
-        ``setup_hessian`` is only reached while instantiating a real solver, which the
+        ``_init_hessian`` is only reached while instantiating a real solver, which the
         empty-tree case skips, so no Newton-specific hook is required of the stand-in.
         """
         X, y, model = poissonGLM_model_instantiation[:3]
