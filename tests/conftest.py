@@ -59,7 +59,7 @@ from nemos.hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
 from nemos.params import ModelParams
 from nemos.regularizer import UnRegularized
 from nemos.solvers import get_solver
-from nemos.tree_utils import tree_full_like
+from nemos.tree_utils import tree_filled_with
 
 _totals = defaultdict(float)
 _counts = defaultdict(int)
@@ -1190,7 +1190,7 @@ def example_data_prox_operator():
         jnp.ones((n_features)),
         jnp.zeros(1),
     )
-    regularizer_strength = tree_full_like(params, 0.1)
+    regularizer_strength = tree_filled_with(params, 0.1)
     # Mask as PyTree with same structure as params, shape (n_groups, *param_shape)
     # Intercept mask is zeros (not regularized)
     mask = GLMParams(
@@ -1211,7 +1211,7 @@ def example_data_prox_operator_multineuron():
         jnp.ones((n_features, n_neurons)),
         jnp.zeros(n_neurons),
     )
-    regularizer_strength = tree_full_like(params, 0.1)
+    regularizer_strength = tree_filled_with(params, 0.1)
     # Mask as PyTree with same structure as params
     # For multi-neuron: mask shape is (n_groups, n_features, n_neurons)
     # Intercept mask is zeros (not regularized)

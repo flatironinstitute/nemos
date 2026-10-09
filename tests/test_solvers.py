@@ -14,7 +14,7 @@ from nemos.solvers._no_op import NoOpSolver
 from nemos.solvers._svrg import SVRG, ProxSVRG, SVRGState
 from nemos.tree_utils import (
     pytree_map_and_reduce,
-    tree_full_like,
+    tree_filled_with,
     tree_l2_norm,
     tree_slice,
     tree_sub,
@@ -565,7 +565,7 @@ def test_svrg_xk_update_step(request, regr_setup, to_tuple, prox, prox_lambda):
     def prox_op(params, hyperparams, scaling=1.0):
         return prox(params, prox_lambda, scaling)
 
-    prox_lambda = tree_full_like(true_params, prox_lambda)
+    prox_lambda = tree_filled_with(true_params, prox_lambda)
 
     # set the initial parameters to zero and
     # set the anchor point to a random value that's not just zeros
