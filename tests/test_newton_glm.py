@@ -1519,11 +1519,12 @@ def test_second_order_solvers_store_rtol(solver_name):
 def test_prox_newton_rtol_loosens_convergence(request):
     """``rtol`` must reach the Cauchy test, not merely sit on the instance.
 
-    ``AbstractSecondOrderSolver.converged`` calls ``cauchy_termination(self.rtol, self.tol, ...)``,
-    so a
-    relative tolerance well above the absolute one has to stop the run sooner. Being stored
-    is not enough: that is exactly what the unreachable ``0.0`` default did before. Measured
-    on this problem, 9 steps at ``rtol=0.0`` against 4 at ``rtol=1e-2``.
+    ``AbstractSecondOrderSolver.converged`` calls
+    ``cauchy_termination(self.rtol, self.tol, ...)``, so a relative tolerance well above
+    the absolute one has to stop the run sooner. Being stored is not enough: that is
+    exactly what the unreachable ``0.0`` default did before. Only the ordering of the two
+    step counts is asserted; the counts themselves differ by a step or two between
+    machines.
     """
     X, y, model, _, _ = request.getfixturevalue("poissonGLM_model_instantiation")
 
