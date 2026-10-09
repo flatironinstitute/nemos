@@ -238,9 +238,14 @@ class AbstractSecondOrderSolver(abc.ABC, Generic[Y, S]):
         descent = new_ls_state.descent
         step_taken = new_ls_state.step_taken
         # A failed search at a slope this small means the iterate is stationary rather
-        # than broken, so the zero step is left for the convergence test to read.
+        # than broken, so the zero step is left for the convergence test to use.
+        # The slope at which the search runs out of precision is set by the rounding
+        # error of the objective, which is a few ulp rather than exactly one: a measured
+        # stall sat at ``1.18 * eps * |F|`` and a threshold of ``eps * |F|`` called it a
+        # failure. ``16`` is the factor sklearn uses for the same decision in
+        # ``NewtonSolver.line_search``.
         eps = jnp.finfo(jnp.asarray(value).dtype).eps
-        stationary = jnp.abs(descent) <= eps * jnp.abs(value)
+        stationary = jnp.abs(descent) <= 16 * eps * jnp.abs(value)
         return updates, new_ls_state, ~step_taken & ~stationary
 
     def converged(self, params: Y, state: S, grad: Y, fval: Scalar) -> Bool[Array, ""]:
