@@ -25,13 +25,15 @@ import nemos as nmo
 
 ## Why silent neurons are a problem
 
-By default, [`GLM.initialize_params`](nemos.glm.GLM.initialize_params) starts the fit from parameters that match the mean of the observations. It sets the coefficients to zero, and the intercept to the **inverse link function applied to the mean rate** of each neuron:
+By default, [`GLM.initialize_params`](nemos.glm.GLM.initialize_params) starts the fit from parameters that match the mean of the observations. It sets the coefficients to zero and chooses the intercept so that the rate predicted by the model equals the mean rate of each neuron.
+
+A GLM maps the linear predictor to a rate through its **inverse link function** $g$ (`model.inverse_link_function`). To find the intercept that reproduces a given mean rate, initialization therefore applies the *inverse of that function* to the mean rate $\bar{y}$:
 
 $$
-b_0 = f^{-1}\big(\bar{y}\big)
+b_0 = g^{-1}(\bar{y})
 $$
 
-For the default Poisson GLM the link is the log, so the inverse link $f^{-1}$ is the exponential's inverse: the logarithm. A silent neuron has $\bar{y} = 0$, and $\log(0) = -\infty$. The initial intercept would not be finite, and the fit could not even start.
+For the default Poisson GLM the inverse link function is the exponential, $g = \exp$, so $g^{-1} = \log$ and the initial intercept is $\log(\bar{y})$. A silent neuron has $\bar{y} = 0$, and $\log(0) = -\infty$. The initial intercept would not be finite, and the fit could not even start.
 
 ```{code-cell} ipython3
 with np.errstate(divide="ignore"):
