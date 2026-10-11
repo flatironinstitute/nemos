@@ -163,8 +163,14 @@ def _initial_mean(y, rate_range):
             raise ValueError(
                 f"Cannot shift boundary means for rate_range={rate_range}."
             )
+        # get positions
+        positions = jnp.argwhere(boundary).tolist()
+        if boundary.ndim == 1:
+            affected = [p[0] for p in positions]  # e.g. [1, 3]
+        else:
+            affected = [tuple(p) for p in positions]  # e.g. [(1, 2)]
         warnings.warn(
-            f"Output(s) {jnp.flatnonzero(boundary).tolist()} have boundary mean activity "
+            f"Output(s) {affected} have boundary mean activity "
             f"in `y`; shifting into rate_range={rate_range} for initialization.",
             UserWarning,
             stacklevel=3,
