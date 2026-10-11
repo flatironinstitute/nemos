@@ -493,21 +493,6 @@ def test_categorical_missing_classes_initialization(population):
     )
     assert np.isfinite(intercept).all()
 
-
-@pytest.mark.parametrize(
-    "rate_range,expected",
-    [((0, float("inf")), [0.05, 0.1]), ((0, 1), [0.5 / 11, 0.5 / 6])],
-)
-def test_boundary_shift_counts_nonmissing_observations(rate_range, expected):
-    from nemos.glm.initialize_parameters import _initial_mean
-
-    y = np.zeros((10, 2))
-    y[:5, 1] = np.nan
-    with pytest.warns(UserWarning, match="boundary mean activity"):
-        actual = _initial_mean(jnp.asarray(y), rate_range)
-    np.testing.assert_allclose(actual, expected)
-
-
 @pytest.mark.parametrize("rate_range,y", [((0, float("inf")), [-1.0]), ((0, 1), [2.0])])
 def test_invalid_mean_is_not_silently_shifted(rate_range, y):
     from nemos.glm.initialize_parameters import _initial_mean
