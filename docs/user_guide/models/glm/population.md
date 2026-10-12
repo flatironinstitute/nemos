@@ -95,7 +95,7 @@ print(f"coef_ shape:      {model.coef_.shape}")
 print(f"intercept_ shape: {model.intercept_.shape}")
 ```
 
-`coef_` is `(n_features, n_neurons)` and `intercept_` is `(n_neurons,)`, so column `j` of `coef_` holds the entire weight vector of neuron `j`, and it is the column that the `feature_mask` of the next section indexes. The single neuron [`GLM`](nemos.glm.GLM) stores the same quantities without that trailing axis: `coef_` of shape `(n_features,)` and `intercept_` of shape `(1,)`.
+`coef_` is `(n_features, n_neurons)` and `intercept_` is `(n_neurons,)`, so column `j` of `coef_` holds the entire weight vector of neuron `j`. The single neuron [`GLM`](nemos.glm.GLM) stores the same quantities without that trailing axis: `coef_` of shape `(n_features,)` and `intercept_` of shape `(1,)`.
 
 Predicting the rate works in the same way,
 
