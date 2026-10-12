@@ -29,7 +29,7 @@ import numpy as np
 import nemos as nmo
 
 n_neurons = 3
-n_classes = 3
+n_classes = 4
 n_samples = 1000
 
 # generate data:
