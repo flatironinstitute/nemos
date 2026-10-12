@@ -3,7 +3,7 @@ from typing import Callable
 import jax
 import jax.numpy as jnp
 
-from .basis import BSplineEval
+from ..basis import BSplineEval
 
 
 def _tuned_rnd(
