@@ -14,19 +14,26 @@ kernelspec:
 
 The theory behind the GLM, and the classes implementing it for a single neuron, a population, and categorical responses of one or several outputs.
 
-## TLDR;
+Fitting a GLM in NeMoS can be done in a single line of code. For instance, for a Poisson GLM,
 
 ```{code-cell}
 import nemos as nmo
 
 # Poisson GLM
-X, y = nmo.datasets.gauss_tuned_poisson()
-model = nmo.model.GLM().fit(X, y)
+X, y = nmo.datasets.tuned_poisson()
+nmo.glm.GLM().fit(X, y)
 
-# Other observation Models
-model = nmo.model.GLM("Gaussian").fit(X, y)
-mode
 ```
+
+Observation models can be easily swapped.
+
+```{code-cell}
+# Other observation Models
+X, y = nmo.datasets.tuned_gaussian()
+nmo.glm.GLM("Gaussian").fit(X, y)
+```
+
+## Contents
 
 ```{toctree}
 :maxdepth: 1
