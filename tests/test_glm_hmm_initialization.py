@@ -343,6 +343,7 @@ class TestRandomGLMParamsInitialization:
             jnp.ones((100, 5)),
             jnp.array([1.0, 2.0, 3.0] * 33 + [1.0]),
             lambda x: x,
+            PoissonObservations(),
             random_key=jax.random.PRNGKey(123),
         )
         assert jnp.allclose(intercept[0], intercept)
@@ -355,7 +356,12 @@ class TestRandomGLMParamsInitialization:
         X = FeaturePytree(a=jnp.ones((n_samples, 2)), b=jnp.ones((n_samples, 4)))
         y = jnp.ones(n_samples)
         coef, intercept = random_glm_params_init(
-            n_states, X, y, lambda x: x, random_key=jax.random.PRNGKey(0)
+            n_states,
+            X,
+            y,
+            lambda x: x,
+            PoissonObservations(),
+            random_key=jax.random.PRNGKey(0),
         )
         # Line 93-94: FeaturePytree -> X.data (dict).
         assert isinstance(coef, dict)
@@ -373,6 +379,7 @@ class TestRandomGLMParamsInitialization:
             jnp.ones((100, 5)),
             y,
             jax.nn.softplus,
+            PoissonObservations(),
             random_key=jax.random.PRNGKey(123),
         )
         link_func = resolve_inverse_link_function(jax.nn.softplus, None)
@@ -838,7 +845,7 @@ class TestGenerateGLMHMMInitialParams:
         y = jnp.ones((50, n_neurons)) if n_neurons > 1 else jnp.ones(50)
 
         coef, intercept, scale = generate_glm_hmm_initial_model_params(
-            n_states, X, y, jnp.exp, "Poisson"
+            n_states, X, y, jnp.exp, PoissonObservations()
         )
 
         if n_neurons == 1:
@@ -855,7 +862,7 @@ class TestGenerateGLMHMMInitialParams:
 
     def test_returns_three_elements(self):
         result = generate_glm_hmm_initial_model_params(
-            2, jnp.ones((10, 3)), jnp.ones(10), lambda x: x, "Poisson"
+            2, jnp.ones((10, 3)), jnp.ones(10), lambda x: x, PoissonObservations()
         )
         assert isinstance(result, tuple)
         assert len(result) == 3
@@ -874,7 +881,7 @@ class TestGenerateGLMHMMInitialParams:
                 jnp.ones((10, 5)),
                 jnp.ones(10),
                 lambda x: x,
-                "Poisson",
+                PoissonObservations(),
                 init_funcs=init_funcs,
             )
 
@@ -888,7 +895,7 @@ class TestGenerateGLMHMMInitialParams:
         X = jnp.ones((50, 5))
         y = jnp.full(50, 2.0)
         coef, intercept, scale = generate_glm_hmm_initial_model_params(
-            3, X, y, lambda x: x, "Poisson"
+            3, X, y, lambda x: x, PoissonObservations()
         )
         assert jnp.abs(coef).max() < 0.01
         assert jnp.allclose(intercept, 2.0)
@@ -899,9 +906,9 @@ class TestGenerateGLMHMMInitialParams:
         X = jnp.ones((50, 5))
         y = jnp.ones(50)
         coef1, *_ = generate_glm_hmm_initial_model_params(
-            3, X, y, lambda x: x, "Poisson", random_key=1
+            3, X, y, lambda x: x, PoissonObservations(), random_key=1
         )
         coef2, *_ = generate_glm_hmm_initial_model_params(
-            3, X, y, lambda x: x, "Poisson", random_key=2
+            3, X, y, lambda x: x, PoissonObservations(), random_key=2
         )
         assert not jnp.allclose(coef1, coef2)
