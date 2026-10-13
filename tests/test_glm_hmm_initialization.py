@@ -22,7 +22,7 @@ from nemos.glm_hmm.initialize_parameters import (
 from nemos.glm_hmm.validation import GLMHMMValidator
 from nemos.hmm.hmm import BaseHMM
 from nemos.inverse_link_function_utils import resolve_inverse_link_function
-from nemos.observation_models import PoissonObservations
+from nemos.observation_models import BernoulliObservations, PoissonObservations
 
 # =============================================================================
 # Minimal GLMHMM mock for key-validation tests (exercises initialization_funcs setter)
@@ -384,6 +384,30 @@ class TestRandomGLMParamsInitialization:
         )
         link_func = resolve_inverse_link_function(jax.nn.softplus, None)
         assert jnp.allclose(intercept, link_func(10.0))
+
+    @pytest.mark.parametrize(
+        "observation_model, expectation",
+        [
+            (PoissonObservations(), does_not_raise()),
+            (
+                BernoulliObservations(),
+                pytest.raises(ValueError, match="Mean activity must lie within"),
+            ),
+        ],
+    )
+    def test_rate_range_read_from_observation_model(
+        self, observation_model, expectation
+    ):
+        """A mean of 2.5 is valid for Poisson and out of range for Bernoulli."""
+        with expectation:
+            random_glm_params_init(
+                3,
+                jnp.ones((100, 5)),
+                jnp.full(100, 2.5),
+                lambda x: x,
+                observation_model,
+                random_key=jax.random.PRNGKey(123),
+            )
 
 
 # =============================================================================
