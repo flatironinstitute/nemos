@@ -109,7 +109,9 @@ class ClassifierMixin:
         >>> model.set_classes(y_all_classes)
         ClassifierGLM(...)
         >>> init_params = model.initialize_params(X_batch1, y_batch1)
-        >>> state = model.initialize_optimizer_and_state(init_params, X_batch1, y_batch1)
+        >>> state = model.initialize_optimizer_and_state(
+        ...     init_params, X_batch1, y_batch1
+        ... )
 
         Now batches with any subset of classes work with :meth:`update`:
 
