@@ -215,7 +215,7 @@ Dividing by the bin size converts it to spikes per second.
 ```{code-cell} ipython3
 bin_size = 0.01  # 10 ms bins, in seconds
 
-rate / bin_size
+rate[:10] / bin_size
 ```
 
 The type of the output follows the predictors passed to `predict`, whatever the model was fit on.
