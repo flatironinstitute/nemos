@@ -343,14 +343,50 @@ class Regularizer(Base, abc.ABC):
 
         return prox_op
 
+    def penalty_fn(self, params: Any, strength: Any) -> Callable:
+        r"""Return a function evaluating the penalty alone, given the parameters.
+
+        The penalty depends on the parameters only: the strength, and any other
+        ingredient the penalty needs (``GroupLasso``'s mask), are resolved once here by
+        ``_get_filter_kwargs``. ``_penalization`` then applies ``_penalty_on_subtree``
+        to each of ``params.regularizable_subtrees()``, which is what leaves the
+        intercept unpenalized.
+
+        Most callers want ``loss + penalty`` and should use ``penalized_loss``, which is
+        written in terms of this method so the two cannot disagree. This accessor is for
+        solvers needing the penalty on its own: a proximal solver differentiates the
+        smooth loss and reaches the penalty through its proximal operator, so it has to
+        evaluate :math:`P` without :math:`f` -- see
+        ``ProximalNewton._line_search_inputs``, whose sufficient-decrease slope is built
+        from :math:`P(\\beta + d) - P(\\beta)`.
+
+        Parameters
+        ----------
+        params:
+            Full, unsliced parameters. Used to expand the strength and to build any
+            mask, so the shape checks see the shapes the user passed.
+        strength:
+            The strength as the user set it.
+
+        Returns
+        -------
+        :
+            A function mapping a parameter tree to the scalar penalty.
+        """
+        filter_kwargs = self._get_filter_kwargs(strength=strength, params=params)
+
+        def _penalty(params: Any) -> jnp.ndarray:
+            return self._penalization(params, filter_kwargs=filter_kwargs)
+
+        return _penalty
+
     def penalized_loss(self, loss: Callable, params: Any, strength: Any) -> Callable:
         """Return a function for calculating the penalized loss."""
-
-        filter_kwargs = self._get_filter_kwargs(strength=strength, params=params)
+        penalty_fn = self.penalty_fn(params=params, strength=strength)
 
         def _penalized_loss(params, *args, **kwargs):
             result = loss(params, *args, **kwargs)
-            penalty = self._penalization(params, filter_kwargs=filter_kwargs)
+            penalty = penalty_fn(params)
             if isinstance(result, tuple):
                 self._check_loss_output_tuple(result)
                 loss_value, aux = result
@@ -527,7 +563,6 @@ class Regularizer(Base, abc.ABC):
             - A non-scalar strength leaf does not match the shape of the
               corresponding parameter leaf.
         """
-
         wheres = getattr(params, "regularizable_subtrees", lambda: [lambda x: x])()
         struct = jax.tree_util.tree_structure(params)
         structured_strength = jax.tree_util.tree_unflatten(
@@ -647,6 +682,7 @@ class UnRegularized(Regularizer):
         "SVRG",
         "ProxSVRG",
         "Newton",
+        "ProximalNewton",
     )
 
     _default_solver = "LBFGS"
@@ -693,6 +729,7 @@ class Ridge(Regularizer):
         "SVRG",
         "ProxSVRG",
         "Newton",
+        "ProximalNewton",
     )
 
     _default_solver = "LBFGS"
@@ -743,6 +780,7 @@ class Lasso(Regularizer):
     _allowed_solvers = (
         "ProximalGradient",
         "ProxSVRG",
+        "ProximalNewton",
     )
 
     _default_solver = "ProximalGradient"
@@ -808,6 +846,7 @@ class ElasticNet(Regularizer):
     _allowed_solvers = (
         "ProximalGradient",
         "ProxSVRG",
+        "ProximalNewton",
     )
 
     _default_solver = "ProximalGradient"
@@ -923,13 +962,15 @@ class GroupLasso(Regularizer):
     Examples
     --------
     >>> import numpy as np
-    >>> from nemos.regularizer import GroupLasso  # Assuming the module is named group_lasso
+    >>> from nemos.regularizer import (
+    ...     GroupLasso,
+    ... )  # Assuming the module is named group_lasso
     >>> from nemos.glm import GLM
     >>> # simulate some counts
     >>> num_samples, num_features, num_groups = 1000, 5, 3
-    >>> X = np.random.normal(size=(num_samples, num_features)) # design matrix
-    >>> w = [0, 0.5, 1, 0, -0.5] # define some weights
-    >>> y = np.random.poisson(np.exp(X.dot(w))) # observed counts
+    >>> X = np.random.normal(size=(num_samples, num_features))  # design matrix
+    >>> w = [0, 0.5, 1, 0, -0.5]  # define some weights
+    >>> y = np.random.poisson(np.exp(X.dot(w)))  # observed counts
     >>> # Define a mask for 3 groups and 5 features
     >>> mask = np.zeros((num_groups, num_features))
     >>> mask[0] = [1, 0, 0, 1, 0]  # Group 0 includes features 0 and 3
@@ -968,6 +1009,7 @@ class GroupLasso(Regularizer):
     _allowed_solvers = (
         "ProximalGradient",
         "ProxSVRG",
+        "ProximalNewton",
     )
 
     _default_solver = "ProximalGradient"

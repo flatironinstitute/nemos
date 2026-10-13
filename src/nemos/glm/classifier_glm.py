@@ -459,7 +459,9 @@ class ClassifierGLM(ClassifierGLMMixin, GLM):
 
     Classify into more than two classes:
 
-    >>> X = jnp.array([[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]])
+    >>> X = jnp.array(
+    ...     [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]]
+    ... )
     >>> y = jnp.array([0, 0, 1, 1, 2, 2])
     >>> model = nmo.glm.ClassifierGLM(n_classes=3).fit(X, y)
     >>> model.coef_.shape
@@ -470,9 +472,7 @@ class ClassifierGLM(ClassifierGLMMixin, GLM):
     Change regularization strength:
 
     >>> model = nmo.glm.ClassifierGLM(
-    ...     n_classes=2,
-    ...     regularizer="Ridge",
-    ...     regularizer_strength=0.5
+    ...     n_classes=2, regularizer="Ridge", regularizer_strength=0.5
     ... )
     >>> model.regularizer
     Ridge()
@@ -713,7 +713,9 @@ class ClassifierPopulationGLM(ClassifierGLMMixin, PopulationGLM):
     >>> import jax.numpy as jnp
     >>> import numpy as np
     >>> import nemos as nmo
-    >>> X = jnp.array([[1., 2.], [2., 3.], [3., 4.], [4., 5.], [5., 6.], [6., 7.]])
+    >>> X = jnp.array(
+    ...     [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]]
+    ... )
     >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
     >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X, y)
     >>> model.coef_.shape
@@ -739,7 +741,9 @@ class ClassifierPopulationGLM(ClassifierGLMMixin, PopulationGLM):
 
     Class labels can be strings or any hashable type:
 
-    >>> y_str = np.array([["a", "a"], ["a", "b"], ["b", "a"], ["b", "c"], ["c", "b"], ["c", "c"]])
+    >>> y_str = np.array(
+    ...     [["a", "a"], ["a", "b"], ["b", "a"], ["b", "c"], ["c", "b"], ["c", "c"]]
+    ... )
     >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X, y_str)
     >>> model.classes_
     array(['a', 'b', 'c'], dtype='<U1')
@@ -753,8 +757,7 @@ class ClassifierPopulationGLM(ClassifierGLMMixin, PopulationGLM):
     >>> feature_mask = jnp.array([[1, 0], [1, 1]])
     >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
     >>> model = nmo.glm.ClassifierPopulationGLM(
-    ...     n_classes=3,
-    ...     feature_mask=feature_mask
+    ...     n_classes=3, feature_mask=feature_mask
     ... ).fit(X, y)
     >>> model.coef_
     Array(...)
@@ -764,9 +767,7 @@ class ClassifierPopulationGLM(ClassifierGLMMixin, PopulationGLM):
     Change regularization strength:
 
     >>> model = nmo.glm.ClassifierPopulationGLM(
-    ...     n_classes=3,
-    ...     regularizer="Ridge",
-    ...     regularizer_strength=0.5
+    ...     n_classes=3, regularizer="Ridge", regularizer_strength=0.5
     ... )
     >>> model.regularizer
     Ridge()
@@ -884,7 +885,9 @@ class ClassifierPopulationGLM(ClassifierGLMMixin, PopulationGLM):
         --------
         >>> import jax.numpy as jnp
         >>> import nemos as nmo
-        >>> X = jnp.array([[1., 2.], [2., 3.], [3., 4.], [4., 5.], [5., 6.], [6., 7.]])
+        >>> X = jnp.array(
+        ...     [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]]
+        ... )
         >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
         >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3)
         >>> model = model.fit(X, y)
@@ -933,7 +936,9 @@ class ClassifierPopulationGLM(ClassifierGLMMixin, PopulationGLM):
         --------
         >>> import jax.numpy as jnp
         >>> import nemos as nmo
-        >>> X = jnp.array([[1., 2.], [2., 3.], [3., 4.], [4., 5.], [5., 6.], [6., 7.]])
+        >>> X = jnp.array(
+        ...     [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]]
+        ... )
         >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
         >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X, y)
         >>> score = model.score(X, y)

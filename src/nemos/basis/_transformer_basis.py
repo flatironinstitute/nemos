@@ -64,7 +64,7 @@ class TransformerBasis:
 
     >>> # Generate data
     >>> num_samples, num_features = 10000, 1
-    >>> x = np.random.normal(size=(num_samples, ))  # raw time series
+    >>> x = np.random.normal(size=(num_samples,))  # raw time series
     >>> basis = BSplineEval(10, bounds=(x.min(), x.max()))
     >>> features = basis.compute_features(x)  # basis transformed time series
     >>> weights = np.random.normal(size=basis.n_basis_funcs)  # true weights
@@ -72,9 +72,16 @@ class TransformerBasis:
 
     >>> # transformer can be used in pipelines
     >>> transformer = TransformerBasis(basis)
-    >>> pipeline = Pipeline([ ("compute_features", transformer), ("glm", GLM()),])
-    >>> pipeline = pipeline.fit(x[:, None], y)  # x need to be 2D for sklearn transformer API
-    >>> out = pipeline.predict(np.arange(10)[:, None]) # predict rate from new datas
+    >>> pipeline = Pipeline(
+    ...     [
+    ...         ("compute_features", transformer),
+    ...         ("glm", GLM()),
+    ...     ]
+    ... )
+    >>> pipeline = pipeline.fit(
+    ...     x[:, None], y
+    ... )  # x need to be 2D for sklearn transformer API
+    >>> out = pipeline.predict(np.arange(10)[:, None])  # predict rate from new datas
     >>> # TransformerBasis parameter can be cross-validated.
     >>> # 5-fold cross-validate the number of basis
     >>> param_grid = dict(compute_features__n_basis_funcs=[4, 10])

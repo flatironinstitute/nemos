@@ -1,3 +1,4 @@
+import inspect
 import os
 from contextlib import nullcontext as does_not_raise
 
@@ -327,6 +328,7 @@ def test_svrg_glm_update(
     assert state.solver_state.iter_num == 1
 
 
+@pytest.mark.requires_x64
 @pytest.mark.parametrize(
     "regularizer_name, solver_name, mask",
     [
@@ -387,13 +389,11 @@ def test_maxiter_is_respected(
     solver_class_name = str(nmo.solvers.get_solver(solver_name).implementation)
 
     use_jaxopt_tol = False
-    if backend == "jaxopt":
+
+    if backend == "jaxopt" and "jaxopt" in solver_class_name.lower():
         use_jaxopt_tol = True
 
-    if "jaxopt" in solver_class_name.lower():
-        use_jaxopt_tol = True
-
-    if "optimistix" in solver_class_name.lower():
+    if backend == "optimistix" in solver_class_name.lower():
         use_jaxopt_tol = False
 
     tol = -1.0 if use_jaxopt_tol else 0.0
@@ -693,6 +693,38 @@ def test_all_solvers_accept_maxiter_and_not_max_steps():
     for spec in nmo.solvers.list_available_solvers():
         assert "maxiter" in spec.implementation.get_accepted_arguments()
         assert "max_steps" not in spec.implementation.get_accepted_arguments()
+
+
+def test_all_solvers_accept_every_argument_they_advertise():
+    """Every name in ``get_accepted_arguments`` must be a real ``__init__`` parameter.
+
+    ``BaseRegressor._check_solver_kwargs`` validates ``solver_kwargs`` against this set and
+    nothing else, so a name advertised but not accepted passes validation and then raises
+    ``TypeError`` at construction -- a failure the user cannot act on, since the name came
+    from the solver itself. Two such names existed before this test: ``Newton`` advertised
+    ``autodiff``, which no solver accepted, and ``ProximalNewton`` advertised ``rtol``
+    without taking it while ``_converged`` read it.
+
+    Adapters forwarding ``**kwargs`` to a wrapped solver are exempt: their accepted set is
+    deliberately wider than their own signature.
+    """
+    offenders = {}
+    for spec in nmo.solvers.list_available_solvers():
+        solver_class = spec.implementation
+        signature = inspect.signature(solver_class.__init__)
+        if any(
+            param.kind is inspect.Parameter.VAR_KEYWORD
+            for param in signature.parameters.values()
+        ):
+            continue
+        missing = solver_class.get_accepted_arguments() - set(signature.parameters)
+        if missing:
+            offenders[spec.algo_name] = sorted(missing)
+
+    assert not offenders, (
+        "solvers advertise arguments their __init__ cannot accept, so passing them via "
+        f"solver_kwargs clears validation and then raises TypeError: {offenders}"
+    )
 
 
 @pytest.mark.requires_x64

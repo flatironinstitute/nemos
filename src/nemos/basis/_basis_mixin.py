@@ -732,7 +732,6 @@ class BoundedEvalBasisMixin(EvalBasisMixin):
     @staticmethod
     def _format_bounds(values: Any) -> Tuple[Any, Exception | None]:
         """Check bounds and cast to tuple."""
-
         if not hasattr(values, "__len__"):
             raise TypeError(
                 "Invalid bounds provided. ``bounds`` must be a tuple of floats."
@@ -966,8 +965,12 @@ class BasisTransformerMixin:
         >>> from sklearn.model_selection import GridSearchCV
         >>> # load some data
         >>> X, y = np.random.normal(size=(30, 1)), np.random.poisson(size=30)
-        >>> basis = nmo.basis.RaisedCosineLinearEval(10, bounds=(X.min(), X.max())).set_input_shape(1).to_transformer()
-        >>> glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=1.)
+        >>> basis = (
+        ...     nmo.basis.RaisedCosineLinearEval(10, bounds=(X.min(), X.max()))
+        ...     .set_input_shape(1)
+        ...     .to_transformer()
+        ... )
+        >>> glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=1.0)
         >>> pipeline = Pipeline([("basis", basis), ("glm", glm)])
         >>> param_grid = dict(
         ...     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),

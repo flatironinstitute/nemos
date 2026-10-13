@@ -542,7 +542,6 @@ class FourierBasis(AtomicBasisMixin, Basis):
           second array mask filters the already-filtered combinations. Assign
           ``"all"`` or ``"no-intercept"`` to start from the full half-space again.
         """
-
         if isinstance(values, str) and values == "no-intercept":
             self._frequency_mask = "no-intercept"
             combinations = _combinator_builder(self._frequencies)

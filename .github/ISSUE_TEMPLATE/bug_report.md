@@ -15,6 +15,7 @@ Please provide a short, reproducible example of the error, for example:
 
 ```python
 import nemos as nmo
+
 bspline = nmo.basis.BSplineEval(5)
 # This raises an error
 bspline.compute_features(np.random.randn(10), np.random.randn(10))

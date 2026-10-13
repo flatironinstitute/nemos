@@ -29,12 +29,16 @@ from nemos.hmm.expectation_maximization import (
     compute_xi_log,
     em_hmm,
     forward_backward,
-    max_sum,
     run_m_step,
 )
+from nemos.hmm.hmm import FORWARD_BACKWARD, MAX_SUM
 from nemos.hmm.m_step_analytical_updates import (
     _analytical_m_step_log_initial_prob,
     _analytical_m_step_log_transition_prob,
+)
+from nemos.hmm.parallel_expectation import (
+    _backward_pass_assoc,
+    _forward_pass_assoc,
 )
 from nemos.observation_models import (
     BernoulliObservations,
@@ -45,6 +49,21 @@ from nemos.observation_models import (
 )
 from nemos.regularizer import UnRegularized
 from nemos.solvers import get_solver
+
+_FORWARD = {
+    "sequential": _forward_pass,
+    "associative": _forward_pass_assoc,
+}
+
+_BACKWARD = {
+    "sequential": _backward_pass,
+    "associative": _backward_pass_assoc,
+}
+
+# Derived from the registry in src, not from the local dicts above: a new E-step
+# then parametrizes every test here immediately, and the local dicts raise a
+# KeyError until they are extended too, which is the work list.
+ESTEP_TYPE = pytest.mark.parametrize("estep_type", tuple(FORWARD_BACKWARD))
 
 
 def setup_solver(
@@ -578,6 +597,7 @@ def lagrange_mult_loss(param, args, loss, **kwargs):
     return loss(proba, args, **kwargs) + lagrange_mult_term
 
 
+@ESTEP_TYPE
 class TestForwardBackward:
     """Tests for forward-backward algorithm and related E-step computations."""
 
@@ -592,7 +612,7 @@ class TestForwardBackward:
         ],
     )
     @pytest.mark.requires_x64
-    def test_forward_backward_regression(self, decorator):
+    def test_forward_backward_regression(self, decorator, estep_type):
         """
         Test forward-backward algorithm against reference implementation.
 
@@ -632,7 +652,7 @@ class TestForwardBackward:
             inverse_link_function=obs.default_inverse_link_function,
         )
 
-        decorated_forward_backward = decorator(forward_backward)
+        decorated_forward_backward = decorator(FORWARD_BACKWARD[estep_type])
         (
             log_gammas_nemos,
             log_xis_nemos,
@@ -673,7 +693,7 @@ class TestForwardBackward:
         [{"observations": PoissonObservations(), "scale": 1.0}],
         indirect=True,
     )
-    def test_for_loop_forward_step(self, generate_data_multi_state):
+    def test_for_loop_forward_step(self, generate_data_multi_state, estep_type):
         """
         Test forward pass implementation against numpy for-loop version.
 
@@ -701,7 +721,7 @@ class TestForwardBackward:
         predicted_rate_given_state = inv_link(X @ coef + intercept)
         log_conditionals = log_likelihood(y, predicted_rate_given_state)
 
-        log_alphas, log_normalization = _forward_pass(
+        log_alphas, log_normalization = _FORWARD[estep_type](
             np.log(initial_prob), np.log(transition_prob), log_conditionals, new_sess
         )
 
@@ -717,7 +737,7 @@ class TestForwardBackward:
         [{"observations": PoissonObservations(), "scale": 1.0}],
         indirect=True,
     )
-    def test_for_loop_backward_step(self, generate_data_multi_state):
+    def test_for_loop_backward_step(self, generate_data_multi_state, estep_type):
         """
         Test backward pass implementation against numpy for-loop version.
 
@@ -745,12 +765,15 @@ class TestForwardBackward:
         predicted_rate_given_state = inv_link(X @ coef + intercept)
         log_conditionals = log_likelihood(y, predicted_rate_given_state)
 
-        log_alphas, log_normalization = _forward_pass(
+        log_alphas, log_normalization = _FORWARD[estep_type](
             np.log(initial_prob), np.log(transition_prob), log_conditionals, new_sess
         )
 
-        log_betas = _backward_pass(
-            np.log(transition_prob), log_conditionals, log_normalization, new_sess
+        log_betas = _BACKWARD[estep_type](
+            np.log(transition_prob),
+            log_conditionals,
+            log_normalization,
+            new_sess.astype(bool),
         )
         betas_numpy = backward_step_numpy(
             np.exp(log_conditionals),
@@ -760,7 +783,7 @@ class TestForwardBackward:
         )
         np.testing.assert_almost_equal(np.log(betas_numpy), log_betas)
 
-    def test_single_state_estep(self, single_state_inputs):
+    def test_single_state_estep(self, single_state_inputs, estep_type):
         """
         Test single-state HMM E-step reduces to trivial case.
 
@@ -778,11 +801,14 @@ class TestForwardBackward:
         log_conditionals = log_likelihood(y, rate)
         new_sess = np.zeros(10)
         new_sess[0] = 1
-        log_alphas, log_norm = _forward_pass(
-            np.log(initial_prob), np.log(transition_prob), log_conditionals, new_sess
+        log_alphas, log_norm = _FORWARD[estep_type](
+            np.log(initial_prob),
+            np.log(transition_prob),
+            log_conditionals,
+            new_sess.astype(bool),
         )
-        log_betas = _backward_pass(
-            np.log(transition_prob), log_conditionals, log_norm, new_sess
+        log_betas = _BACKWARD[estep_type](
+            np.log(transition_prob), log_conditionals, log_norm, new_sess.astype(bool)
         )
 
         # check that the normalization factor reduces to the log p(x_t | z_t)
@@ -977,9 +1003,11 @@ class TestMStep:
         )
         # Initial probability:
         sum_gammas = np.sum(gammas[np.where(new_sess)[0]], axis=0)
-        lagrange_multiplier = -jax.grad(expected_log_likelihood_wrt_initial_prob)(
-            new_initial_prob, sum_gammas
-        ).mean()  # note that the lagrange mult makes the gradient all the same for each prob.
+        lagrange_multiplier = (
+            -jax.grad(expected_log_likelihood_wrt_initial_prob)(
+                new_initial_prob, sum_gammas
+            ).mean()
+        )  # note that the lagrange mult makes the gradient all the same for each prob.
         grad_objective = jax.grad(lagrange_mult_loss)
         grad_at_init, grad_at_lagr = grad_objective(
             (new_initial_prob, lagrange_multiplier),
@@ -1163,9 +1191,11 @@ class TestMStep:
         )
         # Initial probabilities:
         sum_gammas = np.sum(np.exp(log_gammas)[np.where(new_sess)[0]], axis=0)
-        lagrange_multiplier = -jax.grad(expected_log_likelihood_wrt_initial_prob)(
-            new_initial_prob, sum_gammas, dirichlet_alphas=alphas_init
-        ).mean()  # note that the lagrange mult makes the gradient all the same for each prob.
+        lagrange_multiplier = (
+            -jax.grad(expected_log_likelihood_wrt_initial_prob)(
+                new_initial_prob, sum_gammas, dirichlet_alphas=alphas_init
+            ).mean()
+        )  # note that the lagrange mult makes the gradient all the same for each prob.
         # 2) Check that the gradient of the loss is zero
         grad_objective = jax.grad(lagrange_mult_loss)
         grad_at_init, grad_at_lagr = grad_objective(
@@ -1775,9 +1805,9 @@ class TestMStep:
             log_likelihood_func=ll_func,
             session_starts=new_sess,
         )
-        assert (
-            updated_log_like > initial_log_like
-        ), "M-step for initial prob did not increase likelihood"
+        assert updated_log_like > initial_log_like, (
+            "M-step for initial prob did not increase likelihood"
+        )
 
         initial_log_like = updated_log_like
         new_log_transition_prob = _analytical_m_step_log_transition_prob(
@@ -1795,9 +1825,9 @@ class TestMStep:
             log_likelihood_func=ll_func,
             session_starts=new_sess,
         )
-        assert (
-            updated_log_like > initial_log_like
-        ), "M-step for transition prob did not increase likelihood"
+        assert updated_log_like > initial_log_like, (
+            "M-step for transition prob did not increase likelihood"
+        )
 
         # Minimize negative log-likelihood to update GLM weights
         initial_log_like = updated_log_like
@@ -1819,9 +1849,9 @@ class TestMStep:
             log_likelihood_func=ll_func,
             session_starts=new_sess,
         )
-        assert (
-            updated_log_like > initial_log_like
-        ), "M-step for GLMParams prob did not increase likelihood"
+        assert updated_log_like > initial_log_like, (
+            "M-step for GLMParams prob did not increase likelihood"
+        )
 
         # Minimize negative log-likelihood to update scale (if applicable)
         initial_log_like = updated_log_like
@@ -1848,9 +1878,9 @@ class TestMStep:
                 log_likelihood_func=ll_func,
                 session_starts=new_sess,
             )
-            assert (
-                updated_log_like > initial_log_like
-            ), "M-step for GLM scale prob did not increase likelihood"
+            assert updated_log_like > initial_log_like, (
+                "M-step for GLM scale prob did not increase likelihood"
+            )
         else:
             np.testing.assert_array_equal(new_scale, jnp.zeros_like(intercept))
 
@@ -1901,7 +1931,8 @@ class TestEMAlgorithm:
     @pytest.mark.parametrize("regularization", ["UnRegularized", "Ridge", "Lasso"])
     @pytest.mark.parametrize("require_new_session", [True, False])
     @pytest.mark.requires_x64
-    def test_run_em(self, regularization, require_new_session):
+    @ESTEP_TYPE
+    def test_run_em(self, regularization, require_new_session, estep_type):
         """
         Test EM algorithm increases log-likelihood.
 
@@ -1970,6 +2001,7 @@ class TestEMAlgorithm:
             ),
             log_likelihood_func=likelihood_func,
             m_step_fn_model_params=solver_run,
+            e_step_fn=FORWARD_BACKWARD[estep_type],
         )
 
         (
@@ -1979,7 +2011,7 @@ class TestEMAlgorithm:
             log_likelihood_em,
             _,
             _,
-        ) = forward_backward(
+        ) = FORWARD_BACKWARD[estep_type](
             learned_params,
             X[:, 1:],  # drop intercept
             y,
@@ -1992,7 +2024,7 @@ class TestEMAlgorithm:
             log_likelihood_true_params,
             _,
             _,
-        ) = forward_backward(
+        ) = FORWARD_BACKWARD[estep_type](
             GLMHMMParams(
                 hmm_params=HMMParams(jnp.log(initial_prob), jnp.log(transition_prob)),
                 model_params=GLMHMMModelParams(
@@ -2003,13 +2035,14 @@ class TestEMAlgorithm:
             y,
             log_likelihood_func=likelihood_func,
         )
-        assert (
-            log_likelihood_true_params < log_likelihood_em
-        ), "log-likelihood did not increase."
+        assert log_likelihood_true_params < log_likelihood_em, (
+            "log-likelihood did not increase."
+        )
 
     @pytest.mark.parametrize("n_neurons", [5])
     @pytest.mark.requires_x64
-    def test_check_em(self, n_neurons):
+    @ESTEP_TYPE
+    def test_check_em(self, n_neurons, estep_type):
         """
         Test EM algorithm recovers true latent states.
 
@@ -2081,7 +2114,7 @@ class TestEMAlgorithm:
             log_likelihood_norm_noisy_params,
             log_alphas_noisy_params,
             log_betas_noisy_params,
-        ) = forward_backward(
+        ) = FORWARD_BACKWARD[estep_type](
             GLMHMMParams(
                 hmm_params=HMMParams(jnp.log(init_pb), jnp.log(transition_pb)),
                 model_params=GLMHMMModelParams(
@@ -2125,6 +2158,7 @@ class TestEMAlgorithm:
             y=jnp.squeeze(y),
             log_likelihood_func=likelihood_func,
             m_step_fn_model_params=solver_run,
+            e_step_fn=FORWARD_BACKWARD[estep_type],
             tol=10**-10,
         )
         (
@@ -2134,7 +2168,7 @@ class TestEMAlgorithm:
             log_likelihood_em,
             _,
             _,
-        ) = forward_backward(
+        ) = FORWARD_BACKWARD[estep_type](
             learned_params,
             X[:, 1:],  # drop intercept
             y,
@@ -2149,12 +2183,12 @@ class TestEMAlgorithm:
         max_corr = np.max(corr_matrix, axis=1)
         print("\nMAX CORR", max_corr)
         assert np.all(max_corr > 0.9), "State recovery failed."
-        assert np.all(
-            max_corr > max_corr_before_em
-        ), "Latent state recovery did not improve."
-        assert (
-            log_likelihood_noisy_params < log_likelihood_em
-        ), "Log-likelihood decreased."
+        assert np.all(max_corr > max_corr_before_em), (
+            "Latent state recovery did not improve."
+        )
+        assert log_likelihood_noisy_params < log_likelihood_em, (
+            "Log-likelihood decreased."
+        )
 
 
 @pytest.mark.requires_x64
@@ -2163,7 +2197,8 @@ class TestEMAlgorithm:
     [{"observations": PoissonObservations(), "scale": 1.0}],
     indirect=True,
 )
-def test_e_and_m_step_for_population(generate_data_multi_state_population):
+@ESTEP_TYPE
+def test_e_and_m_step_for_population(generate_data_multi_state_population, estep_type):
     """Run E and M step fitting a population."""
     (
         new_sess,
@@ -2182,7 +2217,7 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
         True, False, observation_model=obs, inverse_link_function=inv_link
     )
     init_model_params = GLMHMMModelParams(coef, intercept, jnp.zeros_like(intercept))
-    log_gammas, log_xis, _, _, _, _ = forward_backward(
+    log_gammas, log_xis, _, _, _, _ = FORWARD_BACKWARD[estep_type](
         GLMHMMParams(
             hmm_params=HMMParams(jnp.log(initial_prob), jnp.log(transition_prob)),
             model_params=init_model_params,
@@ -2220,9 +2255,10 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population):
     )
 
 
+@ESTEP_TYPE
 class TestViterbi:
     @pytest.mark.parametrize("use_new_sess", [True, False])
-    def test_viterbi_against_hmmlearn(self, use_new_sess):
+    def test_viterbi_against_hmmlearn(self, use_new_sess, estep_type):
         data = np.load(fetch_data("em_three_states.npz"))
         initial_prob = data["initial_prob"]
         transition_prob = data["transition_prob"]
@@ -2248,7 +2284,7 @@ class TestViterbi:
             return log_like_func(y, predicted_rate)
 
         log_emission_array = log_like_func(y, predicted_rate_given_state)
-        map_path = max_sum(
+        map_path = MAX_SUM[estep_type](
             GLMHMMParams(
                 hmm_params=HMMParams(jnp.log(initial_prob), jnp.log(transition_prob)),
                 model_params=GLMHMMModelParams(coef, intercept),
@@ -2271,7 +2307,7 @@ class TestViterbi:
 
     @pytest.mark.parametrize("use_new_sess", [True, False])
     @pytest.mark.parametrize("return_index", [True, False])
-    def test_viterbi_return_index(self, use_new_sess, return_index):
+    def test_viterbi_return_index(self, use_new_sess, return_index, estep_type):
         data = np.load(fetch_data("em_three_states.npz"))
         initial_prob = data["initial_prob"]
         transition_prob = data["transition_prob"]
@@ -2295,7 +2331,7 @@ class TestViterbi:
             predicted_rate = inverse_link_function(X @ params.coef + params.intercept)
             return log_like_func(y, predicted_rate)
 
-        map_path = max_sum(
+        map_path = MAX_SUM[estep_type](
             GLMHMMParams(
                 hmm_params=HMMParams(jnp.log(initial_prob), jnp.log(transition_prob)),
                 model_params=GLMHMMModelParams(coef, intercept),
@@ -2368,7 +2404,8 @@ class TestConvergence:
         assert isinstance(result, jnp.ndarray)
 
     @pytest.mark.requires_x64
-    def test_custom_convergence_checker(self):
+    @ESTEP_TYPE
+    def test_custom_convergence_checker(self, estep_type):
         """Test that custom convergence functions work with EM."""
 
         def always_converge(state, tol):
@@ -2426,6 +2463,7 @@ class TestConvergence:
             y=y,
             log_likelihood_func=likelihood_func,
             m_step_fn_model_params=solver_run,
+            e_step_fn=FORWARD_BACKWARD[estep_type],
             check_convergence=always_converge,
             maxiter=100,
             tol=1e-8,
@@ -2441,7 +2479,8 @@ class TestConvergence:
         assert final_state.converged, "EMState converged flag should be set to True"
 
     @pytest.mark.requires_x64
-    def test_never_converge_checker(self):
+    @ESTEP_TYPE
+    def test_never_converge_checker(self, estep_type):
         """Test that EM runs to maxiter when convergence is never reached."""
 
         def never_converge(state, tol):
@@ -2499,6 +2538,7 @@ class TestConvergence:
             y=y,
             log_likelihood_func=likelihood_func,
             m_step_fn_model_params=solver_run,
+            e_step_fn=FORWARD_BACKWARD[estep_type],
             check_convergence=never_converge,
             maxiter=maxiter,
             tol=1e-8,
@@ -2511,12 +2551,13 @@ class TestConvergence:
         )
 
         # check converged flag is False
-        assert (
-            not final_state.converged
-        ), "EMState converged flag should be set to False"
+        assert not final_state.converged, (
+            "EMState converged flag should be set to False"
+        )
 
     @pytest.mark.requires_x64
-    def test_em_stops_when_converged(self):
+    @ESTEP_TYPE
+    def test_em_stops_when_converged(self, estep_type):
         """Test that EM stops early when convergence criterion is met."""
 
         data_path = fetch_data("em_three_states.npz")
@@ -2571,6 +2612,7 @@ class TestConvergence:
             y=y,
             log_likelihood_func=likelihood_func,
             m_step_fn_model_params=solver_run,
+            e_step_fn=FORWARD_BACKWARD[estep_type],
             maxiter=maxiter,
             tol=tol,
         )
@@ -2582,12 +2624,13 @@ class TestConvergence:
         )
 
         # Should have actually converged according to the criterion
-        assert check_log_likelihood_increment(
-            final_state, tol=tol
-        ), "EM stopped but did not meet convergence criterion"
+        assert check_log_likelihood_increment(final_state, tol=tol), (
+            "EM stopped but did not meet convergence criterion"
+        )
 
     @pytest.mark.requires_x64
-    def test_em_nan_diagnostics_after_convergence(self):
+    @ESTEP_TYPE
+    def test_em_nan_diagnostics_after_convergence(self, estep_type):
         """Test that NaN likelihoods after convergence don't break the algorithm."""
 
         data_path = fetch_data("em_three_states.npz")
@@ -2641,33 +2684,35 @@ class TestConvergence:
             y=y[:100],
             log_likelihood_func=likelihood_func,
             m_step_fn_model_params=solver_run,
+            e_step_fn=FORWARD_BACKWARD[estep_type],
             maxiter=maxiter,
             tol=tol,
         )
 
         # Final state should have valid likelihood
-        assert jnp.isfinite(
-            final_state.data_log_likelihood
-        ), "Final state has non-finite log-likelihood"
+        assert jnp.isfinite(final_state.data_log_likelihood), (
+            "Final state has non-finite log-likelihood"
+        )
 
         # Final state should have valid previous likelihood
-        assert jnp.isfinite(
-            final_state.previous_data_log_likelihood
-        ), "Final state has non-finite previous log-likelihood"
+        assert jnp.isfinite(final_state.previous_data_log_likelihood), (
+            "Final state has non-finite previous log-likelihood"
+        )
 
         # All learned parameters should be valid
-        assert jnp.all(
-            jnp.isfinite(learned_params.hmm_params.log_initial_prob)
-        ), "Final log_initial_prob contains non-finite values"
-        assert jnp.all(
-            jnp.isfinite(learned_params.hmm_params.log_transition_prob)
-        ), "Final log_transition_prob contains non-finite values"
-        assert jnp.all(
-            jnp.isfinite(learned_params.model_params.log_scale)
-        ), "Final log_scale contains non-finite values"
+        assert jnp.all(jnp.isfinite(learned_params.hmm_params.log_initial_prob)), (
+            "Final log_initial_prob contains non-finite values"
+        )
+        assert jnp.all(jnp.isfinite(learned_params.hmm_params.log_transition_prob)), (
+            "Final log_transition_prob contains non-finite values"
+        )
+        assert jnp.all(jnp.isfinite(learned_params.model_params.log_scale)), (
+            "Final log_scale contains non-finite values"
+        )
 
     @pytest.mark.requires_x64
-    def test_convergence_with_different_tolerances(self):
+    @ESTEP_TYPE
+    def test_convergence_with_different_tolerances(self, estep_type):
         """Test that different tolerance values produce expected iteration counts."""
 
         data_path = fetch_data("em_three_states.npz")
@@ -2726,6 +2771,7 @@ class TestConvergence:
                 y=y,
                 log_likelihood_func=likelihood_func,
                 m_step_fn_model_params=solver_run,
+                e_step_fn=FORWARD_BACKWARD[estep_type],
                 maxiter=10,
                 tol=tol,
             )
@@ -2738,7 +2784,8 @@ class TestConvergence:
         )
 
     @pytest.mark.requires_x64
-    def test_convergence_checker_with_iteration_limit(self):
+    @ESTEP_TYPE
+    def test_convergence_checker_with_iteration_limit(self, estep_type):
         """Test custom convergence checker that combines likelihood and iteration limit."""
 
         def converge_after_n_iterations(state: EMState, tol: float, n: int = 5):
@@ -2801,15 +2848,16 @@ class TestConvergence:
             y=y,
             log_likelihood_func=likelihood_func,
             m_step_fn_model_params=solver_run,
+            e_step_fn=FORWARD_BACKWARD[estep_type],
             check_convergence=check_conv_5_iter,
             maxiter=100,
             tol=1e-10,  # Very tight tolerance, but will stop at 5 iterations
         )
 
         # Should stop at or just after 5 iterations
-        assert (
-            final_state.iterations <= 6
-        ), f"EM should stop around 5 iterations, but ran for {final_state.iterations}"
+        assert final_state.iterations <= 6, (
+            f"EM should stop around 5 iterations, but ran for {final_state.iterations}"
+        )
 
 
 class TestCompilation:
@@ -2937,9 +2985,9 @@ class TestCompilation:
             dirichlet_transition_proba=np.ones(transition_prob.shape),
             dirichlet_initial_proba=np.ones(initial_prob.shape),
         )
-        assert (
-            compilation_counter["n_compilations"] == 2
-        ), "None -> array should recompile"
+        assert compilation_counter["n_compilations"] == 2, (
+            "None -> array should recompile"
+        )
 
         # 4th call with prior (different values, same shape)
         _ = tracked_run_m_step(
@@ -2962,7 +3010,10 @@ class TestCompilation:
         [{"observations": PoissonObservations(), "scale": 1.0}],
         indirect=True,
     )
-    def test_em_hmm_compiles_once(self, generate_data_multi_state, solver_name):
+    @ESTEP_TYPE
+    def test_em_hmm_compiles_once(
+        self, generate_data_multi_state, solver_name, estep_type
+    ):
         """
         Test that em_hmm compiles only once for repeated calls.
 
@@ -3018,6 +3069,7 @@ class TestCompilation:
                 "inverse_link_function",
                 "likelihood_func",
                 "m_step_fn_model_params",
+                "estep_fn",
                 "maxiter",
                 "check_convergence",
                 "tol",
@@ -3029,6 +3081,7 @@ class TestCompilation:
             y,
             likelihood_func,
             m_step_fn_model_params,
+            estep_fn,
             inverse_link_function,
             session_starts=None,
             maxiter=10**3,
@@ -3044,6 +3097,7 @@ class TestCompilation:
                 y=y,
                 log_likelihood_func=likelihood_func,
                 m_step_fn_model_params=m_step_fn_model_params,
+                e_step_fn=estep_fn,
                 maxiter=maxiter,
                 session_starts=session_starts,
                 tol=tol,
@@ -3067,6 +3121,7 @@ class TestCompilation:
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_model_params=solver_run,
+            estep_fn=FORWARD_BACKWARD[estep_type],
             maxiter=5,
             tol=1e-8,
         )
@@ -3080,12 +3135,13 @@ class TestCompilation:
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_model_params=solver_run,
+            estep_fn=FORWARD_BACKWARD[estep_type],
             maxiter=5,
             tol=1e-8,
         )
-        assert (
-            compilation_counter["n_compilations"] == 1
-        ), "Second call should use cache"
+        assert compilation_counter["n_compilations"] == 1, (
+            "Second call should use cache"
+        )
 
         # Third call with DIFFERENT data (same shape) - should NOT recompile
         X_new = (X + np.random.randn(*X.shape) * 0.1).astype(X.dtype)
@@ -3110,12 +3166,13 @@ class TestCompilation:
             inverse_link_function=obs.default_inverse_link_function,
             likelihood_func=likelihood_func,
             m_step_fn_model_params=solver_run,
+            estep_fn=FORWARD_BACKWARD[estep_type],
             maxiter=5,
             tol=1e-8,
         )
-        assert (
-            compilation_counter["n_compilations"] == 1
-        ), "Different data (same shape) should use cache"
+        assert compilation_counter["n_compilations"] == 1, (
+            "Different data (same shape) should use cache"
+        )
 
     @pytest.mark.requires_x64
     @pytest.mark.parametrize(
@@ -3123,7 +3180,10 @@ class TestCompilation:
         [{"observations": PoissonObservations(), "scale": 1.0}],
         indirect=True,
     )
-    def test_forward_backward_compiles_once(self, generate_data_multi_state):
+    @ESTEP_TYPE
+    def test_forward_backward_compiles_once(
+        self, generate_data_multi_state, estep_type
+    ):
         """
         Test that forward_backward is not recompiled on each EM iteration.
 
@@ -3183,7 +3243,7 @@ class TestCompilation:
             # This increment only runs during tracing (compilation)
             compilation_counter["n_compilations"] += 1
 
-            return forward_backward(
+            return FORWARD_BACKWARD[estep_type](
                 params,
                 X,  # drop intercept
                 y,
@@ -3242,7 +3302,8 @@ class TestPytreeSupport:
         [{"observations": PoissonObservations(), "scale": 1.0}],
         indirect=True,
     )
-    def test_forward_backward_with_pytree(self, generate_data_multi_state):
+    @ESTEP_TYPE
+    def test_forward_backward_with_pytree(self, generate_data_multi_state, estep_type):
         """Test forward_backward accepts pytree inputs for X and coef."""
         (
             new_sess,
@@ -3281,7 +3342,7 @@ class TestPytreeSupport:
             ll_norm_ref,
             alphas_ref,
             betas_ref,
-        ) = forward_backward(
+        ) = FORWARD_BACKWARD[estep_type](
             GLMHMMParams(
                 hmm_params=HMMParams(jnp.log(initial_prob), jnp.log(transition_prob)),
                 model_params=GLMHMMModelParams(
@@ -3295,7 +3356,9 @@ class TestPytreeSupport:
         )
 
         # Test with pytrees
-        posteriors, joint_posterior, ll, ll_norm, alphas, betas = forward_backward(
+        posteriors, joint_posterior, ll, ll_norm, alphas, betas = FORWARD_BACKWARD[
+            estep_type
+        ](
             GLMHMMParams(
                 hmm_params=HMMParams(jnp.log(initial_prob), jnp.log(transition_prob)),
                 model_params=GLMHMMModelParams(
@@ -3394,7 +3457,8 @@ class TestPytreeSupport:
         [{"observations": PoissonObservations(), "scale": 1.0}],
         indirect=True,
     )
-    def test_em_hmm_with_pytree(self, generate_data_multi_state):
+    @ESTEP_TYPE
+    def test_em_hmm_with_pytree(self, generate_data_multi_state, estep_type):
         """Test em_hmm accepts pytree inputs for X and coef."""
         (
             new_sess,
@@ -3455,14 +3519,14 @@ class TestPytreeSupport:
             ),
             hmm_params=HMMParams(jnp.log(initial_prob), jnp.log(transition_prob)),
         )
-
         # Run EM with pytrees (just a few iterations)
         final_params, final_state = em_hmm(
             params=params,
-            X=X_tree,
-            y=y,
+            X=jax.tree.map(jnp.asarray, X_tree),
+            y=jnp.asarray(y),
             log_likelihood_func=likelihood_func,
             m_step_fn_model_params=solver_run,
+            e_step_fn=FORWARD_BACKWARD[estep_type],
             session_starts=new_sess.astype(bool),
             maxiter=3,
             tol=1e-8,
@@ -3641,8 +3705,9 @@ class TestEMScaleOptimization:
             "states": states,
         }
 
+    @ESTEP_TYPE
     def test_em_gaussian_analytical_scale_single_neuron(
-        self, gaussian_data_single_neuron
+        self, gaussian_data_single_neuron, estep_type
     ):
         """
         Test #1: Full EM with Gaussian observations using analytical scale update (single neuron).
@@ -3711,6 +3776,7 @@ class TestEMScaleOptimization:
             y=data["y"],
             log_likelihood_func=likelihood_func,
             m_step_fn_model_params=update_fn,
+            e_step_fn=FORWARD_BACKWARD[estep_type],
             maxiter=50,
             tol=1e-5,
         )
@@ -3720,9 +3786,9 @@ class TestEMScaleOptimization:
 
         # Verify scale was updated (should differ from initialization)
         final_scale = jnp.exp(final_params.model_params.log_scale)
-        assert not jnp.allclose(
-            final_scale, init_scale, atol=0.1
-        ), "Scale should have been updated from initialization"
+        assert not jnp.allclose(final_scale, init_scale, atol=0.1), (
+            "Scale should have been updated from initialization"
+        )
 
         # Verify scale is positive
         assert jnp.all(final_scale > 0), "All scale parameters should be positive"
@@ -3730,7 +3796,10 @@ class TestEMScaleOptimization:
         # Verify shapes
         assert final_scale.shape == (data["n_states"],)
 
-    def test_em_gaussian_scale_improves_likelihood(self, gaussian_data_single_neuron):
+    @ESTEP_TYPE
+    def test_em_gaussian_scale_improves_likelihood(
+        self, gaussian_data_single_neuron, estep_type
+    ):
         """
         Test #3: Compare EM with and without scale optimization for Gaussian.
 
@@ -3777,6 +3846,7 @@ class TestEMScaleOptimization:
             y=data["y"],
             log_likelihood_func=likelihood_func,
             m_step_fn_model_params=solver.run,
+            e_step_fn=FORWARD_BACKWARD[estep_type],
             maxiter=50,
             tol=1e-5,
         )
@@ -3822,6 +3892,7 @@ class TestEMScaleOptimization:
             y=data["y"],
             log_likelihood_func=likelihood_func,
             m_step_fn_model_params=update_fn,
+            e_step_fn=FORWARD_BACKWARD[estep_type],
             maxiter=50,
             tol=1e-5,
         )
@@ -3840,11 +3911,14 @@ class TestEMScaleOptimization:
         ), "EM with scale optimization should achieve at least as good likelihood"
 
         # Verify scale changed
-        assert not jnp.allclose(
-            final_scale, init_scale, atol=0.1
-        ), "Scale parameters should have been optimized"
+        assert not jnp.allclose(final_scale, init_scale, atol=0.1), (
+            "Scale parameters should have been optimized"
+        )
 
-    def test_em_gamma_numerical_scale_single_neuron(self, gamma_data_single_neuron):
+    @ESTEP_TYPE
+    def test_em_gamma_numerical_scale_single_neuron(
+        self, gamma_data_single_neuron, estep_type
+    ):
         """
         Test #2: Full EM with Gamma observations using numerical scale update.
 
@@ -3917,6 +3991,7 @@ class TestEMScaleOptimization:
             y=data["y"],
             log_likelihood_func=likelihood_func,
             m_step_fn_model_params=update_fn,
+            e_step_fn=FORWARD_BACKWARD[estep_type],
             maxiter=50,
             tol=1e-5,
         )
@@ -3926,14 +4001,17 @@ class TestEMScaleOptimization:
 
         # Verify scale was updated
         final_scale = jnp.exp(final_params.model_params.log_scale)
-        assert not jnp.allclose(
-            final_scale, init_scale, atol=0.1
-        ), "Scale should have been updated from initialization"
+        assert not jnp.allclose(final_scale, init_scale, atol=0.1), (
+            "Scale should have been updated from initialization"
+        )
 
         # Verify shapes
         assert final_scale.shape == (data["n_states"],)
 
-    def test_em_gaussian_analytical_scale_population(self, gaussian_data_population):
+    @ESTEP_TYPE
+    def test_em_gaussian_analytical_scale_population(
+        self, gaussian_data_population, estep_type
+    ):
         """
         Test #5: Full EM for population GLM with Gaussian observations and analytical scale.
 
@@ -4002,6 +4080,7 @@ class TestEMScaleOptimization:
             y=data["y"],
             log_likelihood_func=likelihood_func,
             m_step_fn_model_params=update_fn,
+            e_step_fn=FORWARD_BACKWARD[estep_type],
             maxiter=50,
             tol=1e-5,
         )
@@ -4015,12 +4094,14 @@ class TestEMScaleOptimization:
         assert final_scale.shape == (
             n_neurons,
             data["n_states"],
-        ), f"Expected scale shape ({n_neurons}, {data['n_states']}), got {final_scale.shape}"
+        ), (
+            f"Expected scale shape ({n_neurons}, {data['n_states']}), got {final_scale.shape}"
+        )
 
         # Verify scale was updated
-        assert not jnp.allclose(
-            final_scale, init_scale, atol=0.1
-        ), "Scale should have been updated from initialization"
+        assert not jnp.allclose(final_scale, init_scale, atol=0.1), (
+            "Scale should have been updated from initialization"
+        )
 
         # Verify all scales are positive
         assert jnp.all(final_scale > 0), "All scale parameters should be positive"

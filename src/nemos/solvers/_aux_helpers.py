@@ -88,7 +88,6 @@ def out_asarray(fn: Callable):
 
 def convert_fn(fn: Callable, has_aux: bool, y0: Params, args: Any):
     """Convert the objective function the way optimistix.minimise does."""
-
     y0 = tree_map_inexact_asarray(y0)
     if not has_aux:
         fn = wrap_aux(fn)

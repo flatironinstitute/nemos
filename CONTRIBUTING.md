@@ -230,7 +230,7 @@ properly documented as outlined below.
     # run the build locally
     sphinx-autobuild . _build/html
     ```
-    
+
     If the build fails, you will see line-specific errors that prompted the failure.
 
 3. **Doctest: Test the example code in your docs**

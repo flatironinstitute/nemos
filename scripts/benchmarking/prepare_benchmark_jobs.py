@@ -51,7 +51,6 @@ def _print_env_info() -> None:
     """Print environment diagnostics for debugging worker configuration."""
     import os
     import socket
-    import sys
 
     import jax
 
@@ -148,7 +147,7 @@ def write_disbatch_script(args, device: str, indices: list[int]) -> Tuple[Path, 
                     f" --n_reps {args.n_reps}"
                 ),
             ]
-            f.write(f'( {" && ".join(lines)} ) &> {log}\n')
+            f.write(f"( {' && '.join(lines)} ) &> {log}\n")
 
         f.write("#DISBATCH BARRIER\n")
 
@@ -258,10 +257,10 @@ def print_commands(args, dsb_paths: dict[str, Path], n_tasks: dict[str, int]) ->
         agg_cmd = _build_aggregation_sbatch_command(
             args, [f"${v}" for v in var_names.values()]
         )
-        print(f"\n  # Aggregation (runs after all device jobs succeed)")
+        print("\n  # Aggregation (runs after all device jobs succeed)")
         print(f"  AGG_JID=$({agg_cmd} | awk '{{print $NF}}')")
         combine_cmd = _build_combine_sbatch_command(args, "$AGG_JID")
-        print(f"\n  # Summary statistics (runs after aggregation succeeds)")
+        print("\n  # Summary statistics (runs after aggregation succeeds)")
         print(f"  {combine_cmd}")
 
 

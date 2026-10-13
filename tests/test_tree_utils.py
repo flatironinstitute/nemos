@@ -1,3 +1,4 @@
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -129,3 +130,100 @@ def test_tree_slice(idx):
     for key in mydict:
         expected = mydict[key][idx]
         assert jnp.all(result[key] == expected)
+
+
+@pytest.mark.parametrize(
+    "tree, expected",
+    [
+        (jnp.array([1.0, 2.0, 3.0]), True),
+        (jnp.array([1.0, jnp.nan, 3.0]), False),
+        (jnp.array([1.0, jnp.inf, 3.0]), False),
+        (jnp.array([1.0, -jnp.inf, 3.0]), False),
+        (
+            {
+                "a": jnp.array([1.0, 2.0]),
+                "b": {"c": jnp.array([3.0, 4.0])},
+            },
+            True,
+        ),
+        (
+            {
+                "a": jnp.array([1.0, 2.0]),
+                "b": {"c": jnp.array([3.0, jnp.nan])},
+            },
+            False,
+        ),
+        (
+            {
+                "a": jnp.array([1.0, jnp.inf]),
+                "b": jnp.array([3.0, 4.0]),
+            },
+            False,
+        ),
+        (
+            {
+                "float": jnp.array([1.0, 2.0]),
+                "integer": jnp.array([1, 2]),
+                "boolean": jnp.array([True, False]),
+            },
+            True,
+        ),
+    ],
+)
+def test_tree_all_finite(tree, expected):
+    """Test whether all elements across all PyTree leaves are finite."""
+    result = tree_utils.tree_all_finite(tree)
+
+    assert result.shape == ()
+    assert jnp.array_equal(result, jnp.asarray(expected))
+
+
+@pytest.mark.parametrize(
+    "tree, expected",
+    [
+        ({"a": jnp.array([1.0, 2.0])}, True),
+        ({"a": jnp.array([1.0, jnp.nan])}, False),
+        ({"a": jnp.array([1.0, jnp.inf])}, False),
+    ],
+)
+def test_tree_all_finite_jit(tree, expected):
+    """Test that tree_all_finite works under JIT compilation."""
+    result = jax.jit(tree_utils.tree_all_finite)(tree)
+
+    assert result.shape == ()
+    assert jnp.array_equal(result, jnp.asarray(expected))
+
+
+def test_tree_all_finite_empty_tree():
+    """Test that an empty PyTree is considered finite."""
+    result = tree_utils.tree_all_finite({})
+
+    assert result.shape == ()
+    assert jnp.array_equal(result, jnp.asarray(True))
+
+
+@pytest.mark.parametrize("dtype", [jnp.float16, jnp.int32, "float32"])
+def test_tree_astype_casts_every_leaf(dtype):
+    trees = ({"a": jnp.ones(2)}, [np.zeros(3), jnp.arange(4)])
+    out = tree_utils.tree_astype(*trees, dtype=dtype)
+    assert len(out) == len(trees)
+    leaves = jax.tree_util.tree_leaves(out)
+    assert leaves and all(leaf.dtype == jnp.dtype(dtype) for leaf in leaves)
+
+
+def test_tree_astype_always_returns_a_tuple():
+    """One argument in, a one-element tuple out: no special case for a single tree."""
+    (out,) = tree_utils.tree_astype(jnp.ones(3), dtype=jnp.float16)
+    assert out.dtype == jnp.float16
+
+
+def test_tree_astype_passes_none_through():
+    """None is an empty pytree node, so optional arguments need no guard."""
+    array, missing = tree_utils.tree_astype(jnp.ones(3), None, dtype=jnp.float16)
+    assert array.dtype == jnp.float16
+    assert missing is None
+
+
+def test_tree_astype_default_dtype_is_a_noop():
+    (out,) = tree_utils.tree_astype({"a": jnp.ones(2, dtype=jnp.int16)})
+    assert out["a"].dtype == jnp.int16

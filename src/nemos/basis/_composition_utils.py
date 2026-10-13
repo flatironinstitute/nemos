@@ -118,7 +118,6 @@ def _iterate_over_components(basis: BasisMixin):
 
 def _get_root(bas: BasisMixin):
     """Get the basis root."""
-
     parent = bas
     while hasattr(parent, "_parent") and parent._parent is not None:
         parent = parent._parent
@@ -438,7 +437,6 @@ def set_input_shape(bas, *xi):
 
     Set input shape logic, compatible with all bases (composite, atomic, and custom).
     """
-
     # use 1 as default or number of non-variable args
     n_args = (
         count_positional_and_var_args(bas.compute_features)[0]

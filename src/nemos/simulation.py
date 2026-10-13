@@ -87,7 +87,7 @@ def difference_of_gammas(
         ...     inhib_a=inhib_a,
         ...     inhib_b=inhib_b,
         ...     excit_a=excit_a,
-        ...     excit_b=excit_b
+        ...     excit_b=excit_b,
         ... )
         >>> _ = plt.plot(coupling_filter)
         >>> _ = plt.title("Coupling filter from difference of gammas")
@@ -164,7 +164,9 @@ def regress_filter(coupling_filters: NDArray, eval_basis: NDArray) -> NDArray:
         >>> from nemos.basis import RaisedCosineLogEval
         >>> filter_duration = 100
         >>> n_basis_funcs = 20
-        >>> filter_bank = difference_of_gammas(filter_duration).reshape(filter_duration, 1, 1)
+        >>> filter_bank = difference_of_gammas(filter_duration).reshape(
+        ...     filter_duration, 1, 1
+        ... )
         >>> _, basis = RaisedCosineLogEval(10).evaluate_on_grid(filter_duration)
         >>> weights = regress_filter(filter_bank, basis)[0, 0]
         >>> print("Weights shape:", weights.shape)
@@ -288,7 +290,7 @@ def simulate_recurrent(
         >>> coupling_duration = 100
         >>> feedforward_input = np.random.normal(size=(1000, n_neurons, 1))
         >>> coupling_basis = np.random.normal(size=(coupling_duration, 10))
-        >>> coupling_coef = 0.5*np.random.normal(size=(n_neurons, n_neurons, 10))
+        >>> coupling_coef = 0.5 * np.random.normal(size=(n_neurons, n_neurons, 10))
         >>> intercept = -9 * np.ones(n_neurons)
         >>> init_spikes = np.zeros((coupling_duration, n_neurons))
         >>> random_key = jax.random.key(123)
@@ -299,7 +301,7 @@ def simulate_recurrent(
         ...     random_key=random_key,
         ...     feedforward_input=feedforward_input,
         ...     coupling_basis_matrix=coupling_basis,
-        ...     init_y=init_spikes
+        ...     init_y=init_spikes,
         ... )
         >>> _ = plt.figure()
         >>> _ = plt.plot(rates[:, 0], label="Neuron 0 rate")

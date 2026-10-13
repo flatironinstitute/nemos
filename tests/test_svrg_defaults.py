@@ -149,21 +149,21 @@ def test_svrg_optimal_batch_and_stepsize_with_provided_defaults(
         stepsize=stepsize,
     )
     if expected_batch_size is not None:
-        assert (
-            result["batch_size"] == expected_batch_size
-        ), "Provided batch_size should be returned as-is."
+        assert result["batch_size"] == expected_batch_size, (
+            "Provided batch_size should be returned as-is."
+        )
     else:
-        assert (
-            "batch_size" in result and result["batch_size"] > 0
-        ), "Batch size should be computed since it was not provided."
+        assert "batch_size" in result and result["batch_size"] > 0, (
+            "Batch size should be computed since it was not provided."
+        )
     if expected_stepsize is not None:
-        assert (
-            result["stepsize"] == expected_stepsize
-        ), "Provided stepsize should be returned as-is."
+        assert result["stepsize"] == expected_stepsize, (
+            "Provided stepsize should be returned as-is."
+        )
     else:
-        assert (
-            "stepsize" in result and result["stepsize"] > 0
-        ), "Stepsize should be computed since it was not provided."
+        assert "stepsize" in result and result["stepsize"] > 0, (
+            "Stepsize should be computed since it was not provided."
+        )
 
 
 @pytest.mark.parametrize(
@@ -319,6 +319,6 @@ def test_calculate_optimal_batch_size_svrg_all_config(
     batch_size = _svrg_defaults._calculate_optimal_batch_size_svrg(
         num_samples, l_smooth_max, l_smooth, strong_convexity
     )
-    assert (
-        batch_size == expected_batch_size
-    ), f"Expected batch_size {expected_batch_size}, got {batch_size}"
+    assert batch_size == expected_batch_size, (
+        f"Expected batch_size {expected_batch_size}, got {batch_size}"
+    )

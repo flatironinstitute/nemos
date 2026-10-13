@@ -130,7 +130,6 @@ def test_inherited_setter_called(attr, init_kwargs, is_classifier):
 
 
 class TestGLMHMMInit:
-
     # -------------------------------------------------------------------------
     # observation_model setter
     # -------------------------------------------------------------------------
@@ -411,7 +410,6 @@ class TestGLMHMMSetup:
 
 @pytest.mark.parametrize("model_class", GLMHMM_MODELS)
 class TestGLMHMMCheckModelIsFit:
-
     def _set_all_params(self, model):
         model.coef_ = jnp.zeros((3, 2))
         model.intercept_ = jnp.zeros((1, 2))
