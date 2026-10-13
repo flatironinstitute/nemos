@@ -134,7 +134,7 @@ def _glm_hessian_block(
 
 
 class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
-    r"""Generalized Linear Model (GLM) for neural activity data.
+    r"""Generalized Linear Model (GLM) predicting neural activity from input features.
 
     This GLM implementation allows users to model neural activity based on a combination of exogenous inputs
     (like convolved currents or light intensities) and a choice of observation model. It is suitable for scenarios where
