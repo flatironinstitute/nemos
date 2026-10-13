@@ -12,9 +12,6 @@ kernelspec:
 
 # Population Classifier GLM
 
-:::{note}
-Still to be added to this page: the choice of regularizer and solver, why Ridge does not make the categorical loss strictly convex, and saving and loading.
-:::
 
 [`ClassifierPopulationGLM`](nemos.glm.ClassifierPopulationGLM) predicts discrete labels for several outputs at once, one categorical variable per neuron, through a softmax inverse link. It stands to the [`ClassifierGLM`](nemos.glm.ClassifierGLM) as the [`PopulationGLM`](nemos.glm.PopulationGLM) stands to the [`GLM`](nemos.glm.GLM): the same model, fit jointly over the neuron axis instead of in a loop.
 
