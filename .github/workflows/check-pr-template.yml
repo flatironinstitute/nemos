@@ -33,6 +33,18 @@ jobs:
             echo "enforce=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # Read the template from the base branch, so the rules come from the template itself.
+      - name: Fetch the PR template
+        if: steps.author.outputs.enforce == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          gh api -H "Accept: application/vnd.github.raw+json" \
+            "repos/$REPO/contents/.github/pull_request_template.md?ref=$BASE_SHA" \
+            > "$RUNNER_TEMP/pull_request_template.md"
+
       - name: Check PR description follows the template
         if: steps.author.outputs.enforce == 'true'
         # The body is passed through an env var (never interpolated into the script)
@@ -45,56 +57,59 @@ jobs:
           import re
           import sys
 
-          body = (os.environ.get("PR_BODY") or "").replace("\r\n", "\n")
-          # Ignore the template's HTML comments.
-          body = re.sub(r"<!--.*?-->", "", body, flags=re.S)
+          COMMENT = re.compile(r"<!--.*?-->", flags=re.S)
+          CHECKBOX = re.compile(r"^\s*[-*]\s*\[([ xX])\]", flags=re.M)
+          PLACEHOLDER = re.compile(r"^\*[^*].*\*$")
 
-          # Map each "##"/"###" heading to the text below it.
-          headings = list(re.finditer(r"^#{2,3}\s+(.+?)\s*$", body, flags=re.M))
-          sections = {}
-          for i, match in enumerate(headings):
-              end = headings[i + 1].start() if i + 1 < len(headings) else len(body)
-              sections[match.group(1)] = body[match.end():end].strip()
 
-          checked_box = r"^\s*[-*]\s*\[[xX]\]"
+          def split_sections(text):
+              """Map each "##"/"###" heading to the raw text below it."""
+              text = text.replace("\r\n", "\n")
+              headings = list(re.finditer(r"^#{2,3}\s+(.+?)\s*$", text, flags=re.M))
+              sections = {}
+              for i, match in enumerate(headings):
+                  end = headings[i + 1].start() if i + 1 < len(headings) else len(text)
+                  sections[match.group(1)] = text[match.end():end]
+              return sections
+
+
+          with open(os.path.join(os.environ["RUNNER_TEMP"], "pull_request_template.md")) as f:
+              template = split_sections(f.read())
+          body = split_sections(os.environ.get("PR_BODY") or "")
+
           errors = []
-
-          required = [
-              "1. Contributor statement",
-              "AI Assistance Disclosure",
-              "Motivation",
-              "PR description",
-              "Checklist",
-          ]
-          for heading in required:
-              if heading not in sections:
+          for heading, template_text in template.items():
+              if heading not in body:
                   errors.append(f"Missing section '{heading}'.")
+                  continue
+              text = COMMENT.sub("", body[heading])
+              template_lines = COMMENT.sub("", template_text).strip().splitlines()
 
-          if "AI Assistance Disclosure" in sections:
-              n_checked = len(
-                  re.findall(checked_box, sections["AI Assistance Disclosure"], flags=re.M)
-              )
-              if n_checked != 1:
-                  errors.append(
-                      "Select exactly one option under 'AI Assistance Disclosure' "
-                      f"({n_checked} selected)."
-                  )
+              # Sections with checkboxes: tick exactly one if the template says so,
+              # otherwise tick all of them.
+              n_boxes = len(CHECKBOX.findall(template_text))
+              if n_boxes:
+                  ticks = CHECKBOX.findall(text)
+                  n_ticked = sum(t in "xX" for t in ticks)
+                  if re.search(r"exactly\s+one", template_text, flags=re.I):
+                      if n_ticked != 1:
+                          errors.append(
+                              f"Select exactly one option under '{heading}' ({n_ticked} selected)."
+                          )
+                  elif len(ticks) < n_boxes or n_ticked < len(ticks):
+                      errors.append(f"Tick all the boxes under '{heading}'.")
 
-          for heading in ("Motivation", "PR description"):
-              if heading in sections:
-                  # Drop the italic "*Please ...*" placeholder before checking for content.
-                  text = re.sub(r"^\*Please .*?\*$", "", sections[heading], flags=re.M)
-                  if not text.strip():
+              # Sections holding only an italic placeholder must be filled in.
+              elif template_lines and all(
+                  PLACEHOLDER.match(line.strip()) for line in template_lines if line.strip()
+              ):
+                  placeholders = {line.strip() for line in template_lines}
+                  content = [
+                      line for line in text.splitlines()
+                      if line.strip() and line.strip() not in placeholders
+                  ]
+                  if not content:
                       errors.append(f"Fill out the '{heading}' section.")
-
-          if "Checklist" in sections and not re.search(
-              checked_box + r"\s*I have described the changes",
-              sections["Checklist"],
-              flags=re.M,
-          ):
-              errors.append(
-                  "Tick 'I have described the changes in this PR' in the 'Checklist' section."
-              )
 
           if errors:
               summary = "\n".join(f"- {e}" for e in errors)
