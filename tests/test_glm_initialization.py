@@ -493,6 +493,7 @@ def test_categorical_missing_classes_initialization(population):
     )
     assert np.isfinite(intercept).all()
 
+
 @pytest.mark.parametrize("rate_range,y", [((0, float("inf")), [-1.0]), ((0, 1), [2.0])])
 def test_invalid_mean_is_not_silently_shifted(rate_range, y):
     from nemos.glm.initialize_parameters import _initial_mean
