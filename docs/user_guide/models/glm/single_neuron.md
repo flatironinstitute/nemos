@@ -247,6 +247,14 @@ The samples are aggregated by `aggregate_sample_scores`, which defaults to the m
 model.score(X, y, aggregate_sample_scores=lambda x: x).shape
 ```
 
+Summing instead gives the total log-likelihood over the samples.
+
+```{code-cell} ipython3
+import jax.numpy as jnp
+
+model.score(X, y, aggregate_sample_scores=jnp.sum)
+```
+
 ### Simulate
 
 [`simulate`](nemos.glm.GLM.simulate) draws counts from the observation model at the predicted rate, returning the counts and the rate they were drawn from.
@@ -262,7 +270,11 @@ print(f"rate:   {np.round(np.asarray(rate_sim[:5]), 2)}")
 
 The random key makes the draw reproducible: the same key and the same rate give the same counts.
 
+:::{admonition} Simulating a coupled population
+:class: dropdown
+
 [`simulate`](nemos.glm.GLM.simulate) is feed-forward: the counts it draws do not feed back into the rate. To simulate a population whose spikes drive the next time step through coupling filters, use [`simulate_recurrent`](nemos.simulation.simulate_recurrent), shown in [simulate a coupled population](../../../how_to_guide/simulate_coupled_population.md).
+:::
 
 ### Fitting out of memory
 
@@ -337,11 +349,13 @@ The inverse link maps the linear term to the mean of the observation model. Each
 | `Bernoulli` | `logistic` | `logistic`, `expit` |
 | `NegativeBinomial` | `jnp.exp` | `jnp.exp` |
 
-Convexity is a property of the pair, not of the link alone: the same `jax.nn.softplus` that is safe for a Poisson GLM makes the Negative Binomial log-likelihood non-convex.
+:::{admonition} Convexity depends on the pair
+:class: warning
+
+The same `jax.nn.softplus` that is safe for a Poisson GLM makes the Negative Binomial log-likelihood non-convex. NeMoS does not reject such a model: it fits, but the solution it converges to is a local optimum that depends on the starting point, and the solver can no longer rely on the curvature being positive semi-definite. A link that is not in the table is treated the same way.
+:::
 
 ```{code-cell} ipython3
-import jax.numpy as jnp
-
 # convex
 nmo.glm.GLM("Poisson", inverse_link_function=jax.nn.softplus)
 
@@ -349,15 +363,13 @@ nmo.glm.GLM("Poisson", inverse_link_function=jax.nn.softplus)
 nmo.glm.GLM("NegativeBinomial", inverse_link_function=jax.nn.softplus)
 ```
 
-NeMoS does not reject the second model. It fits, but the solution it converges to is a local optimum that depends on the starting point, and the solver can no longer rely on the curvature being positive semi-definite. A custom link that is not in the table is treated the same way.
-
 (glm-regularizers)=
 ### Regularizers
 
 The regularizer and its strength are set at initialization. Leaving `regularizer_strength` unset for a model that needs it warns and falls back to 1.
 
 ```{code-cell} ipython3
-nmo.glm.GLM(regularizer="Lasso", regularizer_strength=0.01).fit(X, y).coef_
+nmo.glm.GLM(regularizer="Lasso", regularizer_strength=0.05).fit(X, y).coef_
 ```
 
 Group-wise and parameter-wise strengths, and the special cases of ElasticNet and GroupLasso, are covered in [regularizers](../../regularizers.md).
