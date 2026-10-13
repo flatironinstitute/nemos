@@ -75,7 +75,7 @@ model
 
 `y` is always an array. `X` can be an array, or a container of arrays holding one group of predictors per leaf, which in JAX is called a [PyTree](https://docs.jax.dev/en/latest/pytrees.html) of arrays.
 
-Supported array formats are: numpy, jax, and [pynapple](https://pynapple-org.github.io/pynapple/) time series. [`predict`](nemos.glm.GLM.predict) and [`simulate`](nemos.glm.GLM.simulate) return a pynapple object whenever they are given one.
+Supported array formats are: [numpy](https://numpy.org/), [jax](https://docs.jax.dev/), and [pynapple](https://pynapple-org.github.io/pynapple/) time series. [`predict`](nemos.glm.GLM.predict) and [`simulate`](nemos.glm.GLM.simulate) return a pynapple object whenever they are given one.
 
 Examples of PyTrees are dictionaries, lists, and classes of your own registered as PyTree nodes.
 :::
@@ -388,6 +388,8 @@ Which solver accepts which regularizer, and which one to reach for, are covered 
 (glm-parameter-specification)=
 ## Parameter specification
 
+### Drop the intercept
+
 `fit_intercept=False` drops the intercept from the model, which is then held at zero and costs no degree of freedom.
 
 ```{code-cell} ipython3
@@ -396,6 +398,8 @@ no_intercept = nmo.glm.GLM(fit_intercept=False).fit(X, y)
 print(f"intercept_: {no_intercept.intercept_}")
 print(f"dof_resid_: {no_intercept.dof_resid_}")
 ```
+
+### Fix parameter values
 
 `fix_params` holds any leaf of the parameters fixed at a value of your choosing. The parameters are a `(coef, intercept)` tuple, and `coef` is a PyTree whenever `X` is one, so the leaves that can be fixed are:
 
