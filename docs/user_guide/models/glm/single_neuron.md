@@ -417,7 +417,7 @@ from nemos.solvers import list_available_solvers
 sorted(f"{spec.algo_name}[{spec.backend}]" for spec in list_available_solvers())
 ```
 
-Which solver accepts which regularizer, and which one to reach for, are covered in [solvers](../../solvers.md).
+Which solver accepts which regularizer, which one to reach for, and how to register one of your own are covered in [solvers](../../solvers.md).
 
 (glm-parameter-specification)=
 ## Parameter specification
