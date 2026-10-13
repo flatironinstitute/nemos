@@ -89,6 +89,7 @@ Examples of PyTrees are dictionaries, lists, and classes of your own registered 
 X, y = nmo.datasets.tuned_poisson(n_samples=500)
 
 model = nmo.glm.GLM().fit(X, y)
+model
 ```
 
 #### Pynapple Inputs
@@ -116,6 +117,7 @@ predictors = nap.TsdFrame(t=time, d=np.asarray(X), time_support=epochs)
 counts = nap.Tsd(t=time, d=np.asarray(y), time_support=epochs)
 
 model_nap = nmo.glm.GLM().fit(predictors, counts)
+model_nap
 ```
 
 #### Pytree Inputs
@@ -133,10 +135,13 @@ model_dict = nmo.glm.GLM().fit(X_dict, y)
 model_dict.coef_
 ```
 
+A dictionary is flattened by sorted key, so `history` comes out before `stimulus` whatever the order it was built in.
+
 With a list,
 
 ```{code-cell} ipython3
-model_list = nmo.glm.GLM().fit([X[:, :4], X[:, 4:]], y)
+# swap array order to match dict print order
+model_list = nmo.glm.GLM().fit([X[:, 4:], X[:, :4]], y)
 
 model_list.coef_
 ```
