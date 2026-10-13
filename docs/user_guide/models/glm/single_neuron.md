@@ -377,11 +377,28 @@ Group-wise and parameter-wise strengths, and the special cases of ElasticNet and
 (glm-solvers)=
 ### Solvers
 
-The solver is chosen by name, optionally with the backend that implements it in brackets, and configured through `solver_kwargs`.
+The solver is chosen by name and configured through `solver_kwargs`.
 
 ```{code-cell} ipython3
 model = nmo.glm.GLM(solver_name="Newton", solver_kwargs={"tol": 1e-10}).fit(X, y)
-model.solver_spec
+```
+
+The keys `solver_kwargs` takes are the arguments of the solver itself, which it can be asked for. Anything else raises.
+
+```{code-cell} ipython3
+from nemos.solvers import get_solver
+
+sorted(get_solver("Newton").implementation.get_accepted_arguments())
+```
+
+[`get_solver_documentation`](nemos.solvers.get_solver_documentation) returns the solver's docstring, which says what each argument does.
+
+```{code-cell} ipython3
+:tags: [hide-cell]
+
+from nemos.solvers import get_solver_documentation
+
+print(get_solver_documentation("Newton"))
 ```
 
 Left unset, NeMoS picks a solver that the regularizer admits: `Newton` for Ridge, `LBFGS` without regularization, and `ProximalGradient` for the non-smooth penalties.
