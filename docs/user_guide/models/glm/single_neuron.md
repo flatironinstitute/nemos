@@ -120,7 +120,7 @@ model_nap = nmo.glm.GLM().fit(predictors, counts)
 model_nap
 ```
 
-#### Pytree Inputs
+#### PyTree Inputs
 
 `X` can also be a PyTree of arrays, one leaf per group of predictors, each leaf holding the same number of samples. This saves concatenating the groups into a single design matrix, and the coefficients come back with the structure of `X`.
 
