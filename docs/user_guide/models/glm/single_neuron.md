@@ -391,7 +391,7 @@ from nemos.solvers import get_solver
 sorted(get_solver("Newton").implementation.get_accepted_arguments())
 ```
 
-[`get_solver_documentation`](nemos.solvers.get_solver_documentation) returns the solver's docstring, which says what each argument does.
+[`get_solver_documentation`](nemos.solvers.get_solver_documentation) returns the solver's docstring, which says what each argument does. Expand the cell below for the `Newton` one.
 
 ```{code-cell} ipython3
 :tags: [hide-cell]
