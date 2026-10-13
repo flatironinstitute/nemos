@@ -2065,6 +2065,7 @@ def instantiate_glm_hmm_func(
         X=X,
         y=y,
         inverse_link_function=model.inverse_link_function,
+        observation_model=model.observation_model,
         session_starts=None,
         random_key=jax.random.PRNGKey(123),
     )
