@@ -51,7 +51,7 @@ def random_glm_params_init(
     X: DESIGN_INPUT_TYPE,
     y: jnp.ndarray,
     inverse_link_function: Callable,
-    observation_model: Optional[Observations] = None,
+    observation_model: Observations,
     session_starts: Optional[NDArray | jnp.ndarray] = None,
     random_key: Optional[jax.Array] = None,
     std_dev=0.001,
@@ -219,6 +219,7 @@ class KMeansInitializerGLM(KMeansInitializer):
             self._X,
             self._y,
             self.inverse_link_function,
+            self._glm_models[0].observation_model,
             std_dev=0.0,
             random_key=key,
         )

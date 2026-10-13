@@ -22,6 +22,7 @@ from nemos.glm_hmm.initialize_parameters import (
 from nemos.glm_hmm.validation import GLMHMMValidator
 from nemos.hmm.hmm import BaseHMM
 from nemos.inverse_link_function_utils import resolve_inverse_link_function
+from nemos.observation_models import PoissonObservations
 
 # =============================================================================
 # Minimal GLMHMM mock for key-validation tests (exercises initialization_funcs setter)
@@ -231,7 +232,12 @@ class TestRandomGLMParamsInitialization:
         inverse_link = lambda x: x
 
         coef, intercept = random_glm_params_init(
-            n_states, X, y, inverse_link, random_key=jax.random.PRNGKey(123)
+            n_states,
+            X,
+            y,
+            inverse_link,
+            PoissonObservations(),
+            random_key=jax.random.PRNGKey(123),
         )
 
         if n_neurons == 1:
@@ -250,7 +256,12 @@ class TestRandomGLMParamsInitialization:
     )
     def test_expected_output_type(self, X, y):
         coef, intercept = random_glm_params_init(
-            2, X, y, lambda x: x, random_key=jax.random.PRNGKey(123)
+            2,
+            X,
+            y,
+            lambda x: x,
+            PoissonObservations(),
+            random_key=jax.random.PRNGKey(123),
         )
         assert isinstance(coef, jnp.ndarray)
         assert isinstance(intercept, jnp.ndarray)
@@ -262,10 +273,20 @@ class TestRandomGLMParamsInitialization:
         inverse_link = lambda x: x
 
         coef1, intercept1 = random_glm_params_init(
-            3, X, y, inverse_link, random_key=jax.random.PRNGKey(41)
+            3,
+            X,
+            y,
+            inverse_link,
+            PoissonObservations(),
+            random_key=jax.random.PRNGKey(41),
         )
         coef2, intercept2 = random_glm_params_init(
-            3, X, y, inverse_link, random_key=jax.random.PRNGKey(42)
+            3,
+            X,
+            y,
+            inverse_link,
+            PoissonObservations(),
+            random_key=jax.random.PRNGKey(42),
         )
 
         assert not jnp.allclose(coef1, coef2)
@@ -276,7 +297,13 @@ class TestRandomGLMParamsInitialization:
         X = jnp.ones((10, 2))
         y = jnp.ones((10, 3))
         coef, _ = random_glm_params_init(
-            4, X, y, lambda x: x, random_key=jax.random.PRNGKey(123), std_dev=std_dev
+            4,
+            X,
+            y,
+            lambda x: x,
+            PoissonObservations(),
+            random_key=jax.random.PRNGKey(123),
+            std_dev=std_dev,
         )
         if std_dev == 0.0:
             assert jnp.all(coef == 0)
@@ -286,7 +313,12 @@ class TestRandomGLMParamsInitialization:
         X = jnp.ones((100, 5))
         y = jnp.ones(100)
         coef, _ = random_glm_params_init(
-            3, X, y, lambda x: x, random_key=jax.random.PRNGKey(123)
+            3,
+            X,
+            y,
+            lambda x: x,
+            PoissonObservations(),
+            random_key=jax.random.PRNGKey(123),
         )
         assert jnp.abs(coef).max() < 0.01
 
@@ -295,7 +327,12 @@ class TestRandomGLMParamsInitialization:
         y_mean = 2.5
         y = jnp.full(100, y_mean)
         _, intercept = random_glm_params_init(
-            3, jnp.ones((100, 5)), y, lambda x: x, random_key=jax.random.PRNGKey(123)
+            3,
+            jnp.ones((100, 5)),
+            y,
+            lambda x: x,
+            PoissonObservations(),
+            random_key=jax.random.PRNGKey(123),
         )
         assert jnp.allclose(intercept, y_mean)
 
