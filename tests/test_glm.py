@@ -5138,6 +5138,21 @@ class TestClassifierGLM:
         with pytest.raises(ValueError, match="Found only .* unique class labels"):
             model.set_classes(too_few)
 
+    @pytest.mark.parametrize("input_type", [None, "array"])
+    def test_set_classes_input_type(
+        self, inv_link, glm_type, model_instantiation, request, input_type
+    ):
+        _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        if input_type is None:
+            inp = input_type
+        else:
+            inp = y
+        assert isinstance(model.set_classes(inp), model.__class__)
+        if inp is None:
+            assert model.classes_ is None and not model._label_encoder.declared
+        else:
+            assert model._label_encoder.declared
+
     def test_derived_classes_refit(
         self,
         inv_link,
