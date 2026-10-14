@@ -24,6 +24,22 @@ pip install nemos[examples]
 :::{grid-item-card}
 
 <figure>
+<a href="handle_silent_neurons.html">
+<img src="../_static/thumbnail_silent_neurons.svg" style="height: 100px", alt="Silent neurons."/>
+</a>
+</figure>
+
+```{toctree}
+:maxdepth: 2
+:caption: Using Models
+
+handle_silent_neurons.md
+```
+:::
+
+:::{grid-item-card}
+
+<figure>
 <a href="raw_history_feature.html">
 <img src="../_static/glm_population_scheme.svg" style="height: 100px", alt="Coupled GLM."/>
 </a>
@@ -31,7 +47,6 @@ pip install nemos[examples]
 
 ```{toctree}
 :maxdepth: 2
-:caption: Using Models
 
 raw_history_feature.md
 ```

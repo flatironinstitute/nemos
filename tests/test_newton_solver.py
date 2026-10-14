@@ -1,4 +1,5 @@
 import itertools
+import re
 import warnings
 
 import jax
@@ -16,6 +17,7 @@ from nemos._hess import (
     mask_claim_none,
 )
 from nemos.regularizer import Ridge, UnRegularized
+from nemos.solvers import CHOLESKY_ERR_MSG
 from nemos.solvers._abstract_solver import OptimizationInfo
 from nemos.solvers._hessian_mixins import LinearSolverTag
 from nemos.solvers._newton import Newton, NewtonState
@@ -1280,7 +1282,7 @@ def test_cholesky_raises_for_indefinite_matrix_with_positive_tag():
         warnings.simplefilter("error", RuntimeWarning)
         with pytest.raises(
             jax.errors.JaxRuntimeError,
-            match="Cholesky solve failed",
+            match=re.escape(CHOLESKY_ERR_MSG),
         ):
             solver.run(params)
 
@@ -1301,7 +1303,7 @@ def test_forced_cholesky_on_indefinite_hessian_raise():
         pytest.warns(RuntimeWarning, match="Cholesky generally requires"),
         pytest.raises(
             jax.errors.JaxRuntimeError,
-            match="Cholesky solve failed",
+            match=re.escape(CHOLESKY_ERR_MSG),
         ),
     ):
         solver.run(params)

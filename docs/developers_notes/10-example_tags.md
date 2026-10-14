@@ -10,7 +10,7 @@ nemos_tags:
   signal: [spike counts]
   topic: [stochastic fit, scalability]
   data: simulated
-  description: Fit a population GLM by mini-batch stochastic optimization on data read from an NWB file.
+  description: Fit a population GLM by mini-batch stochastic optimization on data loaded from an NWB file.
 ```
 
 | field | values                                                                                         |
@@ -18,7 +18,7 @@ nemos_tags:
 | `model` | `GLM`, `PopulationGLM`, `GLMHMM`, `ClassifierGLM`                                              |
 | `observation_model` | `Poisson`, `Gamma`, `Gaussian`, `Bernoulli`, `NegativeBinomial`, `Categorical`                 |
 | `signal` | `spike counts`, `calcium imaging`, `lfp`, `behavior choices`, `behavior tracking`, `continuous` |
-| `topic` | `feature design`, `variable selection`, `cross-validation`, `regularization`, `stochastic fit`, `scalability`, `functional connectivity`, `simulation`, `custom components`, `receptive fields`, `latent states` |
+| `topic` | `feature design`, `variable selection`, `cross-validation`, `regularization`, `stochastic fit`, `scalability`, `functional connectivity`, `simulation`, `custom components`, `receptive fields`, `latent states`, `initialization` |
 | `data` | `recorded`, `simulated`                                                                        |
 | `description` | free text, one sentence                                                                        |
 
@@ -28,7 +28,7 @@ nemos_tags:
 
 Sphinx exposes the block as `env.metadata[docname]["nemos_tags"]`, where `myst_parser` leaves it as a **JSON string**; the generator has to `json.loads` it rather than index it as a dict.
 
-The extension `sphinxext/nemos_examples.py` reads the tags back:
+The extension `sphinxext/nemos_examples.py` collects the tags:
 
 - `write_examples_index` runs on `build-finished` and writes `_build/html/_static/examples.json`, one entry per tagged page: its tags plus `title` and `url`, the latter relative to the site root. It is written into the build and not the sources, so it never needs committing.
 - The `nemos-examples` directive renders a link to the Example Finder with its options as filters; values within a field are comma-separated. A page linking to its examples **should** use it, so the link is resolved relative to the page:

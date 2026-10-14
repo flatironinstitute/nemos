@@ -169,7 +169,7 @@ html_sidebars = {
     "reference/benchmarking": [],
     "tutorials/README": [],
     "examples": [],
-    "**": ["sidebar-nav-bs.html"],
+    "**": ["search-field.html", "sidebar-nav-bs.html"],
 }
 
 

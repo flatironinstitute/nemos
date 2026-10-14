@@ -4918,6 +4918,31 @@ class TestClassifierGLM:
             model.predict_proba(X, return_type=return_type)
 
     @pytest.mark.parametrize(
+        "return_type",
+        [
+            "proba",
+            "log-proba",
+        ],
+    )
+    def test_predict_proba_pynapple(
+        self,
+        return_type,
+        inv_link,
+        glm_type,
+        model_instantiation,
+        request,
+    ):
+        X, _, model, true_params, _ = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        X_nap = TsdFrame(t=np.arange(X.shape[0]), d=X)
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
+        proba_array = model.predict_proba(X, return_type=return_type)
+        proba_nap = model.predict_proba(X_nap, return_type=return_type)
+        np.testing.assert_array_equal(proba_array, proba_nap.d)
+
+    @pytest.mark.parametrize(
         "X, expectation",
         [
             (np.ones((3, 5)), does_not_raise()),
