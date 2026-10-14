@@ -13,11 +13,11 @@ kernelspec:
 # Population Classifier GLM
 
 
-[`ClassifierPopulationGLM`](nemos.glm.ClassifierPopulationGLM) predicts discrete labels for several outputs at once, one categorical variable per neuron, through a softmax inverse link. It stands to the [`ClassifierGLM`](nemos.glm.ClassifierGLM) as the [`PopulationGLM`](nemos.glm.PopulationGLM) stands to the [`GLM`](nemos.glm.GLM): the same model, fit jointly over the neuron axis instead of in a loop.
+[`ClassifierPopulationGLM`](nemos.glm.ClassifierPopulationGLM) predicts discrete labels for several outputs at once, one categorical variable per neuron, through a softmax inverse link. It stands to the [`ClassifierGLM`](nemos.glm.ClassifierGLM) as the [`PopulationGLM`](nemos.glm.PopulationGLM) stands to the [`GLM`](nemos.glm.GLM): the same model, fit jointly over the neuron axis instead of in a loop. This page covers the neuron axis; `n_classes`, the [class labels](classifier-labels) and the [identifiability of the parameters](classifier-identifiability) work as in the [classifier GLM](glm-classifier).
 
 ## Fitting a Population Classifier GLM
 
-The `y` passed to [`fit`](nemos.glm.ClassifierPopulationGLM.fit) is a two-dimensional array of shape `(n_samples, n_neurons)`, each column holding the labels of one neuron. The number of classes is not inferred from the data, it is declared at initialization with `n_classes`.
+The `y` passed to [`fit`](nemos.glm.ClassifierPopulationGLM.fit) is a two-dimensional array of shape `(n_samples, n_neurons)`, each column holding the labels of one neuron. All the columns share one set of classes, declared at initialization with `n_classes`.
 
 ```{code-cell} ipython3
 import jax.numpy as jnp
@@ -54,23 +54,11 @@ print(f"intercept_ shape: {model.intercept_.shape}")
 
 `coef_` is `(n_features, n_neurons, n_classes)` and `intercept_` is `(n_neurons, n_classes)`, so `coef_[:, j, k]` are the weights that neuron `j` assigns to class `k`. Dropping the class axis from both recovers the shapes of the [`PopulationGLM`](nemos.glm.PopulationGLM), and dropping the neuron axis as well recovers those of the single neuron [`ClassifierGLM`](nemos.glm.ClassifierGLM), `(n_features, n_classes)` and `(n_classes,)`.
 
-The model is over-parameterized. It fits one linear predictor per class, $n$ of them, to determine $n$ probabilities that are constrained to sum to one, which is one more than strictly needed: once the first $n - 1$ probabilities are known, the last one is
-
-$$
-p_n = 1 - \sum_{k=1}^{n-1} p_k .
-$$
-
-The redundancy is an invariance of the softmax, which is unchanged when the same quantity is added to the linear predictor of every class. Without regularization the model therefore has infinitely many solutions, all of them giving the same probabilities. Adding a Ridge regularization prevents that, and that is why `Ridge` is the default instead of `UnRegularized`.
-
-The index `k` of the class axis refers to `classes_`, the sorted labels observed during the fit.
-
-```{code-cell} ipython3
-model.classes_
-```
+The class axis carries the same over-parameterization as in the single neuron model, one linear predictor per class for probabilities that sum to one, so `Ridge` is the default here too. See [identifiability](classifier-identifiability), including what the penalty does and does not pin down.
 
 ## Predicting labels and probabilities
 
-[`predict`](nemos.glm.ClassifierPopulationGLM.predict) returns labels drawn from `classes_`, one per sample and neuron, with the class axis consumed by the arg-max.
+[`predict`](nemos.glm.ClassifierPopulationGLM.predict) consumes the class axis with its arg-max, leaving one label per sample and neuron.
 
 ```{code-cell} ipython3
 predicted = model.predict(X)
@@ -78,7 +66,7 @@ print(f"predicted shape: {predicted.shape}")
 predicted[:5]
 ```
 
-[`predict_proba`](nemos.glm.ClassifierPopulationGLM.predict_proba) keeps the class axis and returns the whole distribution. It returns log-probabilities by default, matching the `log_softmax` inverse link; pass `return_type="proba"` for probabilities.
+[`predict_proba`](nemos.glm.ClassifierPopulationGLM.predict_proba) keeps the class axis, so the distribution of every neuron comes back on its own axis.
 
 ```{code-cell} ipython3
 proba = model.predict_proba(X, return_type="proba")
