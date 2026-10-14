@@ -1150,7 +1150,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         else:
             init_params = self._normalize_user_params(init_params, X, y)
             init_params = self._validator.validate_and_cast_params(init_params)
-            self._validator.validate_consistency(init_params, X=X, y=y)
+        self._validator.validate_consistency(init_params, X=X, y=y)
 
         self._validator.feature_mask_consistency(
             getattr(self, "_feature_mask", None), init_params
