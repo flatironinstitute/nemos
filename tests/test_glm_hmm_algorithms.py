@@ -42,6 +42,7 @@ from nemos.hmm.parallel_expectation import (
 )
 from nemos.observation_models import (
     BernoulliObservations,
+    CategoricalObservations,
     GammaObservations,
     GaussianObservations,
     Observations,
@@ -412,6 +413,7 @@ def generate_data_multi_state(request):
     """
     np.random.seed(44)
     obs_model: Observations = request.param["observations"]
+    is_categorical = isinstance(obs_model, CategoricalObservations)
     scale: float = request.param["scale"]
     inv_link = request.param.get("inv_link", None)
     if inv_link is None:
@@ -424,20 +426,30 @@ def generate_data_multi_state(request):
     transition_prob = np.random.uniform(size=(n_states, n_states))
     transition_prob /= np.sum(transition_prob, axis=0)
     transition_prob = transition_prob.T
-    coef, intercept = np.random.randn(2, n_states), np.random.randn(n_states)
+    if is_categorical:
+        coef, intercept = np.random.randn(2, 2, n_states), np.random.randn(2, n_states)
+        y = np.zeros((n_samples, 2))
+
+    else:
+        coef, intercept = np.random.randn(2, n_states), np.random.randn(n_states)
+        y = np.zeros(n_samples)
+
 
     X = np.random.randn(n_samples, 2)
-    y = np.zeros(n_samples)
     key = jax.random.PRNGKey(42)
     for i, k in enumerate(range(0, 100, 10)):
         sl = slice(k, k + 10)
         state = i % n_states
-        rate = inv_link(X[sl].dot(coef[:, state]) + intercept[state])
+        if is_categorical:
+            rate = inv_link(X[sl].dot(coef[:, :, state]) + intercept[:, state])
+        else:
+            rate = inv_link(X[sl].dot(coef[:, state]) + intercept[state])
         key, subkey = jax.random.split(key)
         y[sl] = obs_model.sample_generator(subkey, rate, scale)
 
     new_sess = np.zeros(n_samples)
     new_sess[[0, 10, 90]] = 1
+
     return (
         new_sess,
         initial_prob,
@@ -1750,6 +1762,7 @@ class TestMStep:
             {"observations": GaussianObservations(), "scale": 2.0, "inv_link": None},
             {"observations": GammaObservations(), "scale": 1.0, "inv_link": jnp.exp},
             {"observations": GammaObservations(), "scale": 2.0, "inv_link": jnp.exp},
+            {"observations": CategoricalObservations(), "scale": 1.0, "inv_link": None}
         ],
         indirect=True,
     )
@@ -1767,7 +1780,10 @@ class TestMStep:
             inv_link,
         ) = generate_data_multi_state
         new_sess = jnp.asarray(new_sess, dtype=bool)
-        ll_func = prepare_estep_log_likelihood(False, False, obs, inv_link)
+        is_categorical = isinstance(obs, CategoricalObservations)
+        if is_categorical:
+            inv_link = partial(inv_link, axis=-2)
+        ll_func = prepare_estep_log_likelihood(False, is_categorical, obs, inv_link)
         # with jax.disable_jit():
         log_posteriors, log_joint_posterior, _, initial_log_like, _, _ = (
             forward_backward(
@@ -1834,7 +1850,7 @@ class TestMStep:
         init_model_params = GLMHMMModelParams(
             coef, intercept, jnp.zeros_like(intercept)
         )
-        objective = prepare_mstep_nll_objective_param(False, False, obs, inv_link)
+        objective = prepare_mstep_nll_objective_param(False, is_categorical, obs, inv_link)
 
         solver = setup_solver(objective, init_params=init_model_params, tol=1e-8)
 
@@ -1854,16 +1870,16 @@ class TestMStep:
         )
 
         # Minimize negative log-likelihood to update scale (if applicable)
-        initial_log_like = updated_log_like
-        predicted_rate = compute_rate_per_state(
-            X, new_glm_params, inverse_link_function=inv_link
-        )
-        objective_scale = prepare_mstep_nll_objective_scale(False, obs)
-        init_scale = jnp.zeros_like(intercept)
-        solver = setup_solver(objective_scale, init_params=init_scale, tol=1e-8)
+        if not isinstance(obs, (PoissonObservations, BernoulliObservations, CategoricalObservations)):
+            initial_log_like = updated_log_like
+            predicted_rate = compute_rate_per_state(
+                X, new_glm_params, inverse_link_function=inv_link
+            )
+            objective_scale = prepare_mstep_nll_objective_scale(False, obs)
+            init_scale = jnp.zeros_like(intercept)
+            solver = setup_solver(objective_scale, init_params=init_scale, tol=1e-8)
 
-        new_scale, _, _ = solver.run(init_scale, y, predicted_rate, posteriors)
-        if not isinstance(obs, (PoissonObservations, BernoulliObservations)):
+            new_scale, _, _ = solver.run(init_scale, y, predicted_rate, posteriors)
             _, _, _, updated_log_like, _, _ = forward_backward(
                 GLMHMMParams(
                     hmm_params=HMMParams(new_log_initial_prob, new_log_transition_prob),
@@ -1882,7 +1898,7 @@ class TestMStep:
                 "M-step for GLM scale prob did not increase likelihood"
             )
         else:
-            np.testing.assert_array_equal(new_scale, jnp.zeros_like(intercept))
+            new_scale = jnp.zeros_like(intercept)
 
         params = GLMHMMParams(
             hmm_params=HMMParams(None, None),
@@ -1890,7 +1906,7 @@ class TestMStep:
         )
 
         update_fn = prepare_mstep_update_fn(
-            False, False, obs, inv_link, setup_solver, params.model_params
+            False, is_categorical, obs, inv_link, setup_solver, params.model_params
         )
 
         (

@@ -220,9 +220,13 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
     >>> is_new_mask = np.zeros(200, dtype=bool)
     >>> is_new_mask[0] = True
     >>> is_new_mask[100] = True
-    >>> model = nmo.glm_hmm.ClassifierGLMHMM(n_states=2).fit(X, y, session_starts=is_new_mask)
+    >>> model = nmo.glm_hmm.ClassifierGLMHMM(n_states=2).fit(
+    ...     X, y, session_starts=is_new_mask
+    ... )
     >>> # Equivalent: pass the starts as integer indices.
-    >>> model = nmo.glm_hmm.ClassifierGLMHMM(n_states=2).fit(X, y, session_starts=np.array([0, 100]))
+    >>> model = nmo.glm_hmm.ClassifierGLMHMM(n_states=2).fit(
+    ...     X, y, session_starts=np.array([0, 100])
+    ... )
 
     **Multi-class Classification**
 
@@ -398,7 +402,9 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
         Multiple sessions via explicit ``session_starts``:
 
         >>> session_starts = np.array([0, 100])
-        >>> model = nmo.glm_hmm.ClassifierGLMHMM(n_states=2).fit(X, y, session_starts=session_starts)
+        >>> model = nmo.glm_hmm.ClassifierGLMHMM(n_states=2).fit(
+        ...     X, y, session_starts=session_starts
+        ... )
         """
         self.set_classes(y)
         y = self._label_encoder.encode(y)
@@ -919,8 +925,12 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
         >>> model.set_classes(y)
         ClassifierGLMHMM(...)
         >>> init_params = model.initialize_params(X, y)
-        >>> opt_state = model.initialize_optimizer_and_state(init_params, X, y, session_starts=session_starts)
-        >>> new_params, new_state = model.update(init_params, opt_state, X, y, session_starts=session_starts)
+        >>> opt_state = model.initialize_optimizer_and_state(
+        ...     init_params, X, y, session_starts=session_starts
+        ... )
+        >>> new_params, new_state = model.update(
+        ...     init_params, opt_state, X, y, session_starts=session_starts
+        ... )
         """
         self._label_encoder.check_classes_is_set("update")
         y = self._label_encoder.encode(y)

@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
-from ..glm import GLM, PopulationGLM, ClassifierGLM, ClassifierPopulationGLM
+from ..glm import GLM, ClassifierGLM, ClassifierPopulationGLM, PopulationGLM
 from ..glm.initialize_parameters import initialize_intercept_matching_mean_rate
 from ..glm.params import GLMUserParams
 from ..hmm.initialize_parameters import (
@@ -18,7 +18,7 @@ from ..hmm.initialize_parameters import (
     _resolve_init_funcs,
     _validate_init_funcs_kwargs,
 )
-from ..observation_models import Observations, CategoricalObservations
+from ..observation_models import CategoricalObservations, Observations
 from ..pytrees import FeaturePytree
 from ..type_casting import cast_to_jax
 from ..typing import DESIGN_INPUT_TYPE

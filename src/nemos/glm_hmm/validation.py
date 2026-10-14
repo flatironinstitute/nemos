@@ -98,12 +98,12 @@ class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
             raise ValueError(
                 "GLM coef must be of shape ``(n_features, n_states)`` or a dict of arrays "
                 "with shape ``(n_features, n_states)``. "
-                f"n_states is {self.extra_params["n_states"]} but coef has shape(s) ``{invalid_shapes}``."
+                f"n_states is {self.extra_params['n_states']} but coef has shape(s) ``{invalid_shapes}``."
             )
         if intercept.shape[-1] != self.extra_params["n_states"]:
             raise ValueError(
                 "GLM intercept must be of shape ``(n_states,)``. "
-                f"n_states is {self.extra_params["n_states"]} but coef has shape ``{intercept.shape}``."
+                f"n_states is {self.extra_params['n_states']} but coef has shape ``{intercept.shape}``."
             )
         return params
 
@@ -237,12 +237,12 @@ class ClassifierGLMHMMValidator(GLMHMMValidator):
             raise ValueError(
                 "Classifier GLM-HMM coef must be of shape ``(n_features, n_classes, n_states)`` or a dict of arrays "
                 "with shape ``(n_features, n_classes, n_states)``. "
-                f"n_states is {self.extra_params["n_states"]} but coef has shape(s) ``{invalid_shapes}``."
+                f"n_states is {self.extra_params['n_states']} but coef has shape(s) ``{invalid_shapes}``."
             )
         if intercept.shape[-1] != self.extra_params["n_states"]:
             raise ValueError(
                 "Classifier GLM-HMM intercept must be of shape ``(n_classes, n_states)``. "
-                f"n_states is {self.extra_params["n_states"]} but coef has shape ``{intercept.shape}``."
+                f"n_states is {self.extra_params['n_states']} but coef has shape ``{intercept.shape}``."
             )
 
         # also check n_classes consistency with extra_params
@@ -253,12 +253,12 @@ class ClassifierGLMHMMValidator(GLMHMMValidator):
             raise ValueError(
                 "Classifier GLM-HMM coef must be of shape ``(n_features, n_classes, n_states)`` or a dict of arrays "
                 "with shape ``(n_features, n_classes, n_states)``. "
-                f"n_classes is {self.extra_params["n_classes"]} but coef has shape(s) ``{invalid_shapes}``."
+                f"n_classes is {self.extra_params['n_classes']} but coef has shape(s) ``{invalid_shapes}``."
             )
         if intercept.shape[-2] != self.extra_params["n_classes"]:
             raise ValueError(
                 "Classifier GLM-HMM intercept must be of shape ``(n_classes, n_states)``. "
-                f"n_classes is {self.extra_params["n_classes"]} but coef has shape ``{intercept.shape}``."
+                f"n_classes is {self.extra_params['n_classes']} but coef has shape ``{intercept.shape}``."
             )
         return params
 

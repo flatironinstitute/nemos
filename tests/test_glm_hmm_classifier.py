@@ -200,7 +200,6 @@ class TestClassifierGLMHMM:
 
 
 class TestClassifierGLMHMMLabeling:
-
     @pytest.fixture
     def classifier_glm_hmm_labeled(self):
         """Two equivalent fits of the same data, one with default and one with string labels.
