@@ -194,14 +194,9 @@ class KMeansInitializerGLM(KMeansInitializer):
                 }
                 self._is_population = False
             else:
-                self._glm_models = {
-                    i: ClassifierPopulationGLM(
-                        inverse_link_function=inverse_link_function,
-                        **self.glm_kwargs,
-                    )
-                    for i in range(self.n_states)
-                }
-                self._is_population = True
+                raise NotImplementedError(
+                    "ClassifierPopulationGLMHMM is not implemented."
+                )
         else:
             self._glm_models = {
                 i: PopulationGLM(
@@ -250,7 +245,7 @@ class KMeansInitializerGLM(KMeansInitializer):
             coef = jax.tree_util.tree_map(
                 lambda c, mc: c.at[..., i].set(mc), coef, m.coef_
             )
-            if self._is_population:
+            if self._is_population or self._is_categorical:
                 intercept = intercept.at[..., i].set(m.intercept_)
             else:
                 intercept = intercept.at[i : i + 1].set(m.intercept_)

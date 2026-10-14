@@ -460,10 +460,8 @@ class KMeansInitializer:
         self.model = sklearn.cluster.KMeans(
             n_clusters=n_states, random_state=random_key
         )
-        # concatenate pytree leaves if applicable and append y
-        data = jnp.concatenate(
-            jax.tree_util.tree_leaves(X) + [y if y.ndim > 1 else y[:, None]], axis=-1
-        )
+        # concatenate pytree leaves if applicable
+        data = jnp.concatenate(jax.tree_util.tree_leaves(X), axis=-1)
         self.model.fit(data)
         self.states = jax.nn.one_hot(self.model.labels_, num_classes=n_states)
 
