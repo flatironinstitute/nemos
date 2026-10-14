@@ -14,7 +14,9 @@ def _tuned_rnd(
     n_neurons: int = 1,
     sample_shape: int = (1000,),
 ):
-    peak = jnp.linspace(0, 1, n_neurons) if n_neurons > 1 else jnp.array([0.5])
+    # peaks are kept away from the edges, where the tuning curve tails are all zeros
+    # and the weights of the GLM diverge
+    peak = jnp.linspace(0.25, 0.75, n_neurons) if n_neurons > 1 else jnp.array([0.5])
     sub, key = jax.random.split(random_key)
     samples = jax.random.uniform(key, shape=sample_shape)
     exp_axis = (0, *(i + 1 for i in range(1, len(sample_shape))))
