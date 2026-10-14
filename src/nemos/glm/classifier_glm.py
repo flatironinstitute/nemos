@@ -133,7 +133,7 @@ class ClassifierMixin:
         """
         if y is None:
             self._label_encoder.reset()
-            return
+            return self
         self._label_encoder.set_classes(y, declared=True)
         return self
 
