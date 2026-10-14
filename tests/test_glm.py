@@ -3286,6 +3286,28 @@ class TestPopulationGLM:
         np.testing.assert_allclose(model_reference.coef_, model_test.coef_)
         np.testing.assert_allclose(model_reference.intercept_, model_test.intercept_)
 
+    def test_fit_fixed_intercept_wrong_n_neurons_raises(self, model_instantiation):
+        """A pinned intercept must have one entry per neuron."""
+        n_neurons = 3
+        rng = np.random.default_rng(0)
+        X = rng.normal(size=(10, 2))
+        y = rng.poisson(2.0, size=(10, n_neurons))
+        # a single pinned intercept for a multi-neuron fit
+        model = nmo.glm.PopulationGLM(fix_params=(None, np.array([1.0])))
+        with pytest.raises(ValueError, match="Inconsistent number of neurons"):
+            model.fit(X, y)
+
+    def test_fit_fixed_intercept_correct_n_neurons(self, model_instantiation):
+        """A pinned intercept with one entry per neuron still fits."""
+        n_neurons = 3
+        rng = np.random.default_rng(0)
+        X = rng.normal(size=(10, 2))
+        y = rng.poisson(2.0, size=(10, n_neurons))
+        pinned = np.zeros(n_neurons)
+        model = nmo.glm.PopulationGLM(fix_params=(None, pinned))
+        model.fit(X, y)
+        np.testing.assert_allclose(model.intercept_, pinned)
+
     #######################################
     # Compare with standard implementation
     #######################################
