@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
-from ..glm import GLM, PopulationGLM
+from ..glm import GLM, ClassifierGLM, ClassifierPopulationGLM, PopulationGLM
 from ..glm.initialize_parameters import initialize_intercept_matching_mean_rate
 from ..glm.params import GLMUserParams
 from ..hmm.initialize_parameters import (
@@ -18,7 +18,7 @@ from ..hmm.initialize_parameters import (
     _resolve_init_funcs,
     _validate_init_funcs_kwargs,
 )
-from ..observation_models import Observations
+from ..observation_models import CategoricalObservations, Observations
 from ..pytrees import FeaturePytree
 from ..type_casting import cast_to_jax
 from ..typing import DESIGN_INPUT_TYPE
@@ -172,6 +172,7 @@ class KMeansInitializerGLM(KMeansInitializer):
         self.inverse_link_function = inverse_link_function
         self.observation_model = observation_model
         self.glm_kwargs = glm_kwargs if glm_kwargs is not None else {}
+        self._is_categorical = isinstance(observation_model, CategoricalObservations)
         if self._y.ndim == 1:
             self._glm_models = {
                 i: GLM(
@@ -182,6 +183,20 @@ class KMeansInitializerGLM(KMeansInitializer):
                 for i in range(self.n_states)
             }
             self._is_population = False
+        elif self._is_categorical:
+            if self._y.ndim == 2:
+                self._glm_models = {
+                    i: ClassifierGLM(
+                        inverse_link_function=inverse_link_function,
+                        **self.glm_kwargs,
+                    )
+                    for i in range(self.n_states)
+                }
+                self._is_population = False
+            else:
+                raise NotImplementedError(
+                    "ClassifierPopulationGLMHMM is not implemented."
+                )
         else:
             self._glm_models = {
                 i: PopulationGLM(
@@ -205,6 +220,9 @@ class KMeansInitializerGLM(KMeansInitializer):
                     f"KMeans assigned 0 samples to state {i}. Try reducing n_states "
                     f"or using a different initialization method."
                 )
+            if self._is_categorical:
+                y_state = jnp.argmax(y_state, axis=1)
+                model.n_classes = len(jnp.unique(y_state))
             model.fit(X_state, y_state)
         return self
 
@@ -227,7 +245,7 @@ class KMeansInitializerGLM(KMeansInitializer):
             coef = jax.tree_util.tree_map(
                 lambda c, mc: c.at[..., i].set(mc), coef, m.coef_
             )
-            if self._is_population:
+            if self._is_population or self._is_categorical:
                 intercept = intercept.at[..., i].set(m.intercept_)
             else:
                 intercept = intercept.at[i : i + 1].set(m.intercept_)

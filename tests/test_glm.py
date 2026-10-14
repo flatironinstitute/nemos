@@ -4734,6 +4734,19 @@ class TestClassifierGLM:
     Unit tests specific to classifier GLM.
     """
 
+    def test_invalid_observation_model(
+        self, inv_link, request, glm_type, model_instantiation
+    ):
+        """
+        Ensure that changing the observation model leads to an error.
+        """
+        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        # this should be fine
+        model.observation_model = "Categorical"
+        # this should raise an error
+        with pytest.raises(TypeError, match="observation type is not supported"):
+            model.observation_model = "Poisson"
+
     @pytest.mark.solver_related
     def test_fit_glm(self, inv_link, request, glm_type, model_instantiation):
         """
@@ -5492,9 +5505,7 @@ def test_glm_set_regularizer_strength_recovers(model_instantiation, request):
     "model_instantiation",
     [
         "poissonGLM",
-        "classifierGLM",
         "population_poissonGLM",
-        "population_classifierGLM",
     ],
 )
 def test_glm_set_observation_model_invalidates(model_instantiation, request):
@@ -5521,9 +5532,7 @@ def test_glm_set_observation_model_invalidates(model_instantiation, request):
     "model_instantiation",
     [
         "poissonGLM",
-        "classifierGLM",
         "population_poissonGLM",
-        "population_classifierGLM",
     ],
 )
 def test_glm_set_observation_model_recovers(model_instantiation, request):

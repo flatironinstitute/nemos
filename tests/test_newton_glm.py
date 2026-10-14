@@ -986,8 +986,9 @@ def test_solver_invalidated_after_observation_model_change(
     model._initialize_optimizer_and_state(true_params, X, y)
     assert model._solver is not None
 
-    model.observation_model = "Gaussian"
-    assert model._solver is None, "_solver must be None after observation_model change."
+    if "class" not in model_instantiation_type:
+        model.observation_model = "Gaussian"
+        assert model._solver is None, "_solver must be None after observation_model change."
 
 
 @pytest.mark.parametrize("model_instantiation_type", _MODEL_FIXTURES.values())

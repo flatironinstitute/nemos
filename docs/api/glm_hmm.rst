@@ -12,3 +12,4 @@ Classes for creating Hidden Markov models (HMMs) with Generalized Linear Models 
     :nosignatures:
 
     GLMHMM
+    ClassifierGLMHMM

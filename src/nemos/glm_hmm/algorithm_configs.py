@@ -9,6 +9,7 @@ import jax.numpy as jnp
 from ..glm.params import GLMParams
 from ..observation_models import (
     BernoulliObservations,
+    CategoricalObservations,
     GaussianObservations,
     Observations,
     PoissonObservations,
@@ -18,7 +19,7 @@ from .m_step_analytical_updates import _m_step_scale_gaussian_observations
 from .params import GLMHMMModelParams
 from .utils import Array, compute_rate_per_state
 
-_NO_SCALE = (PoissonObservations, BernoulliObservations)
+_NO_SCALE = (PoissonObservations, BernoulliObservations, CategoricalObservations)
 _ANALYTICAL_SCALE_UPDATE: dict[Type[Observations], Callable] = {
     GaussianObservations: _m_step_scale_gaussian_observations
 }
@@ -182,6 +183,7 @@ def posterior_weighted_glm_negative_log_likelihood_scale(
 
 def prepare_estep_log_likelihood(
     is_population_glm: bool,
+    is_categorical_glm: bool,
     observation_model: Observations,
     inverse_link_function: Callable,
 ) -> Callable:
@@ -194,6 +196,8 @@ def prepare_estep_log_likelihood(
     ----------
     is_population_glm:
         True if it is a population GLM likelihood.
+    is_categorical_glm:
+        True if it is a categorical GLM likelihood.
     observation_model:
         The observation model.
     inverse_link_function:
@@ -206,7 +210,9 @@ def prepare_estep_log_likelihood(
         Signature: (y, rate, scale) -> log_likelihood per state
     """
     # Vectorize over the states axis
-    state_axes = 2 if is_population_glm else 1
+    # state_axes = 2 if is_population_glm or is_categorical_glm,
+    # state_axes = 3 if is_population_glm and is_categorical_glm, else 1
+    state_axes = 1 + is_population_glm + is_categorical_glm
 
     def log_likelihood_per_sample(x, z, s):
         return observation_model.log_likelihood(
@@ -217,7 +223,7 @@ def prepare_estep_log_likelihood(
         log_likelihood_per_sample = jax.vmap(
             log_likelihood_per_sample,
             in_axes=(None, state_axes, None),
-            out_axes=state_axes,
+            out_axes=state_axes - is_categorical_glm,
         )
 
     else:
@@ -280,6 +286,7 @@ def prepare_mstep_nll_for_analytical_scale(
 
 def prepare_mstep_nll_objective_param(
     is_population_glm: bool,
+    is_categorical_glm: bool,
     observation_model: Observations,
     inverse_link_function: Callable,
 ) -> Callable:
@@ -303,7 +310,7 @@ def prepare_mstep_nll_objective_param(
         Objective function for optimizing GLM coefficients and intercept.
         Signature: (glm_params, design_matrix, observations, posteriors) -> scalar
     """
-    state_axes = 2 if is_population_glm else 1
+    state_axes = 1 + is_population_glm + is_categorical_glm
 
     if observation_model._separable_scale:
 
@@ -315,7 +322,7 @@ def prepare_mstep_nll_objective_param(
         negative_log_likelihood = jax.vmap(
             negative_log_likelihood_per_sample,
             in_axes=(None, state_axes),
-            out_axes=state_axes,
+            out_axes=state_axes - is_categorical_glm,
         )
 
     else:
@@ -445,6 +452,7 @@ def get_analytical_scale_update(
 
 def prepare_mstep_update_fn(
     is_population_glm: bool,
+    is_categorical_glm: bool,
     observation_model: Observations,
     inverse_link_function: Callable,
     setup_solver: Callable,
@@ -460,6 +468,8 @@ def prepare_mstep_update_fn(
     ----------
     is_population_glm:
         True if it is a population GLM likelihood.
+    is_categorical_glm:
+        True if it is a categorical GLM likelihood.
     observation_model:
         The observation model.
     inverse_link_function:
@@ -478,7 +488,7 @@ def prepare_mstep_update_fn(
     """
     # get objective and update function for optimizing GLM parameters (coef, intercept)
     objective_param = prepare_mstep_nll_objective_param(
-        is_population_glm, observation_model, inverse_link_function
+        is_population_glm, is_categorical_glm, observation_model, inverse_link_function
     )
 
     # if scale is separable and needs to be optimized, get update function for optimizing scale
