@@ -143,7 +143,7 @@ print(f"proba shape: {proba.shape}")
 proba[:3]
 ```
 
-With pynapple predictors, the labels come back as a `Tsd` and the log-probabilities as a `TsdFrame`, one column per class.
+With pynapple predictors, the labels come back as a `Tsd`, and both probabilities and log-probabilities as a `TsdFrame` with one column per class.
 
 ```{code-cell} ipython3
 import pynapple as nap
@@ -159,7 +159,7 @@ predictors = nap.TsdFrame(t=time, d=np.asarray(X))
 model_nap = nmo.glm.ClassifierGLM(n_classes=n_classes).fit(
     predictors, nap.Tsd(t=time, d=labels)
 )
-model_nap.predict_proba(predictors)
+model_nap.predict_proba(predictors, return_type="proba")
 ```
 
 ## Scoring
