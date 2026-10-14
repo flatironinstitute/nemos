@@ -1754,25 +1754,24 @@ def _custom_glm_init(
     return jnp.zeros((X.shape[1], n_states)), jnp.zeros((n_states,))
 
 
-@pytest.fixture(scope="module")
-def fitted_glmhmm():
-    f = instantiate_glm_hmm_func(simulate=False)
-    f.model.fit(f.X, f.y, init_params=_init_params_from_fixture(f))
-    return f.model
-
-
-@pytest.fixture(scope="module")
-def fitted_glmhmm_custom():
-    f = instantiate_glm_hmm_func(simulate=False)
-    f.model.setup(glm_params_init=_custom_glm_init)
-    f.model.fit(f.X, f.y, init_params=_init_params_from_fixture(f))
-    return f.model
-
-
+@pytest.mark.parametrize("obs_model", ["Bernoulli", "Categorical"], scope="class")
 class TestGLMHMMSaveLoad:
     """save_params / load_model round-trip with native and custom initializers."""
 
-    def test_native_round_trip(self, fitted_glmhmm, tmp_path):
+    @pytest.fixture(scope="class")
+    def fitted_glmhmm(self, obs_model):
+        f = instantiate_glm_hmm_func(simulate=False, obs_model=obs_model)
+        f.model.fit(f.X, f.y, init_params=_init_params_from_fixture(f))
+        return f.model
+
+    @pytest.fixture(scope="class")
+    def fitted_glmhmm_custom(self, obs_model):
+        f = instantiate_glm_hmm_func(simulate=False, obs_model=obs_model)
+        f.model.setup(glm_params_init=_custom_glm_init)
+        f.model.fit(f.X, f.y, init_params=_init_params_from_fixture(f))
+        return f.model
+
+    def test_native_round_trip(self, obs_model, fitted_glmhmm, tmp_path):
         """All params and fit-state survive a save/load cycle with default initializers."""
         save_path = tmp_path / "glmhmm.npz"
         fitted_glmhmm.save_params(save_path)
@@ -1780,7 +1779,9 @@ class TestGLMHMMSaveLoad:
 
         _assert_params_equal(_collect_params(fitted_glmhmm), _collect_params(loaded))
 
-    def test_custom_callable_requires_mapping(self, fitted_glmhmm_custom, tmp_path):
+    def test_custom_callable_requires_mapping(
+        self, obs_model, fitted_glmhmm_custom, tmp_path
+    ):
         """Custom callable can't be resolved from name alone; load raises a clear error."""
         save_path = tmp_path / "glmhmm.npz"
         fitted_glmhmm_custom.save_params(save_path)
@@ -1800,7 +1801,7 @@ class TestGLMHMMSaveLoad:
         ids=["nested-dict", "sklearn-key"],
     )
     def test_custom_callable_mapping(
-        self, fitted_glmhmm_custom, tmp_path, mapping_dict
+        self, obs_model, fitted_glmhmm_custom, tmp_path, mapping_dict
     ):
         """Both mapping_dict formats resolve the custom callable and preserve all params."""
         save_path = tmp_path / "glmhmm.npz"

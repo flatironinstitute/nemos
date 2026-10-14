@@ -434,7 +434,6 @@ def generate_data_multi_state(request):
         coef, intercept = np.random.randn(2, n_states), np.random.randn(n_states)
         y = np.zeros(n_samples)
 
-
     X = np.random.randn(n_samples, 2)
     key = jax.random.PRNGKey(42)
     for i, k in enumerate(range(0, 100, 10)):
@@ -1762,7 +1761,7 @@ class TestMStep:
             {"observations": GaussianObservations(), "scale": 2.0, "inv_link": None},
             {"observations": GammaObservations(), "scale": 1.0, "inv_link": jnp.exp},
             {"observations": GammaObservations(), "scale": 2.0, "inv_link": jnp.exp},
-            {"observations": CategoricalObservations(), "scale": 1.0, "inv_link": None}
+            {"observations": CategoricalObservations(), "scale": 1.0, "inv_link": None},
         ],
         indirect=True,
     )
@@ -1850,7 +1849,9 @@ class TestMStep:
         init_model_params = GLMHMMModelParams(
             coef, intercept, jnp.zeros_like(intercept)
         )
-        objective = prepare_mstep_nll_objective_param(False, is_categorical, obs, inv_link)
+        objective = prepare_mstep_nll_objective_param(
+            False, is_categorical, obs, inv_link
+        )
 
         solver = setup_solver(objective, init_params=init_model_params, tol=1e-8)
 
@@ -1870,7 +1871,9 @@ class TestMStep:
         )
 
         # Minimize negative log-likelihood to update scale (if applicable)
-        if not isinstance(obs, (PoissonObservations, BernoulliObservations, CategoricalObservations)):
+        if not isinstance(
+            obs, (PoissonObservations, BernoulliObservations, CategoricalObservations)
+        ):
             initial_log_like = updated_log_like
             predicted_rate = compute_rate_per_state(
                 X, new_glm_params, inverse_link_function=inv_link

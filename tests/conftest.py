@@ -2030,7 +2030,7 @@ def run_simulation_glm_hmm(
 def instantiate_glm_hmm_func(
     n_states: int = 3,
     obs_model: (
-        Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial"]
+        Literal["Poisson", "Gamma", "Bernoulli", "NegativeBinomial", "Categorical"]
         | nmo.observation_models.Observations
     ) = "Bernoulli",
     regularizer: str = "UnRegularized",
@@ -2044,21 +2044,40 @@ def instantiate_glm_hmm_func(
     if solver_kwargs is None:
         solver_kwargs = {"maxiter": 1}
 
-    model = nmo.glm_hmm.GLMHMM(
-        n_states=n_states,
-        observation_model=obs_model,
-        regularizer=regularizer,
-        solver_name=solver_name,
-        solver_kwargs=solver_kwargs,
-        maxiter=maxiter,
-        **(init_kwargs or {}),
-    )
+    if (obs_model == "Categorical") or isinstance(
+        obs_model, nmo.observation_models.CategoricalObservations
+    ):
+        is_categorical = True
+    else:
+        is_categorical = False
+
+    if is_categorical:
+        model = nmo.glm_hmm.ClassifierGLMHMM(
+            n_states=n_states,
+            regularizer=regularizer,
+            solver_name=solver_name,
+            solver_kwargs=solver_kwargs,
+            maxiter=maxiter,
+            **(init_kwargs or {}),
+        )
+    else:
+        model = nmo.glm_hmm.GLMHMM(
+            n_states=n_states,
+            observation_model=obs_model,
+            regularizer=regularizer,
+            solver_name=solver_name,
+            solver_kwargs=solver_kwargs,
+            maxiter=maxiter,
+            **(init_kwargs or {}),
+        )
     n_features = 2
     X = np.ones((500, n_features))
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
     y = np.zeros(X.shape[0])
     y[np.random.choice(y.shape[0], size=y.shape[0] // 3, replace=False)] = 1
+    if is_categorical:
+        y = jax.nn.one_hot(y, 2)
 
     coef, intercept = random_glm_params_init(
         n_states=n_states,
@@ -2091,6 +2110,8 @@ def instantiate_glm_hmm_func(
     else:
         rates, latent_states = None, None
 
+    if is_categorical:
+        y = jnp.argmax(y, axis=-1)
     return ModelFixture(
         X=X,
         y=y,
@@ -2136,6 +2157,10 @@ MODEL_CONFIG = {
         "is_population": False,
         "default_y_shape": (500,),
     },
+    "ClassifierGLMHMM": {
+        "is_population": False,
+        "default_y_shape": (500, 2),
+    },
 }
 
 
@@ -2145,6 +2170,7 @@ OBSERVATION_PER_MODEL = {
     "ClassifierPopulationGLM": ["Categorical"],
     "PopulationGLM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
     "GLMHMM": ["Bernoulli"],
+    "ClassifierGLMHMM": ["Categorical"],
 }
 
 
