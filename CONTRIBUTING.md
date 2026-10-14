@@ -9,6 +9,8 @@ Developers are encouraged to contribute to various areas of development. This co
 
 Feel free to work on any section of code that you believe you can improve. More importantly, remember to thoroughly test all your classes and functions, and to provide clear, detailed comments within your code. This not only aids others in using the library, but also facilitates future maintenance and further development.
 
+Issues labelled good first issue are reserved for NeMoS users; when claiming one, briefly describe how you use the package. We don't assign issues before a short discussion.
+
 For more detailed information about NeMoS modules, including design choices and implementation details, visit the [`For Developers`](https://nemos.readthedocs.io/en/latest/developers_notes/README.html) section of the package documentation.
 
 ## Contributing to the code
