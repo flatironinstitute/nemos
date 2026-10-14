@@ -66,6 +66,7 @@ import nemos as nmo
 nmo.glm.PopulationGLM()
 ```
 
+(glm-population-methods)=
 ## Methods
 
 The inputs are the same as for the [single neuron GLM](glm-input-types). `y` is now two-dimensional, with shape `(n_samples, n_neurons)`.
@@ -156,13 +157,26 @@ To keep the samples of the other neurons, fit the neuron with the gap on its own
 model.predict(X).shape
 ```
 
-With pynapple predictors, the rate is a `TsdFrame` with the unit names and the region of each unit. You can split it by region without matching the columns back to the units.
+With pynapple predictors, `predict` returns a `TsdFrame`, one column per unit, where the single neuron GLM returns a `Tsd`.
 
 ```{code-cell} ipython3
-model_nap.predict(predictors)
+rate = model_nap.predict(predictors)
+rate
 ```
 
-As for the single neuron GLM, the type and the timestamps of the output follow the predictors passed to `predict`. Only the column names and the metadata come from the fit.
+A `TsdFrame` can carry metadata labeling its columns, which here are the units of the population. `predict` carries over the metadata of the counts the model was fit on.
+
+```{code-cell} ipython3
+rate.metadata
+```
+
+The rate can then be split by any of those labels, without matching columns back to units by hand.
+
+```{code-cell} ipython3
+rate[:, rate.region == "M1"]
+```
+
+The column names and the metadata are the only part of the output that comes from the fit. The type and the timestamps follow the predictors passed to `predict`.
 
 ### Score
 
@@ -202,21 +216,26 @@ The simulation is feed-forward: the counts drawn do not feed back into the rate 
 
 ### Fitting out of memory
 
-[`stochastic_fit`](nemos.glm.PopulationGLM.stochastic_fit) and [`update`](nemos.glm.PopulationGLM.update) work as for the [single neuron GLM](glm-single-neuron). The loader serves batches of `y` with all the neurons in them.
+[`stochastic_fit`](nemos.glm.PopulationGLM.stochastic_fit) and [`update`](nemos.glm.PopulationGLM.update) take the same arguments and behave as for the [single neuron GLM](glm-out-of-memory). The loader serves batches of `y` with all the neurons in them.
 
-```{code-cell} ipython3
-loader = nmo.batching.ArrayDataLoader(X, y, batch_size=100)
-
-glm = nmo.glm.PopulationGLM(
-    solver_name="GradientDescent",
-    solver_kwargs={"stepsize": 0.05, "acceleration": False},
-)
-glm.stochastic_fit(loader, n_passes=20)
-```
-
+(glm-population-model-configuration)=
 ## Model Configurations
 
-You set observation models, inverse link functions, regularizers and solvers exactly as in the [single neuron GLM](glm-model-configuration). A per-parameter regularizer strength gains the neuron axis, like the parameters themselves, as shown in [regularizers](../../regularizers.md).
+You set observation models, inverse link functions, regularizers and solvers exactly as in the [single neuron GLM](glm-model-configuration).
+
+A parameter-wise `regularizer_strength` is the one argument whose shape changes: it has the shape of the parameters, neuron axis included. The array of one strength per feature that the single neuron GLM takes is rejected here.
+
+```{code-cell} ipython3
+n_features, n_neurons = X.shape[1], y.shape[1]
+
+# penalize the second neuron heavily, the first one barely
+strength = np.full((n_features, n_neurons), 0.01)
+strength[:, 1] = 100.0
+
+nmo.glm.PopulationGLM(regularizer="Ridge", regularizer_strength=strength).fit(X, y).coef_
+```
+
+The group-wise and parameter-wise forms, and the special cases of ElasticNet and GroupLasso, are covered in [regularizers](../../regularizers.md).
 
 ### GroupLasso
 
@@ -225,7 +244,7 @@ You set observation models, inverse link functions, regularizers and solvers exa
 ```{code-cell} ipython3
 model_group = nmo.glm.PopulationGLM(
     regularizer="GroupLasso",
-    regularizer_strength=0.05,
+    regularizer_strength=0.3,
 ).fit(X_dict, y)
 
 # norm of each group, one entry per neuron
@@ -237,8 +256,6 @@ With 2 leaves and 2 neurons there are 4 groups. Here, the first neuron keeps its
 A mask of your own has shape `(n_groups, n_features, n_neurons)` for each leaf, with the neuron axis like the parameters.
 
 ```{code-cell} ipython3
-n_features, n_neurons = X.shape[1], y.shape[1]
-
 # group 0: the stimulus of every neuron; group 1: the coupling of every neuron
 mask = np.zeros((2, n_features, n_neurons))
 mask[0, :4] = 1
@@ -246,7 +263,7 @@ mask[1, 4:] = 1
 
 nmo.glm.PopulationGLM(
     regularizer=nmo.regularizer.GroupLasso(mask=mask),
-    regularizer_strength=0.05,
+    regularizer_strength=0.3,
 ).fit(X, y)
 ```
 
@@ -310,7 +327,7 @@ model_masked = nmo.glm.PopulationGLM(feature_mask=feature_mask).fit(input_featur
 model_masked.coef_
 ```
 
-`coef_[i, j]` is zero wherever `feature_mask[i, j]` is zero. You can pass the mask at initialization or set it as an attribute before fitting. After fitting, you can read it but not reassign it.
+`coef_[i, j]` is zero wherever `feature_mask[i, j]` is zero. You can pass the mask at initialization or set it as an attribute before fitting. After fitting, the attribute still returns the mask, but assigning to it raises.
 
 A masked weight is not estimated, so it does not count towards the residual degrees of freedom of its neuron.
 

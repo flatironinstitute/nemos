@@ -276,6 +276,7 @@ The random key makes the draw reproducible: the same key and the same rate give 
 [`simulate`](nemos.glm.GLM.simulate) is feed-forward: the counts it draws do not feed back into the rate. To simulate a population whose spikes drive the next time step through coupling filters, use [`simulate_recurrent`](nemos.simulation.simulate_recurrent), shown in [simulate a coupled population](../../../how_to_guide/simulate_coupled_population.md).
 :::
 
+(glm-out-of-memory)=
 ### Fitting out of memory
 
 When the design does not fit in memory, [`stochastic_fit`](nemos.glm.GLM.stochastic_fit) takes a data loader instead of arrays and updates the parameters one batch at a time. Stochastic solvers require acceleration and line searches to be turned off.
@@ -445,7 +446,7 @@ A leaf to fix carries its array of values, a leaf to learn carries `None` as a p
 With `X` an array, `coef` is a single leaf, held or learned as a whole.
 
 
-### Fix a value for the intercept
+#### Fix a value for the intercept
 
 ```{code-cell} ipython3
 # hold the intercept at 0.5, learn the weights
@@ -455,7 +456,7 @@ print(f"coef_:      {model_fixed.coef_}")
 print(f"intercept_: {model_fixed.intercept_}")
 ```
 
-### Fix a value for the coefficients
+#### Fix a value for the coefficients
 
 ```{code-cell} ipython3
 # hold all the weights at zero, learn the intercept
@@ -465,7 +466,7 @@ print(f"coef_:      {model_fixed.coef_}")
 print(f"intercept_: {model_fixed.intercept_}")
 ```
 
-### Partially specify the coefficients
+#### Partially specify the coefficients
 
 With `X` a PyTree, each leaf of `coef` is held or learned on its own.
 
@@ -485,7 +486,7 @@ print(f"intercept_: {model_fixed.intercept_}")
 Fitting the same design once with a group of predictors held at zero and once with it free gives two nested models, which can be compared to test whether that group explains the activity.
 :::
 
-### Interaction between `fit_intercept` and `fix_params`
+#### Interaction between `fit_intercept` and `fix_params`
 
 An intercept set through `fix_params` takes precedence over `fit_intercept`: the two together hold the intercept at the value given, rather than at zero.
 
