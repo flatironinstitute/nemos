@@ -31,6 +31,11 @@ from .validation import (
 
 __all__ = ["ClassifierGLM", "ClassifierPopulationGLM"]
 
+_NAP_EXP = support_pynapple(conv_type="jax")(jnp.exp)
+_NAP_NORM = support_pynapple(conv_type="jax")(
+    lambda x: x / x.sum(axis=-1, keepdims=True)
+)
+
 
 class ClassifierMixin:
     """GLM for classification."""
@@ -312,11 +317,9 @@ class ClassifierMixin:
         if return_type == "log-proba":
             return log_proba
         elif return_type == "proba":
-            exp = support_pynapple(conv_type="jax")(jnp.exp)
-            proba = exp(log_proba)
+            proba = _NAP_EXP(log_proba)
             # renormalize (sum to 1 constraint)
-            proba /= proba.sum(axis=-1, keepdims=True)
-            return proba
+            return _NAP_NORM(proba)
         else:
             raise ValueError(f"Unrecognized return type ``'{return_type}'``")
 
