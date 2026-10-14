@@ -158,14 +158,14 @@ class TestClassifierGLMHMM:
             model.intercept_[:, 0], model_check.intercept_
         )
 
+    @pytest.mark.parametrize("session_starts", [None, np.array([0, 40])])
     @pytest.mark.requires_x64
-    def test_n_update_steps_matches_fit(self):
+    def test_n_update_steps_matches_fit(self, session_starts):
         """fit(maxiter=N) and N manual update() calls from the same init produce identical params."""
         rng = np.random.default_rng(0)
         n, k, c, s = 80, 3, 2, 2
         X = rng.standard_normal((n, k))
         y = rng.binomial(1, 0.4, size=n)
-        session_starts = jnp.zeros(n, dtype=bool).at[0].set(True)
 
         # shared init params so both paths start from exactly the same point
         seed = jax.random.PRNGKey(7)
@@ -186,7 +186,7 @@ class TestClassifierGLMHMM:
 
         # --- path A: fit with maxiter=n_steps ---
         model_fit = ClassifierGLMHMM(n_states=s, maxiter=n_steps, tol=1e-300, seed=seed)
-        model_fit.fit(X, y, init_params=init_params)
+        model_fit.fit(X, y, session_starts=session_starts, init_params=init_params)
 
         # --- path B: manual update loop ---
         model_update = ClassifierGLMHMM(
@@ -198,7 +198,7 @@ class TestClassifierGLMHMM:
         params = init_params
         for _ in range(n_steps):
             params, opt_state = model_update.update(
-                params, opt_state, X, y, session_starts
+                params, opt_state, X, y, session_starts=session_starts
             )
 
         np.testing.assert_allclose(model_fit.coef_, model_update.coef_)
