@@ -79,6 +79,7 @@ __PUBLIC_BASES__ = [
     "CyclicBSplineEval",
     "CyclicBSplineConv",
     "FourierEval",
+    "FourierGP",
     "RaisedCosineLinearEval",
     "RaisedCosineLinearConv",
     "RaisedCosineLogEval",
