@@ -4756,14 +4756,18 @@ class TestClassifierGLM:
         mock_classifier_population_glm_optimizer_run,
     ):
         """
-        Show that model a model with less classes than user specified fits.
+        A model whose y holds fewer classes than declared still fits.
         """
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
         model.inverse_link_function = inv_link
         y = jnp.where(y == 2, 1, y)  # reduce to only 2 classes
-        model.fit(X, y)
+        # the unobserved class has zero mean activity, which initialization shifts
+        with pytest.warns(
+            UserWarning, match=r"Output\(s\) \[2\] have boundary mean activity"
+        ):
+            model.fit(X, y)
 
     @pytest.mark.solver_related
     def test_fit_glm_too_many_classes(
