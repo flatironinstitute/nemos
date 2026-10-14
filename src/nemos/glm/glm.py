@@ -1147,10 +1147,13 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         # initialize params if no params are provided
         if init_params is None:
             init_params = self._model_specific_initialization(X, y)
+            # validate only if the user pinned something through fix_params
+            if jax.tree_util.tree_leaves(self._fix_params):
+                self._validator.validate_consistency(init_params, X=X, y=y)
         else:
             init_params = self._normalize_user_params(init_params, X, y)
             init_params = self._validator.validate_and_cast_params(init_params)
-        self._validator.validate_consistency(init_params, X=X, y=y)
+            self._validator.validate_consistency(init_params, X=X, y=y)
 
         self._validator.feature_mask_consistency(
             getattr(self, "_feature_mask", None), init_params

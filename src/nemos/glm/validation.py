@@ -382,7 +382,7 @@ class PopulationGLMValidator(GLMValidator):
                 f"{jax.tree_util.tree_map(lambda p: p.shape[1], params.coef)} neurons, "
                 f"y has {jax.tree_util.tree_map(lambda x: x.shape[1], y)} neurons instead!",
             )
-            n_neurons = jax.tree_util.tree_leaves(y)[0].shape[1]
+            n_neurons = y.shape[1]
             if params.intercept.shape[0] != n_neurons:
                 raise ValueError(
                     "Inconsistent number of neurons. "
