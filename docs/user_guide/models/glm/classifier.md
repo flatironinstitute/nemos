@@ -109,7 +109,19 @@ $$
 p_n = 1 - \sum_{k=1}^{n-1} p_k .
 $$
 
-The redundancy is an invariance of the softmax, which is unchanged when the same constant is added to the linear predictor of every class: if `(coef, intercept)` is a solution, so is `(coef + c, intercept + c)`. Without regularization the model has infinitely many solutions, all giving the same probabilities, and the one the solver returns depends on where it started. `Ridge` is the default for that reason.
+The redundancy is an invariance of the softmax: adding the same constant to the linear predictor of every class leaves the probabilities where they were.
+
+```{code-cell} ipython3
+import jax
+
+# the linear predictor of one sample, one entry per class
+z = np.array([0.3, -1.2, 2.0])
+
+print(f"softmax(z):      {jax.nn.softmax(z)}")
+print(f"softmax(z + 10): {jax.nn.softmax(z + 10.0)}")
+```
+
+So if `(coef, intercept)` is a solution, so is `(coef + c, intercept + c)`. Without regularization the model has infinitely many solutions, all giving the same probabilities, and the one the solver returns depends on where it started. `Ridge` is the default for that reason.
 
 Ridge does not remove the invariance entirely. By default NeMoS does not penalize the intercept, only the coefficients. `coef_` is therefore unique, and centered, summing to zero across classes.
 
