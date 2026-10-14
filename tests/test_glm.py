@@ -1,4 +1,5 @@
 import inspect
+import re
 from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
 from typing import Callable
@@ -4763,9 +4764,16 @@ class TestClassifierGLM:
         )
         model.inverse_link_function = inv_link
         y = jnp.where(y == 2, 1, y)  # reduce to only 2 classes
-        # the unobserved class has zero mean activity, which initialization shifts
+        # class 2 is now unobserved, so its mean activity sits on the boundary of
+        # rate_range and initialization shifts it; the population model reports one
+        # (neuron, class) pair per neuron.
+        if y.ndim == 1:
+            affected = [2]
+        else:
+            affected = [(neuron, 2) for neuron in range(y.shape[1])]
         with pytest.warns(
-            UserWarning, match=r"Output\(s\) \[2\] have boundary mean activity"
+            UserWarning,
+            match=re.escape(f"Output(s) {affected} have boundary mean activity"),
         ):
             model.fit(X, y)
 
