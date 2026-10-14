@@ -52,7 +52,7 @@ Fitting the population jointly is faster than fitting one neuron at a time in a 
 
 :::{note}
 
-For an unregularized, Lasso, Ridge, or GroupLasso GLM, the loss is a sum of one term per neuron. Fitting the population jointly and fitting each neuron on its own give the same parameters.
+For an unregularized, Lasso, or Ridge GLM, the loss is a sum of one term per neuron. Fitting the population jointly and fitting each neuron on its own give the same parameters. The same holds for a GroupLasso whose groups do not mix neurons, so that the parameters of a neuron fall in groups of their own, which is what the default mask gives you.
 
 :::
 
