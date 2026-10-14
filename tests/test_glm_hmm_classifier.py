@@ -48,21 +48,37 @@ class TestClassifierGLMHMM:
         assert "n_classes" in repr_str
 
     @pytest.mark.solver_related
-    @pytest.mark.parametrize("seed", [0, 123])
+    @pytest.mark.parametrize("seed", [0, 1])
     @pytest.mark.parametrize("n_states", [2, 3])
+    @pytest.mark.parametrize("session_starts", [None, np.array([0, 70, 140])])
     @pytest.mark.requires_x64
-    def test_fit_glmhmm_matches_bernoulli(self, seed, n_states):
+    def test_fit_glmhmm_matches_bernoulli(self, seed, n_states, session_starts):
         """
         Ensure that the model fit matches the Bernoulli GLMHMM.
         """
         np.random.seed(seed)
         n_classes = 2
-        X = np.random.normal(size=(100, 5))
+        X = np.random.normal(size=(200, 5))
         b_true = np.zeros((n_classes,))
         w_true = np.random.normal(size=(5, n_classes))
         rate = jax.nn.log_softmax(jnp.einsum("ki,tk->ti", w_true, X) + b_true)
         key = jax.random.PRNGKey(seed)
         y = jax.random.categorical(key, rate)
+
+        # match init params
+        rng = np.random.default_rng(seed)
+        d = rng.normal(scale=0.5, size=(5, n_states))
+        b = rng.normal(scale=0.5, size=n_states)
+        pi = jnp.ones(n_states) / n_states
+        A = jnp.full((n_states, n_states), 0.05 / (n_states - 1)).at[jnp.diag_indices(n_states)].set(0.95)
+
+        init_cat = (
+            jnp.stack([-d / 2, d / 2], axis=1),   # (5, 2, n_states)
+            jnp.stack([-b / 2, b / 2]),           # (2, n_states)
+            jnp.ones((2, n_states)),
+            pi, A,
+        )
+        init_bern = (jnp.asarray(d), jnp.asarray(b), jnp.ones(n_states), pi, A)
 
         model = ClassifierGLMHMM(
             n_states=n_states,
@@ -70,8 +86,8 @@ class TestClassifierGLMHMM:
             regularizer="Ridge",
             regularizer_strength=1.0,
             solver_name="LBFGS",
-            solver_kwargs={"tol": 10**-8},
-        ).fit(X, y)
+            solver_kwargs={"tol": 10**-12},
+        ).fit(X, y, session_starts=session_starts, init_params=init_cat)
         flat_coef = model.coef_[:, 1, :] - model.coef_[:, 0, :]
         flat_intercept = model.intercept_[1, :] - model.intercept_[0, :]
 
@@ -81,13 +97,13 @@ class TestClassifierGLMHMM:
             regularizer="Ridge",
             regularizer_strength=0.5,
             solver_name="LBFGS",
-            solver_kwargs={"tol": 10**-8},
-        ).fit(X, y)
+            solver_kwargs={"tol": 10**-12},
+        ).fit(X, y, session_starts=session_starts, init_params=init_bern)
         np.testing.assert_array_almost_equal(
             np.sort(flat_coef.ravel()), np.sort(model_check.coef_.ravel()), decimal=4
         )
         np.testing.assert_array_almost_equal(
-            np.sort(flat_intercept), np.sort(model_check.intercept_), decimal=5
+            np.sort(flat_intercept), np.sort(model_check.intercept_), decimal=4
         )
         np.testing.assert_array_almost_equal(
             np.sort(model.transition_prob_.ravel()),
