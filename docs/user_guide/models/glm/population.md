@@ -39,227 +39,305 @@ warnings.filterwarnings(
 )
 ```
 
+(glm-population)=
 # Population GLM
 
-Fitting the activity of a neural population with NeMoS can be much more efficient than fitting each individual
-neuron in a loop, because `JAX` vectorizes the fit across neurons and runs it on the GPU.
+[`PopulationGLM`](nemos.glm.PopulationGLM) fits a GLM to every neuron of a population at once. It takes the same arguments and has the same methods as the [single neuron GLM](glm-single-neuron). This page covers only what changes:
+
+- `y` has one column per neuron,
+- every parameter gains a trailing neuron axis,
+- each neuron can have its own set of predictors.
+
+Fitting the population jointly is faster than fitting one neuron at a time in a loop. JAX vectorizes the fit across neurons and can run it on a GPU. The loop uses less memory.
 
 :::{note}
-For an unregularized, Lasso, Ridge, or group-Lasso GLM, fitting a GLM one neuron at the time, or fitting jointly
-the neural population is equivalent. The main difference between the approaches is that the former is more
-memory efficient, the latter is computationally more efficient (it takes less time to fit).
+
+For an unregularized, Lasso, Ridge, or GroupLasso GLM, the loss is a sum of one term per neuron. Fitting the population jointly and fitting each neuron on its own give the same parameters.
+
 :::
 
-## Fitting a Population GLM
+## Initializing a PopulationGLM object
 
-NeMoS has a dedicated [`nemos.GLM.PopulationGLM`](nemos.glm.PopulationGLM) class for fitting jointly a neural population. The API
- is very similar to that the regular [`GLM`](nemos.glm.GLM), but with a few differences:
-
- 1. The `y` input to the methods [`fit`](nemos.glm.PopulationGLM.fit) and [`score`](nemos.glm.PopulationGLM.score) must be a two-dimensional array of shape `(n_samples, n_neurons)`.
- 2. You can optionally pass a `feature_mask` in the form of an array of 0s and 1s with shape `(n_features, n_neurons)`
- that specifies which features are used as predictors for each neuron. More on this [later](#neuron-specific-features).
-
-The rest of the configurations (observation models, regularizers etc.) work exactly as in the single neuron GLM. Refer to the [single neuron GLM](./single_neuron.md) user guide for those.
-
-Let's generate some synthetic data and fit a population model.
+The arguments are those of [`GLM`](nemos.glm.GLM), with the same defaults, plus a [`feature_mask`](neuron-specific-features) that selects the predictors of each neuron.
 
 ```{code-cell} ipython3
-import jax.numpy as jnp
-import matplotlib.pyplot as plt
-
-import numpy as np
-
 import nemos as nmo
 
-n_neurons = 2
-n_samples = 1000
-
-# generate data:
-# - X array of shape (n_samples, n_features)
-# - spikes array of shape (n_samples, n_features)
-X, spikes = nmo.datasets.tuned_poisson(
-    n_samples=n_samples, n_neurons=n_neurons
-)
-print(f"X shape:      {X.shape}")
-print(f"spikes shape: {spikes.shape}")
-
-# define and fit the model
-model = nmo.glm.PopulationGLM(solver_name="Newton")
-model.fit(X, spikes)
+nmo.glm.PopulationGLM()
 ```
 
-The neuron axis comes last in the fitted parameters.
+## Methods
+
+The inputs are the same as for the [single neuron GLM](glm-input-types). `y` is now two-dimensional, with shape `(n_samples, n_neurons)`.
+
+### Fit
 
 ```{code-cell} ipython3
-print(f"coef_ shape:      {model.coef_.shape}")
-print(f"intercept_ shape: {model.intercept_.shape}")
+# X of shape (n_samples, n_features), y of shape (n_samples, n_neurons)
+X, y = nmo.datasets.tuned_poisson(n_samples=1000, n_neurons=2)
+
+model = nmo.glm.PopulationGLM().fit(X, y)
+model
 ```
 
-`coef_` is `(n_features, n_neurons)` and `intercept_` is `(n_neurons,)`, so column `j` of `coef_` holds the entire weight vector of neuron `j`. The single neuron [`GLM`](nemos.glm.GLM) stores the same quantities without that trailing axis: `coef_` of shape `(n_features,)` and `intercept_` of shape `(1,)`.
+#### Pynapple Inputs
 
-Predicting the rate works in the same way,
-
-```{code-cell}
-import jax
-
-Xnew, _ = nmo.datasets.tuned_poisson(
-    n_samples=n_samples, n_neurons=n_neurons, random_key=jax.random.key(2),
-)
-# rate in spikes/bin
-rate = model.predict(Xnew)
-rate.shape
-```
-
-## Scoring neuron by neuron
-
-[`score`](nemos.glm.PopulationGLM.score) returns a single number, the average over samples and neurons, which is what scikit-learn cross-validation expects from an estimator.
+`y` can be a pynapple `TsdFrame`, one column per neuron. `fit` stores its column names and metadata. [`predict`](nemos.glm.PopulationGLM.predict) and [`simulate`](nemos.glm.PopulationGLM.simulate) attach them to their outputs.
 
 ```{code-cell} ipython3
-model.score(X, spikes, score_type="pseudo-r2-McFadden")
-```
-
-Samples are aggregated by `aggregate_sample_scores`, which is applied to an array of shape `(n_samples, n_neurons)`. Averaging over the sample axis alone leaves one score per neuron.
-
-```{code-cell} ipython3
-model.score(
-    X,
-    spikes,
-    score_type="pseudo-r2-McFadden",
-    aggregate_sample_scores=lambda x: jnp.mean(x, axis=0),
-)
-
-```
-
-(neuron-specific-features)=
-## Neuron-specific features
-With [`PopulationGLM`](nemos.glm.PopulationGLM), one can set up a model that fits a different set of predictors for each neuron. The way to do so is to specify a `feature_mask`.
-
-Let's assume that we have two neurons, share one shared input, and have an extra private one, for a total of
-3 inputs.
-
-```{code-cell} ipython3
-# let's take the first three input
-n_features = 3
-input_features = X[:, :3]
-```
-
-Let's assume that:
-
-  - `input_features[:, 0]` is shared.
-  - `input_features[:, 1]` is an input only for the first neuron.
-  - `input_features[:, 2]` is an input only for the second neuron.
-
-
-We can impose the same constraint to the [`PopulationGLM`](nemos.glm.PopulationGLM) by masking the weights.
-
-```{code-cell} ipython3
-# initialize the mask to a matrix of 1s.
-feature_mask = np.ones((n_features, n_neurons))
-
-# remove the 3rd feature from the predictors of the first neuron
-feature_mask[2, 0] = 0
-
-# remove the 2nd feature from the predictors of the second neuron
-feature_mask[1, 1] = 0
-
-# visualize the mask
-print(feature_mask)
-```
-
-The mask can be passed at initialization or set after the model is initialized, but cannot be changed after the model is fit.
-
-```{code-cell} ipython3
-# set a quasi-newton solver and low tolerance for better numerical precision
-model = nmo.glm.PopulationGLM(solver_name="Newton")
-
-# set the mask
-model.feature_mask = feature_mask
-
-# fit the model
-model.fit(input_features, spikes)
-```
-
-If we print the model coefficients, we can see the effect of the mask.
-
-```{code-cell} ipython3
-model.coef_
-```
-
-The coefficient for the first neuron corresponding to the last feature is zero, as well as the coefficient of the second neuron corresponding to the second feature.
-
-The mask has the same shape as `coef_`, and `coef_[i, j]` is zero wherever `feature_mask[i, j]` is zero. The mask is stored as the `feature_mask` attribute. It can be accessed after fitting, but not reassigned.
-
-A masked coefficient is not estimated, so it does not count towards the residual degrees of freedom.
-
-```{code-cell} ipython3
-# same design, no mask
-unmasked = nmo.glm.PopulationGLM(solver_name="Newton").fit(input_features, spikes)
-
-print(f"masked:   {model.dof_resid_}")
-print(f"unmasked: {unmasked.dof_resid_}")
-```
-
-Each neuron estimates one parameter fewer under the mask. `dof_resid_` has one entry per neuron, since every neuron has its own set of predictors.
-
-### Masking groups of features
-
-When the predictors are a dictionary, one entry per basis or per group of features, the mask mirrors that same structure, each leaf shaped like its own coefficients.
-
-```{code-cell} ipython3
-# split the design in two groups of features
-X_dict = {"stimulus": X[:, :4], "coupling": X[:, 4:]}
-
-# the stimulus drives both neurons, the coupling only the second one
-feature_mask = {
-    "stimulus": np.ones((4, n_neurons)),
-    "coupling": np.array([[0, 1]] * 4),
-}
-
-model_dict = nmo.glm.PopulationGLM(
-    solver_name="Newton",
-    feature_mask=feature_mask
-)
-model_dict.fit(X_dict, spikes)
-
-model_dict.coef_["coupling"]
-```
-
-A single column of zeros removes the entire `"coupling"` group from the predictors of the first neuron, without indexing the columns of the design one by one. This is the form to use when the mask encodes a hypothesis about which inputs reach which neuron, for example dropping self-coupling or restricting coupling to a sub-population.
-
-## Keeping track of the units with pynapple
-
-NeMoS does not require [pynapple](https://pynapple-org.github.io/pynapple/), but it accepts its objects wherever an array is accepted. The column names and the metadata of `y` are stored at fit time, and are attached again to the output of [`predict`](nemos.glm.PopulationGLM.predict).
-
-```{code-cell} ipython3
+import numpy as np
 import pynapple as nap
 
 # suppress jax to numpy conversion warning
 nap.nap_config.suppress_conversion_warnings = True
 
 # 10 ms bins
-time = np.arange(n_samples) / 100
+time = np.arange(X.shape[0]) / 100
 
+predictors = nap.TsdFrame(t=time, d=np.asarray(X))
 counts = nap.TsdFrame(
     t=time,
-    d=np.asarray(spikes),
+    d=np.asarray(y),
     columns=["unit0", "unit1"],
     metadata={"region": ["M1", "PFC"]},
 )
-predictors = nap.TsdFrame(t=time, d=np.asarray(X))
 
-model_nap = nmo.glm.PopulationGLM(solver_name="Newton").fit(predictors, counts)
+model_nap = nmo.glm.PopulationGLM().fit(predictors, counts)
+```
+
+#### PyTree Inputs
+
+With `X` a PyTree, each leaf of `coef_` has the shape of its predictors and a trailing neuron axis.
+
+```{code-cell} ipython3
+# the coupling filters play the role of the single neuron history
+X_dict = {"stimulus": X[:, :4], "coupling": X[:, 4:]}
+
+model_dict = nmo.glm.PopulationGLM().fit(X_dict, y)
+
+{key: coef.shape for key, coef in model_dict.coef_.items()}
+```
+
+#### Fitted Attributes
+
+Every fitted attribute has one entry per neuron, along the last axis.
+
+```{code-cell} ipython3
+print(f"coef_:       {model.coef_.shape}")
+print(f"intercept_:  {model.intercept_.shape}")
+print(f"scale_:      {model.scale_}")
+print(f"dof_resid_:  {model.dof_resid_}")
+```
+
+Column `j` of `coef_` holds the weights of neuron `j`. Entry `j` of `intercept_`, `scale_` and `dof_resid_` holds its baseline, dispersion and residual degrees of freedom. The single neuron [`GLM`](nemos.glm.GLM) stores the same quantities without the neuron axis.
+
+#### NaN Treatment
+
+`fit` drops a sample when `X` or any column of `y` contains a NaN. A NaN in a single neuron therefore drops that sample for the whole population.
+
+```{code-cell} ipython3
+y_nan = np.asarray(y, dtype=float).copy()
+# a gap in the recording of the first neuron only
+y_nan[:10, 0] = np.nan
+
+model_nan = nmo.glm.PopulationGLM().fit(X, y_nan)
+model_dropped = nmo.glm.PopulationGLM().fit(np.asarray(X)[10:], np.asarray(y)[10:])
+
+np.allclose(model_nan.coef_, model_dropped.coef_)
+```
+
+To keep the samples of the other neurons, fit the neuron with the gap on its own using a [`GLM`](nemos.glm.GLM).
+
+### Predict
+
+[`predict`](nemos.glm.PopulationGLM.predict) returns one rate per sample and neuron, in counts per bin.
+
+```{code-cell} ipython3
+model.predict(X).shape
+```
+
+With pynapple predictors, the rate is a `TsdFrame` with the unit names and the region of each unit. You can split it by region without matching the columns back to the units.
+
+```{code-cell} ipython3
 model_nap.predict(predictors)
 ```
 
-The predicted rate is a `TsdFrame` carrying the unit names and the region of each unit, so it can be restricted to an epoch or split by region without matching the columns back to the units.
+As for the single neuron GLM, the type and the timestamps of the output follow the predictors passed to `predict`. Only the column names and the metadata come from the fit.
 
-Only the column names and the metadata are taken from the fit. The timestamps and the time support of the output are those of the predictors passed to `predict`, which can cover any interval.
+### Score
+
+[`score`](nemos.glm.PopulationGLM.score) returns a single number, the average over samples and neurons, which is what scikit-learn cross-validation expects from an estimator.
 
 ```{code-cell} ipython3
-model_nap.predict(predictors[:10])
+model.score(X, y, score_type="pseudo-r2-McFadden")
 ```
 
-The same rule decides the type of the output: predictors passed as a plain array return a plain array, even for a model that was fit on pynapple objects.
+`score` applies `aggregate_sample_scores` to an array of shape `(n_samples, n_neurons)`. Averaging over the sample axis alone leaves one score per neuron.
+
+```{code-cell} ipython3
+import jax.numpy as jnp
+
+model.score(
+    X,
+    y,
+    score_type="pseudo-r2-McFadden",
+    aggregate_sample_scores=lambda x: jnp.mean(x, axis=0),
+)
+```
+
+### Simulate
+
+[`simulate`](nemos.glm.PopulationGLM.simulate) draws counts for every neuron and returns them with the rate they were drawn from, both of shape `(n_samples, n_neurons)`.
+
+```{code-cell} ipython3
+import jax
+
+counts_sim, rate_sim = model.simulate(jax.random.key(0), X)
+
+print(f"counts: {counts_sim.shape}")
+print(f"rate:   {rate_sim.shape}")
+```
+
+The simulation is feed-forward: the counts drawn do not feed back into the rate through the coupling filters. For a recurrently coupled population, use [`simulate_recurrent`](nemos.simulation.simulate_recurrent), shown in [simulate a coupled population](../../../how_to_guide/simulate_coupled_population.md).
+
+### Fitting out of memory
+
+[`stochastic_fit`](nemos.glm.PopulationGLM.stochastic_fit) and [`update`](nemos.glm.PopulationGLM.update) work as for the [single neuron GLM](glm-single-neuron). The loader serves batches of `y` with all the neurons in them.
+
+```{code-cell} ipython3
+loader = nmo.batching.ArrayDataLoader(X, y, batch_size=100)
+
+glm = nmo.glm.PopulationGLM(
+    solver_name="GradientDescent",
+    solver_kwargs={"stepsize": 0.05, "acceleration": False},
+)
+glm.stochastic_fit(loader, n_passes=20)
+```
+
+## Model Configurations
+
+You set observation models, inverse link functions, regularizers and solvers exactly as in the [single neuron GLM](glm-model-configuration). A per-parameter regularizer strength gains the neuron axis, like the parameters themselves, as shown in [regularizers](../../regularizers.md).
+
+### GroupLasso
+
+[`GroupLasso`](nemos.regularizer.GroupLasso) defines its groups per neuron. With the default mask, each leaf of `coef` is a separate group for each neuron. A group of predictors can then shrink to zero for one neuron and stay for another.
+
+```{code-cell} ipython3
+model_group = nmo.glm.PopulationGLM(
+    regularizer="GroupLasso",
+    regularizer_strength=0.05,
+).fit(X_dict, y)
+
+# norm of each group, one entry per neuron
+{key: np.linalg.norm(coef, axis=0) for key, coef in model_group.coef_.items()}
+```
+
+With 2 leaves and 2 neurons there are 4 groups. Here, the first neuron keeps its stimulus weights and drops its coupling. The second neuron does the opposite.
+
+A mask of your own has shape `(n_groups, n_features, n_neurons)` for each leaf, with the neuron axis like the parameters.
+
+```{code-cell} ipython3
+n_features, n_neurons = X.shape[1], y.shape[1]
+
+# group 0: the stimulus of every neuron; group 1: the coupling of every neuron
+mask = np.zeros((2, n_features, n_neurons))
+mask[0, :4] = 1
+mask[1, 4:] = 1
+
+nmo.glm.PopulationGLM(
+    regularizer=nmo.regularizer.GroupLasso(mask=mask),
+    regularizer_strength=0.05,
+).fit(X, y)
+```
+
+:::{warning}
+
+A group that spans several neurons, like the two above, couples their fits. The joint fit then differs from fitting each neuron on its own.
+
+:::
+
+(glm-population-parameter-specification)=
+## Parameter specification
+
+`fit_intercept` and `fix_params` work as in the [single neuron GLM](glm-parameter-specification). The values held fixed have the shape of the parameters, with the neuron axis last.
+
+### Fix parameter values
+
+```{code-cell} ipython3
+# hold one intercept per neuron, learn the weights
+model_fixed = nmo.glm.PopulationGLM(
+    fix_params=(None, np.array([0.5, 1.0]))
+).fit(X, y)
+
+print(f"intercept_: {model_fixed.intercept_}")
+```
+
+With `X` a PyTree, the model holds or learns each leaf of `coef` on its own, for all the neurons together.
+
+```{code-cell} ipython3
+# hold the coupling weights of every neuron at zero, learn the stimulus ones
+fixed = ({"stimulus": None, "coupling": np.zeros((4, n_neurons))}, None)
+
+model_fixed = nmo.glm.PopulationGLM(fix_params=fixed).fit(X_dict, y)
+
+model_fixed.coef_["coupling"]
+```
+
+To remove a group of predictors from some neurons only, use a feature mask.
+
+(neuron-specific-features)=
+### Neuron-specific features
+
+`feature_mask` selects which predictors enter the model of each neuron. It has the shape of `coef_`, with a 1 where the model learns the weight and a 0 where it holds the weight at zero.
+
+Take three predictors and two neurons:
+
+- predictor 0 drives both neurons,
+- predictor 1 drives only the first neuron,
+- predictor 2 drives only the second neuron.
+
+```{code-cell} ipython3
+input_features = X[:, :3]
+
+feature_mask = np.ones((3, n_neurons))
+# drop predictor 2 from the first neuron
+feature_mask[2, 0] = 0
+# drop predictor 1 from the second neuron
+feature_mask[1, 1] = 0
+
+model_masked = nmo.glm.PopulationGLM(feature_mask=feature_mask).fit(input_features, y)
+
+model_masked.coef_
+```
+
+`coef_[i, j]` is zero wherever `feature_mask[i, j]` is zero. You can pass the mask at initialization or set it as an attribute before fitting. After fitting, you can read it but not reassign it.
+
+A masked weight is not estimated, so it does not count towards the residual degrees of freedom of its neuron.
+
+```{code-cell} ipython3
+unmasked = nmo.glm.PopulationGLM().fit(input_features, y)
+
+print(f"masked:   {model_masked.dof_resid_}")
+print(f"unmasked: {unmasked.dof_resid_}")
+```
+
+#### Masking groups of features
+
+With `X` a PyTree, the mask has the same structure, each leaf shaped like its coefficients.
+
+```{code-cell} ipython3
+# the stimulus drives both neurons, the coupling only the second one
+feature_mask = {
+    "stimulus": np.ones((4, n_neurons)),
+    "coupling": np.array([[0, 1]] * 4),
+}
+
+model_dict = nmo.glm.PopulationGLM(feature_mask=feature_mask).fit(X_dict, y)
+
+model_dict.coef_["coupling"]
+```
+
+A single column of zeros removes the entire `"coupling"` group from the predictors of the first neuron. You do not have to index the columns of the design one by one. Use this form when the mask encodes a hypothesis about which inputs reach which neuron. Examples are dropping self-coupling or restricting coupling to a sub-population.
 
 ## Examples
 
