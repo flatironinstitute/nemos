@@ -68,7 +68,7 @@ class ClassifierMixin:
         """
         return claim_nothing(params)
 
-    def set_classes(self, y: ArrayLike) -> ClassifierMixin:
+    def set_classes(self, y: ArrayLike | None) -> ClassifierMixin:
         """
         Infer unique class labels and set the ``classes_`` attribute.
 
@@ -79,8 +79,8 @@ class ClassifierMixin:
         Parameters
         ----------
         y
-            An array that must contain all the class labels,
-            i.e. ``len(np.unique(y)) == n_classes``.
+            If an array that must contain all the class labels,
+            i.e. ``len(np.unique(y)) == n_classes``. If None, it resets the labels.
 
         Raises
         ------
@@ -131,7 +131,10 @@ class ClassifierMixin:
         >>> result = model.update(init_params, state, X_batch1, y_batch1)
 
         """
-        self._label_encoder.set_classes(y)
+        if y is None:
+            self._label_encoder.reset()
+            return
+        self._label_encoder.set_classes(y, declared=True)
         return self
 
     @property
@@ -142,7 +145,7 @@ class ClassifierMixin:
     @classes_.setter
     def classes_(self, value: NDArray | None) -> None:
         if value is not None:
-            self._label_encoder.set_classes(value)
+            self._label_encoder.set_classes(value, declared=True)
         else:
             self._label_encoder.reset()
 
@@ -837,7 +840,8 @@ class ClassifierGLM(ClassifierMixin, GLM):
         >>> model.coef_.shape
         (2, 2)
         """
-        self.set_classes(y)
+        if not self._label_encoder.declared:
+            self._label_encoder.set_classes(y)
         y = self._label_encoder.encode(y)
         return super().fit(X, y, init_params)
 
@@ -1172,7 +1176,8 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         >>> model.coef_.shape
         (2, 2, 3)
         """
-        self.set_classes(y)
+        if not self._label_encoder.declared:
+            self._label_encoder.set_classes(y)
         y = self._label_encoder.encode(y)
         return super().fit(X, y, init_params)
 

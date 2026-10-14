@@ -225,6 +225,18 @@ def mock_glm_optimizer_run(monkeypatch):
 
 
 @pytest.fixture
+def mock_classifier_glm_optimizer_run(monkeypatch):
+    """Bypass the JAX solver in GLM.fit() while keeping all validation logic."""
+    _make_optimizer_run_patch(monkeypatch, nmo.glm.ClassifierGLM)
+
+
+@pytest.fixture
+def mock_classifier_population_glm_optimizer_run(monkeypatch):
+    """Bypass the JAX solver in GLM.fit() while keeping all validation logic."""
+    _make_optimizer_run_patch(monkeypatch, nmo.glm.ClassifierPopulationGLM)
+
+
+@pytest.fixture
 def mock_glm_hmm_optimizer_run(monkeypatch):
     """Bypass the JAX solver in GLMHMM.fit() while keeping all validation logic."""
     _make_optimizer_run_patch(monkeypatch, nmo.glm_hmm.GLMHMM)

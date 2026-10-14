@@ -4746,19 +4746,24 @@ class TestClassifierGLM:
         model.fit(X, y)
 
     @pytest.mark.solver_related
-    def test_fit_glm_too_few_classes(
-        self, inv_link, request, glm_type, model_instantiation
+    def test_fit_glm_too_few_classes_ok(
+        self,
+        inv_link,
+        request,
+        glm_type,
+        model_instantiation,
+        mock_classifier_glm_optimizer_run,
+        mock_classifier_population_glm_optimizer_run,
     ):
         """
-        Ensure that the model can be fit with different link functions.
+        Show that model a model with less classes than user specified fits.
         """
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
         model.inverse_link_function = inv_link
         y = jnp.where(y == 2, 1, y)  # reduce to only 2 classes
-        with pytest.raises(ValueError, match="Found only .* unique class labels"):
-            model.fit(X, y)
+        model.fit(X, y)
 
     @pytest.mark.solver_related
     def test_fit_glm_too_many_classes(
@@ -4772,7 +4777,7 @@ class TestClassifierGLM:
         )
         model.inverse_link_function = inv_link
         y = y.at[:10].set(3)  # add another class
-        with pytest.raises(ValueError, match="Found .* unique class labels"):
+        with pytest.raises(ValueError, match=r"Unrecognized label\(s\)"):
             model.fit(X, y)
 
     def test_score_glm(self, inv_link, request, glm_type, model_instantiation):
@@ -5089,7 +5094,7 @@ class TestClassifierGLM:
 
         label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
         model_label.set_classes(label)
-        y_label = model._label_encoder.decode(y)
+        y_label = model_label._label_encoder.decode(y)
         model_label.fit(X, y_label)
         assert jnp.array_equal(model.coef_, model_label.coef_)
         assert jnp.array_equal(model.intercept_, model_label.intercept_)
@@ -5133,6 +5138,36 @@ class TestClassifierGLM:
         with pytest.raises(ValueError, match="Found only .* unique class labels"):
             model.set_classes(too_few)
 
+    def test_derived_classes_refit(
+        self,
+        inv_link,
+        glm_type,
+        model_instantiation,
+        request,
+        mock_classifier_glm_optimizer_run,
+        mock_classifier_population_glm_optimizer_run,
+    ):
+        X, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        # fit without setting
+        model._label_encoder.declared = False
+        model.fit(X, y)
+        # change classes re-fit ok
+        model.fit(X, y + 1)
+
+        # setting the class then re-fit fails
+        model.set_classes(y)
+        with pytest.raises(ValueError, match=r"Unrecognized label\(s\)"):
+            model.fit(X, y + 1)
+
+        # reset + refit works
+        model.classes_ = None
+        model.fit(X, y + 1)
+
+        # reset in from a different path
+        model.set_classes(y)
+        model.set_classes(None)
+        model.fit(X, y + 1)
+
     def test_encode_invalid_label_raises(
         self, inv_link, glm_type, model_instantiation, request
     ):
@@ -5172,7 +5207,7 @@ class TestClassifierGLM:
         # Use non-contiguous integers like [5, 10, 15] instead of [0, 1, 2]
         nc_labels = np.array([5 + i * 5 for i in range(model.n_classes)])
         y_nc = nc_labels[y]  # Map 0->5, 1->10, 2->15, etc.
-
+        model_nc.set_classes(y_nc)
         model_nc.fit(X, y_nc)
 
         # Coefficients should be the same
