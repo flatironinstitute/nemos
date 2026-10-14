@@ -13,7 +13,13 @@ kernelspec:
 (glm-classifier)=
 # Classifier GLM
 
-[`ClassifierGLM`](nemos.glm.ClassifierGLM) predicts a discrete label per sample through a softmax inverse link. It takes the arguments of the [single neuron GLM](glm-single-neuron) and is configured the same way, with [`CategoricalObservations`](nemos.observation_models.CategoricalObservations) and `log_softmax` set for you. What is specific to it is the number of classes, the handling of the labels, and the identifiability of the parameters.
+[`ClassifierGLM`](nemos.glm.ClassifierGLM) predicts a discrete label per sample through a softmax inverse link. It is initialized with the arguments of the [single neuron GLM](glm-single-neuron) — `regularizer`, `regularizer_strength`, `fit_intercept`, `fix_params`, `solver_name` and `solver_kwargs` all mean there what they mean here — except that:
+
+- the observation model is fixed to [`CategoricalObservations`](nemos.observation_models.CategoricalObservations), so it is not an argument at all,
+- the inverse link function is set to `log_softmax` for you,
+- `n_classes` is added.
+
+What is specific to the model past initialization is the handling of the labels and the identifiability of the parameters.
 
 ## Fitting a Classifier GLM
 
@@ -105,13 +111,27 @@ $$
 
 The redundancy is an invariance of the softmax, which is unchanged when the same constant is added to the linear predictor of every class: if `(coef, intercept)` is a solution, so is `(coef + c, intercept + c)`. Without regularization the model has infinitely many solutions, all giving the same probabilities, and the one the solver returns depends on where it started. `Ridge` is the default for that reason.
 
-Ridge does not remove the invariance entirely. The penalty reaches the coefficients and leaves the intercept alone, so `coef_` comes out pinned and centered, summing to zero across classes, while `intercept_` is still free to slide: fitting from a starting point whose intercept is shifted by a constant returns that same shift in `intercept_`, with the coefficients and the probabilities unchanged.
+Ridge does not remove the invariance entirely. By default NeMoS does not penalize the intercept, only the coefficients. `coef_` is therefore unique, and centered, summing to zero across classes.
 
 ```{code-cell} ipython3
 model.coef_.sum(axis=-1)[:4]
 ```
 
-Carrying the intercept as a constant column of the design, with `fit_intercept=False`, brings it under the penalty and leaves nothing unpinned.
+`intercept_` is not determined. Fitting the same data from a starting point whose intercept is shifted by a constant returns that same shift, and the coefficients and the probabilities do not move.
+
+```{code-cell} ipython3
+coef, intercept = model.initialize_params(X, labels)
+
+shifted = nmo.glm.ClassifierGLM(n_classes=n_classes).fit(
+    X, labels, init_params=(coef, intercept + 5.0)
+)
+
+print(f"intercept_:         {model.intercept_}")
+print(f"shifted intercept_: {shifted.intercept_}")
+print(f"same probabilities: {np.allclose(model.predict_proba(X), shifted.predict_proba(X), atol=1e-4)}")
+```
+
+To penalize the intercept too, add a constant column to the design and set `fit_intercept=False`. The intercept is then one of the coefficients, and every parameter is penalized.
 
 ```{code-cell} ipython3
 X_with_intercept = np.concatenate([np.ones((X.shape[0], 1)), np.asarray(X)], axis=1)
