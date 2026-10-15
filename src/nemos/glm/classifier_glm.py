@@ -79,7 +79,7 @@ class ClassifierMixin:
         Parameters
         ----------
         y
-            If an array that must contain all the class labels,
+            An array that must contain all the class labels,
             i.e. ``len(np.unique(y)) == n_classes``. If None, it resets the labels.
 
         Raises
@@ -89,10 +89,11 @@ class ClassifierMixin:
 
         Notes
         -----
-        Calling ``set_classes`` declares the labels: :meth:`fit` then keeps them instead of
-        inferring its own, so its ``y`` may hold any subset of them, and a label outside the
-        set raises. Passing ``None`` clears the declaration, and the next :meth:`fit` infers
-        the labels from ``y`` again.
+        If ``set_classes`` is used to declare class labels, :meth:`fit` keeps them instead of
+        inferring labels from the input ``y``. Manually setting class labels allows the input 
+        ``y`` to fit to hold any subset of possible classes. A label outside the set raises an
+        error. Passing ``None`` clears the labels, and the next :meth:`fit` infers the labels 
+        from ``y`` again.
 
         :meth:`initialize_optimizer_and_state` and :meth:`update` do not infer labels. Declare
         them with ``set_classes`` before an :meth:`update` loop, since a single batch need not
@@ -685,13 +686,13 @@ class ClassifierGLM(ClassifierMixin, GLM):
 
     **Setting Class Labels**
 
-    :meth:`fit` infers the class labels from its ``y``, which must therefore hold every one
-    of the ``n_classes`` labels. Declaring them instead with :meth:`set_classes` lifts that
-    requirement: ``y`` may then hold any subset of the declared labels, and a label outside
-    the set raises. Every other method requires the labels to be set already, so after
-    assigning ``coef_`` and ``intercept_`` by hand, call :meth:`set_classes` before
-    :meth:`predict`, :meth:`predict_proba`, :meth:`simulate`, :meth:`score`,
-    :meth:`compute_loss`, :meth:`initialize_optimizer_and_state` or :meth:`update`.
+    :meth:`fit` infers the class labels from input ``y``, which must contain the full set
+    of ``n_classes`` labels. Declaring them instead with :meth:`set_classes` lifts that
+    requirement: ``y`` can hold any subset of the declared labels, and a label outside
+    the set raises. Every other method requires the labels to be set already. If assigning
+    ``coef_`` and ``intercept_`` by hand, call :meth:`set_classes` before :meth:`predict`,
+    :meth:`predict_proba`, :meth:`simulate`, :meth:`score`, :meth:`compute_loss`,
+    :meth:`initialize_optimizer_and_state` or :meth:`update`.
 
     See Also
     --------
@@ -833,9 +834,9 @@ class ClassifierGLM(ClassifierMixin, GLM):
 
         Notes
         -----
-        When the labels have not been declared with :meth:`set_classes`, ``fit`` infers them
-        from ``y``, which must then hold all ``n_classes`` of them. Declared labels are kept
-        as they are: ``y`` may hold any subset of them, and a label outside the set raises.
+        When the labels have not been set with :meth:`set_classes`, ``fit`` infers them
+        from ``y``, which must contain all ``n_classes``. Declared labels are kept
+        as they are: ``y`` can have any subset of them, and a label outside the set raises.
 
         Examples
         --------
@@ -984,11 +985,11 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
     **Setting Class Labels**
 
-    :meth:`fit` infers the class labels from its ``y``, which must therefore hold every one
-    of the ``n_classes`` labels, across all the neurons. Declaring them instead with
-    :meth:`set_classes` lifts that requirement: ``y`` may then hold any subset of the
-    declared labels, and a label outside the set raises. Every other method requires the
-    labels to be set already, so after assigning ``coef_`` and ``intercept_`` by hand, call
+    :meth:`fit` infers the class labels from input ``y``, which must contain the full set
+    of ``n_classes`` labels, across all observations. Declaring them instead with
+    :meth:`set_classes` lifts that requirement: ``y`` can hold any subset of the declared
+    labels, and a label outside the set raises. Every other method requires the labels to
+    be set already. If assigning ``coef_`` and ``intercept_`` by hand, call
     :meth:`set_classes` before :meth:`predict`, :meth:`predict_proba`, :meth:`simulate`,
     :meth:`score`, :meth:`compute_loss`, :meth:`initialize_optimizer_and_state` or
     :meth:`update`.
@@ -1172,9 +1173,9 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
         Notes
         -----
-        When the labels have not been declared with :meth:`set_classes`, ``fit`` infers them
-        from ``y``, which must then hold all ``n_classes`` of them across the neurons.
-        Declared labels are kept as they are: ``y`` may hold any subset of them, and a label
+        When the labels have not been set with :meth:`set_classes`, ``fit`` infers them
+        from ``y``, which must contain all ``n_classes`` across all observations.
+        Declared labels are kept as they are: ``y`` can have any subset of them, and a label
         outside the set raises.
 
         Examples
