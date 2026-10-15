@@ -5157,15 +5157,17 @@ class TestClassifierGLM:
         self, inv_link, glm_type, model_instantiation, request, input_type
     ):
         _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        n_classes = deepcopy(model.n_classes)
         if input_type is None:
             inp = input_type
         else:
             inp = y
         assert isinstance(model.set_classes(inp), model.__class__)
         if inp is None:
-            assert model.classes is None and not model._label_encoder.declared
+            assert model.classes is n_classes and not model._label_encoder.declared
         else:
             assert model._label_encoder.declared
+            np.testing.assert_array_equal(model.classes, np.unique(np.asarray(inp)))
 
     def test_derived_classes_refit(
         self,
@@ -5177,9 +5179,12 @@ class TestClassifierGLM:
         mock_classifier_population_glm_optimizer_run,
     ):
         X, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        n_classes = model.n_classes
         # fit without setting
         model._label_encoder.declared = False
         model.fit(X, y)
+        # fit infers the labels without declaring them, so classes stays the count
+        assert model.classes == n_classes
         # change classes re-fit ok
         model.fit(X, y + 1)
 
@@ -5333,6 +5338,9 @@ class TestClassifierGLM:
         model = model.__class__(classes=classes)
         cloned = sklearn.clone(model)
         np.testing.assert_array_equal(cloned.classes, model.classes)
+        # a count leaves the labels to be inferred by fit, an array declares them;
+        # the clone must agree, or it accepts a y the original rejects
+        assert cloned._label_encoder.declared == model._label_encoder.declared
 
     def test_initialize_params_stale_feature_mask_raises(
         self, inv_link, glm_type, model_instantiation, request

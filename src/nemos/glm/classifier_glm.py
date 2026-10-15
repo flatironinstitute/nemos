@@ -144,9 +144,13 @@ class ClassifierMixin:
         return self
 
     @property
-    def classes(self) -> NDArray | None:
+    def classes(self) -> NDArray | int:
         """Class labels, or None if not set."""
-        return self._label_encoder.classes_
+        return (
+            self.n_classes
+            if not self._label_encoder.declared
+            else self._label_encoder.classes_
+        )
 
     @classes.setter
     def classes(self, value: NDArray | None) -> None:
@@ -211,7 +215,8 @@ class ClassifierMixin:
 
         if not isinstance(value, Number) or value < 2 or not int(value) == value:
             raise ValueError(
-                "The number of classes must be an integer greater than or equal to 2."
+                "The number of classes must be an integer greater than or equal to 2.\n"
+                f"Classes ``{value}`` provided instead."
             )
 
         self._label_encoder = LabelEncoder(int(value))
@@ -612,7 +617,8 @@ class ClassifierMixin:
         )
 
     def _setup_classes(self, classes: int | ArrayLike):
-        if isinstance(classes, int):
+
+        if np.ndim(classes) == 0:
             self.n_classes = classes
             self._label_encoder.set_classes(np.arange(classes), declared=False)
         else:
