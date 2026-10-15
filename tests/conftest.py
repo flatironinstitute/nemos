@@ -1622,7 +1622,7 @@ def population_classifierGLM_model_instantiation_pytree(
         true_params.intercept,
     )
     model_tree = nmo.glm.ClassifierPopulationGLM(
-        n_classes=model.n_classes, regularizer=model.regularizer
+        classes=model.n_classes, regularizer=model.regularizer
     )
     model_tree.set_classes(np.arange(model.n_classes))
     return X_tree, spikes, model_tree, true_params_tree, rate
@@ -1969,7 +1969,7 @@ def instantiate_population_classifier_glm_func(
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
     model = nmo.glm.ClassifierPopulationGLM(
-        n_classes=n_classes,
+        classes=n_classes,
         regularizer=regularizer,
         solver_name=solver_name,
         **(init_kwargs or {}),

@@ -5293,6 +5293,45 @@ class TestClassifierGLM:
         # Probabilities should be identical (only label interpretation changes)
         assert jnp.allclose(proba_default, proba_label)
 
+    @pytest.mark.parametrize(
+        "classes, expectation",
+        [
+            (3, does_not_raise()),
+            (np.array(["a", "b", "c", "d"]), does_not_raise()),
+            (["a", "b", "c", "d"], does_not_raise()),
+            (("a", "b", "c", "d"), does_not_raise()),
+            (
+                [["a", "b", "c", "d"]],
+                pytest.raises(ValueError, match="``classes`` must be a"),
+            ),
+            ({"a": 1}, pytest.raises(ValueError, match="``classes`` must be a")),
+            ("abc", pytest.raises(ValueError, match="``classes`` must be a")),
+        ],
+    )
+    def test_init_classes(
+        self, expectation, classes, inv_link, glm_type, model_instantiation, request
+    ):
+        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        with expectation:
+            model.__class__(classes=classes)
+
+    @pytest.mark.parametrize(
+        "classes",
+        [
+            3,
+            np.array(["a", "b", "c", "d"]),
+            ["a", "b", "c", "d"],
+            ("a", "b", "c", "d"),
+        ],
+    )
+    def test_sklearn_clone(
+        self, classes, inv_link, glm_type, model_instantiation, request
+    ):
+        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        model = model.__class__(classes=classes)
+        cloned = sklearn.clone(model)
+        np.testing.assert_array_equal(cloned.classes, model.classes)
+
     def test_initialize_params_stale_feature_mask_raises(
         self, inv_link, glm_type, model_instantiation, request
     ):

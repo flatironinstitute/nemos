@@ -611,6 +611,20 @@ class ClassifierMixin:
             params, opt_state, X, y, *args, n_samples=n_samples, **kwargs
         )
 
+    def _setup_classes(self, classes: int | ArrayLike):
+        if isinstance(classes, int):
+            self.n_classes = classes
+            self._label_encoder.set_classes(np.arange(classes), declared=False)
+        else:
+            classes_array = np.asarray(classes)
+            if classes_array.ndim != 1:
+                raise ValueError(
+                    "``classes`` must be a 1-D array-like. "
+                    f"The provided {classes} were casted to a {classes_array.ndim}-D array instead."
+                )
+            self.n_classes = len(classes_array)
+            self.set_classes(classes_array)
+
 
 class ClassifierGLM(ClassifierMixin, GLM):
     """
@@ -792,14 +806,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         solver_name: str = None,
         solver_kwargs: dict = None,
     ):
-        if isinstance(classes, int):
-            self.n_classes = classes
-        else:
-            self.n_classes = len(classes)
-            classes = np.asarray(classes)
-            if classes.ndim != 1:
-                raise ValueError("Classes must be a 1-D array-like.")
-            self.set_classes(classes)
+        self._setup_classes(classes)
         observation_model = obs.CategoricalObservations()
         if regularizer is None:
             regularizer = "Ridge"
@@ -925,7 +932,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
     Parameters
     ----------
-    n_classes
+    classes
         The number of classes. Must be >= 2.
     inverse_link_function
         The inverse link function. Default is ``log_softmax``.
@@ -1020,7 +1027,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     ...     [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]]
     ... )
     >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
-    >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X, y)
+    >>> model = nmo.glm.ClassifierPopulationGLM(classes=3).fit(X, y)
     >>> model.coef_.shape
     (2, 2, 3)
 
@@ -1047,7 +1054,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     >>> y_str = np.array(
     ...     [["a", "a"], ["a", "b"], ["b", "a"], ["b", "c"], ["c", "b"], ["c", "c"]]
     ... )
-    >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X, y_str)
+    >>> model = nmo.glm.ClassifierPopulationGLM(classes=3).fit(X, y_str)
     >>> model.classes
     array(['a', 'b', 'c'], dtype='<U1')
     >>> model.predict(X).shape
@@ -1060,7 +1067,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     >>> feature_mask = jnp.array([[1, 0], [1, 1]])
     >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
     >>> model = nmo.glm.ClassifierPopulationGLM(
-    ...     n_classes=3, feature_mask=feature_mask
+    ...     classes=3, feature_mask=feature_mask
     ... ).fit(X, y)
     >>> model.coef_
     Array(...)
@@ -1070,7 +1077,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     Change regularization strength:
 
     >>> model = nmo.glm.ClassifierPopulationGLM(
-    ...     n_classes=3, regularizer="Ridge", regularizer_strength=0.5
+    ...     classes=3, regularizer="Ridge", regularizer_strength=0.5
     ... )
     >>> model.regularizer
     Ridge()
@@ -1081,7 +1088,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     ``coef_`` will share the same pytree structure:
 
     >>> X_dict = {"feature_1": X[:, :1], "feature_2": X[:, 1:]}
-    >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X_dict, y)
+    >>> model = nmo.glm.ClassifierPopulationGLM(classes=3).fit(X_dict, y)
     >>> type(model.coef_)
     <class 'dict'>
     """
@@ -1093,7 +1100,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
     def __init__(
         self,
-        n_classes: Optional[int] = 2,
+        classes: Optional[int | ArrayLike] = 2,
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Any = None,
@@ -1103,7 +1110,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         solver_kwargs: dict = None,
         feature_mask: Optional[jnp.ndarray] = None,
     ):
-        self.n_classes = n_classes
+        self._setup_classes(classes)
         observation_model = obs.CategoricalObservations()
         if regularizer is None:
             regularizer = "Ridge"
@@ -1194,7 +1201,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         ...     [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]]
         ... )
         >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
-        >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3)
+        >>> model = nmo.glm.ClassifierPopulationGLM(classes=3)
         >>> model = model.fit(X, y)
         >>> model.coef_.shape
         (2, 2, 3)
@@ -1246,7 +1253,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
         ...     [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]]
         ... )
         >>> y = jnp.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 1], [2, 2]])
-        >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X, y)
+        >>> model = nmo.glm.ClassifierPopulationGLM(classes=3).fit(X, y)
         >>> score = model.score(X, y)
         """
         self._label_encoder.check_classes_is_set("score")
