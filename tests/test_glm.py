@@ -1151,7 +1151,7 @@ class TestGLM:
                     "scale_": 2.0,
                     "dof_resid_": 3,
                     "aux_": None,
-                    "classes_": np.array([2, 3]),
+                    "classes": np.array([2, 3]),
                 },
                 (jnp.ones((3, 2)), None),
             ),
@@ -1163,7 +1163,7 @@ class TestGLM:
                     "scale_": 2.0,
                     "dof_resid_": 3,
                     "aux_": None,
-                    "classes_": np.array([2, 3]),
+                    "classes": np.array([2, 3]),
                 },
                 (jnp.ones((3, 1, 2)), None),
             ),
@@ -2735,7 +2735,8 @@ class TestGLMObservationModel:
             regularizer_strength = None
 
         kwargs = dict(
-            n_classes=getattr(model_obs, "n_classes", None),
+            # an int leaves the labels undeclared, so fit infers them from y
+            classes=getattr(model_obs, "n_classes", None),
             regularizer=regularizer,
             regularizer_strength=regularizer_strength,
             observation_model=model_obs.observation_model,
@@ -3039,7 +3040,8 @@ class TestGLMObservationModel:
         # if the regularizer is not allowed for the solver type, return
         try:
             kwargs = dict(
-                n_classes=getattr(model, "n_classes", None),
+                # an int leaves the labels undeclared, so fit infers them from y
+                classes=getattr(model, "n_classes", None),
                 regularizer=regularizer,
                 solver_name=solver_name,
                 inverse_link_function=inv_link,
@@ -4873,7 +4875,7 @@ class TestClassifierGLM:
     ):
         _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
         with expectation:
-            model.__class__(n_classes=n_classes)
+            model.__class__(classes=n_classes)
 
         with expectation:
             model.n_classes = n_classes
