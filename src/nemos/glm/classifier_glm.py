@@ -8,6 +8,7 @@ from typing import Any, Callable, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from .. import observation_models as obs
@@ -70,7 +71,7 @@ class ClassifierMixin:
 
     def set_classes(self, y: ArrayLike | None) -> ClassifierMixin:
         """
-        Infer unique class labels and set the ``classes_`` attribute.
+        Infer unique class labels and set the ``classes`` attribute.
 
         This method infers class labels from ``y`` and sets up the internal
         encoding/decoding machinery. When labels are the default ``[0, 1, ..., n_classes-1]``,
@@ -90,9 +91,9 @@ class ClassifierMixin:
         Notes
         -----
         If ``set_classes`` is used to declare class labels, :meth:`fit` keeps them instead of
-        inferring labels from the input ``y``. Manually setting class labels allows the input 
+        inferring labels from the input ``y``. Manually setting class labels allows the input
         ``y`` to fit to hold any subset of possible classes. A label outside the set raises an
-        error. Passing ``None`` clears the labels, and the next :meth:`fit` infers the labels 
+        error. Passing ``None`` clears the labels, and the next :meth:`fit` infers the labels
         from ``y`` again.
 
         :meth:`initialize_optimizer_and_state` and :meth:`update` do not infer labels. Declare
@@ -143,12 +144,12 @@ class ClassifierMixin:
         return self
 
     @property
-    def classes_(self) -> NDArray | None:
+    def classes(self) -> NDArray | None:
         """Class labels, or None if not set."""
         return self._label_encoder.classes_
 
-    @classes_.setter
-    def classes_(self, value: NDArray | None) -> None:
+    @classes.setter
+    def classes(self, value: NDArray | None) -> None:
         if value is not None:
             self._label_encoder.set_classes(value, declared=True)
         else:
@@ -175,7 +176,7 @@ class ClassifierMixin:
         X
             Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
         y
-            Target class labels in the same format as ``classes_``.
+            Target class labels in the same format as ``classes``.
         *args
             Additional positional arguments passed to the model-specific loss function.
         **kwargs
@@ -189,7 +190,7 @@ class ClassifierMixin:
         Raises
         ------
         RuntimeError
-            If ``classes_`` has not been set.
+            If ``classes`` has not been set.
         ValueError
             If inputs or parameters have incompatible shapes or invalid values.
         """
@@ -265,7 +266,7 @@ class ClassifierMixin:
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y)
+        >>> model = nmo.glm.ClassifierGLM(classes=2).fit(X, y)
         >>> predictions = model.predict(X)
         >>> predictions.shape
         (4,)
@@ -308,7 +309,7 @@ class ClassifierMixin:
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y)
+        >>> model = nmo.glm.ClassifierGLM(classes=2).fit(X, y)
         >>> proba = model.predict_proba(X, return_type="proba")
         >>> proba.shape
         (4, 2)
@@ -318,7 +319,7 @@ class ClassifierMixin:
         # One could assume default labels 0,...,n-1
         # but requiring to be explicit makes the mapping between
         # the class labels and the probability index less ambiguous:
-        #   `log_proba[:, i]` is the log-proba of class `self.classes_[i]`
+        #   `log_proba[:, i]` is the log-proba of class `self.classes[i]`
         self._label_encoder.check_classes_is_set("predict_proba")
         # log-proba for categorical, proba for Bernoulli
         log_proba = super().predict(X)
@@ -425,14 +426,14 @@ class ClassifierMixin:
         :
             A tuple ``(y, log_prob)`` where:
             - ``y`` is an array of shape ``(n_samples,)`` containing the
-              simulated class labels (in the same format as ``classes_``).
+              simulated class labels (in the same format as ``classes``).
             - ``log_prob`` is an array of shape ``(n_samples,)`` containing the
               log-probability of the simulated responses under the model.
 
         Raises
         ------
         RuntimeError
-            If ``classes_`` has not been set. Call :meth:`set_classes` or :meth:`fit`
+            If ``classes`` has not been set. Call :meth:`set_classes` or :meth:`fit`
             before calling this method.
 
         Examples
@@ -442,7 +443,7 @@ class ClassifierMixin:
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y)
+        >>> model = nmo.glm.ClassifierGLM(classes=2).fit(X, y)
         >>> key = jax.random.key(0)
         >>> simulated_y, log_prob = model.simulate(key, X)
         >>> simulated_y.shape
@@ -507,7 +508,7 @@ class ClassifierMixin:
         y :
             Class labels, array of shape ``(n_time_bins,)`` for single neuron
             models or ``(n_time_bins, n_neurons)`` for population models. Labels
-            must be a subset of ``classes_``.
+            must be a subset of ``classes``.
 
         Returns
         -------
@@ -516,8 +517,8 @@ class ClassifierMixin:
 
         Notes
         -----
-        All labels in ``y`` must be present in ``classes_``. Passing labels not
-        in ``classes_`` will raise an error.
+        All labels in ``y`` must be present in ``classes``. Passing labels not
+        in ``classes`` will raise an error.
 
         Examples
         --------
@@ -525,7 +526,7 @@ class ClassifierMixin:
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.ClassifierGLM(n_classes=2)
+        >>> model = nmo.glm.ClassifierGLM(classes=2)
         >>> model.set_classes(y)
         ClassifierGLM(...)
         >>> coef, intercept = model.initialize_params(X, y)
@@ -556,7 +557,7 @@ class ClassifierMixin:
         encoding before the update.
 
         **Important**: Labels of any dtype (integers, floats, strings, etc.) are
-        supported and will be encoded using the ``classes_`` attribute set via
+        supported and will be encoded using the ``classes`` attribute set via
         :meth:`set_classes`. For best performance, use integer labels ``[0, n_classes - 1]``.
 
         Parameters
@@ -572,7 +573,7 @@ class ClassifierMixin:
         y :
             Class labels, array of shape ``(n_time_bins,)`` for single neuron
             models or ``(n_time_bins, n_neurons)`` for population models. Labels must
-            match those defined in ``classes_``.
+            match those defined in ``classes``.
         *args :
             Additional positional arguments to be passed to the solver's update method.
         n_samples :
@@ -594,7 +595,7 @@ class ClassifierMixin:
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.ClassifierGLM(n_classes=2)
+        >>> model = nmo.glm.ClassifierGLM(classes=2)
         >>> model.set_classes(y)
         ClassifierGLM(...)
         >>> params = model.initialize_params(X, y)
@@ -622,7 +623,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
 
     Parameters
     ----------
-    n_classes
+    classes
         The number of classes. Must be >= 2.
     inverse_link_function
         The inverse link function. Default is ``log_softmax``.
@@ -710,7 +711,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
     >>> import nemos as nmo
     >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
     >>> y = jnp.array([0, 0, 1, 1])
-    >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y)
+    >>> model = nmo.glm.ClassifierGLM(classes=2).fit(X, y)
     >>> model.coef_.shape
     (2, 2)
 
@@ -738,8 +739,8 @@ class ClassifierGLM(ClassifierMixin, GLM):
     Class labels can be strings or any hashable type:
 
     >>> y_str = np.array(["cat", "cat", "dog", "dog"])
-    >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y_str)
-    >>> model.classes_
+    >>> model = nmo.glm.ClassifierGLM(classes=2).fit(X, y_str)
+    >>> model.classes
     array(['cat', 'dog'], dtype='<U3')
     >>> model.predict(X)  # doctest: +NORMALIZE_WHITESPACE
     array(['cat', 'cat', 'dog', 'dog'], dtype='<U3')
@@ -752,7 +753,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
     ...     [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0], [6.0, 7.0]]
     ... )
     >>> y = jnp.array([0, 0, 1, 1, 2, 2])
-    >>> model = nmo.glm.ClassifierGLM(n_classes=3).fit(X, y)
+    >>> model = nmo.glm.ClassifierGLM(classes=3).fit(X, y)
     >>> model.coef_.shape
     (2, 3)
 
@@ -761,7 +762,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
     Change regularization strength:
 
     >>> model = nmo.glm.ClassifierGLM(
-    ...     n_classes=2, regularizer="Ridge", regularizer_strength=0.5
+    ...     classes=2, regularizer="Ridge", regularizer_strength=0.5
     ... )
     >>> model.regularizer
     Ridge()
@@ -772,7 +773,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
     ``coef_`` will share the same pytree structure:
 
     >>> X_dict = {"feature_1": X[:, :1], "feature_2": X[:, 1:]}
-    >>> model = nmo.glm.ClassifierGLM(n_classes=3).fit(X_dict, y)
+    >>> model = nmo.glm.ClassifierGLM(classes=3).fit(X_dict, y)
     >>> # The coefficient structure matches the input
     >>> type(model.coef_)
     <class 'dict'>
@@ -782,7 +783,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
 
     def __init__(
         self,
-        n_classes: Optional[int] = 2,
+        classes: Optional[int | ArrayLike] = 2,
         inverse_link_function: Optional[Callable] = None,
         regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Any = None,
@@ -791,7 +792,14 @@ class ClassifierGLM(ClassifierMixin, GLM):
         solver_name: str = None,
         solver_kwargs: dict = None,
     ):
-        self.n_classes = n_classes
+        if isinstance(classes, int):
+            self.n_classes = classes
+        else:
+            self.n_classes = len(classes)
+            classes = np.asarray(classes)
+            if classes.ndim != 1:
+                raise ValueError("Classes must be a 1-D array-like.")
+            self.set_classes(classes)
         observation_model = obs.CategoricalObservations()
         if regularizer is None:
             regularizer = "Ridge"
@@ -844,7 +852,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.ClassifierGLM(n_classes=2)
+        >>> model = nmo.glm.ClassifierGLM(classes=2)
         >>> model = model.fit(X, y)
         >>> model.coef_.shape
         (2, 2)
@@ -872,7 +880,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
             Test input samples of shape ``(n_samples, n_features)`` or a pytree of arrays of the same shape.
         y
             True class labels of shape ``(n_samples,)``. Labels must be a subset
-            of ``classes_``.
+            of ``classes``.
         score_type
             The type of score to compute.
         aggregate_sample_scores
@@ -885,8 +893,8 @@ class ClassifierGLM(ClassifierMixin, GLM):
 
         Notes
         -----
-        All labels in ``y`` must be present in ``classes_``. Passing labels not
-        in ``classes_`` will raise an error.
+        All labels in ``y`` must be present in ``classes``. Passing labels not
+        in ``classes`` will raise an error.
 
         Examples
         --------
@@ -894,7 +902,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.ClassifierGLM(n_classes=2).fit(X, y)
+        >>> model = nmo.glm.ClassifierGLM(classes=2).fit(X, y)
         >>> score = model.score(X, y)
         """
         # check if classes are not set, aka user set the coef and intercept
@@ -1040,7 +1048,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     ...     [["a", "a"], ["a", "b"], ["b", "a"], ["b", "c"], ["c", "b"], ["c", "c"]]
     ... )
     >>> model = nmo.glm.ClassifierPopulationGLM(n_classes=3).fit(X, y_str)
-    >>> model.classes_
+    >>> model.classes
     array(['a', 'b', 'c'], dtype='<U1')
     >>> model.predict(X).shape
     (6, 2)
@@ -1214,7 +1222,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
             Test input samples of shape ``(n_samples, n_features)`` or a pytree of arrays of the same shape.
         y
             True class labels of shape ``(n_samples, n_neurons)``. Labels must
-            be a subset of ``classes_``.
+            be a subset of ``classes``.
         score_type
             The type of score to compute.
         aggregate_sample_scores
@@ -1227,8 +1235,8 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
 
         Notes
         -----
-        All labels in ``y`` must be present in ``classes_``. Passing labels not
-        in ``classes_`` will raise an error.
+        All labels in ``y`` must be present in ``classes``. Passing labels not
+        in ``classes`` will raise an error.
 
         Examples
         --------

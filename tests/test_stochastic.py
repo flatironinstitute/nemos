@@ -830,7 +830,7 @@ class TestGLMStochasticFit:
         loader = ArrayDataLoader(X, y, batch_size=32)
 
         model = nmo.glm.ClassifierGLM(
-            n_classes=3,
+            classes=3,
             solver_name="GradientDescent",
             solver_kwargs={"stepsize": 0.001, "maxiter": 100, "acceleration": False},
         )

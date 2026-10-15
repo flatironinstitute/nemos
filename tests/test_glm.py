@@ -5030,7 +5030,7 @@ class TestClassifierGLM:
             glm_type + model_instantiation
         )
         model = deepcopy(model)
-        model.classes_ = None
+        model.classes = None
 
         # superset of all possible required inputs
         input_dict = {
@@ -5161,7 +5161,7 @@ class TestClassifierGLM:
             inp = y
         assert isinstance(model.set_classes(inp), model.__class__)
         if inp is None:
-            assert model.classes_ is None and not model._label_encoder.declared
+            assert model.classes is None and not model._label_encoder.declared
         else:
             assert model._label_encoder.declared
 
@@ -5187,7 +5187,7 @@ class TestClassifierGLM:
             model.fit(X, y + 1)
 
         # reset + refit works
-        model.classes_ = None
+        model.classes = None
         model.fit(X, y + 1)
 
         # reset in from a different path
