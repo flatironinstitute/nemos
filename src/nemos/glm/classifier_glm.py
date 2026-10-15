@@ -113,15 +113,15 @@ class ClassifierMixin:
         Generate sample data where the first batch only contains 2 of 3 classes:
 
         >>> X = np.random.randn(100, 5)
-        >>> y_all_classes = np.array([0, 1, 2])  # all possible classes
-        >>> y_batch1 = np.array([0, 1, 0, 1, 0])  # first batch missing class 2
+        >>> y_all_classes = np.array(["a", "b", "c"])  # all possible classes
+        >>> y_batch1 = np.array(["a", "b", "a", "b", "a"])  # first batch missing "c"
         >>> X_batch1 = X[:5]
 
-        Without ``set_classes``, initialization fails if batch lacks all classes:
+        Without ``set_classes``, the model expects the default integer labels:
 
         >>> init_params = model.initialize_params(X_batch1, y_batch1)
         Traceback (most recent call last):
-        RuntimeError: Classes are not set. Must call ``set_classes`` before calling...
+        ValueError: Expected integer labels when classes are the default...
 
         Call ``set_classes`` first to define all labels, then initialize:
 
@@ -145,7 +145,7 @@ class ClassifierMixin:
 
     @property
     def classes(self) -> NDArray | int:
-        """Class labels, or None if not set."""
+        """Declared class labels, or the number of classes when they are not declared."""
         return (
             self.n_classes
             if not self._label_encoder.declared
@@ -158,6 +158,11 @@ class ClassifierMixin:
             self._label_encoder.set_classes(value, declared=True)
         else:
             self._label_encoder.reset()
+
+    @property
+    def classes_(self) -> NDArray | None:
+        """Class labels in use, declared or inferred by :meth:`fit`, or None if not set."""
+        return self._label_encoder.classes_
 
     def compute_loss(
         self,
@@ -760,7 +765,7 @@ class ClassifierGLM(ClassifierMixin, GLM):
 
     >>> y_str = np.array(["cat", "cat", "dog", "dog"])
     >>> model = nmo.glm.ClassifierGLM(classes=2).fit(X, y_str)
-    >>> model.classes
+    >>> model.classes_
     array(['cat', 'dog'], dtype='<U3')
     >>> model.predict(X)  # doctest: +NORMALIZE_WHITESPACE
     array(['cat', 'cat', 'dog', 'dog'], dtype='<U3')
@@ -1061,7 +1066,7 @@ class ClassifierPopulationGLM(ClassifierMixin, PopulationGLM):
     ...     [["a", "a"], ["a", "b"], ["b", "a"], ["b", "c"], ["c", "b"], ["c", "c"]]
     ... )
     >>> model = nmo.glm.ClassifierPopulationGLM(classes=3).fit(X, y_str)
-    >>> model.classes
+    >>> model.classes_
     array(['a', 'b', 'c'], dtype='<U1')
     >>> model.predict(X).shape
     (6, 2)

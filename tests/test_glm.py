@@ -2311,7 +2311,7 @@ class TestGLMObservationModel:
         class_name = "PopulationGLM" if is_population_glm_type(glm_type) else "GLM"
         if "classifier" in model_instantiation:
             class_name = "Classifier" + class_name
-            second_line = f"    n_classes={n_classes},\n"
+            second_line = f"    classes={n_classes},\n"
         else:
             second_line = f"    observation_model={observation_model},\n"
 
