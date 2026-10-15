@@ -622,19 +622,23 @@ class ClassifierMixin:
         )
 
     def _setup_classes(self, classes: int | ArrayLike):
-
-        if np.ndim(classes) == 0:
+        classes_array = np.asarray(classes)
+        # ``np.asarray`` casts a dict or a string to a 0-D array too, so the dtype
+        # is what separates a count from them
+        if classes_array.ndim == 0 and np.issubdtype(classes_array.dtype, np.number):
             self.n_classes = classes
-            self._label_encoder.set_classes(np.arange(classes), declared=False)
-        else:
-            classes_array = np.asarray(classes)
-            if classes_array.ndim != 1:
-                raise ValueError(
-                    "``classes`` must be a 1-D array-like. "
-                    f"The provided {classes} were casted to a {classes_array.ndim}-D array instead."
-                )
+            self._label_encoder.set_classes(np.arange(self.n_classes), declared=False)
+        elif classes_array.ndim == 1 and not np.issubdtype(
+            classes_array.dtype, np.object_
+        ):
             self.n_classes = len(classes_array)
             self.set_classes(classes_array)
+        else:
+            raise ValueError(
+                "``classes`` must be a class count or a 1-D array-like of class "
+                f"labels. The provided {classes} was cast to a "
+                f"{classes_array.ndim}-D array of dtype {classes_array.dtype} instead."
+            )
 
 
 class ClassifierGLM(ClassifierMixin, GLM):
