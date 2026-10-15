@@ -1123,6 +1123,11 @@ class BaseRegressor(
         :
             A dictionary of attribute names and their values.
         """
+
+        def is_read_only_property(name):
+            cls_attr = getattr(self.__class__, name, None)
+            return isinstance(cls_attr, property) and cls_attr.fset is None
+
         set_attr = {
             name: getattr(self, name)
             for name in dir(self)
@@ -1131,15 +1136,8 @@ class BaseRegressor(
             if name.endswith("_")
             and not name.endswith("__")
             and (not callable(getattr(self, name)))
+            and not is_read_only_property(name)
         }
-        # drop attributes that have a private equivalent
-        # those are likely properties without a setter.
-        private_set_attr_names = [
-            name for name in set_attr.keys() if name.startswith("_")
-        ]
-        for name in private_set_attr_names:
-            if name[1:] in set_attr:
-                set_attr.pop(name[1:])
         return set_attr
 
     @staticmethod
