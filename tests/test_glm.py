@@ -2311,7 +2311,8 @@ class TestGLMObservationModel:
         class_name = "PopulationGLM" if is_population_glm_type(glm_type) else "GLM"
         if "classifier" in model_instantiation:
             class_name = "Classifier" + class_name
-            second_line = f"    classes={n_classes},\n"
+            # the fixture declares the labels, so the repr shows them
+            second_line = f"    classes={list(range(n_classes))},\n"
         else:
             second_line = f"    observation_model={observation_model},\n"
 
@@ -4874,9 +4875,8 @@ class TestClassifierGLM:
         request,
     ):
         _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
-        with expectation:
-            model.__class__(classes=n_classes)
-
+        # the constructor accepts labels as well as a count, so it reports malformed
+        # input differently; ``test_init_classes`` covers it
         with expectation:
             model.n_classes = n_classes
 
@@ -5304,6 +5304,8 @@ class TestClassifierGLM:
         "classes, expectation",
         [
             (3, does_not_raise()),
+            (np.int64(3), does_not_raise()),
+            (np.array(2), does_not_raise()),
             (np.array(["a", "b", "c", "d"]), does_not_raise()),
             (["a", "b", "c", "d"], does_not_raise()),
             (("a", "b", "c", "d"), does_not_raise()),
@@ -5313,6 +5315,7 @@ class TestClassifierGLM:
             ),
             ({"a": 1}, pytest.raises(ValueError, match="``classes`` must be a")),
             ("abc", pytest.raises(ValueError, match="``classes`` must be a")),
+            ("2", pytest.raises(ValueError, match="``classes`` must be a")),
         ],
     )
     def test_init_classes(

@@ -1823,7 +1823,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
     def __repr__(self):
         """Representation of the GLM class."""
         return format_repr(
-            self, multiline=True, use_name_keys=["inverse_link_function"]
+            self,
+            multiline=True,
+            use_name_keys=["inverse_link_function"],
+            array_keys=["classes"],
         )
 
     def __sklearn_clone__(self) -> GLM:
