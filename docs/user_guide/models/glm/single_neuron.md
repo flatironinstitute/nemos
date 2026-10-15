@@ -384,22 +384,13 @@ The solver is chosen by name and configured through `solver_kwargs`.
 model = nmo.glm.GLM(solver_name="Newton", solver_kwargs={"tol": 1e-10}).fit(X, y)
 ```
 
-The keys `solver_kwargs` takes are the arguments of the solver itself, which it can be asked for. Anything else raises.
+The keys `solver_kwargs` takes are the arguments of the solver itself; anything else raises. To inspect which parameters can be specified, print the solver docstring with [`get_solver_documentation`](nemos.solvers.get_solver_documentation). Below is the top of the `LBFGS` one, up to its accepted arguments.
 
 ```{code-cell} ipython3
-from nemos.solvers import get_solver
-
-sorted(get_solver("Newton").implementation.get_accepted_arguments())
-```
-
-[`get_solver_documentation`](nemos.solvers.get_solver_documentation) returns the solver's docstring, which says what each argument does. Expand the cell below for the `Newton` one.
-
-```{code-cell} ipython3
-:tags: [hide-cell]
-
 from nemos.solvers import get_solver_documentation
 
-print(get_solver_documentation("Newton"))
+doc = get_solver_documentation("LBFGS")
+print("\n".join(doc.splitlines()[:27]))
 ```
 
 Left unset, NeMoS picks a solver that the regularizer admits: `Newton` for Ridge, `LBFGS` without regularization, and `ProximalGradient` for the non-smooth penalties.
