@@ -36,6 +36,13 @@ An `Observations` object is a small, self-contained calculator for one [exponent
 
 Models such as [`GLM`](nemos.glm.GLM) and [`GLMHMM`](nemos.glm_hmm.GLMHMM) store one such object as an attribute, and use it to define their loss function and to compute model statistics. This page describes the object itself, which is of interest if you are writing a model of your own, or if you want these statistics for a model you fit elsewhere.
 
+```{contents}
+:local:
+:depth: 2
+```
+
+## Supported Noise Distributions
+
 The available families are:
 
 | Observation model | Data modeled |
@@ -46,6 +53,7 @@ The available families are:
 | [`GaussianObservations`](nemos.observation_models.GaussianObservations) | unbounded continuous |
 | [`BernoulliObservations`](nemos.observation_models.BernoulliObservations) | binary events |
 | [`CategoricalObservations`](nemos.observation_models.CategoricalObservations) | one of $K$ labels |
+
 
 ## Background
 
