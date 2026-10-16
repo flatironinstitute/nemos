@@ -11,7 +11,7 @@ The [`nemos.glm`](nemos_glm) module currently  offers implementations of two GLM
 1. [`GLM`](nemos.glm.GLM): A direct implementation of a feedforward GLM.
 2. [`PopulationGLM`](nemos.glm.PopulationGLM): An implementation of a GLM for fitting a populaiton of neuron in a vectorized manner. This class inherits from [`GLM`](nemos.glm.GLM) and redefines the [`fit`](nemos.glm.GLM.fit) and `_predict` to fit the model and predict the firing rate.
 
-Our design aligns with the `scikit-learn` API, facilitating seamless integration of our GLM classes with the well-established `scikit-learn` pipeline and its cross-validation tools.
+Our design follows the `scikit-learn` API, so our GLM classes work with the `scikit-learn` pipeline and its cross-validation tools.
 
 The classes provided here are modular by design offering a standard foundation for any GLM variant.
 
@@ -19,7 +19,7 @@ Instantiating a specific GLM simply requires providing an observation model (Gam
 
 
 <figure markdown>
-    <img src="../_static/classes_nemos.png" alt="NeMoS classes."/>
+    <img src="../_static/classes_nemos.svg" alt="NeMoS classes."/>
     <figcaption>Schematic of the module interactions.</figcaption>
 </figure>
 
@@ -50,7 +50,7 @@ Additionally, the [`GLM`](nemos.glm.GLM) class inherits the attributes of `BaseR
 
 - [`predict`](nemos.glm.GLM.predict): Validates input and computes the mean rates of the [`GLM`](nemos.glm.GLM) by invoking the inverse-link function of the `observation_models` attribute.
 - [`score`](nemos.glm.GLM.score): Validates input and assesses the Poisson GLM using either log-likelihood or pseudo-$R^2$. This method uses the `observation_models` to determine log-likelihood or pseudo-$R^2$.
-- [`fit`](nemos.glm.GLM.fit): Validates input and aligns the Poisson GLM with spike train data. It leverages the `observation_models` and `regularizer` to define the model's loss function and instantiate the regularizer.
+- [`fit`](nemos.glm.GLM.fit): Validates input and aligns the Poisson GLM with spike train data. It uses the `observation_models` and `regularizer` to define the model's loss function and instantiate the regularizer.
 - [`simulate`](nemos.glm.GLM.simulate): Simulates spike trains using the GLM as a feedforward network, invoking the `observation_models.sample_generator` method for emission probability.
 - [`compute_loss`](nemos.glm.GLM.compute_loss): Computes the loss function for given user-provided parameters, `X`, and `y`. This method validates inputs and parameters, converts user parameters to the internal representation, and delegates to `_compute_loss`.
 - [`initialize_params`](nemos.glm.GLM.initialize_params): Initialize model parameters, setting to zero the coefficients, and setting the intercept by matching the firing rate.
@@ -92,7 +92,7 @@ The `GLMValidator` handles conversion between user-facing tuples and internal `G
 
 ## The Concrete Class `PopulationGLM`
 
-The [`PopulationGLM`](nemos.glm.PopulationGLM) class is an extension of the [`GLM`](nemos.glm.GLM), designed to fit multiple neurons jointly. This involves vectorized fitting processes that efficiently handle multiple neurons simultaneously, leveraging the inherent parallelism.
+The [`PopulationGLM`](nemos.glm.PopulationGLM) class is an extension of the [`GLM`](nemos.glm.GLM), designed to fit multiple neurons jointly. The fit is vectorized over neurons, so all of them are fit in parallel.
 
 ### `PopulationGLM` Specific Attributes
 

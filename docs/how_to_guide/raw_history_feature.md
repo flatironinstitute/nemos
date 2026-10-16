@@ -8,6 +8,13 @@ kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
   name: python3
+nemos_tags:
+  model: [PopulationGLM]
+  observation_model: [Poisson]
+  signal: [spike counts]
+  topic: [functional connectivity]
+  data: simulated
+  description: Fit a fully coupled population GLM on raw spike history, then reduce its parameters with a basis.
 ---
 
 # Fit GLMs For Neural Coupling

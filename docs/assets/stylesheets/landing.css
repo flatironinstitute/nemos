@@ -1,0 +1,8 @@
+/* The landing page has no sidebar on either side, so the 60em cap the theme
+   puts on the article column only narrows it. The selector matches the theme's
+   own, which is three classes deep and wins over a shorter one whatever the
+   order the stylesheets are loaded in. */
+.bd-main .bd-content .bd-article-container {
+    max-width: 100%;
+    flex-grow: 1;
+}

@@ -8,6 +8,13 @@ kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
   name: python3
+nemos_tags:
+  model: []
+  observation_model: []
+  signal: [continuous]
+  topic: [custom components, feature design]
+  data: simulated
+  description: Define a basis from a list of functions with CustomBasis, using Laguerre polynomials as the example.
 ---
 
 # How to Define A Custom Basis Class

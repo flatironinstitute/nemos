@@ -48,3 +48,9 @@ repos:
       entry: python scripts/check_notebook_metadata.py --fix
       language: system
       files: ^docs/.*\.md$
+
+    - id: check-example-tags
+      name: Check that examples are tagged appropriately
+      entry: python scripts/check_example_tags.py
+      language: system
+      files: ^docs/.*\.md$

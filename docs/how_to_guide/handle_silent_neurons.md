@@ -8,6 +8,13 @@ kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
   name: python3
+nemos_tags:
+  model: [GLM, PopulationGLM]
+  observation_model: [Poisson]
+  signal: [spike counts]
+  topic: [initialization]
+  data: simulated
+  description: Start a fit from finite parameters when a neuron never fires, and pick a solver that converges on it.
 ---
 
 (handle-silent-neurons)=
