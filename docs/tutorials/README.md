@@ -1,24 +1,16 @@
 # Tutorials
 
-Each tutorial is a complete analysis of a neural recording, across brain regions and recording modalities. The building blocks they use are explained in the [user guide](../user_guide/README.md); for answers to specific questions, such as how to fit a dataset that does not fit in memory, see the [how-to guides](../how_to_guide/README.md). The [Example Finder](examples-overview) lists both, filterable by model, signal and topic.
+A gallery of fully worked out tutorials analyzing neural recordings from different brain regions and recording modalities.
 
 :::{dropdown} Additional requirements
 :color: warning
 :icon: alert
-:open:
 To run the tutorials, you may need to install some additional packages used for plotting and data fetching.
 You can install all of the required packages with the following command:
 ```
 pip install nemos[examples]
 ```
 :::
-
-% Only the first toctree of each group carries the :caption:, so the sidebar shows one
-% group header per model family; conf.py keeps captions out of this page's body.
-
-## GLM
-
-Encoding models of intracellular current injection, head direction, grid and place fields, V1 responses and calcium transients.
 
 ::::{grid} 1 2 3 3
 
@@ -30,9 +22,8 @@ Encoding models of intracellular current injection, head direction, grid and pla
 
 ```{toctree}
 :maxdepth: 2
-:caption: GLM
 
-glm/plot_01_current_injection.md
+plot_01_current_injection.md
 ```
 :::
 
@@ -45,7 +36,7 @@ glm/plot_01_current_injection.md
 ```{toctree}
 :maxdepth: 2
 
-glm/plot_02_head_direction.md
+plot_02_head_direction.md
 ```
 :::
 
@@ -58,8 +49,9 @@ glm/plot_02_head_direction.md
 ```{toctree}
 :maxdepth: 2
 
-glm/plot_03_grid_cells.md
+plot_03_grid_cells.md
 ```
+
 :::
 
 :::{grid-item-card}
@@ -71,7 +63,7 @@ glm/plot_03_grid_cells.md
 ```{toctree}
 :maxdepth: 2
 
-glm/plot_04_v1_cells.md
+plot_04_v1_cells.md
 ```
 :::
 
@@ -84,30 +76,21 @@ glm/plot_04_v1_cells.md
 ```{toctree}
 :maxdepth: 2
 
-glm/plot_05_place_cells.md
+plot_05_place_cells.md
 ```
 :::
 
 :::{grid-item-card}
 
 <figure>
-<img src="../_static/thumbnails/tutorials/plot_06_calcium_imaging.svg" style="height: 100px", alt="Calcium imaging."/>
+<img src="../_static/thumbnails/tutorials/plot_06_calcium_imaging.svg" style="height: 100px", alt="Calcium immaging."/>
 </figure>
 
 ```{toctree}
 :maxdepth: 2
-
-glm/plot_06_calcium_imaging.md
+plot_06_calcium_imaging.md
 ```
 :::
-
-::::
-
-## GLM-HMM
-
-Inferring the behavioral states an animal switches between during a decision-making task.
-
-::::{grid} 1 2 3 3
 
 :::{grid-item-card}
 
@@ -117,9 +100,7 @@ Inferring the behavioral states an animal switches between during a decision-mak
 
 ```{toctree}
 :maxdepth: 2
-:caption: GLM-HMM
-
-glm_hmm/plot_07_behavioral_states.md
+plot_07_behavioral_states.md
 ```
 :::
 

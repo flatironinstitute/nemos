@@ -1963,7 +1963,7 @@ class CategoricalObservations(Observations):
 
     """
 
-    rate_range = (0.0, 1.0)
+    rate_range = (0.0, float("inf"))
 
     glm_convexity_preserving_links = (log_softmax,)
 

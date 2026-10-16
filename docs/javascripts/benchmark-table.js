@@ -1,6 +1,5 @@
 document.addEventListener("DOMContentLoaded", function () {
-  // Relative to reference/benchmarking.html, the only page that loads this file.
-  var CSV_URL = "../_static/aggregate_summary.csv";
+  var CSV_URL = "_static/aggregate_summary.csv";
   var TABLE_COLS = ["device", "solver_name", "fit_time_s", "converged", "iter_num", "compile_time_fraction"];
 
   // recordings first so it drives the sort order
