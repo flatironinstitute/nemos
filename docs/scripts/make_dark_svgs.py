@@ -23,7 +23,15 @@ import re
 
 ASSETS = pathlib.Path(__file__).resolve().parent.parent / "assets"
 
-DIAGRAMS = ("glm_hmm_graphical_model.svg", "lnp_model_colscheme.svg")
+DIAGRAMS = (
+    "glm_hmm_graphical_model.svg",
+    "lnp_model_colscheme.svg",
+    "glm_vs_population.svg",
+    "classifier_glm.svg",
+    "glm.svg",
+    "population_glm.svg",
+    "population_classifier_glm.svg",
+)
 
 # Largest spread between channels for a colour to count as a grey. The inks here
 # are slightly tinted (#231f20, #1c2123), so an exact r == g == b test misses them.

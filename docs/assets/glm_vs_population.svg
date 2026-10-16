@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 250" width="792" height="300" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#231f20"/>
+    </marker>
+  </defs>
+
+  <!-- ===== GLM: one neuron ===== -->
+  <text x="123" y="20" font-size="16" font-weight="bold" text-anchor="middle" fill="#231f20">GLM</text>
+
+  <!-- X -->
+  <text x="60" y="44" font-size="10" text-anchor="middle" fill="#666666">n_features</text>
+  <text x="22" y="125" font-size="10" text-anchor="middle" fill="#666666" transform="rotate(-90 22 125)">n_samples</text>
+  <rect x="30" y="50" width="60" height="150" fill="#ececec" stroke="#231f20" stroke-width="1.5"/>
+  <text x="60" y="222" font-size="15" font-style="italic" text-anchor="middle" fill="#231f20">X</text>
+
+  <text x="105" y="84" font-size="20" text-anchor="middle" fill="#231f20">·</text>
+
+  <!-- w -->
+  <rect x="120" y="50" width="16" height="60" fill="#FAE0C8" stroke="#E07B39" stroke-width="1.5"/>
+  <text x="128" y="128" font-size="15" font-style="italic" text-anchor="middle" fill="#231f20">w</text>
+
+  <!-- link -->
+  <text x="169" y="113" font-size="11" text-anchor="middle" fill="#666666">f( · + c)</text>
+  <line x1="148" y1="125" x2="190" y2="125" stroke="#231f20" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- y -->
+  <rect x="200" y="50" width="16" height="150" fill="#FAE0C8" stroke="#E07B39" stroke-width="1.5"/>
+  <text x="208" y="222" font-size="15" font-style="italic" text-anchor="middle" fill="#231f20">y</text>
+  <text x="208" y="238" font-size="10" text-anchor="middle" fill="#666666">(n_samples,)</text>
+
+  <!-- divider -->
+  <line x1="290" y1="30" x2="290" y2="240" stroke="#d1d1d1" stroke-width="1" stroke-dasharray="4 4"/>
+
+  <!-- ===== PopulationGLM: several neurons ===== -->
+  <text x="484" y="20" font-size="16" font-weight="bold" text-anchor="middle" fill="#231f20">PopulationGLM</text>
+
+  <!-- X (shared) -->
+  <text x="390" y="44" font-size="10" text-anchor="middle" fill="#666666">n_features</text>
+  <text x="352" y="125" font-size="10" text-anchor="middle" fill="#666666" transform="rotate(-90 352 125)">n_samples</text>
+  <rect x="360" y="50" width="60" height="150" fill="#ececec" stroke="#231f20" stroke-width="1.5"/>
+  <text x="390" y="222" font-size="15" font-style="italic" text-anchor="middle" fill="#231f20">X</text>
+
+  <text x="435" y="84" font-size="20" text-anchor="middle" fill="#231f20">·</text>
+
+  <!-- W: one column per neuron -->
+  <text x="474" y="44" font-size="10" text-anchor="middle" fill="#666666">n_neurons</text>
+  <rect x="450" y="50" width="16" height="60" fill="#FAE0C8" stroke="#E07B39" stroke-width="1.5"/>
+  <rect x="466" y="50" width="16" height="60" fill="#DDEFDA" stroke="#4F9E4F" stroke-width="1.5"/>
+  <rect x="482" y="50" width="16" height="60" fill="#DCE6F3" stroke="#4C82C3" stroke-width="1.5"/>
+  <text x="474" y="128" font-size="15" font-style="italic" text-anchor="middle" fill="#231f20">W</text>
+
+  <!-- link -->
+  <text x="529" y="113" font-size="11" text-anchor="middle" fill="#666666">f( · + c)</text>
+  <line x1="508" y1="125" x2="550" y2="125" stroke="#231f20" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Y: one column per neuron -->
+  <text x="584" y="44" font-size="10" text-anchor="middle" fill="#666666">n_neurons</text>
+  <rect x="560" y="50" width="16" height="150" fill="#FAE0C8" stroke="#E07B39" stroke-width="1.5"/>
+  <rect x="576" y="50" width="16" height="150" fill="#DDEFDA" stroke="#4F9E4F" stroke-width="1.5"/>
+  <rect x="592" y="50" width="16" height="150" fill="#DCE6F3" stroke="#4C82C3" stroke-width="1.5"/>
+  <text x="584" y="222" font-size="15" font-style="italic" text-anchor="middle" fill="#231f20">Y</text>
+  <text x="584" y="238" font-size="10" text-anchor="middle" fill="#666666">(n_samples, n_neurons)</text>
+</svg>

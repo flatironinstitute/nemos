@@ -146,7 +146,7 @@ html_theme_options = {
     # level is open and the pages under it sit behind a closed dropdown.
     # collapse_navigation would drop those pages from the tree altogether,
     # leaving nothing to open, so it stays off.
-    "show_nav_level": 1,
+    "show_nav_level": 2,
     "logo": {
         "image_light": "_static/NeMoS_Logo_CMYK_Full.svg",
         "image_dark": "_static/NeMoS_Logo_CMYK_White.svg",
@@ -159,6 +159,9 @@ html_theme_options = {
         "examples": [],
     },
 }
+
+# Open the site in light mode. Readers can still switch with the theme toggle.
+html_context = {"default_mode": "light"}
 
 # The landing pages of the guides keep the left nav, so their sub-pages and the
 # groups they belong to stay visible when moving into them.
@@ -291,6 +294,17 @@ intersphinx_mapping = {
 
 full_api = os.environ.get("NEMOS_FULL_API", "false").lower() == "true"
 
+# Drop the API reference from the build. Generating the autosummary stubs under
+# api/generated and running autodoc over them is the slowest part of a build, so this
+# is the flag to set when iterating on the narrative pages. References into the API do
+# not resolve without it, hence nitpicky goes off too.
+exclude_api = os.environ.get("EXCLUDE_API", "false").lower() == "true"
+
+if exclude_api:
+    autosummary_generate = False
+    nitpicky = False
+    exclude_patterns += ["api"]
+
 # ---- API index generation ----
 api_order = [
     "glm.rst",
@@ -371,7 +385,8 @@ else:
     exclude_patterns += ["api/full.rst", "api/generated/full/**"]
 
 
-(api_dir / "index.rst").write_text(api_index)
+if not exclude_api:
+    (api_dir / "index.rst").write_text(api_index)
 
 # ---- Download admonition for runnable notebook docs ----
 # Every jupytext MyST .md doc is written to _build/jupyter_execute/<doc>.ipynb
