@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 250" width="384" height="300" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#231f20"/>
+    </marker>
+  </defs>
+  <text x="154" y="20" font-size="16" text-anchor="middle" fill="#231f20" font-weight="bold">PopulationGLM</text>
+  <text x="60" y="44" font-size="10" text-anchor="middle" fill="#666666">n_features</text>
+  <text x="22" y="125" font-size="10" text-anchor="middle" fill="#666666" transform="rotate(-90 22 125)">n_samples</text>
+  <rect x="30" y="50" width="60" height="150" fill="#ececec" stroke="#231f20" stroke-width="1.5"/>
+  <text x="60" y="222" font-size="15" text-anchor="middle" fill="#231f20" font-style="italic">X</text>
+  <text x="105" y="84" font-size="20" text-anchor="middle" fill="#231f20">·</text>
+  <text x="144" y="44" font-size="10" text-anchor="middle" fill="#666666">n_neurons</text>
+  <rect x="120" y="50" width="16" height="60" fill="#FAE0C8" stroke="#E07B39" stroke-width="1.5"/>
+  <rect x="136" y="50" width="16" height="60" fill="#DDEFDA" stroke="#4F9E4F" stroke-width="1.5"/>
+  <rect x="152" y="50" width="16" height="60" fill="#DCE6F3" stroke="#4C82C3" stroke-width="1.5"/>
+  <text x="144" y="128" font-size="15" text-anchor="middle" fill="#231f20" font-style="italic">W</text>
+  <text x="199.0" y="113" font-size="11" text-anchor="middle" fill="#666666">f( · + c)</text>
+  <line x1="178" y1="125" x2="220" y2="125" stroke="#231f20" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="254" y="44" font-size="10" text-anchor="middle" fill="#666666">n_neurons</text>
+  <rect x="230" y="50" width="16" height="150" fill="#FAE0C8" stroke="#E07B39" stroke-width="1.5"/>
+  <rect x="246" y="50" width="16" height="150" fill="#DDEFDA" stroke="#4F9E4F" stroke-width="1.5"/>
+  <rect x="262" y="50" width="16" height="150" fill="#DCE6F3" stroke="#4C82C3" stroke-width="1.5"/>
+  <text x="254" y="222" font-size="15" text-anchor="middle" fill="#231f20" font-style="italic">Y</text>
+  <text x="254" y="238" font-size="10" text-anchor="middle" fill="#666666">(n_samples, n_neurons)</text>
+</svg>
