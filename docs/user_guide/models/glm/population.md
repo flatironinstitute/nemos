@@ -37,12 +37,19 @@ warnings.filterwarnings(
     ),
     category=RuntimeWarning,
 )
+warnings.filterwarnings(
+    "ignore",
+    message=(
+        "The fit did not converge"
+    ),
+    category=RuntimeWarning,
+)
 ```
 
 (glm-population)=
 # Population GLM
 
-[`PopulationGLM`](nemos.glm.PopulationGLM) fits a GLM to every neuron of a population at once. It takes the same arguments and has the same methods as the [single neuron GLM](glm-single-neuron). This page covers only the differences:
+[`PopulationGLM`](nemos.glm.PopulationGLM) fits a GLM to every neuron of a population at once. It takes the same arguments and has the same methods as the [single neuron GLM](glm-single-neuron), with three differences:
 
 - `y` has one column per neuron.
 - Every parameter has an additional last axis for the neurons.
@@ -266,9 +273,65 @@ The simulation is feed-forward: the simulated counts do not change the rate thro
 (glm-population-model-configuration)=
 ## Model configurations
 
-You set observation models, inverse link functions, regularizers and solvers exactly as in the [single neuron GLM](glm-model-configuration).
+(glm-population-observation-model)=
+### Observation models
 
-Only one argument changes shape: a parameter-wise `regularizer_strength`. It has the shape of the parameters, including the neuron axis. `PopulationGLM` rejects an array with one strength per feature, as used by the single neuron GLM.
+The observation model is the distribution of the counts around the predicted rate. Every neuron of the population shares it. You can set it by name:
+
+```{code-cell} ipython3
+nmo.glm.PopulationGLM("Gamma")
+```
+
+You can also give the observation model object. The object gives access to the parameters of the family. The Negative Binomial needs the object, because its `scale` is a fixed value, not an estimated one.
+
+```{code-cell} ipython3
+from nemos.observation_models import NegativeBinomialObservations
+
+nmo.glm.PopulationGLM(NegativeBinomialObservations(scale=2.0))
+```
+
+[Observation models](../../observation_models.md) describes each family, the signals it suits, and what it estimates.
+
+(glm-population-inverse-link)=
+### Inverse link function
+
+The inverse link function maps the linear term to the mean of the observation model. Each family has a default. Only a few other choices keep the log-likelihood convex.
+
+| Observation model | Default | Convexity preserving |
+| --- | --- | --- |
+| `Poisson` | `jnp.exp` | `jnp.exp`, `jax.nn.softplus` |
+| `Gamma` | `one_over_x` | `jnp.exp`, `one_over_x` |
+| `Gaussian` | `identity` | `identity` |
+| `Bernoulli` | `logistic` | `logistic`, `expit` |
+| `NegativeBinomial` | `jnp.exp` | `jnp.exp` |
+
+:::{admonition} Convexity depends on the pair
+:class: warning
+
+`jax.nn.softplus` is safe for a Poisson GLM, but it makes the Negative Binomial log-likelihood non-convex. NeMoS does not reject such a model. The fit runs, but it converges to a local optimum that depends on the starting point. Also, the solver can no longer rely on a positive semi-definite curvature. NeMoS treats a link that is not in the table the same way.
+:::
+
+```{code-cell} ipython3
+# convex
+nmo.glm.PopulationGLM("Poisson", inverse_link_function=jax.nn.softplus)
+
+# not convex
+nmo.glm.PopulationGLM("NegativeBinomial", inverse_link_function=jax.nn.softplus)
+```
+
+(glm-population-regularizers)=
+### Regularizers
+
+Set the regularizer and its strength when you create the model. If the regularizer needs a strength and `regularizer_strength` is not set, NeMoS gives a warning and uses 1.
+
+```{code-cell} ipython3
+nmo.glm.PopulationGLM(
+    regularizer="Lasso",
+    regularizer_strength=0.05
+).fit(X, y).coef_.shape
+```
+
+One argument changes shape with respect to the single neuron GLM: a parameter-wise `regularizer_strength`. It has the shape of the parameters, including the neuron axis. `PopulationGLM` rejects an array with one strength per feature, as used by the single neuron GLM.
 
 ```{code-cell} ipython3
 n_features, n_neurons = X.shape[1], y.shape[1]
@@ -318,12 +381,72 @@ A group that contains several neurons, like the two groups above, couples the fi
 
 :::
 
+(glm-population-solvers)=
+### Solvers
+
+Select the solver by name, and configure it with `solver_kwargs`. The whole population is fit in a single optimization.
+
+```{code-cell} ipython3
+model = nmo.glm.PopulationGLM(solver_name="Newton", solver_kwargs={"tol": 1e-10}).fit(X, y)
+```
+
+The keys of `solver_kwargs` must be arguments of the solver. Other keys raise an error. To see the accepted arguments, print the solver docstring with [`get_solver_documentation`](nemos.solvers.get_solver_documentation). The next cell prints the start of the `LBFGS` docstring, up to the list of accepted arguments.
+
+```{code-cell} ipython3
+from nemos.solvers import get_solver_documentation
+
+doc = get_solver_documentation("LBFGS")
+print("\n".join(doc.splitlines()[:27]))
+```
+
+If you do not set the solver, NeMoS selects one that is compatible with the regularizer:
+
+- `Newton` for Ridge.
+- `LBFGS` without regularization.
+- `ProximalGradient` for the non-smooth penalties.
+
+```{code-cell} ipython3
+print(nmo.glm.PopulationGLM().solver_name)
+print(nmo.glm.PopulationGLM(regularizer="Ridge", regularizer_strength=0.01).solver_name)
+print(nmo.glm.PopulationGLM(regularizer="Lasso", regularizer_strength=0.01).solver_name)
+```
+
+The registry lists the installed solvers as `algo_name` and `backend` pairs.
+
+```{code-cell} ipython3
+from nemos.solvers import list_available_solvers
+
+sorted(f"{spec.algo_name}[{spec.backend}]" for spec in list_available_solvers())
+```
+
+[Solvers](../../solvers.md) describes which solver accepts which regularizer, which solver to use, and how to register your own solver.
+
 (glm-population-parameter-specification)=
 ## Parameter specification
 
-`fit_intercept` and `fix_params` work as in the [single neuron GLM](glm-parameter-specification). The fixed values have the shape of the parameters, with the neuron axis last.
+### Drop the intercept
+
+`fit_intercept=False` removes the intercept from the model. Every neuron keeps its intercept at zero, and none of them uses a degree of freedom for it.
+
+```{code-cell} ipython3
+no_intercept = nmo.glm.PopulationGLM(fit_intercept=False).fit(X, y)
+
+print(f"intercept_: {no_intercept.intercept_}")
+print(f"dof_resid_: {no_intercept.dof_resid_}")
+```
 
 ### Fix parameter values
+
+`fix_params` keeps any leaf of the parameters at a value that you choose. The parameters are a `(coef, intercept)` tuple. If `X` is a PyTree, `coef` is also a PyTree. Thus, you can fix these leaves:
+
+- the intercept,
+- each leaf of `coef`.
+
+For a leaf to fix, give its array of values, with the neuron axis last. For a leaf to learn, give `None` as a placeholder.
+
+If `X` is an array, `coef` is a single leaf. The fit fixes or learns all of it, for every neuron.
+
+#### Fix a value for the intercept
 
 ```{code-cell} ipython3
 # hold one intercept per neuron, learn the weights
@@ -334,6 +457,20 @@ model_fixed = nmo.glm.PopulationGLM(
 print(f"intercept_: {model_fixed.intercept_}")
 ```
 
+#### Fix a value for the coefficients
+
+```{code-cell} ipython3
+# hold all the weights of every neuron at zero, learn the intercepts
+model_fixed = nmo.glm.PopulationGLM(
+    fix_params=(np.zeros((n_features, n_neurons)), None)
+).fit(X, y)
+
+print(f"coef_:\n{model_fixed.coef_[:2]}")
+print(f"\nintercept_:\n{model_fixed.intercept_}")
+```
+
+#### Partially specify the coefficients
+
 If `X` is a PyTree, you can fix or learn each leaf of `coef` separately. The choice applies to all the neurons together.
 
 ```{code-cell} ipython3
@@ -343,6 +480,24 @@ fixed = ({"stimulus": None, "coupling": np.zeros((4, n_neurons))}, None)
 model_fixed = nmo.glm.PopulationGLM(fix_params=fixed).fit(X_dict, y)
 
 model_fixed.coef_["coupling"]
+```
+
+:::{admonition} Example use case
+:class: dropdown
+
+Fit the same design two times: one time with a group of predictors fixed at zero, and one time with this group free. The result is two nested models. Compare them to test whether that group explains the activity.
+:::
+
+#### Interaction between `fit_intercept` and `fix_params`
+
+An intercept set with `fix_params` has priority over `fit_intercept`. With both arguments, the intercepts stay at the values in `fix_params`, not at zero.
+
+```{code-cell} ipython3
+both = nmo.glm.PopulationGLM(
+    fit_intercept=False,
+    fix_params=(None, np.array([0.5, 1.0]))
+).fit(X, y)
+both.intercept_
 ```
 
 To remove a group of predictors from some neurons only, use a feature mask.
