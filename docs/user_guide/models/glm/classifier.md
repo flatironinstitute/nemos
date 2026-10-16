@@ -13,17 +13,26 @@ kernelspec:
 (glm-classifier)=
 # Classifier GLM
 
-[`ClassifierGLM`](nemos.glm.ClassifierGLM) predicts a discrete label per sample through a softmax inverse link. It is initialized with the arguments of the [single neuron GLM](glm-single-neuron) — `regularizer`, `regularizer_strength`, `fit_intercept`, `fix_params`, `solver_name` and `solver_kwargs` all mean there what they mean here — except that:
+[`ClassifierGLM`](nemos.glm.ClassifierGLM) predicts a discrete label for each sample. It uses a softmax inverse link. It takes the arguments of the [single neuron GLM](glm-single-neuron), and you configure it the same way. The observation model is [`CategoricalObservations`](nemos.observation_models.CategoricalObservations) and the inverse link is `log_softmax`. NeMoS sets both for you. This page covers only the differences: the number of classes, the class labels, and the identifiability of the parameters.
 
-- the observation model is fixed to [`CategoricalObservations`](nemos.observation_models.CategoricalObservations), so it is not an argument at all,
-- the inverse link function is set to `log_softmax` for you,
-- `n_classes` is added.
+```{image} ../../../assets/classifier_glm.svg
+:alt: ClassifierGLM. It maps X through a weight matrix W, one column per class, then a softmax gives the class probabilities P, and the argmax gives one label per sample.
+:class: only-light
+```
 
-What is specific to the model past initialization is the handling of the labels and the identifiability of the parameters.
+```{image} ../../../assets/classifier_glm_dark.svg
+:alt: ClassifierGLM. It maps X through a weight matrix W, one column per class, then a softmax gives the class probabilities P, and the argmax gives one label per sample.
+:class: only-dark
+```
 
-## Fitting a Classifier GLM
+```{contents}
+:local:
+:depth: 3
+```
 
-The number of classes is declared at initialization. It is not inferred from the data.
+## Initializing a ClassifierGLM object
+
+Set the number of classes at initialization. The model does not infer it from the data. `n_classes` must be an integer of at least 2.
 
 ```{code-cell} ipython3
 import numpy as np
@@ -32,150 +41,44 @@ import nemos as nmo
 
 n_classes = 3
 
+nmo.glm.ClassifierGLM(n_classes=n_classes)
+```
+
+(glm-classifier-input-types)=
+## Inputs
+
+`X` is the same as for the [single neuron GLM](glm-input-types). `y` contains one label for each sample.
+
+### Arrays
+
+`X` has shape `(n_samples, n_features)` and `y` has shape `(n_samples,)`. Each of them can be a NumPy array, a JAX array, or a [pynapple](https://www.pynapple.org) time series.
+
+#### NumPy
+
+```{code-cell} ipython3
 # X of shape (n_samples, n_features), labels of shape (n_samples,)
 X, labels = nmo.datasets.tuned_categorical(n_samples=1000, n_classes=n_classes)
+X_np = np.asarray(X)
 labels = np.asarray(labels, dtype=int)
 
-model = nmo.glm.ClassifierGLM(n_classes=n_classes).fit(X, labels)
-model
+model_np = nmo.glm.ClassifierGLM(n_classes=n_classes).fit(X_np, labels)
 ```
 
-`n_classes` must be an integer of at least 2, and it must agree with the labels: `fit` raises unless `y` holds exactly that many distinct values.
+#### JAX
+
+`fit` gives the same parameters for JAX arrays and for NumPy arrays.
 
 ```{code-cell} ipython3
-:tags: [raises-exception]
+import jax.numpy as jnp
 
-nmo.glm.ClassifierGLM(n_classes=5).fit(X, labels)
+model_jax = nmo.glm.ClassifierGLM(n_classes=n_classes).fit(X, jnp.asarray(labels))
+
+np.allclose(model_jax.coef_, model_np.coef_)
 ```
 
-(classifier-labels)=
-## Class labels
+#### Pynapple
 
-`y` can hold any labels that fit in a numpy array: integers, strings, or another hashable type. `classes_` lists them sorted, and the model maps them to the indices `0, ..., n_classes - 1` for the fit.
-
-```{code-cell} ipython3
-y_str = np.array(["left", "center", "right"])[labels]
-
-model_str = nmo.glm.ClassifierGLM(n_classes=n_classes).fit(X, y_str)
-model_str.classes_
-```
-
-The order is the sorted one, so `"center"` is class 0 whatever order the labels came in. Predictions are decoded back into the labels you passed.
-
-```{code-cell} ipython3
-model_str.predict(X)[:5]
-```
-
-Labels that are already the integers `0, ..., n_classes - 1` are the internal indices, and the model skips the translation for them. Any other set of labels pays for a translation on the way in and on the way out.
-
-:::{admonition} Setting the classes when fitting in batches
-:class: dropdown
-
-[`fit`](nemos.glm.ClassifierGLM.fit) and [`initialize_optimizer_and_state`](nemos.glm.ClassifierGLM.initialize_optimizer_and_state) infer the classes from the `y` they are given. A single batch need not contain every class.
-
-```{code-cell} ipython3
-np.unique(labels[:10])
-```
-
-Declare the labels with [`set_classes`](nemos.glm.ClassifierGLM.set_classes) before stepping through batches with [`update`](nemos.glm.ClassifierGLM.update), and the missing ones are still accounted for.
-
-```{code-cell} ipython3
-batched = nmo.glm.ClassifierGLM(n_classes=n_classes).set_classes(labels)
-
-params = batched.initialize_params(X[:10], labels[:10])
-state = batched.initialize_optimizer_and_state(params, X[:10], labels[:10])
-
-batched.classes_
-```
-:::
-
-## Shape of the parameters
-
-The model estimates one set of coefficients per class, so the class axis is added last.
-
-```{code-cell} ipython3
-print(f"coef_:      {model.coef_.shape}")
-print(f"intercept_: {model.intercept_.shape}")
-```
-
-`coef_[:, k]` are the weights of class `classes_[k]`, and `intercept_[k]` its baseline.
-
-(classifier-identifiability)=
-## Identifiability
-
-The model fits one linear predictor per class, $n$ of them, for $n$ probabilities constrained to sum to one. That is one more than strictly needed: once the first $n - 1$ probabilities are known, the last one is
-
-$$
-p_n = 1 - \sum_{k=1}^{n-1} p_k .
-$$
-
-The redundancy is an invariance of the softmax: adding the same constant to the linear predictor of every class leaves the probabilities where they were.
-
-```{code-cell} ipython3
-import jax
-
-# the linear predictor of one sample, one entry per class
-z = np.array([0.3, -1.2, 2.0])
-
-print(f"softmax(z):      {jax.nn.softmax(z)}")
-print(f"softmax(z + 10): {jax.nn.softmax(z + 10.0)}")
-```
-
-So if `(coef, intercept)` is a solution, so is `(coef + c, intercept + c)`. Without regularization the model has infinitely many solutions, all giving the same probabilities, and the one the solver returns depends on where it started. `Ridge` is the default for that reason.
-
-Ridge does not remove the invariance entirely. By default NeMoS does not penalize the intercept, only the coefficients. `coef_` is therefore unique, and centered, summing to zero across classes.
-
-```{code-cell} ipython3
-model.coef_.sum(axis=-1)[:4]
-```
-
-`intercept_` is not determined. Fitting the same data from a starting point whose intercept is shifted by a constant returns that same shift, and the coefficients and the probabilities do not move.
-
-```{code-cell} ipython3
-coef, intercept = model.initialize_params(X, labels)
-
-shifted = nmo.glm.ClassifierGLM(n_classes=n_classes).fit(
-    X, labels, init_params=(coef, intercept + 5.0)
-)
-
-print(f"intercept_:         {model.intercept_}")
-print(f"shifted intercept_: {shifted.intercept_}")
-print(f"same probabilities: {np.allclose(model.predict_proba(X), shifted.predict_proba(X), atol=1e-4)}")
-```
-
-To penalize the intercept too, add a constant column to the design and set `fit_intercept=False`. The intercept is then one of the coefficients, and every parameter is penalized.
-
-```{code-cell} ipython3
-X_with_intercept = np.concatenate([np.ones((X.shape[0], 1)), np.asarray(X)], axis=1)
-
-folded = nmo.glm.ClassifierGLM(n_classes=n_classes, fit_intercept=False).fit(
-    X_with_intercept, labels
-)
-
-# the weights of the constant column play the role of the intercept
-folded.coef_[0]
-```
-
-The model expresses exactly what it did before. The objective is the one that changes, since the intercept is now shrunk along with the rest, and in exchange the problem is strictly convex and its solution unique.
-
-## Predicting labels and probabilities
-
-[`predict`](nemos.glm.ClassifierGLM.predict) takes the arg-max over the class axis and decodes it into a label, consuming the axis.
-
-```{code-cell} ipython3
-model.predict(X)[:5]
-```
-
-[`predict_proba`](nemos.glm.ClassifierGLM.predict_proba) keeps the class axis and returns the whole distribution. It returns log-probabilities by default, matching the `log_softmax` inverse link; pass `return_type="proba"` for probabilities.
-
-```{code-cell} ipython3
-proba = model.predict_proba(X, return_type="proba")
-
-print(f"proba shape: {proba.shape}")
-proba[:3]
-```
-
-With pynapple predictors, the labels come back as a `Tsd`, and both probabilities and log-probabilities as a `TsdFrame` with one column per class.
+With [pynapple](https://www.pynapple.org), `y` is a `Tsd` of labels. With [pynapple](https://www.pynapple.org) predictors, `predict` returns the labels as a `Tsd`. `predict_proba` returns the probabilities or the log-probabilities as a `TsdFrame` with one column per class.
 
 ```{code-cell} ipython3
 import pynapple as nap
@@ -194,15 +97,174 @@ model_nap = nmo.glm.ClassifierGLM(n_classes=n_classes).fit(
 model_nap.predict_proba(predictors, return_type="proba")
 ```
 
-## Scoring
+### PyTrees
 
-[`score`](nemos.glm.ClassifierGLM.score) returns the mean log-likelihood per sample, and `score_type` switches to one of the two pseudo-$R^2$, as for the [single neuron GLM](glm-single-neuron).
+`X` can be a PyTree, as for the [single neuron GLM](glm-input-types). Each leaf of `coef_` has the shape of its predictors, plus a last axis for the classes.
+
+```{code-cell} ipython3
+X_dict = {"stimulus": X[:, :12], "history": X[:, 12:]}
+
+model_dict = nmo.glm.ClassifierGLM(n_classes=n_classes).fit(X_dict, labels)
+
+{key: coef.shape for key, coef in model_dict.coef_.items()}
+```
+
+(classifier-labels)=
+### Class labels
+
+`y` can contain any labels that fit in a NumPy array: integers, strings, or another hashable type. `classes_` lists the labels in sorted order. For the fit, the model maps the labels to the indices `0, ..., n_classes - 1`.
+
+```{code-cell} ipython3
+y_str = np.array(["left", "center", "right"])[labels]
+
+model_str = nmo.glm.ClassifierGLM(n_classes=n_classes).fit(X, y_str)
+model_str.classes_
+```
+
+The order is the sorted order. Thus, `"center"` is class 0, whatever the order of the labels in `y`. `predict` returns the labels that you gave to `fit`.
+
+```{code-cell} ipython3
+model_str.predict(X)[:5]
+```
+
+If the labels are already the integers `0, ..., n_classes - 1`, they are the internal indices, and the model does not translate them. Any other set of labels needs a translation at the input and at the output.
+
+`n_classes` must agree with the labels. `fit` raises an error if `y` does not contain exactly `n_classes` distinct values.
+
+```{code-cell} ipython3
+:tags: [raises-exception]
+
+nmo.glm.ClassifierGLM(n_classes=5).fit(X, labels)
+```
+
+:::{admonition} Setting the classes when fitting in batches
+:class: dropdown
+
+[`fit`](nemos.glm.ClassifierGLM.fit) and [`initialize_optimizer_and_state`](nemos.glm.ClassifierGLM.initialize_optimizer_and_state) infer the classes from the `y` that they receive. A single batch does not always contain every class.
+
+```{code-cell} ipython3
+np.unique(labels[:10])
+```
+
+Declare the labels with [`set_classes`](nemos.glm.ClassifierGLM.set_classes) before you step through the batches with [`update`](nemos.glm.ClassifierGLM.update). The model then includes the classes that are missing from a batch.
+
+```{code-cell} ipython3
+batched = nmo.glm.ClassifierGLM(n_classes=n_classes).set_classes(labels)
+
+params = batched.initialize_params(X[:10], labels[:10])
+state = batched.initialize_optimizer_and_state(params, X[:10], labels[:10])
+
+batched.classes_
+```
+:::
+
+## Methods
+
+### Fit
+
+```{code-cell} ipython3
+model = nmo.glm.ClassifierGLM(n_classes=n_classes).fit(X, labels)
+model
+```
+
+#### Fitted attributes
+
+The model estimates one set of coefficients for each class. Thus, the parameters have an additional last axis for the classes.
+
+```{code-cell} ipython3
+print(f"coef_:      {model.coef_.shape}")
+print(f"intercept_: {model.intercept_.shape}")
+```
+
+`coef_[:, k]` holds the weights of class `classes_[k]`. `intercept_[k]` holds its baseline.
+
+### Predict
+
+[`predict`](nemos.glm.ClassifierGLM.predict) takes the arg-max over the class axis and returns the corresponding label. The output has no class axis.
+
+```{code-cell} ipython3
+model.predict(X)[:5]
+```
+
+[`predict_proba`](nemos.glm.ClassifierGLM.predict_proba) keeps the class axis and returns the full distribution. By default, it returns log-probabilities, which matches the `log_softmax` inverse link. For probabilities, set `return_type="proba"`.
+
+```{code-cell} ipython3
+proba = model.predict_proba(X, return_type="proba")
+
+print(f"proba shape: {proba.shape}")
+proba[:3]
+```
+
+### Score
+
+[`score`](nemos.glm.ClassifierGLM.score) returns the mean log-likelihood per sample. As for the [single neuron GLM](glm-single-neuron), `score_type` selects one of the two pseudo-$R^2$ scores instead.
 
 ```{code-cell} ipython3
 model.score(X, labels)
 ```
 
-None of the three is the accuracy. They score the probabilities the model assigns to the observed labels, not the fraction of labels its arg-max gets right.
+None of these three scores is the accuracy. They score the probabilities that the model gives to the observed labels. They do not count the fraction of labels that the arg-max predicts correctly.
+
+(classifier-identifiability)=
+## Identifiability
+
+The model fits one linear predictor for each class: $n$ predictors for $n$ probabilities that must sum to one. This is one predictor more than necessary. When the first $n - 1$ probabilities are known, the last one is
+
+$$
+p_n = 1 - \sum_{k=1}^{n-1} p_k .
+$$
+
+This redundancy comes from an invariance of the softmax. The softmax does not change when you add the same constant to the linear predictor of every class.
+
+```{code-cell} ipython3
+import jax
+
+# the linear predictor of one sample, one entry per class
+z = np.array([0.3, -1.2, 2.0])
+
+print(f"softmax(z):      {jax.nn.softmax(z)}")
+print(f"softmax(z + 10): {jax.nn.softmax(z + 10.0)}")
+```
+
+If `(coef, intercept)` is a solution, `(coef + c, intercept + c)` is also a solution. Without regularization, the model has infinitely many solutions, and all of them give the same probabilities. The solution that the solver returns depends on its starting point. For this reason, `Ridge` is the default.
+
+Ridge does not remove the invariance entirely. The penalty applies to the coefficients but not to the intercept. Thus, `coef_` is pinned and centered: it sums to zero across classes.
+
+```{code-cell} ipython3
+model.coef_.sum(axis=-1)[:4]
+```
+
+But `intercept_` can still shift. If the starting intercept is shifted by a constant, the fit returns the same shift in `intercept_`. The coefficients and the probabilities do not change.
+
+```{code-cell} ipython3
+coef, intercept = model.initialize_params(X, labels)
+
+shifted = nmo.glm.ClassifierGLM(n_classes=n_classes).fit(
+    X, labels, init_params=(coef, intercept + 5.0)
+)
+
+print(f"intercept_:         {model.intercept_}")
+print(f"shifted intercept_: {shifted.intercept_}")
+print(
+    "same probabilities: "
+    f"{np.allclose(model.predict_proba(X), shifted.predict_proba(X), atol=1e-4)}"
+)
+```
+
+To penalize the intercept too, add it as a constant column of the design matrix and set `fit_intercept=False`. Then no parameter is free to shift.
+
+```{code-cell} ipython3
+X_with_intercept = np.concatenate([np.ones((X.shape[0], 1)), np.asarray(X)], axis=1)
+
+folded = nmo.glm.ClassifierGLM(n_classes=n_classes, fit_intercept=False).fit(
+    X_with_intercept, labels
+)
+
+# the weights of the constant column play the role of the intercept
+folded.coef_[0]
+```
+
+The model is the same as before. Only the objective changes, because the penalty now shrinks the intercept with the other weights. In exchange, the problem is strictly convex and its solution is unique.
 
 ## Examples
 
