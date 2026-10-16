@@ -266,9 +266,44 @@ print(f"rate:   {rate_sim.shape}")
 
 The simulation is feed-forward: the simulated counts do not change the rate through the coupling filters. For a recurrently coupled population, use [`simulate_recurrent`](nemos.simulation.simulate_recurrent). See [simulate a coupled population](../../../how_to_guide/simulate_coupled_population.md).
 
+(glm-population-out-of-memory)=
 ### Fitting out of memory
 
-[`stochastic_fit`](nemos.glm.PopulationGLM.stochastic_fit) and [`update`](nemos.glm.PopulationGLM.update) work as for the [single neuron GLM](glm-out-of-memory), with the same arguments. Each batch of `y` from the loader contains all the neurons.
+If the design matrix does not fit in memory, use [`stochastic_fit`](nemos.glm.PopulationGLM.stochastic_fit). It takes a data loader instead of arrays, and updates the parameters one batch at a time. Each batch of `y` from the loader contains all the neurons. Stochastic solvers require acceleration and line searches to be off.
+
+:::{admonition} In-memory example
+:class: note
+
+The arrays here fit in memory, so the loader is an [`ArrayDataLoader`](nemos.batching.ArrayDataLoader). For data that does not fit in memory, [`LazyArrayDataLoader`](nemos.batching.LazyArrayDataLoader) loads one batch at a time from a dask, zarr or HDF5 array.
+:::
+
+```{code-cell} ipython3
+# the loader serves the data in batches of 100 samples
+loader = nmo.batching.ArrayDataLoader(X, y, batch_size=100)
+
+glm = nmo.glm.PopulationGLM(
+    solver_name="GradientDescent",
+    solver_kwargs={"stepsize": 0.05, "acceleration": False},
+)
+glm.stochastic_fit(loader, n_passes=20)
+```
+
+See [stochastic optimization](../../scalability/README.md).
+
+#### Update
+
+For full control of the optimization loop, call [`update`](nemos.glm.PopulationGLM.update) to do each step yourself. [`initialize_params`](nemos.glm.PopulationGLM.initialize_params) returns the initial parameters. [`initialize_optimizer_and_state`](nemos.glm.PopulationGLM.initialize_optimizer_and_state) sets up the solver.
+
+```{code-cell} ipython3
+params = glm.initialize_params(X, y)
+opt_state = glm.initialize_optimizer_and_state(params, X, y)
+
+# a full pass over all the batches
+for X_batch, y_batch in loader:
+    params, opt_state = glm.update(params, opt_state, X_batch, y_batch)
+```
+
+The loop body can contain any code. Examples are a log of the score for each batch, a change of the learning rate between passes, or your own stopping rule. See [custom update](../../scalability/custom_update.md).
 
 (glm-population-model-configuration)=
 ## Model configurations

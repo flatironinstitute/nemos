@@ -13,7 +13,7 @@ kernelspec:
 (glm-classifier)=
 # Classifier GLM
 
-[`ClassifierGLM`](nemos.glm.ClassifierGLM) predicts a discrete label for each sample. It uses a softmax inverse link. It takes the arguments of the [single neuron GLM](glm-single-neuron), and you configure it the same way. The observation model is [`CategoricalObservations`](nemos.observation_models.CategoricalObservations) and the inverse link is `log_softmax`. NeMoS sets both for you. This page covers only the differences: the number of classes, the class labels, and the identifiability of the parameters.
+[`ClassifierGLM`](nemos.glm.ClassifierGLM) predicts a discrete label for each sample. It uses a softmax inverse link. It takes the arguments of the [single neuron GLM](glm-single-neuron), and you configure it the same way, with three differences: the number of classes, the class labels, and the identifiability of the parameters.
 
 ```{image} ../../../assets/classifier_glm.svg
 :alt: ClassifierGLM. It maps X through a weight matrix W, one column per class, then a softmax gives the class probabilities P, and the argmax gives one label per sample.
@@ -178,6 +178,22 @@ print(f"intercept_: {model.intercept_.shape}")
 
 `coef_[:, k]` holds the weights of class `classes_[k]`. `intercept_[k]` holds its baseline.
 
+#### NaN treatment
+
+The fit ignores samples with a NaN in `X` or `y`. Examples of such samples are bins without a measurement, and the edges that a convolution leaves undefined. You do not need to remove these samples by hand.
+
+```{code-cell} ipython3
+X_nan = np.asarray(X).copy()
+X_nan[:10] = np.nan
+
+model_nan = nmo.glm.ClassifierGLM(n_classes=n_classes).fit(X_nan, labels)
+model_dropped = nmo.glm.ClassifierGLM(n_classes=n_classes).fit(
+    np.asarray(X)[10:], np.asarray(labels)[10:]
+)
+
+np.allclose(model_nan.coef_, model_dropped.coef_)
+```
+
 ### Predict
 
 [`predict`](nemos.glm.ClassifierGLM.predict) takes the arg-max over the class axis and returns the corresponding label. The output has no class axis.
@@ -204,6 +220,61 @@ model.score(X, labels)
 ```
 
 None of these three scores is the accuracy. They score the probabilities that the model gives to the observed labels. They do not count the fraction of labels that the arg-max predicts correctly.
+
+### Simulate
+
+[`simulate`](nemos.glm.ClassifierGLM.simulate) draws a label for each sample from the predicted class distribution. It returns the labels and the log-probabilities they were drawn from.
+
+```{code-cell} ipython3
+import jax
+
+labels_sim, log_proba_sim = model.simulate(jax.random.key(0), X)
+
+print(f"labels:     {labels_sim[:5]}")
+print(f"log-probas: {np.round(np.asarray(log_proba_sim[:2]), 2)}")
+```
+
+The random key makes the draw reproducible: the same key and the same probabilities give the same labels. Unlike [`predict`](nemos.glm.ClassifierGLM.predict), which returns the most probable class, `simulate` samples from the distribution, so a less probable class can come out.
+
+(classifier-out-of-memory)=
+### Fitting out of memory
+
+If the design matrix does not fit in memory, use [`stochastic_fit`](nemos.glm.ClassifierGLM.stochastic_fit). It takes a data loader instead of arrays, and updates the parameters one batch at a time. Stochastic solvers require acceleration and line searches to be off.
+
+:::{admonition} In-memory example
+:class: note
+
+The arrays here fit in memory, so the loader is an [`ArrayDataLoader`](nemos.batching.ArrayDataLoader). For data that does not fit in memory, [`LazyArrayDataLoader`](nemos.batching.LazyArrayDataLoader) loads one batch at a time from a dask, zarr or HDF5 array.
+:::
+
+```{code-cell} ipython3
+# the loader serves the data in batches of 100 samples
+loader = nmo.batching.ArrayDataLoader(X, labels, batch_size=100)
+
+clf = nmo.glm.ClassifierGLM(
+    n_classes=n_classes,
+    solver_name="GradientDescent",
+    solver_kwargs={"stepsize": 0.05, "acceleration": False},
+)
+clf.stochastic_fit(loader, n_passes=20)
+```
+
+See [stochastic optimization](../../scalability/README.md).
+
+#### Update
+
+For full control of the optimization loop, call [`update`](nemos.glm.ClassifierGLM.update) to do each step yourself. [`initialize_params`](nemos.glm.ClassifierGLM.initialize_params) returns the initial parameters. [`initialize_optimizer_and_state`](nemos.glm.ClassifierGLM.initialize_optimizer_and_state) sets up the solver.
+
+```{code-cell} ipython3
+params = clf.initialize_params(X, labels)
+opt_state = clf.initialize_optimizer_and_state(params, X, labels)
+
+# a full pass over all the batches
+for X_batch, labels_batch in loader:
+    params, opt_state = clf.update(params, opt_state, X_batch, labels_batch)
+```
+
+The loop body can contain any code. Examples are a log of the score for each batch, a change of the learning rate between passes, or your own stopping rule. See [custom update](../../scalability/custom_update.md).
 
 (classifier-identifiability)=
 ## Identifiability
