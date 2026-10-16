@@ -10,27 +10,59 @@ kernelspec:
   name: python3
 ---
 
-# GLM
+(glm-user-guide)=
+# Generalized Linear Model (GLM)
 
-The theory behind the GLM, and the classes implementing it for a single neuron, a population, and categorical responses of one or several outputs.
+A GLM predicts a response by passing a linear combination of the input features through an inverse link function, which gives the mean of an observation distribution such as Poisson for spike counts. NeMoS provides four GLM classes. They differ in the number of outputs and in the type of the response.
 
-Fitting a GLM in NeMoS can be done in a single line of code. For instance, for a Poisson GLM,
+A [`GLM`](glm-single-neuron) learns one weight vector `w` for one neuron. A [`PopulationGLM`](glm-population) learns a weight matrix `W` with one column per neuron. All the neurons share the same predictors `X`.
 
-```{code-cell}
-import nemos as nmo
-
-# Poisson GLM
-X, y = nmo.datasets.tuned_poisson()
-nmo.glm.GLM().fit(X, y)
-
+```{image} ../../../assets/glm_vs_population.svg
+:alt: GLM and PopulationGLM. A GLM maps X through a weight vector w to a single output y. A PopulationGLM maps the same X through a weight matrix W, one column per neuron, to an output Y with one column per neuron.
+:class: only-light
 ```
 
-Observation models can be easily swapped.
+```{image} ../../../assets/glm_vs_population_dark.svg
+:alt: GLM and PopulationGLM. A GLM maps X through a weight vector w to a single output y. A PopulationGLM maps the same X through a weight matrix W, one column per neuron, to an output Y with one column per neuron.
+:class: only-dark
+```
 
-```{code-cell}
-# Other observation Models
+A `GLM` predicts a count or a continuous value for each sample. A [`ClassifierGLM`](glm-classifier) predicts a discrete label for each sample. It learns one weight column per class. The softmax gives the probability of each class, and the predicted label is the most probable class.
+
+```{image} ../../../assets/classifier_glm.svg
+:alt: ClassifierGLM. It maps X through a weight matrix W, one column per class, then a softmax gives the class probabilities P, and the argmax gives one label per sample.
+:class: only-light
+```
+
+```{image} ../../../assets/classifier_glm_dark.svg
+:alt: ClassifierGLM. It maps X through a weight matrix W, one column per class, then a softmax gives the class probabilities P, and the argmax gives one label per sample.
+:class: only-dark
+```
+
+A [`ClassifierPopulationGLM`](population_classifier.md) combines the two: it predicts one label for each neuron.
+
+New to GLMs? Start with the [background](intro.md).
+
+```{code-cell} ipython3
+import nemos as nmo
+
+X, y = nmo.datasets.tuned_poisson()
+model = nmo.glm.GLM().fit(X, y)
+model.score(X, y)
+```
+
+Swap the observation model with a single argument:
+
+```{code-cell} ipython3
 X, y = nmo.datasets.tuned_gaussian()
 nmo.glm.GLM("Gaussian").fit(X, y)
+```
+
+and classify discrete labels with `ClassifierGLM`:
+
+```{code-cell} ipython3
+X, y = nmo.datasets.tuned_categorical(n_classes=3)
+nmo.glm.ClassifierGLM(n_classes=3).fit(X, y)
 ```
 
 ## Contents
@@ -39,8 +71,8 @@ nmo.glm.GLM("Gaussian").fit(X, y)
 :maxdepth: 1
 
 Background <intro>
-GLM: 1-d output <single_neuron>
-PopulationGLM: 2-d output <population>
+GLM <single_neuron>
+PopulationGLM <population>
 ClassifierGLM <classifier>
-Population ClassifierGLM <population_classifier>
+ClassifierPopulationGLM <population_classifier>
 ```
