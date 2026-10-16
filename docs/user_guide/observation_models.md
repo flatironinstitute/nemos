@@ -376,7 +376,6 @@ Passing an instance instead is what you need when the family has a parameter to 
 ```{code-cell} ipython3
 obs = nmo.observation_models.NegativeBinomialObservations(scale=2.0)
 
-nmo.glm.GLM(observation_model=obs)
+model = nmo.glm.GLM(observation_model=obs)
+model.observation_model
 ```
-
-Setting the observation model also sets the default inverse link function, which can be overridden with the `inverse_link_function` argument. See [single neuron GLM](models/glm/single_neuron.md) for the pairs that keep the log-likelihood convex.
