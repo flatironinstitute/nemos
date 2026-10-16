@@ -13,6 +13,8 @@ kernelspec:
 (glm-user-guide)=
 # Generalized Linear Model (GLM)
 
+## Overview
+
 A GLM predicts a response by passing a linear combination of the input features through an inverse link function, which gives the mean of an observation distribution such as Poisson for spike counts. NeMoS provides four GLM classes. They differ in the number of outputs and in the type of the response.
 
 A [`GLM`](glm-single-neuron) learns one weight vector `w` for one neuron. A [`PopulationGLM`](glm-population) learns a weight matrix `W` with one column per neuron. All the neurons share the same predictors `X`.
@@ -41,7 +43,23 @@ A `GLM` predicts a count or a continuous value for each sample. A [`ClassifierGL
 
 A [`ClassifierPopulationGLM`](population_classifier.md) combines the two: it predicts one label for each neuron.
 
-New to GLMs? Start with the [background](intro.md).
+## GLM Guide Contents
+
+::::{div} topic
+
+```{toctree}
+:maxdepth: 2
+
+Background <intro>
+GLM <single_neuron>
+PopulationGLM <population>
+ClassifierGLM <classifier>
+ClassifierPopulationGLM <population_classifier>
+```
+
+::::
+
+## Basic Syntax
 
 ```{code-cell} ipython3
 import nemos as nmo
@@ -63,16 +81,4 @@ and classify discrete labels with `ClassifierGLM`:
 ```{code-cell} ipython3
 X, y = nmo.datasets.tuned_categorical(n_classes=3)
 nmo.glm.ClassifierGLM(n_classes=3).fit(X, y)
-```
-
-## Contents
-
-```{toctree}
-:maxdepth: 1
-
-Background <intro>
-GLM <single_neuron>
-PopulationGLM <population>
-ClassifierGLM <classifier>
-ClassifierPopulationGLM <population_classifier>
 ```
