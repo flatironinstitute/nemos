@@ -91,12 +91,19 @@ model_selection.md
 ```
 :::
 
+::::
+
+## Scoring and Model Comparison
+
+::::{grid} 1 2 3 3
+
 :::{grid-item-card}
 
 $$\mathcal{L}_0$$
 
 ```{toctree}
 :maxdepth: 2
+:caption: Scoring and Model Comparison
 
 null_model_log_likelihood.md
 ```
