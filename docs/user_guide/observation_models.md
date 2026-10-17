@@ -346,6 +346,7 @@ print(deviance.shape)
 print(deviance.sum())  # total residual deviance
 ```
 
+(pseudo-r2)=
 ### Pseudo-$R^2$
 
 The log-likelihood is unbounded, so its magnitude is not informative on its own. [`pseudo_r2`](nemos.observation_models.Observations.pseudo_r2) compares the model to a null model that predicts the mean of `y` for every sample, giving a number close to 1 for a good fit and close to 0 for a model no better than the null.
