@@ -43,8 +43,12 @@ Score the fitted rate and the constant null rate with the same aggregator, `jnp.
 ```{code-cell} ipython3
 obs = model.observation_model
 
-ll_model = obs.log_likelihood(y, model.predict(X), model.scale_, aggregate_sample_scores=jnp.sum)
-ll_null = obs.log_likelihood(y, jnp.full_like(y, y.mean()), model.scale_, aggregate_sample_scores=jnp.sum)
+ll_model = obs.log_likelihood(
+    y, model.predict(X), model.scale_, aggregate_sample_scores=jnp.sum
+)
+ll_null = obs.log_likelihood(
+    y, jnp.full_like(y, y.mean()), model.scale_, aggregate_sample_scores=jnp.sum
+)
 ```
 
 Dividing by the spike count and by $\log 2$ gives the bits per spike.
