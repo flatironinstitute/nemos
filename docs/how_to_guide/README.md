@@ -91,6 +91,39 @@ model_selection.md
 ```
 :::
 
+:::{grid-item-card}
+
+$$\mathcal{L}_0$$
+
+```{toctree}
+:maxdepth: 2
+
+null_model_log_likelihood.md
+```
+:::
+
+:::{grid-item-card}
+
+$$\frac{\mathcal{L} - \mathcal{L}_0}{N \log 2}$$
+
+```{toctree}
+:maxdepth: 2
+
+log_likelihood_bits_per_spike.md
+```
+:::
+
+:::{grid-item-card}
+
+$$-2\mathcal{L} + 2k$$
+
+```{toctree}
+:maxdepth: 2
+
+compute_aic.md
+```
+:::
+
 ::::
 
 ## Feature Engineering
