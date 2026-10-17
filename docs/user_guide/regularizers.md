@@ -543,22 +543,7 @@ print("shrunk parameters:  ", group_prox(params, None, 1.0))
 
 The first row of the mask holds the coefficients `0` and `3`, and those keep three quarters of their value. The second row holds `1`, `2` and `4`, and those are the zeros. The two groups are shrunk by different amounts, which is the point of a strength per group.
 
-The groups themselves need not follow the structure of the parameters: the mask is a pytree matching them, with a leaf of shape `(n_groups, *leaf.shape)` for each parameter leaf, and a group may collect coefficients from several leaves. Here the first group holds `f1[0]`, `f1[1]` and `f2[0]`, and the second holds the two coefficients left.
-
-```{code-cell} ipython3
-tree_mask = {"f1": np.zeros((2, 3)), "f2": np.zeros((2, 2))}
-
-tree_mask["f1"][0, :2] = 1
-tree_mask["f2"][0, 0] = 1
-
-tree_mask["f1"][1, 2] = 1
-tree_mask["f2"][1, 1] = 1
-
-grouped = nmo.regularizer.GroupLasso(mask=tree_mask)
-grouped.penalty_fn(beta_tree, strength=jnp.array([0.1, 0.4]))(beta_tree_true)
-```
-
-A coefficient is penalized by the strength of its own group, whatever leaf it sits in.
+The groups do not have to follow the structure of the parameters: the mask is a pytree matching them, with a leaf of shape `(n_groups, *leaf.shape)`, and one group may collect coefficients from several leaves. That is why the strength is one flat array rather than a structure matching the parameters.
 
 ## Regularizers as model attributes
 
@@ -597,4 +582,10 @@ model = nmo.glm.GLM(regularizer="Lasso", regularizer_strength=0.05).fit(
 )
 
 model.coef_
+```
+
+## Examples
+
+```{nemos-examples}
+:topic: regularization
 ```
