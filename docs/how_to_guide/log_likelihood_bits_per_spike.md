@@ -56,7 +56,7 @@ Dividing by the spike count and by $\log 2$ gives the bits per spike.
 ```{code-cell} ipython3
 bits_per_spike = (ll_model - ll_null) / (y.sum() * jnp.log(2))
 
-print(bits_per_spike)
+print("bits/spike:", bits_per_spike)
 ```
 
 :::{warning}
