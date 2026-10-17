@@ -78,6 +78,15 @@ simulate_coupled_population.md
 
 :::{grid-item-card}
 
+```{toctree}
+:maxdepth: 2
+
+finegrained_regularization.md
+```
+:::
+
+:::{grid-item-card}
+
 <figure>
 <a href="model_selection.html">
 <img src="../_static/thumbnails/how_to_guide/variable_selection_zero_basis.svg" style="height: 100px", alt="Model Selection."/>
