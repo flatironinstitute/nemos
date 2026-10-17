@@ -38,15 +38,11 @@ X, y = nmo.datasets.tuned_poisson(n_samples=500)
 model = nmo.glm.GLM().fit(X, y)
 ```
 
-Score the fitted rate and the constant null rate with the same aggregator, `jnp.sum`, so both terms are totals rather than per-sample averages.
+[`score`](nemos.glm.GLM.score) gives the first term. The second one is scored by the observation model, since no model predicts the null rate. Both take `aggregate_sample_scores=jnp.sum`, so they are totals rather than per-sample averages.
 
 ```{code-cell} ipython3
-obs = model.observation_model
-
-ll_model = obs.log_likelihood(
-    y, model.predict(X), model.scale_, aggregate_sample_scores=jnp.sum
-)
-ll_null = obs.log_likelihood(
+ll_model = model.score(X, y, aggregate_sample_scores=jnp.sum)
+ll_null = model.observation_model.log_likelihood(
     y, jnp.full_like(y, y.mean()), model.scale_, aggregate_sample_scores=jnp.sum
 )
 ```
