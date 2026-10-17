@@ -20,7 +20,7 @@ nemos_tags:
 (null-model-log-likelihood)=
 # Compute the Null-Model Log-Likelihood
 
-The null model predicts the same rate at every time point, the mean of the observations. Its log-likelihood is the baseline that the [pseudo-$R^2$](pseudo-r2), the [bits per spike](./log_likelihood_bits_per_spike.md), and any other normalized score measure a fit against.
+The null model predicts the same rate at every time point, the mean of the observations. It serves as a minimal baseline: a common question is how much better a model does than the mean rate, and that is what the [pseudo-$R^2$](pseudo-r2) and the [bits per spike](./log_likelihood_bits_per_spike.md) measure.
 
 Nothing has to be fitted to get it: an [observation model](../user_guide/observation_models.md) scores any rate you hand it, so the null-model log-likelihood is one call on a constant array.
 
