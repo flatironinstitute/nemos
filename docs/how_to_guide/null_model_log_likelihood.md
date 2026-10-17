@@ -45,7 +45,7 @@ and [`log_likelihood`](nemos.observation_models.Observations.log_likelihood) eva
 ```{code-cell} ipython3
 ll_null = obs.log_likelihood(y, null_rate)
 
-print(ll_null)
+print("null log-likelihood:", ll_null)
 ```
 
 ## Several neurons
@@ -57,7 +57,7 @@ _, y_pop = nmo.datasets.tuned_poisson(n_neurons=3, n_samples=500)
 
 null_rate_pop = jnp.broadcast_to(y_pop.mean(axis=0), y_pop.shape)
 
-print(obs.log_likelihood(y_pop, null_rate_pop))
+print("null log-likelihood:", obs.log_likelihood(y_pop, null_rate_pop))
 ```
 
 ## Families with a free scale
@@ -73,5 +73,7 @@ null_scale = gamma.estimate_scale(
     y_gamma, null_rate_gamma, dof_resid=y_gamma.shape[0] - 1
 )
 
-print(gamma.log_likelihood(y_gamma, null_rate_gamma, null_scale))
+ll_null_gamma = gamma.log_likelihood(y_gamma, null_rate_gamma, null_scale)
+
+print("null log-likelihood:", ll_null_gamma)
 ```

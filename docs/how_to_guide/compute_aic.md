@@ -51,7 +51,8 @@ obs = model.observation_model
 
 ll = obs.log_likelihood(y, model.predict(X), aggregate_sample_scores=jnp.sum)
 
-print(ll, model.score(X, y, aggregate_sample_scores=jnp.sum))
+print("observation model:", ll)
+print("model.score:", model.score(X, y, aggregate_sample_scores=jnp.sum))
 ```
 
 The Poisson scale is fixed at 1, so the parameters are the coefficients and the intercept.
@@ -59,7 +60,7 @@ The Poisson scale is fixed at 1, so the parameters are the coefficients and the 
 ```{code-cell} ipython3
 n_params = model.coef_.size + model.intercept_.size
 
-print(-2 * ll + 2 * n_params)
+print("AIC:", -2 * ll + 2 * n_params)
 ```
 
 ## Gamma GLM
@@ -76,7 +77,8 @@ rate = model.predict(X)
 n_mean_params = model.coef_.size + model.intercept_.size
 scale = obs.estimate_scale(y, rate, dof_resid=X.shape[0] - n_mean_params)
 
-print(scale, model.scale_)
+print("estimate_scale:", scale)
+print("model.scale_:", model.scale_)
 ```
 
 The scale enters the log-likelihood, so it has to be passed explicitly when scoring from the observation model.
@@ -84,14 +86,15 @@ The scale enters the log-likelihood, so it has to be passed explicitly when scor
 ```{code-cell} ipython3
 ll = obs.log_likelihood(y, rate, scale, aggregate_sample_scores=jnp.sum)
 
-print(ll, model.score(X, y, aggregate_sample_scores=jnp.sum))
+print("observation model:", ll)
+print("model.score:", model.score(X, y, aggregate_sample_scores=jnp.sum))
 ```
 
 ```{code-cell} ipython3
 # coefficients and intercept, plus one scale per neuron
 n_params = n_mean_params + scale.size
 
-print(-2 * ll + 2 * n_params)
+print("AIC:", -2 * ll + 2 * n_params)
 ```
 
 ## Categorical GLM
@@ -110,7 +113,8 @@ ll = obs.log_likelihood(
     aggregate_sample_scores=jnp.sum,
 )
 
-print(ll, model.score(X, y, aggregate_sample_scores=jnp.sum))
+print("observation model:", ll)
+print("model.score:", model.score(X, y, aggregate_sample_scores=jnp.sum))
 ```
 
 Here `coef_.size + intercept_.size` overcounts: the class probabilities sum to one, so only $C - 1$ of the $C$ columns are free. Each free column holds one coefficient per feature and one intercept, so the fit estimates $(n_{\text{features}} + 1)(C - 1)$ parameters.
@@ -119,6 +123,7 @@ Here `coef_.size + intercept_.size` overcounts: the class probabilities sum to o
 n_features, n_classes = model.coef_.shape
 n_params = (n_features + 1) * (n_classes - 1)
 
-print(model.coef_.size + model.intercept_.size, n_params)
-print(-2 * ll + 2 * n_params)
+print("all coefficients:", model.coef_.size + model.intercept_.size)
+print("free parameters:", n_params)
+print("AIC:", -2 * ll + 2 * n_params)
 ```
