@@ -69,7 +69,9 @@ _, y_gamma = nmo.datasets.tuned_gamma(n_samples=500)
 
 gamma = nmo.observation_models.GammaObservations()
 null_rate_gamma = jnp.full_like(y_gamma, y_gamma.mean())
-null_scale = gamma.estimate_scale(y_gamma, null_rate_gamma, dof_resid=y_gamma.shape[0] - 1)
+null_scale = gamma.estimate_scale(
+    y_gamma, null_rate_gamma, dof_resid=y_gamma.shape[0] - 1
+)
 
 print(gamma.log_likelihood(y_gamma, null_rate_gamma, null_scale))
 ```
