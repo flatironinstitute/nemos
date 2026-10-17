@@ -63,6 +63,15 @@ simulate_coupled_population.md
 
 :::{grid-item-card}
 
+```{toctree}
+:maxdepth: 2
+
+finegrained_regularization.md
+```
+:::
+
+:::{grid-item-card}
+
 <figure>
 <a href="handle_silent_neurons.html">
 <img src="../_static/thumbnail_silent_neurons.svg" style="height: 100px", alt="Silent neurons."/>
