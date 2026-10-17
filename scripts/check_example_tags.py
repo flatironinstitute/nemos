@@ -34,6 +34,7 @@ EXPECTED_TAGS = {
         "receptive fields",
         "latent states",
         "initialization",
+        "model comparison",
     ],
     "data": ["recorded", "simulated"],
 }
