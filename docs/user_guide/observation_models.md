@@ -222,40 +222,6 @@ The value is exposed as a read-only property, so it cannot be changed after cons
 neg_binomial.dispersion
 ```
 
-## Class attributes
-
-`rate_range` and `glm_convexity_preserving_links` are class attributes: their value depends only on the observation model class.
-
-### `rate_range`
-
-The interval the mean of the observations, $\mu = \mathbb{E}[Y]$, has to lie in.
-
-```{code-cell} ipython3
-gaussian = nmo.observation_models.GaussianObservations()
-poisson = nmo.observation_models.PoissonObservations()
-categorical = nmo.observation_models.CategoricalObservations()
-print("Gaussian mean range: ", gaussian.rate_range)
-print("Poisson mean range: ", poisson.rate_range)
-# the mean of a one-hot observation is the frequency of that label
-print("Categorical mean range: ", categorical.rate_range)
-```
-
-### `glm_convexity_preserving_links`
-
-A GLM predicts the mean as $\mu = f(Xw + c)$, and $\mathbf{f}$ is what NeMoS calls the **inverse link function**. The log-likelihood is a function of $\mu$, so $f$ is part of it too. This means that the properties of the log-likelihood depends on which inverse link $f$ is chosen.
-
-Not every choice leaves the log-likelihood convex, and convexity is worth having: it guarantees a unique optimal solution, independent of the intial parameter guess. Each class lists the non-linearities known to preserve convexity.
-
-```{code-cell} ipython3
-nb = nmo.observation_models.NegativeBinomialObservations()
-
-print("GLM convexity preserving inverse links:")
-print("Poisson:          ", [f.__name__ for f in poisson.glm_convexity_preserving_links])
-print("NegativeBinomial: ", [f.__name__ for f in nb.glm_convexity_preserving_links])
-```
-
-The Poisson keeps convexity with either one. The Negative Binomial keeps it only with `exp`, and `softplus` loses it.
-
 ## Methods
 
 The examples below use a small Poisson dataset and the rate predicted by a GLM fit to it.
@@ -378,6 +344,40 @@ The log-likelihood is unbounded, so its magnitude is not informative on its own.
 print(poisson.pseudo_r2(y, predicted_rate, score_type="pseudo-r2-McFadden"))
 print(poisson.pseudo_r2(y, predicted_rate, score_type="pseudo-r2-Cohen"))
 ```
+
+## Class attributes
+
+`rate_range` and `glm_convexity_preserving_links` are class attributes: their value depends only on the observation model class.
+
+### `rate_range`
+
+The interval the mean of the observations, $\mu = \mathbb{E}[Y]$, has to lie in.
+
+```{code-cell} ipython3
+gaussian = nmo.observation_models.GaussianObservations()
+poisson = nmo.observation_models.PoissonObservations()
+categorical = nmo.observation_models.CategoricalObservations()
+print("Gaussian mean range: ", gaussian.rate_range)
+print("Poisson mean range: ", poisson.rate_range)
+# the mean of a one-hot observation is the frequency of that label
+print("Categorical mean range: ", categorical.rate_range)
+```
+
+### `glm_convexity_preserving_links`
+
+A GLM predicts the mean as $\mu = f(Xw + c)$, and $\mathbf{f}$ is what NeMoS calls the **inverse link function**. The log-likelihood is a function of $\mu$, so $f$ is part of it too. This means that the properties of the log-likelihood depends on which inverse link $f$ is chosen.
+
+Not every choice leaves the log-likelihood convex, and convexity is worth having: it guarantees a unique optimal solution, independent of the intial parameter guess. Each class lists the non-linearities known to preserve convexity.
+
+```{code-cell} ipython3
+nb = nmo.observation_models.NegativeBinomialObservations()
+
+print("GLM convexity preserving inverse links:")
+print("Poisson:          ", [f.__name__ for f in poisson.glm_convexity_preserving_links])
+print("NegativeBinomial: ", [f.__name__ for f in nb.glm_convexity_preserving_links])
+```
+
+The Poisson keeps convexity with either one. The Negative Binomial keeps it only with `exp`, and `softplus` loses it.
 
 ## Observation models as model attributes
 
