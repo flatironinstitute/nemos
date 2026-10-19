@@ -80,5 +80,5 @@ and classify discrete labels with `ClassifierGLM`:
 
 ```{code-cell} ipython3
 X, y = nmo.datasets.tuned_categorical(n_classes=3)
-nmo.glm.ClassifierGLM(n_classes=3).fit(X, y)
+nmo.glm.ClassifierGLM(classes=3).fit(X, y)
 ```
