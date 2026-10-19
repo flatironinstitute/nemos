@@ -34,6 +34,16 @@ warnings.filterwarnings(
 
 An `Observations` instance models one distribution of the [exponential family](https://en.wikipedia.org/wiki/Exponential_family). Given observations and a predicted mean it returns the log-likelihood, the deviance, the pseudo-$R^2$, an estimate of the scale, and samples from the distribution.
 
+```{image} ../assets/observation_model_scheme.svg
+:alt: An Observations instance takes the observations y and a predicted mean and scale, and returns the log-likelihood, the deviance, the pseudo-R2, an estimate of the scale, and samples drawn from the distribution it models.
+:class: only-light
+```
+
+```{image} ../assets/observation_model_scheme_dark.svg
+:alt: An Observations instance takes the observations y and a predicted mean and scale, and returns the log-likelihood, the deviance, the pseudo-R2, an estimate of the scale, and samples drawn from the distribution it models.
+:class: only-dark
+```
+
 Models such as [`GLM`](nemos.glm.GLM) and [`GLMHMM`](nemos.glm_hmm.GLMHMM) store one such object as an attribute, and use it to define their loss function and to compute model statistics. This page describes the object itself, which is of interest if you are writing a model of your own, or if you want these statistics for a model you fit elsewhere.
 
 ```{contents}
@@ -85,7 +95,7 @@ Both identities are obtained by differentiating the integral of the density unde
 
 ### The parametrization used here
 
-Every method below takes the mean and the scale of the distribution as its `predicted_rate` and `scale` arguments, with `predicted_rate` named after the spike-count case where $\mu$ is a firing rate. To map back to the textbook parametrization, recover the canonical parameter by inverting $\mu = k'(\theta)$.
+Every method below takes the mean and the scale of the distribution as its `predicted_rate` and `scale` arguments, the two inputs on the left of the diagram above, with `predicted_rate` named after the spike-count case where $\mu$ is a firing rate. To map back to the textbook parametrization, recover the canonical parameter by inverting $\mu = k'(\theta)$.
 
 Anything that produces a predicted mean can use these objects, however that mean was obtained: a weighted sum of predictors, the output layer of a network, the emission of a state space model.
 
