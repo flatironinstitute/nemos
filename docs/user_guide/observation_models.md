@@ -111,7 +111,7 @@ The Categorical methods take $\log \mu_k$ rather than $\mu_k$, which is what `lo
 
 ### The log-likelihood of each family
 
-Every panel below gives the log-likelihood of a single observation in terms of $\mu$ and $\phi$, which is what `log_likelihood` computes, and says what `predicted_rate` holds.
+Every panel below gives the log-likelihood of a single observation in terms of $\mu$ and $\phi$, which is what `log_likelihood` computes, and states what `predicted_rate` is.
 
 ::::{tab-set}
 
@@ -121,7 +121,7 @@ $$
 \ell(y; \mu) = y \log\mu - \mu - \log(y!)
 $$
 
-`predicted_rate` holds $\mu$, the rate. `scale` is fixed to 1 and does not enter.
+`predicted_rate` is $\mu$, the rate. The Poisson log-likelihood depends only on $\mu$, and `scale` is fixed to 1 by convention.
 :::
 
 :::{tab-item} Negative Binomial
@@ -130,7 +130,7 @@ $$
 \ell(y; \mu, \phi) = \log\Gamma\!\left(y + \frac{1}{\phi}\right) - \log\Gamma(y + 1) - \log\Gamma\!\left(\frac{1}{\phi}\right) + y \log\frac{\mu\phi}{1 + \mu\phi} - \frac{1}{\phi}\log(1 + \mu\phi)
 $$
 
-`predicted_rate` holds $\mu$, the mean. `scale` is the dispersion $\phi$, the shape is $1/\phi$, and the variance is $\mu + \phi\mu^2$.
+`predicted_rate` is $\mu$, the mean. `scale` is the dispersion $\phi$, the shape is $1/\phi$, and the variance is $\mu + \phi\mu^2$.
 
 This is a member of the exponential family only while $\phi$ is held fixed. If it were free, it would enter through $\Gamma(y + 1/\phi)/\Gamma(1/\phi)$, which does not separate into a factor of $y$ and a factor of the parameters.
 :::
@@ -143,7 +143,7 @@ $$
 \ell(y; \mu, \phi) = \left( \frac{1}{\phi} - 1 \right)\log y - \frac{y}{\mu\phi} - \frac{1}{\phi}\log(\mu\phi) - \log\Gamma\!\left(\frac{1}{\phi}\right)
 $$
 
-`predicted_rate` holds $\mu$, the mean. `scale` is $\phi$, and the variance is $\phi\mu^2$.
+`predicted_rate` is $\mu$, the mean. `scale` is $\phi$, and the variance is $\phi\mu^2$.
 :::
 
 :::{tab-item} Gaussian
@@ -152,7 +152,7 @@ $$
 \ell(y; \mu, \phi) = -\frac{(y - \mu)^2}{2\phi} - \frac{1}{2}\log(2\pi\phi)
 $$
 
-`predicted_rate` holds $\mu$, the mean. `scale` is the variance $\phi$.
+`predicted_rate` is $\mu$, the mean. `scale` is the variance $\phi$.
 :::
 
 :::{tab-item} Bernoulli
@@ -161,7 +161,7 @@ $$
 \ell(y; \mu) = y \log\mu + (1 - y)\log(1 - \mu)
 $$
 
-`predicted_rate` holds $\mu$, the success probability. `scale` is fixed to 1 and does not enter.
+`predicted_rate` is $\mu$, the success probability. The Bernoulli log-likelihood depends only on $\mu$, and `scale` is fixed to 1 by convention.
 :::
 
 :::{tab-item} Categorical
@@ -172,9 +172,9 @@ $$
 \ell(y; \mu) = \sum_{k=1}^{K} y_k \log \mu_k
 $$
 
-`predicted_rate` holds $\log \mu_k$, one log-probability per label, rather than $\mu_k$ itself. `scale` is fixed to 1 and does not enter.
+`predicted_rate` is $\log \mu_k$, one log-probability per label. The Categorical log-likelihood depends only on $\log \mu_k$, and `scale` is fixed to 1 by convention.
 
-Since $y$ is one-hot encoded, multiplying $[\log\mu_1, \ldots, \log\mu_K]$ elementwise by $[y_1, \ldots, y_K]$ keeps only the entry of the label that occurred, and zeroes the rest. The log-likelihood of a sample is therefore the log-probability of the observed label. Only $\log\mu_k$ is ever needed, so `predicted_rate` carries it directly, which avoids computing a small probability and then taking its logarithm.
+Since $y$ is one-hot encoded, multiplying $[\log\mu_1, \ldots, \log\mu_K]$ elementwise by $[y_1, \ldots, y_K]$ keeps only the entry of the label that occurred, and zeroes the rest. The log-likelihood of a sample is therefore the log-probability of the observed label. The likelihood needs only $\log\mu_k$, so `predicted_rate` is $\log\mu_k$. Computing a small $\mu_k$ first and then taking its logarithm loses precision.
 :::
 
 ::::
@@ -193,7 +193,7 @@ print(poisson)
 print(gamma)
 ```
 
-`NegativeBinomialObservations` takes one. Its dispersion $\phi$ is fixed rather than estimated from the data, so it is set at initialization. The variance of the distribution is $\mu + \phi\mu^2$, so a larger `scale` means counts more overdispersed relative to a Poisson of the same mean, and $\phi \to 0$ recovers the Poisson.
+The only exception is `NegativeBinomialObservations`, which takes the dispersion $\phi$ as `scale`. The model does not learn $\phi$ from the data, so you must set it at initialization. The variance of the distribution is $\mu + \phi\mu^2$, so a larger `scale` means that counts are more overdispersed relative to a Poisson of the same mean, and $\phi \to 0$ recovers the Poisson.
 
 ```{code-cell} ipython3
 nmo.observation_models.NegativeBinomialObservations(scale=4.0)
@@ -201,7 +201,7 @@ nmo.observation_models.NegativeBinomialObservations(scale=4.0)
 
 ## Class attributes
 
-Two attributes describe the family itself, and are the same for every instance of a class.
+`rate_range` and `glm_convexity_preserving_links` are class attributes: their value depends only on the observation model class.
 
 ### `rate_range`
 
@@ -246,7 +246,7 @@ predicted_rate = glm.predict(X)
 
 ### Log-likelihood
 
-[`log_likelihood`](nemos.observation_models.Observations.log_likelihood) compares the observations to a predicted mean. Both arrays have the same shape, one entry per sample.
+[`log_likelihood`](nemos.observation_models.Observations.log_likelihood) computes the mean log-likelihood of the observations given the predicted mean. Both arrays have the same shape, one entry per sample.
 
 ```{code-cell} ipython3
 poisson.log_likelihood(y, predicted_rate)
@@ -276,7 +276,7 @@ per_sample.shape
 :::{admonition} Objective function
 :class: note
 
-A model objective is minimized, so what a model optimizes is the negative log-likelihood. The full log-likelihood usually carries normalization terms that do not depend on the parameters, and dropping them does not move the minimum. Models therefore optimize the private `_negative_log_likelihood`, which computes the parameter-dependent part alone.
+A model objective is minimized, so what a model optimizes is the negative log-likelihood. The full log-likelihood usually includes normalization terms that do not depend on the parameters, and dropping them does not move the minimum. Models therefore optimize the private `_negative_log_likelihood`, which computes the parameter-dependent part alone.
 :::
 
 ### Scale estimation
