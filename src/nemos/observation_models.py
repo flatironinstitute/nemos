@@ -1343,8 +1343,6 @@ class NegativeBinomialObservations(Observations):
             + y \log\left(\frac{\mu}{r + \mu}\right)
 
         """
-        if self.dispersion is None:
-            self.estimate_scale(y, predicted_rate, 1.0)
         predicted_rate = jnp.clip(
             predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
         )
@@ -1507,10 +1505,7 @@ class NegativeBinomialObservations(Observations):
         r"""
         Return the scale parameter of the distribution.
 
-        The ``scale`` parameter of the Negative Binomial distribution is set
-        at initialization and affect the likelihood landscape. This implies
-        that the ``scale`` parameter cannot be estimated post-hoc without
-        re-fitting a model.
+        The ``scale`` parameter of the Negative Binomial distribution is 1.
 
         Note that the arguments of this method are not used but are kept for
         API consistency—i.e., all ``Observations.estimate_scale`` methods
@@ -1532,7 +1527,7 @@ class NegativeBinomialObservations(Observations):
         `glm.nb <https://www.rdocumentation.org/packages/MASS/versions/7.3-65/topics/glm.nb>`_
         for more details.
         """
-        return jnp.array(self.dispersion)
+        return jnp.ones_like(jnp.atleast_1d(y[0]))
 
 
 class GaussianObservations(Observations):
