@@ -1236,7 +1236,7 @@ class NegativeBinomialObservations(Observations):
     Select the observation model by name, which uses the default ``scale``:
 
     >>> nmo.glm.GLM(observation_model="NegativeBinomial").observation_model
-    NegativeBinomialObservations(scale=1.0)
+    NegativeBinomialObservations(dispersion=1.0)
 
     Pass an instance instead to set the dispersion explicitly:
 
