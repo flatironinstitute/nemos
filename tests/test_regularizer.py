@@ -1125,7 +1125,7 @@ class TestUnRegularized:
             endog=y,
             exog=sm.add_constant(X),
             family=sm.families.NegativeBinomial(
-                link=link_sm, alpha=model.observation_model.scale
+                link=link_sm, alpha=model.observation_model.dispersion
             ),
         )
 

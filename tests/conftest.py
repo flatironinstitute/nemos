@@ -1729,7 +1729,7 @@ def negativeBinomialGLM_model_instantiation():
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.GLM(observation_model, regularizer=regularizer, solver_name="LBFGS")
     rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
-    r = 1 / model.observation_model.scale
+    r = 1 / model.observation_model.dispersion
     spikes = np.random.poisson(np.random.gamma(shape=r, size=rate.shape) * (r / rate))
     return X, spikes, model, GLMParams(w_true, b_true), rate
 

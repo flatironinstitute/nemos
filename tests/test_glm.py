@@ -2293,7 +2293,7 @@ class TestGLMObservationModel:
             inverse_link_function = "logistic"
             solver_name = default_solver_name
         elif "negativeBinomial" in model_instantiation:
-            observation_model = "NegativeBinomialObservations(scale=1.0)"
+            observation_model = "NegativeBinomialObservations(dispersion=1.0)"
             inverse_link_function = "exp"
             solver_name = lbfgs_solver_name
         elif "gaussian" in model_instantiation:
@@ -2533,7 +2533,7 @@ class TestGLMObservationModel:
         )
         model.coef_ = params.coef
         model.intercept_ = params.intercept
-        model.scale_ = model.observation_model.scale
+        model.scale_ = 1.0
         if is_population_model(model):
             model._feature_mask = initialize_feature_mask_for_population_glm(
                 X, y.shape[1], coef=params.coef

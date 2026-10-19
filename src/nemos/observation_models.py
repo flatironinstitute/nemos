@@ -1,6 +1,7 @@
 """Observation model classes for GLMs."""
 
 import abc
+import numbers
 from typing import Callable, ClassVar, Literal, Union
 
 import jax
@@ -60,7 +61,6 @@ class Observations(Base, abc.ABC):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.scale = 1.0
         self._separable_scale = None
 
     def __repr__(self):
@@ -76,19 +76,6 @@ class Observations(Base, abc.ABC):
     @abc.abstractmethod
     def default_inverse_link_function(self):
         pass
-
-    @property
-    def scale(self):
-        """Getter for the scale parameter of the model."""
-        return self._scale
-
-    @scale.setter
-    def scale(self, value: Union[int, float, jnp.ndarray]):
-        """Setter for the scale parameter of the model."""
-        try:
-            self._scale = float(value)
-        except Exception:
-            raise ValueError("The `scale` parameter must be of numeric type.")
 
     @abc.abstractmethod
     def _negative_log_likelihood(
@@ -461,7 +448,6 @@ class PoissonObservations(Observations):
 
     def __init__(self):
         super().__init__()
-        self.scale = 1.0
         self._separable_scale = True
 
     @property
@@ -713,7 +699,6 @@ class GammaObservations(Observations):
         self,
     ):
         super().__init__()
-        self.scale = 1.0
         self._separable_scale = True
 
     @property
@@ -940,7 +925,6 @@ class BernoulliObservations(Observations):
 
     def __init__(self):
         super().__init__()
-        self.scale = 1.0
         self._separable_scale = True
 
     @property
@@ -1222,7 +1206,7 @@ class NegativeBinomialObservations(Observations):
 
     Parameters
     ----------
-    scale :
+    dispersion :
         The dispersion parameter :math:`\phi`. Lower values correspond to lower overdispersion, and as
         :math:`\phi \to 0`, the model behaves like a Poisson. The shape parameter of
         the Negative Binomial is given by `r = 1 / scale`.
@@ -1256,7 +1240,7 @@ class NegativeBinomialObservations(Observations):
 
     Pass an instance instead to set the dispersion explicitly:
 
-    >>> obs_model = nmo.observation_models.NegativeBinomialObservations(scale=2.0)
+    >>> obs_model = nmo.observation_models.NegativeBinomialObservations(dispersion=2.0)
     >>> nmo.glm.GLM(observation_model=obs_model).observation_model
     NegativeBinomialObservations(scale=2.0)
 
@@ -1270,8 +1254,12 @@ class NegativeBinomialObservations(Observations):
         >>> import matplotlib.pyplot as plt
         >>> import numpy as np
         >>> import nemos as nmo
-        >>> obs_low = nmo.observation_models.NegativeBinomialObservations(scale=0.05)
-        >>> obs_high = nmo.observation_models.NegativeBinomialObservations(scale=2.0)
+        >>> obs_low = nmo.observation_models.NegativeBinomialObservations(
+        ...     dispersion=0.05
+        ... )
+        >>> obs_high = nmo.observation_models.NegativeBinomialObservations(
+        ...     dispersion=2.0
+        ... )
         >>> rate = np.full(1000, fill_value=10.0)
         >>> key = jax.random.PRNGKey(123)
         >>> samples_low = obs_low.sample_generator(key, rate)
@@ -1296,10 +1284,14 @@ class NegativeBinomialObservations(Observations):
 
     def __init__(
         self,
-        scale=1.0,
+        dispersion: float = 1.0,
     ):
         super().__init__()
-        self.scale = scale
+        if not isinstance(dispersion, numbers.Real) or dispersion <= 0.0:
+            raise ValueError(
+                f"``dispersion`` must be a positive real number. {dispersion} provided instead."
+            )
+        self.dispersion = dispersion
         self._separable_scale = False
 
     @property
@@ -1346,16 +1338,18 @@ class NegativeBinomialObservations(Observations):
             + y \log\left(\frac{\mu}{r + \mu}\right)
 
         """
-        if self.scale is None:
+        if self.dispersion is None:
             self.estimate_scale(y, predicted_rate, 1.0)
         predicted_rate = jnp.clip(
             predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
         )
         # robust log1p forms of log(mu / (r + mu)) and log(r / (r + mu)).
-        scaled_rate = self.scale * predicted_rate
+        scaled_rate = self.dispersion * predicted_rate
         log_ratio_mu = -jnp.log1p(1 / scaled_rate)
         log_ratio_r = -jnp.log1p(scaled_rate)
-        return -aggregate_sample_scores(y * log_ratio_mu + log_ratio_r / self.scale)
+        return -aggregate_sample_scores(
+            y * log_ratio_mu + log_ratio_r / self.dispersion
+        )
 
     def log_likelihood(
         self,
@@ -1387,7 +1381,7 @@ class NegativeBinomialObservations(Observations):
         :
             The log-likelihood of the Negative Binomial model. Shape ``(1,)``.
         """
-        scale = self.scale if scale is None else scale
+        scale = self.dispersion if scale is None else scale
         ll_unnormalized = -self._negative_log_likelihood(
             y, predicted_rate, aggregate_sample_scores
         )
@@ -1438,7 +1432,7 @@ class NegativeBinomialObservations(Observations):
         For more information, see the `Negative Binomial distribution on Wikipedia
         <https://en.wikipedia.org/wiki/Negative_binomial_distribution#Gamma%E2%80%93Poisson_mixture>`_.
         """
-        scale = self.scale if scale is None else scale
+        scale = self.dispersion if scale is None else scale
         r = 1.0 / scale
         gamma_key, poisson_key = jax.random.split(key)
 
@@ -1491,7 +1485,7 @@ class NegativeBinomialObservations(Observations):
         where :math:`y` is the observed data, :math:`\hat{y}` is the predicted data, and :math:`\text{LL}` is
         the model log-likelihood.
         """
-        scale = self.scale if scale is None else scale
+        scale = self.dispersion if scale is None else scale
         factor = (predicted_rate * scale + 1) / (observations * scale + 1)
         y_mu = observations / predicted_rate
         y_mu = jnp.clip(y_mu, min=jnp.finfo(predicted_rate.dtype).eps)
@@ -1533,7 +1527,7 @@ class NegativeBinomialObservations(Observations):
         `glm.nb <https://www.rdocumentation.org/packages/MASS/versions/7.3-65/topics/glm.nb>`_
         for more details.
         """
-        return jnp.array(self.scale)
+        return jnp.array(self.dispersion)
 
 
 class GaussianObservations(Observations):
@@ -1575,7 +1569,6 @@ class GaussianObservations(Observations):
         self,
     ):
         super().__init__()
-        self.scale = 1.0
         self._separable_scale = True
 
     @property
@@ -1969,7 +1962,6 @@ class CategoricalObservations(Observations):
 
     def __init__(self):
         super().__init__()
-        self.scale = 1.0
         self._separable_scale = True
 
     @property
