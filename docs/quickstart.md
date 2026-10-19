@@ -356,14 +356,14 @@ glm = nmo.glm.GLM(observation_model=nmo.observation_models.BernoulliObservations
 
 A [Negative Binomial observation model](nemos.observation_models.NegativeBinomialObservations) is appropriate for describing a counting process (such as neural spike counts) that exhibits supra-Poisson variability — that is, it is over-dispersed relative to a Poisson model (equivalently, the variance of the counts is larger than the mean).
 
-To set up a Negative Binomial GLM, provide this `observation_model` at initialization. The degree of overdispersion can be controlled via the `scale` parameter: larger values of `scale` result in greater variability compared to a Poisson model, while as `scale` approaches zero, the distribution converges to a Poisson. An appropriate value for `scale` depends on the distribution of the observed spike counts and should be tuned, for example through [cross-validation](sklearn-how-to).
+To set up a Negative Binomial GLM, provide this `observation_model` at initialization. The degree of overdispersion can be controlled via the `dispersion` parameter: larger values of `dispersion` result in greater variability compared to a Poisson model, while as `dispersion` approaches zero, the distribution converges to a Poisson. An appropriate value for `dispersion` depends on the distribution of the observed spike counts and should be tuned, for example through [cross-validation](sklearn-how-to).
 
 
 ```{code-cell} ipython3
 
 import nemos as nmo
 
-# set up a Negative Binomial GLM for modeling counts (with scale = 1)
+# set up a Negative Binomial GLM for modeling counts (with dispersion = 1)
 glm = nmo.glm.GLM(observation_model=nmo.observation_models.NegativeBinomialObservations(dispersion=1))
 
 ```
