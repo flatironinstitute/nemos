@@ -373,12 +373,12 @@ The observation model is the distribution of the counts around the predicted rat
 nmo.glm.GLM("Gamma")
 ```
 
-You can also give the observation model object. The object gives access to the parameters of the family. The Negative Binomial needs the object, because its `scale` is a fixed value, not an estimated one.
+You can also give the observation model object. The object gives access to the parameters of the family. The Negative Binomial needs the object, because its `dispersion` is a fixed value, not an estimated one.
 
 ```{code-cell} ipython3
 from nemos.observation_models import NegativeBinomialObservations
 
-nmo.glm.GLM(NegativeBinomialObservations(scale=2.0))
+nmo.glm.GLM(NegativeBinomialObservations(dispersion=2.0))
 ```
 
 [Observation models](../../observation_models.md) describes each family, the signals it suits, and what it estimates.
