@@ -32,7 +32,7 @@ warnings.filterwarnings(
 (observation-models)=
 # Observation Models
 
-An `Observations` object is a small, self-contained calculator for one [exponential family](https://en.wikipedia.org/wiki/Exponential_family) distribution. Given observations and a predicted mean it returns the log-likelihood, the deviance, the pseudo-$R^2$, an estimate of the scale, and samples from the distribution.
+An `Observations` instance models one distribution of the [exponential family](https://en.wikipedia.org/wiki/Exponential_family). Given observations and a predicted mean it returns the log-likelihood, the deviance, the pseudo-$R^2$, an estimate of the scale, and samples from the distribution.
 
 Models such as [`GLM`](nemos.glm.GLM) and [`GLMHMM`](nemos.glm_hmm.GLMHMM) store one such object as an attribute, and use it to define their loss function and to compute model statistics. This page describes the object itself, which is of interest if you are writing a model of your own, or if you want these statistics for a model you fit elsewhere.
 
@@ -85,7 +85,7 @@ Both identities are obtained by differentiating the integral of the density unde
 
 ### The parametrization used here
 
-NeMoS parametrizes the exponential family in terms of the mean $\mu$ and the scale $\phi$. These are the `predicted_rate` and `scale` arguments of every method below, with `predicted_rate` named after the spike-count case where $\mu$ is a firing rate. To map back to the textbook parametrization, recover the canonical parameter by inverting $\mu = k'(\theta)$.
+Every method below takes the mean and the scale of the distribution as its `predicted_rate` and `scale` arguments, with `predicted_rate` named after the spike-count case where $\mu$ is a firing rate. To map back to the textbook parametrization, recover the canonical parameter by inverting $\mu = k'(\theta)$.
 
 Anything that produces a predicted mean can use these objects, however that mean was obtained: a weighted sum of predictors, the output layer of a network, the emission of a state space model.
 
@@ -131,8 +131,6 @@ $$
 $$
 
 `predicted_rate` is $\mu$, the mean, and $r$ is the shape, the reciprocal of the `dispersion` set at initialization. The variance is $\mu + \mu^2/r$. `scale` is fixed to 1.
-
-This is a member of the exponential family only while $r$ is held fixed. If it were free, it would enter through $\Gamma(y + r)/\Gamma(r)$, which does not separate into a factor of $y$ and a factor of the parameters.
 :::
 
 :::{tab-item} Gamma
@@ -178,6 +176,16 @@ Since $y$ is one-hot encoded, multiplying $[\log\mu_1, \ldots, \log\mu_K]$ eleme
 :::
 
 ::::
+
+:::{admonition} The Negative Binomial dispersion selects the distribution
+:class: note
+
+"Negative Binomial" names a collection of distributions, one for each shape $r$, the reciprocal of the dispersion. Fix $r$ and the result is an exponential family in the mean, with $\theta = \log\frac{\mu}{\mu + r}$, $k(\theta) = -r\log(1 - e^{\theta})$ and $a(\phi) = 1$. Differentiating gives $k'(\theta) = \mu$ and $k''(\theta) = \mu + \mu^2/r$, the mean and the variance.
+
+Let $r$ vary and the collection is no longer one exponential family. The variance would have to be $V(\mu)/a(r)$ for a single variance function $V$, and the ratio of $\mu + \mu^2/r$ at two values $r_1 \neq r_2$ is $(1 + \mu/r_1)/(1 + \mu/r_2)$, which depends on $\mu$ while $a(r_2)/a(r_1)$ does not.
+
+So $r$ is not passed to the methods beside the mean and the scale: it decides which distribution the instance models, and is set once, at construction.
+:::
 
 ## Initialization
 
