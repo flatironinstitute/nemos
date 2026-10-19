@@ -1242,7 +1242,7 @@ class NegativeBinomialObservations(Observations):
 
     >>> obs_model = nmo.observation_models.NegativeBinomialObservations(dispersion=2.0)
     >>> nmo.glm.GLM(observation_model=obs_model).observation_model
-    NegativeBinomialObservations(scale=2.0)
+    NegativeBinomialObservations(dispersion=2.0)
 
     A larger ``scale`` yields more variable counts for the same mean rate:
 
