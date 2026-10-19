@@ -1178,11 +1178,11 @@ class NegativeBinomialObservations(Observations):
     This model represents a Negative Binomial distribution [4]_ commonly used to model overdispersed
     count data [5]_ [6]_ (i.e., data where the variance exceeds the mean), which cannot be captured by a
     standard Poisson model. The distribution is parameterized by the predicted mean rate
-    (:math:`\mu`) and a fixed dispersion parameter (:math:`\phi`) or `scale` of the model.
+    (:math:`\mu`) and a fixed dispersion parameter (:math:`\phi`) of the model.
 
-    **Important:** the scale parameter must be estimated from the data for accurately capturing the
-    dispersion. In the context of NeMoS GLM, estimation can be achieved by cross-validating the
-    ``scale`` parameter. One may use scikit-learn :ref:`GridSearchCV <sklearn-how-to>` for example.
+    **Important:** the dispersion parameter must be estimated from the data.
+    In the context of NeMoS GLM, estimation can be achieved by cross-validating the
+    ``dispersion`` parameter. One may use scikit-learn :ref:`GridSearchCV <sklearn-how-to>` for example.
 
     The variance of the Negative Binomial distribution under this parameterization is:
 
@@ -1193,7 +1193,7 @@ class NegativeBinomialObservations(Observations):
     where :math:`\mu` is the predicted mean, and :math:`\phi` is the dispersion parameter. This
     formulation corresponds to the Negative Binomial as a Gamma–Poisson mixture.
 
-    The scale parameter :math:`\phi` is related to the canonical Negative Binomial
+    The dispersion parameter :math:`\phi` is related to the canonical Negative Binomial
     shape parameter `r` as:
 
     .. math::
@@ -1209,13 +1209,13 @@ class NegativeBinomialObservations(Observations):
     dispersion :
         The dispersion parameter :math:`\phi`. Lower values correspond to lower overdispersion, and as
         :math:`\phi \to 0`, the model behaves like a Poisson. The shape parameter of
-        the Negative Binomial is given by `r = 1 / scale`.
+        the Negative Binomial is given by `r = 1 / dispersion`.
 
     Notes
     -----
     This class is not meant to be used on its own. It is intended to be passed to a model
     such as :class:`~nemos.glm.GLM`, which relies on it to compute the log-likelihood and
-    to set the default inverse link function. Note that ``scale`` is not estimated during the
+    to set the default inverse link function. Note that ``dispersion`` is not estimated during the
     fit: the value provided at initialization is used as-is, so it has to be chosen beforehand,
     for example by cross-validation as described above.
 
@@ -1248,7 +1248,7 @@ class NegativeBinomialObservations(Observations):
 
     .. plot::
         :include-source: True
-        :caption: Effect of the scale parameter on the sampled counts.
+        :caption: Effect of the dispersion parameter on the sampled counts.
 
         >>> import jax
         >>> import matplotlib.pyplot as plt
@@ -1268,10 +1268,10 @@ class NegativeBinomialObservations(Observations):
         True
         >>> _ = plt.subplot(211)
         >>> _, edges, _ = plt.hist(samples_high, bins=50)
-        >>> _ = plt.title("scale = 2.0")
+        >>> _ = plt.title("dispersion = 2.0")
         >>> _ = plt.subplot(212)
         >>> _ = plt.hist(samples_low, bins=edges)
-        >>> _ = plt.title("scale = 0.05")
+        >>> _ = plt.title("dispersion = 0.05")
         >>> plt.tight_layout()
         >>> plt.show()
 
@@ -1333,7 +1333,7 @@ class NegativeBinomialObservations(Observations):
         Notes
         -----
         The Negative Binomial distribution models overdispersed count data.
-        The likelihood assumes the mean-parameterized form with dispersion `r = 1 / scale`.
+        The likelihood assumes the mean-parameterized form with dispersion `r = 1 / dispersion`.
 
         The log-likelihood is computed (up to a constant) using:
 
@@ -1403,8 +1403,7 @@ class NegativeBinomialObservations(Observations):
         r"""
         Sample from the Negative Binomial distribution.
 
-        This method generates random count data from the Negative Binomial distribution based on the predicted rate
-        and scale (dispersion).
+        This method generates random count data from the Negative Binomial distribution based on the predicted rate.
 
         Parameters
         ----------
@@ -1519,12 +1518,6 @@ class NegativeBinomialObservations(Observations):
         dof_resid :
             The DOF of the residuals.
 
-        Notes
-        -----
-        NeMoS currently does not support joint estimation of scale and mean for the negative binomial.
-        For alternatives, see the R package MASS
-        `glm.nb <https://www.rdocumentation.org/packages/MASS/versions/7.3-65/topics/glm.nb>`_
-        for more details.
         """
         return jnp.ones_like(jnp.atleast_1d(y[0]))
 
