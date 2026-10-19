@@ -3341,7 +3341,7 @@ class TestFourierGP(BasisFuncsTesting):
     @pytest.mark.parametrize("variance", [1e0])
     @pytest.mark.parametrize("eps", [1e-4])
     @pytest.mark.parametrize("bounds", [(0.0, 1.0)])
-    def test_scalar_property_setting(self, length_scale, variance, eps, bounds):
+    def test_scalar_construction(self, length_scale, variance, eps, bounds):
         basis = FourierGP(
             lengthscale=length_scale, bounds=bounds, eps=eps, variance=variance
         )
@@ -3353,7 +3353,7 @@ class TestFourierGP(BasisFuncsTesting):
     @pytest.mark.parametrize("variance", [1e0])
     @pytest.mark.parametrize("eps", [1e-4])
     @pytest.mark.parametrize("bounds", [(0.0, 1.0), (-2.0, 3.0)])
-    def test_xis_property_setting(self, length_scale, variance, eps, bounds):
+    def test_xis_construction(self, length_scale, variance, eps, bounds):
         L = bounds[1] - bounds[0]
         expected_xis, _, _, _ = _get_nodes_weights(length_scale, variance, eps, L)
 
@@ -3383,6 +3383,105 @@ class TestFourierGP(BasisFuncsTesting):
         )
         assert basis.n_frequencies == len(basis.xis) - 1
         assert basis.n_frequencies == basis.freq_combinations.shape[1] - 1
+
+    @pytest.mark.parametrize("via_setter", [False, True])
+    @pytest.mark.parametrize(
+        "grid_parameter, bad_value, expectation",
+        [
+            (
+                "lengthscale",
+                -1.0,
+                pytest.raises(ValueError, match=r"``lengthscale`` must be positive"),
+            ),
+            (
+                "lengthscale",
+                0,
+                pytest.raises(ValueError, match=r"``lengthscale`` must be positive"),
+            ),
+            ("eps", -1.0, pytest.raises(ValueError, match=r"``eps`` must be positive")),
+            ("eps", 0, pytest.raises(ValueError, match=r"``eps`` must be positive")),
+            (
+                "variance",
+                -1.0,
+                pytest.raises(ValueError, match=r"``variance`` must be positive"),
+            ),
+            (
+                "variance",
+                0,
+                pytest.raises(ValueError, match=r"``variance`` must be positive"),
+            ),
+            (
+                "bounds",
+                None,
+                pytest.raises(ValueError, match=r"``bounds`` must not be ``None``"),
+            ),
+        ],
+    )
+    def test_rebuild_grid_value_errors(
+        self, via_setter, grid_parameter, bad_value, expectation
+    ):
+        params = {
+            "lengthscale": 1e-2,
+            "eps": 1e-4,
+            "variance": 1e0,
+            "bounds": (0.0, 1.0),
+        }
+        if via_setter:
+            basis = FourierGP(**params)
+            with expectation:
+                setattr(basis, grid_parameter, bad_value)
+            assert getattr(basis, grid_parameter) == params[grid_parameter]
+        else:
+            params[grid_parameter] = bad_value
+            with expectation:
+                FourierGP(**params)
+
+    @pytest.mark.parametrize(
+        "grid_parameter, good_value",
+        [
+            ("lengthscale", 1e-1),
+            ("eps", 1e-3),
+            ("variance", 1e1),
+            ("bounds", (0.0, 10.0)),
+        ],
+    )
+    def test_rebuild_grid_property_setters(self, grid_parameter, good_value):
+        params = {
+            "lengthscale": 1e-2,
+            "eps": 1e-4,
+            "variance": 1e0,
+            "bounds": (0.0, 1.0),
+        }
+        basis = FourierGP(**params)
+        setattr(basis, grid_parameter, good_value)
+        assert getattr(basis, grid_parameter) == good_value
+
+        params[grid_parameter] = good_value
+        L = params["bounds"][1] - params["bounds"][0]
+        expected_xis, expected_weights, _, _ = _get_nodes_weights(
+            params["lengthscale"], params["variance"], params["eps"], L
+        )
+        np.testing.assert_allclose(basis.xis, expected_xis, rtol=1e-4)
+        np.testing.assert_allclose(basis.weights, expected_weights, rtol=1e-4)
+
+    @pytest.mark.parametrize("n_inputs", [10])
+    def test_fouriergp_split_by_feature(self, n_inputs):
+        input = np.random.uniform(size=(n_inputs,))
+        expected_shapes = []
+        basis1 = FourierGP(
+            lengthscale=0.2, bounds=(0.0, 1.0), eps=1e-4, label="one_input"
+        )
+        expected_shapes.append((n_inputs, basis1.n_basis_funcs))
+        basis2 = FourierGP(
+            lengthscale=1e-1, bounds=(0.0, 1.0), eps=1e-2, label="two_input"
+        )
+        expected_shapes.append((n_inputs, basis2.n_basis_funcs))
+        basis = basis1 + basis2
+        X = basis.compute_features(input, input)
+        split_features_multi = basis.split_by_feature(X, axis=1)
+        for i, itm in enumerate(split_features_multi.items()):
+            _, val = itm
+            assert val.shape == expected_shapes[i]
 
 
 class TestFourierBasis(BasisFuncsTesting):
