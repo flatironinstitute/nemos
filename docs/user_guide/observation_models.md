@@ -247,6 +247,7 @@ The number returned is the mean log-likelihood per sample.
 :class: note
 
 Every family takes the same arguments, so the Poisson takes a `scale` too. The Poisson scale is fixed at 1, and the argument makes no difference to the result.
+:::
 
 ```{code-cell} ipython3
 X_counts, counts = nmo.datasets.tuned_poisson(n_samples=500)
@@ -255,7 +256,6 @@ rate_counts = nmo.glm.GLM().fit(X_counts, counts).predict(X_counts)
 print(poisson.log_likelihood(counts, rate_counts))
 print(poisson.log_likelihood(counts, rate_counts, scale=7.0))
 ```
-:::
 
 The per-sample values are passed through `aggregate_sample_scores`, which can be any function and defaults to the mean. For the total log-likelihood,
 
