@@ -542,6 +542,48 @@ class TestNegativeBinomialObservations:
             "dispersion": 1.0,
         }
 
+    @pytest.mark.parametrize(
+        "dispersion, expectation",
+        [
+            (1, does_not_raise()),
+            (1.0, does_not_raise()),
+            (0.1, does_not_raise()),
+            (np.array(1), does_not_raise()),
+            ("1", does_not_raise()),
+            (
+                1j,
+                pytest.raises(
+                    TypeError,
+                    match=r"float\(\) argument must be a string or a real number",
+                ),
+            ),
+            (0, pytest.raises(ValueError, match="``dispersion``")),
+            (-1, pytest.raises(ValueError, match="``dispersion``")),
+        ],
+    )
+    def test_dispersion_init(self, dispersion, expectation):
+        with expectation:
+            nmo.observation_models.NegativeBinomialObservations(dispersion=dispersion)
+
+    def test_dispersion_readonly(self):
+        obs = nmo.observation_models.NegativeBinomialObservations()
+        with pytest.raises(AttributeError):
+            obs.dispersion = 1.1
+
+    @pytest.mark.parametrize(
+        "dispersion",
+        [
+            1,
+            1.0,
+            0.1,
+            np.array(1),
+            "1",
+        ],
+    )
+    def test_dispersion_type(self, dispersion):
+        obs = nmo.observation_models.NegativeBinomialObservations(dispersion=dispersion)
+        assert isinstance(obs.dispersion, float)
+
     @pytest.mark.requires_x64
     def test_deviance_against_statsmodels(
         self, negativeBinomialGLM_model_instantiation

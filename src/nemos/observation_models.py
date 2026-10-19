@@ -1287,12 +1287,17 @@ class NegativeBinomialObservations(Observations):
         dispersion: float = 1.0,
     ):
         super().__init__()
-        if not isinstance(dispersion, numbers.Real) or dispersion <= 0.0:
+        dispersion = float(dispersion)
+        if dispersion <= 0.0:
             raise ValueError(
                 f"``dispersion`` must be a positive real number. {dispersion} provided instead."
             )
-        self.dispersion = dispersion
+        self._dispersion = float(dispersion)
         self._separable_scale = False
+
+    @property
+    def dispersion(self):
+        return self._dispersion
 
     @property
     def default_inverse_link_function(self):
