@@ -97,7 +97,7 @@ Both identities are obtained by differentiating the integral of the density unde
 
 Every method below takes the mean and the scale of the distribution as its `predicted_rate` and `scale` arguments, the two inputs on the left of the diagram above, with `predicted_rate` named after the spike-count case where $\mu$ is a firing rate. To map back to the textbook parametrization, recover the canonical parameter by inverting $\mu = k'(\theta)$.
 
-Anything that produces a predicted mean can use these objects, however that mean was obtained: a weighted sum of predictors, the output layer of a network, the emission of a state space model.
+Any model that produces a predicted mean can use these objects, however that mean was obtained: a weighted sum of predictors, the output layer of a network, the emission of a state space model.
 
 :::{dropdown} Can $\mu = k'(\theta)$ always be inverted?
 :color: info
@@ -367,7 +367,7 @@ print("Categorical mean range: ", categorical.rate_range)
 
 A GLM predicts the mean as $\mu = f(Xw + c)$, and $\mathbf{f}$ is what NeMoS calls the **inverse link function**. The log-likelihood is a function of $\mu$, so $f$ is part of it too. This means that the properties of the log-likelihood depends on which inverse link $f$ is chosen.
 
-Not every choice leaves the log-likelihood convex, and convexity is worth having: it guarantees a unique optimal solution, independent of the intial parameter guess. Each class lists the non-linearities known to preserve convexity.
+In particular, a fundamental property of the GLM log-likelihood, its convexity, also depends on the choice of $f$. Convexity guarantees a single optimal solution, independent of the initial parameter guess. NeMoS stores the inverse links known to preserve it in this class attribute.
 
 ```{code-cell} ipython3
 nb = nmo.observation_models.NegativeBinomialObservations()
