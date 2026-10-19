@@ -101,7 +101,7 @@ Each family names $\mu$ and $\phi$ differently:
 | Distribution | $\mu$ | Range of $\mu$ | $\phi$ |
 | --- | --- | --- | --- |
 | Poisson | rate $\lambda$ | $(0, \infty)$ | fixed to 1 |
-| Negative Binomial | mean | $(0, \infty)$ | dispersion, $r = 1/\phi$ the shape |
+| Negative Binomial | mean | $(0, \infty)$ | fixed to 1; the dispersion is a separate parameter |
 | Gamma | mean | $(0, \infty)$ | $1/\phi$ the shape, $\mu\phi$ the scale |
 | Gaussian | mean | $(-\infty, \infty)$ | variance $\sigma^2$ |
 | Bernoulli | success probability $p$ | $(0, 1)$ | fixed to 1 |
@@ -127,12 +127,12 @@ $$
 :::{tab-item} Negative Binomial
 
 $$
-\ell(y; \mu, \phi) = \log\Gamma\!\left(y + \frac{1}{\phi}\right) - \log\Gamma(y + 1) - \log\Gamma\!\left(\frac{1}{\phi}\right) + y \log\frac{\mu\phi}{1 + \mu\phi} - \frac{1}{\phi}\log(1 + \mu\phi)
+\ell(y; \mu, r) = \log\Gamma(y + r) - \log\Gamma(y + 1) - \log\Gamma(r) + y \log\frac{\mu}{\mu + r} + r \log\frac{r}{\mu + r}
 $$
 
-`predicted_rate` is $\mu$, the mean. `scale` is the dispersion $\phi$, the shape is $1/\phi$, and the variance is $\mu + \phi\mu^2$.
+`predicted_rate` is $\mu$, the mean, and $r$ is the shape, the reciprocal of the `dispersion` set at initialization. The variance is $\mu + \mu^2/r$. `scale` is fixed to 1.
 
-This is a member of the exponential family only while $\phi$ is held fixed. If it were free, it would enter through $\Gamma(y + 1/\phi)/\Gamma(1/\phi)$, which does not separate into a factor of $y$ and a factor of the parameters.
+This is a member of the exponential family only while $r$ is held fixed. If it were free, it would enter through $\Gamma(y + r)/\Gamma(r)$, which does not separate into a factor of $y$ and a factor of the parameters.
 :::
 
 :::{tab-item} Gamma
@@ -193,10 +193,18 @@ print(poisson)
 print(gamma)
 ```
 
-The only exception is `NegativeBinomialObservations`, which takes the dispersion $\phi$ as `scale`. The model does not learn $\phi$ from the data, so you must set it at initialization. The variance of the distribution is $\mu + \phi\mu^2$, so a larger `scale` means that counts are more overdispersed relative to a Poisson of the same mean, and $\phi \to 0$ recovers the Poisson.
+The only exception is `NegativeBinomialObservations`, which takes a `dispersion`. The model does not learn it from the data, so you must set it at initialization. Writing the dispersion as $1/r$, the variance of the distribution is $\mu + \mu^2/r$: a larger `dispersion` means counts more overdispersed relative to a Poisson of the same mean, and a `dispersion` approaching zero recovers the Poisson.
 
 ```{code-cell} ipython3
-nmo.observation_models.NegativeBinomialObservations(scale=4.0)
+neg_binomial = nmo.observation_models.NegativeBinomialObservations(dispersion=4.0)
+
+neg_binomial
+```
+
+The value is exposed as a read-only property, so it cannot be changed after construction.
+
+```{code-cell} ipython3
+neg_binomial.dispersion
 ```
 
 ## Class attributes
@@ -281,7 +289,7 @@ A model objective is minimized, so what a model optimizes is the negative log-li
 
 ### Scale estimation
 
-The scale $\phi$ is the dispersion of the family: it sets the variance left over once the mean is fixed. [`estimate_scale`](nemos.observation_models.Observations.estimate_scale) estimates it from the residuals, correcting for the number of parameters in the model.
+The scale $\phi$ sets the variance left over once the mean is fixed. [`estimate_scale`](nemos.observation_models.Observations.estimate_scale) estimates it from the residuals, correcting for the number of parameters in the model.
 
 The Gamma is a family that has one. Fit a Gamma GLM to Gamma-distributed data,
 
@@ -317,7 +325,7 @@ The Poisson has no scale to estimate: it is fixed at 1 by the family, and the me
 poisson.estimate_scale(y, predicted_rate, dof_resid=dof_resid)
 ```
 
-The Bernoulli and the Categorical behave the same way. The Gaussian is estimated like the Gamma, and the Negative Binomial returns the value set at initialization.
+The Bernoulli, the Categorical and the Negative Binomial behave the same way, and the Gaussian is estimated like the Gamma. The Negative Binomial `dispersion` is a separate parameter, and is not estimated either.
 
 ### Sampling
 
@@ -375,7 +383,7 @@ type(model.observation_model)
 Passing an instance instead is what you need when the family has a parameter to set, which among the families above is the Negative Binomial dispersion.
 
 ```{code-cell} ipython3
-obs = nmo.observation_models.NegativeBinomialObservations(scale=2.0)
+obs = nmo.observation_models.NegativeBinomialObservations(dispersion=2.0)
 
 model = nmo.glm.GLM(observation_model=obs)
 model.observation_model
