@@ -1233,7 +1233,7 @@ class NegativeBinomialObservations(Observations):
     --------
     >>> import nemos as nmo
 
-    Select the observation model by name, which uses the default ``scale``:
+    Select the observation model by name, which uses the default ``dispersion``:
 
     >>> nmo.glm.GLM(observation_model="NegativeBinomial").observation_model
     NegativeBinomialObservations(dispersion=1.0)
@@ -1244,7 +1244,7 @@ class NegativeBinomialObservations(Observations):
     >>> nmo.glm.GLM(observation_model=obs_model).observation_model
     NegativeBinomialObservations(dispersion=2.0)
 
-    A larger ``scale`` yields more variable counts for the same mean rate:
+    A larger ``dispersion`` yields more variable counts for the same mean rate:
 
     .. plot::
         :include-source: True
@@ -1374,8 +1374,7 @@ class NegativeBinomialObservations(Observations):
             The predicted mean of the Negative Binomial distribution. Shape ``(n_time_bins,)`` or
             ``(n_time_bins, n_observations)``.
         scale :
-            The scale (dispersion) parameter of the distribution. It is related to the shape ``r`` as ``r = 1 / scale``.
-            Default is the scale provided at initialization ``self.scale``.
+            The scale parameter of the distribution, unused since it is constant and equals to 1.
         aggregate_sample_scores :
             Function that aggregates the log-likelihood across samples (e.g., jnp.mean or jnp.sum).
 
@@ -1384,14 +1383,14 @@ class NegativeBinomialObservations(Observations):
         :
             The log-likelihood of the Negative Binomial model. Shape ``(1,)``.
         """
-        scale = self.dispersion if scale is None else scale
+        dispersion = self._dispersion
         ll_unnormalized = -self._negative_log_likelihood(
             y, predicted_rate, aggregate_sample_scores
         )
         norm = aggregate_sample_scores(
-            jax.scipy.special.gammaln(y + 1 / scale)
+            jax.scipy.special.gammaln(y + 1 / dispersion)
             - jax.scipy.special.gammaln(y + 1)
-            - jax.scipy.special.gammaln(1 / scale)
+            - jax.scipy.special.gammaln(1 / dispersion)
         )
         return ll_unnormalized + norm
 
@@ -1415,7 +1414,7 @@ class NegativeBinomialObservations(Observations):
             The predicted mean of the Negative Binomial distribution. Shape ``(n_time_bins,)`` or
             ``(n_time_bins, n_observations)``.
         scale :
-            Dispersion parameter of the distribution. Smaller values imply higher variance.
+            Scale parameter of the distribution, unused, kept for api consistency.
 
         Returns
         -------
@@ -1435,8 +1434,8 @@ class NegativeBinomialObservations(Observations):
         For more information, see the `Negative Binomial distribution on Wikipedia
         <https://en.wikipedia.org/wiki/Negative_binomial_distribution#Gamma%E2%80%93Poisson_mixture>`_.
         """
-        scale = self.dispersion if scale is None else scale
-        r = 1.0 / scale
+        dispersion = self._dispersion
+        r = 1.0 / dispersion
         gamma_key, poisson_key = jax.random.split(key)
 
         # Gamma with shape=r, rate=r/mu → scale=mu/r
@@ -1465,7 +1464,7 @@ class NegativeBinomialObservations(Observations):
         predicted_rate:
             Predicted mean count of the Negative Binomial distribution. Shape matches `observations`.
         scale:
-            Dispersion parameter of the distribution.
+            Scale parameter of the distribution, unused, kept for api consistency.
 
         Returns
         -------
@@ -1488,12 +1487,12 @@ class NegativeBinomialObservations(Observations):
         where :math:`y` is the observed data, :math:`\hat{y}` is the predicted data, and :math:`\text{LL}` is
         the model log-likelihood.
         """
-        scale = self.dispersion if scale is None else scale
-        factor = (predicted_rate * scale + 1) / (observations * scale + 1)
+        dispersion = self._dispersion
+        factor = (predicted_rate * dispersion + 1) / (observations * dispersion + 1)
         y_mu = observations / predicted_rate
         y_mu = jnp.clip(y_mu, min=jnp.finfo(predicted_rate.dtype).eps)
         term1 = observations * jnp.log(y_mu * factor)
-        term2 = jnp.log(factor) / scale
+        term2 = jnp.log(factor) / dispersion
         return 2 * (term1 + term2)
 
     def estimate_scale(
