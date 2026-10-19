@@ -121,7 +121,7 @@ The Categorical methods take $\log \mu_k$ rather than $\mu_k$, which is what `lo
 
 ### The log-likelihood of each family
 
-Every panel below gives the log-likelihood of a single observation in terms of $\mu$ and $\phi$, which is what `log_likelihood` computes, and states what `predicted_rate` is.
+Every panel below gives the log-likelihood of a single observation in terms of $\mu$ and $\phi$, and of the dispersion for the Negative Binomial, which is what `log_likelihood` computes, and states what `predicted_rate` is.
 
 ::::{tab-set}
 
@@ -224,38 +224,54 @@ neg_binomial.dispersion
 
 ## Methods
 
-The examples below use a small Poisson dataset and the rate predicted by a GLM fit to it.
+The examples below use a small Gamma dataset and the mean predicted by a GLM fit to it. The Gamma has a scale, so every method can be shown with one.
 
 ```{code-cell} ipython3
-X, y = nmo.datasets.tuned_poisson(n_samples=500)
+X, y = nmo.datasets.tuned_gamma(n_samples=500)
 
-glm = nmo.glm.GLM().fit(X, y)
+glm = nmo.glm.GLM(observation_model="Gamma").fit(X, y)
 predicted_rate = glm.predict(X)
 ```
 
 ### Log-likelihood
 
-[`log_likelihood`](nemos.observation_models.Observations.log_likelihood) computes the mean log-likelihood of the observations given the predicted mean. Both arrays have the same shape, one entry per sample.
+[`log_likelihood`](nemos.observation_models.Observations.log_likelihood) computes the mean log-likelihood of the observations given the predicted mean and the scale. Observations and mean have the same shape, one entry per sample.
 
 ```{code-cell} ipython3
-poisson.log_likelihood(y, predicted_rate)
+gamma.log_likelihood(y, predicted_rate, scale=0.8)
 ```
 
 The number returned is the mean log-likelihood per sample.
+
+:::{admonition} Families with a fixed scale
+:class: note
+
+Every family takes the same arguments, so the Poisson takes a `scale` too. The Poisson scale is fixed at 1, and the argument makes no difference to the result.
+
+```{code-cell} ipython3
+X_counts, counts = nmo.datasets.tuned_poisson(n_samples=500)
+rate_counts = nmo.glm.GLM().fit(X_counts, counts).predict(X_counts)
+
+print(poisson.log_likelihood(counts, rate_counts))
+print(poisson.log_likelihood(counts, rate_counts, scale=7.0))
+```
+:::
 
 The per-sample values are passed through `aggregate_sample_scores`, which can be any function and defaults to the mean. For the total log-likelihood,
 
 ```{code-cell} ipython3
 import jax.numpy as jnp
 
-poisson.log_likelihood(y, predicted_rate, aggregate_sample_scores=jnp.sum)
+gamma.log_likelihood(
+    y, predicted_rate, scale=0.8, aggregate_sample_scores=jnp.sum
+)
 ```
 
 For the log-likelihood of each sample,
 
 ```{code-cell} ipython3
-per_sample = poisson.log_likelihood(
-    y, predicted_rate, aggregate_sample_scores=lambda x: x
+per_sample = gamma.log_likelihood(
+    y, predicted_rate, scale=0.8, aggregate_sample_scores=lambda x: x
 )
 per_sample.shape
 ```
@@ -272,38 +288,21 @@ A model objective is minimized, so what a model optimizes is the negative log-li
 
 The scale $\phi$ sets the variance left over once the mean is fixed. [`estimate_scale`](nemos.observation_models.Observations.estimate_scale) estimates it from the residuals, correcting for the number of parameters in the model.
 
-The Gamma is a family that has one. Fit a Gamma GLM to Gamma-distributed data,
-
-```{code-cell} ipython3
-X_gamma, y_gamma = nmo.datasets.tuned_gamma(n_samples=500)
-
-glm_gamma = nmo.glm.GLM(observation_model="Gamma").fit(X_gamma, y_gamma)
-rate_gamma = glm_gamma.predict(X_gamma)
-```
-
-and estimate the scale from the residuals,
-
 ```{code-cell} ipython3
 # the parameters free to vary in the model:
 # one per column of X, plus the intercept
-n_parameters = X_gamma.shape[1] + 1
-n_samples = X_gamma.shape[0]
+n_parameters = X.shape[1] + 1
+n_samples = X.shape[0]
 
 dof_resid = n_samples - n_parameters
 
-gamma.estimate_scale(y_gamma, rate_gamma, dof_resid=dof_resid)
-```
-
-A fitted model does this for you and stores the result in `scale_`.
-
-```{code-cell} ipython3
-glm_gamma.scale_, glm_gamma.dof_resid_
+gamma.estimate_scale(y, predicted_rate, dof_resid=dof_resid)
 ```
 
 The Poisson has no scale to estimate: it is fixed at 1 by the family, and the method returns 1 whatever the data.
 
 ```{code-cell} ipython3
-poisson.estimate_scale(y, predicted_rate, dof_resid=dof_resid)
+poisson.estimate_scale(counts, rate_counts, dof_resid=dof_resid)
 ```
 
 The Bernoulli, the Categorical and the Negative Binomial behave the same way, and the Gaussian is estimated like the Gamma. The Negative Binomial `dispersion` is a separate parameter, and is not estimated either.
@@ -315,7 +314,7 @@ The Bernoulli, the Categorical and the Negative Binomial behave the same way, an
 ```{code-cell} ipython3
 import jax
 
-poisson.sample_generator(jax.random.key(0), predicted_rate)[:10]
+gamma.sample_generator(jax.random.key(0), predicted_rate, scale=0.8)[:10]
 ```
 
 ### Deviance
@@ -329,7 +328,7 @@ $$
 It is zero for a perfect fit and grows as the fit worsens, which makes it the natural residual for a non-Gaussian family: for the Gaussian it reduces to the sum of squared residuals. [`deviance`](nemos.observation_models.Observations.deviance) returns one value per sample.
 
 ```{code-cell} ipython3
-deviance = poisson.deviance(y, predicted_rate)
+deviance = gamma.deviance(y, predicted_rate, scale=0.8)
 
 print(deviance.shape)
 print(deviance.sum())  # total residual deviance
@@ -341,8 +340,12 @@ print(deviance.sum())  # total residual deviance
 The log-likelihood is unbounded, so its magnitude is not informative on its own. [`pseudo_r2`](nemos.observation_models.Observations.pseudo_r2) compares the model to a null model that predicts the mean of `y` for every sample, giving a number close to 1 for a good fit and close to 0 for a model no better than the null.
 
 ```{code-cell} ipython3
-print(poisson.pseudo_r2(y, predicted_rate, score_type="pseudo-r2-McFadden"))
-print(poisson.pseudo_r2(y, predicted_rate, score_type="pseudo-r2-Cohen"))
+mcfadden = gamma.pseudo_r2(
+    y, predicted_rate, score_type="pseudo-r2-McFadden", scale=0.8
+)
+cohen = gamma.pseudo_r2(y, predicted_rate, score_type="pseudo-r2-Cohen", scale=0.8)
+
+print(mcfadden, cohen)
 ```
 
 ## Class attributes
