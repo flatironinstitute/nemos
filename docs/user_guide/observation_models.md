@@ -106,7 +106,7 @@ Anything that produces a predicted mean can use these objects, however that mean
 Yes, for every family here. Differentiating twice gives $k''(\theta) = a(\phi)\operatorname{var}(Y)$, which is positive wherever $a(\phi) > 0$ and $\operatorname{var}(Y) > 0$. So $k'$ is strictly increasing, and it maps the canonical parameter onto the range of $\mu$ one to one.
 :::
 
-Each family names $\mu$ and $\phi$ differently:
+$\mu$ and $\phi$ have a different interpretation under each observation model:
 
 | Distribution | $\mu$ | Range of $\mu$ | $\phi$ |
 | --- | --- | --- | --- |
@@ -187,14 +187,11 @@ Since $y$ is one-hot encoded, multiplying $[\log\mu_1, \ldots, \log\mu_K]$ eleme
 
 ::::
 
-:::{admonition} The Negative Binomial dispersion selects the distribution
-:class: note
+:::{dropdown} Why the Negative Binomial dispersion is not a scale
+:color: info
+:icon: info
 
-"Negative Binomial" names a collection of distributions, one for each shape $r$, the reciprocal of the dispersion. Fix $r$ and the result is an exponential family in the mean, with $\theta = \log\frac{\mu}{\mu + r}$, $k(\theta) = -r\log(1 - e^{\theta})$ and $a(\phi) = 1$. Differentiating gives $k'(\theta) = \mu$ and $k''(\theta) = \mu + \mu^2/r$, the mean and the variance.
-
-Let $r$ vary and the collection is no longer one exponential family. The variance would have to be $V(\mu)/a(r)$ for a single variance function $V$, and the ratio of $\mu + \mu^2/r$ at two values $r_1 \neq r_2$ is $(1 + \mu/r_1)/(1 + \mu/r_2)$, which depends on $\mu$ while $a(r_2)/a(r_1)$ does not.
-
-So $r$ is not passed to the methods beside the mean and the scale: it decides which distribution the instance models, and is set once, at construction.
+The Negative Binomial variance is $\mu + \mu^2/r$, with $r$ the shape, the reciprocal of the dispersion. A scale would have to let the variance be written as $V(\mu)/a(r)$, with one variance function $V$ shared by every $r$. That cannot be done here, so unless $r$ is fixed the Negative Binomial does not conform to the exponential family, which is why it is set at construction rather than passed to the methods.
 :::
 
 ## Initialization
