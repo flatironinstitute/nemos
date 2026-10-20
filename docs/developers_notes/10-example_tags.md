@@ -18,7 +18,7 @@ nemos_tags:
 | `model` | `GLM`, `PopulationGLM`, `GLMHMM`, `ClassifierGLM`                                              |
 | `observation_model` | `Poisson`, `Gamma`, `Gaussian`, `Bernoulli`, `NegativeBinomial`, `Categorical`                 |
 | `signal` | `spike counts`, `calcium imaging`, `lfp`, `behavior choices`, `behavior tracking`, `continuous` |
-| `topic` | `feature design`, `variable selection`, `cross-validation`, `regularization`, `stochastic fit`, `scalability`, `functional connectivity`, `simulation`, `custom components`, `receptive fields`, `latent states`, `initialization` |
+| `topic` | `feature design`, `variable selection`, `cross-validation`, `regularization`, `stochastic fit`, `scalability`, `functional connectivity`, `simulation`, `custom components`, `receptive fields`, `latent states`, `initialization`, `model comparison` |
 | `data` | `recorded`, `simulated`                                                                        |
 | `description` | free text, one sentence                                                                        |
 
