@@ -32,7 +32,7 @@ warnings.filterwarnings(
 (observation-models)=
 # Observation Models
 
-An `Observations` instance models one distribution of the [exponential family](https://en.wikipedia.org/wiki/Exponential_family). Given observations and a predicted mean it returns the log-likelihood, the deviance, the pseudo-$R^2$, an estimate of the scale, and samples from the distribution.
+An `Observations` instance models one distribution of the [exponential family](https://en.wikipedia.org/wiki/Exponential_family). Given observations and a predicted mean it returns the statistics of that distribution.
 
 ```{image} ../assets/observation_model_scheme.svg
 :alt: An Observations instance takes the observations y and a predicted mean and scale, and returns the log-likelihood, the deviance, the pseudo-R2, an estimate of the scale, and samples drawn from the distribution it models.
@@ -52,8 +52,6 @@ Models such as [`GLM`](nemos.glm.GLM) and [`GLMHMM`](nemos.glm_hmm.GLMHMM) store
 ```
 
 ## Supported Noise Distributions
-
-The available families are:
 
 | Observation model | Data modeled |
 | --- | --- |
@@ -77,7 +75,7 @@ $$
 
 with $\theta$ the canonical parameter, $k$ the cumulant function, $\phi$ the scale, and $h$ the factor that normalizes the density.
 
-It can be shown that the first two moments of $Y$ are both obtained by differentiating $k$. The mean is
+The first two moments of $Y$ are both obtained by differentiating $k$. The mean is
 
 $$
 \mu = \mathbb{E}[Y] = k'(\theta),
@@ -91,13 +89,13 @@ $$
 
 The mean determines $\theta$ through the first identity, so the variance can be expressed as a function of the mean alone, $\operatorname{var}(Y) = V(\mu)/a(\phi)$, with $V = k'' \circ (k')^{-1}$ the variance function.
 
-Both identities are obtained by differentiating the integral of the density under the parameter and using the score function. The argument is worked out step by step in Chapter 3 of [An Introduction to Generalized Linear Models](https://www.routledge.com/An-Introduction-to-Generalized-Linear-Models/Dobson-Barnett/p/book/9781138741515) by Dobson and Barnett, under "Properties of distributions in the exponential family".
+Both identities follow from differentiating the integral of the density under the parameter; the argument is worked out in Chapter 3 of [An Introduction to Generalized Linear Models](https://www.routledge.com/An-Introduction-to-Generalized-Linear-Models/Dobson-Barnett/p/book/9781138741515) by Dobson and Barnett, under "Properties of distributions in the exponential family".
 
 ### The parametrization used here
 
-Every method below takes the mean and the scale of the distribution as its `predicted_rate` and `scale` arguments, the two inputs on the left of the diagram above, with `predicted_rate` named after the spike-count case where $\mu$ is a firing rate. To map back to the textbook parametrization, recover the canonical parameter by inverting $\mu = k'(\theta)$.
+Every method below takes the mean and the scale of the distribution as its `predicted_rate` and `scale` arguments, with `predicted_rate` named after the spike-count case where $\mu$ is a firing rate. To map back to the textbook parametrization, recover the canonical parameter by inverting $\mu = k'(\theta)$.
 
-Any model that produces a predicted mean can use these objects, however that mean was obtained: a weighted sum of predictors, the output layer of a network, the emission of a state space model.
+Any model that produces a predicted mean can use these objects, however that mean was obtained.
 
 :::{dropdown} Can $\mu = k'(\theta)$ always be inverted?
 :color: info
@@ -121,7 +119,7 @@ The Categorical methods take $\log \mu_k$ rather than $\mu_k$, which is what `lo
 
 ### The log-likelihood of each family
 
-Every panel below gives the log-likelihood of a single observation in terms of $\mu$ and $\phi$, and of the dispersion for the Negative Binomial, which is what `log_likelihood` computes, and states what `predicted_rate` is.
+Every panel below gives the log-likelihood of a single observation and states what `predicted_rate` is.
 
 ::::{tab-set}
 
@@ -208,7 +206,7 @@ print(poisson)
 print(gamma)
 ```
 
-The only exception is `NegativeBinomialObservations`, which takes a `dispersion`. The model does not learn it from the data, so you must set it at initialization. Writing the dispersion as $1/r$, the variance of the distribution is $\mu + \mu^2/r$: a larger `dispersion` means counts more overdispersed relative to a Poisson of the same mean, and a `dispersion` approaching zero recovers the Poisson.
+The only exception is `NegativeBinomialObservations`, which takes a `dispersion`. The variance of the distribution is $\mu + \text{dispersion} \cdot \mu^2$: a larger `dispersion` means counts more overdispersed relative to a Poisson of the same mean, and a `dispersion` approaching zero recovers the Poisson.
 
 ```{code-cell} ipython3
 neg_binomial = nmo.observation_models.NegativeBinomialObservations(dispersion=4.0)
@@ -218,13 +216,9 @@ neg_binomial
 
 The value is exposed as a read-only property, so it cannot be changed after construction.
 
-```{code-cell} ipython3
-neg_binomial.dispersion
-```
-
 ## Methods
 
-The examples below use a small Gamma dataset and the mean predicted by a GLM fit to it. The Gamma has a scale, so every method can be shown with one.
+The examples below use a small Gamma dataset and the mean predicted by a GLM fit to it.
 
 ```{code-cell} ipython3
 X, y = nmo.datasets.tuned_gamma(n_samples=500)
@@ -239,22 +233,6 @@ predicted_rate = glm.predict(X)
 
 ```{code-cell} ipython3
 gamma.log_likelihood(y, predicted_rate, scale=0.8)
-```
-
-The number returned is the mean log-likelihood per sample.
-
-:::{admonition} Families with a fixed scale
-:class: note
-
-Every family takes the same arguments, so the Poisson takes a `scale` too. The Poisson scale is fixed at 1, and the argument makes no difference to the result.
-:::
-
-```{code-cell} ipython3
-X_counts, counts = nmo.datasets.tuned_poisson(n_samples=500)
-rate_counts = nmo.glm.GLM().fit(X_counts, counts).predict(X_counts)
-
-print(poisson.log_likelihood(counts, rate_counts))
-print(poisson.log_likelihood(counts, rate_counts, scale=7.0))
 ```
 
 The per-sample values are passed through `aggregate_sample_scores`, which can be any function and defaults to the mean. For the total log-likelihood,
@@ -302,7 +280,7 @@ gamma.estimate_scale(y, predicted_rate, dof_resid=dof_resid)
 The Poisson has no scale to estimate: it is fixed at 1 by the family, and the method returns 1 whatever the data.
 
 ```{code-cell} ipython3
-poisson.estimate_scale(counts, rate_counts, dof_resid=dof_resid)
+poisson.estimate_scale(y, predicted_rate, dof_resid=dof_resid)
 ```
 
 The Bernoulli, the Categorical and the Negative Binomial behave the same way, and the Gaussian is estimated like the Gamma. The Negative Binomial `dispersion` is a separate parameter, and is not estimated either.
