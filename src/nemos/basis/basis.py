@@ -40,7 +40,7 @@ class BSplineEval(BoundedEvalBasisMixin, BSplineBasis):
     bounds :
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
+        If a sample is outside the bounds, the basis returns ``fill_value`` for that sample.
     fill_value :
         The value to fill when samples are outside the bounds. Default is NaN.
     label :
@@ -393,7 +393,7 @@ class CyclicBSplineEval(BoundedEvalBasisMixin, CyclicBSplineBasis):
     bounds :
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
+        If a sample is outside the bounds, the basis returns ``fill_value`` for that sample.
     fill_value :
         The value to fill when samples are outside the bounds. Default is NaN.
     label :
@@ -752,7 +752,7 @@ class MSplineEval(BoundedEvalBasisMixin, MSplineBasis):
     bounds :
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
+        If a sample is outside the bounds, the basis returns ``fill_value`` for that sample.
     fill_value :
         The value to fill when samples are outside the bounds. Default is NaN.
     label :
@@ -1127,7 +1127,7 @@ class RaisedCosineLinearEval(BoundedEvalBasisMixin, RaisedCosineBasisLinear):
     bounds :
         The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
+        If a sample is outside the bounds, the basis returns ``fill_value`` for that sample.
     fill_value :
         The value to fill when samples are outside the bounds. Default is NaN.
     label :
@@ -1482,7 +1482,7 @@ class RaisedCosineLogEval(BoundedEvalBasisMixin, RaisedCosineBasisLog):
     bounds :
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
+        If a sample is outside the bounds, the basis returns ``fill_value`` for that sample.
     fill_value :
         The value to fill when samples are outside the bounds. Default is NaN.
     label :
@@ -1844,7 +1844,7 @@ class OrthExponentialEval(BoundedEvalBasisMixin, OrthExponentialBasis):
     bounds :
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
+        If a sample is outside the bounds, the basis returns ``fill_value`` for that sample.
     fill_value :
         The value to fill when samples are outside the bounds. Default is NaN.
     label :
@@ -2213,7 +2213,7 @@ class IdentityEval(BoundedEvalBasisMixin, IdentityBasis):
     bounds :
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
+        If a sample is outside the bounds, the basis returns ``fill_value`` for that sample.
     fill_value :
         The value to fill when samples are outside the bounds. Default is NaN.
     label :
@@ -2222,7 +2222,7 @@ class IdentityEval(BoundedEvalBasisMixin, IdentityBasis):
     """
 
     # ``IdentityBasis.evaluate`` already masks out-of-bounds samples, so the mixin must
-    # not apply ``fill_value`` a second time in ``_compute_features``.
+    # not apply ``fill_value`` a second time in ``evaluate``.
     _apply_bounds_fill = False
 
     # For this basis, bounds are not using to rescale, therefore they do not define the
