@@ -1538,6 +1538,28 @@ class TestEvalBasis:
                 f"should not have fill_value={fill_value}"
             )
 
+    @pytest.mark.parametrize("method_name", ["compute_features", "evaluate"])
+    def test_fill_value_applied_per_element(self, method_name, cls):
+        """Test that fill_value is applied only to the out-of-bounds entries of a multi-column input."""
+        if cls in [CustomBasis, Zero, FourierEval, FourierGP, Category]:
+            pytest.skip(
+                f"Skipping test_fill_value_applied_per_element for {cls.__name__}"
+            )
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=(1, 3),
+            fill_value=-999.0,
+            **extra_kwargs(cls, 5),
+        )
+        samples = np.array(
+            [[0.0, 1.5], [1.5, 4.0], [2.0, 2.5], [2.5, 2.0], [4.0, 0.0], [1.2, 2.8]]
+        )
+        out = np.asarray(getattr(bas, method_name)(samples))
+        out = out.reshape(*samples.shape, -1)
+        expected_fill = (samples < 1) | (samples > 3)
+        np.testing.assert_array_equal(np.all(out == -999.0, axis=-1), expected_fill)
+
     @pytest.mark.parametrize("fill_value", [0.0, np.nan])
     def test_fill_value_set_params(self, fill_value, cls):
         """Test that fill_value can be set via set_params."""
