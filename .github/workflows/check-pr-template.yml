@@ -1,0 +1,126 @@
+name: check-pr-template
+
+permissions: {}
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+
+jobs:
+  check-pr-template:
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # Contributors with write access (maintainers) are exempt from the check.
+      - name: Check whether the PR author has write access
+        id: author
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          if permission=$(gh api "repos/$REPO/collaborators/$AUTHOR/permission" --jq .permission); then
+            echo "Permission of $AUTHOR: $permission"
+          else
+            echo "::warning::Could not look up the permission of $AUTHOR; enforcing the template."
+            permission=none
+          fi
+          if [ "$permission" = admin ] || [ "$permission" = write ]; then
+            echo "enforce=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enforce=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Read the template from the base branch, so the rules come from the template itself.
+      - name: Fetch the PR template
+        if: steps.author.outputs.enforce == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          gh api -H "Accept: application/vnd.github.raw+json" \
+            "repos/$REPO/contents/.github/pull_request_template.md?ref=$BASE_SHA" \
+            > "$RUNNER_TEMP/pull_request_template.md"
+
+      - name: Check PR description follows the template
+        if: steps.author.outputs.enforce == 'true'
+        # The body is passed through an env var (never interpolated into the script)
+        # to avoid template injection.
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        shell: python
+        run: |
+          import os
+          import re
+          import sys
+
+          COMMENT = re.compile(r"<!--.*?-->", flags=re.S)
+          CHECKBOX = re.compile(r"^\s*[-*]\s*\[([ xX])\]", flags=re.M)
+          PLACEHOLDER = re.compile(r"^\*[^*].*\*$")
+
+
+          def split_sections(text):
+              """Map each "##"/"###" heading to the raw text below it."""
+              text = text.replace("\r\n", "\n")
+              headings = list(re.finditer(r"^#{2,3}\s+(.+?)\s*$", text, flags=re.M))
+              sections = {}
+              for i, match in enumerate(headings):
+                  end = headings[i + 1].start() if i + 1 < len(headings) else len(text)
+                  sections[match.group(1)] = text[match.end():end]
+              return sections
+
+
+          with open(os.path.join(os.environ["RUNNER_TEMP"], "pull_request_template.md")) as f:
+              template = split_sections(f.read())
+          body = split_sections(os.environ.get("PR_BODY") or "")
+
+          errors = []
+          for heading, template_text in template.items():
+              if heading not in body:
+                  errors.append(f"Missing section '{heading}'.")
+                  continue
+              text = COMMENT.sub("", body[heading])
+              template_lines = COMMENT.sub("", template_text).strip().splitlines()
+
+              # Sections with checkboxes: tick exactly one if the template says so,
+              # otherwise tick all of them.
+              n_boxes = len(CHECKBOX.findall(template_text))
+              if n_boxes:
+                  ticks = CHECKBOX.findall(text)
+                  n_ticked = sum(t in "xX" for t in ticks)
+                  if re.search(r"exactly\s+one", template_text, flags=re.I):
+                      if n_ticked != 1:
+                          errors.append(
+                              f"Select exactly one option under '{heading}' ({n_ticked} selected)."
+                          )
+                  elif len(ticks) < n_boxes or n_ticked < len(ticks):
+                      errors.append(f"Tick all the boxes under '{heading}'.")
+
+              # Sections holding only an italic placeholder must be filled in.
+              elif template_lines and all(
+                  PLACEHOLDER.match(line.strip()) for line in template_lines if line.strip()
+              ):
+                  placeholders = {line.strip() for line in template_lines}
+                  content = [
+                      line for line in text.splitlines()
+                      if line.strip() and line.strip() not in placeholders
+                  ]
+                  if not content:
+                      errors.append(f"Fill out the '{heading}' section.")
+
+          if errors:
+              summary = "\n".join(f"- {e}" for e in errors)
+              with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+                  f.write(
+                      "## PR description does not follow the template\n\n"
+                      "See `.github/pull_request_template.md`.\n\n"
+                      f"{summary}\n"
+                  )
+              for e in errors:
+                  print(f"::error::{e}")
+              sys.exit(1)
+
+          print("PR description follows the template.")
