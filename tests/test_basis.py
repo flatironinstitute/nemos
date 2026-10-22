@@ -407,6 +407,17 @@ def assert_jit_matches_eager(bas, *inputs):
         )
 
 
+def assert_continuous_at_upper_bound(bas):
+    """Check that the basis at the upper bound matches its limit from the left, eager and jitted."""
+    upper = bas.bounds[1]
+    samples = np.array([upper - 1e-5, upper])
+    for func in (bas.compute_features, jax.jit(bas.compute_features)):
+        out = np.asarray(func(samples))
+        np.testing.assert_allclose(
+            out[1], out[0], atol=1e-3 * np.abs(out[0]).max(), err_msg=f"{bas}"
+        )
+
+
 def jit_composite_inputs(*bases, n_samples=20):
     """One sample array per basis, integer coded for the discrete ones."""
     grid = np.linspace(0, 1, n_samples)
@@ -2828,6 +2839,13 @@ class TestMSplineBasis(BasisFuncsTesting):
         )
         assert_jit_matches_eager(bas, JIT_INPUTS[inp_label])
 
+    @pytest.mark.parametrize("order", [2, 3, 4, 5])
+    @pytest.mark.parametrize("n_basis_funcs", [6, 12])
+    def test_continuous_at_upper_bound(self, order, n_basis_funcs):
+        """The upper bound is in the support of the M-spline basis."""
+        bas = MSplineEval(n_basis_funcs, order=order, bounds=(0.0, 1.0))
+        assert_continuous_at_upper_bound(bas)
+
     @pytest.mark.requires_x64
     @pytest.mark.parametrize("order", [1, 2, 3, 5])
     @pytest.mark.parametrize("n_basis_funcs", [5, 9])
@@ -3114,6 +3132,13 @@ class TestBSplineBasis(BasisFuncsTesting):
             self.cls[mode], n_basis_funcs=6, window_size=8, **kwargs
         )
         assert_jit_matches_eager(bas, JIT_INPUTS[inp_label])
+
+    @pytest.mark.parametrize("order", [2, 3, 4, 5])
+    @pytest.mark.parametrize("n_basis_funcs", [6, 12])
+    def test_continuous_at_upper_bound(self, order, n_basis_funcs):
+        """The upper bound is in the support of the B-spline basis."""
+        bas = BSplineEval(n_basis_funcs, order=order, bounds=(0.0, 1.0))
+        assert_continuous_at_upper_bound(bas)
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
     @pytest.mark.parametrize("order", [1, 2, 3, 4, 5])
