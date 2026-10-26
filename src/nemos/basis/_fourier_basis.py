@@ -28,7 +28,6 @@ if TYPE_CHECKING:
 
 from ..type_casting import is_at_least_1d_numpy_array_like, support_pynapple
 from ..typing import Array, FeatureMatrix
-from ..utils import format_repr
 from ._basis import Basis, check_transform_input, min_max_rescale_samples
 from ._basis_mixin import AtomicBasisMixin, BoundedEvalBasisMixin
 from ._composition_utils import add_docstring
@@ -555,9 +554,6 @@ class FourierBasis(AtomicBasisMixin, Basis):
             The samples as provided, identity function.
         """
         return sample_pts
-
-    def __repr__(self):
-        return format_repr(self, exclude_keys=["fill_value"])
 
 
 class FourierEval(BoundedEvalBasisMixin, FourierBasis):
