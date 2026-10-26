@@ -394,8 +394,6 @@ class CyclicBSplineEval(BoundedEvalBasisMixin, CyclicBSplineBasis):
         The bounds of one period of the basis. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         Samples outside the bounds are wrapped around the period ``bounds[1] - bounds[0]``.
-    fill_value :
-        Not applied: samples outside the bounds are wrapped around the period. Default is NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -420,7 +418,6 @@ class CyclicBSplineEval(BoundedEvalBasisMixin, CyclicBSplineBasis):
         n_basis_funcs: int,
         order: int = 4,
         bounds: Optional[Tuple[float, float]] = None,
-        fill_value: float = jax.numpy.nan,
         label: Optional[str] = "CyclicBSplineEval",
     ):
         CyclicBSplineBasis.__init__(
@@ -429,7 +426,7 @@ class CyclicBSplineEval(BoundedEvalBasisMixin, CyclicBSplineBasis):
             order=order,
             label=label,
         )
-        BoundedEvalBasisMixin.__init__(self, bounds=bounds, fill_value=fill_value)
+        BoundedEvalBasisMixin.__init__(self, bounds=bounds)
 
     @add_docstring("split_by_feature", CyclicBSplineBasis)
     def split_by_feature(

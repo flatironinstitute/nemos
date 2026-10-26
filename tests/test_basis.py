@@ -1470,7 +1470,7 @@ class TestEvalBasis:
 
     def test_fill_value_default(self, cls):
         """Test that fill_value defaults to NaN."""
-        if cls in [CustomBasis, Zero, FourierEval, Category]:
+        if cls in [CustomBasis, Zero, FourierEval, Category, CyclicBSplineEval]:
             pytest.skip(f"Skipping test_fill_value_default for {cls.__name__}")
         bas = instantiate_atomic_basis(
             cls,
@@ -1543,7 +1543,14 @@ class TestEvalBasis:
     @pytest.mark.parametrize("fill_value", [0.0, np.nan])
     def test_fill_value_set_params(self, fill_value, cls):
         """Test that fill_value can be set via set_params."""
-        if cls in [CustomBasis, Zero, FourierEval, FourierGP, Category]:
+        if cls in [
+            CustomBasis,
+            Zero,
+            FourierEval,
+            FourierGP,
+            Category,
+            CyclicBSplineEval,
+        ]:
             pytest.skip(f"Skipping test_fill_value_set_params for {cls.__name__}")
         bas = instantiate_atomic_basis(
             cls,
@@ -1647,7 +1654,7 @@ class TestSharedMethods:
                 RaisedCosineLogEval: "RaisedCosineLogEval(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=(1.0, 2.0), fill_value=nan)",
                 RaisedCosineLinearEval: "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0, bounds=(1.0, 2.0), fill_value=nan)",
                 BSplineEval: "BSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0), fill_value=nan)",
-                CyclicBSplineEval: "CyclicBSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0), fill_value=nan)",
+                CyclicBSplineEval: "CyclicBSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
                 MSplineEval: "MSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0), fill_value=nan)",
                 OrthExponentialEval: "OrthExponentialEval(n_basis_funcs=5, bounds=(1.0, 2.0), fill_value=nan)",
                 IdentityEval: "IdentityEval(bounds=(1.0, 2.0), fill_value=nan)",
@@ -1683,7 +1690,7 @@ class TestSharedMethods:
                 RaisedCosineLogEval: r"'mylabel': RaisedCosineLogEval\(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=\(1.0, 2.0\), fill_value=nan\)",
                 RaisedCosineLinearEval: r"'mylabel': RaisedCosineLinearEval\(n_basis_funcs=5, width=2.0, bounds=\(1.0, 2.0\), fill_value=nan\)",
                 BSplineEval: r"'mylabel': BSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\), fill_value=nan\)",
-                CyclicBSplineEval: r"'mylabel': CyclicBSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\), fill_value=nan\)",
+                CyclicBSplineEval: r"'mylabel': CyclicBSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\)\)",
                 MSplineEval: r"'mylabel': MSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\), fill_value=nan\)",
                 OrthExponentialEval: r"'mylabel': OrthExponentialEval\(n_basis_funcs=5, bounds=\(1.0, 2.0\), fill_value=nan\)",
                 IdentityEval: r"'mylabel': IdentityEval\(bounds=\(1.0, 2.0\), fill_value=nan\)",
