@@ -391,11 +391,11 @@ class CyclicBSplineEval(BoundedEvalBasisMixin, CyclicBSplineBasis):
         The B-splines have (order-2) continuous derivatives at each interior knot.
         The higher this number, the smoother the basis representation will be.
     bounds :
-        The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
+        The bounds of one period of the basis. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
+        Samples outside the bounds are wrapped around the period ``bounds[1] - bounds[0]``.
     fill_value :
-        The value to fill when samples are outside the bounds. Default is NaN.
+        Not applied: samples outside the bounds are wrapped around the period. Default is NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -412,6 +412,8 @@ class CyclicBSplineEval(BoundedEvalBasisMixin, CyclicBSplineBasis):
     >>> sample_points = linspace(0, 1, 100)
     >>> features = cyclic_bspline_basis.compute_features(sample_points)
     """
+
+    _apply_bounds_fill = False
 
     def __init__(
         self,

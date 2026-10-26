@@ -1330,8 +1330,8 @@ class TestEvalBasis:
         ],
     )
     def test_vmin_vmax_range(self, vmin, vmax, samples, nan_idx, cls):
-        if cls in [CustomBasis, Zero, FourierEval, Category]:
-            # FourierEval is defined over the real line; bounds specify period, not domain
+        if cls in [CustomBasis, Zero, FourierEval, Category, CyclicBSplineEval]:
+            # FourierEval and CyclicBSplineEval are periodic; bounds specify period, not domain
             pytest.skip(f"Skipping test_vmin_vmax_range for {cls.__name__}")
         if cls is FourierGP and vmin is None:
             pytest.skip("FourierGP requires bounds.")
@@ -1504,7 +1504,14 @@ class TestEvalBasis:
         self, fill_value, samples, out_of_bounds_idx, cls
     ):
         """Test that fill_value is applied to samples outside bounds."""
-        if cls in [CustomBasis, Zero, FourierEval, FourierGP, Category]:
+        if cls in [
+            CustomBasis,
+            Zero,
+            FourierEval,
+            FourierGP,
+            Category,
+            CyclicBSplineEval,
+        ]:
             pytest.skip(
                 f"Skipping test_fill_value_applied_to_out_of_bounds for {cls.__name__}"
             )
@@ -1585,9 +1592,14 @@ class TestEvalBasis:
         # JIT and non-JIT should produce the same result
         np.testing.assert_allclose(result_jit, result_no_jit)
         # Out of bounds samples should have fill_value (except FourierEval where bounds = period)
-        if cls != FourierEval:
+        apply_fill = getattr(bas, "_apply_bounds_fill", True)
+        if apply_fill or isinstance(cls, IdentityEval):
             # 0.5 < 1 and 3.5 > 3
             np.testing.assert_array_equal(result_jit[[0, 4]], bas.fill_value)
+        else:
+            period = bas.bounds[1] - bas.bounds[0]
+            result_wrapped = bas.compute_features(samples % period)
+            np.testing.assert_allclose(result_no_jit, result_wrapped, atol=1e-15)
 
 
 @pytest.mark.parametrize(
@@ -3195,6 +3207,19 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
             self.cls[mode], n_basis_funcs=6, window_size=8, **kwargs
         )
         assert_jit_matches_eager(bas, JIT_INPUTS[inp_label])
+
+    @pytest.mark.parametrize("bounds", [(0, 1), (-1, 1), (-0.5, 0.5), (1, 2.5)])
+    def test_periodicity(self, bounds):
+        bas = instantiate_atomic_basis(
+            self.cls["eval"], n_basis_funcs=6, window_size=8, bounds=bounds
+        )
+        period = bounds[1] - bounds[0]
+        rng = np.random.default_rng(seed=42)
+        x = rng.uniform(-10, 10, size=10)
+        X = bas.compute_features(x)
+        for k in range(2, 4):
+            Y = bas.compute_features(x + k * period)
+            np.testing.assert_allclose(X, Y, atol=1e-13)
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
     @pytest.mark.parametrize("order", [2, 3, 4, 5])

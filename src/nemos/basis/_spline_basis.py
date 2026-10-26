@@ -480,6 +480,8 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
             getattr(self, "bounds", None),
             use_jax=is_traced(sample_pts),
         )
+        # wrap around the period
+        sample_pts %= 1
         knot_locs = self._generate_knots(is_cyclic=True)
 
         # for cyclic, do not repeat knots
