@@ -7,7 +7,7 @@
 [![codecov](https://codecov.io/gh/flatironinstitute/nemos/graph/badge.svg?token=vvtrcTFNeu)](https://codecov.io/gh/flatironinstitute/nemos)
 [![Documentation Status](https://readthedocs.org/projects/nemos/badge/?version=latest)](https://nemos.readthedocs.io/en/latest/?badge=latest)
 [![nemos CI](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml/badge.svg)](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17553287.svg)](https://doi.org/10.5281/zenodo.17553287)
+[![DOI 10.5281/zenodo.17553286](https://zenodo.org/badge/DOI/10.5281/zenodo.17553286.svg)](https://doi.org/10.5281/zenodo.17553286)
 
 
 
@@ -83,7 +83,6 @@ X = basis.compute_features(input_1, input_2, input_3)
 #### GLM
 
 ```python
-
 # Fit the model mapping X to the spike count
 # time-series y
 glm = nmo.glm.GLM().fit(X, y)
@@ -115,8 +114,7 @@ import nemos as nmo
 
 # generate 5 basis functions of 100 time-bins,
 # and convolve the counts with the basis.
-X = nmo.basis.RaisedCosineLogConv(5, window_size=100
-    ).compute_features(spike_counts)
+X = nmo.basis.RaisedCosineLogConv(5, window_size=100).compute_features(spike_counts)
 ```
 #### Population GLM
 
@@ -188,7 +186,7 @@ cite the code by the DOI. You can click on
 `Cite this repository` on the right side of the GitHub page to get a copyable
 citation for the code, or use the following:
 
-- Code: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17553287.svg)](https://doi.org/10.5281/zenodo.17553287)
+- Code (all versions): [![DOI 10.5281/zenodo.17553286](https://zenodo.org/badge/DOI/10.5281/zenodo.17553286.svg)](https://doi.org/10.5281/zenodo.17553286)
 
 
 ## Support

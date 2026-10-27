@@ -3,7 +3,7 @@
 # required to get ArrayLike to render correctly
 from __future__ import annotations
 
-from typing import List, Literal, Optional, Tuple
+from typing import Optional, Tuple
 
 import jax
 from numpy.typing import ArrayLike, NDArray
@@ -17,7 +17,6 @@ from ._basis_mixin import (
 )
 from ._composition_utils import add_docstring
 from ._decaying_exponential import OrthExponentialBasis
-from ._fourier_basis import FourierBasis
 from ._identity import HistoryBasis, IdentityBasis
 from ._raised_cosine_basis import RaisedCosineBasisLinear, RaisedCosineBasisLog
 from ._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
@@ -41,7 +40,7 @@ class BSplineEval(BoundedEvalBasisMixin, BSplineBasis):
     bounds :
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
+        If a sample is outside the bounds, the basis returns ``fill_value`` for that sample.
     fill_value :
         The value to fill when samples are outside the bounds. Default is NaN.
     label :
@@ -98,10 +97,14 @@ class BSplineEval(BoundedEvalBasisMixin, BSplineBasis):
         >>> from nemos.basis import BSplineEval
         >>> from nemos.glm import GLM
         >>> basis = BSplineEval(n_basis_funcs=6, label="one_input")
-        >>> X = basis.compute_features(np.random.randn(20,))
+        >>> X = basis.compute_features(
+        ...     np.random.randn(
+        ...         20,
+        ...     )
+        ... )
         >>> split_features_multi = basis.split_by_feature(X, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
-        ...        print(f"{feature}, shape {sub_dict.shape}")
+        ...     print(f"{feature}, shape {sub_dict.shape}")
         one_input, shape (20, 6)
 
         """
@@ -117,7 +120,7 @@ class BSplineEval(BoundedEvalBasisMixin, BSplineBasis):
 
         >>> # Generate data
         >>> num_samples = 1000
-        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> X = np.random.normal(size=(num_samples,))  # raw time series
         >>> basis = BSplineEval(10)
         >>> features = basis.compute_features(X)  # basis transformed time series
         >>> features.shape
@@ -142,12 +145,14 @@ class BSplineEval(BoundedEvalBasisMixin, BSplineBasis):
             >>> bspline_basis = BSplineEval(n_basis_funcs=4, order=3)
             >>> sample_points, basis_values = bspline_basis.evaluate_on_grid(100)
             >>> for i in range(4):
-            ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
-            >>> plt.title('B-Spline Basis Functions')
+            ...     p = plt.plot(
+            ...         sample_points, basis_values[:, i], label=f"Function {i + 1}"
+            ...     )
+            >>> plt.title("B-Spline Basis Functions")
             Text(0.5, 1.0, 'B-Spline Basis Functions')
-            >>> plt.xlabel('Domain')
+            >>> plt.xlabel("Domain")
             Text(0.5, 0, 'Domain')
-            >>> plt.ylabel('Basis Function Value')
+            >>> plt.ylabel("Basis Function Value")
             Text(0, 0.5, 'Basis Function Value')
             >>> l = plt.legend()
             >>> plt.show()
@@ -274,7 +279,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         >>> X_multi = basis.compute_features(np.random.randn(20, 2))
         >>> split_features_multi = basis.split_by_feature(X_multi, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
-        ...        print(f"{feature}, shape {sub_dict.shape}")
+        ...     print(f"{feature}, shape {sub_dict.shape}")
         two_inputs, shape (20, 2, 6)
 
         """
@@ -291,7 +296,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
 
         >>> # Generate data
         >>> num_samples = 1000
-        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> X = np.random.normal(size=(num_samples,))  # raw time series
         >>> basis = BSplineConv(10, window_size=11)
         >>> features = basis.compute_features(X)  # basis transformed time series
         >>> features.shape
@@ -316,12 +321,14 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
             >>> bspline_basis = BSplineConv(n_basis_funcs=4, order=3, window_size=10)
             >>> sample_points, basis_values = bspline_basis.evaluate_on_grid(100)
             >>> for i in range(4):
-            ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
-            >>> plt.title('B-Spline Basis Functions')
+            ...     p = plt.plot(
+            ...         sample_points, basis_values[:, i], label=f"Function {i + 1}"
+            ...     )
+            >>> plt.title("B-Spline Basis Functions")
             Text(0.5, 1.0, 'B-Spline Basis Functions')
-            >>> plt.xlabel('Domain')
+            >>> plt.xlabel("Domain")
             Text(0.5, 0, 'Domain')
-            >>> plt.ylabel('Basis Function Value')
+            >>> plt.ylabel("Basis Function Value")
             Text(0, 0.5, 'Basis Function Value')
             >>> l = plt.legend()
             >>> plt.show()
@@ -386,7 +393,7 @@ class CyclicBSplineEval(BoundedEvalBasisMixin, CyclicBSplineBasis):
     bounds :
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
+        If a sample is outside the bounds, the basis returns ``fill_value`` for that sample.
     fill_value :
         The value to fill when samples are outside the bounds. Default is NaN.
     label :
@@ -435,10 +442,14 @@ class CyclicBSplineEval(BoundedEvalBasisMixin, CyclicBSplineBasis):
         >>> from nemos.basis import CyclicBSplineEval
         >>> from nemos.glm import GLM
         >>> basis = CyclicBSplineEval(n_basis_funcs=6, label="one_input")
-        >>> X = basis.compute_features(np.random.randn(20,))
+        >>> X = basis.compute_features(
+        ...     np.random.randn(
+        ...         20,
+        ...     )
+        ... )
         >>> split_features_multi = basis.split_by_feature(X, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
-        ...        print(f"{feature}, shape {sub_dict.shape}")
+        ...     print(f"{feature}, shape {sub_dict.shape}")
         one_input, shape (20, 6)
 
         """
@@ -455,7 +466,7 @@ class CyclicBSplineEval(BoundedEvalBasisMixin, CyclicBSplineBasis):
 
         >>> # Generate data
         >>> num_samples = 1000
-        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> X = np.random.normal(size=(num_samples,))  # raw time series
         >>> basis = CyclicBSplineEval(10)
         >>> features = basis.compute_features(X)  # basis transformed time series
         >>> features.shape
@@ -482,12 +493,14 @@ class CyclicBSplineEval(BoundedEvalBasisMixin, CyclicBSplineBasis):
             >>> cbspline_basis = CyclicBSplineEval(n_basis_funcs=4, order=3)
             >>> sample_points, basis_values = cbspline_basis.evaluate_on_grid(100)
             >>> for i in range(4):
-            ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
-            >>> plt.title('Cyclic B-Spline Basis Functions')
+            ...     p = plt.plot(
+            ...         sample_points, basis_values[:, i], label=f"Function {i + 1}"
+            ...     )
+            >>> plt.title("Cyclic B-Spline Basis Functions")
             Text(0.5, 1.0, 'Cyclic B-Spline Basis Functions')
-            >>> plt.xlabel('Domain')
+            >>> plt.xlabel("Domain")
             Text(0.5, 0, 'Domain')
-            >>> plt.ylabel('Basis Function Value')
+            >>> plt.ylabel("Basis Function Value")
             Text(0, 0.5, 'Basis Function Value')
             >>> l = plt.legend()
             >>> plt.show()
@@ -567,7 +580,9 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
     >>> from nemos.basis import CyclicBSplineConv
     >>> n_basis_funcs = 5
     >>> order = 3
-    >>> cyclic_bspline_basis = CyclicBSplineConv(n_basis_funcs, order=order, window_size=10)
+    >>> cyclic_bspline_basis = CyclicBSplineConv(
+    ...     n_basis_funcs, order=order, window_size=10
+    ... )
     >>> cyclic_bspline_basis
     CyclicBSplineConv(n_basis_funcs=5, window_size=10, order=3)
     >>> sample_points = linspace(0, 1, 100)
@@ -602,11 +617,13 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         >>> import numpy as np
         >>> from nemos.basis import CyclicBSplineConv
         >>> from nemos.glm import GLM
-        >>> basis = CyclicBSplineConv(n_basis_funcs=6, window_size=10, label="two_inputs")
+        >>> basis = CyclicBSplineConv(
+        ...     n_basis_funcs=6, window_size=10, label="two_inputs"
+        ... )
         >>> X_multi = basis.compute_features(np.random.randn(20, 2))
         >>> split_features_multi = basis.split_by_feature(X_multi, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
-        ...        print(f"{feature}, shape {sub_dict.shape}")
+        ...     print(f"{feature}, shape {sub_dict.shape}")
         two_inputs, shape (20, 2, 6)
 
         """
@@ -623,7 +640,7 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
 
         >>> # Generate data
         >>> num_samples = 1000
-        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> X = np.random.normal(size=(num_samples,))  # raw time series
         >>> basis = CyclicBSplineConv(10, window_size=11)
         >>> features = basis.compute_features(X)  # basis transformed time series
         >>> features.shape
@@ -647,15 +664,19 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
             >>> import numpy as np
             >>> import matplotlib.pyplot as plt
             >>> from nemos.basis import CyclicBSplineConv
-            >>> cbspline_basis = CyclicBSplineConv(n_basis_funcs=4, order=3, window_size=10)
+            >>> cbspline_basis = CyclicBSplineConv(
+            ...     n_basis_funcs=4, order=3, window_size=10
+            ... )
             >>> sample_points, basis_values = cbspline_basis.evaluate_on_grid(100)
             >>> for i in range(4):
-            ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
-            >>> plt.title('Cyclic B-Spline Basis Functions')
+            ...     p = plt.plot(
+            ...         sample_points, basis_values[:, i], label=f"Function {i + 1}"
+            ...     )
+            >>> plt.title("Cyclic B-Spline Basis Functions")
             Text(0.5, 1.0, 'Cyclic B-Spline Basis Functions')
-            >>> plt.xlabel('Domain')
+            >>> plt.xlabel("Domain")
             Text(0.5, 0, 'Domain')
-            >>> plt.ylabel('Basis Function Value')
+            >>> plt.ylabel("Basis Function Value")
             Text(0, 0.5, 'Basis Function Value')
             >>> l = plt.legend()
             >>> plt.show()
@@ -731,7 +752,7 @@ class MSplineEval(BoundedEvalBasisMixin, MSplineBasis):
     bounds :
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
+        If a sample is outside the bounds, the basis returns ``fill_value`` for that sample.
     fill_value :
         The value to fill when samples are outside the bounds. Default is NaN.
     label :
@@ -796,7 +817,7 @@ class MSplineEval(BoundedEvalBasisMixin, MSplineBasis):
         >>> X = basis.compute_features(np.random.randn(20))
         >>> split_features_multi = basis.split_by_feature(X, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
-        ...        print(f"{feature}, shape {sub_dict.shape}")
+        ...     print(f"{feature}, shape {sub_dict.shape}")
         one_input, shape (20, 6)
 
         """
@@ -813,7 +834,7 @@ class MSplineEval(BoundedEvalBasisMixin, MSplineBasis):
 
         >>> # Generate data
         >>> num_samples = 1000
-        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> X = np.random.normal(size=(num_samples,))  # raw time series
         >>> basis = MSplineEval(10)
         >>> features = basis.compute_features(X)  # basis transformed time series
         >>> features.shape
@@ -840,12 +861,14 @@ class MSplineEval(BoundedEvalBasisMixin, MSplineBasis):
         >>> mspline_basis = MSplineEval(n_basis_funcs=4, order=3)
         >>> sample_points, basis_values = mspline_basis.evaluate_on_grid(100)
         >>> for i in range(4):
-        ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
-        >>> plt.title('M-Spline Basis Functions')
+        ...     p = plt.plot(
+        ...         sample_points, basis_values[:, i], label=f"Function {i + 1}"
+        ...     )
+        >>> plt.title("M-Spline Basis Functions")
         Text(0.5, 1.0, 'M-Spline Basis Functions')
-        >>> plt.xlabel('Domain')
+        >>> plt.xlabel("Domain")
         Text(0.5, 0, 'Domain')
-        >>> plt.ylabel('Basis Function Value')
+        >>> plt.ylabel("Basis Function Value")
         Text(0, 0.5, 'Basis Function Value')
         >>> l = plt.legend()
         >>> plt.show()
@@ -988,7 +1011,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         >>> X_multi = basis.compute_features(np.random.randn(20, 2))
         >>> split_features_multi = basis.split_by_feature(X_multi, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
-        ...        print(f"{feature}, shape {sub_dict.shape}")
+        ...     print(f"{feature}, shape {sub_dict.shape}")
         two_inputs, shape (20, 2, 6)
 
         """
@@ -1005,7 +1028,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
 
         >>> # Generate data
         >>> num_samples = 1000
-        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> X = np.random.normal(size=(num_samples,))  # raw time series
         >>> basis = MSplineConv(10, window_size=11)
         >>> features = basis.compute_features(X)  # basis transformed time series
         >>> features.shape
@@ -1032,12 +1055,14 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         >>> mspline_basis = MSplineConv(n_basis_funcs=4, order=3, window_size=10)
         >>> sample_points, basis_values = mspline_basis.evaluate_on_grid(100)
         >>> for i in range(4):
-        ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
-        >>> plt.title('M-Spline Basis Functions')
+        ...     p = plt.plot(
+        ...         sample_points, basis_values[:, i], label=f"Function {i + 1}"
+        ...     )
+        >>> plt.title("M-Spline Basis Functions")
         Text(0.5, 1.0, 'M-Spline Basis Functions')
-        >>> plt.xlabel('Domain')
+        >>> plt.xlabel("Domain")
         Text(0.5, 0, 'Domain')
-        >>> plt.ylabel('Basis Function Value')
+        >>> plt.ylabel("Basis Function Value")
         Text(0, 0.5, 'Basis Function Value')
         >>> l = plt.legend()
         """
@@ -1102,7 +1127,7 @@ class RaisedCosineLinearEval(BoundedEvalBasisMixin, RaisedCosineBasisLinear):
     bounds :
         The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
+        If a sample is outside the bounds, the basis returns ``fill_value`` for that sample.
     fill_value :
         The value to fill when samples are outside the bounds. Default is NaN.
     label :
@@ -1158,7 +1183,7 @@ class RaisedCosineLinearEval(BoundedEvalBasisMixin, RaisedCosineBasisLinear):
             >>> import matplotlib.pyplot as plt
             >>> from nemos.basis import RaisedCosineLinearEval
             >>> n_basis_funcs = 5
-            >>> window_size=10
+            >>> window_size = 10
             >>> raised_cos_basis = RaisedCosineLinearEval(n_basis_funcs)
             >>> sample_points, basis_values = raised_cos_basis.evaluate_on_grid(100)
             >>> plt.plot(sample_points, basis_values)
@@ -1194,7 +1219,7 @@ class RaisedCosineLinearEval(BoundedEvalBasisMixin, RaisedCosineBasisLinear):
 
         >>> # Generate data
         >>> num_samples = 1000
-        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> X = np.random.normal(size=(num_samples,))  # raw time series
         >>> basis = RaisedCosineLinearEval(10)
         >>> features = basis.compute_features(X)  # basis transformed time series
         >>> features.shape
@@ -1217,10 +1242,14 @@ class RaisedCosineLinearEval(BoundedEvalBasisMixin, RaisedCosineBasisLinear):
         >>> from nemos.basis import RaisedCosineLinearEval
         >>> from nemos.glm import GLM
         >>> basis = RaisedCosineLinearEval(n_basis_funcs=6, label="one_input")
-        >>> X = basis.compute_features(np.random.randn(20,))
+        >>> X = basis.compute_features(
+        ...     np.random.randn(
+        ...         20,
+        ...     )
+        ... )
         >>> split_features_multi = basis.split_by_feature(X, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
-        ...        print(f"{feature}, shape {sub_dict.shape}")
+        ...     print(f"{feature}, shape {sub_dict.shape}")
         one_input, shape (20, 6)
 
         """
@@ -1328,8 +1357,10 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
             >>> import matplotlib.pyplot as plt
             >>> from nemos.basis import RaisedCosineLinearConv
             >>> n_basis_funcs = 5
-            >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
-            >>> window_size=10
+            >>> decay_rates = np.array(
+            ...     [0.01, 0.02, 0.03, 0.04, 0.05]
+            ... )  # sample decay rates
+            >>> window_size = 10
             >>> ortho_basis = RaisedCosineLinearConv(n_basis_funcs, window_size)
             >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
             >>> plt.plot(sample_points, basis_values)
@@ -1365,7 +1396,7 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
 
         >>> # Generate data
         >>> num_samples = 1000
-        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> X = np.random.normal(size=(num_samples,))  # raw time series
         >>> basis = RaisedCosineLinearConv(10, window_size=100)
         >>> features = basis.compute_features(X)  # basis transformed time series
         >>> features.shape
@@ -1387,11 +1418,13 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         >>> import numpy as np
         >>> from nemos.basis import RaisedCosineLinearConv
         >>> from nemos.glm import GLM
-        >>> basis = RaisedCosineLinearConv(n_basis_funcs=6, window_size=10, label="two_inputs")
+        >>> basis = RaisedCosineLinearConv(
+        ...     n_basis_funcs=6, window_size=10, label="two_inputs"
+        ... )
         >>> X_multi = basis.compute_features(np.random.randn(20, 2))
         >>> split_features_multi = basis.split_by_feature(X_multi, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
-        ...        print(f"{feature}, shape {sub_dict.shape}")
+        ...     print(f"{feature}, shape {sub_dict.shape}")
         two_inputs, shape (20, 2, 6)
 
         """
@@ -1449,7 +1482,7 @@ class RaisedCosineLogEval(BoundedEvalBasisMixin, RaisedCosineBasisLog):
     bounds :
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
+        If a sample is outside the bounds, the basis returns ``fill_value`` for that sample.
     fill_value :
         The value to fill when samples are outside the bounds. Default is NaN.
     label :
@@ -1509,8 +1542,10 @@ class RaisedCosineLogEval(BoundedEvalBasisMixin, RaisedCosineBasisLog):
             >>> import matplotlib.pyplot as plt
             >>> from nemos.basis import RaisedCosineLogEval
             >>> n_basis_funcs = 5
-            >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
-            >>> window_size=10
+            >>> decay_rates = np.array(
+            ...     [0.01, 0.02, 0.03, 0.04, 0.05]
+            ... )  # sample decay rates
+            >>> window_size = 10
             >>> ortho_basis = RaisedCosineLogEval(n_basis_funcs)
             >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
             >>> plt.plot(sample_points, basis_values)
@@ -1546,7 +1581,7 @@ class RaisedCosineLogEval(BoundedEvalBasisMixin, RaisedCosineBasisLog):
 
         >>> # Generate data
         >>> num_samples = 1000
-        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> X = np.random.normal(size=(num_samples,))  # raw time series
         >>> basis = RaisedCosineLogEval(10)
         >>> features = basis.compute_features(X)  # basis transformed time series
         >>> features.shape
@@ -1569,10 +1604,14 @@ class RaisedCosineLogEval(BoundedEvalBasisMixin, RaisedCosineBasisLog):
         >>> from nemos.basis import RaisedCosineLogEval
         >>> from nemos.glm import GLM
         >>> basis = RaisedCosineLogEval(n_basis_funcs=6, label="one_input")
-        >>> X = basis.compute_features(np.random.randn(20,))
+        >>> X = basis.compute_features(
+        ...     np.random.randn(
+        ...         20,
+        ...     )
+        ... )
         >>> split_features_multi = basis.split_by_feature(X, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
-        ...        print(f"{feature}, shape {sub_dict.shape}")
+        ...     print(f"{feature}, shape {sub_dict.shape}")
         one_input, shape (20, 6)
 
         """
@@ -1692,8 +1731,10 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
             >>> import matplotlib.pyplot as plt
             >>> from nemos.basis import RaisedCosineLogConv
             >>> n_basis_funcs = 5
-            >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
-            >>> window_size=10
+            >>> decay_rates = np.array(
+            ...     [0.01, 0.02, 0.03, 0.04, 0.05]
+            ... )  # sample decay rates
+            >>> window_size = 10
             >>> ortho_basis = RaisedCosineLogConv(n_basis_funcs, window_size)
             >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
             >>> plt.plot(sample_points, basis_values)
@@ -1729,7 +1770,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
 
         >>> # Generate data
         >>> num_samples = 1000
-        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> X = np.random.normal(size=(num_samples,))  # raw time series
         >>> basis = RaisedCosineLogConv(10, window_size=100)
         >>> features = basis.compute_features(X)  # basis transformed time series
         >>> features.shape
@@ -1751,11 +1792,13 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         >>> import numpy as np
         >>> from nemos.basis import RaisedCosineLogConv
         >>> from nemos.glm import GLM
-        >>> basis = RaisedCosineLogConv(n_basis_funcs=6, window_size=10, label="two_inputs")
+        >>> basis = RaisedCosineLogConv(
+        ...     n_basis_funcs=6, window_size=10, label="two_inputs"
+        ... )
         >>> X_multi = basis.compute_features(np.random.randn(20, 2))
         >>> split_features_multi = basis.split_by_feature(X_multi, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
-        ...        print(f"{feature}, shape {sub_dict.shape}")
+        ...     print(f"{feature}, shape {sub_dict.shape}")
         two_inputs, shape (20, 2, 6)
 
         """
@@ -1801,7 +1844,7 @@ class OrthExponentialEval(BoundedEvalBasisMixin, OrthExponentialBasis):
     bounds :
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
+        If a sample is outside the bounds, the basis returns ``fill_value`` for that sample.
     fill_value :
         The value to fill when samples are outside the bounds. Default is NaN.
     label :
@@ -1855,9 +1898,13 @@ class OrthExponentialEval(BoundedEvalBasisMixin, OrthExponentialBasis):
             >>> import matplotlib.pyplot as plt
             >>> from nemos.basis import OrthExponentialEval
             >>> n_basis_funcs = 5
-            >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
-            >>> window_size=10
-            >>> ortho_basis = OrthExponentialEval(n_basis_funcs, decay_rates=decay_rates)
+            >>> decay_rates = np.array(
+            ...     [0.01, 0.02, 0.03, 0.04, 0.05]
+            ... )  # sample decay rates
+            >>> window_size = 10
+            >>> ortho_basis = OrthExponentialEval(
+            ...     n_basis_funcs, decay_rates=decay_rates
+            ... )
             >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
             >>> plt.plot(sample_points, basis_values)
             [<matplotlib.lines.Line2D object at ...
@@ -1893,7 +1940,7 @@ class OrthExponentialEval(BoundedEvalBasisMixin, OrthExponentialBasis):
 
         >>> # Generate data
         >>> num_samples = 1000
-        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> X = np.random.normal(size=(num_samples,))  # raw time series
         >>> basis = OrthExponentialEval(10, decay_rates=np.arange(1, 11))
         >>> features = basis.compute_features(X)  # basis transformed time series
         >>> features.shape
@@ -1916,7 +1963,9 @@ class OrthExponentialEval(BoundedEvalBasisMixin, OrthExponentialBasis):
         >>> from nemos.basis import OrthExponentialEval
         >>> from nemos.glm import GLM
         >>> # Define an additive basis
-        >>> basis = OrthExponentialEval(n_basis_funcs=5, decay_rates=np.arange(1, 6), label="feature")
+        >>> basis = OrthExponentialEval(
+        ...     n_basis_funcs=5, decay_rates=np.arange(1, 6), label="feature"
+        ... )
         >>> # Generate a sample input array and compute features
         >>> inp = np.random.randn(20)
         >>> X = basis.compute_features(inp)
@@ -2026,9 +2075,13 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
             >>> import matplotlib.pyplot as plt
             >>> from nemos.basis import OrthExponentialConv
             >>> n_basis_funcs = 5
-            >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
-            >>> window_size=10
-            >>> ortho_basis = OrthExponentialConv(n_basis_funcs, window_size, decay_rates=decay_rates)
+            >>> decay_rates = np.array(
+            ...     [0.01, 0.02, 0.03, 0.04, 0.05]
+            ... )  # sample decay rates
+            >>> window_size = 10
+            >>> ortho_basis = OrthExponentialConv(
+            ...     n_basis_funcs, window_size, decay_rates=decay_rates
+            ... )
             >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
             >>> plt.plot(sample_points, basis_values)
             [<matplotlib.lines.Line2D object at ...
@@ -2046,7 +2099,9 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         >>> import numpy as np
         >>> from nemos.basis import OrthExponentialConv
         >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05])
-        >>> ortho_basis = OrthExponentialConv(n_basis_funcs=5, window_size=20, decay_rates=decay_rates)
+        >>> ortho_basis = OrthExponentialConv(
+        ...     n_basis_funcs=5, window_size=20, decay_rates=decay_rates
+        ... )
         >>> out = ortho_basis.evaluate(np.random.randn(100, 5, 2))
         >>> out.shape
         (100, 5, 2, 5)
@@ -2064,8 +2119,10 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
 
         >>> # Generate data
         >>> num_samples = 1000
-        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
-        >>> basis = OrthExponentialConv(10, window_size=100, decay_rates=np.arange(1, 11))
+        >>> X = np.random.normal(size=(num_samples,))  # raw time series
+        >>> basis = OrthExponentialConv(
+        ...     10, window_size=100, decay_rates=np.arange(1, 11)
+        ... )
         >>> features = basis.compute_features(X)  # basis transformed time series
         >>> features.shape
         (1000, 10)
@@ -2090,12 +2147,12 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         ...     n_basis_funcs=6,
         ...     decay_rates=np.arange(1, 7),
         ...     window_size=10,
-        ...     label="two_inputs"
+        ...     label="two_inputs",
         ... )
         >>> X_multi = basis.compute_features(np.random.randn(20, 2))
         >>> split_features_multi = basis.split_by_feature(X_multi, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
-        ...        print(f"{feature}, shape {sub_dict.shape}")
+        ...     print(f"{feature}, shape {sub_dict.shape}")
         two_inputs, shape (20, 2, 6)
 
         """
@@ -2109,7 +2166,9 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         --------
         >>> import nemos as nmo
         >>> import numpy as np
-        >>> basis = nmo.basis.OrthExponentialConv(5, window_size=10, decay_rates=np.arange(1, 6))
+        >>> basis = nmo.basis.OrthExponentialConv(
+        ...     5, window_size=10, decay_rates=np.arange(1, 6)
+        ... )
         >>> # Configure with an integer input:
         >>> _ = basis.set_input_shape(3)
         >>> basis.n_output_features
@@ -2154,7 +2213,7 @@ class IdentityEval(BoundedEvalBasisMixin, IdentityBasis):
     bounds :
         The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
+        If a sample is outside the bounds, the basis returns ``fill_value`` for that sample.
     fill_value :
         The value to fill when samples are outside the bounds. Default is NaN.
     label :
@@ -2163,7 +2222,7 @@ class IdentityEval(BoundedEvalBasisMixin, IdentityBasis):
     """
 
     # ``IdentityBasis.evaluate`` already masks out-of-bounds samples, so the mixin must
-    # not apply ``fill_value`` a second time in ``_compute_features``.
+    # not apply ``fill_value`` a second time in ``evaluate``.
     _apply_bounds_fill = False
 
     # For this basis, bounds are not using to rescale, therefore they do not define the
@@ -2230,7 +2289,7 @@ class IdentityEval(BoundedEvalBasisMixin, IdentityBasis):
 
         >>> # Generate data
         >>> num_samples = 1000
-        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> X = np.random.normal(size=(num_samples,))  # raw time series
         >>> basis = IdentityEval()
         >>> features = basis.compute_features(X)  # basis transformed time series
         >>> features.shape
@@ -2384,7 +2443,7 @@ class Zero(EvalBasisMixin, ZeroBasis):
 
         >>> # Generate data
         >>> num_samples = 1000
-        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> X = np.random.normal(size=(num_samples,))  # raw time series
         >>> basis = Zero()
         >>> features = basis.compute_features(X)  # returns empty feature matrix
         >>> features.shape
@@ -2491,7 +2550,7 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
 
             >>> import matplotlib.pyplot as plt
             >>> from nemos.basis import HistoryConv
-            >>> window_size=100
+            >>> window_size = 100
             >>> basis = HistoryConv(window_size=window_size)
             >>> sample_points, basis_values = basis.evaluate_on_grid(window_size)
             >>> plt.plot(sample_points, basis_values)
@@ -2511,7 +2570,11 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         >>> from nemos.basis import HistoryConv
         >>> basis = HistoryConv(window_size=20)
         >>> # evaluate for HistoryConv require a 1d input
-        >>> out = basis.evaluate(np.random.randn(100, ))
+        >>> out = basis.evaluate(
+        ...     np.random.randn(
+        ...         100,
+        ...     )
+        ... )
         >>> out.shape
         (100, 20)
         """
@@ -2528,7 +2591,7 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
 
         >>> # Generate data
         >>> num_samples = 1000
-        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> X = np.random.normal(size=(num_samples,))  # raw time series
         >>> basis = HistoryConv(10)
         >>> features = basis.compute_features(X)  # basis transformed time series
         >>> features.shape
@@ -2600,297 +2663,3 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         self._check_window_size(window_size)
         self._window_size = window_size
         self._n_basis_funcs = window_size
-
-
-class FourierEval(BoundedEvalBasisMixin, FourierBasis):
-    """
-    N-dimensional Fourier basis for feature expansion.
-
-    This class generates a set of sine and cosine basis functions defined over
-    an ``n``-dimensional input space. The basis functions are constructed from
-    a Cartesian product of frequencies specified for each input dimension.
-    Each selected frequency combination contributes two basis functions
-    (cosine and sine), except for the all-zero frequency (DC component),
-    which contributes only a cosine term.
-
-    The class supports flexible frequency specification (integers, ranges, or
-    arrays per dimension) and optional masking to include or exclude specific
-    frequency combinations.
-
-    Parameters
-    ----------
-    frequencies :
-        Frequency specification(s).
-
-        Single specification (broadcasted to all dimensions when ``ndim > 1``):
-
-            * :class:`int`: An integer ``k`` with ``k >= 0``.
-
-            * :class:`tuple`: ``(low, high)``, a 2-element tuple of integers with ``0 <= low < high``.
-
-            * :class:`~numpy.ndarray`: 1-D NumPy array of non-negative integers. If not sorted ascending,
-              a ``UserWarning`` is issue for non-sorted arrays.
-
-        Per-dimension container:
-
-            * A :class:`list` of length ``ndim`` whose elements are each a valid single specification.
-              For ``ndim == 1``, a length-1 :class:`list` is also accepted.
-
-    ndim :
-        Dimensionality of the basis. Default is 1.
-
-    bounds :
-        Period bounds for each dimension. Unlike other basis classes where bounds define
-        a valid domain (with out-of-bounds samples filled with NaN), for the Fourier basis
-        the bounds define the period of the basis functions. Samples outside these bounds
-        are still valid and will be evaluated using the periodic nature of the basis.
-
-        * :class:`tuple`: ``(low, high)`` of floats: applies to all dimensions.
-        * :class:`list` of :class:`tuple`: ``[(low, high), ...]``, one tuple per dimension, length must match ``ndim``.
-        * :class:`None <NoneType>`: the period is inferred from the input data (minimum to maximum values).
-
-        In all cases, ``low`` must be strictly less than ``high``, and values must be convertible to floats.
-
-    frequency_mask :
-        Optional mask specifying which frequency components to include.
-        Can be:
-
-        * :class:`~typing.Literal`: either ``"no-intercept"`` - default - which drops
-          the 0-frequency DC term, or ``"all"`` which keeps all the frequencies -
-          equivalent to :class:`None <NoneType>`. The default excludes the intercept
-          because these basis objects are most commonly used to generate design matrices
-          for NeMoS GLMs, which already include an intercept term by default, making an
-          additional intercept in the design matrix redundant.
-
-        * Array-like of integers {0, 1} or booleans: A 1D mask with one entry
-          per column of ``masked_frequencies``, keeping (1/True) or dropping
-          (0/False) that frequency combination. At construction it filters the
-          combinations left by the default ``"no-intercept"`` selection; print
-          ``masked_frequencies`` to see the combinations in column order.
-
-        * :class:`~typing.Callable`: A function applied to each retained frequency
-          combination (one scalar per dimension, signed), returning a single
-          boolean or {0, 1} indicating whether to keep that frequency.
-
-        * :class:`None <NoneType>`: All frequencies are kept.
-
-        Values must be 0/1 or boolean. Callables must return a single boolean or
-        {0, 1} value for each frequency coordinate.
-
-    label :
-        Descriptive label for the basis (e.g., to use in plots or summaries).
-
-    Notes
-    -----
-    - If ``frequency_mask`` is provided, only the selected frequency
-      combinations are used to build the basis.
-    - The output of ``compute_features`` contains both cosine and sine components for
-      each active frequency combination, except that the all-zero frequency
-      includes only a cosine term.
-    - When a :class:`tuple` is provided as a frequency, it is interpreted
-      as a single range specification. Tuples that are not exactly a 2-element
-      tuple of non-negative integers are invalid.
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from nemos.basis import FourierEval
-    >>> rng = np.random.default_rng(0)
-
-    **1D: basic usage**
-
-    >>> n_freq = 5
-    >>> fourier_1d = FourierEval(n_freq)
-    >>> # cos at 0..4 (5) + sin at 1..4 (4) = 9
-    >>> fourier_1d.n_basis_funcs
-    8
-    >>> x = rng.normal(size=8)
-    >>> X = fourier_1d.compute_features(x)
-    >>> X.shape  # (n_samples, n_basis_funcs)
-    (8, 8)
-
-    **2D: unmasked grid of frequency pairs**
-
-    >>> fourier_2d = FourierEval(n_freq, ndim=2)
-    >>> # half-space of the 5x5 grid has 41 pairs (incl. DC); DC dropped -> 40; *2
-    >>> fourier_2d.n_basis_funcs
-    80
-    >>> x, y = rng.normal(size=(2, 6))
-    >>> X = fourier_2d.compute_features(x, y)
-    >>> X.shape
-    (6, 80)
-
-    **2D: masking with an array (drop 3 pairs)**
-
-    >>> # one mask entry per retained pair: the default "no-intercept"
-    >>> # selection drops the DC and leaves 40 pairs
-    >>> fourier_2d.masked_frequencies.shape
-    (2, 40)
-    >>> mask = np.ones(40)
-    >>> mask[:3] = 0  # drop the first 3 pairs
-    >>> fourier_2d_masked = FourierEval(
-    ...     n_freq,
-    ...     ndim=2,
-    ...     frequency_mask=mask
-    ... )
-    >>> # (40 pairs - 3 dropped) * 2 (cos+sin) = 74
-    >>> fourier_2d_masked.n_basis_funcs
-    74
-
-    **2D: masking with a callable**
-
-    >>> # keep pairs inside a circle of radius 3.5 in frequency space
-    >>> keep_circle = lambda fx, fy: (fx**2 + fy**2) ** 0.5 < 3.5
-    >>> fourier_2d_funcmask = FourierEval(
-    ...     n_freq,
-    ...     ndim=2,
-    ...     frequency_mask=keep_circle
-    ... )
-    >>> fourier_2d_funcmask.n_basis_funcs
-    37
-
-    **Explicit frequency specifications**
-
-    >>> # mix forms per-dimension: an explicit array
-    >>> # and an inclusive tuple (low, high)
-    >>> fourier_mixed = FourierEval(
-    ...     frequencies=[np.arange(3), (1, 4)],
-    ...     ndim=2
-    ... )
-    >>> # 15 half-space pairs (no DC, since the y-axis omits 0) -> 2*15 = 30
-    >>> fourier_mixed.n_basis_funcs
-    30
-
-    """
-
-    # Fourier basis is defined over the entire real line; bounds specify the period,
-    # not a valid domain. No out-of-bounds filling should be applied.
-    _apply_bounds_fill = False
-
-    def __init__(
-        self,
-        frequencies: (
-            int
-            | Tuple[int, int]
-            | List[int]
-            | List[Tuple[int, int]]
-            | NDArray
-            | List[NDArray]
-        ),
-        ndim: int = 1,
-        bounds: Optional[Tuple[float, float] | Tuple[Tuple[float, float]]] = None,
-        frequency_mask: (
-            Literal["all", "no-intercept"] | NDArray[bool] | None
-        ) = "no-intercept",
-        label: Optional[str] = "FourierEval",
-    ):
-        FourierBasis.__init__(
-            self,
-            frequencies=frequencies,
-            label=label,
-            frequency_mask=frequency_mask,
-            ndim=ndim,
-        )
-        BoundedEvalBasisMixin.__init__(self, bounds=bounds)
-
-    @add_docstring("evaluate_on_grid", FourierBasis)
-    def evaluate_on_grid(self, *n_samples: int) -> Tuple[NDArray, NDArray]:
-        """
-        Examples
-        --------
-        .. plot::
-            :include-source: True
-            :caption: FourierEval
-
-            >>> import numpy as np
-            >>> import matplotlib.pyplot as plt
-            >>> from nemos.basis import FourierEval
-            >>> n_frequencies = 5
-            >>> fourier_basis = FourierEval(n_frequencies)
-            >>> sample_points, basis_values = fourier_basis.evaluate_on_grid(100)
-            >>> plt.plot(sample_points, basis_values)
-            [<matplotlib.lines.Line2D object at ...
-            >>> plt.show()
-        """
-        return super().evaluate_on_grid(*n_samples)
-
-    @add_docstring("_compute_features", BoundedEvalBasisMixin)
-    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
-        """
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from nemos.basis import FourierEval
-
-        >>> # Generate data
-        >>> num_samples = 1000
-        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
-        >>> basis = FourierEval(10)
-        >>> features = basis.compute_features(X)  # basis transformed time series
-        >>> features.shape
-        (1000, 18)
-
-        """
-        return super().compute_features(*xi)
-
-    @add_docstring("split_by_feature", FourierBasis)
-    def split_by_feature(
-        self,
-        x: NDArray,
-        axis: int = 1,
-    ):
-        r"""
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from nemos.basis import FourierEval
-        >>> from nemos.glm import GLM
-        >>> basis = FourierEval(6, label="one_input")
-        >>> X = basis.compute_features(np.random.randn(20,))
-        >>> split_features_multi = basis.split_by_feature(X, axis=1)
-        >>> for feature, sub_dict in split_features_multi.items():
-        ...        print(f"{feature}, shape {sub_dict.shape}")
-        one_input, shape (20, 10)
-
-        """
-        return super().split_by_feature(x, axis=axis)
-
-    @add_docstring("set_input_shape", AtomicBasisMixin)
-    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray):
-        """
-        Examples
-        --------
-        >>> import nemos as nmo
-        >>> import numpy as np
-        >>> basis = nmo.basis.FourierEval(5)
-        >>> # Configure with an integer input:
-        >>> _ = basis.set_input_shape(3)
-        >>> basis.n_output_features
-        24
-        >>> # Configure with a tuple:
-        >>> _ = basis.set_input_shape((4, 5))
-        >>> basis.n_output_features
-        160
-        >>> # Configure with an array:
-        >>> x = np.ones((10, 4, 5))
-        >>> _ = basis.set_input_shape(x)
-        >>> basis.n_output_features
-        160
-
-        """
-        return super().set_input_shape(*xi)
-
-    @add_docstring("evaluate", FourierBasis)
-    def evaluate(self, *sample_pts: NDArray) -> NDArray:
-        """
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from nemos.basis import FourierEval
-        >>> basis = FourierEval(4)
-        >>> out = basis.evaluate(np.random.randn(100, 5, 2))
-        >>> out.shape
-        (100, 5, 2, 6)
-        """
-        # ruff: noqa: D205, D400
-        return super().evaluate(*sample_pts)

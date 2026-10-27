@@ -795,7 +795,7 @@ def plot_accuracy_and_occupancy(frac_occupancy, accuracies_to_plot):
         col = "grey" if z == 0 else cols[z - 1]
         ax.bar(z, acc * 100, width=0.8, color=col)
         ax.text(
-            z, acc * 100 + 1, f"{acc*100:.2f}", ha="center", va="bottom", fontsize=10
+            z, acc * 100 + 1, f"{acc * 100:.2f}", ha="center", va="bottom", fontsize=10
         )
 
     ax.set_ylim(50, 100)

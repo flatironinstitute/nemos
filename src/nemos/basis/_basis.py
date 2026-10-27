@@ -173,7 +173,6 @@ def get_equi_spaced_samples(
         A generator yielding numpy arrays of linspaces from 0 (or specified min)
         to 1 (or specified max) of sizes specified by ``n_samples``.
     """
-
     if _is_single_bound(bounds):
         # bounds is None or a single (min, max) tuple - expand to match n_samples length
         bounds = [bounds] * len(n_samples)
@@ -678,10 +677,14 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         >>> from nemos.basis import BSplineEval, RaisedCosineLogConv
         >>> from nemos.glm import GLM
         >>> basis1 = BSplineEval(n_basis_funcs=5, label="one_input")
-        >>> basis2 = RaisedCosineLogConv(n_basis_funcs=6, window_size=10, label="two_inputs")
+        >>> basis2 = RaisedCosineLogConv(
+        ...     n_basis_funcs=6, window_size=10, label="two_inputs"
+        ... )
         >>> basis_add = basis1 + basis2
-        >>> X_multi = basis_add.compute_features(np.random.randn(20), np.random.randn(20, 2))
-        >>> print(X_multi.shape) # num_features: 17 = 5 + 2*6
+        >>> X_multi = basis_add.compute_features(
+        ...     np.random.randn(20), np.random.randn(20, 2)
+        ... )
+        >>> print(X_multi.shape)  # num_features: 17 = 5 + 2*6
         (20, 17)
 
         """
@@ -810,10 +813,9 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         >>> from nemos.basis import BSplineConv
         >>> from nemos.glm import GLM
         >>> # Define an additive basis
-        >>> basis = (
-        ...     BSplineConv(n_basis_funcs=5, window_size=10, label="feature_1") +
-        ...     BSplineConv(n_basis_funcs=6, window_size=10, label="feature_2")
-        ... )
+        >>> basis = BSplineConv(
+        ...     n_basis_funcs=5, window_size=10, label="feature_1"
+        ... ) + BSplineConv(n_basis_funcs=6, window_size=10, label="feature_2")
         >>> # Generate a sample input array and compute features
         >>> x1, x2 = np.random.randn(20), np.random.randn(20)
         >>> X = basis.compute_features(x1, x2)
@@ -824,12 +826,13 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         feature_1: shape (20, 5)
         feature_2: shape (20, 6)
         >>> # If one of the basis components accepts multiple inputs, the resulting dictionary will be nested:
-        >>> multi_input_basis = BSplineConv(n_basis_funcs=6, window_size=10,
-        ... label="multi_input")
+        >>> multi_input_basis = BSplineConv(
+        ...     n_basis_funcs=6, window_size=10, label="multi_input"
+        ... )
         >>> X_multi = multi_input_basis.compute_features(np.random.randn(20, 2))
         >>> split_features_multi = multi_input_basis.split_by_feature(X_multi, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
-        ...        print(f"{feature}, shape {sub_dict.shape}")
+        ...     print(f"{feature}, shape {sub_dict.shape}")
         multi_input, shape (20, 2, 6)
         >>> # the method can be used to decompose the glm coefficients in the various features
         >>> counts = np.random.poisson(size=20)
@@ -1208,10 +1211,14 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         >>> from nemos.basis import BSplineEval, RaisedCosineLogConv
         >>> from nemos.glm import GLM
         >>> basis1 = BSplineEval(n_basis_funcs=5, label="one_input")
-        >>> basis2 = RaisedCosineLogConv(n_basis_funcs=6, window_size=10, label="two_inputs")
+        >>> basis2 = RaisedCosineLogConv(
+        ...     n_basis_funcs=6, window_size=10, label="two_inputs"
+        ... )
         >>> basis_mul = basis1 * basis2
-        >>> X_multi = basis_mul.compute_features(np.random.randn(20, 2), np.random.randn(20, 2))
-        >>> print(X_multi.shape) # num_features: 60 = 5 * 2 * 6
+        >>> X_multi = basis_mul.compute_features(
+        ...     np.random.randn(20, 2), np.random.randn(20, 2)
+        ... )
+        >>> print(X_multi.shape)  # num_features: 60 = 5 * 2 * 6
         (20, 60)
 
         """
@@ -1230,10 +1237,14 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         >>> from nemos.basis import BSplineEval, RaisedCosineLogConv
         >>> from nemos.glm import GLM
         >>> basis1 = BSplineEval(n_basis_funcs=5, label="one_input")
-        >>> basis2 = RaisedCosineLogConv(n_basis_funcs=6, window_size=10, label="two_inputs")
+        >>> basis2 = RaisedCosineLogConv(
+        ...     n_basis_funcs=6, window_size=10, label="two_inputs"
+        ... )
         >>> basis_mul = basis1 * basis2
-        >>> X_multi = basis_mul.compute_features(np.random.randn(20, 2), np.random.randn(20, 2))
-        >>> print(X_multi.shape) # num_features: 20 = 2 * 5 * 6
+        >>> X_multi = basis_mul.compute_features(
+        ...     np.random.randn(20, 2), np.random.randn(20, 2)
+        ... )
+        >>> print(X_multi.shape)  # num_features: 20 = 2 * 5 * 6
         (20, 60)
 
         >>> # The multiplicative basis is a single 2D component.
@@ -1288,7 +1299,9 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         >>> multiplicative_basis = basis_1 * basis_2 * basis_3
 
         Specify the input shape using all 3 allowed ways: integer, tuple, array
-        >>> _ = multiplicative_basis.set_input_shape((4, 5), (4, 5), np.ones((10, 4, 5)))
+        >>> _ = multiplicative_basis.set_input_shape(
+        ...     (4, 5), (4, 5), np.ones((10, 4, 5))
+        ... )
 
         Expected output features are:
         (5 * 6 * 7 bases) * (20 inputs) = 4200

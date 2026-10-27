@@ -19,6 +19,11 @@ from ..hmm.expectation_maximization import (
     forward_pass,
     max_sum,
 )
+from ..hmm.parallel_expectation import (
+    forward_backward_assoc,
+    forward_pass_assoc,
+    max_sum_assoc,
+)
 from ..regularizer import Regularizer
 from ..type_casting import support_pynapple
 from ..typing import (
@@ -45,6 +50,21 @@ nap = lazy.load("pynapple")
 MODEL_INITIALIZATION_FN_DICT_T = TypeVar("MODEL_INITIALIZATION_FN_DICT_T")
 HMMValidatorT = TypeVar("HMMValidatorT", bound="HMMValidator")
 
+FORWARD_PASS = {
+    "sequential": forward_pass,
+    "associative": forward_pass_assoc,
+}
+
+FORWARD_BACKWARD = {
+    "sequential": forward_backward,
+    "associative": forward_backward_assoc,
+}
+
+MAX_SUM = {
+    "sequential": max_sum,
+    "associative": max_sum_assoc,
+}
+
 
 class BaseHMM(
     BaseRegressor[HMMModelParamsT, HMMUserProvidedParamsT, HMMValidatorT],
@@ -67,10 +87,14 @@ class BaseHMM(
         The number of hidden states in the HMM. Must be a positive integer.
     dirichlet_initial_proba :
         Alpha parameters for the Dirichlet prior over the initial state probabilities.
-        Shape ``(n_states,)``. If None, a flat (uninformative) prior is assumed.
+        Any array-like (list, tuple, NumPy or JAX array) of shape ``(n_states,)``, cast
+        to a JAX array on assignment. All values must be >= 1. If None, a flat
+        (uninformative) prior is assumed.
     dirichlet_transition_proba :
         Alpha parameters for the Dirichlet prior over the transition probabilities.
-        Shape ``(n_states, n_states)``. If None, a flat (uninformative) prior is assumed.
+        Any array-like (list, tuple, NumPy or JAX array) of shape
+        ``(n_states, n_states)``, cast to a JAX array on assignment. All values must be
+        >= 1. If None, a flat (uninformative) prior is assumed.
     regularizer :
         Regularization to use for model parameter optimization. Defines the regularization scheme
         and related parameters. Default is UnRegularized.
@@ -99,6 +123,18 @@ class BaseHMM(
         included at initialization for scikit-learn compatibility; however, users should set up the
         initialization functions using the :meth:`~nemos.hmm.hmm.BaseHMM.setup` method after model
         instantiation.
+    estep_type:
+        How the forward-backward recursions of the E-step are evaluated. ``"sequential"``
+        steps through the time bins one at a time; ``"associative"`` uses
+        ``jax.lax.associative_scan``, whose depth grows like ``log(n_time_bins)`` rather
+        than ``n_time_bins``.
+
+        Which is faster depends on the hardware. On GPU and TPU the ``"associative"``
+        can be orders of magnitude faster; on CPU it is usually slower, a CPU core being
+        well suited to a tight sequential loop. ``"associative"`` also holds its whole scan
+        in memory, roughly ``4 * n_time_bins * n_states ** 2`` floats against
+        ``n_time_bins * n_states``, which becomes the binding constraint for large
+        ``n_states``.
     """
 
     _validator_class: type[HMMValidatorT]
@@ -108,10 +144,8 @@ class BaseHMM(
     def __init__(
         self,
         n_states: int,
-        dirichlet_initial_proba: Union[jnp.ndarray, None] = None,  # (n_state, )
-        dirichlet_transition_proba: Union[
-            jnp.ndarray | None
-        ] = None,  # (n_state, n_state):
+        dirichlet_initial_proba: Optional[ArrayLike] = None,  # (n_state, )
+        dirichlet_transition_proba: Optional[ArrayLike] = None,  # (n_state, n_state):
         regularizer: Optional[Union[str, Regularizer]] = None,
         regularizer_strength: Optional[
             Any
@@ -122,6 +156,7 @@ class BaseHMM(
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
         hmm_initialization_funcs: Optional[HMM_INITIALIZATION_FN_DICT] = None,
+        estep_type: Literal["sequential", "associative"] = "sequential",
     ):
         super().__init__(
             regularizer=regularizer,
@@ -143,6 +178,26 @@ class BaseHMM(
         self.initial_prob_: Optional[jnp.ndarray] = None
 
         self.hmm_initialization_funcs = hmm_initialization_funcs
+        self.estep_type = estep_type
+
+    @property
+    def estep_type(self):
+        """Expectation type: sequential or associative."""
+        return self._estep_type
+
+    @estep_type.setter
+    def estep_type(self, value):
+        """Setter for expectation type: sequential or associative."""
+        if value not in ["sequential", "associative"]:
+            raise ValueError(
+                "estep_type must be either ``'sequential'`` or ``'associative'``. "
+                f"{value} provided instead."
+            )
+        self._estep_type = value
+        # the E-step is bound into the optimizer partials when the solver is
+        # instantiated, so an already-built solver would keep running the previous
+        # algorithm. The inference paths read self._estep_type live and are unaffected.
+        self._invalidate_solver()
 
     def _hmm_setup(
         self,
@@ -174,10 +229,14 @@ class BaseHMM(
 
         An example of a custom initialization function for initial probabilities could be:
         ```
-        def custom_initial_proba_init(n_states, X, y, session_starts, random_key, min_prob=0.05):
+        def custom_initial_proba_init(
+            n_states, X, y, session_starts, random_key, min_prob=0.05
+        ):
             init_prob = jax.random.uniform(random_key, (n_states,), dtype=float)
             init_prob = init_prob / init_prob.sum()  # normalize to sum to 1
-            init_prob = jnp.clip(init_prob, a_min=min_prob)  # enforce minimum probability
+            init_prob = jnp.clip(
+                init_prob, a_min=min_prob
+            )  # enforce minimum probability
             return init_prob / init_prob.sum()  # renormalize after clipping
         ```
 
@@ -327,7 +386,7 @@ class BaseHMM(
         return self._dirichlet_initial_proba
 
     @dirichlet_initial_proba.setter
-    def dirichlet_initial_proba(self, value: jnp.ndarray | None):
+    def dirichlet_initial_proba(self, value: Optional[ArrayLike]):
         """Validate and set the alpha parameters of the Dirichlet prior over the initial probabilities."""
         self._dirichlet_initial_proba = _resolve_dirichlet_priors(
             value, (self._n_states,)
@@ -342,7 +401,7 @@ class BaseHMM(
         return self._dirichlet_transition_proba
 
     @dirichlet_transition_proba.setter
-    def dirichlet_transition_proba(self, value: jnp.ndarray | None):
+    def dirichlet_transition_proba(self, value: Optional[ArrayLike]):
         """Validate and set the alpha parameters of the Dirichlet prior over the transition probabilities."""
         self._dirichlet_transition_proba = _resolve_dirichlet_priors(
             value, (self._n_states, self._n_states)
@@ -536,9 +595,9 @@ class BaseHMM(
         if self._hmm_use_kmeans is not None:
             for param, use_kmeans in self._hmm_use_kmeans.items():
                 if use_kmeans:
-                    self._hmm_initialization_funcs[f"{param}_kwargs"][
-                        "initializer"
-                    ] = initializer
+                    self._hmm_initialization_funcs[f"{param}_kwargs"]["initializer"] = (
+                        initializer
+                    )
         if self._model_use_kmeans is not None:
             for param, use_kmeans in self._model_use_kmeans.items():
                 if use_kmeans:
@@ -677,12 +736,12 @@ class BaseHMM(
         # filter for non-nans, grab data if needed
         data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
         # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+        (params,) = tree_utils.tree_astype(params, dtype=y.dtype)
 
         # make sure session_starts starts with a 1
         session_starts = session_starts.at[0].set(True)
 
-        _, log_norm = forward_pass(
+        _, log_norm = FORWARD_PASS[self._estep_type](
             params=params,
             X=data,
             y=y,
@@ -744,13 +803,13 @@ class BaseHMM(
         data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
 
         # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+        (params,) = tree_utils.tree_astype(params, dtype=y.dtype)
 
         # make sure session_starts starts with a 1
         session_starts = session_starts.at[0].set(True)
 
         # smooth with forward backward
-        log_posteriors, _, _, _, _, _ = forward_backward(
+        log_posteriors, _, _, _, _, _ = FORWARD_BACKWARD[self._estep_type](
             params=params,
             X=data,
             y=y,
@@ -842,11 +901,11 @@ class BaseHMM(
         data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
 
         # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+        (params,) = tree_utils.tree_astype(params, dtype=y.dtype)
 
         # make sure session_starts starts with a 1
         session_starts = session_starts.at[0].set(True)
-        log_proba, _ = forward_pass(
+        log_proba, _ = FORWARD_PASS[self._estep_type](
             params,
             data,
             y,
@@ -942,12 +1001,12 @@ class BaseHMM(
         data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
 
         # safe conversion to jax arrays of float
-        params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, y.dtype), params)
+        (params,) = tree_utils.tree_astype(params, dtype=y.dtype)
 
         # make sure session_starts starts with a 1
         session_starts = session_starts.at[0].set(True)
 
-        decoded_states = max_sum(
+        decoded_states = MAX_SUM[self._estep_type](
             params,
             data,
             y,
@@ -1041,6 +1100,31 @@ class BaseHMM(
         - The algorithm properly handles session boundaries and NaN values at epoch borders
         - Decoding is useful for segmenting continuous data into discrete behavioral states
         - For uncertainty estimates about states, use ``smooth_proba()`` instead
+
+        Decoding walks the time bins one at a time, which suits a CPU core and does not
+        suit a GPU: each step is a tiny kernel launch of a few microseconds, so the cost
+        is set by the number of bins rather than by the arithmetic, and a long recording
+        can take minutes on an accelerator that a CPU finishes in seconds. Unlike the
+        E-step, which :class:`~nemos.glm_hmm.GLMHMM`'s ``estep_type`` can switch to a
+        parallel scan, this method has no such option yet.
+
+        On a long recording it is therefore often faster to decode on the CPU, even from
+        a model fit on the GPU. Placing the inputs on a CPU device is enough, the
+        computation following its data:
+
+        >>> import jax  # doctest: +SKIP
+        >>> cpu = jax.devices("cpu")[0]  # doctest: +SKIP
+        >>> states = model.decode_state(  # doctest: +SKIP
+        ...     jax.device_put(X, cpu), jax.device_put(y, cpu)
+        ... )
+
+        The transfers cost a fraction of what the loop saves: the inputs are one
+        ``(n_samples, n_features)`` array and one of observations, against a per-bin
+        launch overhead paid ``n_samples`` times. ``jax.default_device`` is the
+        alternative if several calls should run there:
+
+        >>> with jax.default_device(cpu):  # doctest: +SKIP
+        ...     states = model.decode_state(X, y)
         """
         params, X, y, session_starts = self._validate_and_prepare_inputs(
             X, y, session_starts

@@ -650,13 +650,18 @@ class BoundedEvalBasisMixin(EvalBasisMixin):
 
         """
         out = self.evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
+        return np.reshape(out, (out.shape[0], -1))
+
+    def evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor):
+        """Evaluate the basis and fill out-of-bounds samples with ``fill_value``."""
+        out = super().evaluate(*xi)
         if (
             self._apply_bounds_fill
             and (not self._is_discrete)
             and self.bounds is not None
         ):
             out = self._apply_fill_value(*xi, out=out)
-        return np.reshape(out, (out.shape[0], -1))
+        return out
 
     @support_pynapple(conv_type="jax")
     def _apply_fill_value(self, *xi: ArrayLike, out: NDArray) -> jax.Array:
@@ -664,18 +669,13 @@ class BoundedEvalBasisMixin(EvalBasisMixin):
         to_fill = jnp.any(
             jnp.stack(
                 [
-                    jnp.any(
-                        (jnp.reshape(x, (x.shape[0], -1)) < lo)
-                        | (jnp.reshape(x, (x.shape[0], -1)) > hi),
-                        axis=1,
-                    )
+                    (x < lo) | (x > hi)
                     for x, (lo, hi) in zip(xi, self._get_bounds_per_dim(), strict=True)
                 ]
             ),
             axis=0,
         )
-        to_fill_broadcast = to_fill.reshape(to_fill.shape[0], *([1] * (out.ndim - 1)))
-        return jnp.where(to_fill_broadcast, self.fill_value, out)
+        return jnp.where(to_fill[..., None], self.fill_value, out)
 
     @property
     def bounds(self) -> List[Tuple[float, float]] | Tuple[float, float] | None:
@@ -732,7 +732,6 @@ class BoundedEvalBasisMixin(EvalBasisMixin):
     @staticmethod
     def _format_bounds(values: Any) -> Tuple[Any, Exception | None]:
         """Check bounds and cast to tuple."""
-
         if not hasattr(values, "__len__"):
             raise TypeError(
                 "Invalid bounds provided. ``bounds`` must be a tuple of floats."
@@ -966,8 +965,12 @@ class BasisTransformerMixin:
         >>> from sklearn.model_selection import GridSearchCV
         >>> # load some data
         >>> X, y = np.random.normal(size=(30, 1)), np.random.poisson(size=30)
-        >>> basis = nmo.basis.RaisedCosineLinearEval(10, bounds=(X.min(), X.max())).set_input_shape(1).to_transformer()
-        >>> glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=1.)
+        >>> basis = (
+        ...     nmo.basis.RaisedCosineLinearEval(10, bounds=(X.min(), X.max()))
+        ...     .set_input_shape(1)
+        ...     .to_transformer()
+        ... )
+        >>> glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=1.0)
         >>> pipeline = Pipeline([("basis", basis), ("glm", glm)])
         >>> param_grid = dict(
         ...     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),

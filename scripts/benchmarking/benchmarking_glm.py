@@ -15,6 +15,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import List, Literal, Optional, Tuple
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import pandas as pd
@@ -23,6 +24,7 @@ from scipy_adapter import ScipyLBFGS
 from sklearn.linear_model import PoissonRegressor
 
 import nemos as nmo
+from nemos.utils import get_flattener_unflattener
 
 
 def _setup() -> None:
@@ -126,7 +128,7 @@ def generate_glm_configs(
                     continue
                 if base_name in _prox_solvers and reg in _smooth_regs:
                     continue
-                solver_kw = {"maxiter": 3000, "tol": 1e-6}
+                solver_kw = {"maxiter": 4000, "tol": 1e-6}
                 if base_name in _svrg_solvers:
                     solver_kw["batch_size"] = max(1, samp // 10)
                 fit_config = {
@@ -183,7 +185,7 @@ def generate_glm_configs(
                     continue
                 if base_name in _prox_solvers and reg in _smooth_regs:
                     continue
-                solver_kw = {"maxiter": 3000, "tol": 1e-6}
+                solver_kw = {"maxiter": 4000, "tol": 1e-6}
                 if base_name in _svrg_solvers:
                     solver_kw["batch_size"] = max(1, X.shape[0] // 10)
                 configs.append(
@@ -399,11 +401,36 @@ def _get_meta() -> dict:
     }
 
 
+def _solution_quality(
+    model, X: jnp.ndarray, y: jnp.ndarray, config: dict
+) -> Tuple[float, float]:
+    """Penalized loss and gradient sup-norm at a fitted model's parameters.
+
+    Evaluates the same objective the solver minimized -- unregularized loss plus
+    the regularizer's penalty -- so the two numbers are comparable across every
+    solver in the grid regardless of which stopping rule ended the fit.
+    """
+    params = model._validator.to_model_params((model.coef_, model.intercept_))
+    strength = config["model_conf"]["regularizer_strength"]
+    penalized = model.regularizer.penalized_loss(model._compute_loss, params, strength)
+    loss, grad = jax.value_and_grad(penalized)(params, X, y)
+    flatten, _ = get_flattener_unflattener(params)
+    return float(loss), float(jnp.abs(flatten(grad)).max())
+
+
 def _benchmark_nemos(config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int) -> dict:
     """Benchmark a NeMoS GLM/PopulationGLM, isolating solver init, compilation, and execution."""
     model = model_from_config(config)
     pars = model.initialize_params(X, y)
     model_pars = model._validator.to_model_params(pars)
+    # Mirror what model.fit() does before touching the solver: split params into
+    # the active subtree the optimizer actually runs on and the (here, empty)
+    # frozen subtree, and thread frozen_params through init. Skipping this — as
+    # this function used to — breaks PopulationGLM's Newton solver: its
+    # per-neuron Hessian vmaps over `frozen`, and that vmap's in_axes spec
+    # assumes the partitioned GLMParams shape, not the bare `None` you get by
+    # calling _initialize_optimizer_and_state/_optimizer_run without it.
+    active_pars, frozen_pars = model._partition_active(model_pars)
 
     is_scipy = model.solver_spec.backend == "scipy"
 
@@ -426,14 +453,16 @@ def _benchmark_nemos(config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int) 
         model = model_from_config(config)
 
         t0 = perf_counter()
-        _ = model._initialize_optimizer_and_state(model_pars, X, y)
+        _ = model._initialize_optimizer_and_state(
+            active_pars, X, y, frozen_params=frozen_pars
+        )
         t1 = perf_counter()
         solver_init_s.append(t1 - t0)
 
         if not is_scipy:
             t2 = perf_counter()
             compiled = (
-                jax.jit(model._optimizer_run).trace(model_pars, X, y).lower().compile()
+                jax.jit(model._optimizer_run).trace(active_pars, X, y).lower().compile()
             )
             t3 = perf_counter()
             compilation_s.append(t3 - t2)
@@ -442,7 +471,8 @@ def _benchmark_nemos(config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int) 
             compilation_s.append(jnp.nan)
 
         t4 = perf_counter()
-        pars, state, _ = compiled(model_pars, X, y)
+        pars, state, _ = compiled(active_pars, X, y)
+        pars = eqx.combine(pars, frozen_pars)
         pars.coef.block_until_ready()
         t5 = perf_counter()
         fit_s.append(t5 - t4)
@@ -470,6 +500,13 @@ def _benchmark_nemos(config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int) 
     step_time = [
         f / n if n > 0 else float("nan") for f, n in zip(fit_s, num_solver_iter)
     ]
+
+    # Solution quality of the last fit. Without this, iteration counts and
+    # timings are not comparable across solvers: each stops on its own rule, so
+    # a low count can mean "converged fast" or "quit early" (which is why the
+    # scipy wrapper pins `ftol=0`, see `ScipyLBFGS`). Computed once rather than per rep,
+    # so it does not add an objective+gradient pass to every timed iteration.
+    final_loss, final_grad_max = _solution_quality(model, X, y, config)
 
     input_shapes = config["input_shapes"]
     model_conf = config["model_conf"]
@@ -503,6 +540,8 @@ def _benchmark_nemos(config: dict, X: jnp.ndarray, y: jnp.ndarray, n_reps: int) 
             "converged": converged,
             "iter_num": num_solver_iter,
             "param_norm": param_norm,
+            "final_loss": final_loss,
+            "final_grad_max": final_grad_max,
         },
         "meta": _get_meta(),
     }
@@ -567,6 +606,10 @@ def _benchmark_sklearn(
             "converged": converged,
             "iter_num": num_solver_iter,
             "param_norm": param_norm,
+            # sklearn fits one model per neuron against its own objective, which
+            # is not the single penalized loss the NeMoS solvers minimize.
+            "final_loss": nan,
+            "final_grad_max": nan,
         },
         "meta": _get_meta(),
     }
@@ -667,6 +710,9 @@ def aggregate_results(results_dir: str, csv_path: str) -> None:
                     "converged": res["converged"][i],
                     "iter_num": res["iter_num"][i],
                     "param_norm": res["param_norm"][i],
+                    # measured once for the config, not per rep
+                    "final_loss": res["final_loss"],
+                    "final_grad_max": res["final_grad_max"],
                 }
             )
 
@@ -707,6 +753,8 @@ def compute_summary_stats(df: pd.DataFrame) -> pd.DataFrame:
             converged=("converged", "all"),
             iter_num=("iter_num", "mean"),
             compile_time_fraction=("compile_time_fraction", "mean"),
+            final_loss=("final_loss", "mean"),
+            final_grad_max=("final_grad_max", "mean"),
         )
         .sort_values("fit_time_s")
         .reset_index()

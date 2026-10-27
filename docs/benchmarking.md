@@ -15,6 +15,13 @@ In this note we compare solver performance in GLM problems on simulated data and
 NeMoS native solvers JIT-compile the full optimization when `GLM.fit` is called, incurring a one-time compilation cost before the first iteration. `L-BFGS-B` from `scipy.minimize` calls pre-compiled Fortran routines but invokes Python at each iteration to evaluate the GLM likelihood and gradient. As a result, most JIT-compiled solvers run faster per-iteration once compiled, while `scipy` avoids the compilation cost entirely. If the optimization loop dominates over compilation (large problems, many iterations), prefer the JIT-compiled solvers; for small problems, the scipy wrapper is likely faster.
 :::
 
+(stopping-rules)=
+:::{admonition} Stopping rules and comparability
+:class: warning
+
+Timings are only comparable when solvers stop for the same reason. `scipy.optimize.minimize` routes its `tol` onto both `ftol` and `gtol` for `L-BFGS-B` and halts on whichever fires first; `ftol` tests the relative decrease of the objective per iteration, so it stops on stalled progress rather than on a small gradient. On the head-direction recording it fires while the gradient sup-norm is still around 2e-2, cutting the iteration count by roughly a factor of eight — the solver reports success, but at a looser solution than the other entries in the grid. We therefore benchmark the scipy wrapper with `ftol=0`, leaving the projected gradient as its only stopping rule. Note that this is not scipy's out-of-the-box behaviour: with default settings it returns sooner, and less converged, than the numbers below.
+:::
+
 ```{contents}
 :local:
 :depth: 2
@@ -22,8 +29,8 @@ NeMoS native solvers JIT-compile the full optimization when `GLM.fit` is called,
 
 ## Results
 
-- **Simulations**: fitting simulated data requires fewer optimization steps; compilation cost can dominate, especially for small datasets. `scipy.minimize` and `scikit-learn` are the most efficient options for small problems, while native NeMoS solvers are significantly faster for large ones.
-- **Neural recordings**: fitting real recordings often requires hundreds to thousands of optimization steps. JIT-compiled solvers are more efficient since the compilation cost is negligible — and this is the common case in practice.
+- **Simulations**: simulated data converges in a few tens of iterations, so the optimization loop is short and the one-time compilation cost weighs heavily. `scipy.minimize` and `scikit-learn` are the most efficient options on the smallest problems; at the largest simulated size compilation amortizes and the JIT-compiled solvers catch up, though the scipy wrapper stays competitive. The exception is the ill-conditioned corner where the feature dimension approaches the sample size (100 samples, 100 features): there every solver needs hundreds to thousands of iterations, and the ranking looks like the recordings below.
+- **Neural recordings**: fitting real recordings takes hundreds to thousands of iterations, so per-iteration cost dominates and compilation is negligible. Solvers that exploit curvature reach the tolerance in far fewer steps and win outright — `Newton[nemos]` and `BFGS[optimistix]` are the fastest on both devices. The scipy wrapper is the slowest of the converged solvers here, since it pays a Python callback on each of the thousands of iterations it needs to drive the gradient down. This is the common case in practice.
 - **GPU vs CPU**: GPU compilation is slower, but the optimization loop scales very well with problem size, making GPU the most performant option for large problems.
 
 (summary-chart)=
@@ -123,7 +130,7 @@ NeMoS native solvers JIT-compile the full optimization when `GLM.fit` is called,
 | [`GradientDescent`](https://en.wikipedia.org/wiki/Gradient_descent) | [optimistix](https://docs.kidger.site/optimistix/) | First-order (gradient only). Memory scales linearly with parameter count. Smooth penalties only; typically requires many iterations. |
 | [`BFGS`](https://en.wikipedia.org/wiki/Broyden%E2%80%93Fletcher%E2%80%93Goldfarb%E2%80%93Shanno_algorithm) | [optimistix](https://docs.kidger.site/optimistix/) | Quasi-Newton; maintains a dense Hessian approximation. Memory scales quadratically — impractical for large parameter spaces. Fewer iterations than first-order methods. |
 | [`LBFGS`](https://en.wikipedia.org/wiki/Limited-memory_BFGS) | [optax](https://optax.readthedocs.io/) + [optimistix](https://docs.kidger.site/optimistix/) | Limited-memory quasi-second-order; stores the last *m* gradient vectors. Memory scales linearly. Recommended default for smooth problems. |
-| [`LBFGS`](https://en.wikipedia.org/wiki/Limited-memory_BFGS) | scipy | L-BFGS-B via [`scipy.optimize.minimize`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html). No JIT compilation cost; Python callback per iteration. Preferred for small problems or many repeated `fit()` calls. |
+| [`LBFGS`](https://en.wikipedia.org/wiki/Limited-memory_BFGS) | scipy | L-BFGS-B via [`scipy.optimize.minimize`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html). No JIT compilation cost; Python callback per iteration. Preferred for small problems or many repeated `fit()` calls. Benchmarked with `ftol=0` so that it stops on the projected gradient rather than on stalled progress; see the [note above](stopping-rules). |
 | [`NewtonCholesky`](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.PoissonRegressor.html) | scikit-learn | Newton method; each iteration builds the p × p Hessian (O(n · p²)) and solves it via Cholesky (O(p³)), where n = samples and p = features. Memory O(p²). Converges in very few iterations. CPU only. |
 | [`ProximalGradient`](https://en.wikipedia.org/wiki/Proximal_gradient_method) | [optimistix](https://docs.kidger.site/optimistix/) | First-order + proximal step for non-smooth penalties (Lasso, GroupLasso, ElasticNet). Memory scales linearly. Typically requires many iterations. |
 | [`SVRG`](https://en.wikipedia.org/wiki/Stochastic_variance_reduction#SVRG) | nemos | Mini-batch gradient steps with a full-gradient anchor step per epoch. Memory scales linearly. The nested inner-outer loop structure can be slow on GPU. [[2]](#ref-2) |

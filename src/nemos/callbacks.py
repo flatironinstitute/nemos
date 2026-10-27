@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import inspect
+from dataclasses import dataclass
 from functools import partial
 from typing import Any, Iterable, Union
 
+import equinox as eqx
 from numpy.typing import ArrayLike
 
 from .typing import DESIGN_INPUT_TYPE
@@ -45,7 +47,6 @@ class StochasticFitSummary:
     stop_reason: str = ""
 
 
-@dataclass
 class TrainingContext:
     """
     Mutable context object passed to callbacks during training.
@@ -60,7 +61,10 @@ class TrainingContext:
     solver :
         The solver instance running the optimization.
     params :
-        Current model parameters.
+        Current model parameters. Exposed as a read/write property: the training loop
+        assigns the actively optimized subtree (``ctx.params = ...``), and reading
+        ``ctx.params`` recombines the frozen subtree (see ``frozen``) so callbacks
+        always see the complete parameters.
     state :
         Current solver state.
     aux :
@@ -71,21 +75,47 @@ class TrainingContext:
         Current batch index within the pass.
     n_passes :
         Total number of passes requested.
+    frozen :
+        Parameter subtree held fixed during optimization (e.g. a zero intercept when
+        ``fit_intercept=False``). The solver optimizes only the active subtree; this is
+        recombined with it so callbacks always see the complete parameters. ``None``
+        when nothing is frozen.
     """
 
-    model: Any = None
-    solver: Any = None
-    params: Any = None
-    state: Any = None
-    aux: Any = None
-    pass_idx: int | None = None
-    batch_idx: int | None = None
-    n_passes: int = 0
+    def __init__(
+        self,
+        model: Any = None,
+        solver: Any = None,
+        params: Any = None,
+        state: Any = None,
+        aux: Any = None,
+        pass_idx: int | None = None,
+        batch_idx: int | None = None,
+        n_passes: int = 0,
+        frozen: Any = None,
+    ):
+        self.model = model
+        self.solver = solver
+        self.state = state
+        self.aux = aux
+        self.pass_idx = pass_idx
+        self.batch_idx = batch_idx
+        self.n_passes = n_passes
+        self.frozen = frozen
+        self._stop_requested = False
+        self._stop_reason = ""
+        self.params = params
 
-    # signals for stopping optimization,
-    # controlled through methods, not included in constructor
-    _stop_requested: bool = field(default=False, init=False, repr=False)
-    _stop_reason: str = field(default="", init=False, repr=False)
+    @property
+    def params(self) -> Any:
+        """Current parameters, with the frozen subtree recombined into the active one."""
+        if self.frozen is None:
+            return self._params
+        return eqx.combine(self._params, self.frozen)
+
+    @params.setter
+    def params(self, value: Any) -> None:
+        self._params = value
 
     def request_stop(self, reason: str = "") -> None:
         """
@@ -118,6 +148,26 @@ class TrainingContext:
             should_stop=self.should_stop,
             stop_reason=self.stop_reason,
         )
+
+    def __repr__(self, N_CHAR_MAX: int = 700) -> str:
+        """Represent this context as a string.
+
+        Simple string representation, similar to that of a dataclass.
+        """
+        cls = self.__class__.__name__
+        parts = []
+        for name in inspect.signature(self.__init__).parameters:
+            value = getattr(self, name)
+            if value is None:
+                continue
+            parts.append(f"{name}={value}")
+        if not parts:
+            return f"{cls}()"
+        single_line = f"{cls}({', '.join(parts)})"
+        if len(single_line) <= N_CHAR_MAX:
+            return single_line
+        body = "".join(f"    {part},\n" for part in parts)
+        return f"{cls}(\n{body})"
 
 
 class Callback:

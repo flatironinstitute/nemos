@@ -242,10 +242,10 @@ def trim_kwargs(cls: type, kwargs: dict, class_specific_params: dict):
     Example
     -------
     >>> class_specific_params = {
-    ...     'MyClass': {'param1', 'param2'},
-    ...     'OtherClass': {'param3', 'param4'}
+    ...     "MyClass": {"param1", "param2"},
+    ...     "OtherClass": {"param3", "param4"},
     ... }
-    >>> kwargs = {'param1': 10, 'param3': 20, 'param5': 30}
+    >>> kwargs = {"param1": 10, "param3": 20, "param5": 30}
     >>> class MyClass:
     ...     pass
     >>> trim_kwargs(MyClass, kwargs, class_specific_params)

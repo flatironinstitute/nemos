@@ -5,6 +5,7 @@ from typing import Any, Callable, ClassVar, Literal
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+import lineax as lx
 import optimistix as optx
 from jaxtyping import Array, Bool, Float, Int, PyTree
 from optimistix._custom_types import Aux, Y
@@ -77,7 +78,7 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
     stepsize: float | None = None
     maxls: int = 15
     decrease_factor: float = 0.5
-    max_stepsize: float | None = 1.0
+    max_stepsize: float | None = None
 
     acceleration: bool = True
 
@@ -246,9 +247,8 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
                 jnp.array(1.0),
                 new_stepsize / self.decrease_factor,
             )
-            # B: in my experience, this guard helps stabilize and reduce the number of iterations
-            # For some reason, without it this implementation sometimes needs more iterations than the
-            # original JAXopt implementation, which in theory should be mathematically identical.
+            # Unbounded by default, matching JAXopt: its `ProximalGradient` has no
+            # `max_stepsize`.
             if self.max_stepsize is not None:
                 new_stepsize = jnp.minimum(new_stepsize, self.max_stepsize)
         else:
@@ -279,7 +279,7 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
             new_fun_val = fun(next_x, args)
 
             diff_x = tree_sub(next_x, x)
-            sqdist = optx._misc.sum_squares(diff_x)
+            sqdist = lx.internal.sum_squares(diff_x)
 
             # verbatim from JAXopt
             # The expression below checks the sufficient decrease condition
@@ -287,7 +287,7 @@ class FISTA(optx.AbstractMinimiser[Y, Aux, ProxGradState]):
             # where the terms have been reordered for numerical stability.
             fun_decrease = stepsize * (new_fun_val - x_fun_val)
             expected_decrease = (
-                stepsize * optx._misc.tree_dot(diff_x, grad) + 0.5 * sqdist
+                stepsize * lx.internal.tree_dot(diff_x, grad) + 0.5 * sqdist
             )
 
             return fun_decrease > expected_decrease + eps

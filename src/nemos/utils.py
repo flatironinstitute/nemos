@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import inspect
 import os
 import warnings
@@ -14,6 +15,7 @@ import jax.numpy as jnp
 import numpy as np
 from numpy.typing import NDArray
 
+from .params import ModelParams
 from .tree_utils import pytree_map_and_reduce
 from .type_casting import support_pynapple
 from .typing import Pytree
@@ -427,6 +429,7 @@ def format_repr(
     obj: Base,
     exclude_keys: Optional[List[str]] = None,
     use_name_keys: Optional[List[str]] = None,
+    array_keys: Optional[List[str]] = None,
     multiline=False,
 ):
     """
@@ -447,6 +450,9 @@ def format_repr(
     use_name_keys :
         List of keys for which the value's `__name__` attribute is used instead
         of the default `__repr__` output. Defaults to an empty list.
+    array_keys :
+        List of keys whose array values are shown instead of dropped, abbreviated with
+        an ellipsis past a few entries. Defaults to an empty list.
     multiline:
         If True, add each parameter on a new line, if False (default), list all parameters
         in a single line.
@@ -463,7 +469,8 @@ def format_repr(
       representation. The falsey values include empty list or dict, or similar.
     - Parameters are displayed in the order defined in the `obj.__init__`
       method.
-    - Parameters with a `shape` attribute (arrays) are excluded from the representation.
+    - Parameters with a `shape` attribute (arrays) are excluded from the representation,
+      unless their key is listed in `array_keys`.
 
     Examples
     --------
@@ -483,6 +490,7 @@ def format_repr(
     """
     exclude_keys = [] if exclude_keys is None else exclude_keys
     use_name_keys = [] if use_name_keys is None else use_name_keys
+    array_keys = [] if array_keys is None else array_keys
 
     init_params = list(inspect.signature(obj.__init__).parameters.keys())
     disp_params = []
@@ -490,11 +498,27 @@ def format_repr(
     all_params = obj.get_params(deep=False)
     label = all_params.pop("label", None)
     for k, v in all_params.items():
-        repr_param = (
-            k not in exclude_keys and not hasattr(v, "shape") and (v or v in (0, False))
-        )
+        # an array is truthy only when it holds a single entry, so it is tested on size
+        show_array = k in array_keys and hasattr(v, "shape")
+        if show_array:
+            repr_param = k not in exclude_keys and v.size > 0
+        else:
+            # a pytree of only None leaves (e.g. the default fix_params spec) is "unset"
+            all_none = pytree_map_and_reduce(
+                lambda x: x is None, all, v, is_leaf=lambda x: x is None
+            )
+            repr_param = (
+                k not in exclude_keys
+                and not hasattr(v, "shape")
+                and not all_none
+                and (v or v in (0, False))
+            )
         if repr_param:
-            if k in use_name_keys:
+            if show_array:
+                v = np.array2string(
+                    np.asarray(v), threshold=6, edgeitems=2, separator=", "
+                )
+            elif k in use_name_keys:
                 if v in SPECIAL_KEY_NAMES:
                     v = SPECIAL_KEY_NAMES[v]
                 else:
@@ -632,7 +656,6 @@ def _flatten_dict(
     dict :
         A flattened dictionary where the hierarchy is represented by concatenated keys (using __ as a separator).
     """
-
     sep = "::"
     items = []
     # Iterate over key-value pairs in the dictionary
@@ -822,7 +845,6 @@ def _unpack_params(params_dict: dict, string_attrs: list = None) -> dict:
     dict :
         Serializable dictionary with class names and nested parameters.
     """
-
     out = dict()
     for key, value in params_dict.items():
         # if the parameter is an objet with get_params/set_params,
@@ -831,6 +853,16 @@ def _unpack_params(params_dict: dict, string_attrs: list = None) -> dict:
             cls_name = _get_name(value)
             params = _unpack_params(value.get_params(deep=False), string_attrs)
             out[key] = {"class": cls_name, "params": params}
+        elif isinstance(value, ModelParams):
+            # parameter containers are equinox modules and have no ``get_params``, so
+            # unpack them field by field through the same class/params convention.
+            # Without this they reach ``_flatten_dict`` whole and are stored as pickled
+            # object arrays, which ``load_model`` cannot read back.
+            fields = {f.name: getattr(value, f.name) for f in dataclasses.fields(value)}
+            out[key] = {
+                "class": _get_name(value),
+                "params": _unpack_params(fields, string_attrs),
+            }
         elif isinstance(value, dict):
             # serialize callable/class leaves inside plain dicts by their name,
             # so npz can store them as strings instead of pickled object arrays.

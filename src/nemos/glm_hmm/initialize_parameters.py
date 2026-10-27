@@ -51,7 +51,7 @@ def random_glm_params_init(
     X: DESIGN_INPUT_TYPE,
     y: jnp.ndarray,
     inverse_link_function: Callable,
-    observation_model: Optional[Observations] = None,
+    observation_model: Observations,
     session_starts: Optional[NDArray | jnp.ndarray] = None,
     random_key: Optional[jax.Array] = None,
     std_dev=0.001,
@@ -73,8 +73,7 @@ def random_glm_params_init(
     inverse_link_function :
         Inverse link function of the GLM.
     observation_model :
-        Observation model of the GLM. Unused for this initialization, but included for protocol
-        conformance with :class:`InitFunctionGLM`.
+        Observation model defining the valid range for the initial mean.
     session_starts :
         Optional boolean array of shape (n_samples,) indicating the start of new sessions.
         Unused for this initialization, but included for API consistency.
@@ -100,12 +99,18 @@ def random_glm_params_init(
         X = X.data
     # small random noisy coef
     coef = jax.tree_util.tree_map(
-        lambda x: std_dev
-        * jax.random.normal(random_key, (x.shape[1], n_neurons, n_states)),
+        lambda x: (
+            std_dev * jax.random.normal(random_key, (x.shape[1], n_neurons, n_states))
+        ),
         X,
     )
     # mean-rate
-    intercept = initialize_intercept_matching_mean_rate(inverse_link_function, y)
+    intercept = initialize_intercept_matching_mean_rate(
+        inverse_link_function,
+        X,
+        y,
+        rate_range=observation_model.rate_range,
+    )
     intercept = jnp.tile(intercept[:, jnp.newaxis], (1, n_states))
     if is_one_dim:
         coef = jax.tree_util.tree_map(lambda x: jnp.squeeze(x, axis=1), coef)
@@ -214,6 +219,7 @@ class KMeansInitializerGLM(KMeansInitializer):
             self._X,
             self._y,
             self.inverse_link_function,
+            self._glm_models[0].observation_model,
             std_dev=0.0,
             random_key=key,
         )
@@ -478,7 +484,6 @@ def setup_glm_hmm_initialization(
     init_funcs :
         Updated dictionary of initialization functions based on provided inputs.
     """
-
     if init_funcs is None:
         glm_init_funcs = DEFAULT_INIT_FUNCTIONS_GLMHMM.copy()
     else:

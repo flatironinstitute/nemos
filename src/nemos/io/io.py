@@ -11,12 +11,14 @@ import numpy as np
 if TYPE_CHECKING:
     from ..base_regressor import BaseRegressor
     from ..observation_models import Observations
+    from ..params import ModelParams
     from ..regularizer import Regularizer
 
 from .._observation_model_builder import (
     AVAILABLE_OBSERVATION_MODELS,
     instantiate_observation_model,
 )
+from .._params_builder import AVAILABLE_PARAM_CONTAINERS, instantiate_param_container
 from .._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from ..glm import GLM, ClassifierGLM, ClassifierPopulationGLM, PopulationGLM
 from ..glm_hmm import GLMHMM
@@ -74,6 +76,8 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     ... )
     >>> for key, value in model.get_params().items():
     ...     print(f"{key}: {value}")
+    fit_intercept: True
+    fix_params: (None, None)
     inverse_link_function: <function one_over_x at ...>
     observation_model: GammaObservations()
     regularizer: Ridge()
@@ -87,6 +91,8 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     >>> # Model has the same parameters before and after load
     >>> for key, value in model.get_params().items():  # doctest: +ELLIPSIS
     ...     print(f"{key}: {value}")
+    fit_intercept: True
+    fix_params: (None, None)
     inverse_link_function: <function one_over_x at ...>
     observation_model: GammaObservations()
     regularizer: Ridge()
@@ -105,6 +111,8 @@ def load_model(filename: Union[str, Path], mapping_dict: dict = None):
     >>> # Now the loaded model will have the updated solver_name and solver_kwargs
     >>> for key, value in loaded_model.get_params().items():
     ...     print(f"{key}: {value}")
+    fit_intercept: True
+    fix_params: (None, None)
     inverse_link_function: <function <lambda> at ...>
     observation_model: PoissonObservations()
     regularizer: UnRegularized()
@@ -191,7 +199,7 @@ def _is_param(par):
 
 def _safe_instantiate(
     param_name: str, class_name: str, **kwargs
-) -> "Regularizer | Observations":
+) -> "Regularizer | Observations | ModelParams":
     if not isinstance(class_name, str):
         # this should not be hit, if it does the saved params had been modified.
         raise ValueError(
@@ -202,6 +210,8 @@ def _safe_instantiate(
     class_basename = class_name.split(".")[-1]
     if class_basename in AVAILABLE_REGULARIZERS:
         return instantiate_regularizer(class_name, **kwargs)
+    elif class_basename in AVAILABLE_PARAM_CONTAINERS:
+        return instantiate_param_container(class_name, **kwargs)
     elif any(class_basename.startswith(obs) for obs in AVAILABLE_OBSERVATION_MODELS):
         return instantiate_observation_model(class_name, **kwargs)
     else:
@@ -478,8 +488,8 @@ def get_user_keys_from_nested_dict(nested_dict: dict, filter_keys: bool = True) 
     Examples
     --------
     >>> params = {
-    ...     'regularizer': {'class': 'GroupLasso', 'params': {'mask': None}},
-    ...     'solver_kwargs': {'tol': 1e-7, 'maxiter': 100}
+    ...     "regularizer": {"class": "GroupLasso", "params": {"mask": None}},
+    ...     "solver_kwargs": {"tol": 1e-7, "maxiter": 100},
     ... }
     >>> get_user_keys_from_nested_dict(params)
     ['regularizer', 'regularizer__mask', 'solver_kwargs', 'solver_kwargs__maxiter', 'solver_kwargs__tol']
@@ -543,22 +553,27 @@ def _get_invalid_mappings(mapping_dict: dict | None) -> List:
     >>> import nemos as nmo
     >>> def square(x):
     ...     return x**2
-    ...
     >>> class MyRegularizer(nmo.regularizer.GroupLasso):
     ...     def __init__(self, mask=None, new_param=1):
     ...         super().__init__(mask=mask)
     ...         self.new_param = new_param
-    ...
-    >>> invalid = _get_invalid_mappings({
-    ...     "inverse_link_function": square,
-    ...     "regularizer": {"class": MyRegularizer, "params": {"regularizer__new_param": 10.}}
-    ... })
+    >>> invalid = _get_invalid_mappings(
+    ...     {
+    ...         "inverse_link_function": square,
+    ...         "regularizer": {
+    ...             "class": MyRegularizer,
+    ...             "params": {"regularizer__new_param": 10.0},
+    ...         },
+    ...     }
+    ... )
     >>> invalid
     []
-    >>> invalid = _get_invalid_mappings({
-    ...     "inverse_link_function": square,
-    ...     "regularizer": {"params": {"new_param": 10.}}
-    ... })
+    >>> invalid = _get_invalid_mappings(
+    ...     {
+    ...         "inverse_link_function": square,
+    ...         "regularizer": {"params": {"new_param": 10.0}},
+    ...     }
+    ... )
     >>> invalid
     ['regularizer__new_param']
     """

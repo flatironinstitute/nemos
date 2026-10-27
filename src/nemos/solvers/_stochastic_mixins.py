@@ -5,9 +5,8 @@ from __future__ import annotations
 import abc
 from typing import TYPE_CHECKING, Any
 
-from nemos.solvers._abstract_solver import SolverAdapterState
-
 from ..callbacks import Callback, TrainingContext
+from ..solvers._abstract_solver import SolverAdapterState
 from ..typing import Params, SolverState, StepResult
 
 if TYPE_CHECKING:

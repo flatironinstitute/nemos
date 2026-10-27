@@ -1,4 +1,4 @@
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 import scipy.optimize
 
@@ -30,6 +30,7 @@ class ScipySolver:
         hess=None,
         maxiter: int = 100,
         tol: float = 1e-8,
+        options: Optional[dict] = None,
     ) -> None:
         """
         Required arguments to accept are `unregularized_loss`, `regularizer`, `regularizer_strength`.
@@ -56,6 +57,7 @@ class ScipySolver:
         self.method = method
         self.tol = tol
         self.maxiter = maxiter
+        self.options = options
 
         if has_aux:
             raise NotImplementedError(
@@ -69,7 +71,7 @@ class ScipySolver:
         For alternative, more flexible implementations see the solvers
         implemented in `nemos.solvers`.
         """
-        return {"method", "hess", "maxiter", "tol"}
+        return {"method", "hess", "maxiter", "tol", "options"}
 
     def init_state(self, init_params, *args):
         """
@@ -141,6 +143,8 @@ class ScipySolver:
 
         # pass the flat parameters and the objective function taking them
         # also the custom parameters we saved in __init__
+        options = dict(self.options or {})
+        options.update({"maxiter": n_steps})
         res = scipy.optimize.minimize(
             fun=_flat_obj,
             jac=True,
@@ -148,7 +152,7 @@ class ScipySolver:
             x0=_flat_params,
             args=args,
             method=self.method,
-            options={"maxiter": n_steps},
+            options=options,
             tol=self.tol,
         )
 
@@ -156,7 +160,16 @@ class ScipySolver:
 
 
 class ScipyLBFGS(ScipySolver):
-    """Solver using the L-BFGS-B algorithm via scipy.optimize.minimize."""
+    """Solver using the L-BFGS-B algorithm via scipy.optimize.minimize.
+
+    Stopped on the projected gradient alone. `scipy.optimize.minimize` routes its
+    `tol` onto both `ftol` and `gtol` for L-BFGS-B and stops on whichever fires
+    first. `ftol` tests the *relative decrease per iteration*, so it halts on
+    stalled progress rather than on stationarity: on the head-direction benchmark
+    it fires while the gradient sup-norm is still 2e-2. Pinning `ftol=0` leaves
+    `gtol` as the only stopping rule, which is the same criterion the other
+    solvers in the grid use, so timings and iteration counts are comparable.
+    """
 
     def __init__(
         self,
@@ -167,6 +180,7 @@ class ScipyLBFGS(ScipySolver):
         init_params,
         maxiter: int = 100,
         tol: float = 1e-8,
+        options: Optional[dict] = None,
     ):
         return super().__init__(
             unregularized_loss,
@@ -177,4 +191,5 @@ class ScipyLBFGS(ScipySolver):
             method="L-BFGS-B",
             maxiter=maxiter,
             tol=tol,
+            options={**(options or {}), "ftol": 0.0},
         )

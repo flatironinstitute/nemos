@@ -83,4 +83,18 @@ glm_hmm/README.md
 ```
 :::
 
+:::{grid-item-card}
+
+<figure>
+<img src="../_static/thumbnails/background/plot_gp_regression.svg" style="height: 100px", alt="Gaussian Process Regression."/>
+</figure>
+
+```{toctree}
+:maxdepth: 2
+
+efgp.md
+```
+
+:::
+
 ::::
