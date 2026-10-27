@@ -295,7 +295,16 @@ def test_eval_conv_mixins_agree_with_the_name_convention():
             )
 
 
-class EvalBasis2D(BoundedEvalBasisMixin, AtomicBasisMixin, Basis):
+class _Basis2D(AtomicBasisMixin, Basis):
+    """Basis 2D for test purposes."""
+
+    def evaluate(self, *x):
+        # example implementation
+        x_sum = sum(x)
+        return np.stack([x_sum for _ in range(self.n_basis_funcs)], axis=1)
+
+
+class EvalBasis2D(BoundedEvalBasisMixin, _Basis2D):
     """Eval basis 2D for test purposes."""
 
     def __init__(self, ndim, bounds=None, label=None):
@@ -303,11 +312,6 @@ class EvalBasis2D(BoundedEvalBasisMixin, AtomicBasisMixin, Basis):
         Basis.__init__(self)
         AtomicBasisMixin.__init__(self, n_basis_funcs=5, label=label)
         BoundedEvalBasisMixin.__init__(self, bounds=bounds)
-
-    def evaluate(self, *x):
-        # example implementation
-        x_sum = sum(x)
-        return np.stack([x_sum for _ in range(self.n_basis_funcs)], axis=1)
 
 
 def compare_bounds(bas, bounds):
@@ -400,6 +404,17 @@ def assert_jit_matches_eager(bas, *inputs):
             rtol=1e-8,
             atol=1e-10,
             err_msg=f"jit and eager ``{method}`` disagree for {bas}",
+        )
+
+
+def assert_continuous_at_upper_bound(bas):
+    """Check that the basis at the upper bound matches its limit from the left, eager and jitted."""
+    upper = bas.bounds[1]
+    samples = np.array([upper - 1e-5, upper])
+    for func in (bas.compute_features, jax.jit(bas.compute_features)):
+        out = np.asarray(func(samples))
+        np.testing.assert_allclose(
+            out[1], out[0], atol=1e-3 * np.abs(out[0]).max(), err_msg=f"{bas}"
         )
 
 
@@ -1480,6 +1495,7 @@ class TestEvalBasis:
         )
         assert np.isnan(bas.fill_value)
 
+    @pytest.mark.parametrize("method_name", ["compute_features", "evaluate"])
     @pytest.mark.parametrize("fill_value", [-999.0, -123.456])
     @pytest.mark.parametrize(
         "samples, out_of_bounds_idx",
@@ -1501,7 +1517,7 @@ class TestEvalBasis:
         ],
     )
     def test_fill_value_applied_to_out_of_bounds(
-        self, fill_value, samples, out_of_bounds_idx, cls
+        self, fill_value, samples, out_of_bounds_idx, method_name, cls
     ):
         """Test that fill_value is applied to samples outside bounds."""
         if cls in [
@@ -1525,7 +1541,7 @@ class TestEvalBasis:
             fill_value=fill_value,
             **extra_kwargs(cls, 5),
         )
-        out = np.asarray(bas.compute_features(samples))
+        out = np.asarray(getattr(bas, method_name)(samples))
         in_bounds_idx = [i for i in range(len(samples)) if i not in out_of_bounds_idx]
         # Check that all out-of-bounds samples have the fill_value
         for idx in out_of_bounds_idx:
@@ -1539,6 +1555,28 @@ class TestEvalBasis:
                 f"In-bounds sample at index {idx} (value={samples[idx]}) "
                 f"should not have fill_value={fill_value}"
             )
+
+    @pytest.mark.parametrize("method_name", ["compute_features", "evaluate"])
+    def test_fill_value_applied_per_element(self, method_name, cls):
+        """Test that fill_value is applied only to the out-of-bounds entries of a multi-column input."""
+        if cls in [CustomBasis, Zero, FourierEval, FourierGP, Category]:
+            pytest.skip(
+                f"Skipping test_fill_value_applied_per_element for {cls.__name__}"
+            )
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=(1, 3),
+            fill_value=-999.0,
+            **extra_kwargs(cls, 5),
+        )
+        samples = np.array(
+            [[0.0, 1.5], [1.5, 4.0], [2.0, 2.5], [2.5, 2.0], [4.0, 0.0], [1.2, 2.8]]
+        )
+        out = np.asarray(getattr(bas, method_name)(samples))
+        out = out.reshape(*samples.shape, -1)
+        expected_fill = (samples < 1) | (samples > 3)
+        np.testing.assert_array_equal(np.all(out == -999.0, axis=-1), expected_fill)
 
     @pytest.mark.parametrize("fill_value", [0.0, np.nan])
     def test_fill_value_set_params(self, fill_value, cls):
@@ -1927,7 +1965,7 @@ class TestSharedMethods:
             categories=n_basis,
             **extra_kwargs(cls, n_basis),
         )
-        inp = np.random.randn(10, 2, 3)
+        inp = np.random.uniform(size=(10, 2, 3))
         inp[2, 0, [0, 2]] = np.nan
         inp[4, 1, 1] = np.nan
         out = bas.evaluate(inp)
@@ -2820,6 +2858,13 @@ class TestMSplineBasis(BasisFuncsTesting):
         )
         assert_jit_matches_eager(bas, JIT_INPUTS[inp_label])
 
+    @pytest.mark.parametrize("order", [2, 3, 4, 5])
+    @pytest.mark.parametrize("n_basis_funcs", [6, 12])
+    def test_continuous_at_upper_bound(self, order, n_basis_funcs):
+        """The upper bound is in the support of the M-spline basis."""
+        bas = MSplineEval(n_basis_funcs, order=order, bounds=(0.0, 1.0))
+        assert_continuous_at_upper_bound(bas)
+
     @pytest.mark.requires_x64
     @pytest.mark.parametrize("order", [1, 2, 3, 5])
     @pytest.mark.parametrize("n_basis_funcs", [5, 9])
@@ -3106,6 +3151,13 @@ class TestBSplineBasis(BasisFuncsTesting):
             self.cls[mode], n_basis_funcs=6, window_size=8, **kwargs
         )
         assert_jit_matches_eager(bas, JIT_INPUTS[inp_label])
+
+    @pytest.mark.parametrize("order", [2, 3, 4, 5])
+    @pytest.mark.parametrize("n_basis_funcs", [6, 12])
+    def test_continuous_at_upper_bound(self, order, n_basis_funcs):
+        """The upper bound is in the support of the B-spline basis."""
+        bas = BSplineEval(n_basis_funcs, order=order, bounds=(0.0, 1.0))
+        assert_continuous_at_upper_bound(bas)
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
     @pytest.mark.parametrize("order", [1, 2, 3, 4, 5])

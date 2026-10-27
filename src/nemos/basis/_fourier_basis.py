@@ -595,7 +595,7 @@ class FourierEval(BoundedEvalBasisMixin, FourierBasis):
 
     bounds :
         Period bounds for each dimension. Unlike other basis classes where bounds define
-        a valid domain (with out-of-bounds samples filled with NaN), for the Fourier basis
+        a valid domain (with out-of-bounds samples set to ``fill_value``), for the Fourier basis
         the bounds define the period of the basis functions. Samples outside these bounds
         are still valid and will be evaluated using the periodic nature of the basis.
 
