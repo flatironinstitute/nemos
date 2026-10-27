@@ -1345,8 +1345,8 @@ class TestEvalBasis:
         ],
     )
     def test_vmin_vmax_range(self, vmin, vmax, samples, nan_idx, cls):
-        if cls in [CustomBasis, Zero, FourierEval, Category]:
-            # FourierEval is defined over the real line; bounds specify period, not domain
+        if cls in [CustomBasis, Zero, FourierEval, Category, CyclicBSplineEval]:
+            # FourierEval and CyclicBSplineEval are periodic; bounds specify period, not domain
             pytest.skip(f"Skipping test_vmin_vmax_range for {cls.__name__}")
         if cls is FourierGP and vmin is None:
             pytest.skip("FourierGP requires bounds.")
@@ -1485,7 +1485,7 @@ class TestEvalBasis:
 
     def test_fill_value_default(self, cls):
         """Test that fill_value defaults to NaN."""
-        if cls in [CustomBasis, Zero, FourierEval, Category]:
+        if cls in [CustomBasis, Zero, FourierEval, Category, CyclicBSplineEval]:
             pytest.skip(f"Skipping test_fill_value_default for {cls.__name__}")
         bas = instantiate_atomic_basis(
             cls,
@@ -1520,7 +1520,14 @@ class TestEvalBasis:
         self, fill_value, samples, out_of_bounds_idx, method_name, cls
     ):
         """Test that fill_value is applied to samples outside bounds."""
-        if cls in [CustomBasis, Zero, FourierEval, FourierGP, Category]:
+        if cls in [
+            CustomBasis,
+            Zero,
+            FourierEval,
+            FourierGP,
+            Category,
+            CyclicBSplineEval,
+        ]:
             pytest.skip(
                 f"Skipping test_fill_value_applied_to_out_of_bounds for {cls.__name__}"
             )
@@ -1552,7 +1559,14 @@ class TestEvalBasis:
     @pytest.mark.parametrize("method_name", ["compute_features", "evaluate"])
     def test_fill_value_applied_per_element(self, method_name, cls):
         """Test that fill_value is applied only to the out-of-bounds entries of a multi-column input."""
-        if cls in [CustomBasis, Zero, FourierEval, FourierGP, Category]:
+        if cls in [
+            CustomBasis,
+            Zero,
+            FourierEval,
+            FourierGP,
+            Category,
+            CyclicBSplineEval,
+        ]:
             pytest.skip(
                 f"Skipping test_fill_value_applied_per_element for {cls.__name__}"
             )
@@ -1574,7 +1588,14 @@ class TestEvalBasis:
     @pytest.mark.parametrize("fill_value", [0.0, np.nan])
     def test_fill_value_set_params(self, fill_value, cls):
         """Test that fill_value can be set via set_params."""
-        if cls in [CustomBasis, Zero, FourierEval, FourierGP, Category]:
+        if cls in [
+            CustomBasis,
+            Zero,
+            FourierEval,
+            FourierGP,
+            Category,
+            CyclicBSplineEval,
+        ]:
             pytest.skip(f"Skipping test_fill_value_set_params for {cls.__name__}")
         bas = instantiate_atomic_basis(
             cls,
@@ -1623,9 +1644,14 @@ class TestEvalBasis:
         # JIT and non-JIT should produce the same result
         np.testing.assert_allclose(result_jit, result_no_jit)
         # Out of bounds samples should have fill_value (except FourierEval where bounds = period)
-        if cls != FourierEval:
+        apply_fill = getattr(bas, "_apply_bounds_fill", True)
+        if apply_fill or isinstance(bas, IdentityEval):
             # 0.5 < 1 and 3.5 > 3
             np.testing.assert_array_equal(result_jit[[0, 4]], bas.fill_value)
+        else:
+            period = bas.bounds[1] - bas.bounds[0]
+            result_wrapped = bas.compute_features(samples % period)
+            np.testing.assert_allclose(result_no_jit, result_wrapped, atol=1e-15)
 
 
 @pytest.mark.parametrize(
@@ -1673,7 +1699,7 @@ class TestSharedMethods:
                 RaisedCosineLogEval: "RaisedCosineLogEval(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=(1.0, 2.0), fill_value=nan)",
                 RaisedCosineLinearEval: "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0, bounds=(1.0, 2.0), fill_value=nan)",
                 BSplineEval: "BSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0), fill_value=nan)",
-                CyclicBSplineEval: "CyclicBSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0), fill_value=nan)",
+                CyclicBSplineEval: "CyclicBSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
                 MSplineEval: "MSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0), fill_value=nan)",
                 OrthExponentialEval: "OrthExponentialEval(n_basis_funcs=5, bounds=(1.0, 2.0), fill_value=nan)",
                 IdentityEval: "IdentityEval(bounds=(1.0, 2.0), fill_value=nan)",
@@ -1709,7 +1735,7 @@ class TestSharedMethods:
                 RaisedCosineLogEval: r"'mylabel': RaisedCosineLogEval\(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=\(1.0, 2.0\), fill_value=nan\)",
                 RaisedCosineLinearEval: r"'mylabel': RaisedCosineLinearEval\(n_basis_funcs=5, width=2.0, bounds=\(1.0, 2.0\), fill_value=nan\)",
                 BSplineEval: r"'mylabel': BSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\), fill_value=nan\)",
-                CyclicBSplineEval: r"'mylabel': CyclicBSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\), fill_value=nan\)",
+                CyclicBSplineEval: r"'mylabel': CyclicBSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\)\)",
                 MSplineEval: r"'mylabel': MSplineEval\(n_basis_funcs=5, order=4, bounds=\(1.0, 2.0\), fill_value=nan\)",
                 OrthExponentialEval: r"'mylabel': OrthExponentialEval\(n_basis_funcs=5, bounds=\(1.0, 2.0\), fill_value=nan\)",
                 IdentityEval: r"'mylabel': IdentityEval\(bounds=\(1.0, 2.0\), fill_value=nan\)",
@@ -3247,6 +3273,19 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
             self.cls[mode], n_basis_funcs=6, window_size=8, **kwargs
         )
         assert_jit_matches_eager(bas, JIT_INPUTS[inp_label])
+
+    @pytest.mark.parametrize("bounds", [(0, 1), (-1, 1), (-0.5, 0.5), (1, 2.5)])
+    def test_periodicity(self, bounds):
+        bas = instantiate_atomic_basis(
+            self.cls["eval"], n_basis_funcs=6, window_size=8, bounds=bounds
+        )
+        period = bounds[1] - bounds[0]
+        rng = np.random.default_rng(seed=42)
+        x = rng.uniform(-10, 10, size=10)
+        X = bas.compute_features(x)
+        for k in range(2, 4):
+            Y = bas.compute_features(x + k * period)
+            np.testing.assert_allclose(X, Y, atol=1e-13)
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
     @pytest.mark.parametrize("order", [2, 3, 4, 5])
