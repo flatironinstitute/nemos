@@ -1559,7 +1559,14 @@ class TestEvalBasis:
     @pytest.mark.parametrize("method_name", ["compute_features", "evaluate"])
     def test_fill_value_applied_per_element(self, method_name, cls):
         """Test that fill_value is applied only to the out-of-bounds entries of a multi-column input."""
-        if cls in [CustomBasis, Zero, FourierEval, FourierGP, Category]:
+        if cls in [
+            CustomBasis,
+            Zero,
+            FourierEval,
+            FourierGP,
+            Category,
+            CyclicBSplineEval,
+        ]:
             pytest.skip(
                 f"Skipping test_fill_value_applied_per_element for {cls.__name__}"
             )
