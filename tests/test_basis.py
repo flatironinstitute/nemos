@@ -1600,7 +1600,7 @@ class TestEvalBasis:
         np.testing.assert_allclose(result_jit, result_no_jit)
         # Out of bounds samples should have fill_value (except FourierEval where bounds = period)
         apply_fill = getattr(bas, "_apply_bounds_fill", True)
-        if apply_fill or isinstance(cls, IdentityEval):
+        if apply_fill or isinstance(bas, IdentityEval):
             # 0.5 < 1 and 3.5 > 3
             np.testing.assert_array_equal(result_jit[[0, 4]], bas.fill_value)
         else:
