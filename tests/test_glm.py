@@ -206,8 +206,9 @@ def test_get_fit_attrs(
 
 
 def get_param_shape(model, X, y):
-    empty_par = model._validator.get_empty_params(X, y)
-    return jax.tree_util.tree_map(lambda x: x.shape, empty_par)
+    if hasattr(model, "n_classes"):
+        y = jax.nn.one_hot(y, model.n_classes)
+    return model._get_params_shape(X, y)
 
 
 def _group_lasso_model(mask_kind):
@@ -1025,7 +1026,11 @@ class TestGLM:
             model.intercept_ = true_params.intercept
             if is_population_model(model):
                 model._feature_mask = initialize_feature_mask_for_population_glm(
-                    X, y.shape[1], coef=model._validator.get_empty_params(X, y).coef
+                    X,
+                    y.shape[1],
+                    coef=model._get_empty_params(
+                        X.astype(np.float32), y.astype(np.float32)
+                    ).coef,
                 )
         with expectation:
             model.simulate(
@@ -1744,7 +1749,9 @@ class TestNormalizeUserParams:
 
         with expectation:
             coef, out_intercept = model._normalize_user_params(
-                (true_params.coef, intercept), X, y
+                (true_params.coef, intercept),
+                X.astype(np.float32),
+                y.astype(np.float32),
             )
 
         np.testing.assert_array_equal(coef, true_params.coef)
@@ -4220,9 +4227,13 @@ class TestPoissonGLM:
         )
         X, y = example_X_y_high_firing_rates
         if is_population_model(model):
-            model._model_specific_initialization(X, y)
+            model._model_specific_initialization(
+                X.astype(np.float32), y.astype(np.float32)
+            )
         else:
-            model._model_specific_initialization(X, y[:, 0])
+            model._model_specific_initialization(
+                X.astype(np.float32), y[:, 0].astype(np.float32)
+            )
 
     @pytest.mark.parametrize("reg_setup", ["", "_pytree"])
     @pytest.mark.parametrize(

@@ -129,6 +129,9 @@ class MockPPGLM(BaseRegressor):
     def _get_optimal_solver_params_config(self, *args, **kwargs):
         pass
 
+    def _get_params_shape(self, *args, **kwargs):
+        pass
+
 
 class MockPopulationPPGLM(MockPPGLM):
     def __init__(self, **kwargs):

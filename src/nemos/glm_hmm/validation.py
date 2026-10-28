@@ -9,7 +9,6 @@ from jax.typing import DTypeLike
 
 from ..base_validator import RegressorValidator
 from ..glm.validation import GLMValidator
-from ..hmm.params import HMMParams
 from ..hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
 from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMHMMModelParams, GLMHMMParams, GLMHMMUserParams
@@ -170,21 +169,3 @@ class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
         """Check consistency of feature_mask and params."""
         self._glm_validator.feature_mask_consistency(feature_mask, params.model_params)
         return
-
-    def get_empty_params(self, X, y) -> GLMHMMParams:
-        """Return the param shape given the input data."""
-        empty_coef = jax.tree_util.tree_map(
-            lambda x: jnp.empty((x.shape[1], self.n_states)), X
-        )
-        empty_intercept = jnp.empty((self.n_states,))
-        empty_scale = jnp.empty_like(empty_intercept)
-        model_params = GLMHMMModelParams(
-            coef=empty_coef, intercept=empty_intercept, log_scale=empty_scale
-        )
-        empty_init_proba = jnp.empty((self.n_states,))
-        empty_transition_proba = jnp.empty((self.n_states, self.n_states))
-        hmm_params = HMMParams(
-            log_initial_prob=empty_init_proba,
-            log_transition_prob=empty_transition_proba,
-        )
-        return GLMHMMParams(hmm_params=hmm_params, model_params=model_params)

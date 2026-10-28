@@ -10,7 +10,6 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from nemos.glm_hmm.params import GLMHMMParams
 from nemos.glm_hmm.validation import GLMHMMValidator
 
 # ---------------------------------------------------------------------------
@@ -393,36 +392,3 @@ class TestRoundTrip:
         result = validator.from_model_params(internal)
         expected_scale = jnp.exp(valid_user_params[2])
         assert jnp.allclose(result[2], expected_scale, atol=1e-5)
-
-
-# ---------------------------------------------------------------------------
-# get_empty_params
-# ---------------------------------------------------------------------------
-
-
-class TestGetEmptyParams:
-    """get_empty_params returns a GLMHMMParams with correct shapes derived from X, y, and n_states."""
-
-    @pytest.fixture
-    def empty(self, validator):
-        X = np.ones((20, N_FEATURES))
-        y = np.zeros(20)
-        return validator.get_empty_params(X, y)
-
-    def test_returns_glm_hmm_params(self, empty):
-        assert isinstance(empty, GLMHMMParams)
-
-    def test_coef_shape(self, empty):
-        assert empty.model_params.coef.shape == (N_FEATURES, N_STATES)
-
-    def test_intercept_shape(self, empty):
-        assert empty.model_params.intercept.shape == (N_STATES,)
-
-    def test_log_scale_shape(self, empty):
-        assert empty.model_params.log_scale.shape == (N_STATES,)
-
-    def test_log_initial_prob_shape(self, empty):
-        assert empty.hmm_params.log_initial_prob.shape == (N_STATES,)
-
-    def test_log_transition_prob_shape(self, empty):
-        assert empty.hmm_params.log_transition_prob.shape == (N_STATES, N_STATES)

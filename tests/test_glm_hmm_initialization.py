@@ -89,6 +89,9 @@ class MockGLMHMM(BaseHMM):
     def score(self, *a, **kw):
         pass
 
+    def _get_params_shape(self, *a, **kw):
+        pass
+
 
 # =============================================================================
 # Mock infrastructure

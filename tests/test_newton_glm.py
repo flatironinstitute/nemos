@@ -356,7 +356,10 @@ def test_population_glm_hess_fn_drops_frozen_leaves(freeze, request):
     else:
         freeze_first_coef_leaf(model, true_params)
 
-    params = model._model_specific_initialization(X, y)
+    params = model._model_specific_initialization(
+        jax.tree_util.tree_map(lambda x: x.astype(jnp.float32), X),
+        y.astype(jnp.float32),
+    )
     active, frozen = model._partition_active(params)
     hess = model._get_hess_fn(frozen=frozen)(active, X, y)
 
@@ -385,7 +388,9 @@ def test_feature_mask_reassignment_invalidates_solver(request):
         "population_poissonGLM_model_instantiation"
     )
     model = nmo.glm.PopulationGLM(regularizer="Ridge", regularizer_strength=1.0)
-    params = model._model_specific_initialization(X, y)
+    params = model._model_specific_initialization(
+        X.astype(jnp.float32), y.astype(jnp.float32)
+    )
     active, frozen = model._partition_active(params)
     model._initialize_optimizer_and_state(active, X, y, frozen_params=frozen)
     assert model.solver is not None

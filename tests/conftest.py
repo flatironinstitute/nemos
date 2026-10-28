@@ -769,6 +769,9 @@ class MockRegressor(BaseRegressor):
     def _model_specific_initialization(self, *args, **kwargs):
         pass
 
+    def _get_params_shape(self, X, y):
+        pass
+
 
 class MockRegressorNested(MockRegressor):
     def __init__(self, other_param: int, std_param: int = 0):
@@ -967,6 +970,9 @@ class MockHMM(
         pass
 
     def score(self, *args, **kwargs):
+        pass
+
+    def _get_params_shape(self, *args, **kwargs):
         pass
 
 
