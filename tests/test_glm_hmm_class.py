@@ -2407,3 +2407,74 @@ class TestEStepRouting:
 
         assert calls["associative"]
         assert calls["sequential"] == []
+
+
+class TestGetEmptyParams:
+    """_get_empty_params returns a GLMHMMParams with correct shapes derived from X, y, and n_states."""
+
+    @pytest.fixture
+    def empty(self):
+        model = GLMHMM(N_STATES)
+        X = np.ones((20, N_FEATURES))
+        y = np.zeros(20)
+        return model._get_empty_params(X, y)
+
+    def test_returns_glm_hmm_params(self, empty):
+        assert isinstance(empty, GLMHMMParams)
+
+    def test_coef_shape(self, empty):
+        assert empty.model_params.coef.shape == (N_FEATURES, N_STATES)
+
+    def test_intercept_shape(self, empty):
+        assert empty.model_params.intercept.shape == (N_STATES,)
+
+    def test_log_scale_shape(self, empty):
+        assert empty.model_params.log_scale.shape == (N_STATES,)
+
+    def test_log_initial_prob_shape(self, empty):
+        assert empty.hmm_params.log_initial_prob.shape == (N_STATES,)
+
+    def test_log_transition_prob_shape(self, empty):
+        assert empty.hmm_params.log_transition_prob.shape == (N_STATES, N_STATES)
+
+    @pytest.mark.parametrize(
+        "X, y, expectation",
+        [
+            (
+                jnp.ones((3, 1), dtype=jnp.float32),
+                jnp.ones(3, dtype=jnp.float32),
+                does_not_raise(),
+            ),
+            (
+                jnp.ones((3, 1), dtype=jnp.int16),
+                jnp.ones(3, dtype=jnp.int16),
+                does_not_raise(),
+            ),
+            (
+                [jnp.ones((3, 1), dtype=jnp.int16)] * 2,
+                jnp.ones(3, dtype=jnp.int16),
+                does_not_raise(),
+            ),
+            (
+                jnp.ones((3, 1), dtype=jnp.float32),
+                jnp.ones(3, dtype=jnp.int16),
+                pytest.raises(ValueError, match="X and y have mixed dtypes"),
+            ),
+            (
+                [jnp.ones((3, 1), dtype=jnp.int16)] * 2,
+                jnp.ones(3, dtype=jnp.float32),
+                pytest.raises(ValueError, match="X and y have mixed dtypes"),
+            ),
+            (
+                [
+                    jnp.ones((3, 1), dtype=jnp.int16),
+                    jnp.ones((3, 1), dtype=jnp.float32),
+                ],
+                jnp.ones(3, dtype=jnp.int16),
+                pytest.raises(ValueError, match="X and y have mixed dtypes"),
+            ),
+        ],
+    )
+    def test_mixed_types_raise(self, X, y, expectation):
+        with expectation:
+            GLMHMM(N_STATES)._get_empty_params(X, y)
