@@ -18,6 +18,7 @@ from .._observation_model_builder import instantiate_observation_model
 from ..hmm.expectation_maximization import EMState, em_hmm, em_step
 from ..hmm.hmm import FORWARD_BACKWARD, BaseHMM
 from ..hmm.initialize_parameters import HMM_INITIALIZATION_FN_DICT, InitFunctionHMM
+from ..hmm.params import HMMParams
 from ..hmm.utils import _check_state_format
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
@@ -42,7 +43,7 @@ from .initialize_parameters import (
     kmeans_scale_init,
     setup_glm_hmm_initialization,
 )
-from .params import GLMHMMParams, GLMHMMUserParams
+from .params import GLMHMMModelParams, GLMHMMParams, GLMHMMUserParams
 from .utils import compute_rate_per_state
 from .validation import GLMHMMValidator
 
@@ -1735,3 +1736,20 @@ class GLMHMM(
 
         self._optimizer_init_state = init_state_fn
         return init_state_fn()
+
+    def _get_params_shape(self, X, y) -> GLMHMMParams[tuple[int]]:
+        """Infer the parameter shape from validated X and y."""
+        is_population = jnp.ndim(y) > 1
+        n_observations = jnp.shape(y)[1] if is_population else 1
+        n_states = self.n_states
+        extra_shape = (n_observations, n_states) if is_population else (n_states,)
+        coef_shapes = jax.tree_util.tree_map(
+            lambda x: (jnp.shape(x)[1], *extra_shape), X
+        )
+        glm_params = GLMHMMModelParams(
+            coef=coef_shapes, intercept=extra_shape, log_scale=extra_shape
+        )
+        hmm_params = HMMParams(
+            log_initial_prob=(n_states,), log_transition_prob=(n_states, n_states)
+        )
+        return GLMHMMParams(model_params=glm_params, hmm_params=hmm_params)

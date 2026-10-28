@@ -401,10 +401,3 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
 
         # shift any True values that fall on NaN samples to the next valid sample
         return shift_nan_session_starts(session_starts, nan_sample_mask(X, y))
-
-    def get_empty_params(self, X, y) -> HMMModelParamsT:
-        """Return the param shape given the input data."""
-        return HMMParams(
-            log_initial_prob=jnp.empty((self.n_states,)),
-            log_transition_prob=jnp.empty((self.n_states, self.n_states)),
-        )
