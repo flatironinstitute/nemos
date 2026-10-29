@@ -60,7 +60,7 @@ class AbstractDirection(eqx.Module, ABC, Generic[Y, D]):
         return None
 
 
-def _solve_shifted_system(
+def _solve_shifted_newton_system(
     operator: lx.AbstractLinearOperator,
     grad: Y,
     shift: Array | float | None,
@@ -349,7 +349,7 @@ class LinearSolveDirection(AbstractDirection[Y, Array], Generic[Y]):
             cholesky = lx.Cholesky()
 
             def _solve(tau):
-                result = _solve_shifted_system(
+                result = _solve_shifted_newton_system(
                     operator,
                     grad,
                     tau,
@@ -397,7 +397,7 @@ class LinearSolveDirection(AbstractDirection[Y, Array], Generic[Y]):
 
         # Solve a positive Hessian with Lineax Cholesky.
         # For a PSD tag, _shift_fn adds the small numerical shift selected by the tag
-        direction = _solve_shifted_system(
+        direction = _solve_shifted_newton_system(
             operator,
             grad,
             self.shift_fn(operator),

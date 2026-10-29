@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import lineax as lx
-from jaxtyping import Array, Float, PyTree, Scalar
+from jaxtyping import Array, PyTree
 
 from ..._hess import HessianTag
 from ._typing import R, S, Y
@@ -16,66 +16,6 @@ from ._typing import R, S, Y
 if TYPE_CHECKING:
     from ._typing import HvpFn
 from ._utils import map_blocks
-
-
-class _LBFGSHessianUpdateState(eqx.Module, Generic[Y]):
-    r"""
-    State variables for LBFGS.
-
-    State variables for Algorithm 3.2 of:
-
-        Byrd, R. H., Nocedal, J., & Schnabel, R. B. (1994).
-        "Representations of quasi-Newton matrices and their use in limited memory
-        methods." *Mathematical Programming*, 63(1), 129–156.
-
-    This holds a ring buffer of the history of differences in the optimisation variable
-    `y` and the gradients `grad`, at the last `n` accepted steps, where `n` is the
-    history length.
-
-    **Arguments:**
-
-    - `index_start`: Index of the most recent update in the circular buffer.
-    - `y_diff_history`: Circular buffer containing the history of differences in the
-        optimisation variable `y` between consecutive accepted steps. In most textbooks
-        and in the paper above, the difference in the optimisation variable at iteration
-        `k` is denoted as `s_k` and refers to $y_{k+1} - y_k$`. We use the term `y_diff`
-        here to maintain consistency with variable names in Optimistix.
-        The oldest element is at index `index_start % history_len`.
-    - `grad_diff_history`: Circular buffer containing the history of differences in the
-        gradient values. Similarly to `y_diff_history`, we follow the Optimistix
-        nomenclature rather than the textbook one, where the difference in the gradients
-        is usually denoted as `y_k`.
-        Indexation is handled as for `y_diff_history`.
-    - `y_diff_grad_diff_cross_inner`: Lower triangular matrix with the inner products
-        between parameters and gradient difference histories. This parameter corresponds
-        to `L_k` in the paper, see def. (2.18), with
-
-            L[ij] = y_diff[i-1]^T grad_diff[j-1] if i > j, 0 otherwise,
-
-        for each iteration `k` that is part of the history (k omitted for clarity).
-    - `y_diff_grad_diff_inner`: Array containing the inner products of the differences
-        in `y` and the gradients. This parameter corresponds to `diag(D_k)` from the
-        paper, see def. (2.7). `[D_k]_{ii} = s_{i-1}^T \cdot y_{i-1}`.
-    - `y_diff_cross_inner`: outer product of the parameter difference history. In the
-        paper notation, this is equal to `S_{k-1}^T \cdot S_{k-1}`, which is a matrix of
-        shape `(history_length, history_length)`.
-    - `initial_scale`: NeMoS addition, not part of the paper's state. The `B_0 = c I`
-        used while the history is empty; see :meth:`LBFGSCurvature.hvp`.
-    - `grad_prev`: NeMoS addition. The gradient at the previous accepted iterate, which
-        the next `update` differences against to form the `y` of the curvature pair.
-        It lives here rather than on the solver state because it is history of the
-        curvature model, and nothing outside the model reads it.
-    """
-
-    index_start: Scalar
-    history_length: int = eqx.field(static=True)
-    y_diff_history: PyTree[Y]
-    grad_diff_history: PyTree[Y]
-    y_diff_grad_diff_cross_inner: Float[Array, " history_length history_length"]
-    y_diff_grad_diff_inner: Float[Array, " history_length"]
-    y_diff_cross_inner: Float[Array, " history_length history_length"]
-    initial_scale: Scalar
-    grad_prev: PyTree[Y]
 
 
 class AbstractCurvature(eqx.Module, ABC, Generic[Y, S, R]):
