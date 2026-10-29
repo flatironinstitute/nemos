@@ -34,7 +34,13 @@ import nemos.basis.basis as basis
 from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
 from nemos.base_regressor import BaseRegressor
 from nemos.base_validator import RegressorValidator
-from nemos.basis import AdditiveBasis, Category, CustomBasis, MultiplicativeBasis, Zero
+from nemos.basis import (
+    AdditiveBasis,
+    Category,
+    CustomBasis,
+    MultiplicativeBasis,
+    Zero,
+)
 from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import (
     AtomicBasisMixin,
@@ -225,6 +231,18 @@ def mock_glm_optimizer_run(monkeypatch):
 
 
 @pytest.fixture
+def mock_classifier_glm_optimizer_run(monkeypatch):
+    """Bypass the JAX solver in GLM.fit() while keeping all validation logic."""
+    _make_optimizer_run_patch(monkeypatch, nmo.glm.ClassifierGLM)
+
+
+@pytest.fixture
+def mock_classifier_population_glm_optimizer_run(monkeypatch):
+    """Bypass the JAX solver in GLM.fit() while keeping all validation logic."""
+    _make_optimizer_run_patch(monkeypatch, nmo.glm.ClassifierPopulationGLM)
+
+
+@pytest.fixture
 def mock_glm_hmm_optimizer_run(monkeypatch):
     """Bypass the JAX solver in GLMHMM.fit() while keeping all validation logic."""
     _make_optimizer_run_patch(monkeypatch, nmo.glm_hmm.GLMHMM)
@@ -341,6 +359,36 @@ DEFAULT_KWARGS = {
     "decay_rates": np.arange(1, 1 + 5),
     "categories": 4,
 }
+
+# Per-class overrides, for signatures the shared table cannot express. Applied on top of
+# DEFAULT_KWARGS and then filtered to the names the class accepts.
+CLASS_DEFAULT_KWARGS = {
+    # bounds is mandatory here but optional for nine other classes, so it cannot be shared.
+    # lengthscale/eps are picked for a small derived width (5 features, matching
+    # n_basis_funcs elsewhere) rather than for the approximation accuracy TestFourierGP wants.
+    "FourierGP": {
+        "bounds": (0.0, 1.0),
+        "lengthscale": 1.0,
+        "eps": 0.3,
+        "variance": 1.0,
+    },
+}
+
+
+# Array-valued basis attributes, which ``==`` cannot compare inside a dict.
+ARRAY_ATTRIBUTES = ("_decay_rates", "_freq_combinations", "_weights", "_xis")
+
+
+def default_kwargs_for(basis_cls, **overrides) -> dict:
+    """Constructor arguments for any basis: shared table, class overrides, then filtered."""
+    kwargs = {
+        **DEFAULT_KWARGS,
+        **CLASS_DEFAULT_KWARGS.get(basis_cls.__name__, {}),
+        **overrides,
+    }
+    accepted = set(basis_cls._get_param_names())
+    return {k: v for k, v in kwargs.items() if k in accepted}
+
 
 # shut-off conversion warnings
 nap.nap_config.suppress_conversion_warnings = True
@@ -476,6 +524,9 @@ class CombinedBasis(BasisFuncsTesting):
         # Merge with provided  extra kwargs
         kwargs = {**default_kwargs, **kwargs}
 
+        # per-class overrides for signatures the shared table cannot express
+        kwargs = {**CLASS_DEFAULT_KWARGS.get(basis_class.__name__, {}), **kwargs}
+
         if basis_class == AdditiveBasis:
             kwargs_mspline = inspect_utils.trim_kwargs(
                 basis.MSplineEval, kwargs, class_specific_params
@@ -514,7 +565,8 @@ def is_eval_basis(basis_cls) -> bool:
     The mixin is the criterion: it is what actually gives the class its ``Eval`` behaviour,
     so it classifies correctly regardless of naming. The name suffix is kept as a fallback
     for classes that implement the behaviour without the mixin, such as test doubles.
-    ``Zero`` and ``Category`` need no special case -- both carry ``EvalBasisMixin``.
+    ``Zero``, ``Category`` and ``FourierGP`` need no special case -- all carry
+    ``EvalBasisMixin``.
     """
     return issubclass(basis_cls, EvalBasisMixin) or basis_cls.__name__.endswith("Eval")
 
@@ -1546,7 +1598,7 @@ def classifierGLM_model_instantiation_pytree(classifierGLM_model_instantiation):
         true_params.intercept,
     )
     model_tree = nmo.glm.ClassifierGLM(
-        n_classes=model.n_classes, regularizer=model.regularizer
+        classes=model.n_classes, regularizer=model.regularizer
     )
     model_tree.set_classes(np.arange(model.n_classes))
     return X_tree, spikes, model_tree, true_params_tree, rate
@@ -1610,7 +1662,7 @@ def population_classifierGLM_model_instantiation_pytree(
         true_params.intercept,
     )
     model_tree = nmo.glm.ClassifierPopulationGLM(
-        n_classes=model.n_classes, regularizer=model.regularizer
+        classes=model.n_classes, regularizer=model.regularizer
     )
     model_tree.set_classes(np.arange(model.n_classes))
     return X_tree, spikes, model_tree, true_params_tree, rate
@@ -1921,7 +1973,7 @@ def instantiate_classifier_glm_func(
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
     model = nmo.glm.ClassifierGLM(
-        n_classes=n_classes,
+        classes=n_classes,
         regularizer=regularizer,
         solver_name=solver_name,
         **(init_kwargs or {}),
@@ -1957,7 +2009,7 @@ def instantiate_population_classifier_glm_func(
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
     model = nmo.glm.ClassifierPopulationGLM(
-        n_classes=n_classes,
+        classes=n_classes,
         regularizer=regularizer,
         solver_name=solver_name,
         **(init_kwargs or {}),
@@ -2065,6 +2117,7 @@ def instantiate_glm_hmm_func(
         X=X,
         y=y,
         inverse_link_function=model.inverse_link_function,
+        observation_model=model.observation_model,
         session_starts=None,
         random_key=jax.random.PRNGKey(123),
     )

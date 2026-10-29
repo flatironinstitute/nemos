@@ -294,11 +294,8 @@ When bounds $b_{\min} < b_{\max}$, are provided, the mapping from input $\boldsy
 $$
 a_n(x_j)
 =
-\begin{cases}
 \cos\!\left(2\pi n\,\frac{x_j-b_{\min}}{b_{\max}-b_{\min}}\right)
-\;+\; i\,\sin\!\left(2\pi n\,\frac{x_j-b_{\min}}{b_{\max}-b_{\min}}\right) && \text{if } x_j \in [b_{\min}, b_{\max}] \\
-\text{NaN} && \text{otherwise}
-\end{cases}
+\;+\; i\,\sin\!\left(2\pi n\,\frac{x_j-b_{\min}}{b_{\max}-b_{\min}}\right)
 $$
 
 for $j=1,\ldots,T$.
@@ -307,7 +304,7 @@ In other words,
 
 * The fundamental period over $x$ is $P=b_{\max} - b_{\min}$: the $n$-th basis element completes $n$ full cycles as $x$ runs from $b_{\min}$ to $b_{\max}$.
 * The phase is zero at $b_{\min}$: $\;a_n(b_{\min})=1+0i$.
-* The basis evaluated at samples lying outside the bounds will return a NaN.
+* Samples outside the bounds are not filled: the basis is periodic, so $a_n(x_j + P) = a_n(x_j)$.
 
 :::
 

@@ -1,4 +1,5 @@
 import inspect
+import re
 from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
 from typing import Callable
@@ -1150,7 +1151,7 @@ class TestGLM:
                     "scale_": 2.0,
                     "dof_resid_": 3,
                     "aux_": None,
-                    "classes_": np.array([2, 3]),
+                    "classes": np.array([2, 3]),
                 },
                 (jnp.ones((3, 2)), None),
             ),
@@ -1162,7 +1163,7 @@ class TestGLM:
                     "scale_": 2.0,
                     "dof_resid_": 3,
                     "aux_": None,
-                    "classes_": np.array([2, 3]),
+                    "classes": np.array([2, 3]),
                 },
                 (jnp.ones((3, 1, 2)), None),
             ),
@@ -2319,7 +2320,8 @@ class TestGLMObservationModel:
         class_name = "PopulationGLM" if is_population_glm_type(glm_type) else "GLM"
         if "classifier" in model_instantiation:
             class_name = "Classifier" + class_name
-            second_line = f"    n_classes={n_classes},\n"
+            # the fixture declares the labels, so the repr shows them
+            second_line = f"    classes={list(range(n_classes))},\n"
         else:
             second_line = f"    observation_model={observation_model},\n"
 
@@ -2743,7 +2745,8 @@ class TestGLMObservationModel:
             regularizer_strength = None
 
         kwargs = dict(
-            n_classes=getattr(model_obs, "n_classes", None),
+            # an int leaves the labels undeclared, so fit infers them from y
+            classes=getattr(model_obs, "n_classes", None),
             regularizer=regularizer,
             regularizer_strength=regularizer_strength,
             observation_model=model_obs.observation_model,
@@ -3047,7 +3050,8 @@ class TestGLMObservationModel:
         # if the regularizer is not allowed for the solver type, return
         try:
             kwargs = dict(
-                n_classes=getattr(model, "n_classes", None),
+                # an int leaves the labels undeclared, so fit infers them from y
+                classes=getattr(model, "n_classes", None),
                 regularizer=regularizer,
                 solver_name=solver_name,
                 inverse_link_function=inv_link,
@@ -3294,6 +3298,28 @@ class TestPopulationGLM:
         model_test.fit(*args, **kwargs)
         np.testing.assert_allclose(model_reference.coef_, model_test.coef_)
         np.testing.assert_allclose(model_reference.intercept_, model_test.intercept_)
+
+    def test_fit_fixed_intercept_wrong_n_neurons_raises(self, model_instantiation):
+        """A pinned intercept must have one entry per neuron."""
+        n_neurons = 3
+        rng = np.random.default_rng(0)
+        X = rng.normal(size=(10, 2))
+        y = rng.poisson(2.0, size=(10, n_neurons))
+        # a single pinned intercept for a multi-neuron fit
+        model = nmo.glm.PopulationGLM(fix_params=(None, np.array([1.0])))
+        with pytest.raises(ValueError, match="Inconsistent number of neurons"):
+            model.fit(X, y)
+
+    def test_fit_fixed_intercept_correct_n_neurons(self, model_instantiation):
+        """A pinned intercept with one entry per neuron still fits."""
+        n_neurons = 3
+        rng = np.random.default_rng(0)
+        X = rng.normal(size=(10, 2))
+        y = rng.poisson(2.0, size=(10, n_neurons))
+        pinned = np.zeros(n_neurons)
+        model = nmo.glm.PopulationGLM(fix_params=(None, pinned))
+        model.fit(X, y)
+        np.testing.assert_allclose(model.intercept_, pinned)
 
     #######################################
     # Compare with standard implementation
@@ -4755,18 +4781,34 @@ class TestClassifierGLM:
         model.fit(X, y)
 
     @pytest.mark.solver_related
-    def test_fit_glm_too_few_classes(
-        self, inv_link, request, glm_type, model_instantiation
+    def test_fit_glm_too_few_classes_ok(
+        self,
+        inv_link,
+        request,
+        glm_type,
+        model_instantiation,
+        mock_classifier_glm_optimizer_run,
+        mock_classifier_population_glm_optimizer_run,
     ):
         """
-        Ensure that the model can be fit with different link functions.
+        A model whose y holds fewer classes than declared still fits.
         """
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
         model.inverse_link_function = inv_link
         y = jnp.where(y == 2, 1, y)  # reduce to only 2 classes
-        with pytest.raises(ValueError, match="Found only .* unique class labels"):
+        # class 2 is now unobserved, so its mean activity sits on the boundary of
+        # rate_range and initialization shifts it; the population model reports one
+        # (neuron, class) pair per neuron.
+        if y.ndim == 1:
+            affected = [2]
+        else:
+            affected = [(neuron, 2) for neuron in range(y.shape[1])]
+        with pytest.warns(
+            UserWarning,
+            match=re.escape(f"Output(s) {affected} have boundary mean activity"),
+        ):
             model.fit(X, y)
 
     @pytest.mark.solver_related
@@ -4781,7 +4823,7 @@ class TestClassifierGLM:
         )
         model.inverse_link_function = inv_link
         y = y.at[:10].set(3)  # add another class
-        with pytest.raises(ValueError, match="Found .* unique class labels"):
+        with pytest.raises(ValueError, match=r"Unrecognized label\(s\)"):
             model.fit(X, y)
 
     def test_score_glm(self, inv_link, request, glm_type, model_instantiation):
@@ -4864,9 +4906,8 @@ class TestClassifierGLM:
         request,
     ):
         _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
-        with expectation:
-            model.__class__(n_classes=n_classes)
-
+        # the constructor accepts labels as well as a count, so it reports malformed
+        # input differently; ``test_init_classes`` covers it
         with expectation:
             model.n_classes = n_classes
 
@@ -4925,6 +4966,31 @@ class TestClassifierGLM:
         model.intercept_ = true_params.intercept
         with expectation:
             model.predict_proba(X, return_type=return_type)
+
+    @pytest.mark.parametrize(
+        "return_type",
+        [
+            "proba",
+            "log-proba",
+        ],
+    )
+    def test_predict_proba_pynapple(
+        self,
+        return_type,
+        inv_link,
+        glm_type,
+        model_instantiation,
+        request,
+    ):
+        X, _, model, true_params, _ = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        X_nap = TsdFrame(t=np.arange(X.shape[0]), d=X)
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
+        proba_array = model.predict_proba(X, return_type=return_type)
+        proba_nap = model.predict_proba(X_nap, return_type=return_type)
+        np.testing.assert_array_equal(proba_array, proba_nap.d)
 
     @pytest.mark.parametrize(
         "X, expectation",
@@ -4997,7 +5063,7 @@ class TestClassifierGLM:
             glm_type + model_instantiation
         )
         model = deepcopy(model)
-        model.classes_ = None
+        model.classes = None
 
         # superset of all possible required inputs
         input_dict = {
@@ -5073,7 +5139,7 @@ class TestClassifierGLM:
 
         label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
         model_label.set_classes(label)
-        y_label = model._label_encoder.decode(y)
+        y_label = model_label._label_encoder.decode(y)
         model_label.fit(X, y_label)
         assert jnp.array_equal(model.coef_, model_label.coef_)
         assert jnp.array_equal(model.intercept_, model_label.intercept_)
@@ -5117,6 +5183,56 @@ class TestClassifierGLM:
         with pytest.raises(ValueError, match="Found only .* unique class labels"):
             model.set_classes(too_few)
 
+    @pytest.mark.parametrize("input_type", [None, "array"])
+    def test_set_classes_input_type(
+        self, inv_link, glm_type, model_instantiation, request, input_type
+    ):
+        _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        n_classes = deepcopy(model.n_classes)
+        if input_type is None:
+            inp = input_type
+        else:
+            inp = y
+        assert isinstance(model.set_classes(inp), model.__class__)
+        if inp is None:
+            assert model.classes is n_classes and not model._label_encoder.declared
+        else:
+            assert model._label_encoder.declared
+            np.testing.assert_array_equal(model.classes, np.unique(np.asarray(inp)))
+
+    def test_derived_classes_refit(
+        self,
+        inv_link,
+        glm_type,
+        model_instantiation,
+        request,
+        mock_classifier_glm_optimizer_run,
+        mock_classifier_population_glm_optimizer_run,
+    ):
+        X, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        n_classes = model.n_classes
+        # fit without setting
+        model._label_encoder.declared = False
+        model.fit(X, y)
+        # fit infers the labels without declaring them, so classes stays the count
+        assert model.classes == n_classes
+        # change classes re-fit ok
+        model.fit(X, y + 1)
+
+        # setting the class then re-fit fails
+        model.set_classes(y)
+        with pytest.raises(ValueError, match=r"Unrecognized label\(s\)"):
+            model.fit(X, y + 1)
+
+        # reset + refit works
+        model.classes = None
+        model.fit(X, y + 1)
+
+        # reset in from a different path
+        model.set_classes(y)
+        model.set_classes(None)
+        model.fit(X, y + 1)
+
     def test_encode_invalid_label_raises(
         self, inv_link, glm_type, model_instantiation, request
     ):
@@ -5156,7 +5272,7 @@ class TestClassifierGLM:
         # Use non-contiguous integers like [5, 10, 15] instead of [0, 1, 2]
         nc_labels = np.array([5 + i * 5 for i in range(model.n_classes)])
         y_nc = nc_labels[y]  # Map 0->5, 1->10, 2->15, etc.
-
+        model_nc.set_classes(y_nc)
         model_nc.fit(X, y_nc)
 
         # Coefficients should be the same
@@ -5214,6 +5330,51 @@ class TestClassifierGLM:
 
         # Probabilities should be identical (only label interpretation changes)
         assert jnp.allclose(proba_default, proba_label)
+
+    @pytest.mark.parametrize(
+        "classes, expectation",
+        [
+            (3, does_not_raise()),
+            (np.int64(3), does_not_raise()),
+            (np.array(2), does_not_raise()),
+            (np.array(["a", "b", "c", "d"]), does_not_raise()),
+            (["a", "b", "c", "d"], does_not_raise()),
+            (("a", "b", "c", "d"), does_not_raise()),
+            (
+                [["a", "b", "c", "d"]],
+                pytest.raises(ValueError, match="``classes`` must be a"),
+            ),
+            ({"a": 1}, pytest.raises(ValueError, match="``classes`` must be a")),
+            ("abc", pytest.raises(ValueError, match="``classes`` must be a")),
+            ("2", pytest.raises(ValueError, match="``classes`` must be a")),
+        ],
+    )
+    def test_init_classes(
+        self, expectation, classes, inv_link, glm_type, model_instantiation, request
+    ):
+        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        with expectation:
+            model.__class__(classes=classes)
+
+    @pytest.mark.parametrize(
+        "classes",
+        [
+            3,
+            np.array(["a", "b", "c", "d"]),
+            ["a", "b", "c", "d"],
+            ("a", "b", "c", "d"),
+        ],
+    )
+    def test_sklearn_clone(
+        self, classes, inv_link, glm_type, model_instantiation, request
+    ):
+        _, _, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
+        model = model.__class__(classes=classes)
+        cloned = sklearn.clone(model)
+        np.testing.assert_array_equal(cloned.classes, model.classes)
+        # a count leaves the labels to be inferred by fit, an array declares them;
+        # the clone must agree, or it accepts a y the original rejects
+        assert cloned._label_encoder.declared == model._label_encoder.declared
 
     def test_initialize_params_stale_feature_mask_raises(
         self, inv_link, glm_type, model_instantiation, request

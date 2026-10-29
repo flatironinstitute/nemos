@@ -1,4 +1,5 @@
 import itertools
+import re
 import warnings
 
 import equinox as eqx
@@ -17,6 +18,7 @@ from nemos._hess import (
     mask_claim_none,
 )
 from nemos.regularizer import Ridge, UnRegularized
+from nemos.solvers import CHOLESKY_ERR_MSG
 from nemos.solvers._abstract_solver import OptimizationInfo
 from nemos.solvers._second_order._base import SecondOrderState
 from nemos.solvers._second_order._direction import LinearSolverTag
@@ -1275,7 +1277,7 @@ def test_cholesky_raises_for_indefinite_matrix_with_positive_tag():
         warnings.simplefilter("error", RuntimeWarning)
         with pytest.raises(
             jax.errors.JaxRuntimeError,
-            match="Cholesky solve failed",
+            match=re.escape(CHOLESKY_ERR_MSG),
         ):
             solver.run(params)
 
