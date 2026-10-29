@@ -262,12 +262,10 @@ def test_second_order_solvers_end_a_stalled_run_without_claiming_convergence(
     )
     # reject unconditionally, whatever direction the solver produces, so the test
     # covers how the loop handles a rejection and not one particular cause of it.
-    # ``Loop`` is a frozen ``eqx.Module``, so the class is patched rather than the
-    # instance the solver holds.
     monkeypatch.setattr(
         solver_cls,
         "_apply_or_reject",
-        lambda self, p, step, grad, state, fval, line_search, *args: (
+        lambda self, p, step, grad, state, fval, *args: (
             p,
             state.ls_state,
             jnp.array(True),

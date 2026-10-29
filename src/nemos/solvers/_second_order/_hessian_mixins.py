@@ -60,8 +60,7 @@ class HessianMixin:
 
         The invariant, whichever branch runs: ``curvature.hessian_fn`` is the Hessian of
         the smooth objective the solver differentiates, and the returned tag describes
-        that same matrix. The caller hands the tag to the direction, which is where it
-        comes to rest.
+        that same matrix. The caller passes the tag to the direction, which stores it.
         """
         # A model with no analytic Hessian sends neither a Hessian nor a tag, so the
         # solver falls back to differentiating its own objective, which the unstructured
@@ -136,7 +135,7 @@ class HessianMixin:
         The batching comes from ``model_tag`` rather than the combined tag, because whether
         the Hessian is assembled one block per neuron is a property of the model.
 
-        Only reached for a non-proximal solver: ``setup_hessian`` decides whether there is
+        Only reached for a non-proximal solver: ``_init_hessian`` decides whether there is
         a penalty to add, so this method always adds one.
         """
         if hess_fn is None:

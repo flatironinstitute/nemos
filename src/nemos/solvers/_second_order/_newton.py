@@ -255,7 +255,8 @@ class ProximalNewton(BaseNewtonSolver[Y], Generic[Y]):
     Well-posedness of the subproblem needs two conditions:
 
     - :math:`H \succeq 0`, making it convex. Definiteness is only needed to invert
-      :math:`H`, and here :math:`H` is only multiplied (:meth:`_hvp_block`).
+      :math:`H`, and here :math:`H` is only multiplied
+      (:meth:`~nemos.solvers._second_order._curvature.NewtonCurvature.hvp`).
     - :math:`\nabla f` restricted to :math:`\ker H` dominated by the growth of :math:`P`,
       making it bounded below. This constrains the quadratic model at the current iterate,
       not :math:`f`: a loss bounded below still has an unbounded model wherever :math:`H`
@@ -269,8 +270,8 @@ class ProximalNewton(BaseNewtonSolver[Y], Generic[Y]):
     ----------
     tol, rtol :
         Absolute and relative tolerances of the outer Cauchy criterion on the accepted
-        step. Unlike :class:`Newton`, which tests ``||grad|| <= tol``, both are read
-        here: see :meth:`~nemos.solvers._second_order._base.AbstractSecondOrderSolver.converged`.
+        step, shared with :class:`Newton`: see
+        :meth:`~nemos.solvers._second_order._base.AbstractSecondOrderSolver.converged`.
     inner_iter :
         Maximum FISTA steps on the subproblem. The subproblem uses the assembled
         Hessian block and touches no data, so these steps are cheap.

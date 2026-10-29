@@ -50,15 +50,6 @@ class AbstractDirection(eqx.Module, ABC, Generic[Y, D]):
     @abstractmethod
     def init(self, params: Y) -> D: ...
 
-    @property
-    def prox(self) -> Callable | None:
-        """The proximal operator this direction applies, or ``None`` if it applies none.
-
-        Declared here rather than discovered, so a caller can ask any direction without
-        knowing which one it holds.
-        """
-        return None
-
 
 def _solve_shifted_newton_system(
     operator: lx.AbstractLinearOperator,
@@ -167,11 +158,6 @@ class ProxQuadraticDirection(AbstractDirection[Y, None], Generic[Y]):
     def init(self, params: Y) -> None:
         del params
         return None
-
-    @property
-    def prox(self) -> Callable:
-        """The subproblem solver's proximal operator, which is the only copy of it."""
-        return self._inner_solver.prox
 
 
 LinearSolverTag = Literal["auto", "cholesky", "eigh", "identity_shift"]
@@ -389,10 +375,11 @@ class LinearSolveDirection(AbstractDirection[Y, Array], Generic[Y]):
             accepted_shift = jnp.where(failed, previous_shift, tau)
             return direction, accepted_shift
 
-        # Catch use before init_state has resolved the requested strategy.
+        # Catch a direction built without ``from_tag``, which resolves the strategy.
         elif self.resolved_linear_solver != "cholesky":
             raise RuntimeError(
-                "The solver has not been resolved. Call init_state before update."
+                "The linear solver has not been resolved. "
+                "Build the direction with ``LinearSolveDirection.from_tag``."
             )
 
         # Solve a positive Hessian with Lineax Cholesky.
