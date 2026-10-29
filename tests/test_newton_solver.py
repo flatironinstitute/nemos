@@ -21,7 +21,7 @@ from nemos.regularizer import Ridge, UnRegularized
 from nemos.solvers import CHOLESKY_ERR_MSG
 from nemos.solvers._abstract_solver import OptimizationInfo
 from nemos.solvers._second_order._base import SecondOrderState
-from nemos.solvers._second_order._direction import LinearSolverTag
+from nemos.solvers._second_order._direction import LinearSolveDirection, LinearSolverTag
 from nemos.solvers._second_order._newton import Newton
 from nemos.tree_utils import pytree_map_and_reduce
 
@@ -1238,6 +1238,88 @@ def test_negative_identity_shift_beta_raises():
         )
 
 
+@pytest.mark.parametrize("max_steps", [0, -1, -1.2])
+def test_invalid_max_steps_raises(max_steps):
+    params = jnp.zeros(2)
+    H = jnp.eye(2)
+    loss = _quadratic_loss(H, jnp.zeros(2))
+
+    with pytest.raises(
+        ValueError,
+        match="identity_shift_max_steps must be positive",
+    ):
+        Newton(
+            loss,
+            regularizer=UnRegularized(),
+            regularizer_strength=0.0,
+            has_aux=False,
+            init_params=params,
+            linear_solver="identity_shift",
+            identity_shift_beta=1.0,
+            identity_shift_max_steps=max_steps,
+        )
+
+
+def test_init_params_is_none_raises():
+    H = jnp.eye(2)
+    loss = _quadratic_loss(H, jnp.zeros(2))
+
+    with pytest.raises(
+        ValueError,
+        match="init_params is required for Newton solver",
+    ):
+        Newton(
+            loss,
+            regularizer=UnRegularized(),
+            regularizer_strength=0.0,
+            has_aux=False,
+            init_params=None,
+            linear_solver="identity_shift",
+            identity_shift_beta=1.0,
+            identity_shift_max_steps=1,
+        )
+
+
+def test_hess_property_invalid():
+    params = jnp.zeros(2)
+    H = jnp.eye(2)
+    loss = _quadratic_loss(H, jnp.zeros(2))
+
+    with pytest.raises(
+        ValueError,
+        match="Hessian has unsupported matrix property",
+    ):
+        Newton(
+            loss,
+            regularizer=UnRegularized(),
+            regularizer_strength=0.0,
+            has_aux=False,
+            init_params=params,
+            linear_solver="identity_shift",
+            identity_shift_beta=1.0,
+            identity_shift_max_steps=1,
+            hessian_tag=HessianTag(
+                MatrixStructure.FULL, None, flat_on=None, definite_on=None
+            ),
+        )
+
+
+def test_direction_built_without_from_tag_raises():
+    params = jnp.zeros(2)
+    direction = LinearSolveDirection(
+        linear_solver=None,
+        delta=0.0,
+        resolved_linear_solver=None,
+        shift_fn=None,
+        identity_shift_beta=1e-3,
+        identity_shift_max_steps=1,
+        hessian_tag=None,
+    )
+
+    with pytest.raises(RuntimeError, match="has not been resolved"):
+        direction.update(params, jnp.ones(2), None, jnp.eye(2), jnp.zeros(()))
+
+
 def test_mutated_linear_solver_does_not_reach_the_direction():
     """The strategy is resolved at construction, so writing the request later is inert."""
     params = jnp.zeros(2)
@@ -1434,6 +1516,36 @@ def test_identity_shift_returns_accepted_shift(jit):
     )
 
     np.testing.assert_allclose(direction, expected, atol=1e-12, rtol=1e-12)
+    np.testing.assert_allclose(accepted_shift, expected_shift)
+
+
+@pytest.mark.requires_x64
+@pytest.mark.parametrize("jit", [False, True])
+def test_identity_shift_solver_update_stores_accepted_shift_in_state(jit):
+    H = jnp.asarray(
+        [
+            [1.0, 2.0],
+            [2.0, 1.0],
+        ],
+        dtype=jnp.float64,
+    )
+    grad = jnp.asarray([1.0, -0.5], dtype=H.dtype)
+    params = jnp.zeros_like(grad)
+
+    solver = _make_solver(
+        _quadratic_loss(H, -grad),
+        lambda params, *args: H,
+        _make_tag(params, property=MatrixProperty.SYMMETRIC),
+        params,
+        jit=jit,
+        linear_solver="identity_shift",
+        identity_shift_beta=0.2,
+    )
+    state = solver.init_state(params)
+
+    new_params, new_state, _ = solver.update(params, state)
+    accepted_shift = new_state.direction_state
+    expected_shift = jnp.asarray(2.0, dtype=H.dtype)
     np.testing.assert_allclose(accepted_shift, expected_shift)
 
 

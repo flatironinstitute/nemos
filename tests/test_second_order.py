@@ -29,6 +29,7 @@ and ``loss_value`` / ``descent`` / ``step_taken`` are what the solver reads back
 
 import dataclasses
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import lineax as lx
@@ -363,3 +364,57 @@ def test_second_order_solvers_converge_at_a_tolerance_below_the_search_noise_flo
     for scale in (1e-4, 1e-6, 1e-8):
         trial = jax.tree.map(lambda p, g: p - scale * g, final_params, grad)
         assert objective(trial) >= objective(final_params) - 1e-12
+
+
+# Poisson negative log-likelihood. Unlike ``_mse`` its Hessian changes with the iterate,
+# so Newton needs several steps instead of solving the problem in one.
+def _poisson(params, X, y):
+    eta = jnp.dot(X, params)
+    return jnp.mean(jnp.exp(eta) - y * eta)
+
+
+@pytest.mark.parametrize("solver_cls, regularizer_cls, strength", _STALL_CASES)
+@pytest.mark.requires_x64
+def test_second_order_end_to_end(solver_cls, regularizer_cls, strength):
+    np.random.seed(0)
+    X = np.random.normal(size=(200, _KINKED_PARAMS.size))
+    y = np.random.poisson(np.exp(X @ (0.3 * _KINKED_PARAMS))).astype(float)
+    params = jnp.asarray(_KINKED_PARAMS)
+    # Both runs converge in 5 steps, and the last of them is taken at the line-search
+    # noise floor, where its outcome depends on rounding and differs between the two
+    # loops. Stopping at ``maxiter=3`` compares them before that point.
+    kwargs = dict(
+        regularizer=regularizer_cls(),
+        regularizer_strength=strength,
+        has_aux=False,
+        init_params=params,
+        tol=1e-8,
+        maxiter=3,
+    )
+    solver_jit = solver_cls(_poisson, **kwargs)
+    solver_nojit = solver_cls(_poisson, jit=False, **kwargs)
+    final_params_jit, final_state_jit, _ = solver_jit.run(params, X, y)
+    final_params_nojit, final_state_nojit, _ = solver_nojit.run(params, X, y)
+    assert bool(final_state_jit.stats.reached_max_steps), (
+        "the run must still be stepping"
+    )
+    np.testing.assert_allclose(final_params_nojit, final_params_jit)
+    is_float = lambda x: hasattr(x, "dtype") and np.issubdtype(x.dtype, np.floating)
+    state_float_array_jit, state_others_jit = eqx.partition(final_state_jit, is_float)
+    state_float_array_nojit, state_others_nojit = eqx.partition(
+        final_state_nojit, is_float
+    )
+    all_close = jax.tree.map(
+        lambda x, y: bool(np.allclose(x, y)),
+        state_float_array_jit,
+        state_float_array_nojit,
+    )
+    assert all(jax.tree_util.tree_leaves(all_close)), (
+        f"floating point arrays in state aren't close:\n{all_close}"
+    )
+    same = jax.tree.map(
+        lambda x, y: bool(np.equal(x, y)), state_others_jit, state_others_nojit
+    )
+    assert all(jax.tree_util.tree_leaves(same)), (
+        f"non-floating point states aren't matched:\n{same}"
+    )
