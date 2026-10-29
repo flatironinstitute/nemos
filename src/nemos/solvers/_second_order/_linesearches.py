@@ -48,7 +48,6 @@ class AbstractLineSearch(abc.ABC, Generic[Y]):
     fun: Callable[..., Float[jax.Array, ""] | tuple[Float[jax.Array, ""], Any]] = (
         eqx.field(static=True)
     )
-    has_aux: bool = eqx.field(static=True)
 
     @abc.abstractmethod
     def init(self, params: Y) -> LineSearchState: ...
@@ -77,7 +76,6 @@ class ArmijoBacktracking(AbstractLineSearch[Y], eqx.Module, Generic[Y]):
     fun: Callable[..., Float[jax.Array, ""] | tuple[Float[jax.Array, ""], Any]] = (
         eqx.field(static=True)
     )
-    has_aux: bool = eqx.field(static=True)
 
     def init(self, params: Y) -> LineSearchState:
         dtype = jnp.result_type(*jax.tree_util.tree_leaves(params))
@@ -98,14 +96,10 @@ class ArmijoBacktracking(AbstractLineSearch[Y], eqx.Module, Generic[Y]):
         slope: Y,
         *args: Any,
     ) -> Tuple[Y, ScaleByBacktrackingLinesearchState, Bool[jax.Array, ""]]:
-        if self.has_aux:
 
-            def _fun(p: Y) -> Float[jax.Array, ""]:
-                return self.fun(p, *args)[0]
-        else:
-
-            def _fun(p: Y) -> Float[jax.Array, ""]:
-                return self.fun(p, *args)
+        def _fun(p: Y) -> Float[jax.Array, ""]:
+            out = self.fun(p, *args)
+            return out[0] if isinstance(out, tuple) else out
 
         updates, ls_state = self._line_search.update(
             step,
@@ -172,11 +166,6 @@ class TsengYunBacktracking(ArmijoBacktracking[Y], Generic[Y]):
     the penalized objective, since that is what the search evaluates at each trial point.
     """
 
-    _line_search: GradientTransformationExtraArgs = eqx.field(static=True)
-    fun: Callable[..., Float[jax.Array, ""] | tuple[Float[jax.Array, ""], Any]] = (
-        eqx.field(static=True)
-    )
-    has_aux: bool = eqx.field(static=True)
     penalty: Callable[[Y], Float[jax.Array, ""]] = eqx.field(static=True)
 
     def _slope_descent_value(

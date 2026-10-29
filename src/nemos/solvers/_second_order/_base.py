@@ -97,6 +97,7 @@ class AbstractSecondOrderSolver(abc.ABC, Generic[Y, S]):
         self.maxiter = maxiter
         self.tol = tol
         self.rtol = rtol
+        self.has_aux = has_aux
 
     def _fval_diff(self, fval: Scalar, state: S) -> Scalar:
         """The function-value arm of the Cauchy test, suppressed by returning zero.
@@ -315,11 +316,7 @@ class AbstractSecondOrderSolver(abc.ABC, Generic[Y, S]):
 
         # ``fun_with_aux`` is the objective again: only pay for it when there is an aux
         # to collect, since without one it returns a ``None`` the caller already knows.
-        aux = (
-            self.fun_with_aux(final_params, *args)[1]
-            if self._line_search.has_aux
-            else None
-        )
+        aux = self.fun_with_aux(final_params, *args)[1] if self.has_aux else None
         return final_params, final_state, aux
 
     @classmethod

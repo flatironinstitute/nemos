@@ -137,7 +137,6 @@ class ProximalLBFGS(AbstractSecondOrderSolver[Y, SecondOrderState[Y]], Generic[Y
                 "It is needed to determine the parameter structure for regularization."
             )
 
-        self.has_aux = has_aux
         self.jit = jit
         self.curvature = LBFGSCurvature[Y](history_length=history_length)
 
@@ -158,7 +157,7 @@ class ProximalLBFGS(AbstractSecondOrderSolver[Y, SecondOrderState[Y]], Generic[Y
         )
         backtrack = optax.scale_by_backtracking_linesearch(30)
         self._line_search = TsengYunBacktracking(
-            backtrack, penalized_loss, has_aux=has_aux, penalty=penalty_fn
+            backtrack, penalized_loss, penalty=penalty_fn
         )
 
         # The subproblem is solved for the new parameters, so the prox is the

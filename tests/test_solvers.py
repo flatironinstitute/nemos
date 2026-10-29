@@ -760,7 +760,10 @@ def test_all_solvers_use_aux_in_run(request, aux_gen_fn):
             has_aux=True,
             init_params=param_init,
         )
-        run_params, run_state, run_aux = solver.run(param_init, X, y)
+        try:
+            run_params, run_state, run_aux = solver.run(param_init, X, y)
+        except Exception as e:
+            raise ValueError(f"Failed to run solver {spec}") from e
 
         assert run_aux is not None
         if hasattr(run_state, "aux"):
