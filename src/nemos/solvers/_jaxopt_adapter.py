@@ -56,6 +56,13 @@ class JaxoptAdapter(SolverAdapter[JaxoptAdapterState]):
         init_params: Params | None = None,
         **solver_init_kwargs,
     ):
+        if self._solver_cls is None:
+            raise ImportError(
+                "Missing optional dependency 'jaxopt'."
+                " Please use pip or "
+                "conda to install 'jaxopt'."
+            )
+
         if solver_init_kwargs.get("stepsize", 0.0) is None:
             raise ValueError(
                 "stepsize must be a number. Use 0.0 (or negative) for linesearch, "
