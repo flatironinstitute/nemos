@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from importlib.util import find_spec as _find_spec
 from typing import Type
 
+from . import Newton, ProximalNewton
 from ._abstract_solver import SolverProtocol
 from ._fista import OptimistixFISTA, OptimistixNAG
-from ._newton import Newton, ProximalNewton
 from ._optax_optimistix_solvers import (
     OptimistixOptaxGradientDescent,
     OptimistixOptaxLBFGS,
