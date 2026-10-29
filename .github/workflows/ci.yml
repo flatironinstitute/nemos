@@ -109,6 +109,9 @@ jobs:
           name: nemos-data
           path: ${{ github.workspace }}/nemos-data
 
+      - name: Check eager import
+        run: uvx --with tox-uv tox -e eager_import
+
       - name: Run tox
         run: uvx --with tox-uv tox -e skip_solver_related
 

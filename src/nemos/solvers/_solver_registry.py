@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from importlib.util import find_spec as _find_spec
 from typing import Type
 
-from . import Newton, ProximalNewton
 from ._abstract_solver import SolverProtocol
 from ._fista import OptimistixFISTA, OptimistixNAG
 from ._optax_optimistix_solvers import (
@@ -12,6 +11,7 @@ from ._optax_optimistix_solvers import (
     OptimistixOptaxLBFGS,
 )
 from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
+from ._second_order import Newton, ProximalNewton
 from ._svrg import WrappedProxSVRG, WrappedSVRG
 from ._validation import validate_solver_class
 
