@@ -536,7 +536,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         # source of the pinned value (``_normalize_user_params`` fills it into
         # omitted user input, ``update`` recombines it into the returned params).
         if not self._fit_intercept and frozen.intercept is None:
-            zeros = jnp.zeros_like(self._validator.get_empty_params(X, y).intercept)
+            zeros = jnp.zeros_like(self._get_empty_params(X, y).intercept)
             frozen = GLMParams(frozen.coef, zeros)
         if frozen.coef is None:
             frozen = eqx.tree_at(
@@ -1008,7 +1008,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         frozen_coef = frozen.coef
         frozen_intercept = frozen.intercept
 
-        empty_params = self._validator.get_empty_params(data, y)
+        empty_params = self._get_empty_params(data, y)
         # Resolution order: if fix params provides an intercept use it as fix, otherwise follow flag.
         fit_intercept = False if frozen_intercept is not None else self.fit_intercept
 
@@ -1917,6 +1917,17 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         string_attrs = ["inverse_link_function"]
 
         self._save_params(filename, fit_attrs, string_attrs)
+
+    def _get_params_shape(self, X, y) -> GLMParams[tuple[int]]:
+        """Infer the parameter shape from validated X and y."""
+        is_population = jnp.ndim(y) > 1
+        n_observations = jnp.shape(y)[1] if is_population else 1
+        extra_shape = (n_observations,) if is_population else ()
+        coef_shapes = jax.tree_util.tree_map(
+            lambda x: (jnp.shape(x)[1], *extra_shape), X
+        )
+        intercept_shape = (n_observations,)
+        return GLMParams(coef=coef_shapes, intercept=intercept_shape)
 
 
 def _var_func_of_mu(model) -> Callable:

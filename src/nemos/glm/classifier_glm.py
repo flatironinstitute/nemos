@@ -640,6 +640,21 @@ class ClassifierMixin:
                 f"{classes_array.ndim}-D array of dtype {classes_array.dtype} instead."
             )
 
+    def _get_params_shape(self, X, y) -> GLMParams[tuple[int]]:
+        """Infer the parameter shape from validated X and y.
+
+        Note that y must be already 1-hot encoded.
+        """
+        is_population = jnp.ndim(y) > 2  # valid only for 1-hot encoded
+        n_observations = jnp.shape(y)[1] if is_population else 1
+        extra_shape = (
+            (n_observations, self.n_classes) if is_population else (self.n_classes,)
+        )
+        coef_shapes = jax.tree_util.tree_map(
+            lambda x: (jnp.shape(x)[1], *extra_shape), X
+        )
+        return GLMParams(coef=coef_shapes, intercept=extra_shape)
+
 
 class ClassifierGLM(ClassifierMixin, GLM):
     """

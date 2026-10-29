@@ -16,6 +16,10 @@ from nemos.solvers._no_op import NoOpSolver
 from nemos.tree_utils import tree_broadcast_prefix
 
 
+def cast_to_float32(args):
+    return jax.tree_util.tree_map(lambda x: jnp.asarray(x, dtype=jnp.float32), args)
+
+
 class _RecordingCallback(Callback):
     """Records which hooks the solver invoked, in order."""
 
@@ -58,7 +62,7 @@ def _coef_spec(model, X, y, mode):
     if mode == "learn_all":
         return None
 
-    empty_coef = model._validator.get_empty_params(X, y).coef
+    empty_coef = model._get_empty_params(*cast_to_float32((X, y))).coef
     if mode == "pin_all":
         return jax.tree_util.tree_map(jnp.ones_like, empty_coef)
 
@@ -73,7 +77,9 @@ def _coef_spec(model, X, y, mode):
 
 def _pinned_intercept(model, X, y):
     """A pinned intercept of the shape this model expects."""
-    return jnp.full_like(model._validator.get_empty_params(X, y).intercept, 0.5)
+    return jnp.full_like(
+        model._get_empty_params(*cast_to_float32((X, y))).intercept, 0.5
+    )
 
 
 def _leaves(tree):
@@ -149,9 +155,9 @@ class TestSpecAlgebra:
         _configure(model, X, y, coef_mode, intercept_pinned, fit_intercept)
 
         # expand against params, not frozen: None leaves would swallow the broadcast
-        params = model._validator.get_empty_params(X, y)
+        params = model._get_empty_params(*cast_to_float32((X, y)))
         active = tree_broadcast_prefix(model._active_filter_spec(), params)
-        frozen = model._frozen_values(X, y)
+        frozen = model._frozen_values(*cast_to_float32((X, y)))
 
         for is_active, frozen_leaf in zip(_leaves(active), _leaves(frozen)):
             assert bool(is_active) is (frozen_leaf is None), (
@@ -166,7 +172,7 @@ class TestSpecAlgebra:
         _configure(model, X, y, coef_mode, intercept_pinned, fit_intercept)
 
         params = jax.tree_util.tree_map(
-            jnp.ones_like, model._validator.get_empty_params(X, y)
+            jnp.ones_like, model._get_empty_params(*cast_to_float32((X, y)))
         )
         recombined = eqx.combine(*model._partition_active(params))
 
@@ -199,7 +205,7 @@ class TestInterceptPrecedence:
         X, y, model = poissonGLM_model_instantiation[:3]
         model.fit_intercept = False
 
-        frozen = model._frozen_values(X, y)
+        frozen = model._frozen_values(*cast_to_float32((X, y)))
         np.testing.assert_array_equal(
             frozen.intercept, jnp.zeros_like(frozen.intercept)
         )
@@ -211,7 +217,7 @@ class TestInterceptPrecedence:
         """The default combination leaves the intercept free and warns about nothing."""
         X, y, model = poissonGLM_model_instantiation[:3]
 
-        assert model._frozen_values(X, y).intercept is None
+        assert model._frozen_values(*cast_to_float32((X, y))).intercept is None
         assert bool(model._active_filter_spec().intercept) is True
         assert [w for w in recwarn if issubclass(w.category, UserWarning)] == []
 
@@ -223,7 +229,7 @@ class TestInterceptPrecedence:
         assert bool(model._active_filter_spec().intercept) is True
 
         model.fit_intercept = False
-        frozen = model._frozen_values(X, y)
+        frozen = model._frozen_values(*cast_to_float32((X, y)))
         assert bool(model._active_filter_spec().intercept) is False
         np.testing.assert_array_equal(
             frozen.intercept, jnp.zeros_like(frozen.intercept)
@@ -276,7 +282,7 @@ def test_user_defined_node_spec_cannot_be_loaded(
 
 def _pin_everything(model, X, y):
     """A ``fix_params`` spec leaving nothing active."""
-    empty = model._validator.get_empty_params(X, y)
+    empty = model._get_empty_params(*cast_to_float32((X, y)))
     return (
         jax.tree_util.tree_map(jnp.ones_like, empty.coef),
         jnp.full_like(empty.intercept, 0.25),

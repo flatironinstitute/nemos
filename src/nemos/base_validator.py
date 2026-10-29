@@ -493,11 +493,6 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
             self, multiline=True, use_name_keys=["to_model_params", "from_model_params"]
         )
 
-    @abc.abstractmethod
-    def get_empty_params(self, X, y) -> ModelParamsT:
-        """Return the param shape given the input data."""
-        pass
-
     @staticmethod
     def check_partial_params_specs_type(params: UserProvidedParamsT):
         """Check parameter specs typing.

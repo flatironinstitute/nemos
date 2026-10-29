@@ -914,7 +914,7 @@ class BaseRegressor(
         """
         import equinox as eqx
 
-        model_pars = self._validator.get_empty_params(data, y)
+        model_pars = self._get_empty_params(data, y)
         # composite models solve only a sub-pytree; flat models solve the full
         # params. The regularizer and its mask act at the solved level.
         solver_subtree = getattr(
@@ -1280,3 +1280,40 @@ class BaseRegressor(
     def _repr_html_(self) -> str:
         """HTML representation of the model."""
         return self._repr_mimebundle_().get("text/html", repr(self))
+
+    @abc.abstractmethod
+    def _get_params_shape(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> ModelParamsT:
+        """Return a pytree of model parameters with the expected shape.
+
+        Returns the ModelParams tree with leaves being shape tuples.
+        """
+        pass
+
+    def _get_empty_params(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> ModelParamsT:
+        """Create a Pytree of empty model parameters.
+
+        General method creating a parameter pytree. The parameter leaves dtype is
+        inferred from the input data (X, y), the shape and structure is retrieved
+        by the `_get_params_shape` abstract method.
+        """
+        shapes = self._get_params_shape(X, y)
+        # rely on the assumption that all dtypes should match when this is called.
+        # that means that X and y needs to be cast already to float.
+        dtype = set(
+            jax.tree_util.tree_leaves(jax.tree_util.tree_map(lambda x: x.dtype, (X, y)))
+        )
+        # sanity check that should catch internal violation of the
+        # homogeneity of the dtype.
+        if len(dtype) != 1:
+            raise ValueError(
+                "X and y have mixed dtypes. Before calling this method cast to the same dtype."
+            )
+
+        dtype = dtype.pop()
+
+        def is_shape_tuple(x):
+            return isinstance(x, tuple) and all(isinstance(i, int) for i in x)
+
+        return jax.tree_util.tree_map(
+            lambda s: jnp.empty(s, dtype=dtype), shapes, is_leaf=is_shape_tuple
+        )
