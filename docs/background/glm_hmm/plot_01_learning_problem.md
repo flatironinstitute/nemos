@@ -7,13 +7,20 @@ jupytext:
     format_name: myst
     format_version: 0.13
 kernelspec:
-  display_name: nemos (3.13.3.final.0)
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
 # GLM-HMMs: The Learning Problem
 
-Fitting a GLM-HMM means recovering its parameters from observed choices alone, without ever seeing the states that produced them. This page works through how that is done, using the session simulated at the end of [GLM-HMMs: An Introduction](README.md); the cell below regenerates it, so the page runs on its own. One thing to expect from the outset: the likelihood we maximize is not convex, so a single fit can settle on a poor solution, and fitting in practice means running EM from several initializations and keeping the best of them — see {ref}`glmhmm_non_convexity`. Reading the states back out of a fitted model is taken up in [GLM-HMMs: The Decoding Problem](plot_02_decoding_problem.md).
+Fitting a GLM-HMM means recovering its parameters (the initial state distribution, the transition matrix, and one GLM per state) from the observed choices alone, without seeing the hidden states that, we assume, produced them. Because the states are hidden, the likelihood of the observations is a sum over every possible sequence of states, and it has no closed-form maximum. This page explains why the fitting is problematic, how to fit this model in theory and practice, and what to watch out for when fitting real data. We will briefly cover:
+
+- **The fitting problem.** How the model's assumptions factorize the joint distribution of states and choices, and why the resulting marginal likelihood is hard to maximize directly.
+- **Expectation-maximization (EM).** The iterative algorithm used to fit GLM-HMMs, and the expected complete-data log-likelihood (ECLL) it maximizes at each iteration.
+- **The E-step.** The forward-backward algorithm, which computes the posterior probabilities of the states.
+- **The M-step.** Closed-form updates for the initial distribution and the transition matrix, a numerical fit for each state's GLM, and optional Dirichlet priors that regularize the probabilities.
+- **Three practical caveats.** Why EM can converge to different local optima depending on where it starts (and how NeMoS initializes it), how to handle data recorded in separate sessions, and how to choose the number of states.
+- **Fitting simulated data.** A fit that checks whether EM recovers the parameters used to generate the data.
 
 ```{code-cell} ipython3
 :tags: [hide-input]
@@ -57,7 +64,7 @@ sns.set_theme(style="ticks", palette="colorblind", font_scale=1.2, rc=custom_par
 rng = np.random.default_rng(2)
 ```
 
-The data we fit here is the session simulated at the end of [GLM-HMMs: an overview](README.md). The cell below regenerates it, so this page runs on its own.
+We use the session simulated at the end of [GLM-HMMs: An Introduction](README.md), in which choices switch between an engaged state and two biased states. The cell below regenerates it, so this page runs on its own.
 
 ```{code-cell} ipython3
 :tags: [hide-input]
@@ -92,160 +99,197 @@ true_model.scale_ = np.ones(n_states)  # the Bernoulli has no free scale paramet
 y, prob_left, z_true = true_model.simulate(
     jax.random.PRNGKey(0), X, state_format="index"
 )
-y = np.asarray(y, dtype=float)
-z_true = np.asarray(z_true, dtype=int)
 ```
 
 ## The fitting problem
+A GLM-HMM is fully defined by the parameters $\boldsymbol{\theta} \equiv \{\boldsymbol{\pi},\boldsymbol{A},\{\boldsymbol{w}_k, b_k\}_{k=1}^K\}$:
 
-When fitting a GLM-HMM, the goal is to learn the set of parameters $\boldsymbol{\theta} \equiv \{A,\boldsymbol{\pi},\{\boldsymbol{w}_k, b_k\}_{k=1}^K\}$ — the transition matrix $\boldsymbol{A} \in \mathbb{R}^{K \times K}$, the initial state distribution $\boldsymbol{\pi} \in \mathbb{R}^K$, and the per-state weights and intercepts $\{\boldsymbol{w}_k, b_k\}_{k=1}^K$ with $\boldsymbol{w}_k \in \mathbb{R}^M$ and $b_k \in \mathbb{R}$ — that maximize the likelihood of the observed data. Because the states are hidden, the likelihood of the observations alone is obtained by marginalizing the joint distribution over every possible state sequence:
+- the initial state distribution $\boldsymbol{\pi} \in \mathbb{R}^K$, holding the probability of starting in each state;
+- the transition matrix $\boldsymbol{A} \in \mathbb{R}^{K \times K}$, whose entry $A_{jk} = p(z_t = k \mid z_{t-1} = j)$ is the probability of moving from state $j$ to state $k$, including $k = j$;
+- the per-state weights $\boldsymbol{w}_k \in \mathbb{R}^M$ and intercepts $b_k \in \mathbb{R}$, one pair per state, which define that state's GLM.
+
+Because of the Markov, stationarity and independence assumptions, the joint probability distribution over both latent states $\boldsymbol{z}$ and observed variables $\boldsymbol{y}$, given the inputs $\boldsymbol{x}$ and the parameters $\boldsymbol{\theta}$, is given by:
 
 \begin{equation}
+p(\boldsymbol{y}, \boldsymbol{z} \mid \boldsymbol{x},\boldsymbol{\theta})
+= p(z_1\mid\boldsymbol{\pi})
+  \left[\prod_{t=2}^T p(z_t \mid z_{t-1},\boldsymbol{A})\right]
+  \prod_{t=1}^T p(y_t\mid z_t, \boldsymbol{x}_t, \boldsymbol{w}_{z_t}, b_{z_t})
+\end{equation}
+
+```{admonition} The Markov, stationarity and independence assumptions
+:class: note
+We can factorize the joint distribution of the states and observations into three factors thanks to three assumptions: Markov, stationarity and independence (Ibe, 2013) <span id="cite1"></span><a href="#ref1">[1]</a>. The Markov assumption, which states that the next state depends only on the current one, is what reduces the transition term to a single factor per step; models where the next state depends on several previous states are possible but harder to analyze. The stationarity assumption, which states that transition probabilities are constant, is what lets one fixed matrix $\boldsymbol{A}$ serve for the whole experiment. And the observation independence assumption, which states that each observation is independent of the others given its own state and input, is what turns the emissions into a product $\prod_t p(y_t \mid z_t, \boldsymbol{x}_t, \boldsymbol{w}_{z_t}, b_{z_t})$.
+```
+
+Given that we have a set of observations, we can determine the parameters of a GLM-HMM using maximum likelihood. The likelihood function is obtained from the joint distribution by marginalizing over the hidden states. 
+
+```{math}
+:label: eq_marginal_likelihood
+\begin{split}
 p(\boldsymbol{y}\mid\boldsymbol{x}, \boldsymbol{\theta})
-= \sum_{\boldsymbol{z}} p(\boldsymbol{y}, \boldsymbol{z} \mid \boldsymbol{x},\boldsymbol{\theta})
-= \sum_{\boldsymbol{z}} p(z_1\mid\boldsymbol{\pi}) \left[\prod_{t=2}^T p(z_t \mid z_{t-1},A)\right]\prod_{t=1}^T p(y_t\mid z_t, \boldsymbol{w}_{z_t})
-\end{equation}
+&= \sum_{\boldsymbol{z}} p(\boldsymbol{y}, \boldsymbol{z} \mid \boldsymbol{x},\boldsymbol{\theta}) \\
+&= \sum_{\boldsymbol{z}} p(z_1\mid\boldsymbol{\pi})
+   \left[\prod_{t=2}^T p(z_t \mid z_{t-1},\boldsymbol{A})\right]
+   \prod_{t=1}^T p(y_t\mid z_t, \boldsymbol{x}_t, \boldsymbol{w}_{z_t}, b_{z_t})
+\end{split}
+```
 
-Directly maximizing this is hard, because the sum over all possible state sequences $\boldsymbol{z}$ couples the parameters together. The standard solution is the Expectation-Maximization (EM) algorithm.
+Directly maximizing this likelihood is difficult for two reasons. First, the joint distribution $p(\boldsymbol{y}, \boldsymbol{z} \mid \boldsymbol{x}, \boldsymbol{\theta})$ does not factorize into independent per-trial terms, because each transition term $p(z_t \mid z_{t-1})$ couples a latent state to the previous one. Unlike in a mixture model, the sum over $\boldsymbol{z}$ therefore cannot be split into $T$ independent sums over each $z_t$. Evaluating it by brute force would mean enumerating all $K^T$ sequences of latent states, a number that grows exponentially with the number of trials $T$. Second, marginalizing over $\boldsymbol{z}$ makes the likelihood a sum, over all state sequences, of products of initial-state, transition and state-specific GLM emission probabilities. The log-likelihood is therefore the logarithm of a sum, so the three groups of parameters do not appear in separate terms, and setting the derivatives to zero yields no closed-form solution (for more details in the HMM case, see Chapter 13 of Bishop, 2006 <span id="cite2a"></span><a href="#ref2a">[2a]</a>).
 
-### EM in one paragraph
-The difficulty is circular: if we knew which state was active on each trial, updating the parameters would be easy (each state's GLM would be fit only on its own trials, and $\boldsymbol{A}$ and $\boldsymbol{\pi}$ would be read off from the state sequence); and if we knew the parameters, computing the distribution over states would be easy. EM breaks the circle by alternating between the two:
 
-- **E-step:** given the current parameters $\theta^{\text{old}}$, compute the posterior distribution over the hidden states using the forward-backward algorithm (below). This yields "responsibilities" — how much each trial belongs to each state.
-- **M-step:** given those responsibilities, update the parameters $\theta$ to increase the *expected complete-data log-likelihood* (ECLL).
+## The solution: expectation-maximization (EM)
 
-We iterate until the log-likelihood plateaus. Each full E-then-M iteration is guaranteed not to *decrease* the marginal log-likelihood of the data, so EM climbs steadily to a (local) maximum. With that intuition in place, we now make the E- and M-steps precise.
+EM, combined with the forward-backward algorithm, addresses both difficulties. The objective is to maximize a lower bound on the marginal log-likelihood. The way this is achieved is by iteratively making a guess about the latent state distribution and then using this updated guess to estimate the parameters.
 
-### The expected complete-data log-likelihood
-During the E-step, we form the ECLL, which is a lower bound on the log-likelihood of the data given the parameters, using some current setting of the parameters $\theta^{\text{old}}$:
+- First, the E-step fixes the parameters at their values from the previous iteration, $\boldsymbol{\theta}^{\text{old}}$, and computes the posterior over the latent states, $p(\boldsymbol{z} \mid \boldsymbol{y}, \boldsymbol{x}, \boldsymbol{\theta}^{\text{old}})$. Only two sets of its marginals are needed: the single-trial posteriors $\gamma_{t,k}$ and the consecutive-pair posteriors $\xi_{t,j,k}$.
+- Then, the M-step holds these posteriors fixed and maximizes the expected complete-data log-likelihood (ECLL, defined below), which separates into three terms: $\boldsymbol{\pi}$ is set to the state posteriors on the first trial, $\boldsymbol{A}$ to the expected transition counts normalized so that each row sums to one, and each state's GLM is fit by maximizing its log-likelihood over all trials weighted by $\gamma_{t,k}$, which generally requires numerical optimization. 
+
+Each iteration of these two steps is guaranteed not to decrease the marginal log-likelihood $\log p(\boldsymbol{y} \mid \boldsymbol{x}, \boldsymbol{\theta})$, so the two steps are repeated until it stops improving, converging to a local, not necessarily global, maximum.
+
+## The expected complete-data log-likelihood (ECLL)
+
+During the E-step, we form the ECLL, which is a lower bound on the log-likelihood of the data given the parameters, using the current values of the parameters $\boldsymbol{\theta}^{\text{old}}$:
 
 \begin{equation}
-\text{ECLL}(\theta) = \sum_z p(\textbf{z}\mid \boldsymbol{y}, \{\boldsymbol{x}\}^T_{t=1},\theta^{\text{old}}) \log p(\textbf{y}, \textbf{z}\mid \theta, \{\boldsymbol{x}\}^T_{t=1}) \\
+\text{ECLL}(\boldsymbol{\theta}) \equiv
+\sum_{\boldsymbol{z}} p\!\left(\boldsymbol{z} \mid \boldsymbol{y}, \boldsymbol{x}, \boldsymbol{\theta}^{\text{old}}\right)
+\log p\!\left(\boldsymbol{y}, \boldsymbol{z} \mid \boldsymbol{x}, \boldsymbol{\theta}\right)
 \end{equation}
 
-Two posterior quantities do all the work here. We write $\gamma_{t,k}$ for the marginal posterior probability that trial $t$ was in state $k$, and $\xi_{t,j,k}$ for the joint posterior over two consecutive latents:
+We write $\gamma_{t,k}$ for the marginal posterior probability that trial $t$ was in state $k$, and $\xi_{t,j,k}$ for the joint posterior over two consecutive latents:
 
 \begin{align}
-\gamma_{t,k} &= p(z_t = k \mid \boldsymbol{y}, \{\boldsymbol{x}\}^T_{t=1}, \theta^{\text{old}}) \\
-\xi_{t,j,k} &= p(z_t = k, z_{t-1} = j \mid \boldsymbol{y}, \{\boldsymbol{x}\}^T_{t=1}, \theta^{\text{old}})
+\gamma_{t,k} &= p(z_t = k \mid \boldsymbol{y}, \boldsymbol{x}, \boldsymbol{\theta}^{\text{old}}) \\
+\xi_{t,j,k} &= p(z_{t-1} = j, z_t = k \mid \boldsymbol{y}, \boldsymbol{x}, \boldsymbol{\theta}^{\text{old}})
 \end{align}
 
-Substituting the GLM-HMM joint distribution into the ECLL and collecting terms with these definitions, the ECLL separates into three pieces that correspond exactly to the three objects of the model — the initial distribution, the transitions, and the per-state emissions:
+Substituting the GLM-HMM joint distribution into the ECLL and collecting terms with these definitions, we find that the ECLL separates into three pieces that correspond exactly to the three objects of the model (the initial distribution, the transitions, and the per-state emissions):
 
 ```{math}
 :label: eq_ecll_separated
 \begin{split}
-\text{ECLL}(\theta) = \sum_{k=1}^K \gamma_{1,k} \log \boldsymbol{\pi}_k + \sum_{t=1}^T \sum_{j=1}^K \sum_{k=1}^K \xi_{t,j,k}\log A_{jk} \\
-+ \sum_{t=1}^T \sum_{k=1}^K \gamma_{t,k} \log p(y_t \mid z_t = k, \boldsymbol{x}_t, \boldsymbol{w}_k)
+\text{ECLL}(\boldsymbol{\theta})
+&= \sum_{k=1}^K \gamma_{1,k} \log \pi_k
+ + \sum_{t=2}^T \sum_{j=1}^K \sum_{k=1}^K \xi_{t,j,k}\log A_{jk} \\
+&\quad + \sum_{t=1}^T \sum_{k=1}^K \gamma_{t,k} \log p(y_t \mid z_t = k, \boldsymbol{x}_t, \boldsymbol{w}_k, b_k)
 \end{split}
 ```
 
-That separation is what makes the M-step easy. But it leaves us needing $\gamma$ and $\xi$, which is what the forward-backward algorithm provides.
+That separation is what makes the M-step straightforward. But how do we compute $\gamma$ and $\xi$? With the E-step.
 
-### The E-step: forward-backward algorithm
-The E-step needs the posterior probabilities of the hidden states given *all* the data and the current parameters. The forward-backward algorithm computes them efficiently, in two passes over the sequence:
+```{admonition} How is it guaranteed never to decrease the marginal likelihood?
+:class: note dropdown
+For the derivation, see Bishop (2006), Section 9.4 <span id="cite2b"></span><a href="#ref2b">[2b]</a>, and Pillow (2024) <span id="cite3"></span><a href="#ref3">[3]</a>.
 
-- The **forward pass** sweeps left to right and accumulates evidence *from the past*: after trial $t$ it holds, for each state $k$, the joint probability $\alpha_{t,k}$ of everything observed up to and including trial $t$ and of being in state $k$ at trial $t$.
-- The **backward pass** sweeps right to left and accumulates evidence *from the future*: $\beta_{t,k}$ is the probability of everything observed *after* trial $t$, given that trial $t$ was in state $k$.
-- **Combining** the two at each trial gives the smoothed posterior $\gamma_{t,k} \propto \alpha_{t,k}\beta_{t,k}$: the probability that the system was in state $k$ at trial $t$ given the *whole* observed sequence, past and future together. This is precisely the quantity the M-step needs in order to weight each trial's contribution to each state's update.
+```
 
-Both passes are recursive — each step reuses the previous one — which is what turns a sum over exponentially many state sequences into a computation linear in the number of trials. A useful by-product is that the forward pass hands us the data likelihood for free: $\sum_k \alpha_{T,k}$ is the marginal likelihood of the whole sequence, the very quantity EM is monotonically increasing.
 
-:::{dropdown} The forward and backward recursions in full
-The forward quantity is the joint probability of the activity up until trial $t$ and the latent state at trial $t$ being state $k$,
+## The E-step: forward-backward algorithm
+The E-step does not need the full posterior over all $K^T$ state sequences, only two sets of marginals:
+- $\gamma_{t,k} = p(z_t = k \mid \boldsymbol{y}, \boldsymbol{x}, \boldsymbol{\theta}^{\text{old}})$, the probability of state $k$ on trial $t$, and
+- $\xi_{t,j,k} = p(z_{t-1} = j, z_t = k \mid \boldsymbol{y}, \boldsymbol{x}, \boldsymbol{\theta}^{\text{old}})$, the probability of a transition from state $j$ to state $k$ between trials $t-1$ and $t$.
 
-\begin{equation}
-\alpha_{t,k} \equiv p(\boldsymbol{y}_{1:t}, z_t \mid \{\boldsymbol{x}_{t'}\}_{t'=1}^t)
-\end{equation}
+All quantities in the E-step are evaluated at the current parameter values $\boldsymbol{\theta}^{\text{old}} = \{\boldsymbol{\pi}^{\text{old}}, \boldsymbol{A}^{\text{old}}, \boldsymbol{w}^{\text{old}}_1, \dots, \boldsymbol{w}^{\text{old}}_K, b^{\text{old}}_1, \dots, b^{\text{old}}_K\}$. The forward-backward algorithm computes both sets of marginals in two recursive passes over the trials (Bishop, 2006, Eqs. 13.36 to 13.38) <span id="cite2c"></span><a href="#ref2c">[2c]</a>:
 
-The probability associated with trial 1 is
+- **Forward pass.** $\alpha_{t,k} = p(y_1, \dots, y_t, z_t = k \mid \boldsymbol{x}, \boldsymbol{\theta}^{\text{old}})$ is the joint probability of the observations up to and including trial $t$ and of being in state $k$ on trial $t$. 
+- **Backward pass.** $\beta_{t,k} = p(y_{t+1}, \dots, y_T \mid z_t = k, \boldsymbol{x}, \boldsymbol{\theta}^{\text{old}})$ is the probability of the choices after trial $t$ given state $k$ on trial $t$. 
 
-\begin{equation}
-\alpha_{1,k} = \boldsymbol{\pi}_k\, p(\boldsymbol{y}_{1} \mid z_1,\boldsymbol{x}_1, \boldsymbol{w}_k)
-\end{equation}
+Combining the two passes gives 
+- $\gamma_{t,k} = \alpha_{t,k} \beta_{t,k} / p(\boldsymbol{y} \mid \boldsymbol{x}, \boldsymbol{\theta}^{\text{old}})$ and 
+- $\xi_{t,j,k} = \alpha_{t-1,j} A^{\text{old}}_{jk} \, p(y_t \mid z_t = k, \boldsymbol{x}_t, \boldsymbol{w}^{\text{old}}_k, b^{\text{old}}_k) \, \beta_{t,k} / p(\boldsymbol{y} \mid \boldsymbol{x}, \boldsymbol{\theta}^{\text{old}})$. 
 
-where, in our case, $p(\boldsymbol{y}_{1} \mid z_1,\boldsymbol{x}_1, \boldsymbol{w}_k)$ is the usual Bernoulli GLM distribution mentioned above. For trials $1<t \leq T$, we obtain the probabilities recursively:
+```{admonition} Why the pairwise posterior takes this form
+:class: dropdown
 
-\begin{equation}
-\alpha_{t,k} = \sum_{j=1}^K \alpha_{t-1,j}\,A_{j,k}\,p(y_t \mid z_t = k, \boldsymbol{x}_t, \boldsymbol{w}_k)
-\end{equation}
+By the definition of conditional probability,
 
-During the backward pass, the goal is to calculate the probability of the choice data beyond the current trial,
+$$\xi_{t,j,k} = \frac{p(z_{t-1} = j, z_t = k, \boldsymbol{y} \mid \boldsymbol{x}, \boldsymbol{\theta}^{\text{old}})}{p(\boldsymbol{y} \mid \boldsymbol{x}, \boldsymbol{\theta}^{\text{old}})}.$$
 
-\begin{equation}
-\beta_{t,k} \equiv p(\boldsymbol{y}_{[t+1:T]}\mid z_t = k, \{\boldsymbol{x}_{t'}\}^T_{t'=t+1})
-\end{equation}
+Splitting the choices into past ($y_{1:t-1}$), present ($y_t$) and future ($y_{t+1:T}$) and applying the product rule in time order, the numerator becomes a product of four terms, each simplified by the conditional independence structure of the HMM:
 
-These quantities are calculated recognizing that $\beta_{T,k} = 1$ and, for $t \in \{T-1, ...,1\}$:
+- $p(y_{1:t-1}, z_{t-1} = j \mid \boldsymbol{x}, \boldsymbol{\theta}^{\text{old}}) = \alpha_{t-1,j}$, by definition;
+- $p(z_t = k \mid z_{t-1} = j, y_{1:t-1}, \boldsymbol{x}, \boldsymbol{\theta}^{\text{old}}) = A^{\text{old}}_{jk}$, since the next state depends only on the current state;
+- $p(y_t \mid z_t = k, z_{t-1} = j, y_{1:t-1}, \boldsymbol{x}, \boldsymbol{\theta}^{\text{old}}) = p(y_t \mid z_t = k, \boldsymbol{x}_t, \boldsymbol{w}^{\text{old}}_k, b^{\text{old}}_k)$, since the choice on trial $t$ depends only on the state and input on trial $t$;
+- $p(y_{t+1:T} \mid z_t = k, y_t, z_{t-1} = j, y_{1:t-1}, \boldsymbol{x}, \boldsymbol{\theta}^{\text{old}}) = \beta_{t,k}$, since future choices depend on the past only through $z_t$.
 
-\begin{equation}
-\beta_{t,j} = \sum_{k=1}^K\beta_{t+1,k}\,A_{jk}\,p(y_{t+1}\mid z_{t+1} = k, \boldsymbol{x}_{t+1},\boldsymbol{w}_k)
-\end{equation}
+Intuitively, the numerator is the total probability of all state sequences that pass through state $j$ on trial $t-1$ and state $k$ on trial $t$: $\alpha_{t-1,j}$ covers every way of reaching $j$, $A^{\text{old}}_{jk} \, p(y_t \mid z_t = k, \boldsymbol{x}_t, \boldsymbol{w}^{\text{old}}_k, b^{\text{old}}_k)$ is the step from $j$ to $k$, and $\beta_{t,k}$ covers every way of continuing from $k$ (Bishop, 2006, Eq. 13.43) <span id="cite2d"></span><a href="#ref2d">[2d]</a>.
+```
 
-From the $\alpha_{t,k}$ and $\beta_{t,k}$ quantities we can then form the single and joint posterior state probabilities needed to maximize the ECLL:
+In the M-step, the $\gamma$'s are used to update $\boldsymbol{\pi}$ and to weight each trial in each state's GLM fit, and the $\xi$'s are used to update $\boldsymbol{A}$.
 
-\begin{align}
-\gamma_{t,k}
-    &= p(z_t = k \mid D, \theta^{\text{old}})\\
-    &= \frac{p(y_{[1:t]}, z_t = k \mid \{\boldsymbol{x}\}_{t'=1}^t, \theta^{\text{old}})\, p(y_{[t+1:T]} \mid z_t = k, \{\boldsymbol{x}\}_{t'=t+1}^T, \theta^{\text{old}})}{p(\boldsymbol{y} \mid \{\boldsymbol{x}\}_{t'=1}^T,\theta^{\text{old}})} \\
-    &= \frac{\alpha_{t,k}\beta_{t,k}}{\sum_{k=1}^K\alpha_{T,k}}
-\end{align}
+```{admonition} The marginal likelihood is not only an internal quantity
+:class: tip
 
-and similarly for $\xi$:
+Summing the forward variables over states on the last trial gives the marginal likelihood at the current parameters, $p(\boldsymbol{y} \mid \boldsymbol{x}, \boldsymbol{\theta}^{\text{old}}) = \sum_k \alpha_{T,k}$. NeMoS returns its logarithm, summed over trials, from {meth}`GLMHMM.score <nemos.glm_hmm.GLMHMM.score>`, and we use it below to choose between fits started from different initializations.
 
-\begin{equation}
-    \xi_{t,j,k} = \frac{\alpha_{t,j}\,A_{j,k}\,\beta_{t+1,k}\,p(y_{t+1}\mid z_{t+1} = k, \boldsymbol{x}_{t+1}, \boldsymbol{w}_k)}{\sum_{k=1}^K\alpha_{T,k}}
-\end{equation}
+```
 
-where $p(y_{t+1}\mid z_{t+1} = k, \boldsymbol{x}_{t+1}, \boldsymbol{w}_k)$ is again the Bernoulli GLM distribution.
-:::
-
-That marginal likelihood has a name of its own: computing how probable the observed sequence is under a given model is the third classical HMM problem, the **evaluation problem**, and the forward pass answers it in passing rather than needing an algorithm of its own. It is what {meth}`GLMHMM.score <nemos.glm_hmm.GLMHMM.score>` returns, what EM watches to decide it has converged, and what we use below to choose between fits started from different initializations.
 
 ```{admonition} The smoothed posterior is not only an internal quantity
 :class: tip
-$\gamma_{t,k}$ is computed here as a means to the M-step, but it is also a readout in its own right, and NeMoS exposes it as {meth}`GLMHMM.smooth_proba <nemos.glm_hmm.GLMHMM.smooth_proba>`. It is one of the two ways of asking which strategy was active on a given trial, taken up on [the decoding problem](plot_02_decoding_problem.md) page.
+$\gamma_{t,k}$ is computed here as a means to the M-step, but it is also a readout. NeMoS makes it available by calling {meth}`GLMHMM.smooth_proba <nemos.glm_hmm.GLMHMM.smooth_proba>`. It is one of the two ways of asking which strategy was active on a given trial, taken up on [the decoding problem](plot_02_decoding_problem.md) page.
 ```
 
-```{admonition} Handling session breaks
-:class: note
-Real experiments come in separate sessions recorded on different days, and we do not want the model to treat the last trial of one session and the first trial of the next as a genuine transition. NeMoS handles this through the `session_starts` argument to `fit`, `smooth_proba`, `decode_state`, and `simulate`: the **transition** term is dropped across session boundaries (so the state chain is reset at each session start), while the **emission** term still applies to every trial. Concretely, `session_starts` accepts a boolean/0-1 array of shape `(n_samples,)`, an integer array of session-start indices, or — when `X` or `y` is a pynapple `Tsd`/`TsdFrame` — a `pynapple.IntervalSet`.
-
-Once `session_starts` is supplied, each session is a chain of its own, as opposed to all sessions being one chain together. This distinction matters for history predictors. The previous choice, for instance, is undefined on the first trial of a session, since the preceding trial belongs to a different day; marking those entries `NaN` is allowed precisely because they sit at a chain's first trial. As such, be aware of carrying the last choice of one session over to the first trial of the next, which would invent a dependency between trials recorded days apart. Our example here is a single continuous session, so we omit `session_starts`.
-```
-
-### The M-step: parameter updates
-In the M-step, after having run the forward-backward algorithm, we maximize the ECLL with respect to the GLM-HMM parameters $\theta$. Because the ECLL {eq}`eq_ecll_separated` splits into three independent terms, each parameter can be optimized separately. For the initial distribution $\boldsymbol{\pi}$ and the transition matrix $\boldsymbol{A}$, this yields closed-form updates:
+## The M-step: parameter updates
+In the M-step, after having run the forward-backward algorithm, we maximize the ECLL with respect to the GLM-HMM parameters $\boldsymbol{\theta}$. Because the ECLL {eq}`eq_ecll_separated` splits into three independent terms, each parameter can be optimized separately. For the initial distribution $\boldsymbol{\pi}$ and the transition matrix $\boldsymbol{A}$, this yields closed-form updates:
 
 \begin{align}
     \pi_k^\text{new}
     & = \frac{\gamma_{1,k}}{\sum_{j=1}^K\gamma_{1,j}} \\
-     A_{jk}^\text{new} & = \frac{\sum_{t=2}^T \xi_{t,j,k}}{\sum_{t=2}^T\sum_{k=1}^K \xi_{t,j,k} }
+     A_{jk}^\text{new} & = \frac{\sum_{t=2}^T \xi_{t,j,k}}{\sum_{t=2}^T\sum_{k'=1}^K \xi_{t,j,k'}}
 \end{align}
 
-Intuitively, the new initial distribution is just the (normalized) posterior over the first state, and the new transition probability from $j$ to $k$ is the expected number of $j\!\to\!k$ transitions divided by the expected number of times we left $j$. The third term is the emission: the GLM weights $\{\boldsymbol{w}_k\}$ have no closed form and are updated numerically, by gradient-based optimization of the weighted GLM log-likelihood, each trial weighted by its responsibility $\gamma_{t,k}$.
+Intuitively, the new initial distribution is just the (normalized) posterior over the first state, and the new transition probability from $j$ to $k$ is the expected number of $j\!\to\!k$ transitions divided by the expected number of transitions out of $j$, including those from $j$ back to itself. The third term is the emission: the GLM weights and intercepts $\{\boldsymbol{w}_k, b_k\}$ have no closed form and are updated numerically, by gradient-based optimization of the weighted GLM log-likelihood, each trial weighted by its responsibility $\gamma_{t,k}$. By default, NeMoS adds a Ridge penalty of strength 1.0 on the GLM coefficients to this objective (the `regularizer` and `regularizer_strength` arguments of {class}`GLMHMM <nemos.glm_hmm.GLMHMM>`), so the default update is a penalized fit; pass `regularizer="UnRegularized"` to get the maximum-likelihood update described here.
 
 ```{admonition} Dirichlet priors on the initial and transition probabilities
-:class: note
-The closed-form updates above are maximum-likelihood estimates, which can be poorly behaved when a state or a transition is rarely visited — an entry can be driven all the way to 0 or 1. A **Dirichlet prior** on the initial and transition probabilities regularizes this. The Dirichlet is the natural prior over a categorical distribution (each row of $\boldsymbol{A}$, and $\boldsymbol{\pi}$, is one such distribution): its concentration parameters act like pseudo-counts, keeping every entry a valid probability and pulling the estimates away from degenerate 0-or-1 rows and, if desired, toward stickiness. In NeMoS this turns the M-step updates into *maximum a posteriori* updates, and you control it through the `dirichlet_initial_proba` and `dirichlet_transition_proba` arguments of {class}`GLMHMM <nemos.glm_hmm.GLMHMM>` (each a vector/matrix of Dirichlet concentration parameters; left `None`, a flat, uninformative prior is used). Concretely, the concentration parameters enter the two updates above as extra counts, and the maximum-likelihood estimates become maximum a posteriori ones:
+:class: dropdown
+
+The closed-form updates above are maximum-likelihood estimates, which can be poorly behaved when a state or a transition is rarely visited. A Dirichlet prior on the initial and transition probabilities regularizes this. The Dirichlet is the natural prior over a categorical distribution (each row of $\boldsymbol{A}$, and $\boldsymbol{\pi}$, is one such distribution), and with it the M-step computes *maximum a posteriori* (MAP) rather than maximum-likelihood estimates. In NeMoS you set it through the `dirichlet_initial_proba` and `dirichlet_transition_proba` arguments of {class}`GLMHMM <nemos.glm_hmm.GLMHMM>`, each a vector or matrix of concentration parameters $\kappa \geq 1$, which enter the two updates as extra counts:
 
 \begin{align}
     \pi_k^\text{new}
-    & = \frac{\gamma_{1,k} + \alpha^{\boldsymbol{\pi}}_k - 1}{\sum_{j=1}^K\left(\gamma_{1,j} + \alpha^{\boldsymbol{\pi}}_j - 1\right)} \\
+    & = \frac{\gamma_{1,k} + \kappa^{\boldsymbol{\pi}}_k - 1}{\sum_{j=1}^K\left(\gamma_{1,j} + \kappa^{\boldsymbol{\pi}}_j - 1\right)} \\
     A_{jk}^\text{new}
-    & = \frac{\sum_{t=2}^T \xi_{t,j,k} + \alpha^{\boldsymbol{A}}_{jk} - 1}{\sum_{k'=1}^K\left(\sum_{t=2}^T \xi_{t,j,k'} + \alpha^{\boldsymbol{A}}_{jk'} - 1\right)}
+    & = \frac{\sum_{t=2}^T \xi_{t,j,k} + \kappa^{\boldsymbol{A}}_{jk} - 1}{\sum_{k'=1}^K\left(\sum_{t=2}^T \xi_{t,j,k'} + \kappa^{\boldsymbol{A}}_{jk'} - 1\right)}
 \end{align}
 
-Each $\alpha - 1$ is the pseudo-count the prior contributes before any data is seen, which is why a rarely visited state or transition can no longer be pushed to exactly zero. Setting every $\alpha = 1$ contributes nothing and recovers the maximum-likelihood updates above, which is the flat prior NeMoS uses by default; values below one are not currently supported. The GLM weights, in turn, are regularized through the `regularizer` argument, just as for a plain GLM.
+Each $\kappa - 1$ acts as a pseudo-count added before any data is seen. If every $\kappa > 1$, every numerator is positive, so no entry can reach exactly 0 and therefore none can reach exactly 1; larger values pull the estimates more strongly toward the prior, and a large diagonal $\kappa^{\boldsymbol{A}}_{jj}$ encodes a preference for sticky states. Setting every $\kappa = 1$ adds nothing and recovers the maximum-likelihood updates; this flat prior is the NeMoS default (used when the arguments are left `None`). The GLM coefficients are regularized separately, through the `regularizer` argument described above, just as for a plain GLM.
+
 ```
 
-(glmhmm_non_convexity)=
-### A caveat: the likelihood is non-convex
-EM is guaranteed to increase (or hold) the marginal log-likelihood at every iteration, but that does *not* mean it finds the best possible solution. The GLM-HMM marginal likelihood is **non-convex**: it has multiple local optima, and EM converges to whichever one lies uphill from where it started, so the result depends on the initialization (Salakhutdinov et al., 2003) <span id="cite1a"></span><a href="#ref1a">[1a]</a>. Crucially, even when the per-state emission distribution is itself convex (as the Bernoulli GLM is), marginalizing over the hidden states destroys global convexity (Salakhutdinov et al., 2003). <span id="cite1b"></span><a href="#ref1b">[1b]</a>.
+## A caveat: the likelihood is not concave
 
-This is also why EM is structured the way it is. The E-step freezes the assignment of trials to states as the soft responsibilities $\gamma_{t,k}$, and given those the emission term of the ECLL is $\sum_{t}\sum_{k}\gamma_{t,k}\log p(y_t \mid \boldsymbol{x}_t, \boldsymbol{w}_k)$, which is a weighted sum of concave GLM log-likelihoods, concave again, with an optimum that can be found from any starting point. Each M-step is therefore a well-behaved convex problem; it is the *sequence* of them that depends on where we began, and the fixed point EM settles on is whichever local optimum lies uphill from the initialization.
+EM is guaranteed never to decrease the marginal log-likelihood, but that does not mean it finds the best possible solution. The GLM-HMM marginal log-likelihood is not concave: it has multiple local optima, and once EM starts in the basin of attraction of one of them it cannot escape, so the result depends on the initialization (Salakhutdinov et al., 2003) <span id="cite4a"></span><a href="#ref4a">[4a]</a>. This holds even though each state's Bernoulli GLM has a concave log-likelihood. 
 
-The practical consequence is a heuristic: refit the model from several initializations and keep the solution with the highest log-likelihood, which is what we do below. In NeMoS the initialization is controlled by the `seed` argument of {class}`GLMHMM <nemos.glm_hmm.GLMHMM>`, whose defaults already give EM a sensible starting point. Every GLM coefficient is an independent draw from a zero-mean Gaussian with a standard deviation of 0.001. Each state's intercept is then set so that the predicted mean matches the mean of the observations: the logit of the empirical choice rate for a Bernoulli, and in general the link function applied to `y.mean()`. The initial distribution starts uniform, and the transition matrix starts sticky, with a self-transition probability of 0.95 encoding the prior belief that states persist across trials.
+To see why, start from the case where the states are known. For a given state sequence $\boldsymbol{z}$, the log-likelihood is the logarithm of the joint distribution
+
+\begin{equation}
+\log p(\boldsymbol{y}, \boldsymbol{z} \mid \boldsymbol{x}, \boldsymbol{\theta})
+= \log p(z_1\mid\boldsymbol{\pi})
++ \sum_{t=2}^T \log p(z_t \mid z_{t-1}, \boldsymbol{A})
++ \sum_{t=1}^T \log p(y_t\mid z_t, \boldsymbol{x}_t, \boldsymbol{w}_{z_t}, b_{z_t}),
+\end{equation}
+
+which is a sum of concave terms (the logarithms of the initial and transition probabilities, and the Bernoulli GLM log-likelihoods), and hence concave. However, since they are unknown, the likelihood is instead a sum over all possible state sequences, see equation {eq}`eq_marginal_likelihood`. Each term in that sum has a single peak, located at the GLM weights that best fit that particular assignment of trials to states, and adding peaks located in different places can produce a surface with several peaks. 
+
+This is also why EM is structured the way it is. The E-step freezes the assignment of trials to states as soft responsibilities, the posteriors $\gamma_{t,k}$ and $\xi_{t,j,k}$ computed at $\boldsymbol{\theta}^{\text{old}}$. With these held fixed, the ECLL separates into three terms, one for each group of parameters ({eq}`eq_ecll_separated`), and the M-step maximizes each term on its own. The initial-distribution and transition terms have the closed-form solutions given above. The emission term, $\sum_{t}\sum_{k}\gamma_{t,k}\log p(y_t \mid z_t = k, \boldsymbol{x}_t, \boldsymbol{w}_k, b_k)$, splits into one weighted GLM fit per state, and each is a weighted sum of concave GLM log-likelihoods, so it is concave too: any local maximum is the global one, and it can be found from any starting point. Each M-step is therefore a well-behaved concave problem. The difficulty lies in the sequence of them: every E-step recomputes the responsibilities from the current parameters, so each M-step solves a different problem, and the optimum EM eventually reaches depends on where it started.
+
+
+The practical consequence is a heuristic: refit the model from several initializations and keep the solution with the highest log-likelihood, which is what we do below. In NeMoS, the `seed` argument of {class}`GLMHMM <nemos.glm_hmm.GLMHMM>` is a JAX PRNG key (by default `jax.random.PRNGKey(123)`) that sets the random draws made during initialization, while {meth}`GLMHMM.setup <nemos.glm_hmm.GLMHMM.setup>` chooses how each group of parameters is initialized (see the tip below). The default schemes already give EM a sensible starting point, and with them the seed affects only the GLM coefficients. Every coefficient is an independent draw from a zero-mean Gaussian with a standard deviation of 0.001, whatever the observation model. Each state's intercept is then set so that the model's predicted mean at initialization equals the mean of the observations. Because the coefficients start near zero, that prediction barely depends on the inputs, so the intercept alone decides it. The rule is the same for all observation models: take `y.mean()`, and apply the link function. What changes between observation models is only which link that is, and therefore what the resulting number means:
+
+| Observation model | Default inverse link | Intercept initialized to |
+|---|---|---|
+| Bernoulli | logistic | $\log\!\big(\bar{y}/(1-\bar{y})\big)$ |
+| Categorical | log-softmax | $\log$ of each class frequency, centered to sum to zero |
+| Poisson | exp | $\log \bar{y}$ |
+| Negative Binomial | exp | $\log \bar{y}$ |
+| Gaussian | identity | $\bar{y}$ |
+| Gamma | $1/x$ | $1/\bar{y}$ |
+
+Before the link is applied, the mean is checked against the observation model's `rate_range`: $(0, 1)$ for Bernoulli, $(0, \infty)$ for Poisson, Gamma, Negative Binomial and Categorical, and $(-\infty, \infty)$ for Gaussian. A mean outside that range raises an error, and a mean exactly on a boundary (for example, a Bernoulli session with no 1s) is shifted inside by half an observation, with a warning.
+
+The same intercept is used for all $K$ states, so the states start out identical except for their small random coefficients. `scale_` starts at 1.0 for every state; it matters only for models with a free scale (Gaussian, Gamma, Negative Binomial). The initial distribution starts uniform, and the transition matrix starts sticky, with a self-transition probability of 0.95 and the remaining 0.05 split evenly among the other states.
 
 ```{admonition} Choosing the initialization yourself
 :class: tip
@@ -253,28 +297,28 @@ The practical consequence is a heuristic: refit the model from several initializ
 
 If you would rather skip initialization altogether, pass `init_params` to {meth}`fit <nemos.glm_hmm.GLMHMM.fit>`. It takes the tuple `(coef, intercept, scale, initial_prob, transition_prob)` and bypasses the initializers entirely, which is what you want when you are restarting from an earlier fit or testing whether EM recovers a known solution from a known starting point.
 ```
- 
 
+## A caveat: handling session breaks
 
-### Fitting our simulated data
-Let us put EM to work on the choices we simulated above. We instantiate a fresh {class}`GLMHMM <nemos.glm_hmm.GLMHMM>`, tell it how many states to look for, and call `fit` — which runs the E- and M-steps to convergence internally — from several seeds, keeping the run with the highest log-likelihood.
+Real experiments come in separate sessions recorded on different days, and we do not want the model to treat the last trial of one session and the first trial of the next as a genuine transition. This matters because the E-step computes the state probabilities recursively over trials: the forward pass carries what is known about the state from each trial to the next, and the backward pass carries it from each trial to the one before. The model as described so far assumes that all trials form a single chain, so if sessions were simply concatenated, both passes would carry information across the break, and the states inferred at the end of one session would shape those inferred at the start of the next, and vice versa.
 
+When the data contain several sessions, we instead treat each session as its own chain: an independent draw from the same GLM-HMM, with all sessions sharing the same parameters. The E-step then runs the forward and backward recursions separately within each session. The forward pass restarts from the initial distribution $\boldsymbol{\pi}$ at the first trial of each session, the backward pass restarts from $\beta = 1$ at its last trial, and no transition is counted between sessions. The M-step pools the sessions: $\boldsymbol{\pi}$ is estimated from the first trial of every session, $\boldsymbol{A}$ from the transitions within sessions, and each state's GLM from all trials (Bishop, 2006) <span id="cite2e"></span><a href="#ref2e">[2e]</a>. The marginal log-likelihood is then the sum of the per-session log-likelihoods.
 
+In NeMoS, session breaks are specified with the `session_starts` argument to `fit`, `score`, `smooth_proba`, `filter_proba`, `decode_state` and `simulate`. It accepts a boolean or 0/1 array of shape `(n_samples,)`, an integer array of session-start indices, or, when `X` or `y` is a pynapple `Tsd`/`TsdFrame`, a `pynapple.IntervalSet`. If `session_starts` is not given, pynapple inputs are split at the epochs of their `time_support`, and any other input is treated as a single chain.
 
-```{admonition} Why the number of states has to be chosen, not learned
-:class: note
-The number of hidden states $K$ is a hyperparameter: it is standardly assumed known before fitting begins (Ibe, 2013) <span id="cite2"></span><a href="#ref2">[2]</a>, and NeMoS requires it as the `n_states` argument. There are two separate reasons for this.
+## A caveat: how to choose a number of states
+The number of hidden states $K$ is a hyperparameter: it must be fixed before fitting begins, and NeMoS requires it as the `n_states` argument. There are two separate reasons for this. First, $K$ determines the shape of everything we are fitting: $\boldsymbol{\pi}$ has $K$ entries, $\boldsymbol{A}$ is $K \times K$, and there is one weight vector and one intercept per state. EM searches a parameter space of fixed dimension, so that space does not exist until $K$ is pinned down. Second, the training likelihood cannot be used to choose $K$. A $(K+1)$-state model contains every $K$-state model as a special case: setting the initial probability of the extra state, and every transition probability into it, to zero means the extra state is never visited, which recovers the $K$-state model exactly. The best $(K+1)$-state fit is therefore always at least as good as the best $K$-state fit, and comparing training likelihoods would always favor the largest $K$. 
 
-1. The first is structural. $K$ determines the *shape* of everything we are fitting: $\boldsymbol{\pi}$ has $K$ entries, $\boldsymbol{A}$ is $K \times K$, and there is one weight vector per state. EM searches a parameter space of fixed dimension, so that space does not even exist until $K$ is pinned down.
+If it is not possible to use the training likelihood for assessing how many states to have, then how do we determine $K$? In practice, one fits models across a range of $K$ and compares them with a criterion that penalizes complexity (AIC, BIC) or measures generalization (held-out log-likelihood, cross-validation). These comparisons are worth pairing with a recovery analysis: simulate data from plausible parameters at the number of trials actually available, then check whether fitting recovers those parameters. 
 
-2. The second is statistical: the likelihood cannot arbitrate between values of $K$, because it never decreases as $K$ grows. The reason is that the models are nested. A $K$-state model is a special case of a $(K+1)$-state model: give the extra state zero probability of ever being occupied — so that it is simply never visited — and you recover the smaller model exactly. Because the smaller model is always available to the larger one, the *globally* maximized likelihood can never decrease as $K$ grows, so at the global optimum a likelihood-only comparison would always return the largest $K$ on offer. $K$ therefore has to be judged by a criterion that charges for complexity, not by the one used to fit the parameters.
+A larger $K$ is not always better, nor always feasible, because the number of parameters grows while the data informing each one shrinks. The parameter count grows quadratically with $K$: $K-1$ for the initial distribution, $K(K-1)$ for the transition matrix, and $K(M+1)$ for the GLMs, with $M$ weights and one intercept per state. Meanwhile, every added state leaves fewer trials for the others. Each state's GLM parameters are learned only from the trials the chain spends in that state. Its row of $\boldsymbol{A}$ is learned from the same trials, but where the chain goes when it leaves is learned only from the trials on which it actually leaves, and these are few when the state is sticky.
 
-How much data a given $K$ needs is worth a thought of its own. The parameter count grows quadratically, $(K-1) + K(K-1) + K(M+1)$ for $M$ inputs, but the more useful question is how much data informs each group of them. A state's weights are estimated only from the trials spent in that state. Writing $\rho_k$ for the fraction of trials the chain spends in state $k$, that is about $T\rho_k$ trials, so trials per state fall as states are added. Its transition probabilities are estimated from the number of times the chain *leaves* that state, roughly $T\rho_k(1 - A_{kk})$, which is a much smaller number whenever states are sticky: with the dwell times we chose here, our 3000 trials give about 80 departures per state.
+Finally, statistical criteria are not the only consideration: choosing a $K$ also depends on what the states are for. In neuroscience, each state is meant to stand for something we can interpret. Larger $K$ makes this harder. Additional states tend to split an existing state into variants that differ only slightly, and each is estimated from fewer trials, so the states become harder to tell apart and to interpret. A smaller $K$ can therefore be preferable even when a larger one predicts held-out data slightly better. Ashwood et al. (2022) <span id="cite5"></span><a href="#ref5">[5]</a>, for example, found that held-out log-likelihood kept improving slightly with four and five states, but analyzed the three-state model for simplicity and interpretability, noting that the four-state model mainly split the engaged state into two substates that differed slightly in bias. If the goal is instead purely predictive, as in many machine-learning applications, the states need not be interpretable, and $K$ can be chosen by held-out performance alone.
 
-In practice, one fits models across a range of $K$ and compares them with a criterion that penalizes complexity (AIC, BIC) or measures generalization (held-out log-likelihood, cross-validation). These comparisons are worth pairing with a recovery analysis: simulate data from plausible parameters at the number of trials actually available, then check whether fitting recovers those parameters. 
-```
+(glm_hmm_fitting_simulated_data)=
+## Fitting our simulated data
+Now we can know how the fitting works! The theoretical explanation was important to understand what is under the hood of how easy it is to fit a GLM-HMM with NeMoS. Really, you only need to instantiate a {class}`GLMHMM <nemos.glm_hmm.GLMHMM>`, tell it how many states to look for, and call `fit`. In this short section we fit the model from six random initializations and keep the fit with the highest log-likelihood. We pass `regularizer="UnRegularized"` so that the GLM updates are the maximum-likelihood fits described above, instead of the default Ridge-penalized ones. We also use the true number of states, $K = 3$; with real data, you should choose $K$ by cross-validation.
 
-Now we can see some code to fit our model to the simulated data and try to recover the initial parameters. 
 
 ```{code-cell} ipython3
 # refit from several seeds and keep the highest-likelihood solution
@@ -290,7 +334,8 @@ for s in range(6):
     if ll > best_ll:
         best_ll, best_model = ll, candidate
 
-# put the arbitrary state labels into a canonical order to compare with truth
+# EM's state labels are arbitrary: reorder the fitted states (engaged first,
+# then biased-left, then biased-right) so they line up with the true states
 best_model = tutorial_utils.relabel_by_bias(best_model)
 
 fig = tutorial_utils.plot_param_recovery(
@@ -301,9 +346,15 @@ fig = tutorial_utils.plot_param_recovery(
 )
 ```
 
-EM has recovered the generative model: one engaged state with a large stimulus weight and near-zero bias, two biased states of opposite sign whose choices barely depend on the stimulus, and a transition matrix with a heavy diagonal, closely matching the one we simulated from.
+EM has recovered the generative model: one engaged state with a large stimulus weight and near-zero bias, two biased states of opposite sign whose choices barely depend on the stimulus, and a transition matrix with a heavy diagonal, closely matching the one we simulated from in [GLM-HMMs: An Introduction](README.md).
 
 ## References
-<a id="ref1a"><a href="#cite1a">[1a]</a> <a id="ref1b"><a href="#cite1b">[1b]</a> Salakhutdinov, R., Roweis, S. T., & Ghahramani, Z. (2003). Optimization with EM and expectation-conjugate-gradient. In Proceedings of the 20th International Conference on Machine Learning (ICML-03) (pp. 672–679).
+<a id="ref1"><a href="#cite1">[1]</a> [Ibe, O. C. (2013). Hidden Markov models. In Markov Processes for Stochastic Modeling (2nd ed., Chapter 14, pp. 417–451). Elsevier.](https://doi.org/10.1016/B978-0-12-407795-9.00014-1)
 
-<a id="ref2"><a href="#cite2">[2]</a> [Ibe, O. C. (2013). Hidden Markov models. In Markov Processes for Stochastic Modeling (2nd ed., Chapter 14, pp. 417–451). Elsevier.](https://doi.org/10.1016/B978-0-12-407795-9.00014-1)
+<a id="ref2a"><a href="#cite2a">[2a]</a> <a id="ref2b"><a href="#cite2b">[2b]</a> <a id="ref2c"><a href="#cite2c">[2c]</a> <a id="ref2d"><a href="#cite2d">[2d]</a> <a id="ref2e"><a href="#cite2e">[2e]</a> Bishop, C. M. (2006). Pattern recognition and machine learning. Springer.
+
+<a id="ref3"><a href="#cite3">[3]</a> [Pillow, J. (2024). Lecture 18 notes: Expectation Maximization (EM). Statistical Modeling and Analysis of Neural Data (NEU 560), Princeton University.](https://pillowlab.princeton.edu/teaching/statneuro2024/notes/notes16_EM.pdf)
+
+<a id="ref4a"><a href="#cite4a">[4a]</a> Salakhutdinov, R., Roweis, S. T., & Ghahramani, Z. (2003). Optimization with EM and expectation-conjugate-gradient. In Proceedings of the 20th International Conference on Machine Learning (ICML-03) (pp. 672–679).
+
+<a id="ref5"><a href="#cite5">[5]</a> [Ashwood, Z. C., Roy, N. A., Stone, I. R., The International Brain Laboratory, Urai, A. E., Churchland, A. K., Pouget, A., & Pillow, J. W. (2022). Mice alternate between discrete strategies during perceptual decision-making. Nature Neuroscience, 25(2), 201–212.](https://doi.org/10.1038/s41593-021-01007-z)

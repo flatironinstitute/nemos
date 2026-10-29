@@ -112,7 +112,7 @@ These characteristics allow us to fully describe the HMM by three elements:
 With different uses of these three components we can gather a lot of information about how behavior unfolds over time.
 
 :::{note}
-This tutorial is the applied, end-to-end example. For the theory behind the model — how the three components combine into a likelihood, how the EM, forward-backward, and Viterbi algorithms fit and decode it, and why the fit depends on the initialization — see the companion page [GLM-HMMs: An Introduction](../background/glm_hmm/README.md).
+This tutorial is the applied, end-to-end example. For the theory behind the model (how the three components combine into a likelihood, how the EM, forward-backward, and Viterbi algorithms fit and decode it, and why the fit depends on the initialization), see the companion page [GLM-HMMs: An Introduction](../background/glm_hmm/README.md).
 :::
 
 ### How will we learn?

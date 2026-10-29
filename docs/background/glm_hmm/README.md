@@ -176,11 +176,6 @@ Together these are the whole model: an HMM is standardly written as the triple $
 p(y_1, \dots, y_T, z_1, \dots, z_T) = p(z_1) \left[\prod_{t=2}^T p(z_t \mid z_{t-1})\right] \prod_{t=1}^T p(y_t \mid z_t)
 \end{equation}
 
-```{admonition} The assumptions hiding in that factorization
-:class: note
-We can factorize to three components thanks to three assumptions: Markov, stationarity and independence (Ibe, 2013) <span id="cite5b"></span><a href="#ref5b">[5b]</a>. The Markov assumption, which states that the next state depends only on the current one, is what reduces the transition term to a single factor per step; models where the next state depends on the previous $k$ states are possible but harder to analyze. The stationarity assumption, which states that transition probabilities are constant, is what lets one fixed matrix $\boldsymbol{A}$ serve for the whole experiment. And the observation independence assumption, which states that each observation is independent of the others given its own state, is what turns the emissions into a simple product $\prod_t p(y_t \mid z_t)$. Any structure in the observations must therefore be carried by the states in an HMM.
-```
-
 The factorization above is also a recipe for sampling. Draw the first state from $\boldsymbol{\pi}$; draw each state after it from the row of $\boldsymbol{A}$ that the current state selects; and at every trial draw one observation from the emission distribution of whichever state is active.
 
 Let us do this for three strategies: an unbiased strategy, where the animal chooses randomly left or right; a biased-left strategy, in which it mostly turns left; and a biased-right strategy, in which the animal turns right. Since a choice is binary, we can use a Bernoulli as an emission distribution: each state carries its own probability $\phi_k$ of a leftward choice, and the observation on a trial in state $k$ is a single Bernoulli draw with that probability, $y_t \mid z_t = k \sim \mathrm{Bernoulli}(\phi_k)$.
@@ -307,7 +302,7 @@ The Bernoulli emission above is the default in NeMoS, but it is only one option.
 
 With state-specific weights and intercepts, the states take on interpretable roles, and the two parameters play different parts. The weights say how strongly the choice follows the inputs, while the intercept sets the side the animal leans to when the inputs are not informative. An engaged state therefore has a large stimulus weight and an intercept near zero, so that its choices track the evidence; a biased state has small weights and a large intercept of one sign, so that its choices lean to that side whatever the stimulus does.
 
-
+(glm_hmm_example)=
 ### GLM-HMM example
 Let's build a specific Bernoulli GLM-HMM and generate data from it. In this example, the design matrix has a single column ($M = 1$): the signed contrast of the visual stimulus. The sign gives the side the stimulus appeared on (positive for left, negative for right) and the magnitude gives how visible it was (so a trial near zero carries almost no sensory evidence). 
 
@@ -317,6 +312,7 @@ T = 3000
 
 # a single stimulus predictor (signed contrast) in [-1, 1]: the sign is the
 # side the grating appeared on, the magnitude is how visible it was
+rng = np.random.default_rng(2)
 X = rng.uniform(-1, 1, size=(T, 1))
 ```
 
@@ -400,7 +396,7 @@ fig = tutorial_utils.plot_simulated_session(
 )
 ```
 
-Now that we understand what each component of the model does and we have seen a worked example, it is worth naming what we will ultimately want out of the model. The parameters $\boldsymbol{\theta} \equiv \{A,\boldsymbol{\pi},\{\boldsymbol{w}_k, b_k\}_{k=1}^K\}$ are usually a means to an end, as the questions that motivate fitting a GLM-HMM are about the latent states themselves. *When* was each strategy in use? *How much* of the experiment did the animal spend in each one? And *how does behavior differ* between them — is the animal more accurate when engaged, and by how much?
+Now that we understand what each component of the model does and we have seen a worked example, it is worth naming what we will ultimately want out of the model. The parameters $\boldsymbol{\theta} \equiv \{A,\boldsymbol{\pi},\{\boldsymbol{w}_k, b_k\}_{k=1}^K\}$ are usually a means to an end, as the questions that motivate fitting a GLM-HMM are about the latent states themselves. *When* was each strategy in use? *How much* of the experiment did the animal spend in each one? And *how does behavior differ* between them: is the animal more accurate when engaged, and by how much?
 
 These map onto the two classical HMM problems taken up on the next two pages (Ibe, 2013) <span id="cite5c"></span><a href="#ref5c">[5c]</a>: the **learning problem**, finding the parameters that best explain the observed sequence, which we solve with the EM algorithm; and the **decoding problem**, finding the most likely sequence of hidden states behind the observations, which we solve with the Viterbi algorithm. A third, the **evaluation problem**, which consists of computing how probable the observed sequence is under a given model, is answered by the forward pass along the way, so it needs no page of its own; we pick it up where it appears on [the learning problem](plot_01_learning_problem.md) page.
 
@@ -430,7 +426,7 @@ plot_02_decoding_problem.md
 
 ## Additional resources
 - [Bishop (2006) Chapter 13 "Sequential Data"](https://www.microsoft.com/en-us/research/wp-content/uploads/2006/01/Bishop-Pattern-Recognition-and-Machine-Learning-2006.pdf): in particular section 13.2, "Hidden Markov Models", gives a thorough treatment of maximum-likelihood fitting of HMMs, the EM algorithm, the forward-backward algorithm, and the Viterbi algorithm.
-- [Ibe (2013) Chapter 14 "Hidden Markov Models"](https://doi.org/10.1016/B978-0-12-407795-9.00014-1): a self-contained treatment of HMMs as a class of Markov process — the underlying assumptions, the three fundamental problems (evaluation, decoding, learning), and the forward, backward, Viterbi and Baum-Welch algorithms that solve them.
+- [Ibe (2013) Chapter 14 "Hidden Markov Models"](https://doi.org/10.1016/B978-0-12-407795-9.00014-1): a self-contained treatment of HMMs as a class of Markov process: the underlying assumptions, the three fundamental problems (evaluation, decoding, learning), and the forward, backward, Viterbi and Baum-Welch algorithms that solve them.
 - [Zoe Ashwood's SSM tutorial on GLM-HMMs](https://github.com/zashwood/ssm/blob/master/notebooks/2b%20Input%20Driven%20Observations%20(GLM-HMM).ipynb): an educational notebook that explains GLM-HMMs and their fitting with both maximum-likelihood and MAP estimation.
 - [GLM-HMMs blogpost by Camila Ucheoma](https://anneurai.net/2024/01/26/a-glm-hmm-deep-dive/): a summary of Ashwood et al. (2022) with a concise, intuitive explanation of GLM-HMMs.
 - The applied companion to this page, [Infer behavioral strategies during decision making with GLM-HMMs](../../tutorials/plot_07_behavioral_states.md): an end-to-end example that fits a Bernoulli GLM-HMM to real IBL mouse-choice data and interprets the states, transition matrix, and posteriors.

@@ -207,6 +207,7 @@ intersphinx_mapping = {
     "scikit-learn": ("https://scikit-learn.org/stable/", None),
     "jax": ("https://jax.readthedocs.io/en/latest/", None),
     "scipy": ("https://docs.scipy.org/doc/scipy/", None),
+    "pynapple": ("https://pynapple.org/", None),
 }
 
 full_api = os.environ.get("NEMOS_FULL_API", "false").lower() == "true"
