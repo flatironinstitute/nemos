@@ -442,7 +442,7 @@ class TestUtils:
 
     @pytest.mark.requires_x64
     def test_padding_prevents_windows_reaching_past_the_first_event(self):
-        """Without the prepended events the first spike's feature vector is nan instead of zero."""
+        """Without the prepended events, the window of the first spike includes events that occur after it."""
         dataset = create_dataset()
         max_window, X = dataset["max_window"], dataset["X"]
         unpadded = PredictorsPPGLM(
@@ -450,21 +450,17 @@ class TestUtils:
         )
         first_event = unpadded.times[0]
 
-        def design_row(predictors, timestamp_idx):
-            return log_likelihood._compute_design_matrix(
-                jnp.array([first_event]),
-                jnp.array([timestamp_idx]),
-                predictors,
-                dataset["eval_function"],
-                max_window,
-                dataset["n_neurons"],
+        def window_lags(predictors, timestamp_idx):
+            return first_event - utils.slice_array(
+                predictors.times, timestamp_idx, max_window
             )
 
-        # the padded window holds only the dummy events, whose lags are far above the
-        # history window; the unpadded one wraps to the end of the recording, whose
-        # lags are negative, and the basis is nan below zero even with fill_value=0
-        np.testing.assert_array_equal(design_row(X, max_window), 0.0)
-        assert not jnp.all(design_row(unpadded, 0) == 0)
+        # with padding, the window of the first spike is made of dummy events only, and
+        # their lags are larger than the history window; without padding, the slice
+        # start is clamped to 0, so the window takes events that occur after the first
+        # spike, and their lags are negative
+        assert jnp.all(window_lags(X, max_window) > dataset["history_window"])
+        assert jnp.any(window_lags(unpadded, 0) < 0)
 
     @pytest.mark.requires_x64
     def test_reshape_and_pad_spikes(self):

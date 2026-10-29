@@ -1,9 +1,5 @@
-from ._curvature import LBFGSCurvature as LBFGSCurvature
-from ._curvature import NewtonCurvature as NewtonCurvature
-from ._direction import LinearSolveDirection as LinearSolveDirection
-from ._direction import ProxQuadraticDirection as ProxQuadraticDirection
-from ._lbfgs import ProximalLBFGS as ProximalLBFGS
-from ._linesearches import ArmijoBacktracking as ArmijoBacktracking
-from ._linesearches import TsengYunBacktracking as TsengYunBacktracking
-from ._newton import Newton as Newton
-from ._newton import ProximalNewton as ProximalNewton
+"""Second-order solvers module."""
+
+import lazy_loader as _lazy
+
+__getattr__, __dir__, __all__ = _lazy.attach_stub(__name__, __file__)

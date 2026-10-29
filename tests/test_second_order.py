@@ -35,11 +35,10 @@ import lineax as lx
 import numpy as np
 import optax
 import pytest
-from nemos.solvers._newton import Newton, ProximalNewton
-from nemos.solvers._second_order._loop import Loop
 from optimistix._solver.limited_memory_bfgs import _lbfgs_hessian_operator_fn
 
 from nemos.regularizer import Lasso, Ridge
+from nemos.solvers import Newton, ProximalNewton
 from nemos.solvers._second_order._curvature import LBFGSCurvature
 from nemos.solvers._second_order._lbfgs import ProximalLBFGS
 
@@ -99,14 +98,17 @@ def test_second_order_solvers_step_only_on_a_descent_slope(
         tol=1e-12,
     )
     state = solver.init_state(params, X, y)
-    (fval, _), grad = solver.loop.fval_and_grad_fn(params, X, y)
+    (fval, _), grad = solver._fval_and_grad(params, X, y)
     step = make_step(grad)
 
-    _, descent, _ = solver._line_search._slope_descent_value(params, step, grad, fval)
+    updates, new_ls_state = solver._line_search.update(
+        params, step, grad, fval, state.ls_state, X, y
+    )
+    descent = new_ls_state.descent
     assert np.sign(float(descent)) == slope_sign
 
-    new_params, new_ls_state, no_step_found = solver.loop._apply_or_reject(
-        params, step, grad, state, fval, solver._line_search, X, y
+    new_params, new_ls_state, no_step_found = solver._apply_or_reject(
+        params, step, grad, state, fval, X, y
     )
     # a stationary slope is not a failure: it is the optimum, and the zero step it leaves
     # behind is what the convergence test is supposed to read
@@ -146,14 +148,17 @@ def test_prox_newton_reports_a_nan_slope_as_no_step_found():
         tol=1e-12,
     )
     state = solver.init_state(params, X, y)
-    (fval, _), grad = solver.loop.fval_and_grad_fn(params, X, y)
+    (fval, _), grad = solver._fval_and_grad(params, X, y)
     step = jax.tree.map(lambda g: jnp.full_like(g, jnp.nan), grad)
 
-    _, descent, _ = solver._line_search._slope_descent_value(params, step, grad, fval)
+    updates, new_ls_state = solver._line_search.update(
+        params, step, grad, fval, state.ls_state, X, y
+    )
+    descent = new_ls_state.descent
     assert np.isnan(float(descent))
 
-    new_params, _, no_step_found = solver.loop._apply_or_reject(
-        params, step, grad, state, fval, solver._line_search, X, y
+    new_params, new_ls_state, no_step_found = solver._apply_or_reject(
+        params, step, grad, state, fval, X, y
     )
     assert bool(no_step_found)
     np.testing.assert_array_equal(np.asarray(new_params), np.asarray(params))
@@ -212,7 +217,7 @@ def test_second_order_solvers_reject_an_exhausted_line_search(
     solver, X, y, params = _stall_problem(solver_cls, regularizer_cls, strength)
     solver._line_search = _starve(solver._line_search)
     state = solver.init_state(params, X, y)
-    (fval, _), grad = solver.loop.fval_and_grad_fn(params, X, y)
+    (fval, _), grad = solver._fval_and_grad(params, X, y)
     # far past any stepsize one halving can rescue, and still a descent direction so the
     # slope gate passes and the line search is the only thing that can reject it
     step = jax.tree.map(lambda g: -1e6 * g, grad)
@@ -222,8 +227,8 @@ def test_second_order_solvers_reject_an_exhausted_line_search(
     )
     assert float(descent) < 0.0
 
-    new_params, new_ls_state, no_step_found = solver.loop._apply_or_reject(
-        params, step, grad, state, fval, solver._line_search, X, y
+    new_params, new_ls_state, no_step_found = solver._apply_or_reject(
+        params, step, grad, state, fval, X, y
     )
 
     assert float(new_ls_state.linesearch_state.info.decrease_error) > 0.0, (
@@ -265,7 +270,7 @@ def test_second_order_solvers_end_a_stalled_run_without_claiming_convergence(
     # ``Loop`` is a frozen ``eqx.Module``, so the class is patched rather than the
     # instance the solver holds.
     monkeypatch.setattr(
-        Loop,
+        solver_cls,
         "_apply_or_reject",
         lambda self, p, step, grad, state, fval, line_search, *args: (
             p,
@@ -300,11 +305,13 @@ def test_lbfgs_curvature_scales_b0_by_the_gradient_norm_while_history_is_empty()
 
     empty = curvature.init(params)
     # first call: y_diff is zero, so no pair is admitted and the history stays empty
-    state = curvature.update(empty, params, jax.tree.map(jnp.zeros_like, params), grad)
+    _, _, state = curvature.update(
+        empty, params, jax.tree.map(jnp.zeros_like, params), grad
+    )
     assert int(state.index_start) == 0
     np.testing.assert_allclose(float(state.initial_scale), grad_norm, rtol=1e-12)
 
-    hvp = curvature.hvp(state, params, v)
+    hvp = curvature.hvp(state, params, v, None)
     expected = jax.tree.map(lambda x: grad_norm * x, v)
     for got, want in zip(jax.tree.leaves(hvp), jax.tree.leaves(expected)):
         np.testing.assert_allclose(np.asarray(got), np.asarray(want), rtol=1e-12)
@@ -318,10 +325,14 @@ def test_lbfgs_curvature_scales_b0_by_the_gradient_norm_while_history_is_empty()
 
     # with a pair stored the scale must no longer be applied
     y_diff = jax.tree.map(lambda p: jnp.full_like(p, 0.1), params)
-    filled = curvature.update(state, params, y_diff, grad)
+    # simulate a gradient change to accept a curvature update:
+    # a necessary condition for the ``update`` to be accepted
+    # is that the difference of grad with ``state.grad_prev`` is non-zero
+    grad = jax.tree.map(lambda x: x + 0.001, grad)
+    _, _, filled = curvature.update(state, params, y_diff, grad)
     assert int(filled.index_start) == 1
     for got, want in zip(
-        jax.tree.leaves(curvature.hvp(filled, params, v)),
+        jax.tree.leaves(curvature.hvp(filled, params, v, None)),
         jax.tree.leaves(_lbfgs_hessian_operator_fn(v, filled)),
     ):
         np.testing.assert_array_equal(np.asarray(got), np.asarray(want))
@@ -338,7 +349,7 @@ def test_lbfgs_curvature_floors_the_initial_scale_at_sqrt_eps():
     for dtype in (jnp.float32, jnp.float64):
         params = (jnp.zeros(3, dtype=dtype), jnp.zeros((), dtype=dtype))
         zero_grad = jax.tree.map(jnp.zeros_like, params)
-        state = curvature.update(
+        _, _, state = curvature.update(
             curvature.init(params),
             params,
             jax.tree.map(jnp.zeros_like, params),
@@ -372,7 +383,7 @@ def test_second_order_solvers_do_not_read_a_flat_optimum_as_a_failed_search(
     solver, X, y, params = _stall_problem(solver_cls, regularizer_cls, strength)
     solver._line_search = _starve(solver._line_search)
     state = solver.init_state(params, X, y)
-    (fval, _), grad = solver.loop.fval_and_grad_fn(params, X, y)
+    (fval, _), grad = solver._fval_and_grad(params, X, y)
     # Recreate what the search sees at the optimum: a slope under the rounding scale.
     eps = np.finfo(np.float64).eps
     # ``grad`` is a placeholder step here; ``value`` does not depend on it
@@ -386,8 +397,8 @@ def test_second_order_solvers_do_not_read_a_flat_optimum_as_a_failed_search(
     assert descent < 0.0
     assert abs(descent) <= eps * abs(float(value))
 
-    new_params, new_ls_state, no_step_found = solver.loop._apply_or_reject(
-        params, step, grad, state, fval, solver._line_search, X, y
+    new_params, new_ls_state, no_step_found = solver._apply_or_reject(
+        params, step, grad, state, fval, X, y
     )
 
     assert float(new_ls_state.linesearch_state.info.decrease_error) > 0.0, (
@@ -427,7 +438,7 @@ def test_second_order_solvers_converge_at_a_tolerance_below_the_search_noise_flo
     def objective(c):
         return float(solver._line_search.fun(c, X, y))
 
-    (fval, _), grad = solver.loop.fval_and_grad_fn(final_params, X, y)
+    (fval, _), grad = solver._fval_and_grad(final_params, X, y)
     for scale in (1e-4, 1e-6, 1e-8):
         trial = jax.tree.map(lambda p, g: p - scale * g, final_params, grad)
         assert objective(trial) >= objective(final_params) - 1e-12

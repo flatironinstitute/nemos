@@ -8,7 +8,7 @@ live here.
 
 Subclasses supply their ``__init__``, their state through :meth:`init_state`, the
 keyword arguments they accept, and, where they differ from the defaults here, the two
-seams :meth:`_initial_y_diff` and :meth:`_fval_diff`.
+override points :meth:`_initial_y_diff` and :meth:`_fval_diff`.
 """
 
 from __future__ import annotations
@@ -44,8 +44,8 @@ class SecondOrderState(eqx.Module, Generic[Y]):
 
     grad_norm: Scalar
     stats: OptimizationInfo
-    # Last accepted step, read by the Cauchy convergence test and, for a model that
-    # builds itself from pairs, as the ``s`` of the curvature pair.
+    # Last accepted step. The Cauchy convergence test compares it against ``tol`` and
+    # ``rtol``, and a curvature model built from pairs takes it as the ``s`` of a pair.
     y_diff: Y
     # Set when an iteration produced no usable step: the direction was not a descent
     # direction, or it was not finite. It ends the run, and it is not convergence.
@@ -62,8 +62,7 @@ class SecondOrderState(eqx.Module, Generic[Y]):
 class AbstractSecondOrderSolver(abc.ABC, Generic[Y, S]):
     """Wiring shared by every second-order solver: objective, state seed, run loop."""
 
-    # Whether the penalty is modelled by the quadratic. False for solvers that reach the
-    # penalty through a proximal operator instead.
+    # False if the solver doesn't use a proximal operator
     _proximal: ClassVar[bool] = False
 
     # Set by every subclass' ``__init__``.
@@ -117,10 +116,10 @@ class AbstractSecondOrderSolver(abc.ABC, Generic[Y, S]):
         return jax.eval_shape(self.fun, init_params, *args).dtype
 
     def _initial_y_diff(self, init_params: Y) -> Y:
-        """The step the first convergence test reads, before any step has been taken.
+        """The step the first convergence test sees, before any step has been taken.
 
         Infinite, so a Cauchy criterion on the step alone cannot fire on iteration one.
-        A solver whose curvature model reads ``y_diff`` as a curvature pair overrides
+        A solver whose curvature model takes ``y_diff`` as a curvature pair overrides
         this: see :meth:`~nemos.solvers._second_order._lbfgs.ProximalLBFGS._initial_y_diff`.
         """
         return jax.tree.map(lambda x: jnp.full_like(x, jnp.inf), init_params)
@@ -238,9 +237,14 @@ class AbstractSecondOrderSolver(abc.ABC, Generic[Y, S]):
         descent = new_ls_state.descent
         step_taken = new_ls_state.step_taken
         # A failed search at a slope this small means the iterate is stationary rather
-        # than broken, so the zero step is left for the convergence test to read.
+        # than broken, so the zero step is left for the convergence test to use.
+        # The slope at which the search runs out of precision is set by the rounding
+        # error of the objective, which is a few ulp rather than exactly one: a measured
+        # stall sat at ``1.18 * eps * |F|`` and a threshold of ``eps * |F|`` called it a
+        # failure. ``16`` is the factor sklearn uses for the same decision in
+        # ``NewtonSolver.line_search``.
         eps = jnp.finfo(jnp.asarray(value).dtype).eps
-        stationary = jnp.abs(descent) <= eps * jnp.abs(value)
+        stationary = jnp.abs(descent) <= 16 * eps * jnp.abs(value)
         return updates, new_ls_state, ~step_taken & ~stationary
 
     def converged(self, params: Y, state: S, grad: Y, fval: Scalar) -> Bool[Array, ""]:
@@ -263,9 +267,26 @@ class AbstractSecondOrderSolver(abc.ABC, Generic[Y, S]):
             self._fval_diff(fval, state),
         )
 
-    def _iterate(self, init_params: Y, state: S, *args: Any) -> tuple[Y, S]:
-        """Step until the stopping rule fires, the run stalls, or ``maxiter`` passes."""
+    def run(self, init_params: Y, *args: Any) -> StepResult:
+        """Iterate to convergence, to a stall, or to ``maxiter``.
 
+        ``jit`` picks which of the two loops in :meth:`_run` executes, so the compiled
+        path has to be reached through a separate method: decorating this one would trace
+        the Python loop and fail on its data-dependent condition.
+        """
+        if self.jit:
+            return self._run_jit(init_params, *args)
+        return self._run(init_params, *args)
+
+    @eqx.filter_jit
+    def _run_jit(self, init_params: Y, *args: Any) -> StepResult:
+        """JIT-compiled optimization loop."""
+        return self._run(init_params, *args)
+
+    def _run(self, init_params: Y, *args: Any) -> StepResult:
+        state = self.init_state(init_params, *args)
+
+        # iteration body
         def cond(carry: tuple[Y, S]) -> Bool[Array, ""]:
             _, s = carry
             return (
@@ -291,29 +312,14 @@ class AbstractSecondOrderSolver(abc.ABC, Generic[Y, S]):
             while cond(carry):
                 carry = body(carry)
             final_params, final_state = carry
-        return final_params, final_state
 
-    def run(self, init_params: Y, *args: Any) -> StepResult:
-        """Iterate to convergence, to a stall, or to ``maxiter``.
-
-        ``jit`` picks which of the two loops in :meth:`_run` executes, so the compiled
-        path has to be reached through a separate method: decorating this one would trace
-        the Python loop and fail on its data-dependent condition.
-        """
-        if self.jit:
-            return self._run_jit(init_params, *args)
-        return self._run(init_params, *args)
-
-    @eqx.filter_jit
-    def _run_jit(self, init_params: Y, *args: Any) -> StepResult:
-        return self._run(init_params, *args)
-
-    def _run(self, init_params: Y, *args: Any) -> StepResult:
-        state = self.init_state(init_params, *args)
-        final_params, final_state = self._iterate(init_params, state, *args)
         # ``fun_with_aux`` is the objective again: only pay for it when there is an aux
         # to collect, since without one it returns a ``None`` the caller already knows.
-        aux = self.fun_with_aux(final_params, *args)[1] if self.has_aux else None
+        aux = (
+            self.fun_with_aux(final_params, *args)[1]
+            if self._line_search.has_aux
+            else None
+        )
         return final_params, final_state, aux
 
     @classmethod

@@ -1,7 +1,7 @@
 """Observation model classes for GLMs."""
 
 import abc
-from typing import Callable, Literal, Union
+from typing import Callable, ClassVar, Literal, Union
 
 import jax
 import jax.numpy as jnp
@@ -51,6 +51,9 @@ class Observations(Base, abc.ABC):
     :class:`~nemos.observation_models.BernoulliObservations`
         A specific implementation of an observation model using the Bernoulli distribution.
     """
+
+    # Open interval of valid means; None leaves custom model initialization unchanged.
+    rate_range: ClassVar[tuple[float, float] | None] = None
 
     # list link functions that we know preserve convexity of GLM
     glm_convexity_preserving_links = ()
@@ -452,6 +455,8 @@ class PoissonObservations(Observations):
 
     """
 
+    rate_range = (0.0, float("inf"))
+
     glm_convexity_preserving_links = (exp, softplus)
 
     def __init__(self):
@@ -700,6 +705,8 @@ class GammaObservations(Observations):
 
     """
 
+    rate_range = (0.0, float("inf"))
+
     glm_convexity_preserving_links = (exp, utils.one_over_x)
 
     def __init__(
@@ -926,6 +933,8 @@ class BernoulliObservations(Observations):
     BernoulliObservations()
 
     """
+
+    rate_range = (0.0, 1.0)
 
     glm_convexity_preserving_links = (logistic, expit)
 
@@ -1280,6 +1289,8 @@ class NegativeBinomialObservations(Observations):
 
     """
 
+    rate_range = (0.0, float("inf"))
+
     # NOTE: softplus makes the problem non-convex!
     glm_convexity_preserving_links = (exp,)
 
@@ -1555,6 +1566,8 @@ class GaussianObservations(Observations):
     GaussianObservations()
 
     """
+
+    rate_range = (-float("inf"), float("inf"))
 
     glm_convexity_preserving_links = (identity,)
 
@@ -1949,6 +1962,8 @@ class CategoricalObservations(Observations):
     CategoricalObservations()
 
     """
+
+    rate_range = (0.0, float("inf"))
 
     glm_convexity_preserving_links = (log_softmax,)
 

@@ -157,7 +157,9 @@ class ProximalLBFGS(AbstractSecondOrderSolver[Y, SecondOrderState[Y]], Generic[Y
             self.fun, init_params, strength=regularizer_strength
         )
         backtrack = optax.scale_by_backtracking_linesearch(30)
-        self._line_search = TsengYunBacktracking(backtrack, penalized_loss, penalty_fn)
+        self._line_search = TsengYunBacktracking(
+            backtrack, penalized_loss, has_aux=has_aux, penalty=penalty_fn
+        )
 
         # The subproblem is solved for the new parameters, so the prox is the
         # regularizer's own and the solver does not depend on the current iterate:

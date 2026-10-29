@@ -23,6 +23,11 @@ if TYPE_CHECKING:
     from ._typing import HvpFn
 from ._utils import map_blocks
 
+CHOLESKY_ERR_MSG = (
+    "Cholesky solve failed; the Hessian may not be positive definite. "
+    "Try using the 'eigh' or 'identity_shift' solver instead."
+)
+
 
 class AbstractDirection(eqx.Module, ABC, Generic[Y, D]):
     """Turn a curvature model and a gradient into a step.
@@ -117,8 +122,7 @@ def _solve_shifted_system(
         checked_value = eqx.error_if(
             solution.value,
             failed,
-            "Cholesky solve failed; the Hessian may not be positive definite. "
-            "Try using the 'eigh' or 'identity_shift' solver instead.",
+            CHOLESKY_ERR_MSG,
         )
         solution = eqx.tree_at(
             lambda result: result.value,
