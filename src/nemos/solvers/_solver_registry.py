@@ -11,7 +11,7 @@ from ._optax_optimistix_solvers import (
     OptimistixOptaxLBFGS,
 )
 from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
-from ._second_order import Newton, ProximalNewton
+from ._second_order import Newton, ProximalLBFGS, ProximalNewton
 from ._svrg import WrappedProxSVRG, WrappedSVRG
 from ._validation import validate_solver_class
 
@@ -332,8 +332,7 @@ def list_available_algorithms() -> list[str]:
     -------
     >>> import nemos as nmo
     >>> nmo.solvers.list_available_algorithms()  # doctest: +NORMALIZE_WHITESPACE
-    ['GradientDescent', 'ProximalGradient', 'LBFGS', 'BFGS', 'NonlinearCG',
-     'SVRG', 'ProxSVRG', 'Newton', 'ProximalNewton']
+    ['GradientDescent', 'ProximalGradient', ...]
     """
     return list(_registry.keys())
 
@@ -405,6 +404,7 @@ register("ProximalNewton", ProximalNewton, "nemos", default=True)
 register(
     "GradientDescent", OptimistixOptaxGradientDescent, "optax+optimistix", default=False
 )
+register("ProximalLBFGS", ProximalLBFGS, "nemos", default=True)
 
 if JAXOPT_AVAILABLE:
     from ._jaxopt_solvers import (

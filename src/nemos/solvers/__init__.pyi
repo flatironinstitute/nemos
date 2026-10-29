@@ -24,7 +24,7 @@ from ._optax_optimistix_solvers import (
     OptimistixOptaxLBFGS,
 )
 from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
-from ._second_order import CHOLESKY_ERR_MSG, Newton, ProximalNewton
+from ._second_order import CHOLESKY_ERR_MSG, Newton, ProximalLBFGS, ProximalNewton
 from ._solver_doc_helper import get_solver_documentation
 from ._solver_registry import (
     SolverSpec,
@@ -64,6 +64,7 @@ __all__ = [
     "CHOLESKY_ERR_MSG",
     "Newton",
     "ProximalNewton",
+    "ProximalLBFGS",
     "OptimistixOptaxGradientDescent",
     "OptimistixOptaxLBFGS",
     "OptimistixBFGS",

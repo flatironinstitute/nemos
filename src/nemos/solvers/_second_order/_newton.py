@@ -195,7 +195,6 @@ class Newton(BaseNewtonSolver[Y], Generic[Y]):
             line_search=ArmijoBacktracking(
                 optax.scale_by_backtracking_linesearch(30),
                 penalized_loss,
-                has_aux=has_aux,
             ),
             direction_factory=lambda tag, _: LinearSolveDirection.from_tag(
                 init_params,
@@ -327,7 +326,6 @@ class ProximalNewton(BaseNewtonSolver[Y], Generic[Y]):
             line_search=TsengYunBacktracking(
                 optax.scale_by_backtracking_linesearch(30),
                 penalized_loss,
-                has_aux=has_aux,
                 penalty=penalty_fn,
             ),
             # The subproblem is solved for the new parameters, so the prox is the

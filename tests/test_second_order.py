@@ -36,9 +36,12 @@ import lineax as lx
 import numpy as np
 import optax
 import pytest
+from optimistix._solver.limited_memory_bfgs import _lbfgs_hessian_operator_fn
 
 from nemos.regularizer import Lasso, Ridge
 from nemos.solvers import Newton, ProximalNewton
+from nemos.solvers._second_order._curvature import LBFGSCurvature
+from nemos.solvers._second_order._lbfgs import ProximalLBFGS
 
 # A point with both zero and non-zero coefficients: the zeros are where the L1 penalty is
 # not differentiable, which is the whole reason the composite slope is needed.
@@ -58,6 +61,7 @@ def _mse(params, X, y):
 _GATE_CASES = [
     pytest.param(Newton, Ridge, 0.1, id="Newton-Ridge"),
     pytest.param(ProximalNewton, Lasso, _PENALTY_STRENGTH, id="ProximalNewton-Lasso"),
+    pytest.param(ProximalLBFGS, Lasso, _PENALTY_STRENGTH, id="ProximalLBFGS-Lasso"),
 ]
 
 
@@ -167,6 +171,7 @@ def test_prox_newton_reports_a_nan_slope_as_no_step_found():
 _STALL_CASES = [
     pytest.param(Newton, Ridge, 0.1, id="Newton-Ridge"),
     pytest.param(ProximalNewton, Lasso, _PENALTY_STRENGTH, id="ProximalNewton-Lasso"),
+    pytest.param(ProximalLBFGS, Lasso, _PENALTY_STRENGTH, id="ProximalLBFGS-Lasso"),
 ]
 
 
@@ -280,6 +285,170 @@ def test_second_order_solvers_end_a_stalled_run_without_claiming_convergence(
     assert not bool(final_state.stats.reached_max_steps)
     assert int(final_state.stats.num_steps) == 1, "the run must stop on the first stall"
     np.testing.assert_array_equal(np.asarray(final_params), np.asarray(params))
+
+
+@pytest.mark.requires_x64
+def test_lbfgs_curvature_scales_b0_by_the_gradient_norm_while_history_is_empty():
+    """With no curvature pair the compact operator is the identity, which is unscaled.
+
+    ``B_0 = I`` makes the first direction ``-grad``, whose length is the gradient norm, and
+    a backtracking search with a bounded budget cannot always shorten it. ``initial_scale``
+    is the gradient norm, so the first step is unit length, as SciPy's L-BFGS-B does. Once
+    a pair is stored the compact representation scales itself and this must switch off.
+    """
+    curvature = LBFGSCurvature(history_length=4)
+    params = (jnp.asarray(_KINKED_PARAMS), jnp.zeros(()))
+    grad = jax.tree.map(lambda p: jnp.full_like(p, 3.0), params)
+    grad_norm = float(jnp.sqrt(lx.internal.tree_dot(grad, grad)))
+    v = jax.tree.map(lambda p: jnp.full_like(p, 0.5), params)
+
+    empty = curvature.init(params)
+    # first call: y_diff is zero, so no pair is admitted and the history stays empty
+    _, _, state = curvature.update(
+        empty, params, jax.tree.map(jnp.zeros_like, params), grad
+    )
+    assert int(state.index_start) == 0
+    np.testing.assert_allclose(float(state.initial_scale), grad_norm, rtol=1e-12)
+
+    hvp = curvature.hvp(state, params, v, None)
+    expected = jax.tree.map(lambda x: grad_norm * x, v)
+    for got, want in zip(jax.tree.leaves(hvp), jax.tree.leaves(expected)):
+        np.testing.assert_allclose(np.asarray(got), np.asarray(want), rtol=1e-12)
+
+    # the step now has unit length, where B_0 = I would give one of length ||grad||
+    np.testing.assert_allclose(
+        float(jnp.sqrt(lx.internal.tree_dot(hvp, hvp))) / grad_norm,
+        float(jnp.sqrt(lx.internal.tree_dot(v, v))),
+        rtol=1e-12,
+    )
+
+    # with a pair stored the scale must no longer be applied
+    y_diff = jax.tree.map(lambda p: jnp.full_like(p, 0.1), params)
+    # simulate a gradient change to accept a curvature update:
+    # a necessary condition for the ``update`` to be accepted
+    # is that the difference of grad with ``state.grad_prev`` is non-zero
+    grad = jax.tree.map(lambda x: x + 0.001, grad)
+    _, _, filled = curvature.update(state, params, y_diff, grad)
+    assert int(filled.index_start) == 1
+    for got, want in zip(
+        jax.tree.leaves(curvature.hvp(filled, params, v, None)),
+        jax.tree.leaves(_lbfgs_hessian_operator_fn(v, filled)),
+    ):
+        np.testing.assert_array_equal(np.asarray(got), np.asarray(want))
+
+
+@pytest.mark.requires_x64
+def test_lbfgs_curvature_floors_the_initial_scale_at_sqrt_eps():
+    """A vanishing gradient must not ask for an unbounded first step.
+
+    SciPy caps ``1 / ||d||`` at the f64 constant ``stpmx = 1e10``; the floor here is taken
+    from the parameter dtype instead, so the bound follows the working precision.
+    """
+    curvature = LBFGSCurvature(history_length=4)
+    for dtype in (jnp.float32, jnp.float64):
+        params = (jnp.zeros(3, dtype=dtype), jnp.zeros((), dtype=dtype))
+        zero_grad = jax.tree.map(jnp.zeros_like, params)
+        _, _, state = curvature.update(
+            curvature.init(params),
+            params,
+            jax.tree.map(jnp.zeros_like, params),
+            zero_grad,
+        )
+        expected = float(np.sqrt(np.finfo(np.dtype(dtype).name).eps))
+        np.testing.assert_allclose(float(state.initial_scale), expected, rtol=1e-6)
+        assert state.initial_scale.dtype == dtype, "the lax.cond branches must agree"
+
+
+_HISTORY_LENGTH = 3
+
+
+# Dense BFGS update from B_0 = gamma I, Byrd, Nocedal & Schnabel (1994) eq. (2.17).
+def _dense_bfgs(steps, grad_diffs):
+    gamma = (grad_diffs[-1] @ grad_diffs[-1]) / (steps[-1] @ grad_diffs[-1])
+    hess_approx = gamma * jnp.eye(steps[-1].shape[0])
+    for step, grad_diff in zip(steps, grad_diffs):
+        hess_step = hess_approx @ step
+        hess_approx = (
+            hess_approx
+            - jnp.outer(hess_step, hess_step) / (step @ hess_step)
+            + jnp.outer(grad_diff, grad_diff) / (grad_diff @ step)
+        )
+    return hess_approx
+
+
+# The L-BFGS matrix, assembled column by column from its hvp.
+def _lbfgs_matrix(curvature, state, x):
+    return jnp.stack(
+        [curvature.hvp(state, x, e, None) for e in jnp.eye(x.shape[0])], axis=1
+    )
+
+
+@pytest.mark.parametrize("n_updates", range(1, 2 * _HISTORY_LENGTH + 2))
+@pytest.mark.requires_x64
+def test_lbfgs_curvature_matches_dense_bfgs(n_updates):
+    """The L-BFGS operator equals the dense BFGS matrix over the last stored pairs."""
+    rng = np.random.default_rng(0)
+    A = rng.normal(size=(5, 5))
+    hessian = jnp.asarray(A @ A.T + np.eye(5))
+
+    # loss(x) = 0.5 x^T hessian x, so its gradient is hessian @ x
+    def loss_grad(x):
+        return hessian @ x
+
+    curvature = LBFGSCurvature(history_length=_HISTORY_LENGTH)
+    x = jnp.asarray(rng.normal(size=5))
+    grad = loss_grad(x)
+    # first call: zero step, so no pair is stored, only grad
+    state = curvature.init(x)
+    _, _, state = curvature.update(state, x, jnp.zeros(5), grad)
+
+    steps, grad_diffs = [], []
+    for _ in range(n_updates):
+        step = jnp.asarray(rng.normal(size=5))
+        grad_prev = grad
+        x = x + step
+        grad = loss_grad(x)
+        _, _, state = curvature.update(state, x, step, grad)
+        steps.append(step)
+        grad_diffs.append(grad - grad_prev)
+
+    lbfgs_hess = _lbfgs_matrix(curvature, state, x)
+    expected_hess = _dense_bfgs(steps[-_HISTORY_LENGTH:], grad_diffs[-_HISTORY_LENGTH:])
+    np.testing.assert_allclose(lbfgs_hess, expected_hess, rtol=1e-12, atol=1e-12)
+
+
+@pytest.mark.parametrize(
+    "grad_diff",
+    [
+        pytest.param(-jnp.eye(5)[0], id="negative"),
+        pytest.param(jnp.eye(5)[1], id="zero"),
+        pytest.param(0.5 * jnp.finfo(jnp.float64).eps * jnp.eye(5)[0], id="below-eps"),
+    ],
+)
+@pytest.mark.requires_x64
+def test_lbfgs_curvature_skips_pairs_without_positive_curvature(grad_diff):
+    """A pair with step^T grad_diff <= eps leaves the model unchanged; grad_prev moves."""
+    curvature = LBFGSCurvature(history_length=_HISTORY_LENGTH)
+    # store one valid pair, so the history is not empty
+    x = jnp.zeros(5)
+    grad_prev = jnp.ones(5)
+    state = curvature.init(x)
+    _, _, state = curvature.update(state, x, jnp.zeros(5), grad_prev)
+    step = jnp.arange(1.0, 6.0)
+    x = x + step
+    grad = grad_prev + 2.0 * step
+    _, _, state = curvature.update(state, x, step, grad)
+    hess_before = _lbfgs_matrix(curvature, state, x)
+
+    # step is e_0, so step^T grad_diff is the first entry of grad_diff
+    step = jnp.eye(5)[0]
+    x = x + step
+    new_grad = grad + grad_diff
+    _, _, new_state = curvature.update(state, x, step, new_grad)
+
+    assert int(new_state.index_start) == int(state.index_start)
+    np.testing.assert_array_equal(_lbfgs_matrix(curvature, new_state, x), hess_before)
+    np.testing.assert_array_equal(new_state.grad_prev, new_grad)
 
 
 @pytest.mark.parametrize("solver_cls, regularizer_cls, strength", _STALL_CASES)
