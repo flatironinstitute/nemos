@@ -62,8 +62,7 @@ class SecondOrderState(eqx.Module, Generic[Y]):
 class AbstractSecondOrderSolver(abc.ABC, Generic[Y, S]):
     """Wiring shared by every second-order solver: objective, state seed, run loop."""
 
-    # Whether the penalty is modelled by the quadratic. False for solvers that reach the
-    # penalty through a proximal operator instead.
+    # False if the solver doesn't use a proximal operator
     _proximal: ClassVar[bool] = False
 
     # Set by every subclass' ``__init__``.
@@ -268,9 +267,26 @@ class AbstractSecondOrderSolver(abc.ABC, Generic[Y, S]):
             self._fval_diff(fval, state),
         )
 
-    def _iterate(self, init_params: Y, state: S, *args: Any) -> tuple[Y, S]:
-        """Step until the stopping rule fires, the run stalls, or ``maxiter`` passes."""
+    def run(self, init_params: Y, *args: Any) -> StepResult:
+        """Iterate to convergence, to a stall, or to ``maxiter``.
 
+        ``jit`` picks which of the two loops in :meth:`_run` executes, so the compiled
+        path has to be reached through a separate method: decorating this one would trace
+        the Python loop and fail on its data-dependent condition.
+        """
+        if self.jit:
+            return self._run_jit(init_params, *args)
+        return self._run(init_params, *args)
+
+    @eqx.filter_jit
+    def _run_jit(self, init_params: Y, *args: Any) -> StepResult:
+        """JIT-compiled optimization loop."""
+        return self._run(init_params, *args)
+
+    def _run(self, init_params: Y, *args: Any) -> StepResult:
+        state = self.init_state(init_params, *args)
+
+        # iteration body
         def cond(carry: tuple[Y, S]) -> Bool[Array, ""]:
             _, s = carry
             return (
@@ -296,26 +312,7 @@ class AbstractSecondOrderSolver(abc.ABC, Generic[Y, S]):
             while cond(carry):
                 carry = body(carry)
             final_params, final_state = carry
-        return final_params, final_state
 
-    def run(self, init_params: Y, *args: Any) -> StepResult:
-        """Iterate to convergence, to a stall, or to ``maxiter``.
-
-        ``jit`` picks which of the two loops in :meth:`_run` executes, so the compiled
-        path has to be reached through a separate method: decorating this one would trace
-        the Python loop and fail on its data-dependent condition.
-        """
-        if self.jit:
-            return self._run_jit(init_params, *args)
-        return self._run(init_params, *args)
-
-    @eqx.filter_jit
-    def _run_jit(self, init_params: Y, *args: Any) -> StepResult:
-        return self._run(init_params, *args)
-
-    def _run(self, init_params: Y, *args: Any) -> StepResult:
-        state = self.init_state(init_params, *args)
-        final_params, final_state = self._iterate(init_params, state, *args)
         # ``fun_with_aux`` is the objective again: only pay for it when there is an aux
         # to collect, since without one it returns a ``None`` the caller already knows.
         aux = (
