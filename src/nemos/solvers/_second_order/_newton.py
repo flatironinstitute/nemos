@@ -57,6 +57,7 @@ class BaseNewtonSolver(
                 "It is needed to determine the parameter structure for regularization."
             )
 
+        self.has_aux = has_aux
         self.jit = jit
 
         # A proximal solver differentiates the smooth part only and carries the penalty

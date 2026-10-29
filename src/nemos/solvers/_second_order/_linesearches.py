@@ -172,6 +172,11 @@ class TsengYunBacktracking(ArmijoBacktracking[Y], Generic[Y]):
     the penalized objective, since that is what the search evaluates at each trial point.
     """
 
+    _line_search: GradientTransformationExtraArgs = eqx.field(static=True)
+    fun: Callable[..., Float[jax.Array, ""] | tuple[Float[jax.Array, ""], Any]] = (
+        eqx.field(static=True)
+    )
+    has_aux: bool = eqx.field(static=True)
     penalty: Callable[[Y], Float[jax.Array, ""]] = eqx.field(static=True)
 
     def _slope_descent_value(

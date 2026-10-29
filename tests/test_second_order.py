@@ -36,9 +36,12 @@ import lineax as lx
 import numpy as np
 import optax
 import pytest
+from optimistix._solver.limited_memory_bfgs import _lbfgs_hessian_operator_fn
 
 from nemos.regularizer import Lasso, Ridge
 from nemos.solvers import Newton, ProximalNewton
+from nemos.solvers._second_order._curvature import LBFGSCurvature
+from nemos.solvers._second_order._lbfgs import ProximalLBFGS
 
 # A point with both zero and non-zero coefficients: the zeros are where the L1 penalty is
 # not differentiable, which is the whole reason the composite slope is needed.
@@ -58,6 +61,7 @@ def _mse(params, X, y):
 _GATE_CASES = [
     pytest.param(Newton, Ridge, 0.1, id="Newton-Ridge"),
     pytest.param(ProximalNewton, Lasso, _PENALTY_STRENGTH, id="ProximalNewton-Lasso"),
+    pytest.param(ProximalLBFGS, Lasso, _PENALTY_STRENGTH, id="ProximalLBFGS-Lasso"),
 ]
 
 
@@ -167,6 +171,7 @@ def test_prox_newton_reports_a_nan_slope_as_no_step_found():
 _STALL_CASES = [
     pytest.param(Newton, Ridge, 0.1, id="Newton-Ridge"),
     pytest.param(ProximalNewton, Lasso, _PENALTY_STRENGTH, id="ProximalNewton-Lasso"),
+    pytest.param(ProximalLBFGS, Lasso, _PENALTY_STRENGTH, id="ProximalLBFGS-Lasso"),
 ]
 
 
@@ -280,6 +285,78 @@ def test_second_order_solvers_end_a_stalled_run_without_claiming_convergence(
     assert not bool(final_state.stats.reached_max_steps)
     assert int(final_state.stats.num_steps) == 1, "the run must stop on the first stall"
     np.testing.assert_array_equal(np.asarray(final_params), np.asarray(params))
+
+
+@pytest.mark.requires_x64
+def test_lbfgs_curvature_scales_b0_by_the_gradient_norm_while_history_is_empty():
+    """With no curvature pair the compact operator is the identity, which is unscaled.
+
+    ``B_0 = I`` makes the first direction ``-grad``, whose length is the gradient norm, and
+    a backtracking search with a bounded budget cannot always shorten it. ``initial_scale``
+    is the gradient norm, so the first step is unit length, as SciPy's L-BFGS-B does. Once
+    a pair is stored the compact representation scales itself and this must switch off.
+    """
+    curvature = LBFGSCurvature(history_length=4)
+    params = (jnp.asarray(_KINKED_PARAMS), jnp.zeros(()))
+    grad = jax.tree.map(lambda p: jnp.full_like(p, 3.0), params)
+    grad_norm = float(jnp.sqrt(lx.internal.tree_dot(grad, grad)))
+    v = jax.tree.map(lambda p: jnp.full_like(p, 0.5), params)
+
+    empty = curvature.init(params)
+    # first call: y_diff is zero, so no pair is admitted and the history stays empty
+    _, _, state = curvature.update(
+        empty, params, jax.tree.map(jnp.zeros_like, params), grad
+    )
+    assert int(state.index_start) == 0
+    np.testing.assert_allclose(float(state.initial_scale), grad_norm, rtol=1e-12)
+
+    hvp = curvature.hvp(state, params, v, None)
+    expected = jax.tree.map(lambda x: grad_norm * x, v)
+    for got, want in zip(jax.tree.leaves(hvp), jax.tree.leaves(expected)):
+        np.testing.assert_allclose(np.asarray(got), np.asarray(want), rtol=1e-12)
+
+    # the step now has unit length, where B_0 = I would give one of length ||grad||
+    np.testing.assert_allclose(
+        float(jnp.sqrt(lx.internal.tree_dot(hvp, hvp))) / grad_norm,
+        float(jnp.sqrt(lx.internal.tree_dot(v, v))),
+        rtol=1e-12,
+    )
+
+    # with a pair stored the scale must no longer be applied
+    y_diff = jax.tree.map(lambda p: jnp.full_like(p, 0.1), params)
+    # simulate a gradient change to accept a curvature update:
+    # a necessary condition for the ``update`` to be accepted
+    # is that the difference of grad with ``state.grad_prev`` is non-zero
+    grad = jax.tree.map(lambda x: x + 0.001, grad)
+    _, _, filled = curvature.update(state, params, y_diff, grad)
+    assert int(filled.index_start) == 1
+    for got, want in zip(
+        jax.tree.leaves(curvature.hvp(filled, params, v, None)),
+        jax.tree.leaves(_lbfgs_hessian_operator_fn(v, filled)),
+    ):
+        np.testing.assert_array_equal(np.asarray(got), np.asarray(want))
+
+
+@pytest.mark.requires_x64
+def test_lbfgs_curvature_floors_the_initial_scale_at_sqrt_eps():
+    """A vanishing gradient must not ask for an unbounded first step.
+
+    SciPy caps ``1 / ||d||`` at the f64 constant ``stpmx = 1e10``; the floor here is taken
+    from the parameter dtype instead, so the bound follows the working precision.
+    """
+    curvature = LBFGSCurvature(history_length=4)
+    for dtype in (jnp.float32, jnp.float64):
+        params = (jnp.zeros(3, dtype=dtype), jnp.zeros((), dtype=dtype))
+        zero_grad = jax.tree.map(jnp.zeros_like, params)
+        _, _, state = curvature.update(
+            curvature.init(params),
+            params,
+            jax.tree.map(jnp.zeros_like, params),
+            zero_grad,
+        )
+        expected = float(np.sqrt(np.finfo(np.dtype(dtype).name).eps))
+        np.testing.assert_allclose(float(state.initial_scale), expected, rtol=1e-6)
+        assert state.initial_scale.dtype == dtype, "the lax.cond branches must agree"
 
 
 @pytest.mark.parametrize("solver_cls, regularizer_cls, strength", _STALL_CASES)
