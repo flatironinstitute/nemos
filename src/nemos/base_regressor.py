@@ -381,7 +381,7 @@ class BaseRegressor(
         Returns
         -------
         :
-            The tag for the loss Hessian, with the two leaf sets read off the per-leaf
+            The tag for the loss Hessian, with the two leaf sets taken from the per-leaf
             claims. ``Newton`` combines it with the regularizer's tag to pick a linear
             solver; see :func:`~nemos._hess.combine_hessian_tags`.
         """
