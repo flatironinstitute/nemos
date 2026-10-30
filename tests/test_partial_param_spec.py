@@ -127,6 +127,7 @@ REGULARIZERS = [
     "GroupLasso",  # default mask, built from the active leaves
     "GroupLasso-one-group",  # one group across every coef leaf
     "GroupLasso-group-per-column",  # groups never cross leaves: pinning a leaf empties some
+    "GroupLasso-per-group-strength",  # default mask, one strength per group of the full coef
 ]
 
 
@@ -143,6 +144,10 @@ def _set_regularizer(model, X, y, name):
             )
         elif name == "GroupLasso-group-per-column":
             regularizer.mask = regularizer.initialize_mask(empty_coef)
+        elif name == "GroupLasso-per-group-strength":
+            default_mask = regularizer.initialize_mask(empty_coef)
+            n_groups = jax.tree_util.tree_leaves(default_mask)[0].shape[0]
+            strength = np.full(n_groups, 0.1)
     model.set_params(regularizer=regularizer, regularizer_strength=strength)
     model.solver_name = model.regularizer.default_solver
 
