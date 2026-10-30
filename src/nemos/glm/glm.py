@@ -42,7 +42,7 @@ from .initialize_parameters import (
     initialize_constant_coef_matching_mean_rate,
     initialize_intercept_matching_mean_rate,
 )
-from .params import GLMParams, GLMUserParams
+from .params import FromGLMParams, GLMParams, GLMUserParams, ToGLMParams
 from .validation import (
     GLMValidator,
     PopulationGLMValidator,
@@ -470,12 +470,12 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
         )
+        self._validator: GLMValidator = self._validator_class(
+            extra_params=self._get_validator_extra_params(),
+        )
         self.observation_model = observation_model
         self.inverse_link_function = inverse_link_function
 
-        self._validator: GLMValidator = self._validator_class(
-            extra_params=self._get_validator_extra_params()
-        )
         self.fit_intercept = fit_intercept
         self.fix_params = fix_params
 
@@ -661,6 +661,21 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             self._observation_model = instantiate_observation_model(observation)
             self._validate_observation_class(self.observation_model)
             self._invalidate_solver()
+            self._validator = eqx.tree_at(
+                # selector
+                lambda x: (
+                    x.to_model_params,
+                    x.from_model_params,
+                ),
+                # pytree
+                self._validator,
+                # replace
+                (
+                    ToGLMParams(self.observation_model.map_to),
+                    FromGLMParams(self.observation_model.map_from),
+                ),
+                is_leaf=lambda x: x is None,
+            )
             return
         # check that the model has the required attributes
         # and that the attribute can be called
@@ -668,6 +683,21 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         self._observation_model = observation
         self._validate_observation_class(self.observation_model)
         self._invalidate_solver()
+        self._validator = eqx.tree_at(
+            # selector
+            lambda x: (
+                x.to_model_params,
+                x.from_model_params,
+            ),
+            # pytree
+            self._validator,
+            # replace
+            (
+                ToGLMParams(self.observation_model.map_to),
+                FromGLMParams(self.observation_model.map_from),
+            ),
+            is_leaf=lambda x: x is None,
+        )
 
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
