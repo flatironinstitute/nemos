@@ -1,10 +1,9 @@
 """Validation classes for GLM and PopulationGLM models."""
 
 import types
-from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any, Callable, Dict, Literal, Optional, Tuple, Union
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jax.typing import DTypeLike
@@ -12,69 +11,12 @@ from numpy.typing import ArrayLike, NDArray
 
 from .. import validation
 from ..base_validator import RegressorValidator
-from ..inverse_link_function_utils import identity
 from ..pytrees import FeaturePytree
 from ..tree_utils import pytree_map_and_reduce, tree_astype
 from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMParams, GLMUserParams
 
 
-# FROM direction: ModelParams -> UserParams
-# TO direction: UserParams -> ModelParams
-class MapDirection(Enum):
-    """Enum defining map directions.
-
-    Use integers instead of strings for jit-compilation friendlieness.
-    """
-
-    TO = 0
-    FROM = 1
-
-
-_MAP_LIKELIHOOD_PARS = {
-    "dispersion": {MapDirection.FROM: jnp.exp, MapDirection.TO: jnp.log},
-    "scale": {MapDirection.FROM: jnp.exp, MapDirection.TO: jnp.log},
-}
-
-
-def map_extra_params(extra_params: dict, direction: MapDirection) -> dict:
-    """Map extra params.
-
-    Map extra parameters from user provided to internal representation.
-    An example of that can be the dispersion which undergoes unconstrained
-    optimization, and therefore is mapped to log-space.
-    """
-    return {
-        k: _MAP_LIKELIHOOD_PARS.get(k, {direction: identity})[direction](v)
-        for k, v in extra_params.items()
-    }
-
-
-def to_glm_params[LeafT](user_params: GLMUserParams[LeafT]) -> GLMParams[LeafT]:
-    """Map from GLMUserParams to GLMParams."""
-    if user_params is None:
-        user_params = {}
-    user_params = user_params.copy()
-    coef = user_params.pop("coef", None)
-    intercept = user_params.pop("intercept", None)
-    extra_params = map_extra_params(user_params, MapDirection.TO)
-    extra_params = None if not extra_params else extra_params
-    return GLMParams(coef, intercept, extra_params)
-
-
-def from_glm_params[LeafT](params: GLMParams[LeafT]) -> GLMUserParams[LeafT]:
-    """Map from GLMParams to GLMUserParams."""
-    user_params = {"coef": params.coef, "intercept": params.intercept}
-    extra_params = (
-        map_extra_params(params.extra_params, MapDirection.FROM)
-        if params.extra_params is not None
-        else {}
-    )
-    user_params.update(extra_params)
-    return user_params
-
-
-@dataclass(frozen=True, repr=False)
 class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
     """
     Validator for single-neuron GLM models.
@@ -98,8 +40,6 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
             "intercept": 1,
         }
     )  # this should be (coef.ndim, intercept.ndim)
-    to_model_params: Callable[[GLMUserParams], GLMParams] = to_glm_params
-    from_model_params: Callable[[GLMParams], GLMUserParams] = from_glm_params
     model_class: str = "GLM"
     X_dimensionality: int = 2
     y_dimensionality: int = 1
@@ -116,6 +56,8 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         *RegressorValidator.params_validation_sequence[3:],
         ("validate_intercept_shape", None),
     )
+    to_model_params: Callable[[GLMUserParams], GLMParams] = None
+    from_model_params: Callable[[GLMParams], GLMUserParams] = None
 
     def validate_intercept_shape(
         self, params: GLMParams[jnp.ndarray | NDArray], **kwargs
@@ -365,7 +307,6 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         return coef.shape
 
 
-@dataclass(frozen=True, repr=False)
 class PopulationGLMValidator(GLMValidator):
     """
     Validator for population (multi-neuron) GLM models.
@@ -449,7 +390,6 @@ class PopulationGLMValidator(GLMValidator):
         return params
 
 
-@dataclass(frozen=True, repr=False)
 class ClassifierGLMValidator(GLMValidator):
     """
     Validator for classifier GLM models.
@@ -462,7 +402,7 @@ class ClassifierGLMValidator(GLMValidator):
     - 1D output y: shape (n_samples,) containing integer class labels
     """
 
-    extra_params: Dict[Literal["n_classes"], int] = field(kw_only=True)
+    extra_params: Dict[Literal["n_classes"], int] = eqx.field(kw_only=True)
     expected_param_dims: types.MappingProxyType[Any, int] = types.MappingProxyType(
         {
             "coef": 2,
@@ -625,7 +565,6 @@ class ClassifierGLMValidator(GLMValidator):
         return y_int
 
 
-@dataclass(frozen=True, repr=False)
 class PopulationClassifierGLMValidator(ClassifierGLMValidator):
     """
     Validator for population (multi-neuron) classifier GLM models.

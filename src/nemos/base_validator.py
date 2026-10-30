@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import abc
 import types
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Generic, List, Optional, Tuple
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -27,8 +27,9 @@ from .validation import (
 )
 
 
-@dataclass(frozen=True)
-class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
+class RegressorValidator(
+    abc.ABC, eqx.Module, Base, Generic[UserProvidedParamsT, ModelParamsT]
+):
     """
     Base class for validating regressor models' parameters, inputs, and consistency.
 
@@ -101,8 +102,6 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
 
     expected_param_dims: types.MappingProxyType[Any, int] = None
     model_class: str = None
-    to_model_params: Callable[[UserProvidedParamsT | None], ModelParamsT] = None
-    from_model_params: Callable[[ModelParamsT], UserProvidedParamsT] = None
     X_dimensionality: int = None
     y_dimensionality: int = None
     extra_params: Optional[dict] = None
@@ -116,6 +115,8 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         ("check_array_dimensions", None),
         ("to_model_params", None),
     )
+    to_model_params: Callable[[UserProvidedParamsT | None], ModelParamsT] = None
+    from_model_params: Callable[[ModelParamsT], UserProvidedParamsT] = None
 
     @abc.abstractmethod
     def check_user_params_structure(
