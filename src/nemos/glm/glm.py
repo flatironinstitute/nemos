@@ -2409,11 +2409,9 @@ class PopulationGLM(GLM):
         # yields the active block of the Hessian directly, no slicing needed.
         # ``batch_axes`` is prefix-spelled (one entry for all of ``coef``) while the
         # filter spec is per-leaf, so expand before splitting the axes.
-        spec = self._active_filter_spec()
-        mask = jax.tree_util.tree_map(
-            lambda x: x is not None, self._hess_batch_axes, is_leaf=lambda x: x is None
+        spec = tree_utils.tree_filter_like(
+            self._active_filter_spec(), self._hess_batch_axes
         )
-        spec = eqx.filter(spec, mask)
         active_axis, frozen_axis = self._partition_active(
             tree_utils.tree_broadcast_prefix(self._hess_batch_axes, spec)
         )
