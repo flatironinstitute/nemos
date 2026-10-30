@@ -238,12 +238,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         When True (default), an intercept term is fit. When False, only the coefficients are fit.
         An intercept pinned through ``fix_params`` takes precedence over this flag.
     fix_params :
-        Parameters to hold fixed during fitting, as a ``(coef, intercept)`` tuple with
-        ``coef`` of shape ``(n_features,)`` and ``intercept`` of shape ``(1,)``. An array
-        pins that parameter at the value provided, ``None`` leaves it to be learned. When
-        ``X`` is a pytree, ``coef`` mirrors its structure, its leaves have shape
-        ``(n_features_in_leaf,)``, and each leaf is pinned or learned on its own.
-        Defaults to ``None``, which learns every parameter.
+        A dictionary, keys could be "coef" or "intercept", values are PyTree of
+         arrays with the parameters that will be fixed.
     solver_name :
         Solver to use for model optimization. Defines the optimization scheme and related parameters.
         The solver must be an appropriate match for the chosen regularizer.
@@ -2173,7 +2169,7 @@ class PopulationGLM(GLM):
     # ``intercept``. The sign and the per-leaf claims are inherited from ``GLM`` and hold
     # block by block — each neuron's intercept block is that neuron's sum of weights.
     _hess_structure = MatrixStructure.BLOCK_DIAGONAL
-    _hess_batch_axes = GLMParams(1, 0)
+    _hess_batch_axes = GLMParams(1, 0, None)
 
     def __init__(
         self,
@@ -2413,10 +2409,13 @@ class PopulationGLM(GLM):
         # yields the active block of the Hessian directly, no slicing needed.
         # ``batch_axes`` is prefix-spelled (one entry for all of ``coef``) while the
         # filter spec is per-leaf, so expand before splitting the axes.
+        spec = self._active_filter_spec()
+        mask = jax.tree_util.tree_map(
+            lambda x: x is not None, self._hess_batch_axes, is_leaf=lambda x: x is None
+        )
+        spec = eqx.filter(spec, mask)
         active_axis, frozen_axis = self._partition_active(
-            tree_utils.tree_broadcast_prefix(
-                self._hess_batch_axes, self._active_filter_spec()
-            )
+            tree_utils.tree_broadcast_prefix(self._hess_batch_axes, spec)
         )
 
         def per_neuron(params, X, y, mask, frozen_params):

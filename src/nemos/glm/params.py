@@ -1,6 +1,6 @@
 """GLM parameter definitions and type aliases."""
 
-from typing import Callable
+from typing import Callable, Optional
 
 from jaxtyping import PyTree
 
@@ -12,6 +12,7 @@ class GLMParams[LeafT](ModelParams[LeafT]):
 
     coef: PyTree[LeafT]
     intercept: LeafT
+    extra_params: Optional[dict[str, LeafT]] = None
 
     @staticmethod
     def regularizable_subtrees() -> list[Callable[["GLMParams[LeafT]"], PyTree[LeafT]]]:
@@ -19,4 +20,4 @@ class GLMParams[LeafT](ModelParams[LeafT]):
         return [lambda p: p.coef]
 
 
-type GLMUserParams[LeafT] = tuple[PyTree[LeafT], LeafT]
+type GLMUserParams[LeafT] = dict[str, LeafT]

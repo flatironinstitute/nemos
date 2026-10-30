@@ -6,6 +6,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    Dict,
     NamedTuple,
     Tuple,
     TypeAlias,
@@ -103,8 +104,8 @@ FeatureMatrix: TypeAlias = "nap.TsdFrame | NDArray | jnp.ndarray"
 # A concrete (non-pynapple) array, either NumPy or JAX.
 Array: TypeAlias = "Union[NDArray, jnp.ndarray]"
 
-# User provided init_params (e.g. for GLMs Tuple[array, array])
-UserProvidedParamsT = TypeVar("UserProvidedParamsT")
+# User provided init_params (e.g. for GLMs dict {"coef": array1, "intercept": array2})
+UserProvidedParamsT = TypeVar("UserProvidedParamsT", bound=Dict[Any, Any])
 # Model internal representation (e.g. for GLMs nemos.glm.glm.GLMParams)
 ModelParamsT = TypeVar("ModelParamsT")
 # Validator type associated with a regressor (e.g. GLMValidator for GLM)

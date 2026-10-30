@@ -1,6 +1,8 @@
 """Validation classes for GLM and PopulationGLM models."""
 
+import types
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Callable, Dict, Literal, Optional, Tuple, Union
 
 import jax
@@ -10,20 +12,66 @@ from numpy.typing import ArrayLike, NDArray
 
 from .. import validation
 from ..base_validator import RegressorValidator
+from ..inverse_link_function_utils import identity
 from ..pytrees import FeaturePytree
 from ..tree_utils import pytree_map_and_reduce, tree_astype
 from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMParams, GLMUserParams
 
 
+# FROM direction: ModelParams -> UserParams
+# TO direction: UserParams -> ModelParams
+class MapDirection(Enum):
+    """Enum defining map directions.
+
+    Use integers instead of strings for jit-compilation friendlieness.
+    """
+
+    TO = 0
+    FROM = 1
+
+
+_MAP_LIKELIHOOD_PARS = {
+    "dispersion": {MapDirection.FROM: jnp.exp, MapDirection.TO: jnp.log},
+    "scale": {MapDirection.FROM: jnp.exp, MapDirection.TO: jnp.log},
+}
+
+
+def map_extra_params(extra_params: dict, direction: MapDirection) -> dict:
+    """Map extra params.
+
+    Map extra parameters from user provided to internal representation.
+    An example of that can be the dispersion which undergoes unconstrained
+    optimization, and therefore is mapped to log-space.
+    """
+    return {
+        k: _MAP_LIKELIHOOD_PARS.get(k, {direction: identity})[direction](v)
+        for k, v in extra_params.items()
+    }
+
+
 def to_glm_params[LeafT](user_params: GLMUserParams[LeafT]) -> GLMParams[LeafT]:
     """Map from GLMUserParams to GLMParams."""
-    return GLMParams(*user_params)
+    if user_params is None:
+        user_params = {}
+    user_params = user_params.copy()
+    coef = user_params.pop("coef", None)
+    intercept = user_params.pop("intercept", None)
+    extra_params = map_extra_params(user_params, MapDirection.TO)
+    extra_params = None if not extra_params else extra_params
+    return GLMParams(coef, intercept, extra_params)
 
 
 def from_glm_params[LeafT](params: GLMParams[LeafT]) -> GLMUserParams[LeafT]:
     """Map from GLMParams to GLMUserParams."""
-    return params.coef, params.intercept
+    user_params = {"coef": params.coef, "intercept": params.intercept}
+    extra_params = (
+        map_extra_params(params.extra_params, MapDirection.FROM)
+        if params.extra_params is not None
+        else {}
+    )
+    user_params.update(extra_params)
+    return user_params
 
 
 @dataclass(frozen=True, repr=False)
@@ -44,9 +92,11 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
     """
 
     extra_params: dict = None
-    expected_param_dims: Tuple[int] = (
-        1,
-        1,
+    expected_param_dims: types.MappingProxyType[Any, int] = types.MappingProxyType(
+        {
+            "coef": 1,
+            "intercept": 1,
+        }
     )  # this should be (coef.ndim, intercept.ndim)
     to_model_params: Callable[[GLMUserParams], GLMParams] = to_glm_params
     from_model_params: Callable[[GLMParams], GLMUserParams] = from_glm_params
@@ -61,8 +111,6 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
                 err_message_format="Invalid parameter dimensionality. coef must be an array "
                 "or pytree with array leaves of shape "
                 "(n_features, ). intercept must be of shape (1,)."
-                "\nThe provided coef and intercept have shape ``{}`` and ``{}`` "
-                "instead."
             ),
         ),
         *RegressorValidator.params_validation_sequence[3:],
@@ -144,9 +192,12 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         ValueError
             If arrays have incorrect dimensionality.
         """
-        wrapped = self.wrap_user_params(params)
-        shapes = tuple(jax.tree_util.tree_map(lambda x: x.shape, p) for p in wrapped)
-        err_msg = err_message_format.format(*shapes)
+        shapes = {
+            k: jax.tree_util.tree_map(lambda x: x.shape, v) for k, v in params.items()
+        }
+        err_msg = err_message_format
+        for k, s in shapes.items():
+            err_msg += f"\n- The provided {k} is shape {s}."
         return super().check_array_dimensions(params, err_msg=err_msg)
 
     def check_user_params_structure(
@@ -172,9 +223,10 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         ValueError
             If parameters do not have length two.
         """
-        validation.check_length(params, 2, "Params must have length two.")
-        if not isinstance(params, (tuple, list)):
-            raise TypeError("GLM params must be a tuple/list of length two.")
+        if not isinstance(params, dict):
+            raise TypeError("Parameters must of dictionary type.")
+        if not params.keys() <= {"coef", "intercept"}:
+            raise KeyError("Parameters must have key 'coef' or 'intercept'.")
         return params
 
     def validate_consistency(
@@ -330,9 +382,11 @@ class PopulationGLMValidator(GLMValidator):
     """
 
     y_dimensionality: int = 2
-    expected_param_dims: Tuple[int] = (
-        2,
-        1,
+    expected_param_dims: types.MappingProxyType[Any, int] = types.MappingProxyType(
+        {
+            "coef": 2,
+            "intercept": 1,
+        }
     )  # this should be (coef.ndim, intercept.ndim)
     model_class: str = "PopulationGLM"
     params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
@@ -344,7 +398,6 @@ class PopulationGLMValidator(GLMValidator):
                 "coef must be an array or pytree "
                 "with array leaves of shape (n_features, n_neurons). "
                 "intercept must be of shape (n_neurons,)."
-                "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
             ),
         ),
         *RegressorValidator.params_validation_sequence[3:],
@@ -410,7 +463,12 @@ class ClassifierGLMValidator(GLMValidator):
     """
 
     extra_params: Dict[Literal["n_classes"], int] = field(kw_only=True)
-    expected_param_dims: Tuple[int] = (2, 1)
+    expected_param_dims: types.MappingProxyType[Any, int] = types.MappingProxyType(
+        {
+            "coef": 2,
+            "intercept": 1,
+        }
+    )  # this should be (coef.ndim, intercept.ndim)
     model_class: str = "ClassifierGLM"
 
     @staticmethod
@@ -434,7 +492,6 @@ class ClassifierGLMValidator(GLMValidator):
                 "coef must be an array or pytree "
                 "with array leaves of shape (n_features, n_classes). "
                 "intercept must be of shape (n_classes,)."
-                "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
             ),
         ),
         (
@@ -464,29 +521,25 @@ class ClassifierGLMValidator(GLMValidator):
             Format string for intercept error message. Should have 3 placeholders:
             expected_class_dim, n_classes, actual_shape.
         """
-        coef, intercept = params
         n_classes = self.extra_params["n_classes"]
-        expected_class_dim = n_classes
-
-        # Check coef last dimension
-        coef_class_mismatch = pytree_map_and_reduce(
-            lambda c: c.shape[-1] != expected_class_dim, any, coef
-        )
-        if coef_class_mismatch:
-            coef_shapes = jax.tree_util.tree_map(lambda c: c.shape, coef)
-            raise ValueError(
-                f"coef last dimension must be n_classes = {expected_class_dim}. "
-                f"Got coef with shape(s) {coef_shapes}."
+        for key, pytree in params.items():
+            # Check coef last dimension
+            param_class_mismatch = pytree_map_and_reduce(
+                lambda c: c.shape[-1] != n_classes, any, pytree
             )
-
-        # Check intercept last dimension
-        if intercept.shape[-1] != expected_class_dim:
-            raise ValueError(
-                intercept_err_format.format(
-                    expected_class_dim, n_classes, intercept.shape
-                )
-            )
-
+            if param_class_mismatch:
+                if key == "coef":
+                    coef_shapes = jax.tree_util.tree_map(lambda c: c.shape, pytree)
+                    raise ValueError(
+                        f"coef last dimension must be n_classes = {n_classes}. "
+                        f"Got coef with shape(s) {coef_shapes}."
+                    )
+                elif key == "intercept":
+                    raise ValueError(
+                        intercept_err_format.format(n_classes, n_classes, pytree.shape)
+                    )
+                else:
+                    raise KeyError(f"Unknown key '{key}' for GLM parameter dictionary.")
         return params
 
     def additional_validation_param_specs(
@@ -586,7 +639,12 @@ class PopulationClassifierGLMValidator(ClassifierGLMValidator):
     """
 
     y_dimensionality: int = 2
-    expected_param_dims: Tuple[int] = (3, 2)  # coef is 3D, intercept is 2D
+    expected_param_dims: types.MappingProxyType[Any, int] = types.MappingProxyType(
+        {
+            "coef": 3,
+            "intercept": 2,
+        }
+    )  # this should be (coef.ndim, intercept.ndim)
     model_class: str = "PopulationClassifierGLM"
     params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
         *RegressorValidator.params_validation_sequence[:2],
@@ -597,7 +655,6 @@ class PopulationClassifierGLMValidator(ClassifierGLMValidator):
                 "coef must be an array or pytree "
                 "with array leaves of shape (n_features, n_neurons, n_classes). "
                 "intercept must be of shape (n_neurons, n_classes)."
-                "\nThe provided coef and intercept have shape ``{}`` and ``{}`` instead."
             ),
         ),
         (

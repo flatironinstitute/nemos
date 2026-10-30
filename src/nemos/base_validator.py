@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import abc
+import types
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Generic, List, Optional, Tuple
 
@@ -98,9 +99,9 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         Names of parameter validation methods to call in order.
     """
 
-    expected_param_dims: Tuple[int] = None
+    expected_param_dims: types.MappingProxyType[Any, int] = None
     model_class: str = None
-    to_model_params: Callable[[UserProvidedParamsT], ModelParamsT] = None
+    to_model_params: Callable[[UserProvidedParamsT | None], ModelParamsT] = None
     from_model_params: Callable[[ModelParamsT], UserProvidedParamsT] = None
     X_dimensionality: int = None
     y_dimensionality: int = None
@@ -198,9 +199,8 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         ValueError
             If any array has unexpected dimensionality.
         """
-        for par, exp_dim in zip(
-            self.wrap_user_params(params), self.expected_param_dims
-        ):
+        for key, par in params.items():
+            exp_dim = self.expected_param_dims[key]
             if par is None:
                 continue
             dim_match = pytree_map_and_reduce(lambda x: x.ndim == exp_dim, all, par)
@@ -329,8 +329,8 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         ValueError, TypeError
             If any validation step fails.
         """
-        if params is None:
-            return self.to_model_params([None] * len(self.expected_param_dims))
+        if params is None or params == {}:
+            return self.to_model_params(None)
 
         self.check_user_params_structure(params)
         self.check_partial_params_specs_type(params)
