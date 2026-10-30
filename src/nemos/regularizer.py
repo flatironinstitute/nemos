@@ -163,6 +163,7 @@ def apply_operator(func, params, *args, filter_kwargs=None, **kwargs):
             where,
             params,
             func(where(params), *args, **kwargs, **subtree_kwargs),
+            is_leaf=lambda x: x is None,
         )
 
     return params
