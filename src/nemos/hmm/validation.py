@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import field
 from typing import Any, Optional, Tuple
 
 import jax
@@ -125,7 +125,6 @@ def from_hmm_params(params: HMMParams) -> HMMUserParams:
     )
 
 
-@dataclass(frozen=True, repr=False)
 class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
     """Validate HMM parameters. Meant to be used as a mixin class for models that use HMMs."""
 
