@@ -4,6 +4,7 @@ import operator
 from functools import partial, reduce
 from typing import Any, Callable, Optional
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jax.core import Tracer
@@ -273,6 +274,35 @@ def tree_broadcast_prefix(prefix: Any, full: Any) -> Any:
             )
         ],
     )
+
+
+def tree_filter_like(pytree: Any, like: Any) -> Any:
+    """Keep the leaves of ``tree`` where ``like`` is not ``None``, replacing the others with ``None``.
+
+    Parameters
+    ----------
+    pytree :
+        Pytree to filter.
+    like :
+        Pytree whose ``None`` leaves mark what to drop. Must be a prefix of ``tree``,
+        with ``None`` treated as a leaf. A ``None`` in ``like`` drops the whole subtree
+        of ``tree`` below it.
+
+    Returns
+    -------
+    :
+        A pytree with the structure of ``tree``, ``None`` where ``like`` is ``None``.
+
+    Examples
+    --------
+    >>> from nemos.tree_utils import tree_filter_like
+    >>> tree_filter_like({"a": 1, "b": 2}, {"a": None, "b": 0})
+    {'a': None, 'b': 2}
+    """
+    spec = jax.tree_util.tree_map(
+        lambda x: x is not None, like, is_leaf=lambda x: x is None
+    )
+    return eqx.filter(pytree, spec)
 
 
 # The following functions are adapted from jaxopt.tree_utils

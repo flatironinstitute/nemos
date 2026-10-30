@@ -41,20 +41,42 @@ class _RecordingCallback(Callback):
         self.calls.append("on_batch_end")
 
 
-# conftest fixtures, picked to vary the coef pytree structure and the intercept shape
+# every GLM class, with array and pytree X; guarded by
+# test_model_fixtures_cover_every_glm_class
 MODEL_FIXTURES = [
-    "poissonGLM_model_instantiation",  # coef: one array
-    "poissonGLM_model_instantiation_pytree",  # coef: dict of two arrays
-    "population_poissonGLM_model_instantiation",  # 2-D coef, (n_neurons,) intercept
+    "poissonGLM_model_instantiation",
+    "poissonGLM_model_instantiation_pytree",
+    "population_poissonGLM_model_instantiation",
     "population_poissonGLM_model_instantiation_pytree",
     "classifierGLM_model_instantiation",
+    "classifierGLM_model_instantiation_pytree",
+    "population_classifierGLM_model_instantiation",
+    "population_classifierGLM_model_instantiation_pytree",
 ]
+
+
+@pytest.mark.metatest
+def test_model_fixtures_cover_every_glm_class(request):
+    """Every concrete GLM class appears in ``MODEL_FIXTURES`` with array and with pytree X."""
+    # from the public namespace: the lazily loaded classes are not subclasses until imported
+    glm_classes = [
+        getattr(nmo.glm, name) for name in dir(nmo.glm) if name.endswith("GLM")
+    ]
+    expected = {(cls, is_array) for cls in glm_classes for is_array in (True, False)}
+
+    covered = set()
+    for name in MODEL_FIXTURES:
+        X, _, model = request.getfixturevalue(name)[:3]
+        covered.add((type(model), isinstance(X, (np.ndarray, jnp.ndarray))))
+
+    assert covered == expected
+
 
 COEF_MODES = ["learn_all", "pin_all", "pin_first"]
 
 
 def _coef_spec(model, X, y, mode):
-    """Coef spec mirroring ``X``: ``None`` learns a leaf, an array pins it."""
+    """Coef spec mirroring ``X``: ``None`` learns a leaf, an array fixes it to that value."""
     if mode == "learn_all":
         return None
 
@@ -95,6 +117,39 @@ def _assert_same_spec(got, want):
             assert got_leaf is None
         else:
             np.testing.assert_array_equal(got_leaf, want_leaf)
+
+
+REGULARIZERS = [
+    "UnRegularized",
+    "Ridge",
+    "Lasso",
+    "ElasticNet",
+    "GroupLasso",  # default mask, built from the active leaves
+    "GroupLasso-one-group",  # one group across every coef leaf
+    "GroupLasso-group-per-column",  # groups never cross leaves: pinning a leaf empties some
+    "GroupLasso-per-group-strength",  # default mask, one strength per group of the full coef
+]
+
+
+def _set_regularizer(model, X, y, name):
+    """Install a ``REGULARIZERS`` entry with its default solver."""
+    strength = {"UnRegularized": None, "ElasticNet": (0.1, 0.5)}.get(name, 0.1)
+    regularizer = name
+    if name.startswith("GroupLasso"):
+        regularizer = nmo.regularizer.GroupLasso()
+        empty_coef = model._validator.get_empty_params(X, y).coef
+        if name == "GroupLasso-one-group":
+            regularizer.mask = jax.tree_util.tree_map(
+                lambda c: jnp.ones((1, *c.shape)), empty_coef
+            )
+        elif name == "GroupLasso-group-per-column":
+            regularizer.mask = regularizer.initialize_mask(empty_coef)
+        elif name == "GroupLasso-per-group-strength":
+            default_mask = regularizer.initialize_mask(empty_coef)
+            n_groups = jax.tree_util.tree_leaves(default_mask)[0].shape[0]
+            strength = np.full(n_groups, 0.1)
+    model.set_params(regularizer=regularizer, regularizer_strength=strength)
+    model.solver_name = model.regularizer.default_solver
 
 
 def _configure(model, X, y, coef_mode, intercept_pinned, fit_intercept):
@@ -175,6 +230,32 @@ class TestSpecAlgebra:
         )
         for got, want in zip(_leaves(recombined), _leaves(params)):
             np.testing.assert_array_equal(got, want)
+
+    @pytest.mark.parametrize("regularizer", REGULARIZERS)
+    def test_update_step_is_finite_for_every_regularizer(
+        self,
+        request,
+        model_fixture,
+        coef_mode,
+        intercept_pinned,
+        fit_intercept,
+        regularizer,
+    ):
+        """The regularizer sees only the active leaves, and one solver step stays finite."""
+        X, y, model = request.getfixturevalue(model_fixture)[:3]
+        _set_regularizer(model, X, y, regularizer)
+        _configure(model, X, y, coef_mode, intercept_pinned, fit_intercept)
+        params = model.initialize_params(X, y)
+
+        # eager: one real step, without compiling the solver
+        with jax.disable_jit():
+            state = model.initialize_optimizer_and_state(params, X, y)
+            model.update(params, state, X, y)
+
+        assert all(
+            np.all(np.isfinite(leaf))
+            for leaf in _leaves((model.coef_, model.intercept_))
+        )
 
 
 class TestInterceptPrecedence:
@@ -407,7 +488,7 @@ class TestEveryParameterFixed:
         """No pass or batch runs, so only the train-level callbacks fire.
 
         Iterating the loader could not change a fully fixed tree, and for out-of-memory
-        data it would read everything to no effect.
+        data it would load every batch to no effect.
         """
         X, y, model = poissonGLM_model_instantiation[:3]
         model.set_params(fix_params=_pin_everything(model, X, y), solver_name="SVRG")
@@ -486,7 +567,8 @@ class TestFrozenValuesEnterTheObjective:
         np.testing.assert_allclose(model.intercept_, pinned)
         active, _ = model._partition_active(GLMParams(model.coef_, model.intercept_))
         zeros = jnp.zeros_like(pinned)
-        # float64 with tol=1e-12 lands at ~1e-13; three orders of margin, no more
+        # float64 with tol=1e-12 converges to a gradient norm of ~1e-13; the bound
+        # allows three orders of magnitude above that
         assert _solver_grad_norm(model, active, X, y) < 1e-10
         assert (
             _grad_norm_under_other_spec(
@@ -516,7 +598,8 @@ class TestFrozenValuesEnterTheObjective:
             key: jnp.zeros_like(leaf) if key == pinned_key else leaf
             for key, leaf in model.coef_.items()
         }
-        # float64 with tol=1e-12 lands at ~1e-13; three orders of margin, no more
+        # float64 with tol=1e-12 converges to a gradient norm of ~1e-13; the bound
+        # allows three orders of magnitude above that
         assert _solver_grad_norm(model, active, X, y) < 1e-10
         assert (
             _grad_norm_under_other_spec(
@@ -554,7 +637,7 @@ class TestSpecSurvivesSklearnProtocol:
     def test_set_params_applies_the_spec(
         self, request, model_fixture, coef_mode, intercept_pinned
     ):
-        """A spec handed to ``set_params`` reads back the same through ``get_params``."""
+        """``get_params`` returns the spec passed to ``set_params`` unchanged."""
         X, y, model = request.getfixturevalue(model_fixture)[:3]
         spec = (
             _coef_spec(model, X, y, coef_mode),

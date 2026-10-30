@@ -381,7 +381,7 @@ class BaseRegressor(
         Returns
         -------
         :
-            The tag for the loss Hessian, with the two leaf sets read off the per-leaf
+            The tag for the loss Hessian, with the two leaf sets taken from the per-leaf
             claims. ``Newton`` combines it with the regularizer's tag to pick a linear
             solver; see :func:`~nemos._hess.combine_hessian_tags`.
         """
@@ -625,6 +625,15 @@ class BaseRegressor(
             solver_name = self.solver_spec.full_name
         if regularizer is None:
             regularizer = self.regularizer
+        # count the default groups on every parameter, frozen ones included, so a
+        # per-group strength does not depend on what is frozen
+        if (
+            isinstance(regularizer, GroupLasso)
+            and regularizer.mask is None
+            and frozen_params is not None
+        ):
+            full_params = eqx.combine(init_params, frozen_params)
+            regularizer = GroupLasso(mask=regularizer.initialize_mask(full_params))
         if regularizer_strength is None:
             regularizer_strength = self.regularizer_strength
 
