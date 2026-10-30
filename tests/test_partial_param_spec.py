@@ -97,6 +97,34 @@ def _assert_same_spec(got, want):
             np.testing.assert_array_equal(got_leaf, want_leaf)
 
 
+REGULARIZERS = [
+    "UnRegularized",
+    "Ridge",
+    "Lasso",
+    "ElasticNet",
+    "GroupLasso",  # default mask, built from the active leaves
+    "GroupLasso-one-group",  # one group across every coef leaf
+    "GroupLasso-group-per-column",  # groups never cross leaves: pinning a leaf empties some
+]
+
+
+def _set_regularizer(model, X, y, name):
+    """Install a ``REGULARIZERS`` entry with its default solver."""
+    strength = {"UnRegularized": None, "ElasticNet": (0.1, 0.5)}.get(name, 0.1)
+    regularizer = name
+    if name.startswith("GroupLasso"):
+        regularizer = nmo.regularizer.GroupLasso()
+        empty_coef = model._validator.get_empty_params(X, y).coef
+        if name == "GroupLasso-one-group":
+            regularizer.mask = jax.tree_util.tree_map(
+                lambda c: jnp.ones((1, *c.shape)), empty_coef
+            )
+        elif name == "GroupLasso-group-per-column":
+            regularizer.mask = regularizer.initialize_mask(empty_coef)
+    model.set_params(regularizer=regularizer, regularizer_strength=strength)
+    model.solver_name = model.regularizer.default_solver
+
+
 def _configure(model, X, y, coef_mode, intercept_pinned, fit_intercept):
     """Apply a spec through the public setters, returning the model."""
     intercept = _pinned_intercept(model, X, y) if intercept_pinned else None
@@ -175,6 +203,32 @@ class TestSpecAlgebra:
         )
         for got, want in zip(_leaves(recombined), _leaves(params)):
             np.testing.assert_array_equal(got, want)
+
+    @pytest.mark.parametrize("regularizer", REGULARIZERS)
+    def test_update_step_is_finite_for_every_regularizer(
+        self,
+        request,
+        model_fixture,
+        coef_mode,
+        intercept_pinned,
+        fit_intercept,
+        regularizer,
+    ):
+        """The regularizer sees only the active leaves, and one solver step stays finite."""
+        X, y, model = request.getfixturevalue(model_fixture)[:3]
+        _set_regularizer(model, X, y, regularizer)
+        _configure(model, X, y, coef_mode, intercept_pinned, fit_intercept)
+        params = model.initialize_params(X, y)
+
+        # eager: one real step, without compiling the solver
+        with jax.disable_jit():
+            state = model.initialize_optimizer_and_state(params, X, y)
+            model.update(params, state, X, y)
+
+        assert all(
+            np.all(np.isfinite(leaf))
+            for leaf in _leaves((model.coef_, model.intercept_))
+        )
 
 
 class TestInterceptPrecedence:
