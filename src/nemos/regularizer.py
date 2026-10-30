@@ -1237,10 +1237,30 @@ class GroupLasso(Regularizer):
                     f"Mismatched leaves:\n\t- {sep.join(mismatches)}"
                 )
 
+    def _active_mask(self, params: Any) -> Tuple[Any, Optional[np.ndarray]]:
+        """Mask restricted to the fitted leaves of ``params``, without the groups left empty.
+
+        Frozen leaves are ``None`` in ``params``. Also returns the boolean index of the
+        groups kept, ``None`` when the mask is initialized from ``params``.
+        """
+        if self.mask is None:
+            return self.initialize_mask(params), None
+        mask = tree_utils.tree_filter_like(self.mask, params)
+        kept = (
+            pytree_map_and_reduce(
+                lambda m: np.asarray(m).reshape(m.shape[0], -1).sum(axis=1), sum, mask
+            )
+            > 0
+        )
+        return jax.tree_util.tree_map(lambda m: m[kept], mask), kept
+
     def _validate_strength_structure(self, params: Any, strength: Any):
-        mask = self.mask if self.mask is not None else self.initialize_mask(params)
+        mask, kept = self._active_mask(params)
         flat_mask = jax.tree_util.tree_leaves(mask)
-        n_groups = flat_mask[0].shape[0]
+        # every regularizable leaf is frozen: nothing to penalize
+        if not flat_mask:
+            return mask
+        n_groups = flat_mask[0].shape[0] if kept is None else kept.shape[0]
 
         if isinstance(strength, (int, float)) or strength.ndim == 0:
             per_group_strength = jnp.full(n_groups, strength, dtype=float)
@@ -1252,13 +1272,13 @@ class GroupLasso(Regularizer):
                     f"got shape {strength.shape}"
                 )
             per_group_strength = strength
+        if kept is not None:
+            per_group_strength = per_group_strength[kept]
 
         return jax.tree_util.tree_map(lambda _: per_group_strength, mask)
 
     def _get_filter_kwargs(self, params: Any, strength: Any) -> dict:
+        mask, _ = self._active_mask(params)
         if self.mask is not None:
-            mask = self.mask
             self._check_mask_and_params_shape_match(mask, params)
-        else:
-            mask = self.initialize_mask(params)
         return {"mask": mask, **super()._get_filter_kwargs(params, strength)}
