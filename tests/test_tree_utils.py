@@ -1,3 +1,6 @@
+from typing import Any
+
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -227,3 +230,47 @@ def test_tree_astype_passes_none_through():
 def test_tree_astype_default_dtype_is_a_noop():
     (out,) = tree_utils.tree_astype({"a": jnp.ones(2, dtype=jnp.int16)})
     assert out["a"].dtype == jnp.int16
+
+
+class _Params(eqx.Module):
+    w: Any
+    b: Any
+
+
+@pytest.mark.parametrize(
+    "pytree, like, expected",
+    [
+        # a None leaf drops the leaf, any other value keeps it, falsy ones included
+        ({"a": 1, "b": 2}, {"a": None, "b": 0}, {"a": None, "b": 2}),
+        ({"a": 1, "b": 2}, {"a": False, "b": None}, {"a": 1, "b": None}),
+        # a None prefix drops every leaf below it, keeping the structure of pytree
+        (
+            {"a": {"x": 1, "y": 2}, "b": 3},
+            {"a": None, "b": 0},
+            {"a": {"x": None, "y": None}, "b": 3},
+        ),
+        # a non-None prefix keeps the whole subtree below it
+        (
+            {"a": {"x": 1, "y": 2}, "b": 3},
+            {"a": 0, "b": None},
+            {"a": {"x": 1, "y": 2}, "b": None},
+        ),
+        ({"a": 1, "b": 2}, {"a": None, "b": None}, {"a": None, "b": None}),
+        ({"a": 1, "b": 2}, {"a": 0, "b": 0}, {"a": 1, "b": 2}),
+        ({"a": 1, "b": 2}, None, {"a": None, "b": None}),
+        # a None already in the pytree stays None
+        ({"a": None, "b": 2}, {"a": 0, "b": 0}, {"a": None, "b": 2}),
+        (
+            _Params(w={"a": 1, "b": 2}, b=3),
+            _Params(w={"a": None, "b": 0}, b=None),
+            _Params(w={"a": None, "b": 2}, b=None),
+        ),
+    ],
+)
+def test_tree_filter_like(pytree, like, expected):
+    assert tree_utils.tree_filter_like(pytree, like) == expected
+
+
+def test_tree_filter_like_requires_a_prefix():
+    with pytest.raises(ValueError):
+        tree_utils.tree_filter_like({"a": 1}, {"a": 0, "b": 0})
