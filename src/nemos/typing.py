@@ -110,3 +110,5 @@ UserProvidedParamsT = TypeVar("UserProvidedParamsT", bound=Dict[Any, Any])
 ModelParamsT = TypeVar("ModelParamsT")
 # Validator type associated with a regressor (e.g. GLMValidator for GLM)
 ValidatorT = TypeVar("ValidatorT", bound="RegressorValidator")
+# Pytree leaf
+LeafT = TypeVar("LeafT")
