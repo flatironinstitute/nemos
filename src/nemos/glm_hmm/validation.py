@@ -1,6 +1,5 @@
 """Validation classes for GLMHMM and PopulationGLMHMM models."""
 
-from dataclasses import dataclass
 from typing import Any, Callable, Optional, Tuple, Union
 
 import jax
@@ -42,7 +41,6 @@ def from_glm_hmm_params(params: GLMHMMParams) -> GLMHMMUserParams:
     )
 
 
-@dataclass(frozen=True, repr=False)
 class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
     """Validate GLM-HMM parameters and inputs."""
 

@@ -167,7 +167,7 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         """
         if not isinstance(params, dict):
             raise TypeError("Parameters must of dictionary type.")
-        if not params.keys() <= {"coef", "intercept"}:
+        if not params.keys() <= self.expected_param_dims.keys():
             raise KeyError("Parameters must have key 'coef' or 'intercept'.")
         return params
 
