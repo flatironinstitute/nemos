@@ -8,37 +8,9 @@ from jax.typing import DTypeLike
 
 from ..base_validator import RegressorValidator
 from ..glm.validation import GLMValidator
-from ..hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
+from ..hmm.validation import HMMValidator
 from ..typing import DESIGN_INPUT_TYPE
-from .params import GLMHMMModelParams, GLMHMMParams, GLMHMMUserParams
-
-
-def to_glm_hmm_params(user_params: GLMHMMUserParams) -> GLMHMMParams:
-    """Map from GLMHMMUserParams to GLMHMMParams.
-
-    Converts user-provided parameters (scale and probabilities in regular space)
-    to internal model parameters (log_scale and log probabilities).
-    """
-    return GLMHMMParams(
-        model_params=GLMHMMModelParams(*user_params[:3]),
-        hmm_params=to_hmm_params(user_params[3:]),
-    )
-
-
-def from_glm_hmm_params(params: GLMHMMParams) -> GLMHMMUserParams:
-    """Map from GLMHMMParams to GLMHMMUserParams.
-
-    Converts internal model parameters (log_scale and log probabilities)
-    to user-facing parameters (scale and probabilities in regular space).
-    """
-    initial_prob, transition_prob = from_hmm_params(params.hmm_params)
-    return (
-        params.model_params.coef,
-        params.model_params.intercept,
-        jnp.exp(params.model_params.log_scale),
-        initial_prob,
-        transition_prob,
-    )
+from .params import GLMHMMParams, GLMHMMUserParams
 
 
 class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
@@ -57,8 +29,6 @@ class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
         "scale",
         *HMMValidator.model_param_names,
     )
-    to_model_params: Callable[[GLMHMMUserParams], GLMHMMParams] = to_glm_hmm_params
-    from_model_params: Callable[[GLMHMMParams], GLMHMMUserParams] = from_glm_hmm_params
     model_class: str = "GLMHMM"
     X_dimensionality: int = 2
     y_dimensionality: int = 1
@@ -83,6 +53,8 @@ class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
         *HMMValidator.params_validation_sequence,
         *RegressorValidator.params_validation_sequence[3:],
     )
+    to_model_params: Callable[[GLMHMMUserParams], GLMHMMParams] = None
+    from_model_params: Callable[[GLMHMMParams], GLMHMMUserParams] = None
 
     def check_model_params_shape(self, params: GLMHMMUserParams) -> GLMHMMUserParams:
         """Check the length of the glm parameters state axis."""
