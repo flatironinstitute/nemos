@@ -732,12 +732,14 @@ class GammaObservations(Observations):
 
     extra_params = ReadOnlyDict(
         {
-            "scale": {
-                "range": (0, float("inf")),
-                "default": 1.0,
-                "map_from": exp,
-                "map_to": jnp.log,
-            }
+            "scale": ReadOnlyDict(
+                {
+                    "range": (0, float("inf")),
+                    "default": 1.0,
+                    "map_from": exp,
+                    "map_to": jnp.log,
+                }
+            )
         },
     )
 
@@ -1342,12 +1344,14 @@ class NegativeBinomialObservations(Observations):
     # declaring params
     extra_params = ReadOnlyDict(
         {
-            "dispersion": {
-                "range": (0, float("inf")),
-                "default": 1.0,
-                "map_from": exp,
-                "map_to": jnp.log,
-            }
+            "dispersion": ReadOnlyDict(
+                {
+                    "range": (0, float("inf")),
+                    "default": 1.0,
+                    "map_from": exp,
+                    "map_to": jnp.log,
+                }
+            )
         },
     )
 
@@ -1650,12 +1654,14 @@ class GaussianObservations(Observations):
     # declaring params
     extra_params = ReadOnlyDict(
         {
-            "scale": {
-                "range": (0, float("inf")),
-                "default": 1.0,
-                "map_from": exp,
-                "map_to": jnp.log,
-            }
+            "scale": ReadOnlyDict(
+                {
+                    "range": (0, float("inf")),
+                    "default": 1.0,
+                    "map_from": exp,
+                    "map_to": jnp.log,
+                }
+            )
         },
     )
 
