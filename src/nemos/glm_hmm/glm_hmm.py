@@ -15,7 +15,7 @@ from numpy.typing import ArrayLike, NDArray
 from .. import observation_models as obs
 from .. import tree_utils
 from .._observation_model_builder import instantiate_observation_model
-from ..glm.params import GLMParams
+from ..glm.params import FromGLMParams, GLMParams, ToGLMParams
 from ..hmm.expectation_maximization import EMState, em_hmm, em_step
 from ..hmm.hmm import FORWARD_BACKWARD, BaseHMM
 from ..hmm.initialize_parameters import HMM_INITIALIZATION_FN_DICT, InitFunctionHMM
@@ -44,9 +44,34 @@ from .initialize_parameters import (
     kmeans_scale_init,
     setup_glm_hmm_initialization,
 )
-from .params import GLMHMMParams, GLMHMMUserParams
+from .params import FromGLMHMMParams, GLMHMMParams, GLMHMMUserParams, ToGLMHMMParams
 from .utils import compute_rate_per_state
 from .validation import GLMHMMValidator
+
+
+def set_validator_parameter_converter(
+    observation_model: Observations, validator: GLMHMMValidator
+) -> GLMHMMValidator:
+    """Set the validator to/from model parameter mapping.
+
+    This convenience function sets the validator mappings between the user
+    provided parameter dictionary and the model parameter class.
+    """
+    return eqx.tree_at(
+        # selector
+        lambda x: (
+            x.to_model_params,
+            x.from_model_params,
+        ),
+        # pytree
+        validator,
+        # replace
+        (
+            ToGLMHMMParams(ToGLMParams(observation_model.map_to)),
+            FromGLMHMMParams(FromGLMParams(observation_model.map_from)),
+        ),
+        is_leaf=lambda x: x is None,
+    )
 
 
 class GLMHMM(
@@ -611,11 +636,17 @@ class GLMHMM(
         """
         if isinstance(observation, str):
             self._observation_model = instantiate_observation_model(observation)
+            self._validator = set_validator_parameter_converter(
+                self._observation_model, self._validator
+            )
             return
         # check that the model has the required attributes
         # and that the attribute can be called
         obs.check_observation_model(observation)
         self._observation_model = observation
+        self._validator = set_validator_parameter_converter(
+            self._observation_model, self._validator
+        )
 
     @property
     def inverse_link_function(self):

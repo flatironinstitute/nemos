@@ -175,6 +175,7 @@ VALID_PAIRS = [
     {"bias", "bas"},
     {"M_grid", "grid"},
     {"inner_atol", "inner_rtol"},
+    {"validate", "validator"},
 ]
 
 
