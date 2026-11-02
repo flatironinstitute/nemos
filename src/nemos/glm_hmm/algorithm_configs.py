@@ -15,7 +15,6 @@ from ..observation_models import (
 )
 from ..regularizer import UnRegularized
 from .m_step_analytical_updates import _m_step_scale_gaussian_observations
-from .params import GLMHMMModelParams
 from .utils import Array, compute_rate_per_state
 
 _NO_SCALE = (PoissonObservations, BernoulliObservations)
@@ -448,7 +447,7 @@ def prepare_mstep_update_fn(
     observation_model: Observations,
     inverse_link_function: Callable,
     setup_solver: Callable,
-    init_params: GLMHMMModelParams,
+    init_params: GLMParams,
 ) -> Callable:
     """
     Prepare update function for numerically optimizing GLM parameters (coef, intercept) and scale.
@@ -476,6 +475,7 @@ def prepare_mstep_update_fn(
     update_fn:
         Function that takes current parameters, data, and posteriors, and returns updated parameters.
     """
+    # TODO: BUGFIX scale treatment
     # get objective and update function for optimizing GLM parameters (coef, intercept)
     objective_param = prepare_mstep_nll_objective_param(
         is_population_glm, observation_model, inverse_link_function
@@ -517,8 +517,9 @@ def prepare_mstep_update_fn(
             new_scale, state_scale, aux_scale = scale_update_fn(
                 params.log_scale, y, predicted_rate, posteriors
             )
+
             return (
-                GLMHMMModelParams(
+                GLMParams(
                     new_glm_params.coef,
                     new_glm_params.intercept,
                     new_scale,

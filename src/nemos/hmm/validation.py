@@ -14,7 +14,7 @@ from .. import validation
 from ..base_validator import RegressorValidator
 from ..type_casting import is_pynapple_tsd
 from ..typing import DESIGN_INPUT_TYPE, ArrayLike
-from .params import HMMModelParamsT, HMMParams, HMMUserParams, HMMUserProvidedParamsT
+from .params import HMMModelParamsT, HMMUserProvidedParamsT
 from .utils import (
     initialize_session_starts,
     shift_nan_session_starts,
@@ -97,32 +97,6 @@ def has_interior_nans(is_nan: ArrayLike, session_starts: ArrayLike) -> bool:
     # count per session, so its non-zero entries are the sessions holding valid samples
     n_valid_per_session = np.add.reduceat(is_valid, np.flatnonzero(session_starts))
     return n_runs > np.count_nonzero(n_valid_per_session)
-
-
-def to_hmm_params(user_params: HMMUserParams) -> HMMParams:
-    """Map from HMMUserParams to HMMParams.
-
-    Converts user-provided parameters (scale and probabilities in regular space)
-    to internal model parameters (log_scale and log probabilities).
-    """
-    return HMMParams(*(jnp.log(p) for p in user_params))
-
-
-def from_hmm_params(params: HMMParams) -> HMMUserParams:
-    """Map from HMMParams to HMMUserParams.
-
-    Converts internal model parameters (log_scale and log probabilities)
-    to user-facing parameters (scale and probabilities in regular space).
-    """
-    # exponentiate and re-normalize
-    initial_prob = jnp.exp(params.log_initial_prob)
-    initial_prob /= initial_prob.sum()
-    transition_prob = jnp.exp(params.log_transition_prob)
-    transition_prob /= transition_prob.sum(axis=1, keepdims=True)
-    return (
-        initial_prob,
-        transition_prob,
-    )
 
 
 class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):

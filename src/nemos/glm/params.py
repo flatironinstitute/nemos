@@ -1,25 +1,14 @@
 """GLM parameter definitions and type aliases."""
 
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, NotRequired, Optional, TypedDict
 
 import equinox as eqx
 from jaxtyping import PyTree
+from numpy.typing import ArrayLike
 
 from ..inverse_link_function_utils import identity
 from ..params import ModelParams
 from ..typing import LeafT
-
-# def map_extra_params(extra_params: dict, direction: MapDirection) -> dict:
-#     """Map extra params.
-#
-#     Map extra parameters from user provided to internal representation.
-#     An example of that can be the dispersion which undergoes unconstrained
-#     optimization, and therefore is mapped to log-space.
-#     """
-#     return {
-#         k: _MAP_LIKELIHOOD_PARS.get(k, {direction: identity})[direction](v)
-#         for k, v in extra_params.items()
-#     }
 
 
 class GLMParams[LeafT](ModelParams[LeafT]):
@@ -35,7 +24,13 @@ class GLMParams[LeafT](ModelParams[LeafT]):
         return [lambda p: p.coef]
 
 
-type GLMUserParams[LeafT] = dict[str, LeafT]
+class GLMUserParams(TypedDict):
+    """GLM user parameters."""
+
+    coef: NotRequired[PyTree[ArrayLike]]
+    intercept: NotRequired[ArrayLike]
+    scale: NotRequired[ArrayLike]
+    dispersion: NotRequired[ArrayLike]
 
 
 class ToGLMParams(eqx.Module):
@@ -43,7 +38,7 @@ class ToGLMParams(eqx.Module):
 
     map_to: Dict[str, Callable]
 
-    def __call__(self, user_params: GLMUserParams[LeafT]) -> GLMParams[LeafT]:
+    def __call__(self, user_params: GLMUserParams) -> GLMParams[LeafT]:
         """Convert user params to GLM params.
 
         Parameters
@@ -67,7 +62,7 @@ class ToGLMParams(eqx.Module):
         intercept = user_params.pop("intercept", None)
         if user_params != {}:
             extra_params = {
-                k: self.map_to.get(p, identity)(p) for k, p in user_params.items()
+                k: self.map_to.get(k, identity)(p) for k, p in user_params.items()
             }
         else:
             extra_params = None
@@ -79,7 +74,7 @@ class FromGLMParams(eqx.Module):
 
     map_from: Dict[str, Callable]
 
-    def __call__(self, glm_params: GLMParams[LeafT]) -> GLMUserParams[LeafT]:
+    def __call__(self, glm_params: GLMParams[LeafT]) -> GLMUserParams:
         """Convert user parameter dictionary to GLMParams.
 
         Parameters

@@ -11,7 +11,7 @@ class ReadOnlyDict(Mapping):
     but supporting pickling.
     """
 
-    def __init__(self, d: dict):
+    def __init__(self, d: "dict | ReadOnlyDict"):
         # this raises when trying to store an array
         # which is what we want since arrays can be mutated
         self._hash = hash(frozenset(d.items()))

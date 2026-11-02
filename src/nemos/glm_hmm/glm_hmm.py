@@ -15,6 +15,7 @@ from numpy.typing import ArrayLike, NDArray
 from .. import observation_models as obs
 from .. import tree_utils
 from .._observation_model_builder import instantiate_observation_model
+from ..glm.params import GLMParams
 from ..hmm.expectation_maximization import EMState, em_hmm, em_step
 from ..hmm.hmm import FORWARD_BACKWARD, BaseHMM
 from ..hmm.initialize_parameters import HMM_INITIALIZATION_FN_DICT, InitFunctionHMM
@@ -43,7 +44,7 @@ from .initialize_parameters import (
     kmeans_scale_init,
     setup_glm_hmm_initialization,
 )
-from .params import GLMHMMModelParams, GLMHMMParams, GLMHMMUserParams
+from .params import GLMHMMParams, GLMHMMUserParams
 from .utils import compute_rate_per_state
 from .validation import GLMHMMValidator
 
@@ -392,7 +393,9 @@ class GLMHMM(
         self.coef_: jnp.ndarray | None = None
         self.intercept_: jnp.ndarray | None = None
         self.solver_state_: NamedTuple | None = None
-        self.scale_: jnp.ndarray | None = None
+        # add extra attr conditionally
+        for k in self.observation_model.extra_params.keys():
+            setattr(self, k + "_", None)
         self.dof_resid_: int | None = None
 
         # cache the log-like
@@ -655,21 +658,14 @@ class GLMHMM(
 
     def _check_model_is_fit(self):
         """Ensure the instance has been fitted."""
-        flat_params = [
-            self.coef_,
-            self.intercept_,
-            self.scale_,
-        ]
-        is_missing = [x is None for x in flat_params]
-        if any(is_missing):
-            param_labels = [
-                "coef_",
-                "intercept_",
-                "scale_",
-            ]
-            missing_params = [
-                p for p, missing in zip(param_labels, is_missing) if missing
-            ]
+        import operator
+
+        param_dict = self._get_param_dict()
+        is_missing = jax.tree_util.tree_map(
+            lambda x: x is None, param_dict, is_leaf=lambda x: x is None
+        )
+        if jax.tree_util.tree_reduce(operator.or_, is_missing):
+            missing_params = [k + "_" for k, v in is_missing.items() if v]
             raise ValueError(
                 "This GLMHMM instance is not fitted yet. The following attributes are not set:"
                 f" {missing_params}.\nPlease fit the GLM-HMM model first or "
@@ -1514,26 +1510,35 @@ class GLMHMM(
         """No optimal parameters known for SVRG in GLMHMM."""
         return None, None, None
 
+    def _get_param_dict(self) -> GLMHMMUserParams:
+        params = {
+            "coef": self.coef_,
+            "intercept": self.intercept_,
+            "initial_prob": self.initial_prob_,
+            "transition_prob": self.transition_prob_,
+        }
+        # this is used just after fit, so it is fine for now, however, if obs model changes
+        # then the model params will be incomplete.
+        # side-effect: after fitting, calling is fit after switching obs model from Gamma to Poisson
+        # will return true, the other way around will return false (one extra params in Gamma).
+        extra = {
+            k: getattr(self, k, None)
+            for k in self.observation_model.extra_params.keys()
+        }
+        params.update(extra)
+        return params
+
     def _get_model_params(self) -> GLMHMMParams:
-        return self._validator.to_model_params(
-            (
-                self.coef_,
-                self.intercept_,
-                self.scale_,
-                self.initial_prob_,
-                self.transition_prob_,
-            )
-        )
+        return self._validator.to_model_params(self._get_param_dict())
 
     def _set_model_params(self, params: GLMHMMParams):
-        coef, intercept, scale, initial_prob, transition_prob = (
-            self._validator.from_model_params(params)
-        )
-        self.coef_ = coef
-        self.intercept_ = intercept
-        self.scale_ = scale
-        self.initial_prob_ = initial_prob
-        self.transition_prob_ = transition_prob
+        user_params = self._validator.from_model_params(params)
+        self.coef_ = user_params.pop("coef")
+        self.intercept_ = user_params.pop("intercept")
+        self.initial_prob_ = user_params.pop("initial_prob")
+        self.transition_prob_ = user_params.pop("transition_prob")
+        for k in user_params.keys():
+            setattr(self, k + "_", user_params[k])
 
     def update(
         self,
@@ -1746,8 +1751,11 @@ class GLMHMM(
         coef_shapes = jax.tree_util.tree_map(
             lambda x: (jnp.shape(x)[1], *extra_shape), X
         )
-        glm_params = GLMHMMModelParams(
-            coef=coef_shapes, intercept=extra_shape, log_scale=extra_shape
+        extra_params = {
+            k: extra_shape for k in self.observation_model.extra_params.keys()
+        }
+        glm_params = GLMParams(
+            coef=coef_shapes, intercept=extra_shape, extra_params=extra_params
         )
         hmm_params = HMMParams(
             log_initial_prob=(n_states,), log_transition_prob=(n_states, n_states)
