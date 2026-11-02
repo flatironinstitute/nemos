@@ -17,7 +17,6 @@ import pkgutil
 import re
 from collections import defaultdict, namedtuple
 from copy import deepcopy
-from dataclasses import dataclass
 from functools import partial
 from types import SimpleNamespace
 from typing import Any, Callable, Literal, Optional, Tuple, Union
@@ -847,7 +846,6 @@ def from_mock_params(params: MockHMMParams) -> MockHMMUserParams:
     )
 
 
-@dataclass(frozen=True, repr=False)
 class MockHMMValidator(HMMValidator[MockHMMUserParams, MockHMMParams]):
     model_param_names: Tuple[str] = (
         "param",

@@ -17,7 +17,7 @@ from .inverse_link_function_utils import (
     logistic,
     softplus,
 )
-import types
+from ._read_only_dict import ReadOnlyDict
 
 __all__ = [
     "PoissonObservations",
@@ -54,7 +54,7 @@ class Observations(Base, abc.ABC):
     """
 
     # extra parameters (other than mean and scale, for example, dispersion of a negative binomial
-    extra_params: types.MappingProxyType = types.MappingProxyType({})
+    extra_params: ReadOnlyDict = ReadOnlyDict({})
 
     # Open interval of valid means; None leaves custom model initialization unchanged.
     rate_range: ClassVar[tuple[float, float] | None] = None
@@ -730,7 +730,7 @@ class GammaObservations(Observations):
 
     """
 
-    extra_params = types.MappingProxyType(
+    extra_params = ReadOnlyDict(
         {
             "scale": {
                 "range": (0, float("inf")),
@@ -1340,7 +1340,7 @@ class NegativeBinomialObservations(Observations):
     """
 
     # declaring params
-    extra_params = types.MappingProxyType(
+    extra_params = ReadOnlyDict(
         {
             "dispersion": {
                 "range": (0, float("inf")),
@@ -1648,7 +1648,7 @@ class GaussianObservations(Observations):
     """
 
     # declaring params
-    extra_params = types.MappingProxyType(
+    extra_params = ReadOnlyDict(
         {
             "scale": {
                 "range": (0, float("inf")),

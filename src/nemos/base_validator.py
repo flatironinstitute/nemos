@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import abc
-import types
 from typing import TYPE_CHECKING, Any, Callable, Generic, List, Optional, Tuple
 
 import equinox as eqx
@@ -16,6 +15,7 @@ if TYPE_CHECKING:
     from pynapple import Tsd, TsdFrame
 
 from . import utils
+from ._read_only_dict import ReadOnlyDict
 from .base_class import Base
 from .tree_utils import pytree_map_and_reduce
 from .type_casting import all_same_time_info, is_pynapple_tsd
@@ -100,7 +100,7 @@ class RegressorValidator(
         Names of parameter validation methods to call in order.
     """
 
-    expected_param_dims: types.MappingProxyType[Any, int] = None
+    expected_param_dims: ReadOnlyDict[Any, int] = None
     model_class: str = None
     X_dimensionality: int = None
     y_dimensionality: int = None
