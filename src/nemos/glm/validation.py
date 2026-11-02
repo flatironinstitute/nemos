@@ -1,6 +1,5 @@
 """Validation classes for GLM and PopulationGLM models."""
 
-import types
 from typing import Any, Callable, Dict, Literal, Optional, Tuple, Union
 
 import equinox as eqx
@@ -10,6 +9,7 @@ from jax.typing import DTypeLike
 from numpy.typing import ArrayLike, NDArray
 
 from .. import validation
+from .._read_only_dict import ReadOnlyDict
 from ..base_validator import RegressorValidator
 from ..pytrees import FeaturePytree
 from ..tree_utils import pytree_map_and_reduce, tree_astype
@@ -34,7 +34,7 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
     """
 
     extra_params: dict = None
-    expected_param_dims: types.MappingProxyType[Any, int] = types.MappingProxyType(
+    expected_param_dims: ReadOnlyDict[Any, int] = ReadOnlyDict(
         {
             "coef": 1,
             "intercept": 1,
@@ -323,7 +323,7 @@ class PopulationGLMValidator(GLMValidator):
     """
 
     y_dimensionality: int = 2
-    expected_param_dims: types.MappingProxyType[Any, int] = types.MappingProxyType(
+    expected_param_dims: ReadOnlyDict[Any, int] = ReadOnlyDict(
         {
             "coef": 2,
             "intercept": 1,
@@ -403,7 +403,7 @@ class ClassifierGLMValidator(GLMValidator):
     """
 
     extra_params: Dict[Literal["n_classes"], int] = eqx.field(kw_only=True)
-    expected_param_dims: types.MappingProxyType[Any, int] = types.MappingProxyType(
+    expected_param_dims: ReadOnlyDict[Any, int] = ReadOnlyDict(
         {
             "coef": 2,
             "intercept": 1,
@@ -578,7 +578,7 @@ class PopulationClassifierGLMValidator(ClassifierGLMValidator):
     """
 
     y_dimensionality: int = 2
-    expected_param_dims: types.MappingProxyType[Any, int] = types.MappingProxyType(
+    expected_param_dims: ReadOnlyDict[Any, int] = ReadOnlyDict(
         {
             "coef": 3,
             "intercept": 2,
