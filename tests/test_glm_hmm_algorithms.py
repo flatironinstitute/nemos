@@ -15,8 +15,8 @@ from nemos.glm_hmm.algorithm_configs import (
     posterior_weighted_glm_negative_log_likelihood,
     prepare_estep_log_likelihood,
     prepare_mstep_nll_for_analytical_scale,
+    prepare_mstep_nll_objective_extra_params,
     prepare_mstep_nll_objective_param,
-    prepare_mstep_nll_objective_scale,
     prepare_mstep_update_fn,
 )
 from nemos.glm_hmm.params import GLMHMMModelParams, GLMHMMParams, HMMParams
@@ -1854,7 +1854,7 @@ class TestMStep:
         predicted_rate = compute_rate_per_state(
             X, new_glm_params, inverse_link_function=inv_link
         )
-        objective_scale = prepare_mstep_nll_objective_scale(False, obs)
+        objective_scale = prepare_mstep_nll_objective_extra_params(False, obs)
         init_scale = jnp.zeros_like(intercept)
         solver = setup_solver(objective_scale, init_params=init_scale, tol=1e-8)
 
@@ -3931,7 +3931,7 @@ class TestEMScaleOptimization:
         # Prepare EM components
         likelihood_func = prepare_estep_log_likelihood(False, obs, jnp.exp)
         nll_params = prepare_mstep_nll_objective_param(False, obs, jnp.exp)
-        nll_scale = prepare_mstep_nll_objective_scale(False, obs)
+        nll_scale = prepare_mstep_nll_objective_extra_params(False, obs)
 
         solver_params = setup_solver(
             nll_params,

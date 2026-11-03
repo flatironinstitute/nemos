@@ -8,24 +8,21 @@ import jax.numpy as jnp
 
 from ..glm.params import GLMParams
 from ..observation_models import (
-    BernoulliObservations,
     GaussianObservations,
     Observations,
-    PoissonObservations,
 )
 from ..regularizer import UnRegularized
 from .m_step_analytical_updates import _m_step_scale_gaussian_observations
 from .utils import Array, compute_rate_per_state
 
-_NO_SCALE = (PoissonObservations, BernoulliObservations)
 _ANALYTICAL_SCALE_UPDATE: dict[Type[Observations], Callable] = {
     GaussianObservations: _m_step_scale_gaussian_observations
 }
 
 
-def has_fixed_scale(observation_model: Observations) -> bool:
+def has_no_extra_params(observation_model: Observations) -> bool:
     """Check if observation has fixed scale."""
-    return type(observation_model) in _NO_SCALE
+    return len(observation_model.extra_params) == 0
 
 
 def _posterior_weighted_objective_impl(
@@ -209,10 +206,10 @@ def prepare_estep_log_likelihood(
 
     def log_likelihood_per_sample(x, z, s):
         return observation_model.log_likelihood(
-            x, z, scale=s, aggregate_sample_scores=lambda v: v
+            x, z, extra_params=s, aggregate_sample_scores=lambda v: v
         )
 
-    if has_fixed_scale(observation_model):
+    if has_no_extra_params(observation_model):
         log_likelihood_per_sample = jax.vmap(
             log_likelihood_per_sample,
             in_axes=(None, state_axes, None),
@@ -228,8 +225,11 @@ def prepare_estep_log_likelihood(
 
     def log_likelihood(params, X, y):
         rate = compute_rate_per_state(X, params, inverse_link_function)
-        scale = jnp.exp(params.log_scale) if params.log_scale is not None else None
-        log_like = log_likelihood_per_sample(y, rate, scale)
+        extra_params = {
+            k: observation_model.extra_params[k]["map_from"](p)
+            for k, p in params.extra_params.items()
+        }
+        log_like = log_likelihood_per_sample(y, rate, extra_params)
         if is_population_glm:
             # Multi-neuron case: sum log-likelihoods across neurons
             log_like = log_like.sum(axis=1)
@@ -304,7 +304,7 @@ def prepare_mstep_nll_objective_param(
     """
     state_axes = 2 if is_population_glm else 1
 
-    if observation_model._separable_scale:
+    if all(v["separable"] for v in observation_model.extra_params.values()):
 
         def negative_log_likelihood_per_sample(x, z):
             return observation_model._negative_log_likelihood(
@@ -321,9 +321,10 @@ def prepare_mstep_nll_objective_param(
 
         def negative_log_likelihood_per_sample(x, z, s):
             return -1 * observation_model.log_likelihood(
-                x, z, scale=s, aggregate_sample_scores=lambda v: v
+                x, z, extra_params=s, aggregate_sample_scores=lambda v: v
             )
 
+        # assume all extra params have the same shape
         negative_log_likelihood = jax.vmap(
             negative_log_likelihood_per_sample,
             in_axes=(None, state_axes, state_axes - 1),
@@ -343,7 +344,7 @@ def prepare_mstep_nll_objective_param(
     return objective
 
 
-def prepare_mstep_nll_objective_scale(
+def prepare_mstep_nll_objective_extra_params(
     is_population_glm: bool,
     observation_model: Observations,
 ) -> Callable:
@@ -370,7 +371,7 @@ def prepare_mstep_nll_objective_scale(
 
     def norm_negative_log_likelihood_per_sample(x, z, s):
         return -1 * observation_model.log_likelihood(
-            x, z, scale=s, aggregate_sample_scores=lambda v: v
+            x, z, extra_params=s, aggregate_sample_scores=lambda v: v
         )
 
     norm_negative_log_likelihood = jax.vmap(
@@ -475,14 +476,14 @@ def prepare_mstep_update_fn(
     update_fn:
         Function that takes current parameters, data, and posteriors, and returns updated parameters.
     """
-    # TODO: BUGFIX scale treatment
-    # get objective and update function for optimizing GLM parameters (coef, intercept)
     objective_param = prepare_mstep_nll_objective_param(
         is_population_glm, observation_model, inverse_link_function
     )
 
     # if scale is separable and needs to be optimized, get update function for optimizing scale
-    if observation_model._separable_scale and (not has_fixed_scale(observation_model)):
+    if observation_model.extra_params and all(
+        v["separable"] for v in observation_model.extra_params.values()
+    ):
         # GLM params solver only needs coef and intercept — exclude log_scale
         glm_init_params = GLMParams(init_params.coef, init_params.intercept)
         params_update_fn = setup_solver(
@@ -494,7 +495,7 @@ def prepare_mstep_update_fn(
         )
         # if no analytical update exists, prepare numerical optimization objective and update function
         if scale_update_fn is None:
-            objective_scale = prepare_mstep_nll_objective_scale(
+            objective_scale = prepare_mstep_nll_objective_extra_params(
                 is_population_glm, observation_model
             )
             # force scale to be unregularized and fit with LBFGS
@@ -514,18 +515,18 @@ def prepare_mstep_update_fn(
             predicted_rate = compute_rate_per_state(
                 X, new_glm_params, inverse_link_function=inverse_link_function
             )
-            new_scale, state_scale, aux_scale = scale_update_fn(
-                params.log_scale, y, predicted_rate, posteriors
+            new_extra_params, state_extra_params, aux_extra_params = scale_update_fn(
+                params.extra_params, y, predicted_rate, posteriors
             )
 
             return (
                 GLMParams(
                     new_glm_params.coef,
                     new_glm_params.intercept,
-                    new_scale,
+                    extra_params=new_extra_params,
                 ),
-                (state_params, state_scale),
-                (aux_params, aux_scale),
+                (state_params, state_extra_params),
+                (aux_params, aux_extra_params),
             )
 
         return update_fn
