@@ -16,13 +16,13 @@ from sklearn.utils import InputTags, TargetTags
 from .. import observation_models as obs
 from .. import tree_utils, validation
 from .._hess import LeafClaim, MatrixProperty, MatrixStructure
+from .._inverse_link_function_builder import LINK_NAME_TO_FUNC
 from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor, strip_metadata
 from ..batching import DataLoader, _PreprocessedDataLoader, is_data_loader
 from ..callbacks import Callback, TrainingContext, _normalize_callbacks
 from ..exceptions import NotFittedError
 from ..inverse_link_function_utils import (
-    LINK_NAME_TO_FUNC,
     resolve_inverse_link_function,
     softplus,
 )

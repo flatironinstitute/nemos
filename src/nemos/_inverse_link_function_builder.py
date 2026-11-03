@@ -68,8 +68,10 @@ def instantiate_inverse_link_function(inverse_link_function: str):
     """
     if inverse_link_function in LINK_NAME_TO_FUNC:
         return LINK_NAME_TO_FUNC[inverse_link_function]
-    raise ValueError(
-        f"Unknown link function: {inverse_link_function}. "
-        f"Link function must be one of {AVAILABLE_INVERSE_LINK_FUNCTIONS}. "
-        "If you want to use a custom link function, please provide it as a Callable. "
-    )
+    else:
+        raise ValueError(
+            f"Unknown link function: {inverse_link_function}. "
+            f"Link function must be one of {AVAILABLE_INVERSE_LINK_FUNCTIONS}"
+            f"if you want to use a custom link function, please provide it as a Callable."
+            f"if you think this is a bug, please open an issue at 'https://github.com/flatironinstitute/nemos/issues'."
+        )

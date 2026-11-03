@@ -16,6 +16,7 @@ import nemos as nmo
 
 # Import helpers from conftest
 from conftest import OBSERVATION_PER_MODEL, MockRegressor, is_population_model
+from nemos._inverse_link_function_builder import LINK_NAME_TO_FUNC
 from nemos.glm.validation import (
     ClassifierGLMValidator,
     GLMValidator,
@@ -23,7 +24,6 @@ from nemos.glm.validation import (
     PopulationGLMValidator,
 )
 from nemos.glm_hmm.validation import GLMHMMValidator
-from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
 from nemos.solvers._fista import OptimistixNAG
 from nemos.solvers._optax_optimistix_solvers import OptimistixOptaxGradientDescent
 
