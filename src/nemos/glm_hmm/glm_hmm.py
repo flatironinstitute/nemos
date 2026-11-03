@@ -213,8 +213,10 @@ class GLMHMM(
         GLM intercepts (bias terms) for each state, shape ``(n_states,)``.
     solver_state_ :
         State of the solver after fitting. May include details like optimization error.
-    scale_ :
-        Scale parameter for the observation model, shape ``(n_states,)``.
+    scale_ (optional):
+        Scale parameter for the observation model if Gaussian or Gamma, shape ``(n_states,)``.
+    dispersion_ (optional):
+        Dispersion parameter for the observation model if NegativeBinomial, shape ``(n_states,)``.
     dof_resid_ :
         Degrees of freedom for the residuals.
 
@@ -484,6 +486,7 @@ class GLMHMM(
           ``"random"``, ``"dirichlet"``, ``"kmeans"``.
         - ``glm_params_init``: ``"random"`` (default), ``"kmeans"``.
         - ``scale_init``: ``"constant"`` (default), ``"kmeans"``.
+        - ``dispersion_init``: ``"constant"`` (default).
 
 
         Parameters
@@ -532,11 +535,11 @@ class GLMHMM(
           :class:`~nemos.hmm.initialize_parameters.InitFunctionHMM` and return a
           ``jnp.ndarray`` of shape ``(n_states,)`` or ``(n_states, n_states)``
           respectively.
-        - ``glm_params_init`` and ``scale_init`` must satisfy
+        - ``glm_params_init``, ``scale_init``, and ``dispersion_init`` must satisfy
           :class:`~nemos.glm_hmm.initialize_parameters.InitFunctionGLM`.
           ``glm_params_init`` returns ``(coef, intercept)`` matched to the design
-          and ``n_states``; ``scale_init`` returns the scale array for the
-          observation model.
+          and ``n_states``; ``scale_init`` and ``dispersion_init`` return
+          the scale array and the dispersion array of the observation model.
 
         To inspect a protocol's signature, import and ``help()`` it::
 
@@ -1047,7 +1050,7 @@ class GLMHMM(
             )
             state_idx = jax.random.categorical(state_key, log_state_probs)
 
-            # get rate and scale for sampled state
+            # get rate and extra params for sampled state
             # handles both (n_states,) and (n_neurons, n_states)
             rate = rates_t[..., state_idx]
             state_extra_params = jax.tree_util.tree_map(
@@ -1490,8 +1493,10 @@ class GLMHMM(
         """Save GLM-HMM model parameters and fit state to a .npz file.
 
         Persists hyperparameters returned by :meth:`get_params` together with the
-        fitted attributes (``coef_``, ``intercept_``, ``scale_``, ``initial_prob_``,
-        ``transition_prob_``, ``dof_resid_``). The ``solver_state_`` is intentionally
+        fitted attributes (``coef_``, ``intercept_``, ``initial_prob_``,
+        ``transition_prob_``, ``dof_resid_``, and optionally distribution specific
+        parameters such as ``scale_`` or ``dispersion_``).
+        The ``solver_state_`` is intentionally
         excluded as it is solver-specific and not needed to reuse the fitted model.
         The file can be reloaded with :func:`nemos.load_model`.
 
@@ -1610,8 +1615,9 @@ class GLMHMM(
 
         Performs one E-step / M-step pair starting from the supplied parameters and
         EM state, updates the model's fitted attributes (``coef_``, ``intercept_``,
-        ``scale_``, ``initial_prob_``, ``transition_prob_``, ``solver_state_``,
-        ``dof_resid_``) in place, and returns the updated parameter tuple and EM
+         ``initial_prob_``, ``transition_prob_``, ``solver_state_``,
+        ``dof_resid_``, and distribution specific extra parameters such as ``scale_``
+        or ``dispersion_``) in place, and returns the updated parameter tuple and EM
         state. Intended for callers that need fine-grained control over EM
         iteration (e.g. checkpointing, custom convergence criteria) instead of the
         bundled :meth:`fit` loop.
@@ -1627,9 +1633,14 @@ class GLMHMM(
         Parameters
         ----------
         params :
-            Current model parameters as a 5-tuple
-            ``(coef, intercept, scale, initial_prob, transition_prob)`` matching
-            the structure produced by :meth:`initialize_params`.
+            Current model parameters as a dictionary with keys:
+                - "coef"
+                - "intercept"
+                - "initial_prob"
+                - "transition_prob"
+                - "scale" (only for Gamma and Gaussian)
+                - "dispersion" (only for NegativeBinomial)
+            matching the structure produced by :meth:`initialize_params`.
         opt_state :
             EM state returned by :meth:`initialize_optimizer_and_state` or by the
             previous call to :meth:`update`.
