@@ -20,8 +20,10 @@ _ANALYTICAL_SCALE_UPDATE: dict[Type[Observations], Callable] = {
 }
 
 
-def map_from(extra_params: dict, observation_model: Observations):
+def map_from(extra_params: dict | None, observation_model: Observations):
     """Convenience wrapping mapping wrapper."""
+    if extra_params is None:
+        return extra_params
     return {
         k: observation_model.extra_params[k]["map_from"](p)
         for k, p in extra_params.items()
@@ -94,7 +96,12 @@ def _posterior_weighted_objective_impl(
 
 
 @partial(
-    jax.jit, static_argnames=["inverse_link_function", "negative_log_likelihood_func"]
+    jax.jit,
+    static_argnames=[
+        "inverse_link_function",
+        "negative_log_likelihood_func",
+        "observation_model",
+    ],
 )
 def posterior_weighted_glm_negative_log_likelihood(
     glm_params: GLMParams[jnp.ndarray],
@@ -103,6 +110,7 @@ def posterior_weighted_glm_negative_log_likelihood(
     posteriors: Array,
     inverse_link_function: Callable,
     negative_log_likelihood_func: Callable,
+    observation_model: Observations,
 ):
     """
     Compute the posterior-weighted negative log-likelihood for GLM coefficients.
@@ -129,6 +137,8 @@ def posterior_weighted_glm_negative_log_likelihood(
         Function mapping linear predictors to rates.
     negative_log_likelihood_func:
         Unnormalized negative log-likelihood function.
+    observation_model:
+        Observation model to use.
 
     Returns
     -------
@@ -142,6 +152,8 @@ def posterior_weighted_glm_negative_log_likelihood(
         predicted_rate,
         posteriors,
         negative_log_likelihood_func,
+        extra_params=glm_params.extra_params,
+        observation_model=observation_model,
     )
 
 
@@ -357,6 +369,7 @@ def prepare_mstep_nll_objective_param(
             posteriors=posteriors,
             inverse_link_function=inverse_link_function,
             negative_log_likelihood_func=negative_log_likelihood,
+            observation_model=observation_model,
         )
 
     return objective
