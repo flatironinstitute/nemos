@@ -64,7 +64,6 @@ class Observations(Base, abc.ABC):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._separable_scale = None
 
     def __repr__(self):
         return utils.format_repr(self)
@@ -485,7 +484,6 @@ class PoissonObservations(Observations):
 
     def __init__(self):
         super().__init__()
-        self._separable_scale = True
 
     @property
     def default_inverse_link_function(self):
@@ -738,6 +736,7 @@ class GammaObservations(Observations):
                     "default": 1.0,
                     "map_from": exp,
                     "map_to": jnp.log,
+                    "separable": True,
                 }
             )
         },
@@ -751,7 +750,6 @@ class GammaObservations(Observations):
         self,
     ):
         super().__init__()
-        self._separable_scale = True
 
     @property
     def default_inverse_link_function(self):
@@ -991,7 +989,6 @@ class BernoulliObservations(Observations):
 
     def __init__(self):
         super().__init__()
-        self._separable_scale = True
 
     @property
     def default_inverse_link_function(self):
@@ -1350,6 +1347,7 @@ class NegativeBinomialObservations(Observations):
                     "default": 1.0,
                     "map_from": exp,
                     "map_to": jnp.log,
+                    "separable": False,
                 }
             )
         },
@@ -1364,7 +1362,6 @@ class NegativeBinomialObservations(Observations):
         self,
     ):
         super().__init__()
-        self._separable_scale = False
 
     @property
     def default_inverse_link_function(self):
@@ -1660,6 +1657,7 @@ class GaussianObservations(Observations):
                     "default": 1.0,
                     "map_from": exp,
                     "map_to": jnp.log,
+                    "separable": True,
                 }
             )
         },
@@ -1673,7 +1671,6 @@ class GaussianObservations(Observations):
         self,
     ):
         super().__init__()
-        self._separable_scale = True
 
     @property
     def default_inverse_link_function(self):
@@ -1909,7 +1906,6 @@ class CategoricalObservations(Observations):
 
     def __init__(self):
         super().__init__()
-        self._separable_scale = True
 
     @property
     def default_inverse_link_function(self):

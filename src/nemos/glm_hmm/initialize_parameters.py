@@ -22,7 +22,7 @@ from ..observation_models import Observations
 from ..pytrees import FeaturePytree
 from ..type_casting import cast_to_jax
 from ..typing import DESIGN_INPUT_TYPE
-from .algorithm_configs import has_fixed_scale
+from .algorithm_configs import has_no_extra_params
 
 RANDOM_KEY = jax.Array
 
@@ -242,7 +242,7 @@ class KMeansInitializerGLM(KMeansInitializer):
         else:
             scale = jnp.ones((self.n_states,))
 
-        if has_fixed_scale(self._glm_models[0].observation_model):
+        if has_no_extra_params(self._glm_models[0].observation_model):
             return scale
 
         if self._glm_models[0].scale_ is None:

@@ -8,8 +8,8 @@ from nemos.glm.params import GLMParams
 from nemos.glm_hmm.algorithm_configs import (
     get_analytical_scale_update,
     prepare_estep_log_likelihood,
+    prepare_mstep_nll_objective_extra_params,
     prepare_mstep_nll_objective_param,
-    prepare_mstep_nll_objective_scale,
 )
 from nemos.glm_hmm.params import GLMHMMModelParams, GLMHMMParams
 from nemos.glm_hmm.utils import compute_rate_per_state
@@ -81,7 +81,7 @@ def generate_data_gaussian(request):
     log_likelihood_fn = prepare_estep_log_likelihood(
         is_population_glm, obs, inv_link_func
     )
-    expected_negative_log_likelihood_scale = prepare_mstep_nll_objective_scale(
+    expected_negative_log_likelihood_scale = prepare_mstep_nll_objective_extra_params(
         is_population_glm=is_population_glm,
         observation_model=obs,
     )
