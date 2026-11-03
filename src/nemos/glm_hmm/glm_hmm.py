@@ -461,6 +461,8 @@ class GLMHMM(
         glm_params_init_kwargs: Optional[dict] = None,
         scale_init: Optional[Literal["constant", "kmeans"] | InitFunctionGLM] = None,
         scale_init_kwargs: Optional[dict] = None,
+        dispersion_init: Optional[Literal["constant"] | InitFunctionGLM] = None,
+        dispersion_init_kwargs: Optional[dict] = None,
     ):
         """Configure how :meth:`fit` initializes each model parameter.
 
@@ -499,10 +501,17 @@ class GLMHMM(
             Extra keyword arguments forwarded to ``glm_params_init``.
         scale_init :
             Built-in name or custom callable used to initialize the scale parameter
-            of the observation model (e.g. variance for Gaussian, dispersion for
-            NegativeBinomial). Ignored by observation models without a scale.
+            of the observation model (e.g. variance for Gaussian).
+            Ignored by observation models without a scale.
         scale_init_kwargs :
             Extra keyword arguments forwarded to ``scale_init``.
+        dispersion_init :
+            Built-in name or custom callable used to initialize the dispersion parameter
+            of the observation model (for NegativeBinomial).
+            Ignored by observation models without a dispersion.
+        dispersion_init_kwargs :
+            Extra keyword arguments forwarded to ``dispersion_init``.
+
 
         Raises
         ------
@@ -569,6 +578,8 @@ class GLMHMM(
             glm_params_init_kwargs=glm_params_init_kwargs,
             scale_init=scale_init,
             scale_init_kwargs=scale_init_kwargs,
+            dispersion_init=dispersion_init,
+            dispersion_init_kwargs=dispersion_init_kwargs,
         )
 
     def _model_setup(
@@ -577,6 +588,8 @@ class GLMHMM(
         glm_params_init_kwargs=None,
         scale_init: Optional[str | Callable] = None,
         scale_init_kwargs=None,
+        dispersion_init: Optional[str | Callable] = None,
+        dispersion_init_kwargs=None,
     ):
         """Validate and set GLM-side initialization functions.
 
@@ -591,6 +604,8 @@ class GLMHMM(
             scale_init=scale_init,
             scale_init_kwargs=scale_init_kwargs,
             init_funcs=self._model_initialization_funcs,
+            dispersion_init=dispersion_init,
+            dispersion_init_kwargs=dispersion_init_kwargs,
         )
         self._model_use_kmeans = {
             "glm_params_init": (

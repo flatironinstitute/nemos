@@ -659,9 +659,7 @@ class BaseHMM(
             session_starts,
             random_key=model_key,
         )
-        user_params = self._validator.wrap_user_params(
-            model_params
-        ) + self._validator.wrap_user_params(hmm_params)
+        user_params = {**hmm_params, **model_params}
         if validate_hmm or validate_model:
             model_params = self._validator.validate_and_cast_params(user_params)
             self._validator.validate_consistency(model_params, X=X, y=y)

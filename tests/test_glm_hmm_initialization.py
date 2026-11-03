@@ -12,7 +12,7 @@ from nemos.glm import GLM
 from nemos.glm_hmm.initialize_parameters import (
     DEFAULT_INIT_FUNCTIONS_GLMHMM,
     KMeansInitializerGLM,
-    constant_scale_init,
+    constant_parameter_init,
     generate_glm_hmm_initial_model_params,
     kmeans_glm_params_init,
     kmeans_scale_init,
@@ -427,7 +427,7 @@ class TestConstantScaleInitialization:
         X = jnp.ones((n_samples, 5))
         y = jnp.ones((n_samples, n_neurons)) if n_neurons > 1 else jnp.ones(n_samples)
 
-        scale = constant_scale_init(
+        scale = constant_parameter_init(
             n_states, X, y, lambda x: x, random_key=jax.random.PRNGKey(124)
         )
 
@@ -444,7 +444,7 @@ class TestConstantScaleInitialization:
         ],
     )
     def test_expected_output_type(self, X, y):
-        scale = constant_scale_init(
+        scale = constant_parameter_init(
             2, X, y, lambda x: x, random_key=jax.random.PRNGKey(124)
         )
         assert isinstance(scale, jnp.ndarray)
@@ -453,7 +453,7 @@ class TestConstantScaleInitialization:
     @pytest.mark.parametrize("n_neurons", [1, 3])
     def test_default_value_is_one(self, n_states, n_neurons):
         y = jnp.ones((100, n_neurons)) if n_neurons > 1 else jnp.ones(100)
-        scale = constant_scale_init(
+        scale = constant_parameter_init(
             n_states,
             jnp.ones((100, 5)),
             y,
@@ -466,13 +466,13 @@ class TestConstantScaleInitialization:
     @pytest.mark.parametrize("n_neurons", [1, 3])
     def test_custom_scale_value(self, scale_val, n_neurons):
         y = jnp.ones((100, n_neurons)) if n_neurons > 1 else jnp.ones(100)
-        scale = constant_scale_init(
+        scale = constant_parameter_init(
             3,
             jnp.ones((100, 5)),
             y,
             lambda x: x,
             random_key=jax.random.PRNGKey(124),
-            scale_val=scale_val,
+            fill_value=scale_val,
         )
         assert jnp.all(scale == scale_val)
 
@@ -480,10 +480,10 @@ class TestConstantScaleInitialization:
         """Output is identical regardless of random key."""
         X = jnp.ones((100, 5))
         y = jnp.ones(100)
-        scale1 = constant_scale_init(
+        scale1 = constant_parameter_init(
             3, X, y, lambda x: x, random_key=jax.random.PRNGKey(1)
         )
-        scale2 = constant_scale_init(
+        scale2 = constant_parameter_init(
             3, X, y, lambda x: x, random_key=jax.random.PRNGKey(999)
         )
         assert jnp.array_equal(scale1, scale2)
@@ -692,7 +692,7 @@ class TestSetupGLMHMMInitialization:
     @pytest.mark.parametrize(
         "init_str, expectation, method",
         [
-            ("constant", does_not_raise(), constant_scale_init),
+            ("constant", does_not_raise(), constant_parameter_init),
             ("kmeans", does_not_raise(), kmeans_scale_init),
             (None, does_not_raise(), DEFAULT_INIT_FUNCTIONS_GLMHMM["scale_init"]),
             (
