@@ -33,7 +33,11 @@ from ..typing import (
     StepResult,
 )
 from ..utils import format_repr
-from .algorithm_configs import prepare_estep_log_likelihood, prepare_mstep_update_fn
+from .algorithm_configs import (
+    map_from,
+    prepare_estep_log_likelihood,
+    prepare_mstep_update_fn,
+)
 from .initialize_parameters import (
     DEFAULT_INIT_FUNCTIONS_GLMHMM,
     GLMHMM_INITIALIZATION_FN_DICT,
@@ -1015,7 +1019,9 @@ class GLMHMM(
         # unpack log probabilities directly (avoid exp then log in categorical)
         log_initial_prob = params.hmm_params.log_initial_prob
         log_transition_prob = params.hmm_params.log_transition_prob
-        scale = jnp.exp(params.model_params.log_scale)
+        extra_params = map_from(
+            params.model_params.extra_params, self.observation_model
+        )
 
         # pre-compute rates for all states: (n_time_bins, n_states) or (n_time_bins, n_neurons, n_states)
         all_rates = compute_rate_per_state(
@@ -1044,11 +1050,13 @@ class GLMHMM(
             # get rate and scale for sampled state
             # handles both (n_states,) and (n_neurons, n_states)
             rate = rates_t[..., state_idx]
-            state_scale = scale[..., state_idx]
+            state_extra_params = jax.tree_util.tree_map(
+                lambda p: p[..., state_idx], extra_params
+            )
 
             # sample observation
             y_t = self._observation_model.sample_generator(
-                key=obs_key, predicted_rate=rate, scale=state_scale
+                key=obs_key, predicted_rate=rate, extra_params=state_extra_params
             )
 
             return state_idx, (y_t, rate, state_idx)
@@ -1568,7 +1576,7 @@ class GLMHMM(
         # side-effect: after fitting, calling is fit after switching obs model from Gamma to Poisson
         # will return true, the other way around will return false (one extra params in Gamma).
         extra = {
-            k: getattr(self, k, None)
+            k: getattr(self, k + "_", None)
             for k in self.observation_model.extra_params.keys()
         }
         params.update(extra)
