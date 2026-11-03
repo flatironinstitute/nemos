@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Literal, Optional, Protocol, Tuple
+from typing import Any, Callable, Dict, Literal, Optional, Protocol
 
 import jax
 import jax.numpy as jnp
@@ -368,7 +368,7 @@ def kmeans_scale_init(
 
 
 @cast_to_jax(dtype=None)
-def constant_scale_init(
+def constant_parameter_init(
     n_states: int,
     X: DESIGN_INPUT_TYPE,
     y: NDArray | jnp.ndarray,
@@ -376,7 +376,7 @@ def constant_scale_init(
     observation_model: Optional[Observations] = None,
     session_starts: Optional[NDArray | jnp.ndarray] = None,
     random_key: Optional[jax.Array] = None,
-    scale_val: float = 1.0,
+    fill_value: float = 1.0,
 ):
     """
     Initialize scale to a constant value.
@@ -401,7 +401,7 @@ def constant_scale_init(
         but included for API consistency.
     random_key : jax.random.PRNGKey
         Random key, unused for this initialization, but included for API consistency.
-    scale_val : float
+    fill_value : float
         The constant value to initialize all scale parameters to. Default is 1.0.
 
     Returns
@@ -412,19 +412,22 @@ def constant_scale_init(
     """
     is_one_dim = y.ndim == 1
     n_neurons = 1 if is_one_dim else y.shape[1]
-    scale = jnp.full((n_neurons, n_states), scale_val, dtype=float)
+    param = jnp.full((n_neurons, n_states), fill_value, dtype=float)
     if is_one_dim:
-        scale = jnp.squeeze(scale, axis=0)
-    return scale
+        param = jnp.squeeze(param, axis=0)
+    return param
 
 
 DEFAULT_INIT_FUNCTIONS_GLMHMM = {
     "glm_params_init": random_glm_params_init,
     "glm_params_init_kwargs": {},
     "glm_params_init_custom": False,
-    "scale_init": constant_scale_init,
+    "scale_init": constant_parameter_init,
     "scale_init_kwargs": {},
     "scale_init_custom": False,
+    "dispersion_init": constant_parameter_init,
+    "dispersion_init_kwargs": {},
+    "dispersion_init_custom": False,
 }
 
 AVAIL_INIT_FUNCTIONS_GLM = {
@@ -432,7 +435,8 @@ AVAIL_INIT_FUNCTIONS_GLM = {
         "random": random_glm_params_init,
         "kmeans": kmeans_glm_params_init,
     },
-    "scale_init": {"constant": constant_scale_init, "kmeans": kmeans_scale_init},
+    "scale_init": {"constant": constant_parameter_init, "kmeans": kmeans_scale_init},
+    "dispersion_init": {"constant": constant_parameter_init},
 }
 
 GLMHMM_INITIALIZATION_FN_DICT = dict[
@@ -443,6 +447,9 @@ GLMHMM_INITIALIZATION_FN_DICT = dict[
         "scale_init",
         "scale_init_kwargs",
         "scale_init_custom",
+        "dispersion_init",
+        "dispersion_init_kwargs",
+        "dispersion_init_custom",
     ],
     InitFunctionGLM | InitFunctionHMM | dict[str, Any] | bool,
 ]
@@ -453,6 +460,8 @@ def setup_glm_hmm_initialization(
     glm_params_init_kwargs: Optional[dict] = None,
     scale_init: Optional[str | Callable] = None,
     scale_init_kwargs: Optional[dict] = None,
+    dispersion_init: Optional[str | Callable] = None,
+    dispersion_init_kwargs: Optional[dict] = None,
     init_funcs: Optional[dict | GLMHMM_INITIALIZATION_FN_DICT] = None,
 ) -> GLMHMM_INITIALIZATION_FN_DICT:
     """
@@ -474,6 +483,10 @@ def setup_glm_hmm_initialization(
         Initialization function for the scale of the observation model.
     scale_init_kwargs:
         Kwargs of the initialization function for the scale of the observation model.
+    dispersion_init:
+        Initialization function for the dispersion of the observation model.
+    dispersion_init_kwargs:
+        Kwargs of the initialization function for the dispersion of the observation model.
     init_funcs :
         Existing dictionary of initialization functions to update. If None, a fresh copy of
         ``DEFAULT_INIT_FUNCTIONS_GLMHMM`` is used. Keys must already be validated before calling
@@ -493,7 +506,7 @@ def setup_glm_hmm_initialization(
     # set *_custom = False so the validate-params guard treats them as built-ins.
     _resolve_existing_slots(
         glm_init_funcs,
-        ("glm_params_init", "scale_init"),
+        ("glm_params_init", "scale_init", "dispersion_init"),
         AVAIL_INIT_FUNCTIONS_GLM,
         InitFunctionGLM,
     )
@@ -538,6 +551,24 @@ def setup_glm_hmm_initialization(
             scale_init_kwargs,
             protocol=InitFunctionGLM,
         )
+    if dispersion_init is not None:
+        (
+            glm_init_funcs["dispersion_init"],
+            glm_init_funcs["dispersion_init_kwargs"],
+            glm_init_funcs["dispersion_init_custom"],
+        ) = _resolve_init_funcs(
+            "dispersion_init",
+            scale_init,
+            scale_init_kwargs,
+            AVAIL_INIT_FUNCTIONS_GLM,
+            protocol=InitFunctionGLM,
+        )
+    elif dispersion_init_kwargs is not None:
+        glm_init_funcs["dispersion_init_kwargs"] = _validate_init_funcs_kwargs(
+            glm_init_funcs["dispersion_init"],
+            scale_init_kwargs,
+            protocol=InitFunctionGLM,
+        )
     return glm_init_funcs
 
 
@@ -550,7 +581,7 @@ def generate_glm_hmm_initial_model_params(
     session_starts: Optional[NDArray | jnp.ndarray] = None,
     random_key: int | jax.Array = 123,
     init_funcs: Optional[dict] = None,
-) -> Tuple[Any, jnp.ndarray, jnp.ndarray]:
+) -> GLMUserParams:
     """
     Generate initial GLM model parameters for a GLM-HMM.
 
@@ -621,21 +652,26 @@ def generate_glm_hmm_initial_model_params(
         random_key=glm_params_key,
         **glm_params_init_kwargs,
     )
+    user_params = {"coef": coef, "intercept": intercept}
+    for param_name, param_specs in observation_model.extra_params.items():
+        init_fn = (
+            glm_init_funcs.get(f"{param_name}_init")
+            or DEFAULT_INIT_FUNCTIONS_GLMHMM[f"{param_name}_init"]
+        )
 
-    scale_init_fn = (
-        glm_init_funcs.get("scale_init") or DEFAULT_INIT_FUNCTIONS_GLMHMM["scale_init"]
-    )
-    scale_init_kwargs = glm_init_funcs.get("scale_init_kwargs") or {}
+        init_kwargs = glm_init_funcs.get(f"{param_name}_init_kwargs") or {}
+        if f"{param_name}_value" not in init_kwargs:
+            init_kwargs["fill_value"] = param_specs["default"]
 
-    scale = scale_init_fn(
-        n_states=n_states,
-        X=X,
-        y=y,
-        inverse_link_function=inverse_link_function,
-        observation_model=observation_model,
-        session_starts=session_starts,
-        random_key=scale_key,
-        **scale_init_kwargs,
-    )
+        user_params[param_name] = init_fn(
+            n_states=n_states,
+            X=X,
+            y=y,
+            inverse_link_function=inverse_link_function,
+            observation_model=observation_model,
+            session_starts=session_starts,
+            random_key=scale_key,
+            **init_kwargs,
+        )
 
-    return coef, intercept, scale
+    return user_params

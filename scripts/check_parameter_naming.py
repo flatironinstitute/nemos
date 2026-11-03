@@ -176,6 +176,7 @@ VALID_PAIRS = [
     {"M_grid", "grid"},
     {"inner_atol", "inner_rtol"},
     {"validate", "validator"},
+    {"dispersion_init", "dispersion_init_kwargs"},
 ]
 
 
