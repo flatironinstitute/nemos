@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, Any, Callable, Generic, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Generic, Optional, Tuple
 
 import equinox as eqx
 import jax
@@ -152,22 +152,6 @@ class RegressorValidator(
             If the parameter structure is invalid.
         """
         return params
-
-    @staticmethod
-    def wrap_user_params(params: UserProvidedParamsT) -> List:
-        """Wrap user provided parameters into a list.
-
-        Notes
-        -----
-        The output list should be of the same length as ``self.expected_array_dims``, one element
-        per parameter. The user parameter structure is verified by ``self.check_user_params_structure``,
-        if the structure is valid, the output list should have the expected length. May need re-implementation
-        for complex parameter logic.
-
-        """
-        if hasattr(params, "ndim"):
-            return [params]
-        return list(params)
 
     def check_array_dimensions(
         self,

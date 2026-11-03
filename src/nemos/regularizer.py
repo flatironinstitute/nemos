@@ -696,6 +696,9 @@ class UnRegularized(Regularizer):
     def _validate_strength(self, strength: Any):
         return None
 
+    def _validate_strength_structure(self, params: Any, strength: Any):
+        return strength
+
     def _resolve_hess_tag(self, params: Any, strength: Any) -> HessianTag:
         """Describe the penalty's Hessian, which is the zero matrix.
 

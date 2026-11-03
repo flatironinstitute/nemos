@@ -183,6 +183,8 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         For single-neuron GLM, only validates feature consistency with X.
         Does not validate y since it's 1D (single neuron, no neuron axis to check).
         """
+        if params.coef is None:
+            return
         if X is not None:
             # check that X and params.coef have the same structure
             msg = "X and coef have mismatched structure."

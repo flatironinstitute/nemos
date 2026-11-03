@@ -1081,7 +1081,9 @@ class BernoulliObservations(Observations):
         where :math:`p` is the predicted success probability, given by the inverse link function, and :math:`y` is the
         observed binary variable.
         """
-        nll = self._negative_log_likelihood(y, predicted_rate, aggregate_sample_scores)
+        nll = self._negative_log_likelihood(
+            y, predicted_rate, aggregate_sample_scores=aggregate_sample_scores
+        )
         return -nll
 
     def sample_generator(
