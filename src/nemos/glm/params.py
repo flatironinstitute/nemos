@@ -62,7 +62,8 @@ class ToGLMParams(eqx.Module):
         intercept = user_params.pop("intercept", None)
         if user_params != {}:
             extra_params = {
-                k: self.map_to.get(k, identity)(p) for k, p in user_params.items()
+                k: self.map_to.get(k, identity)(p) if p is not None else None
+                for k, p in user_params.items()
             }
         else:
             extra_params = None
