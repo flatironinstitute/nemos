@@ -243,14 +243,14 @@ def prepare_estep_log_likelihood(
         )
 
     if has_no_extra_params(observation_model):
-        log_likelihood_per_sample = jax.vmap(
+        vmap_log_likelihood_per_sample = jax.vmap(
             log_likelihood_per_sample,
             in_axes=(None, state_axes, None),
             out_axes=state_axes,
         )
 
     else:
-        log_likelihood_per_sample = jax.vmap(
+        vmap_log_likelihood_per_sample = jax.vmap(
             log_likelihood_per_sample,
             in_axes=(None, state_axes, state_axes - 1),
             out_axes=state_axes,
@@ -259,7 +259,7 @@ def prepare_estep_log_likelihood(
     def log_likelihood(params, X, y):
         rate = compute_rate_per_state(X, params, inverse_link_function)
         extra_params = map_from(params.extra_params, observation_model)
-        log_like = log_likelihood_per_sample(y, rate, extra_params)
+        log_like = vmap_log_likelihood_per_sample(y, rate, extra_params)
         if is_population_glm:
             # Multi-neuron case: sum log-likelihoods across neurons
             log_like = log_like.sum(axis=1)
