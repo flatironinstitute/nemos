@@ -549,3 +549,16 @@ class RegressorValidator(
                 "The provided parameters include None values. All provided parameters must be PyTrees of arrays. "
                 f"The following parameter(s) include None values:\n{empty_field}"
             )
+
+    def filter_extra_params(self, params: UserProvidedParamsT):
+        """Filter a user param dictionary and return only the extra parameters."""
+        return {k: params.get(k) for k in self.extra_param_names}
+
+    @property
+    def extra_param_names(self) -> frozenset:
+        """Return the names of the extra parameters.
+
+        Usually, those are distribution specific fitted parameters, like
+        ``dispersion`` for a negative binomial distribution.
+        """
+        return self.model_param_names - self.__class__.model_param_names
