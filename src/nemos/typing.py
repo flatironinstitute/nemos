@@ -18,6 +18,8 @@ import jax.numpy as jnp
 from jax.typing import ArrayLike
 from numpy.typing import NDArray
 
+from .params import ModelParams
+
 if TYPE_CHECKING:
     import pynapple as nap
 
@@ -107,7 +109,7 @@ Array: TypeAlias = "Union[NDArray, jnp.ndarray]"
 # User provided init_params (e.g. for GLMs dict {"coef": array1, "intercept": array2})
 UserProvidedParamsT = TypeVar("UserProvidedParamsT", bound=Dict[Any, Any])
 # Model internal representation (e.g. for GLMs nemos.glm.glm.GLMParams)
-ModelParamsT = TypeVar("ModelParamsT")
+ModelParamsT = TypeVar("ModelParamsT", bound=ModelParams)
 # Validator type associated with a regressor (e.g. GLMValidator for GLM)
 ValidatorT = TypeVar("ValidatorT", bound="RegressorValidator")
 # Pytree leaf
