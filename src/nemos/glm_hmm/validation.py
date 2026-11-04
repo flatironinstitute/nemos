@@ -27,12 +27,12 @@ class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
             "scale": 1,
         }
     )
+    # class-attribute stores only the common param
+    # names
     model_param_names: frozenset[str] = frozenset(
         {
             "coef",
             "intercept",
-            "scale",
-            "dispersion",
             *HMMValidator.model_param_names,
         }
     )
