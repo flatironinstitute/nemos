@@ -503,3 +503,49 @@ class RegressorValidator(
                 "Invalid parameter specification found. Parameters can be jax arrays, "
                 f"numpy arrays or None.\nFound invalid types: {invalid_types}"
             )
+
+    @staticmethod
+    def check_complete_param_specs(params: Any, expected_params: list | set):
+        """Check complete parameter specifications.
+
+        Check that the provided parameter dictionary includes a pytree of
+        non-empty values. This method should be called before any validation of
+        the parameter structure.
+        Note that a misspecified parameter which is not a dictionary won't raise
+        here. The dictionary structure is enforced elsewhere, and therefore here we
+        return directly when the parameters are not a dictionary.
+        """
+        if params is None:
+            return
+        if not isinstance(params, dict):
+            return
+        missing = set(expected_params) - set(params.keys())
+        if missing:
+            raise ValueError(
+                f"The user-provided parameter dictionary is incomplete. Missing fields: {missing}"
+            )
+        invalid = set(params.keys()) - set(expected_params)
+        if invalid:
+            raise ValueError(
+                f"Invalid parameter(s) {invalid} provided. Valid parameter names are {expected_params}"
+            )
+
+        def is_none(x):
+            return x is None
+
+        empty = pytree_map_and_reduce(
+            is_none,
+            any,
+            params,
+            is_leaf=is_none,
+        )
+        if empty:
+            empty_field = dict(
+                (k, v)
+                for k, v in params.items()
+                if pytree_map_and_reduce(is_none, any, v, is_leaf=is_none)
+            )
+            raise ValueError(
+                "The provided parameters include None values. All provided parameters must be PyTrees of arrays. "
+                f"The following parameter(s) include None values:\n{empty_field}"
+            )

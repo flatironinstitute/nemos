@@ -625,6 +625,17 @@ class GLMHMM(
         }
 
     @property
+    def param_names(self) -> list[str]:
+        """List the names of the parameters fitted by the GLM-HMM."""
+        return [
+            "initial_prob",
+            "transition_prob",
+            "coef",
+            "intercept",
+            *self.observation_model.extra_params.keys(),
+        ]
+
+    @property
     def observation_model(self) -> obs.Observations:
         """The observation model governing the emission distribution at each state.
 
@@ -869,6 +880,8 @@ class GLMHMM(
         if init_params is None:
             init_params = self._model_specific_initialization(X, y, session_starts)
         else:
+            # TODO: improve initialization and allow partial param specs
+            self._validator.check_complete_param_specs(init_params, self.param_names)
             init_params = self._validator.validate_and_cast_params(init_params)
             self._validator.validate_consistency(init_params, X=X, y=y)
 
