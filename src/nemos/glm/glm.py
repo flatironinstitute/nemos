@@ -1,1 +1,2483 @@
-"""GLM core module."""# required to get ArrayLike to render correctlyfrom __future__ import annotationsimport warningsfrom pathlib import Pathfrom typing import Any, Callable, List, Literal, Optional, Tuple, Unionimport equinox as eqximport jaximport jax.numpy as jnpfrom numpy.typing import ArrayLike, NDArrayfrom sklearn.utils import InputTags, TargetTagsfrom .. import observation_models as obsfrom .. import tree_utils, validationfrom .._hess import LeafClaim, MatrixProperty, MatrixStructurefrom .._observation_model_builder import instantiate_observation_modelfrom ..base_regressor import BaseRegressor, strip_metadatafrom ..batching import DataLoader, _PreprocessedDataLoader, is_data_loaderfrom ..callbacks import Callback, TrainingContext, _normalize_callbacksfrom ..exceptions import NotFittedErrorfrom ..inverse_link_function_utils import (    LINK_NAME_TO_FUNC,    resolve_inverse_link_function,    softplus,)from ..pytrees import FeaturePytreefrom ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridgefrom ..solvers import (    CHOLESKY_ERR_MSG,    WrappedProxSVRG,    WrappedSVRG,    list_stochastic_solvers,)from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configsfrom ..type_casting import cast_to_jax, support_pynapplefrom ..typing import DESIGN_INPUT_TYPE, SolverState, StepResultfrom ..utils import _elementwise_derivative, format_reprfrom .initialize_parameters import (    initialize_constant_coef_matching_mean_rate,    initialize_intercept_matching_mean_rate,)from .params import FromGLMParams, GLMParams, GLMUserParams, ToGLMParamsfrom .validation import (    GLMValidator,    PopulationGLMValidator,)__all__ = ["GLM", "PopulationGLM"]REGRESSION_GLM_TYPES = Union[    obs.BernoulliObservations,    obs.GammaObservations,    obs.GaussianObservations,    obs.NegativeBinomialObservations,    obs.PoissonObservations,    Literal[        "Poisson",        "Gamma",        "Bernoulli",        "NegativeBinomial",        "Gaussian",    ],]def _broadcast_mask_to(mask: jnp.ndarray, coef: jnp.ndarray) -> jnp.ndarray:    """Add trailing singleton axes so ``mask`` broadcasts against ``coef``.    The mask is spelled ``(n_features, n_neurons)``: it says which features reach which    neuron and knows nothing about axes the coefficients add beyond that (the classes of    a classifier). A no-op when the two already share a shape.    """    return mask.reshape(mask.shape + (1,) * (coef.ndim - mask.ndim))def _active_columns(x_leaves: list, active_coef: Any) -> jnp.ndarray:    """Flag the design columns whose coefficient the solver estimates.    A coefficient frozen through ``fix_params`` is ``None`` in the active tree, so its    columns cost no degrees of freedom. The flags follow the column order of the design,    which is the leaf order of ``X``.    """    active_leaves = jax.tree_util.tree_leaves(active_coef, is_leaf=lambda x: x is None)    return jnp.concatenate(        [            jnp.full((x.shape[1],), coef is not None)            for x, coef in zip(x_leaves, active_leaves)        ]    )def _glm_hessian_block(    X,    eta,    inverse_link_function,    var_of_mu,    lam: Any = None,):    _X = jnp.concatenate(jax.tree_util.tree_leaves(X), axis=1)    n_samples, n_features = _X.shape    gprime = _elementwise_derivative(inverse_link_function)    mu = inverse_link_function(eta)    w = gprime(eta) ** 2 / var_of_mu(mu) / n_samples    X_aug = jnp.concatenate(        [_X, jnp.ones((n_samples, 1))],        axis=1,    )    H = X_aug.T @ (w[:, None] * X_aug)    if lam is not None:        def expand_lam(x_leaf, lam_leaf):            ncols = x_leaf.shape[1]            lam_leaf = jnp.asarray(lam_leaf)            if lam_leaf.ndim == 0:                return jnp.full(ncols, lam_leaf)            return jnp.ravel(lam_leaf)        lam = jnp.concatenate(            jax.tree_util.tree_leaves(jax.tree_util.tree_map(expand_lam, X, lam.coef))        )        H = H.at[:-1, :-1].add(jnp.diag(lam))    return Hclass GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):    r"""Generalized Linear Model (GLM) for neural activity data.    This GLM implementation allows users to model neural activity based on a combination of exogenous inputs    (like convolved currents or light intensities) and a choice of observation model. It is suitable for scenarios where    the relationship between predictors and the response variable might be non-linear, and the residuals    don't follow a normal distribution.    Below is a table of the default inverse link function for the availabe observation model.    +---------------------+---------------------------------+    | Observation Model   | Default Inverse Link Function   |    +=====================+=================================+    | Poisson             | :math:`e^x`                     |    +---------------------+---------------------------------+    | Gamma               | :math:`1/x`                     |    +---------------------+---------------------------------+    | Bernoulli           | :math:`1 / (1 + e^{-x})`        |    +---------------------+---------------------------------+    | NegativeBinomial    | :math:`e^x`                     |    +---------------------+---------------------------------+    | Gaussian            | :math:`x`                       |    +---------------------+---------------------------------+    Below is a table listing the default and available solvers for each regularizer.    +---------------+------------------+-------------------------------------------------------+    | Regularizer   | Default Solver   | Available Solvers                                     |    +===============+==================+=======================================================+    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG,            |    |               |                  | ProximalGradient, SVRG, ProxSVRG, Newton,             |    |               |                  | ProximalNewton                                        |    +---------------+------------------+-------------------------------------------------------+    | Ridge         | Newton           | GradientDescent, BFGS, LBFGS, NonlinearCG,            |    |               |                  | ProximalGradient, SVRG, ProxSVRG, Newton,             |    |               |                  | ProximalNewton                                        |    +---------------+------------------+-------------------------------------------------------+    | Lasso         | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |    +---------------+------------------+-------------------------------------------------------+    | ElasticNet    | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |    +---------------+------------------+-------------------------------------------------------+    | GroupLasso    | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |    +---------------+------------------+-------------------------------------------------------+    The default solver for ``Ridge`` is ``Newton``: the ridge penalty makes the Hessian positive    definite, so each step is a stable Cholesky solve that converges in a handful of iterations at the    feature counts typical of neural GLMs. ``Newton`` is also available for ``UnRegularized`` problems    but is not the default there, since the unpenalized Hessian can be singular. A Newton step solves a    Hessian system, costing ``O(d**2)`` memory and ``O(d**3)`` compute in the number of features ``d``,    so for models with many features ``LBFGS`` is preferable: it is memory-light and more robust on    noisy objective landscapes. Switch solver by passing ``solver_name=...`` at initialization.    **Fitting Large Models**    For very large models, you may consider using the Stochastic Variance Reduced Gradient    :class:`nemos.solvers._svrg.SVRG` or its proximal variant    :class:`nemos.solvers._svrg.ProxSVRG` solver,    which take advantage of batched computation. You can change the solver by passing    ``"SVRG"`` as ``solver_name`` at model initialization.    The performance of the SVRG solver depends critically on the choice of ``batch_size`` and ``stepsize``    hyperparameters. These parameters control the size of the mini-batches used for gradient computations    and the step size for each iteration, respectively. Improper selection of these parameters can lead to slow    convergence or even divergence of the optimization process.    To assist with this, for certain GLM configurations, we provide ``batch_size`` and ``stepsize`` default    values that are theoretically guaranteed to ensure fast convergence.    Below is a list of the configurations for which we can provide guaranteed default hyperparameters:    +---------------------------------------+-----------+-------------+    | GLM / PopulationGLM Configuration     | Stepsize  | Batch Size  |    +=======================================+===========+=============+    | Poisson + soft-plus + UnRegularized   | ✅        | ❌          |    +---------------------------------------+-----------+-------------+    | Poisson + soft-plus + Ridge           | ✅        | ✅          |    +---------------------------------------+-----------+-------------+    | Poisson + soft-plus + Lasso           | ✅        | ❌          |    +---------------------------------------+-----------+-------------+    | Poisson + soft-plus + GroupLasso      | ✅        | ❌          |    +---------------------------------------+-----------+-------------+    Parameters    ----------    observation_model :        Observation model to use. The model describes the distribution of the neural activity.        Default is the Poisson model. Alternatives are "Gamma", "Bernoulli", "NegativeBinomial" and "Gaussian".    inverse_link_function :        A function that maps the linear combination of predictors into a firing rate. The default depends        on the observation model, see the table above.    regularizer :        Regularization to use for model optimization. Defines the regularization scheme        and related parameters.        Default is UnRegularized regression.    regularizer_strength :        Typically a float. Default is None. Sets the regularizer strength.        If a user does not pass a value, and it is needed for regularization,        a warning will be raised and the strength will default to 1.0.        For finer control, the user can pass a pytree that matches the        parameter structure to regularize parameters differentially.    fit_intercept :        When True (default), an intercept term is fit. When False, only the coefficients are fit.        An intercept pinned through ``fix_params`` takes precedence over this flag.    fix_params :        A dictionary, keys could be "coef" or "intercept", values are PyTree of         arrays with the parameters that will be fixed.    solver_name :        Solver to use for model optimization. Defines the optimization scheme and related parameters.        The solver must be an appropriate match for the chosen regularizer.        Default is ``None``. If no solver specified, one will be chosen based on the regularizer.        Please see table above for regularizer/optimizer pairings.    solver_kwargs :        Optional dictionary for keyword arguments that are passed to the solver when instantiated.        E.g. stepsize, tol, acceleration, etc.         For details on each solver's kwargs, see `get_accepted_arguments` and `get_solver_documentation`.    Attributes    ----------    intercept_ :        Model baseline linked firing rate parameters, e.g. if the link is the logarithm, the baseline        firing rate will be ``jnp.exp(model.intercept_)``.    coef_ :        Basis coefficients for the model.    solver_state_ :        State of the solver after fitting. May include details like optimization error.    stochastic_fit_summary_ :        Summary of the most recent stochastic training run, including the        final pass and batch indices and any callback stop reason.    scale_:        Scale parameter for the model. The scale parameter is the constant :math:`\Phi`, for which        :math:`\text{Var} \left( y \right) = \Phi V(\mu)`. This parameter, together with the estimate        of the mean :math:`\mu` fully specifies the distribution of the activity :math:`y`.    dof_resid_:        Degrees of freedom for the residuals.    Raises    ------    TypeError        If provided ``regularizer`` or ``observation_model`` are not valid.    Examples    --------    **Fit a GLM**    Basic model fitting with default Poisson observation model:    >>> import numpy as np    >>> import nemos as nmo    >>> np.random.seed(123)    >>> X = np.random.normal(size=(100, 5))    >>> y = np.random.poisson(size=100)    >>> model = nmo.glm.GLM().fit(X, y)    >>> model.coef_.shape    (5,)    **Customize the Observation Model**    Specify the observation model as a string:    >>> model = nmo.glm.GLM(observation_model="Gamma")    >>> model.observation_model    GammaObservations()    Or pass the observation model object directly:    >>> model = nmo.glm.GLM(    ...     observation_model=nmo.observation_models.GammaObservations()    ... )    >>> model.observation_model    GammaObservations()    **Customize the Inverse Link Function**    Use a soft-plus inverse link function instead of the default exponential:    >>> model = nmo.glm.GLM(inverse_link_function=jax.nn.softplus)    >>> model.inverse_link_function.__name__    'softplus'    **Use Regularization**    Fit with Ridge regularization:    >>> model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)    >>> model = model.fit(X, y)    >>> model.regularizer    Ridge()    Fit with Lasso regularization for sparse coefficients:    >>> model = nmo.glm.GLM(regularizer="Lasso", regularizer_strength=0.01)    >>> model = model.fit(X, y)    >>> model.regularizer    Lasso()    **Fix some parameters**    Pin the first feature block's coefficients to ``[1, 1]`` and learn the rest.    The ``fix_params`` spec mirrors the ``(coef, intercept)`` structure, with    ``None`` marking the parameters to learn:    >>> fix_params = ([jnp.ones((2,)), None], None)    >>> model = nmo.glm.GLM(fix_params=fix_params)    >>> model = model.fit([X[:, :2], X[:, 2:]], y)    >>> model.coef_[0]    Array([1., 1.], dtype=...)    **Select a Solver**    Use LBFGS solver for potentially faster convergence:    >>> model = nmo.glm.GLM(solver_name="BFGS").fit(X, y)    >>> model.solver_name    'BFGS'    **Use a Pytree of arrays as Input**    Features can be passed as any JAX pytree of 2-D arrays; the fitted    ``coef_`` will share the same pytree structure:    >>> X_dict = {"input_1": X[:, :2], "input_2": X[:, 2:]}    >>> model = nmo.glm.GLM().fit(X_dict, y)    >>> # The coefficient structure will match the input.    >>> type(model.coef_)    <class 'dict'>    """    _invalid_observation_types = (obs.CategoricalObservations,)    _validator_class = GLMValidator    # default until the instance sets it; read during ``__init__`` before assignment    # (e.g. when solver-kwargs validation resolves the default solver).    _fit_intercept: bool = True    # full-structure all-None default so the partition helpers never see a bare None    _fix_params: GLMParams[None | jnp.ndarray] = GLMParams(None, None)    def _resolve_default_solver(self) -> str:        # Newton is the default for Ridge: the ridge penalty makes the penalized        # Hessian positive definite, so the Cholesky-based Newton step is stable.        # For other regularizers (e.g. UnRegularized, whose Hessian can be only        # positive semidefinite) defer to the regularizer's own default.        if isinstance(self.regularizer, Ridge) and (            "Newton" in self.regularizer.allowed_solvers        ):            return "Newton"        return super()._resolve_default_solver()    def _resolve_hess_property(self) -> MatrixProperty:        """Resolve the hessian property.        Return the property of the GLM loss function for an unpenalized model.        The penalization contribution is resolved by combining the hessian tag        of the model with that of the regularizer.        Notes        -----        Unknown links can easily break convexity: always tag as MatrixProperty.SYMMETRIC if the link is unknown.        """        conv_preserving_inv_links = (            self._observation_model.glm_convexity_preserving_links        )        link = self._inverse_link_function        if hasattr(link, "__module__") and hasattr(link, "__name__"):            qual_name = f"{link.__module__}.{link.__name__}"        else:            qual_name = None        convexity_preserving = (            link in conv_preserving_inv_links            or LINK_NAME_TO_FUNC.get(qual_name) in conv_preserving_inv_links        )        return (            MatrixProperty.POSITIVE_SEMI_DEFINITE            if convexity_preserving            else MatrixProperty.SYMMETRIC        )    def _hess_leaf_claims(        self, params: GLMParams[jnp.ndarray], active_spec: GLMParams[bool]    ) -> GLMParams[LeafClaim]:        """Certify the intercept, whenever it is being fitted.        The intercept's own block of the loss Hessian is ``1.T W 1``, the per-sample        curvatures added up. They are non-negative for a link that keeps the likelihood        convex, and their sum is positive, so that block is definite for any design matrix.        No other block can be certified: each one is ``X.T W X`` on some columns of ``X``,        and whether that is definite is a question about the rank of the design.        The link is not checked here. One that breaks convexity leaves the whole tag        unsigned, and ``normalize`` drops the definite claim of an unsigned tag, so a single        rule covers every model rather than each model repeating the check.        Parameters        ----------        params :            The parameters being fitted.        active_spec :            The filter spec ``params`` was partitioned with.        Returns        -------        :            A tree shaped like ``params`` with ``LeafClaim.DEFINITE`` on the            intercept and ``LeafClaim.UNCLAIMED`` on the coefficients. An intercept that is            not being fitted is absent from ``params``, and so is its claim: there is no            block of the Hessian to describe.        """        claims = super()._hess_leaf_claims(params, active_spec)        if not active_spec.intercept:            return claims        return eqx.tree_at(lambda p: p.intercept, claims, LeafClaim.DEFINITE)    def __init__(        self,        observation_model: (            REGRESSION_GLM_TYPES            | Literal["Poisson", "Gamma", "Gaussian", "Bernoulli", "NegativeBinomial"]        ) = "Poisson",        inverse_link_function: Optional[Callable] = None,        regularizer: Optional[Union[str, Regularizer]] = None,        regularizer_strength: Any = None,        fit_intercept: bool = True,        fix_params: Optional[GLMUserParams[jnp.ndarray | NDArray | None]] = None,        solver_name: str = None,        solver_kwargs: dict = None,    ):        super().__init__(            regularizer=regularizer,            regularizer_strength=regularizer_strength,            solver_name=solver_name,            solver_kwargs=solver_kwargs,        )        self._validator: GLMValidator = self._validator_class(            extra_params=self._get_validator_extra_params(),        )        self.observation_model = observation_model        self.inverse_link_function = inverse_link_function        self.fit_intercept = fit_intercept        self.fix_params = fix_params        # initialize to None fit output        self.intercept_ = None        self.coef_ = None        self.solver_state_ = None        self.scale_ = None        self.dof_resid_ = None        self.aux_ = None        self._solver = None    @property    def param_names(self) -> List[str]:        """List the names of the parameters fitted by the GLM."""        return [            "coef",            "intercept",        ]    @property    def fix_params(self) -> GLMUserParams[jnp.ndarray | NDArray | None]:        """Parameters held fixed during fitting, as a ``(coef, intercept)`` tuple."""        return self._validator.from_model_params(self._fix_params)    @fix_params.setter    def fix_params(self, value: GLMUserParams[jnp.ndarray | NDArray | None] | None):        """Setter for ``fix_params`` property.        Validates the specification (delegated to the validator) and sets it.        """        self._fix_params = self._validator.validate_param_specs(value)        self._invalidate_solver()    @property    def fit_intercept(self) -> bool:        """Getter for ``fit_intercept`` property."""        return self._fit_intercept    @fit_intercept.setter    def fit_intercept(self, value):        """Setter for ``fit_intercept`` property."""        value = bool(value)        flipped = value != self._fit_intercept        self._fit_intercept = value        # only when the frozen set actually changes: the captured partition and the        # solver closed over the previous frozen values are then stale.        if flipped:            self._invalidate_solver()    def _active_filter_spec(self) -> GLMParams[bool]:        active = super()._active_filter_spec()        # ``fit_intercept=False`` freezes the intercept at the value        # ``_normalize_user_params`` fills into the init params (zeros by default).        if not self._fit_intercept:            active = GLMParams(active.coef, False)        return active    def _frozen_values(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> GLMParams:        frozen = super()._frozen_values(X, y)        # ``fit_intercept=False`` pins the intercept at zero; this is the single        # source of the pinned value (``_normalize_user_params`` fills it into        # omitted user input, ``update`` recombines it into the returned params).        if not self._fit_intercept and frozen.intercept is None:            zeros = jnp.zeros_like(self._get_empty_params(X, y).intercept)            frozen = GLMParams(frozen.coef, zeros)        if frozen.coef is None:            frozen = eqx.tree_at(                lambda p: p.coef,                frozen,                jax.tree_util.tree_map(lambda _: None, X, is_leaf=lambda x: x is None),                is_leaf=lambda x: x is None,            )        return frozen    @property    def solver(self):        """Getter for the solver class."""        return self._solver    @classmethod    def _validate_observation_class(cls, observation: obs.Observations):        if observation.__class__ in cls._invalid_observation_types:            model_name = cls.__name__            obs_name = observation.__class__.__name__            error_msg = f"The ``{obs_name}`` observation type is not supported for ``{model_name}`` models."            is_categorical = isinstance(observation, obs.CategoricalObservations)            if is_categorical:                correct_model = (                    "ClassifierPopulationGLM"                    if issubclass(cls, PopulationGLM)                    else "ClassifierGLM"                )                error_msg += (                    f" To use a GLM for classification instantiate a ``{correct_model}`` "                    f"object."                )            else:                correct_model = (                    "PopulationGLM" if issubclass(cls, PopulationGLM) else "GLM"                )                error_msg += (                    f" To use a GLM for regression with ``{obs_name}`` instantiate a ``{correct_model}`` "                    f"object."                )            raise TypeError(error_msg)    def __sklearn_tags__(self):        """Return GLM specific estimator tags."""        tags = super().__sklearn_tags__()        # Tags for X        tags.input_tags = InputTags(allow_nan=True, two_d_array=True)        # Tags for y        tags.target_tags = TargetTags(            required=True, one_d_labels=True, two_d_labels=False        )        return tags    @property    def inverse_link_function(self):        """Inverse link function mapping the linear predictor to the response space.        Always a callable. If ``None`` was passed at construction time, this is        resolved to the observation model's default (e.g. ``jnp.exp`` for Poisson,        ``1 / x`` for Gamma, ``jax.nn.sigmoid`` for Bernoulli).        """        return self._inverse_link_function    @inverse_link_function.setter    def inverse_link_function(self, inverse_link_function: Callable):        """Validate and set the inverse link function.        Parameters        ----------        inverse_link_function :            One of:            - ``None`` — use the observation model's default inverse link.            - ``str`` — name of a built-in (e.g. ``"identity"``, ``"log"``,              ``"logit"``); resolved by              :func:`nemos.inverse_link_function_utils.resolve_inverse_link_function`.            - ``Callable`` — a custom function. Must be JAX-traceable              (differentiable) and return a ``jax.numpy.ndarray`` or scalar              when called on a JAX array.        Raises        ------        TypeError            If the value is neither callable nor a string.        ValueError            If a callable is non-differentiable or returns an unsupported type.        """        self._inverse_link_function = resolve_inverse_link_function(            inverse_link_function, self._observation_model        )    @property    def observation_model(self) -> Union[None, obs.Observations]:        """The observation model governing the conditional distribution of ``y``.        Always an instance of an :class:`~nemos.observation_models.Observations`        subclass. If a string alias was passed at construction time it is        resolved to the corresponding instance here.        """        return self._observation_model    @observation_model.setter    def observation_model(self, observation: obs.Observations):        """Validate and set the observation model.        Parameters        ----------        observation :            Either an :class:`~nemos.observation_models.Observations` instance,            or a string alias from            ``{"Poisson", "Gamma", "Gaussian", "Bernoulli", "NegativeBinomial"}``.            String aliases are instantiated via            :func:`nemos.observation_models.instantiate_observation_model`.        Raises        ------        AttributeError, TypeError            If the instance does not implement the            :class:`~nemos.observation_models.Observations` interface (checked            via :func:`nemos.observation_models.check_observation_model`).        ValueError            If the resolved observation class is not allowed for this model            (e.g. ``CategoricalObservations`` is rejected by ``GLM``).        """        if isinstance(observation, str):            self._observation_model = instantiate_observation_model(observation)            self._validate_observation_class(self.observation_model)            self._invalidate_solver()            self._validator = eqx.tree_at(                # selector                lambda x: (                    x.to_model_params,                    x.from_model_params,                ),                # pytree                self._validator,                # replace                (                    ToGLMParams(self.observation_model.map_to),                    FromGLMParams(self.observation_model.map_from),                ),                is_leaf=lambda x: x is None,            )            return        # check that the model has the required attributes        # and that the attribute can be called        obs.check_observation_model(observation)        self._observation_model = observation        self._validate_observation_class(self.observation_model)        self._invalidate_solver()        self._validator = eqx.tree_at(            # selector            lambda x: (                x.to_model_params,                x.from_model_params,            ),            # pytree            self._validator,            # replace            (                ToGLMParams(self.observation_model.map_to),                FromGLMParams(self.observation_model.map_from),            ),            is_leaf=lambda x: x is None,        )    def _check_is_fit(self):        """Ensure the instance has been fitted."""        if (self.coef_ is None) or (self.intercept_ is None):            raise NotFittedError(                "This GLM instance is not fitted yet. Call 'fit' with appropriate arguments."            )    def _predict(        self,        params: GLMParams[jnp.ndarray],        X: Union[dict[str, jnp.ndarray], jnp.ndarray],    ) -> jnp.ndarray:        """        Predicts firing rates based on given parameters and design matrix.        This function computes the predicted firing rates using the provided parameters        and model design matrix ``X``. It is a streamlined version used internally within        optimization routines, where it serves as the loss function. Unlike the ``GLM.predict``        method, it does not perform any input validation, assuming that the inputs are pre-validated.        Parameters        ----------        params :            GLMParams containing the spike basis coefficients and bias terms.        X :            Predictors.        Returns        -------        :            The predicted rates. Shape (n_time_bins, ).        """        return self._inverse_link_function(            # First, multiply each feature by its corresponding coefficient,            # then sum across all features and add the intercept, before            # passing to the inverse link function            tree_utils.pytree_map_and_reduce(                lambda x, w: jnp.einsum("tj, j...->t...", x, w), sum, X, params.coef            )            + params.intercept        )    @support_pynapple(conv_type="jax")    def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:        """Predict rates based on fit parameters.        Parameters        ----------        X :            Predictors, array of shape ``(n_time_bins, n_features)`` or a pytree            of arrays of the same shape.        Returns        -------        :            The predicted rates with shape ``(n_time_bins, )``.        Raises        ------        NotFittedError            If ``fit`` has not been called first with this instance.        ValueError            If ``params`` is not a JAX pytree of size two.        ValueError            If weights and bias terms in ``params`` don't have the expected dimensions.        ValueError            If ``X`` is not three-dimensional.        ValueError            If there's an inconsistent number of features between spike basis coefficients and ``X``.        Examples        --------        >>> # example input        >>> import numpy as np        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)        >>> # define and fit a GLM        >>> import nemos as nmo        >>> model = nmo.glm.GLM()        >>> model = model.fit(X, y)        >>> # predict new spike data        >>> Xnew = np.random.normal(size=(20, X.shape[1]))        >>> predicted_spikes = model.predict(Xnew)        See Also        --------        :meth:`nemos.glm.GLM.score`            Score predicted rates against the observations.        :meth:`nemos.glm.GLM.simulate`            Simulate observations in response to a feed-forward input (feed-forward only).        :func:`nemos.simulation.simulate_recurrent`            Simulate neural activity in response to a feed-forward input            using the GLM as a recurrent network (feed-forward + coupling).        """        # check that the model is fitted        self._check_is_fit()        # extract model params        params = self._get_model_params()        # filter for non-nans, grab data if needed        data, _ = self._preprocess_inputs(X, drop_nans=False)        self._validator.validate_inputs(data)        # check consistency between X and params        self._validator.validate_consistency(params, X=data)        self._validator.feature_mask_consistency(            getattr(self, "_feature_mask", None), params        )        return self._predict(params, data)    def _compute_loss(        self,        params: GLMParams[jnp.ndarray],        X: DESIGN_INPUT_TYPE,        y: jnp.ndarray,        *args,        **kwargs,    ) -> jnp.ndarray:        r"""Predict the rate and compute the negative log-likelihood against neural activity.        This method computes the negative log-likelihood up to a constant term. Unlike ``score``,        it does not conduct parameter checks prior to evaluation. Passed directly to the solver,        it serves to establish the optimization objective for learning the model parameters.        Parameters        ----------        params :            2-tuple containing the spike basis coefficients and bias terms.        X :            Predictors.        y :            Target neural activity.        Returns        -------        :            The model negative log-likehood. Shape (1,).        """        predicted_rate = self._predict(params, X)        return self._observation_model._negative_log_likelihood(y, predicted_rate)    @cast_to_jax    def score(        self,        X: Union[DESIGN_INPUT_TYPE, ArrayLike],        y: ArrayLike,        score_type: Literal[            "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"        ] = "log-likelihood",        aggregate_sample_scores: Callable = jnp.mean,    ) -> jnp.ndarray:        r"""Evaluate the goodness-of-fit of the model to the observed neural data.        This method computes the goodness-of-fit score, which can either be the mean        log-likelihood or of two versions of the pseudo-:math:`R^2`.        The scoring process includes validation of input compatibility with the model's        parameters, ensuring that the model has been previously fitted and the input data        are appropriate for scoring. A higher score indicates a better fit of the model        to the observed data.        Parameters        ----------        X :            Predictors, array of shape ``(n_time_bins, n_features)`` or a pytree            of arrays of the same shape.        y :            Neural activity. Shape ``(n_time_bins, )``.        score_type :            Type of scoring: either log-likelihood or pseudo-:math:`R^2`.        aggregate_sample_scores :            Function that aggregates the score of all samples.        Returns        -------        score :            The log-likelihood or the pseudo-:math:`R^2` of the current model.        Raises        ------        NotFittedError            If ``fit`` has not been called first with this instance.        ValueError            If X structure doesn't match the params, and if X and y have different            number of samples.        Examples        --------        >>> # example input        >>> import numpy as np        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)        >>> import nemos as nmo        >>> model = nmo.glm.GLM()        >>> model = model.fit(X, y)        >>> # get model score        >>> log_likelihood_score = model.score(X, y)        >>> # get a pseudo-R2 score        >>> pseudo_r2_score = model.score(X, y, score_type="pseudo-r2-McFadden")        Notes        -----        The log-likelihood is not on a standard scale, its value is influenced by many factors,        among which the number of model parameters. The log-likelihood can assume both positive        and negative values.        The Pseudo-:math:`R^2` is not equivalent to the :math:`R^2` value in linear regression. While both        provide a measure of model fit, and assume values in the [0,1] range, the methods and        interpretations can differ. The Pseudo-:math:`R^2` is particularly useful for generalized linear        models when the interpretation of the :math:`R^2` as explained variance does not apply        (i.e., when the observations are not Gaussian distributed).        Why does the traditional :math:`R^2` is usually a poor measure of performance in GLMs?        1.  In the context of GLMs the variance and the mean of the observations are related.            Ignoring the relation between them can result in underestimating the model            performance; for instance, when we model a Poisson variable with large mean we expect an            equally large variance. In this scenario, even if our model perfectly captures the mean,            the high-variance  will result in large residuals and low :math:`R^2`.            Additionally, when the mean of the observations varies, the variance will vary too. This            violates the "homoschedasticity" assumption, necessary  for interpreting the :math:`R^2` as            variance explained.        2.  The :math:`R^2` capture the variance explained when the relationship between the observations and            the predictors is linear. In GLMs, the link function sets a non-linear mapping between the predictors            and the mean of the observations, compromising the interpretation of the :math:`R^2`.        Note that it is possible to re-normalized the residuals by a mean-dependent quantity proportional        to the model standard deviation (i.e. Pearson residuals). This "rescaled" residual distribution however        deviates substantially from normality for counting data with low mean (common for spike counts).        Therefore, even the Pearson residuals performs poorly as a measure of fit quality, especially        for GLM modeling counting data.        Refer to the ``nmo.observation_models.Observations`` concrete subclasses for the likelihood and        pseudo-:math:`R^2` equations.        """        self._check_is_fit()        if (            score_type in {"log-likelihood", "pseudo-r2-McFadden"}            and self.scale_ is None            and not self._has_constant_scale()        ):            raise ValueError(                "`score()` requires `scale_`, which is not set. This happens after `stochastic_fit()`"                " with an observation model whose scale depends on the data (e.g., Gamma, Gaussian)."                " Workaround: use `compute_loss(X, y)` for model comparison as it does not depend on `scale_`."            )        params = self._get_model_params()        self._validator.validate_inputs(X, y)        X, y = self._preprocess_inputs(X, y, drop_nans=True)        self._validator.validate_consistency(params, X, y)        self._validator.feature_mask_consistency(            getattr(self, "_feature_mask", None), params        )        if score_type == "log-likelihood":            score = self._observation_model.log_likelihood(                y,                self._predict(params, X),                self.scale_,                aggregate_sample_scores=aggregate_sample_scores,            )        elif score_type.startswith("pseudo-r2"):            score = self._observation_model.pseudo_r2(                y,                self._predict(params, X),                score_type=score_type,                scale=self.scale_,                aggregate_sample_scores=aggregate_sample_scores,            )        else:            raise NotImplementedError(                f"Scoring method {score_type} not implemented! "                "`score_type` must be either 'log-likelihood', 'pseudo-r2-McFadden', "                "or 'pseudo-r2-Cohen'."            )        return score    def _model_specific_initialization(        self,        X: DESIGN_INPUT_TYPE,        y: jnp.ndarray,        **kwargs,    ) -> GLMParams[jnp.ndarray]:        """Initialize the parameters based on the structure and dimensions X and y.        This method initializes the coefficients (spike basis coefficients) and intercepts (bias terms)        required for the GLM.        If ``fit_intercept==True``:            - The coefficients are initialized to zeros with dimensions based on the input X.        If ``fit_intercept==False``:            - The coefficients are initialized to a constant that minimizes the min squared error            between ``X @ coef`` and the linked mean firing rate (``log(mean(y))`` for a GLM with            exponential non-linearity).        If X is a pytree of arrays, the coefficients retain the pytree structure with        arrays of zeros shaped according to the features in X.        If X is a simple ndarray, the coefficients are initialized as a 2D array. The intercepts are initialized        based on the log mean of the target data y across the first axis, corresponding to the average log activity        of the neuron.        Parameters        ----------        X :            The input data, either a pytree of arrays with leaves of shape            ``(n_timebins, n_features)``, or a simple ndarray of shape ``(n_timebins, n_features)``.        y :            The target data array of shape ``(n_timebins, )``, representing            the neuron firing rates or similar metrics.        Returns        -------        Tuple[Union[pytree of arrays, jnp.ndarray], jnp.ndarray]            A tuple containing the initialized parameters:            - The first element is the initialized coefficients            (either as a pytree of arrays or ndarray, matching the structure of X) with shapes (n_features,).            - The second element is the initialized intercept (bias terms) as an ndarray of shape (1,).        """        if isinstance(X, FeaturePytree):            data = X.data        else:            data = X        frozen = self._frozen_values(X, y)        frozen_coef = frozen.coef        frozen_intercept = frozen.intercept        empty_params = self._get_empty_params(data, y)        # Resolution order: if fix params provides an intercept use it as fix, otherwise follow flag.        fit_intercept = False if frozen_intercept is not None else self.fit_intercept        if fit_intercept:            initial_intercept = initialize_intercept_matching_mean_rate(                self._inverse_link_function,                data,                y,                frozen_coef=frozen_coef,                rate_range=self.observation_model.rate_range,            )            initial_coef = jax.tree_util.tree_map(                lambda x: jnp.zeros(x.shape), empty_params.coef            )            initial_coef = eqx.combine(frozen_coef, initial_coef)        else:            initial_intercept = (                frozen_intercept                if frozen_intercept is not None                else jnp.zeros_like(empty_params.intercept)            )            initial_coef = initialize_constant_coef_matching_mean_rate(                self._inverse_link_function,                data,                y,                empty_params.coef,                frozen_coef=frozen_coef,                frozen_intercept=frozen_intercept,                rate_range=self.observation_model.rate_range,            )        init_params = eqx.tree_at(            lambda p: (p.coef, p.intercept),            empty_params,            (initial_coef, initial_intercept),        )        self._validator.feature_mask_consistency(            getattr(self, "_feature_mask", None), init_params        )        return init_params    def _normalize_user_params(        self,        init_params: GLMUserParams[jnp.ndarray | None],        X: DESIGN_INPUT_TYPE,        y: jnp.ndarray,    ) -> GLMUserParams[jnp.ndarray]:        """Fill the intercept when it is held fixed (``fit_intercept=False``).        When the intercept is not estimated the user may omit it (pass ``None`` as the        last element); it is replaced with zeros so downstream validation and        partitioning see a complete parameter set. A warning is emitted if the user        supplied an intercept, since it would be ignored. See        :meth:`nemos.base_regressor.BaseRegressor._normalize_user_params` for how this        fits the parameter-processing pipeline.        """        if not self._fit_intercept:            self._validator.check_user_params_structure(init_params)            warn = init_params[-1] is not None and not jnp.array_equal(                self._frozen_values(X, y).intercept, init_params[-1]            )            if warn:                warnings.warn(                    "`fit_intercept=False`: the provided intercept is ignored and the "                    "intercept is held at zero. Set `fit_intercept=True` to estimate it.",                    UserWarning,                    stacklevel=2,                )            zeros = self._frozen_values(X, y).intercept            init_params = tuple([*init_params[:-1], zeros])        return init_params    @cast_to_jax    def fit(        self,        X: Union[DESIGN_INPUT_TYPE, ArrayLike],        y: ArrayLike,        init_params: Optional[GLMUserParams[jnp.ndarray | NDArray]] = None,    ):        """Fit GLM to neural activity.        Fit and store the model parameters as attributes        ``coef_`` and ``coef_``.        Parameters        ----------        X :            Predictors, array of shape (n_time_bins, n_features) or pytree of the same            shape.        y :            Target neural activity arranged in a matrix, shape (n_time_bins, ).        init_params :            2-tuple of initial parameter values: (coefficients, intercepts). If            None, we initialize coefficients with zeros, intercepts with the            log of the mean neural activity. coefficients is an array of shape            (n_features,) or pytree of same, intercepts is an array            of shape (1, )        Raises        ------        ValueError            If ``init_params`` is not of length two.        ValueError            If dimensionality of ``init_params`` are not correct.        ValueError            If ``X`` is not two-dimensional.        ValueError            If ``y`` is not one-dimensional.        ValueError            If solver returns at least one NaN parameter, which means it found              an invalid solution. Try tuning optimization hyperparameters.        TypeError            If ``init_params`` are not array-like        TypeError            If ``init_params[i]`` cannot be converted to ``jnp.ndarray`` for all ``i``        Examples        --------        >>> # example input        >>> import numpy as np        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)        >>> # fit a ridge regression Poisson GLM        >>> import nemos as nmo        >>> model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)        >>> model = model.fit(X, y)        >>> # get model weights and intercept        >>> model_weights = model.coef_        >>> model_intercept = model.intercept_        """        self._validator.validate_inputs(X, y)        # filter for non-nans, grab data if needed        data, y = self._preprocess_inputs(X, y)        # initialize params if no params are provided        if init_params is None:            init_params = self._model_specific_initialization(X, y)            # validate only if the user pinned something through fix_params            if jax.tree_util.tree_leaves(self._fix_params):                self._validator.validate_consistency(init_params, X=X, y=y)        else:            # TODO: improve initialization and allow partial param specs            self._validator.check_complete_param_specs(init_params, self.param_names)            init_params = self._normalize_user_params(init_params, X, y)            init_params = self._validator.validate_and_cast_params(init_params)            self._validator.validate_consistency(init_params, X=X, y=y)        self._validator.feature_mask_consistency(            getattr(self, "_feature_mask", None), init_params        )        # optimize the active parameters with the loss closed over the frozen ones,        # then recombine        active, frozen = self._partition_active(init_params)        self._initialize_optimizer_and_state(active, data, y, frozen_params=frozen)        try:            params, state, aux = self._optimizer_run(active, data, y)        except RuntimeError as exc:            if CHOLESKY_ERR_MSG not in str(exc):                raise            raise ValueError(                "Cholesky solve failed because the Hessian may not be positive definite. "                "This can occur when fitting partially or fully silent populations with "                "Newton and Ridge. Try setting "                "solver_kwargs={'linear_solver': 'eigh'} or "                "solver_kwargs={'linear_solver': 'identity_shift'} "                "when constructing the model or via `set_params`."            ) from exc        params = eqx.combine(params, frozen)        if tree_utils.pytree_map_and_reduce(            lambda x: jnp.any(jnp.isnan(x)), any, params        ):            raise ValueError(                "Solver returned at least one NaN parameter, so solution is invalid!"                " Try tuning optimization hyperparameters, specifically try decreasing the `stepsize` "                "and/or setting `acceleration=False`."            )        if hasattr(state, "stats") and hasattr(state.stats, "converged"):            converged = state.stats.converged        elif hasattr(state, "converged"):            # try if the custom defined solver has a convergence flag directly            converged = state.converged        else:            # custom solver with potentially undefined convergence state            converged = True            warnings.warn(                f"Solver state {state} does not have a ``.converged`` nor a ``.stats.converged`` "                f"attribute. Convergence state is unknown; assuming converged. "                f"To assess the optimization manually, "                f"inspect the ``solver_state_`` attribute of the model.",                UserWarning,            )        if not converged:            warnings.warn(                "The fit did not converge. "                "Consider the following:"                "\n1) Enable float64 with ``jax.config.update('jax_enable_x64', True)`` "                "\n2) Increase the max number of iterations or increase tolerance (if reasonable). "                "These parameters can be specified by providing a ``solver_kwargs`` dictionary. "                "For the available options see the ``self.solver.__init__`` docstrings.",                RuntimeWarning,            )        self._set_model_params(params)        self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X)        self.scale_ = self.observation_model.estimate_scale(            y, self._predict(params, data), dof_resid=self.dof_resid_        )        # note that this will include an error value, which is not the same as        # the output of loss. I believe it's the output of        # solver.l2_optimality_error        self.solver_state_ = state        self.aux_ = aux        return self    def stochastic_fit(        self,        data: DataLoader,        *,        init_params: Optional[GLMUserParams[jnp.ndarray | NDArray]] = None,        n_passes: int = 1,        callbacks: "Callback | list[Callback] | None" = None,    ):        """        Fit GLM using stochastic optimization with mini-batches.        This method provides an out-of-memory training interface for large datasets        that cannot fit in memory. Data is provided via a DataLoader that yields        mini-batches.        Parameters        ----------        data :            Data loader yielding (X_batch, y_batch) tuples.            Must be re-iterable for ``n_passes > 1``.            Note that NaNs are dropped per batch. The optimizer's update method            will be re-compiled for each unique batch size, slowing down computation.            If your data contains NaNs, it's best to drop them before or in the            dataloader, so that batches have mostly the same size after dropping NaNs.        init_params :            Initial parameters (coefficients, intercept).            If None, initialized from ``sample_batch()``.            To continue fitting, pass the current parameters (``model.get_model_params()``)        n_passes :            Maximum number of passes over the data. Must be >= 1.            Optimization may stop earlier if a callback requests a stop.            This parameter is commonly referred to as the number of (training) epochs            in the machine-learning literature.            There is no convergence-based stopping by default. To stop            automatically when the solver's convergence criterion is met,            pass ``callbacks=SolverConvergenceCallback()``. Otherwise the            fit will run for the full ``n_passes``.        callbacks :            Training callbacks. Accepts a single ``Callback``, a list of            ``Callback`` objects, or ``None`` (default, no callbacks).            To stop optimization when the solver's built-in convergence            criterion is met pass ``nmo.callbacks.SolverConvergenceCallback()``.            This is the recommended way to avoid running for the full            ``n_passes`` when the model has already converged.        Returns        -------        self            The fitted model. After fitting, ``self.stochastic_fit_summary_``            stores a :class:`nemos.callbacks.StochasticFitSummary`            describing the run.        Raises        ------        ValueError            If the solver doesn't support stochastic optimization.        TypeError            If data is not a DataLoader.        Examples        --------        >>> import jax.numpy as jnp        >>> import nemos as nmo        >>> from nemos.batching import ArrayDataLoader        >>> from nemos.callbacks import SolverConvergenceCallback        >>> X = jnp.ones((100, 5))        >>> y = jnp.ones((100,))        >>> loader = ArrayDataLoader(X, y, batch_size=32, shuffle="full")        >>> model = nmo.glm.GLM(        ...     solver_name="GradientDescent",        ...     solver_kwargs={"stepsize": 0.01, "acceleration": False},        ... )        >>> # Stop early when the solver's convergence criterion is met.        >>> model = model.stochastic_fit(        ...     loader, n_passes=10, callbacks=SolverConvergenceCallback()        ... )        """        # Validate solver supports stochastic        if not getattr(self.solver_spec.implementation, "_supports_stochastic", False):            raise ValueError(                f"Solver '{self.solver_spec.full_name}' does not support stochastic optimization. "                f"Use one of {[s.full_name for s in list_stochastic_solvers()]}."            )        if not is_data_loader(data):            raise TypeError(                "stochastic_fit requires a DataLoader (re-iterable) providing "                "(X_batch, y_batch) tuples."            )        loader = data        # Get raw sample batch for initialization        raw_sample_X, raw_sample_y = loader.sample_batch()        self._validator.validate_inputs(raw_sample_X, raw_sample_y)        # Preprocess sample batch (cast to jax, drop nans, etc.)        sample_X, sample_y = self._preprocess_inputs(raw_sample_X, raw_sample_y)        if not self._has_constant_scale():            warnings.warn(                "`stochastic_fit()` will not populate `scale_` for observation models whose scale"                " depends on the data (e.g., Gamma, Gaussian), and `score()` will raise after this fit."                " Tip: for evaluation and model comparison use `compute_loss(X, y)` instead.",                UserWarning,            )        # Initialize params if not provided (using preprocessed batch)        if init_params is None:            init_params = self._model_specific_initialization(sample_X, sample_y)        else:            init_params = self._normalize_user_params(init_params, sample_X, sample_y)            init_params = self._validator.validate_and_cast_params(init_params)            self._validator.validate_consistency(init_params, X=sample_X, y=sample_y)        self._validator.feature_mask_consistency(            getattr(self, "_feature_mask", None), init_params        )        # Wrap data loader to preprocess each batch from now on        preprocessed_loader = _PreprocessedDataLoader(loader, self._preprocess_inputs)        # TODO: Add a streaming version setting the right step- and batch size for SVRG that uses the full data        # Run stochastic optimization on the active parameters with the loss closed        # over the frozen ones, then recombine. The context is created here so it is        # available after the run (for the summary); ``ctx.frozen`` lets ``ctx.params``        # expose the complete parameters to callbacks. ``stochastic_run`` sets        # ``ctx.solver`` itself.        ctx = TrainingContext(model=self)        active, frozen = self._partition_active(init_params)        self._initialize_optimizer_and_state(            active, sample_X, sample_y, frozen_params=frozen        )        ctx.frozen = frozen        self._warn_about_estimated_svrg_settings()        params, state, aux = self._solver.stochastic_run(            active,            preprocessed_loader,            n_passes=n_passes,            callback=_normalize_callbacks(callbacks),            ctx=ctx,        )        params = eqx.combine(params, frozen)        if tree_utils.pytree_map_and_reduce(            lambda x: jnp.any(jnp.isnan(x)), any, params        ):            raise ValueError(                "Solver returned at least one NaN parameter, so solution is invalid!"                " Try tuning optimization hyperparameters, specifically try decreasing the `stepsize`."            )        # not warning about non-convergence        # Store results        self._set_model_params(params)        self.solver_state_ = state        self.aux_ = aux        self.stochastic_fit_summary_ = ctx.to_summary()        # instead of keeping it as None, for some observation models we can set the scale_ easily        if self._has_constant_scale():            # for these families `estimate_scale` ignores `y`, `predicted_rate`, and `dof_resid`            # the sample batch and `dof_resid=1.0` are placeholders just to satisfy the shared signature            self.scale_ = self.observation_model.estimate_scale(                sample_y,                self._predict(params, sample_X),                dof_resid=1.0,            )        else:            # TODO: estimate residual dof and data-dependent scale after stochastic_fit            self.scale_ = None        self.dof_resid_ = None        return self    def _warn_about_estimated_svrg_settings(self):        """Warn if SVRG settings are estimated on sample data instead of the full dataset."""        if not isinstance(self._solver, (WrappedSVRG, WrappedProxSVRG)):            return        batch_size_estimated_for_svrg = False        if (            self.inverse_link_function in (jax.nn.softplus, softplus)            and isinstance(self.observation_model, obs.PoissonObservations)            and self.solver_kwargs.get("stepsize", None) is None        ):            parameters_set = "stepsize"            if (                isinstance(self.regularizer, Ridge)                and self.solver_kwargs.get("batch_size", None) is None            ):                parameters_set += " and batch size"                batch_size_estimated_for_svrg = True            warnings.warn(                f"Attempted to set the optimal {parameters_set} for {self.solver_name} using the loader's"                " sample batch instead of the full data, which may be inaccurate."                " A way to calculate the optimal SVRG parameters on a full out-of-memory dataset"                " will be provided in the future."                " As a workaround, calling `model._optimize_solver_params` on the largest possible"                " chunk of data might provide better estimates."            )        batch_size_given_for_svrg = (            self.solver_kwargs.get("batch_size", None) is not None        )        if batch_size_given_for_svrg or batch_size_estimated_for_svrg:            batch_size_source = "given" if batch_size_given_for_svrg else "estimated"            warnings.warn(                f'{self.solver_name} does not use the {batch_size_source} "batch_size"'                " solver argument for stochastic optimization."                " Effective batch size is determined by the data loader."            )    def _has_constant_scale(self) -> bool:        """        Whether the observation model's scale is independent of the data.        When True, ``stochastic_fit`` can populate ``scale_`` without a        finalization pass over the data. When False (Gamma, Gaussian),        ``scale_`` is left unset.        Quick fix until a streaming residual d.o.f. and scale estimation is added.        """        return isinstance(            self.observation_model,            (                obs.PoissonObservations,                obs.BernoulliObservations,                obs.CategoricalObservations,                obs.NegativeBinomialObservations,            ),        )    def _get_model_params(self) -> GLMParams[jnp.ndarray]:        """Pack coef_ and intercept_  into a params pytree.        This method should be overwritten in case the parameter structure changes,        or if new regression models will have a different parameter structure.        """        # Retrieve parameter tree        return GLMParams(self.coef_, self.intercept_)    def _set_model_params(self, params: GLMParams[jnp.ndarray]):        """Unpack and store params pytree to coef_ and intercept_.        This method should be overwritten in case the parameter structure changes,        or if new regression models will have a different parameter structure.        """        # Store parameters        self.coef_: DESIGN_INPUT_TYPE = params.coef        self.intercept_: jnp.ndarray = params.intercept    @support_pynapple(conv_type="jax")    def simulate(        self,        random_key: jax.Array,        feedforward_input: DESIGN_INPUT_TYPE,    ) -> Tuple[jnp.ndarray, jnp.ndarray]:        """Simulate neural activity in response to a feed-forward input.        Parameters        ----------        random_key :            jax.random.key for seeding the simulation.        feedforward_input :            External input predictors to the model, representing factors like convolved currents,            light intensities, etc. When not provided, the simulation is done with coupling-only.            Array of shape (n_time_bins, n_basis_input) or pytree with leaves of the same shape.        Returns        -------        simulated_activity :            Simulated observations (spike counts for a Poisson GLM) over time.            Shape: ``(n_time_bins, )``.        firing_rates :            Simulated rates over time. Shape, ``(n_time_bins, )``.        Raises        ------        NotFittedError            - If the model hasn't been fitted prior to calling this method.        ValueError            - If the instance has not been previously fitted.        Examples        --------        >>> # example input        >>> import numpy as np        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)        >>> # define and fit model        >>> import nemos as nmo        >>> model = nmo.glm.GLM()        >>> model = model.fit(X, y)        >>> # generate spikes and rates        >>> random_key = jax.random.key(123)        >>> Xnew = np.random.normal(size=(20, X.shape[1]))        >>> spikes, rates = model.simulate(random_key, Xnew)        See Also        --------        :meth:`nemos.glm.GLM.predict`            Method to predict rates based on the model's parameters.        """        # check if the model is fit        self._check_is_fit()        params = self._get_model_params()        # if all invalid, raise error        validation.error_all_invalid(feedforward_input)        # check input dimensionality        self._validator.validate_inputs(X=feedforward_input)        # validate input and params consistency        self._validator.validate_consistency(params, X=feedforward_input)        self._validator.feature_mask_consistency(            getattr(self, "_feature_mask", None), params        )        # pre-process        feedforward_input, _ = self._preprocess_inputs(            X=feedforward_input, drop_nans=False        )        predicted_rate = self._predict(params, feedforward_input)        return (            self._observation_model.sample_generator(                key=random_key, predicted_rate=predicted_rate, scale=self.scale_            ),            predicted_rate,        )    def _estimate_resid_degrees_of_freedom(        self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None    ) -> jnp.ndarray:        """        Estimate the degrees of freedom of the residuals.        Parameters        ----------        self :            A fitted GLM model.        X :            The design matrix.        n_samples :            The number of samples observed. If not provided, n_samples is set to ``X.shape[0]``. If the fit is            batched, the n_samples could be larger than ``X.shape[0]``.        Returns        -------        :            An estimate of the degrees of freedom of the residuals.        """        x_leaves = jax.tree_util.tree_leaves(X)        # Convert a pytree to a design-matrix with pytrees        X = jnp.hstack(x_leaves)        if n_samples is None:            n_samples = X.shape[0]        else:            if not isinstance(n_samples, int):                raise TypeError(                    "`n_samples` must be `None` or of type `int`. Type {type(n_sample)} provided "                    "instead!"                )        params = self._get_model_params()        # count dof only over the parameters the solver estimates: frozen leaves        # (e.g. the intercept when ``fit_intercept=False``) are None in the active        # tree and consume no degrees of freedom.        active, _ = self._partition_active(params)        intercept_dof = 0 if active.intercept is None else 1        active_cols = _active_columns(x_leaves, active.coef)        # if the regularizer is lasso use the non-zero        # coeff as an estimate of the dof        # see https://arxiv.org/abs/0712.0881        if isinstance(self.regularizer, (GroupLasso, Lasso, ElasticNet)):            resid_dof = tree_utils.pytree_map_and_reduce(                lambda x: ~jnp.isclose(x, jnp.zeros_like(x)),                lambda x: sum([jnp.sum(i, axis=0) for i in x]),                active.coef,            )            return n_samples - resid_dof - intercept_dof        elif isinstance(self.regularizer, Ridge):            # for Ridge, use the tot parameters (estimated features + intercept)            return (                n_samples - self._n_estimated_features(active_cols) - intercept_dof            ) * jnp.ones_like(params.intercept)        else:            # for UnRegularized, use the rank            return (                n_samples - self._design_rank(X, active_cols) - intercept_dof            ) * jnp.ones_like(params.intercept)    def _n_estimated_features(self, active_cols: jnp.ndarray) -> jnp.ndarray:        """Count the coefficients the model estimates, as a scalar or one per neuron.        Every active column of the design contributes a coefficient here.        ``PopulationGLM`` overrides this: a masked-out feature is not estimated for that        neuron.        """        return jnp.sum(active_cols)    def _design_rank(self, X: jnp.ndarray, active_cols: jnp.ndarray) -> jnp.ndarray:        """Rank of the design the model estimates over, as a scalar or one per neuron.        The rank, rather than the column count, is what an unpenalized fit consumes:        collinear columns share degrees of freedom. Frozen columns are dropped rather        than zeroed: a rank is an SVD away and the smaller matrix is the better        conditioned one. ``PopulationGLM`` overrides this to take the rank per neuron,        since the mask gives each neuron its own design.        """        X = X[:, active_cols]        # every coefficient frozen leaves no design to take the rank of        if X.shape[1] == 0:            return jnp.asarray(0)        return jnp.linalg.matrix_rank(X)    def _initialize_optimizer_and_state(        self,        init_params: GLMParams[jnp.ndarray],        X: dict[str, jnp.ndarray] | jnp.ndarray,        y: jnp.ndarray,        frozen_params: GLMParams[jnp.ndarray | None] = None,    ) -> SolverState:        """Initialize the solver by instantiating its init_state, update and, run methods.        This method also prepares the solver's state by using the initialized model parameters and data.        This setup is ready to be used for running the solver's optimization routines.        Parameters        ----------        init_params :            Initial parameters for the model.        X :            The predictors used in the model fitting process. This can include feature matrices or other structures            compatible with the model's design.        y :            The response variables or outputs corresponding to the predictors. Used to initialize parameters when            they are not provided.        Returns        -------        SolverState            The initialized solver state        Examples        --------        >>> import numpy as np        >>> import nemos as nmo        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)        >>> model = nmo.glm.GLM()        >>> params = model.initialize_params(X, y)        >>> opt_state = model.initialize_optimizer_and_state(params, X, y)        >>> # Now ready to run optimization or update steps        """        # ``eqx.partition`` leaves ``None`` on the frozen leaves and jax drops those, so        # an empty leaf list means every parameter is fixed and there is nothing to run.        if not jax.tree_util.tree_leaves(init_params):            return self._no_op_optimizer()        opt_solver_kwargs = self._optimize_solver_params(X, y)        #  set up the solver init/run/update attrs        self._solver = self._instantiate_solver(            self._compute_loss,            init_params=init_params,            solver_kwargs=opt_solver_kwargs,            frozen_params=frozen_params,        )        self._optimizer_init_state = self._solver.init_state        self._optimizer_update = self._solver.update        self._optimizer_run = self._solver.run        opt_state = self._optimizer_init_state(init_params, X, y)        return opt_state    @cast_to_jax    def update(        self,        params: GLMUserParams[jnp.ndarray | NDArray],        opt_state: SolverState,        X: DESIGN_INPUT_TYPE,        y: jnp.ndarray,        *args,        n_samples: Optional[int] = None,        **kwargs,    ) -> StepResult:        """Update the model parameters and solver state.        This method performs a single optimization step using the model's current solver.        It updates the model's coefficients and intercept based on the provided parameters, predictors (X),        responses (y), and the current optimization state. This method is particularly useful for iterative        model fitting, especially in scenarios where model parameters need to be updated incrementally,        such as online learning or when dealing with very large datasets that do not fit into memory at once.        Parameters        ----------        params            The current model parameters, typically a tuple of coefficients and intercepts.        opt_state            The current state of the optimizer, encapsulating information necessary for the            optimization algorithm to continue from the current state. This includes gradients,            step sizes, and other optimizer-specific metrics.        X            The predictors used in the model fitting process, which may include feature matrices            or a pytree of arrays. Shape ``(n_time_bins, n_features)``.        y            The response variable or output data corresponding to the predictors. Shape ``(n_time_bins,)``.        *args            Additional positional arguments to be passed to the solver's update method.        n_samples            The total number of samples. Usually larger than the samples of an individual batch,            the ``n_samples`` are used to estimate the scale parameter of the GLM.        **kwargs            Additional keyword arguments to be passed to the solver's update method.        Returns        -------        params            Updated model parameters (coefficients, intercepts).        state            Updated optimizer state.        Raises        ------        ValueError            If the solver has not been instantiated or if the solver returns NaN values            indicating an invalid update step, typically due to numerical instabilities            or inappropriate solver configurations.        Examples        --------        >>> import nemos as nmo        >>> import numpy as np        >>> import jax        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)        >>> glm_instance = nmo.glm.GLM()        >>> params = glm_instance.initialize_params(X, y)        >>> opt_state = glm_instance.initialize_optimizer_and_state(params, X, y)        >>> new_params, new_opt_state = glm_instance.update(params, opt_state, X, y)        """        if self._solver is None:            raise RuntimeError("Attempt at update when solver was in invalid state.")        # find non-nans        X, y = tree_utils.drop_nans(X, y)        # grab the data        data = X.data if isinstance(X, FeaturePytree) else X        # wrap into GLM params, this assumes params are well structured,        # if initializaiton is done via `initialize_optimizer_and_state` it        # should be fine        params = self._validator.to_model_params(params)        active, _ = self._partition_active(params)        # perform a one-step update        updated_params, updated_state, aux = self._optimizer_update(            active, opt_state, data, y, *args, **kwargs        )        # the frozen leaves are pinned by the model settings — the same values the        # loss closure was built with — not by the params the caller passes in, so        # a frozen leaf may be omitted (None) in ``params``.        updated_params = eqx.combine(updated_params, self._frozen_values(X, y))        # store params and state        self._set_model_params(updated_params)        self.solver_state_ = updated_state        self.aux_ = aux        # estimate the scale        self.dof_resid_ = self._estimate_resid_degrees_of_freedom(            X, n_samples=n_samples        )        self.scale_ = self.observation_model.estimate_scale(            y, self._predict(updated_params, data), dof_resid=self.dof_resid_        )        return self._validator.from_model_params(updated_params), updated_state    def _get_optimal_solver_params_config(self):        """Return the functions for computing default step and batch size for the solver."""        return glm_compute_optimal_stepsize_configs(self)    def __repr__(self):        """Representation of the GLM class."""        return format_repr(            self,            multiline=True,            use_name_keys=["inverse_link_function"],            array_keys=["classes"],        )    def __sklearn_clone__(self) -> GLM:        """Clone the GLM."""        params = self.get_params(deep=False)        klass = self.__class__(**params)        return klass    def save_params(self, filename: Union[str, Path]):        """        Save GLM model parameters to a .npz file.        This method allows to reuse the model parameters. The saved parameters can be loaded back        into a GLM instance using the `load_params` function.        Parameters        ----------        filename :            The name of the file where the model parameters will be saved. The file will be saved in `.npz` format.        Examples        --------        >>> import nemos as nmo        >>> # Create a GLM model with specified parameters        >>> solver_args = {"stepsize": 0.1, "maxiter": 1000, "tol": 1e-6}        >>> model = nmo.glm.GLM(        ...     regularizer="Ridge",        ...     regularizer_strength=0.1,        ...     observation_model="Gamma",        ...     solver_name="BFGS",        ...     solver_kwargs=solver_args,        ... )        >>> for key, value in model.get_params().items():        ...     print(f"{key}: {value}")        fit_intercept: True        fix_params: (None, None)        inverse_link_function: <function one_over_x at ...>        observation_model: GammaObservations()        regularizer: Ridge()        regularizer_strength: 0.1...        solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}        solver_name: BFGS        >>> # Save the model parameters to a file        >>> model.save_params("model_params.npz")        >>> # Load the model from the saved file        >>> model = nmo.load_model("model_params.npz")        >>> # Model has the same parameters before and after load        >>> for key, value in model.get_params().items():  # doctest: +ELLIPSIS        ...     print(f"{key}: {value}")        fit_intercept: True        fix_params: (None, None)        inverse_link_function: <function one_over_x at ...>        observation_model: GammaObservations()        regularizer: Ridge()        regularizer_strength: 0.1        solver_kwargs: {'maxiter': 1000, 'stepsize': 0.1, 'tol': 1e-06}        solver_name: BFGS        >>> # Saving and loading a custom inverse link function        >>> model = nmo.glm.GLM(        ...     observation_model="Poisson", inverse_link_function=lambda x: x**2        ... )        >>> model.save_params("model_params.npz")        >>> # Provide a mapping for the custom link function when loading.        >>> mapping_dict = {        ...     "inverse_link_function": lambda x: x**2,        ... }        >>> loaded_model = nmo.load_model("model_params.npz", mapping_dict=mapping_dict)        >>> # Now the loaded model will have the updated solver_name and solver_kwargs        >>> for key, value in loaded_model.get_params().items():        ...     print(f"{key}: {value}")        fit_intercept: True        fix_params: (None, None)        inverse_link_function: <function <lambda> at ...>        observation_model: PoissonObservations()        regularizer: UnRegularized()        regularizer_strength: None        solver_kwargs: {}        solver_name: LBFGS        """        # initialize saving dictionary        fit_attrs = self._get_fit_state()        fit_attrs.pop("solver_state_")        fit_attrs.pop("stochastic_fit_summary_", None)        string_attrs = ["inverse_link_function"]        self._save_params(filename, fit_attrs, string_attrs)    def _get_params_shape(self, X, y) -> GLMParams[tuple[int]]:        """Infer the parameter shape from validated X and y."""        is_population = jnp.ndim(y) > 1        n_observations = jnp.shape(y)[1] if is_population else 1        extra_shape = (n_observations,) if is_population else ()        coef_shapes = jax.tree_util.tree_map(            lambda x: (jnp.shape(x)[1], *extra_shape), X        )        intercept_shape = (n_observations,)        return GLMParams(coef=coef_shapes, intercept=intercept_shape)def _var_func_of_mu(model) -> Callable:    """Return the variance function V(mu) for a GLM observation model.    Parameters    ----------    model :        A GLM instance with an ``observation_model`` attribute.    Returns    -------    Callable        A function mapping the mean ``mu`` to the variance ``V(mu)``.    Raises    ------    NotImplementedError        If the observation model is not recognized.    """    obs_name = model.observation_model.__class__.__name__    var_funcs = {        "PoissonObservations": lambda mu: mu,        "GammaObservations": lambda mu: mu**2,        "GaussianObservations": lambda mu: jnp.full_like(mu, 0.5),        "BernoulliObservations": lambda mu: mu * (1.0 - mu),    }    if obs_name not in var_funcs:        raise NotImplementedError(f"No variance function defined for {obs_name!r}")    return var_funcs[obs_name]class PopulationGLM(GLM):    """    Population Generalized Linear Model.    This class implements a Generalized Linear Model for a neural population.    This GLM implementation allows users to model the activity of a population of neurons based on a    combination of exogenous inputs (like convolved currents or light intensities) and a choice of observation model.    It is suitable for scenarios where the relationship between predictors and the response    variable might be non-linear, and the residuals  don't follow a normal distribution. The predictors must be    stored in tabular format, shape (n_timebins, num_features) or as a pytree of arrays of the same shape.    Below is a table listing the default and available solvers for each regularizer.    +---------------+------------------+-------------------------------------------------------+    | Regularizer   | Default Solver   | Available Solvers                                     |    +===============+==================+=======================================================+    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG,            |    |               |                  | ProximalGradient, SVRG, ProxSVRG, Newton,             |    |               |                  | ProximalNewton                                        |    +---------------+------------------+-------------------------------------------------------+    | Ridge         | Newton           | GradientDescent, BFGS, LBFGS, NonlinearCG,            |    |               |                  | ProximalGradient, SVRG, ProxSVRG, Newton,             |    |               |                  | ProximalNewton                                        |    +---------------+------------------+-------------------------------------------------------+    | Lasso         | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |    +---------------+------------------+-------------------------------------------------------+    | ElasticNet    | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |    +---------------+------------------+-------------------------------------------------------+    | GroupLasso    | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |    +---------------+------------------+-------------------------------------------------------+    The default solver for ``Ridge`` is ``Newton``: the ridge penalty makes the Hessian positive    definite, so each step is a stable Cholesky solve that converges in a handful of iterations at the    feature counts typical of neural GLMs. ``Newton`` is also available for ``UnRegularized`` problems    but is not the default there, since the unpenalized Hessian can be singular. A Newton step solves a    Hessian system, costing ``O(d**2)`` memory and ``O(d**3)`` compute in the number of features ``d``,    so for models with many features ``LBFGS`` is preferable: it is memory-light and more robust on    noisy objective landscapes. Switch solver by passing ``solver_name=...`` at initialization.    **Fitting Large Models**    For very large models, you may consider using the Stochastic Variance Reduced Gradient    :class:`nemos.solvers._svrg.SVRG` or its proximal variant    (:class:`nemos.solvers._svrg.ProxSVRG`) solver,    which take advantage of batched computation. You can change the solver by passing    ``"SVRG"`` or ``"ProxSVRG"`` as ``solver_name`` at model initialization.    The performance of the SVRG solver depends critically on the choice of ``batch_size`` and ``stepsize``    hyperparameters. These parameters control the size of the mini-batches used for gradient computations    and the step size for each iteration, respectively. Improper selection of these parameters can lead to slow    convergence or even divergence of the optimization process.    To assist with this, for certain GLM configurations, we provide ``batch_size`` and ``stepsize`` default    values that are theoretically guaranteed to ensure fast convergence.    Below is a list of the configurations for which we can provide guaranteed hyperparameters:    +---------------------------------------+-----------+-------------+    | GLM / PopulationGLM Configuration     | Stepsize  | Batch Size  |    +=======================================+===========+=============+    | Poisson + soft-plus + UnRegularized   | ✅         | ❌         |    +---------------------------------------+-----------+-------------+    | Poisson + soft-plus + Ridge           | ✅         | ✅         |    +---------------------------------------+-----------+-------------+    | Poisson + soft-plus + Lasso           | ✅         | ❌         |    +---------------------------------------+-----------+-------------+    | Poisson + soft-plus + GroupLasso      | ✅         | ❌         |    +---------------------------------------+-----------+-------------+    Parameters    ----------    observation_model :        Observation model to use. The model describes the distribution of the neural activity.        Default is the Poisson model.    inverse_link_function :        A function that maps the linear combination of predictors into a firing rate. The default depends        on the observation model, see the table above.    regularizer :        Regularization to use for model optimization. Defines the regularization scheme        and related parameters.        Default is UnRegularized regression.    regularizer_strength :        Typically a float. Default is None. Sets the regularizer strength.        If a user does not pass a value, and it is needed for regularization,        a warning will be raised and the strength will default to 1.0.        For finer control, the user can pass a pytree that matches the        parameter structure to regularize parameters differentially.    fit_intercept :        When True (default), an intercept term is fit. When False, only the coefficients are fit.        An intercept pinned through ``fix_params`` takes precedence over this flag.    fix_params :        Parameters to hold fixed during fitting, as a ``(coef, intercept)`` tuple with        ``coef`` of shape ``(n_features, n_neurons)`` and ``intercept`` of shape        ``(n_neurons,)``. An array pins that parameter at the value provided, ``None``        leaves it to be learned. When ``X`` is a pytree, ``coef`` mirrors its structure,        its leaves have shape ``(n_features_in_leaf, n_neurons)``, and each leaf is        pinned or learned on its own. Defaults to ``None``, which learns every parameter.    solver_name :        Solver to use for model optimization. Defines the optimization scheme and related parameters.        The solver must be an appropriate match for the chosen regularizer.        Default is ``None``. If no solver specified, one will be chosen based on the regularizer.        Please see table above for regularizer/optimizer pairings.    solver_kwargs :        Optional dictionary for keyword arguments that are passed to the solver when instantiated.        E.g. stepsize, tol, acceleration, etc.         For details on each solver's kwargs, see `get_accepted_arguments` and `get_solver_documentation`.    feature_mask :        A mask of 0s and 1s matching the shape of the coefficients: a matrix of shape        (num_features, num_neurons), or a PyTree mirroring the structure of ``X`` whose        leaves have shape (num_features_in_leaf, num_neurons).        The mask will be used to select which features are used as predictors for which neuron.    Attributes    ----------    intercept_ :        Model baseline linked firing rate parameters, e.g. if the link is the logarithm, the baseline        firing rate will be ``jnp.exp(model.intercept_)``.    coef_ :        Basis coefficients for the model.    solver_state_ :        State of the solver after fitting. May include details like optimization error.    stochastic_fit_summary_ :        Summary of the most recent stochastic training run, including the        final pass and batch indices and any callback stop reason.    Raises    ------    TypeError        If provided ``regularizer`` or ``observation_model`` are not valid.    TypeError        If provided ``feature_mask`` is not an array-like of dimension two.    Examples    --------    **Fit a PopulationGLM**    Basic model fitting for a population of neurons:    >>> import jax.numpy as jnp    >>> import numpy as np    >>> import nemos as nmo    >>> np.random.seed(123)    >>> num_samples, num_features, num_neurons = 100, 3, 2    >>> X = np.random.normal(size=(num_samples, num_features))    >>> weights = np.array([[0.5, 0.0], [-0.5, -0.5], [0.0, 1.0]])    >>> y = np.random.poisson(np.exp(X.dot(weights)))    >>> model = nmo.glm.PopulationGLM().fit(X, y)    >>> model.coef_.shape    (3, 2)    **Mask Coefficients with an Array**    Use a feature mask to specify which features predict each neuron.    The mask has shape ``(num_features, num_neurons)``:    >>> feature_mask = np.array([[1, 0], [1, 1], [0, 1]])    >>> model = nmo.glm.PopulationGLM(feature_mask=feature_mask).fit(X, y)    >>> model.coef_    Array(...)    **Use a Dict of Arrays as Input**    Features can be passed as a dict (or any JAX pytree). The feature mask    should mirror the same structure, each leaf shaped like its coefficients,    ``(num_features_in_leaf, num_neurons)``:    >>> feature_1 = np.random.normal(size=(num_samples, 2))    >>> feature_2 = np.random.normal(size=(num_samples, 1))    >>> X_dict = {"feature_1": feature_1, "feature_2": feature_2}    >>> weights = dict(    ...     feature_1=jnp.array([[0.0, 0.5], [0.0, -0.5]]),    ...     feature_2=jnp.array([[1.0, 0.0]]),    ... )    >>> rate = np.exp(    ...     X_dict["feature_1"].dot(weights["feature_1"])    ...     + X_dict["feature_2"].dot(weights["feature_2"])    ... )    >>> y = np.random.poisson(rate)    >>> feature_mask = {    ...     "feature_1": jnp.array([[0, 1], [0, 1]], dtype=jnp.int32),    ...     "feature_2": jnp.array([[1, 0]], dtype=jnp.int32),    ... }    >>> model = nmo.glm.PopulationGLM(feature_mask=feature_mask).fit(X_dict, y)    >>> model.coef_    {...}    **Customize the Observation Model**    Use a Gamma observation model for continuous positive data:    >>> model = nmo.glm.PopulationGLM(observation_model="Gamma")    >>> model.observation_model    GammaObservations()    **Use Regularization**    Fit with Ridge regularization:    >>> X = np.random.normal(size=(num_samples, num_features))    >>> weights = np.array([[0.5, 0.0], [-0.5, -0.5], [0.0, 1.0]])    >>> y = np.random.poisson(np.exp(X.dot(weights)))    >>> model = nmo.glm.PopulationGLM(    ...     regularizer="Ridge", regularizer_strength=0.1    ... ).fit(X, y)    >>> model.regularizer    Ridge()    """    _validator_class = PopulationGLMValidator    # One block per neuron, since the Hessian is assembled by vmapping over the neuron    # axis: axis 1 of ``coef``, which is ``(n_features, n_neurons)``, and axis 0 of    # ``intercept``. The sign and the per-leaf claims are inherited from ``GLM`` and hold    # block by block — each neuron's intercept block is that neuron's sum of weights.    _hess_structure = MatrixStructure.BLOCK_DIAGONAL    _hess_batch_axes = GLMParams(1, 0, None)    def __init__(        self,        observation_model: (            REGRESSION_GLM_TYPES            | Literal["Poisson", "Gamma", "Gaussian", "Bernoulli", "NegativeBinomial"]        ) = "Poisson",        inverse_link_function: Optional[Callable] = None,        regularizer: Union[str, Regularizer] = "UnRegularized",        regularizer_strength: Any = None,        fit_intercept: bool = True,        fix_params: Optional[GLMUserParams[jnp.ndarray | NDArray | None]] = None,        solver_name: str = None,        solver_kwargs: dict = None,        feature_mask: Optional[jnp.ndarray] = None,    ):        super().__init__(            observation_model=observation_model,            inverse_link_function=inverse_link_function,            regularizer_strength=regularizer_strength,            regularizer=regularizer,            fit_intercept=fit_intercept,            fix_params=fix_params,            solver_name=solver_name,            solver_kwargs=solver_kwargs,        )        self._metadata = None        self.feature_mask = feature_mask    def __sklearn_tags__(self):        """Return Population GLM specific estimator tags."""        tags = super().__sklearn_tags__()        # Tags for y        tags.target_tags = TargetTags(            required=True, one_d_labels=False, two_d_labels=True        )        return tags    @property    def feature_mask(self) -> Union[jnp.ndarray, dict[str, jnp.ndarray]]:        """        Mask indicating which features are used for each neuron.        The feature mask matches the coefficients (``coef_``) leaf by leaf, in both tree        structure and shape:        - **Array input**: Shape ``(n_features, n_neurons)``. Each entry ``[i, j]``          indicates whether feature ``i`` is used for neuron ``j`` (1 = used, 0 = masked).        - **Pytree**: A pytree with structure matching that of ``coef_``, each leaf shaped          like its coefficients, ``(n_features_in_leaf, n_neurons)``. Entry ``[i, j]`` of a          leaf indicates whether feature ``i`` of that group is used for neuron ``j``.        Returns        -------        jnp.ndarray or dict[str, jnp.ndarray]            The feature mask, or None if not set.        """        return self._feature_mask    @feature_mask.setter    def feature_mask(self, feature_mask: Union[DESIGN_INPUT_TYPE, dict]):        # do not allow reassignment after fit        if (self.coef_ is not None) and (self.intercept_ is not None):            raise AttributeError(                "property 'feature_mask' of 'populationGLM' cannot be set after fitting."            )        self._feature_mask = self._validator.validate_and_cast_feature_mask(            feature_mask        )        # the loss and the Hessian read the mask at call time, so a solver built        # against the previous mask is stale.        self._invalidate_solver()    @strip_metadata(arg_num=1, arg_name="y")    def fit(        self,        X: Union[DESIGN_INPUT_TYPE, ArrayLike],        y: ArrayLike,        init_params: Optional[GLMUserParams[jnp.ndarray | NDArray]] = None,    ):        """Fit GLM to the activity of a population of neurons.        Fit and store the model parameters as attributes ``coef_`` and ``intercept_``.        Each neuron can have different predictors. The ``feature_mask`` will determine which        feature will be used for which neurons. See the note below for more information on        the ``feature_mask``.        Parameters        ----------        X :            Predictors, array of shape (n_timebins, n_features) or pytree of the same            shape.        y :            Target neural activity arranged in a matrix, shape (n_timebins, n_neurons).        init_params :            2-tuple of initial parameter values: (coefficients, intercepts). If            None, we initialize coefficients with zeros, intercepts with the            log of the mean neural activity. coefficients is an array of shape            (n_features, n_neurons) or pytree of the same shape, intercepts is an array            of shape (n_neurons, )        Raises        ------        ValueError            If ``init_params`` is not of length two.        ValueError            If dimensionality of ``init_params`` are not correct.        ValueError            If ``X`` is not two-dimensional.        ValueError            If ``y`` is not two-dimensional.        ValueError            If the ``feature_mask`` is not of the right shape.        ValueError            If solver returns at least one NaN parameter, which means it found            an invalid solution. Try tuning optimization hyperparameters.        TypeError            If ``init_params`` are not array-like        TypeError            If ``init_params[i]`` cannot be converted to jnp.ndarray for all i        Notes        -----        The ``feature_mask`` is used to select features for each neuron, and it is        an NDArray or a PyTree of 0s and 1s. In particular,        - If the mask is in array format, feature ``i`` is a predictor for neuron ``j`` if          ``feature_mask[i, j] == 1``.        - If the mask is a PyTree, then          a leaf is a predictor of neuron ``j`` if the matching leaf in ``feature_mask``          is equal to 1.        Examples        --------        >>> # Generate sample data        >>> import jax.numpy as jnp        >>> import numpy as np        >>> from nemos.glm import PopulationGLM        >>> np.random.seed(0)        >>> # Define predictors (X), weights, and neural activity (y)        >>> num_samples, num_features, num_neurons = 100, 3, 2        >>> X = np.random.normal(size=(num_samples, num_features))        >>> # Weights is defined by how each feature influences the output, shape (num_features, num_neurons)        >>> weights = np.array([[0.5, 0.0], [-0.5, -0.5], [0.0, 1.0]])        >>> # Output y simulates a Poisson distribution based on a linear model between features X and wegihts        >>> y = np.random.poisson(np.exp(X.dot(weights)))        >>> # Define a feature mask, shape (num_features, num_neurons)        >>> feature_mask = jnp.array([[1, 0], [1, 1], [0, 1]])        >>> # Create and fit the model        >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)        >>> print(model.coef_.shape)        (3, 2)        """        return super().fit(X, y, init_params)    def _predict(        self, params: GLMParams[jnp.ndarray], X: jnp.ndarray, feature_mask: Any = None    ) -> jnp.ndarray:        """        Predicts firing rates based on given parameters and design matrix.        This function computes the predicted firing rates using the provided parameters, the feature        mask and model design matrix ``X``. It is a streamlined version used internally within        optimization routines, where it serves as the loss function. Unlike the ``GLM.predict``        method, it does not perform any input validation, assuming that the inputs are pre-validated.        The parameters are first element-wise multiplied with the mask, then the canonical        linear-non-linear GLM map is applied.        Parameters        ----------        params :            GLMParams containing the spike basis coefficients and bias terms.        X :            Predictors.        Returns        -------        :            The predicted rates. Shape (n_timebins, n_neurons).        """        if feature_mask is None:            feature_mask = self._feature_mask        if feature_mask is None:            return super()._predict(params, X)        return self.inverse_link_function(            # First, multiply each feature by its corresponding coefficient,            # then sum across all features and add the intercept, before            # passing to the inverse link function            tree_utils.pytree_map_and_reduce(                lambda x, w, m: jnp.einsum(                    "ti, i...->t...", x, w * _broadcast_mask_to(m, w)                ),                sum,                X,                params.coef,                feature_mask,            )            + params.intercept        )    def _n_estimated_features(self, active_cols: jnp.ndarray) -> jnp.ndarray:        """Count the features the mask lets through, per neuron.        A masked-out coefficient contributes nothing to the rate and is never estimated,        so it must not be charged against the residual degrees of freedom. A frozen one        is dropped the same way, through ``active_cols``.        """        if self._feature_mask is None:            return super()._n_estimated_features(active_cols)        mask = jnp.concatenate(jax.tree_util.tree_leaves(self._feature_mask), axis=0)        return jnp.sum(mask[active_cols], axis=0)    def _design_rank(self, X: jnp.ndarray, active_cols: jnp.ndarray) -> jnp.ndarray:        """Rank of each neuron's own design, after its masked columns are dropped.        Zeroing the masked columns leaves the rank unchanged relative to deleting them,        so the per-neuron mask stays a plain array op rather than a boolean index. The        frozen columns are the same for every neuron, so those are sliced away once,        before the vmap: every rank is then read off a smaller matrix.        """        if self._feature_mask is None:            return super()._design_rank(X, active_cols)        mask = jnp.concatenate(jax.tree_util.tree_leaves(self._feature_mask), axis=0)        X, mask = X[:, active_cols], mask[active_cols]        # every coefficient frozen leaves no design to take the rank of        if X.shape[1] == 0:            return jnp.zeros(mask.shape[1], dtype=int)        return jax.vmap(lambda m: jnp.linalg.matrix_rank(X * m), in_axes=1, out_axes=0)(            mask        )    def _get_hess_fn(self, frozen: Optional[GLMParams] = None) -> Callable:        # differentiating the combined loss with respect to the active subtree alone        # yields the active block of the Hessian directly, no slicing needed.        # ``batch_axes`` is prefix-spelled (one entry for all of ``coef``) while the        # filter spec is per-leaf, so expand before splitting the axes.        spec = tree_utils.tree_filter_like(            self._active_filter_spec(), self._hess_batch_axes        )        active_axis, frozen_axis = self._partition_active(            tree_utils.tree_broadcast_prefix(self._hess_batch_axes, spec)        )        def per_neuron(params, X, y, mask, frozen_params):            def loss(params):                params = eqx.combine(params, frozen_params)                rate = self._predict(params, X, feature_mask=mask)                return self._observation_model._negative_log_likelihood(y, rate)            return jax.hessian(loss)(params)        # the mask mirrors coef, so its neuron axis is coef's        vmap_per_neuron = jax.vmap(            per_neuron, in_axes=(active_axis, None, 1, 1, frozen_axis)        )        def hess_fn(params, X, y):            return vmap_per_neuron(params, X, y, self._feature_mask, frozen)        return hess_fn    def __sklearn_clone__(self) -> PopulationGLM:        """Clone the PopulationGLM, dropping feature_mask."""        params = self.get_params(deep=False)        klass = self.__class__(**params)        # reattach metadata        klass._metadata = self._metadata        return klass
+"""GLM core module."""
+
+# required to get ArrayLike to render correctly
+from __future__ import annotations
+
+import warnings
+from pathlib import Path
+from typing import Any, Callable, List, Literal, Optional, Tuple, Union
+
+import equinox as eqx
+import jax
+import jax.numpy as jnp
+from numpy.typing import ArrayLike, NDArray
+from sklearn.utils import InputTags, TargetTags
+
+from .. import observation_models as obs
+from .. import tree_utils, validation
+from .._hess import LeafClaim, MatrixProperty, MatrixStructure
+from .._observation_model_builder import instantiate_observation_model
+from ..base_regressor import BaseRegressor, strip_metadata
+from ..batching import DataLoader, _PreprocessedDataLoader, is_data_loader
+from ..callbacks import Callback, TrainingContext, _normalize_callbacks
+from ..exceptions import NotFittedError
+from ..inverse_link_function_utils import (
+    LINK_NAME_TO_FUNC,
+    resolve_inverse_link_function,
+    softplus,
+)
+from ..pytrees import FeaturePytree
+from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
+from ..solvers import (
+    CHOLESKY_ERR_MSG,
+    WrappedProxSVRG,
+    WrappedSVRG,
+    list_stochastic_solvers,
+)
+from ..solvers._compute_defaults import glm_compute_optimal_stepsize_configs
+from ..type_casting import cast_to_jax, support_pynapple
+from ..typing import DESIGN_INPUT_TYPE, SolverState, StepResult
+from ..utils import _elementwise_derivative, format_repr
+from .initialize_parameters import (
+    initialize_constant_coef_matching_mean_rate,
+    initialize_intercept_matching_mean_rate,
+)
+from .params import FromGLMParams, GLMParams, GLMUserParams, ToGLMParams
+from .validation import (
+    GLMValidator,
+    PopulationGLMValidator,
+)
+
+__all__ = ["GLM", "PopulationGLM"]
+
+REGRESSION_GLM_TYPES = Union[
+    obs.BernoulliObservations,
+    obs.GammaObservations,
+    obs.GaussianObservations,
+    obs.NegativeBinomialObservations,
+    obs.PoissonObservations,
+    Literal[
+        "Poisson",
+        "Gamma",
+        "Bernoulli",
+        "NegativeBinomial",
+        "Gaussian",
+    ],
+]
+
+
+def _broadcast_mask_to(mask: jnp.ndarray, coef: jnp.ndarray) -> jnp.ndarray:
+    """Add trailing singleton axes so ``mask`` broadcasts against ``coef``.
+
+    The mask is spelled ``(n_features, n_neurons)``: it says which features reach which
+    neuron and knows nothing about axes the coefficients add beyond that (the classes of
+    a classifier). A no-op when the two already share a shape.
+    """
+    return mask.reshape(mask.shape + (1,) * (coef.ndim - mask.ndim))
+
+
+def _active_columns(x_leaves: list, active_coef: Any) -> jnp.ndarray:
+    """Flag the design columns whose coefficient the solver estimates.
+
+    A coefficient frozen through ``fix_params`` is ``None`` in the active tree, so its
+    columns cost no degrees of freedom. The flags follow the column order of the design,
+    which is the leaf order of ``X``.
+    """
+    active_leaves = jax.tree_util.tree_leaves(active_coef, is_leaf=lambda x: x is None)
+    return jnp.concatenate(
+        [
+            jnp.full((x.shape[1],), coef is not None)
+            for x, coef in zip(x_leaves, active_leaves)
+        ]
+    )
+
+
+def _glm_hessian_block(
+    X,
+    eta,
+    inverse_link_function,
+    var_of_mu,
+    lam: Any = None,
+):
+    _X = jnp.concatenate(jax.tree_util.tree_leaves(X), axis=1)
+    n_samples, n_features = _X.shape
+
+    gprime = _elementwise_derivative(inverse_link_function)
+
+    mu = inverse_link_function(eta)
+
+    w = gprime(eta) ** 2 / var_of_mu(mu) / n_samples
+
+    X_aug = jnp.concatenate(
+        [_X, jnp.ones((n_samples, 1))],
+        axis=1,
+    )
+
+    H = X_aug.T @ (w[:, None] * X_aug)
+    if lam is not None:
+
+        def expand_lam(x_leaf, lam_leaf):
+            ncols = x_leaf.shape[1]
+            lam_leaf = jnp.asarray(lam_leaf)
+
+            if lam_leaf.ndim == 0:
+                return jnp.full(ncols, lam_leaf)
+
+            return jnp.ravel(lam_leaf)
+
+        lam = jnp.concatenate(
+            jax.tree_util.tree_leaves(jax.tree_util.tree_map(expand_lam, X, lam.coef))
+        )
+        H = H.at[:-1, :-1].add(jnp.diag(lam))
+
+    return H
+
+
+class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
+    r"""Generalized Linear Model (GLM) for neural activity data.
+
+    This GLM implementation allows users to model neural activity based on a combination of exogenous inputs
+    (like convolved currents or light intensities) and a choice of observation model. It is suitable for scenarios where
+    the relationship between predictors and the response variable might be non-linear, and the residuals
+    don't follow a normal distribution.
+
+    Below is a table of the default inverse link function for the availabe observation model.
+
+    +---------------------+---------------------------------+
+    | Observation Model   | Default Inverse Link Function   |
+    +=====================+=================================+
+    | Poisson             | :math:`e^x`                     |
+    +---------------------+---------------------------------+
+    | Gamma               | :math:`1/x`                     |
+    +---------------------+---------------------------------+
+    | Bernoulli           | :math:`1 / (1 + e^{-x})`        |
+    +---------------------+---------------------------------+
+    | NegativeBinomial    | :math:`e^x`                     |
+    +---------------------+---------------------------------+
+    | Gaussian            | :math:`x`                       |
+    +---------------------+---------------------------------+
+
+
+    Below is a table listing the default and available solvers for each regularizer.
+
+    +---------------+------------------+-------------------------------------------------------+
+    | Regularizer   | Default Solver   | Available Solvers                                     |
+    +===============+==================+=======================================================+
+    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG,            |
+    |               |                  | ProximalGradient, SVRG, ProxSVRG, Newton,             |
+    |               |                  | ProximalNewton                                        |
+    +---------------+------------------+-------------------------------------------------------+
+    | Ridge         | Newton           | GradientDescent, BFGS, LBFGS, NonlinearCG,            |
+    |               |                  | ProximalGradient, SVRG, ProxSVRG, Newton,             |
+    |               |                  | ProximalNewton                                        |
+    +---------------+------------------+-------------------------------------------------------+
+    | Lasso         | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |
+    +---------------+------------------+-------------------------------------------------------+
+    | ElasticNet    | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |
+    +---------------+------------------+-------------------------------------------------------+
+    | GroupLasso    | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |
+    +---------------+------------------+-------------------------------------------------------+
+
+    The default solver for ``Ridge`` is ``Newton``: the ridge penalty makes the Hessian positive
+    definite, so each step is a stable Cholesky solve that converges in a handful of iterations at the
+    feature counts typical of neural GLMs. ``Newton`` is also available for ``UnRegularized`` problems
+    but is not the default there, since the unpenalized Hessian can be singular. A Newton step solves a
+    Hessian system, costing ``O(d**2)`` memory and ``O(d**3)`` compute in the number of features ``d``,
+    so for models with many features ``LBFGS`` is preferable: it is memory-light and more robust on
+    noisy objective landscapes. Switch solver by passing ``solver_name=...`` at initialization.
+
+    **Fitting Large Models**
+
+    For very large models, you may consider using the Stochastic Variance Reduced Gradient
+    :class:`nemos.solvers._svrg.SVRG` or its proximal variant
+    :class:`nemos.solvers._svrg.ProxSVRG` solver,
+    which take advantage of batched computation. You can change the solver by passing
+    ``"SVRG"`` as ``solver_name`` at model initialization.
+
+    The performance of the SVRG solver depends critically on the choice of ``batch_size`` and ``stepsize``
+    hyperparameters. These parameters control the size of the mini-batches used for gradient computations
+    and the step size for each iteration, respectively. Improper selection of these parameters can lead to slow
+    convergence or even divergence of the optimization process.
+
+    To assist with this, for certain GLM configurations, we provide ``batch_size`` and ``stepsize`` default
+    values that are theoretically guaranteed to ensure fast convergence.
+
+    Below is a list of the configurations for which we can provide guaranteed default hyperparameters:
+
+    +---------------------------------------+-----------+-------------+
+    | GLM / PopulationGLM Configuration     | Stepsize  | Batch Size  |
+    +=======================================+===========+=============+
+    | Poisson + soft-plus + UnRegularized   | ✅        | ❌          |
+    +---------------------------------------+-----------+-------------+
+    | Poisson + soft-plus + Ridge           | ✅        | ✅          |
+    +---------------------------------------+-----------+-------------+
+    | Poisson + soft-plus + Lasso           | ✅        | ❌          |
+    +---------------------------------------+-----------+-------------+
+    | Poisson + soft-plus + GroupLasso      | ✅        | ❌          |
+    +---------------------------------------+-----------+-------------+
+
+    Parameters
+    ----------
+    observation_model :
+        Observation model to use. The model describes the distribution of the neural activity.
+        Default is the Poisson model. Alternatives are "Gamma", "Bernoulli", "NegativeBinomial" and "Gaussian".
+    inverse_link_function :
+        A function that maps the linear combination of predictors into a firing rate. The default depends
+        on the observation model, see the table above.
+    regularizer :
+        Regularization to use for model optimization. Defines the regularization scheme
+        and related parameters.
+        Default is UnRegularized regression.
+    regularizer_strength :
+        Typically a float. Default is None. Sets the regularizer strength.
+        If a user does not pass a value, and it is needed for regularization,
+        a warning will be raised and the strength will default to 1.0.
+        For finer control, the user can pass a pytree that matches the
+        parameter structure to regularize parameters differentially.
+    fit_intercept :
+        When True (default), an intercept term is fit. When False, only the coefficients are fit.
+        An intercept pinned through ``fix_params`` takes precedence over this flag.
+    fix_params :
+        A dictionary, keys could be "coef" or "intercept", values are PyTree of
+         arrays with the parameters that will be fixed.
+    solver_name :
+        Solver to use for model optimization. Defines the optimization scheme and related parameters.
+        The solver must be an appropriate match for the chosen regularizer.
+        Default is ``None``. If no solver specified, one will be chosen based on the regularizer.
+        Please see table above for regularizer/optimizer pairings.
+    solver_kwargs :
+        Optional dictionary for keyword arguments that are passed to the solver when instantiated.
+        E.g. stepsize, tol, acceleration, etc.
+         For details on each solver's kwargs, see `get_accepted_arguments` and `get_solver_documentation`.
+
+    Attributes
+    ----------
+    intercept_ :
+        Model baseline linked firing rate parameters, e.g. if the link is the logarithm, the baseline
+        firing rate will be ``jnp.exp(model.intercept_)``.
+    coef_ :
+        Basis coefficients for the model.
+    solver_state_ :
+        State of the solver after fitting. May include details like optimization error.
+    stochastic_fit_summary_ :
+        Summary of the most recent stochastic training run, including the
+        final pass and batch indices and any callback stop reason.
+    scale_:
+        Scale parameter for the model. The scale parameter is the constant :math:`\Phi`, for which
+        :math:`\text{Var} \left( y \right) = \Phi V(\mu)`. This parameter, together with the estimate
+        of the mean :math:`\mu` fully specifies the distribution of the activity :math:`y`.
+    dof_resid_:
+        Degrees of freedom for the residuals.
+
+
+    Raises
+    ------
+    TypeError
+        If provided ``regularizer`` or ``observation_model`` are not valid.
+
+    Examples
+    --------
+    **Fit a GLM**
+
+    Basic model fitting with default Poisson observation model:
+
+    >>> import numpy as np
+    >>> import nemos as nmo
+    >>> np.random.seed(123)
+    >>> X = np.random.normal(size=(100, 5))
+    >>> y = np.random.poisson(size=100)
+    >>> model = nmo.glm.GLM().fit(X, y)
+    >>> model.coef_.shape
+    (5,)
+
+    **Customize the Observation Model**
+
+    Specify the observation model as a string:
+
+    >>> model = nmo.glm.GLM(observation_model="Gamma")
+    >>> model.observation_model
+    GammaObservations()
+
+    Or pass the observation model object directly:
+
+    >>> model = nmo.glm.GLM(
+    ...     observation_model=nmo.observation_models.GammaObservations()
+    ... )
+    >>> model.observation_model
+    GammaObservations()
+
+    **Customize the Inverse Link Function**
+
+    Use a soft-plus inverse link function instead of the default exponential:
+
+    >>> model = nmo.glm.GLM(inverse_link_function=jax.nn.softplus)
+    >>> model.inverse_link_function.__name__
+    'softplus'
+
+    **Use Regularization**
+
+    Fit with Ridge regularization:
+
+    >>> model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
+    >>> model = model.fit(X, y)
+    >>> model.regularizer
+    Ridge()
+
+    Fit with Lasso regularization for sparse coefficients:
+
+    >>> model = nmo.glm.GLM(regularizer="Lasso", regularizer_strength=0.01)
+    >>> model = model.fit(X, y)
+    >>> model.regularizer
+    Lasso()
+
+    **Fix some parameters**
+
+    Pin the first feature block's coefficients to ``[1, 1]`` and learn the rest.
+    The ``fix_params`` spec mirrors the ``(coef, intercept)`` structure, with
+    ``None`` marking the parameters to learn:
+
+    >>> fix_params = ([jnp.ones((2,)), None], None)
+    >>> model = nmo.glm.GLM(fix_params=fix_params)
+    >>> model = model.fit([X[:, :2], X[:, 2:]], y)
+    >>> model.coef_[0]
+    Array([1., 1.], dtype=...)
+
+    **Select a Solver**
+
+    Use LBFGS solver for potentially faster convergence:
+
+    >>> model = nmo.glm.GLM(solver_name="BFGS").fit(X, y)
+    >>> model.solver_name
+    'BFGS'
+
+    **Use a Pytree of arrays as Input**
+
+    Features can be passed as any JAX pytree of 2-D arrays; the fitted
+    ``coef_`` will share the same pytree structure:
+
+    >>> X_dict = {"input_1": X[:, :2], "input_2": X[:, 2:]}
+    >>> model = nmo.glm.GLM().fit(X_dict, y)
+    >>> # The coefficient structure will match the input.
+    >>> type(model.coef_)
+    <class 'dict'>
+    """
+
+    _invalid_observation_types = (obs.CategoricalObservations,)
+    _validator_class = GLMValidator
+
+    # default until the instance sets it; read during ``__init__`` before assignment
+    # (e.g. when solver-kwargs validation resolves the default solver).
+    _fit_intercept: bool = True
+    # full-structure all-None default so the partition helpers never see a bare None
+    _fix_params: GLMParams[None | jnp.ndarray] = GLMParams(None, None)
+
+    def _resolve_default_solver(self) -> str:
+        # Newton is the default for Ridge: the ridge penalty makes the penalized
+        # Hessian positive definite, so the Cholesky-based Newton step is stable.
+        # For other regularizers (e.g. UnRegularized, whose Hessian can be only
+        # positive semidefinite) defer to the regularizer's own default.
+        if isinstance(self.regularizer, Ridge) and (
+            "Newton" in self.regularizer.allowed_solvers
+        ):
+            return "Newton"
+        return super()._resolve_default_solver()
+
+    def _resolve_hess_property(self) -> MatrixProperty:
+        """Resolve the hessian property.
+
+        Return the property of the GLM loss function for an unpenalized model.
+        The penalization contribution is resolved by combining the hessian tag
+        of the model with that of the regularizer.
+
+        Notes
+        -----
+        Unknown links can easily break convexity: always tag as MatrixProperty.SYMMETRIC if the link is unknown.
+
+        """
+        conv_preserving_inv_links = (
+            self._observation_model.glm_convexity_preserving_links
+        )
+        link = self._inverse_link_function
+
+        if hasattr(link, "__module__") and hasattr(link, "__name__"):
+            qual_name = f"{link.__module__}.{link.__name__}"
+        else:
+            qual_name = None
+
+        convexity_preserving = (
+            link in conv_preserving_inv_links
+            or LINK_NAME_TO_FUNC.get(qual_name) in conv_preserving_inv_links
+        )
+
+        return (
+            MatrixProperty.POSITIVE_SEMI_DEFINITE
+            if convexity_preserving
+            else MatrixProperty.SYMMETRIC
+        )
+
+    def _hess_leaf_claims(
+        self, params: GLMParams[jnp.ndarray], active_spec: GLMParams[bool]
+    ) -> GLMParams[LeafClaim]:
+        """Certify the intercept, whenever it is being fitted.
+
+        The intercept's own block of the loss Hessian is ``1.T W 1``, the per-sample
+        curvatures added up. They are non-negative for a link that keeps the likelihood
+        convex, and their sum is positive, so that block is definite for any design matrix.
+        No other block can be certified: each one is ``X.T W X`` on some columns of ``X``,
+        and whether that is definite is a question about the rank of the design.
+
+        The link is not checked here. One that breaks convexity leaves the whole tag
+        unsigned, and ``normalize`` drops the definite claim of an unsigned tag, so a single
+        rule covers every model rather than each model repeating the check.
+
+        Parameters
+        ----------
+        params :
+            The parameters being fitted.
+        active_spec :
+            The filter spec ``params`` was partitioned with.
+
+        Returns
+        -------
+        :
+            A tree shaped like ``params`` with ``LeafClaim.DEFINITE`` on the
+            intercept and ``LeafClaim.UNCLAIMED`` on the coefficients. An intercept that is
+            not being fitted is absent from ``params``, and so is its claim: there is no
+            block of the Hessian to describe.
+        """
+        claims = super()._hess_leaf_claims(params, active_spec)
+        if not active_spec.intercept:
+            return claims
+        return eqx.tree_at(lambda p: p.intercept, claims, LeafClaim.DEFINITE)
+
+    def __init__(
+        self,
+        observation_model: (
+            REGRESSION_GLM_TYPES
+            | Literal["Poisson", "Gamma", "Gaussian", "Bernoulli", "NegativeBinomial"]
+        ) = "Poisson",
+        inverse_link_function: Optional[Callable] = None,
+        regularizer: Optional[Union[str, Regularizer]] = None,
+        regularizer_strength: Any = None,
+        fit_intercept: bool = True,
+        fix_params: Optional[GLMUserParams[jnp.ndarray | NDArray | None]] = None,
+        solver_name: str = None,
+        solver_kwargs: dict = None,
+    ):
+        super().__init__(
+            regularizer=regularizer,
+            regularizer_strength=regularizer_strength,
+            solver_name=solver_name,
+            solver_kwargs=solver_kwargs,
+        )
+        self._validator: GLMValidator = self._validator_class(
+            extra_params=self._get_validator_extra_params(),
+        )
+        self.observation_model = observation_model
+        self.inverse_link_function = inverse_link_function
+
+        self.fit_intercept = fit_intercept
+        self.fix_params = fix_params
+
+        # initialize to None fit output
+        self.intercept_ = None
+        self.coef_ = None
+        self.solver_state_ = None
+        self.scale_ = None
+        self.dof_resid_ = None
+        self.aux_ = None
+        self._solver = None
+
+    @property
+    def param_names(self) -> List[str]:
+        """List the names of the parameters fitted by the GLM."""
+        return [
+            "coef",
+            "intercept",
+        ]
+
+    @property
+    def fix_params(self) -> GLMUserParams[jnp.ndarray | NDArray | None]:
+        """Parameters held fixed during fitting, as a ``(coef, intercept)`` tuple."""
+        return self._validator.from_model_params(self._fix_params)
+
+    @fix_params.setter
+    def fix_params(self, value: GLMUserParams[jnp.ndarray | NDArray | None] | None):
+        """Setter for ``fix_params`` property.
+
+        Validates the specification (delegated to the validator) and sets it.
+        """
+        self._fix_params = self._validator.validate_param_specs(value)
+        self._invalidate_solver()
+
+    @property
+    def fit_intercept(self) -> bool:
+        """Getter for ``fit_intercept`` property."""
+        return self._fit_intercept
+
+    @fit_intercept.setter
+    def fit_intercept(self, value):
+        """Setter for ``fit_intercept`` property."""
+        value = bool(value)
+        flipped = value != self._fit_intercept
+        self._fit_intercept = value
+        # only when the frozen set actually changes: the captured partition and the
+        # solver closed over the previous frozen values are then stale.
+        if flipped:
+            self._invalidate_solver()
+
+    def _active_filter_spec(self) -> GLMParams[bool]:
+        active = super()._active_filter_spec()
+        # ``fit_intercept=False`` freezes the intercept at the value
+        # ``_normalize_user_params`` fills into the init params (zeros by default).
+        if not self._fit_intercept:
+            active = GLMParams(active.coef, False)
+        return active
+
+    def _frozen_values(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> GLMParams:
+        frozen = super()._frozen_values(X, y)
+        # ``fit_intercept=False`` pins the intercept at zero; this is the single
+        # source of the pinned value (``_normalize_user_params`` fills it into
+        # omitted user input, ``update`` recombines it into the returned params).
+        if not self._fit_intercept and frozen.intercept is None:
+            zeros = jnp.zeros_like(self._get_empty_params(X, y).intercept)
+            frozen = GLMParams(frozen.coef, zeros)
+        if frozen.coef is None:
+            frozen = eqx.tree_at(
+                lambda p: p.coef,
+                frozen,
+                jax.tree_util.tree_map(lambda _: None, X, is_leaf=lambda x: x is None),
+                is_leaf=lambda x: x is None,
+            )
+        return frozen
+
+    @property
+    def solver(self):
+        """Getter for the solver class."""
+        return self._solver
+
+    @classmethod
+    def _validate_observation_class(cls, observation: obs.Observations):
+        if observation.__class__ in cls._invalid_observation_types:
+            model_name = cls.__name__
+            obs_name = observation.__class__.__name__
+            error_msg = f"The ``{obs_name}`` observation type is not supported for ``{model_name}`` models."
+            is_categorical = isinstance(observation, obs.CategoricalObservations)
+            if is_categorical:
+                correct_model = (
+                    "ClassifierPopulationGLM"
+                    if issubclass(cls, PopulationGLM)
+                    else "ClassifierGLM"
+                )
+                error_msg += (
+                    f" To use a GLM for classification instantiate a ``{correct_model}`` "
+                    f"object."
+                )
+            else:
+                correct_model = (
+                    "PopulationGLM" if issubclass(cls, PopulationGLM) else "GLM"
+                )
+                error_msg += (
+                    f" To use a GLM for regression with ``{obs_name}`` instantiate a ``{correct_model}`` "
+                    f"object."
+                )
+            raise TypeError(error_msg)
+
+    def __sklearn_tags__(self):
+        """Return GLM specific estimator tags."""
+        tags = super().__sklearn_tags__()
+        # Tags for X
+        tags.input_tags = InputTags(allow_nan=True, two_d_array=True)
+        # Tags for y
+        tags.target_tags = TargetTags(
+            required=True, one_d_labels=True, two_d_labels=False
+        )
+        return tags
+
+    @property
+    def inverse_link_function(self):
+        """Inverse link function mapping the linear predictor to the response space.
+
+        Always a callable. If ``None`` was passed at construction time, this is
+        resolved to the observation model's default (e.g. ``jnp.exp`` for Poisson,
+        ``1 / x`` for Gamma, ``jax.nn.sigmoid`` for Bernoulli).
+        """
+        return self._inverse_link_function
+
+    @inverse_link_function.setter
+    def inverse_link_function(self, inverse_link_function: Callable):
+        """Validate and set the inverse link function.
+
+        Parameters
+        ----------
+        inverse_link_function :
+            One of:
+
+            - ``None`` — use the observation model's default inverse link.
+            - ``str`` — name of a built-in (e.g. ``"identity"``, ``"log"``,
+              ``"logit"``); resolved by
+              :func:`nemos.inverse_link_function_utils.resolve_inverse_link_function`.
+            - ``Callable`` — a custom function. Must be JAX-traceable
+              (differentiable) and return a ``jax.numpy.ndarray`` or scalar
+              when called on a JAX array.
+
+        Raises
+        ------
+        TypeError
+            If the value is neither callable nor a string.
+        ValueError
+            If a callable is non-differentiable or returns an unsupported type.
+        """
+        self._inverse_link_function = resolve_inverse_link_function(
+            inverse_link_function, self._observation_model
+        )
+
+    @property
+    def observation_model(self) -> Union[None, obs.Observations]:
+        """The observation model governing the conditional distribution of ``y``.
+
+        Always an instance of an :class:`~nemos.observation_models.Observations`
+        subclass. If a string alias was passed at construction time it is
+        resolved to the corresponding instance here.
+        """
+        return self._observation_model
+
+    @observation_model.setter
+    def observation_model(self, observation: obs.Observations):
+        """Validate and set the observation model.
+
+        Parameters
+        ----------
+        observation :
+            Either an :class:`~nemos.observation_models.Observations` instance,
+            or a string alias from
+            ``{"Poisson", "Gamma", "Gaussian", "Bernoulli", "NegativeBinomial"}``.
+            String aliases are instantiated via
+            :func:`nemos.observation_models.instantiate_observation_model`.
+
+        Raises
+        ------
+        AttributeError, TypeError
+            If the instance does not implement the
+            :class:`~nemos.observation_models.Observations` interface (checked
+            via :func:`nemos.observation_models.check_observation_model`).
+        ValueError
+            If the resolved observation class is not allowed for this model
+            (e.g. ``CategoricalObservations`` is rejected by ``GLM``).
+        """
+        if isinstance(observation, str):
+            self._observation_model = instantiate_observation_model(observation)
+            self._validate_observation_class(self.observation_model)
+            self._invalidate_solver()
+            self._validator = eqx.tree_at(
+                # selector
+                lambda x: (
+                    x.to_model_params,
+                    x.from_model_params,
+                ),
+                # pytree
+                self._validator,
+                # replace
+                (
+                    ToGLMParams(self.observation_model.map_to),
+                    FromGLMParams(self.observation_model.map_from),
+                ),
+                is_leaf=lambda x: x is None,
+            )
+            return
+        # check that the model has the required attributes
+        # and that the attribute can be called
+        obs.check_observation_model(observation)
+        self._observation_model = observation
+        self._validate_observation_class(self.observation_model)
+        self._invalidate_solver()
+        self._validator = eqx.tree_at(
+            # selector
+            lambda x: (
+                x.to_model_params,
+                x.from_model_params,
+            ),
+            # pytree
+            self._validator,
+            # replace
+            (
+                ToGLMParams(self.observation_model.map_to),
+                FromGLMParams(self.observation_model.map_from),
+            ),
+            is_leaf=lambda x: x is None,
+        )
+
+    def _check_is_fit(self):
+        """Ensure the instance has been fitted."""
+        if (self.coef_ is None) or (self.intercept_ is None):
+            raise NotFittedError(
+                "This GLM instance is not fitted yet. Call 'fit' with appropriate arguments."
+            )
+
+    def _predict(
+        self,
+        params: GLMParams[jnp.ndarray],
+        X: Union[dict[str, jnp.ndarray], jnp.ndarray],
+    ) -> jnp.ndarray:
+        """
+        Predicts firing rates based on given parameters and design matrix.
+
+        This function computes the predicted firing rates using the provided parameters
+        and model design matrix ``X``. It is a streamlined version used internally within
+        optimization routines, where it serves as the loss function. Unlike the ``GLM.predict``
+        method, it does not perform any input validation, assuming that the inputs are pre-validated.
+
+
+        Parameters
+        ----------
+        params :
+            GLMParams containing the spike basis coefficients and bias terms.
+        X :
+            Predictors.
+
+        Returns
+        -------
+        :
+            The predicted rates. Shape (n_time_bins, ).
+        """
+        return self._inverse_link_function(
+            # First, multiply each feature by its corresponding coefficient,
+            # then sum across all features and add the intercept, before
+            # passing to the inverse link function
+            tree_utils.pytree_map_and_reduce(
+                lambda x, w: jnp.einsum("tj, j...->t...", x, w), sum, X, params.coef
+            )
+            + params.intercept
+        )
+
+    @support_pynapple(conv_type="jax")
+    def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:
+        """Predict rates based on fit parameters.
+
+        Parameters
+        ----------
+        X :
+            Predictors, array of shape ``(n_time_bins, n_features)`` or a pytree
+            of arrays of the same shape.
+
+        Returns
+        -------
+        :
+            The predicted rates with shape ``(n_time_bins, )``.
+
+        Raises
+        ------
+        NotFittedError
+            If ``fit`` has not been called first with this instance.
+        ValueError
+            If ``params`` is not a JAX pytree of size two.
+        ValueError
+            If weights and bias terms in ``params`` don't have the expected dimensions.
+        ValueError
+            If ``X`` is not three-dimensional.
+        ValueError
+            If there's an inconsistent number of features between spike basis coefficients and ``X``.
+
+        Examples
+        --------
+        >>> # example input
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
+        >>> # define and fit a GLM
+        >>> import nemos as nmo
+        >>> model = nmo.glm.GLM()
+        >>> model = model.fit(X, y)
+        >>> # predict new spike data
+        >>> Xnew = np.random.normal(size=(20, X.shape[1]))
+        >>> predicted_spikes = model.predict(Xnew)
+
+        See Also
+        --------
+        :meth:`nemos.glm.GLM.score`
+            Score predicted rates against the observations.
+
+        :meth:`nemos.glm.GLM.simulate`
+            Simulate observations in response to a feed-forward input (feed-forward only).
+
+        :func:`nemos.simulation.simulate_recurrent`
+            Simulate neural activity in response to a feed-forward input
+            using the GLM as a recurrent network (feed-forward + coupling).
+        """
+        # check that the model is fitted
+        self._check_is_fit()
+        # extract model params
+        params = self._get_model_params()
+
+        # filter for non-nans, grab data if needed
+        data, _ = self._preprocess_inputs(X, drop_nans=False)
+
+        self._validator.validate_inputs(data)
+
+        # check consistency between X and params
+        self._validator.validate_consistency(params, X=data)
+        self._validator.feature_mask_consistency(
+            getattr(self, "_feature_mask", None), params
+        )
+
+        return self._predict(params, data)
+
+    def _compute_loss(
+        self,
+        params: GLMParams[jnp.ndarray],
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        **kwargs,
+    ) -> jnp.ndarray:
+        r"""Predict the rate and compute the negative log-likelihood against neural activity.
+
+        This method computes the negative log-likelihood up to a constant term. Unlike ``score``,
+        it does not conduct parameter checks prior to evaluation. Passed directly to the solver,
+        it serves to establish the optimization objective for learning the model parameters.
+
+        Parameters
+        ----------
+        params :
+            2-tuple containing the spike basis coefficients and bias terms.
+        X :
+            Predictors.
+        y :
+            Target neural activity.
+
+        Returns
+        -------
+        :
+            The model negative log-likehood. Shape (1,).
+
+        """
+        predicted_rate = self._predict(params, X)
+        return self._observation_model._negative_log_likelihood(y, predicted_rate)
+
+    @cast_to_jax
+    def score(
+        self,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: ArrayLike,
+        score_type: Literal[
+            "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
+        ] = "log-likelihood",
+        aggregate_sample_scores: Callable = jnp.mean,
+    ) -> jnp.ndarray:
+        r"""Evaluate the goodness-of-fit of the model to the observed neural data.
+
+        This method computes the goodness-of-fit score, which can either be the mean
+        log-likelihood or of two versions of the pseudo-:math:`R^2`.
+        The scoring process includes validation of input compatibility with the model's
+        parameters, ensuring that the model has been previously fitted and the input data
+        are appropriate for scoring. A higher score indicates a better fit of the model
+        to the observed data.
+
+
+        Parameters
+        ----------
+        X :
+            Predictors, array of shape ``(n_time_bins, n_features)`` or a pytree
+            of arrays of the same shape.
+        y :
+            Neural activity. Shape ``(n_time_bins, )``.
+        score_type :
+            Type of scoring: either log-likelihood or pseudo-:math:`R^2`.
+        aggregate_sample_scores :
+            Function that aggregates the score of all samples.
+
+        Returns
+        -------
+        score :
+            The log-likelihood or the pseudo-:math:`R^2` of the current model.
+
+        Raises
+        ------
+        NotFittedError
+
+            If ``fit`` has not been called first with this instance.
+        ValueError
+
+            If X structure doesn't match the params, and if X and y have different
+            number of samples.
+
+        Examples
+        --------
+        >>> # example input
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
+        >>> import nemos as nmo
+        >>> model = nmo.glm.GLM()
+        >>> model = model.fit(X, y)
+        >>> # get model score
+        >>> log_likelihood_score = model.score(X, y)
+        >>> # get a pseudo-R2 score
+        >>> pseudo_r2_score = model.score(X, y, score_type="pseudo-r2-McFadden")
+
+        Notes
+        -----
+        The log-likelihood is not on a standard scale, its value is influenced by many factors,
+        among which the number of model parameters. The log-likelihood can assume both positive
+        and negative values.
+
+        The Pseudo-:math:`R^2` is not equivalent to the :math:`R^2` value in linear regression. While both
+        provide a measure of model fit, and assume values in the [0,1] range, the methods and
+        interpretations can differ. The Pseudo-:math:`R^2` is particularly useful for generalized linear
+        models when the interpretation of the :math:`R^2` as explained variance does not apply
+        (i.e., when the observations are not Gaussian distributed).
+
+        Why does the traditional :math:`R^2` is usually a poor measure of performance in GLMs?
+
+        1.  In the context of GLMs the variance and the mean of the observations are related.
+            Ignoring the relation between them can result in underestimating the model
+            performance; for instance, when we model a Poisson variable with large mean we expect an
+            equally large variance. In this scenario, even if our model perfectly captures the mean,
+            the high-variance  will result in large residuals and low :math:`R^2`.
+            Additionally, when the mean of the observations varies, the variance will vary too. This
+            violates the "homoschedasticity" assumption, necessary  for interpreting the :math:`R^2` as
+            variance explained.
+
+        2.  The :math:`R^2` capture the variance explained when the relationship between the observations and
+            the predictors is linear. In GLMs, the link function sets a non-linear mapping between the predictors
+            and the mean of the observations, compromising the interpretation of the :math:`R^2`.
+
+        Note that it is possible to re-normalized the residuals by a mean-dependent quantity proportional
+        to the model standard deviation (i.e. Pearson residuals). This "rescaled" residual distribution however
+        deviates substantially from normality for counting data with low mean (common for spike counts).
+        Therefore, even the Pearson residuals performs poorly as a measure of fit quality, especially
+        for GLM modeling counting data.
+
+        Refer to the ``nmo.observation_models.Observations`` concrete subclasses for the likelihood and
+        pseudo-:math:`R^2` equations.
+
+        """
+        self._check_is_fit()
+        if (
+            score_type in {"log-likelihood", "pseudo-r2-McFadden"}
+            and self.scale_ is None
+            and not self._has_constant_scale()
+        ):
+            raise ValueError(
+                "`score()` requires `scale_`, which is not set. This happens after `stochastic_fit()`"
+                " with an observation model whose scale depends on the data (e.g., Gamma, Gaussian)."
+                " Workaround: use `compute_loss(X, y)` for model comparison as it does not depend on `scale_`."
+            )
+        params = self._get_model_params()
+
+        self._validator.validate_inputs(X, y)
+        X, y = self._preprocess_inputs(X, y, drop_nans=True)
+        self._validator.validate_consistency(params, X, y)
+        self._validator.feature_mask_consistency(
+            getattr(self, "_feature_mask", None), params
+        )
+
+        if score_type == "log-likelihood":
+            score = self._observation_model.log_likelihood(
+                y,
+                self._predict(params, X),
+                self.scale_,
+                aggregate_sample_scores=aggregate_sample_scores,
+            )
+        elif score_type.startswith("pseudo-r2"):
+            score = self._observation_model.pseudo_r2(
+                y,
+                self._predict(params, X),
+                score_type=score_type,
+                scale=self.scale_,
+                aggregate_sample_scores=aggregate_sample_scores,
+            )
+        else:
+            raise NotImplementedError(
+                f"Scoring method {score_type} not implemented! "
+                "`score_type` must be either 'log-likelihood', 'pseudo-r2-McFadden', "
+                "or 'pseudo-r2-Cohen'."
+            )
+        return score
+
+    def _model_specific_initialization(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        **kwargs,
+    ) -> GLMParams[jnp.ndarray]:
+        """Initialize the parameters based on the structure and dimensions X and y.
+
+        This method initializes the coefficients (spike basis coefficients) and intercepts (bias terms)
+        required for the GLM.
+
+        If ``fit_intercept==True``:
+            - The coefficients are initialized to zeros with dimensions based on the input X.
+        If ``fit_intercept==False``:
+            - The coefficients are initialized to a constant that minimizes the min squared error
+            between ``X @ coef`` and the linked mean firing rate (``log(mean(y))`` for a GLM with
+            exponential non-linearity).
+        If X is a pytree of arrays, the coefficients retain the pytree structure with
+        arrays of zeros shaped according to the features in X.
+        If X is a simple ndarray, the coefficients are initialized as a 2D array. The intercepts are initialized
+        based on the log mean of the target data y across the first axis, corresponding to the average log activity
+        of the neuron.
+
+        Parameters
+        ----------
+        X :
+            The input data, either a pytree of arrays with leaves of shape
+            ``(n_timebins, n_features)``, or a simple ndarray of shape ``(n_timebins, n_features)``.
+        y :
+            The target data array of shape ``(n_timebins, )``, representing
+            the neuron firing rates or similar metrics.
+
+        Returns
+        -------
+        Tuple[Union[pytree of arrays, jnp.ndarray], jnp.ndarray]
+            A tuple containing the initialized parameters:
+            - The first element is the initialized coefficients
+            (either as a pytree of arrays or ndarray, matching the structure of X) with shapes (n_features,).
+            - The second element is the initialized intercept (bias terms) as an ndarray of shape (1,).
+        """
+        if isinstance(X, FeaturePytree):
+            data = X.data
+        else:
+            data = X
+
+        frozen = self._frozen_values(X, y)
+        frozen_coef = frozen.coef
+        frozen_intercept = frozen.intercept
+
+        empty_params = self._get_empty_params(data, y)
+        # Resolution order: if fix params provides an intercept use it as fix, otherwise follow flag.
+        fit_intercept = False if frozen_intercept is not None else self.fit_intercept
+
+        if fit_intercept:
+            initial_intercept = initialize_intercept_matching_mean_rate(
+                self._inverse_link_function,
+                data,
+                y,
+                frozen_coef=frozen_coef,
+                rate_range=self.observation_model.rate_range,
+            )
+            initial_coef = jax.tree_util.tree_map(
+                lambda x: jnp.zeros(x.shape), empty_params.coef
+            )
+            initial_coef = eqx.combine(frozen_coef, initial_coef)
+        else:
+            initial_intercept = (
+                frozen_intercept
+                if frozen_intercept is not None
+                else jnp.zeros_like(empty_params.intercept)
+            )
+            initial_coef = initialize_constant_coef_matching_mean_rate(
+                self._inverse_link_function,
+                data,
+                y,
+                empty_params.coef,
+                frozen_coef=frozen_coef,
+                frozen_intercept=frozen_intercept,
+                rate_range=self.observation_model.rate_range,
+            )
+
+        init_params = eqx.tree_at(
+            lambda p: (p.coef, p.intercept),
+            empty_params,
+            (initial_coef, initial_intercept),
+        )
+
+        self._validator.feature_mask_consistency(
+            getattr(self, "_feature_mask", None), init_params
+        )
+        return init_params
+
+    def _normalize_user_params(
+        self,
+        init_params: GLMUserParams[jnp.ndarray | None],
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+    ) -> GLMUserParams[jnp.ndarray]:
+        """Fill the intercept when it is held fixed (``fit_intercept=False``).
+
+        When the intercept is not estimated the user may omit it (pass ``None`` as the
+        last element); it is replaced with zeros so downstream validation and
+        partitioning see a complete parameter set. A warning is emitted if the user
+        supplied an intercept, since it would be ignored. See
+        :meth:`nemos.base_regressor.BaseRegressor._normalize_user_params` for how this
+        fits the parameter-processing pipeline.
+        """
+        if not self._fit_intercept:
+            self._validator.check_user_params_structure(init_params)
+            warn = init_params[-1] is not None and not jnp.array_equal(
+                self._frozen_values(X, y).intercept, init_params[-1]
+            )
+            if warn:
+                warnings.warn(
+                    "`fit_intercept=False`: the provided intercept is ignored and the "
+                    "intercept is held at zero. Set `fit_intercept=True` to estimate it.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+            zeros = self._frozen_values(X, y).intercept
+            init_params = tuple([*init_params[:-1], zeros])
+        return init_params
+
+    @cast_to_jax
+    def fit(
+        self,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: ArrayLike,
+        init_params: Optional[GLMUserParams[jnp.ndarray | NDArray]] = None,
+    ):
+        """Fit GLM to neural activity.
+
+        Fit and store the model parameters as attributes
+        ``coef_`` and ``coef_``.
+
+        Parameters
+        ----------
+        X :
+            Predictors, array of shape (n_time_bins, n_features) or pytree of the same
+            shape.
+        y :
+            Target neural activity arranged in a matrix, shape (n_time_bins, ).
+        init_params :
+            2-tuple of initial parameter values: (coefficients, intercepts). If
+            None, we initialize coefficients with zeros, intercepts with the
+            log of the mean neural activity. coefficients is an array of shape
+            (n_features,) or pytree of same, intercepts is an array
+            of shape (1, )
+
+        Raises
+        ------
+        ValueError
+            If ``init_params`` is not of length two.
+        ValueError
+            If dimensionality of ``init_params`` are not correct.
+        ValueError
+            If ``X`` is not two-dimensional.
+        ValueError
+            If ``y`` is not one-dimensional.
+        ValueError
+            If solver returns at least one NaN parameter, which means it found
+              an invalid solution. Try tuning optimization hyperparameters.
+        TypeError
+            If ``init_params`` are not array-like
+        TypeError
+            If ``init_params[i]`` cannot be converted to ``jnp.ndarray`` for all ``i``
+
+        Examples
+        --------
+        >>> # example input
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
+        >>> # fit a ridge regression Poisson GLM
+        >>> import nemos as nmo
+        >>> model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
+        >>> model = model.fit(X, y)
+        >>> # get model weights and intercept
+        >>> model_weights = model.coef_
+        >>> model_intercept = model.intercept_
+
+        """
+        self._validator.validate_inputs(X, y)
+
+        # filter for non-nans, grab data if needed
+        data, y = self._preprocess_inputs(X, y)
+        # initialize params if no params are provided
+        if init_params is None:
+            init_params = self._model_specific_initialization(X, y)
+            # validate only if the user pinned something through fix_params
+            if jax.tree_util.tree_leaves(self._fix_params):
+                self._validator.validate_consistency(init_params, X=X, y=y)
+        else:
+            # TODO: improve initialization and allow partial param specs
+            self._validator.check_complete_param_specs(init_params, self.param_names)
+            init_params = self._normalize_user_params(init_params, X, y)
+            init_params = self._validator.validate_and_cast_params(init_params)
+            self._validator.validate_consistency(init_params, X=X, y=y)
+
+        self._validator.feature_mask_consistency(
+            getattr(self, "_feature_mask", None), init_params
+        )
+
+        # optimize the active parameters with the loss closed over the frozen ones,
+        # then recombine
+        active, frozen = self._partition_active(init_params)
+        self._initialize_optimizer_and_state(active, data, y, frozen_params=frozen)
+
+        try:
+            params, state, aux = self._optimizer_run(active, data, y)
+        except RuntimeError as exc:
+            if CHOLESKY_ERR_MSG not in str(exc):
+                raise
+
+            raise ValueError(
+                "Cholesky solve failed because the Hessian may not be positive definite. "
+                "This can occur when fitting partially or fully silent populations with "
+                "Newton and Ridge. Try setting "
+                "solver_kwargs={'linear_solver': 'eigh'} or "
+                "solver_kwargs={'linear_solver': 'identity_shift'} "
+                "when constructing the model or via `set_params`."
+            ) from exc
+
+        params = eqx.combine(params, frozen)
+
+        if tree_utils.pytree_map_and_reduce(
+            lambda x: jnp.any(jnp.isnan(x)), any, params
+        ):
+            raise ValueError(
+                "Solver returned at least one NaN parameter, so solution is invalid!"
+                " Try tuning optimization hyperparameters, specifically try decreasing the `stepsize` "
+                "and/or setting `acceleration=False`."
+            )
+
+        if hasattr(state, "stats") and hasattr(state.stats, "converged"):
+            converged = state.stats.converged
+        elif hasattr(state, "converged"):
+            # try if the custom defined solver has a convergence flag directly
+            converged = state.converged
+        else:
+            # custom solver with potentially undefined convergence state
+            converged = True
+            warnings.warn(
+                f"Solver state {state} does not have a ``.converged`` nor a ``.stats.converged`` "
+                f"attribute. Convergence state is unknown; assuming converged. "
+                f"To assess the optimization manually, "
+                f"inspect the ``solver_state_`` attribute of the model.",
+                UserWarning,
+            )
+        if not converged:
+            warnings.warn(
+                "The fit did not converge. "
+                "Consider the following:"
+                "\n1) Enable float64 with ``jax.config.update('jax_enable_x64', True)`` "
+                "\n2) Increase the max number of iterations or increase tolerance (if reasonable). "
+                "These parameters can be specified by providing a ``solver_kwargs`` dictionary. "
+                "For the available options see the ``self.solver.__init__`` docstrings.",
+                RuntimeWarning,
+            )
+        self._set_model_params(params)
+
+        self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X)
+        self.scale_ = self.observation_model.estimate_scale(
+            y, self._predict(params, data), dof_resid=self.dof_resid_
+        )
+
+        # note that this will include an error value, which is not the same as
+        # the output of loss. I believe it's the output of
+        # solver.l2_optimality_error
+        self.solver_state_ = state
+        self.aux_ = aux
+        return self
+
+    def stochastic_fit(
+        self,
+        data: DataLoader,
+        *,
+        init_params: Optional[GLMUserParams[jnp.ndarray | NDArray]] = None,
+        n_passes: int = 1,
+        callbacks: "Callback | list[Callback] | None" = None,
+    ):
+        """
+        Fit GLM using stochastic optimization with mini-batches.
+
+        This method provides an out-of-memory training interface for large datasets
+        that cannot fit in memory. Data is provided via a DataLoader that yields
+        mini-batches.
+
+        Parameters
+        ----------
+        data :
+            Data loader yielding (X_batch, y_batch) tuples.
+            Must be re-iterable for ``n_passes > 1``.
+
+            Note that NaNs are dropped per batch. The optimizer's update method
+            will be re-compiled for each unique batch size, slowing down computation.
+            If your data contains NaNs, it's best to drop them before or in the
+            dataloader, so that batches have mostly the same size after dropping NaNs.
+        init_params :
+            Initial parameters (coefficients, intercept).
+            If None, initialized from ``sample_batch()``.
+            To continue fitting, pass the current parameters (``model.get_model_params()``)
+        n_passes :
+            Maximum number of passes over the data. Must be >= 1.
+            Optimization may stop earlier if a callback requests a stop.
+            This parameter is commonly referred to as the number of (training) epochs
+            in the machine-learning literature.
+
+            There is no convergence-based stopping by default. To stop
+            automatically when the solver's convergence criterion is met,
+            pass ``callbacks=SolverConvergenceCallback()``. Otherwise the
+            fit will run for the full ``n_passes``.
+        callbacks :
+            Training callbacks. Accepts a single ``Callback``, a list of
+            ``Callback`` objects, or ``None`` (default, no callbacks).
+
+            To stop optimization when the solver's built-in convergence
+            criterion is met pass ``nmo.callbacks.SolverConvergenceCallback()``.
+            This is the recommended way to avoid running for the full
+            ``n_passes`` when the model has already converged.
+
+        Returns
+        -------
+        self
+            The fitted model. After fitting, ``self.stochastic_fit_summary_``
+            stores a :class:`nemos.callbacks.StochasticFitSummary`
+            describing the run.
+
+        Raises
+        ------
+        ValueError
+            If the solver doesn't support stochastic optimization.
+        TypeError
+            If data is not a DataLoader.
+
+        Examples
+        --------
+        >>> import jax.numpy as jnp
+        >>> import nemos as nmo
+        >>> from nemos.batching import ArrayDataLoader
+        >>> from nemos.callbacks import SolverConvergenceCallback
+        >>> X = jnp.ones((100, 5))
+        >>> y = jnp.ones((100,))
+        >>> loader = ArrayDataLoader(X, y, batch_size=32, shuffle="full")
+        >>> model = nmo.glm.GLM(
+        ...     solver_name="GradientDescent",
+        ...     solver_kwargs={"stepsize": 0.01, "acceleration": False},
+        ... )
+        >>> # Stop early when the solver's convergence criterion is met.
+        >>> model = model.stochastic_fit(
+        ...     loader, n_passes=10, callbacks=SolverConvergenceCallback()
+        ... )
+        """
+        # Validate solver supports stochastic
+        if not getattr(self.solver_spec.implementation, "_supports_stochastic", False):
+            raise ValueError(
+                f"Solver '{self.solver_spec.full_name}' does not support stochastic optimization. "
+                f"Use one of {[s.full_name for s in list_stochastic_solvers()]}."
+            )
+
+        if not is_data_loader(data):
+            raise TypeError(
+                "stochastic_fit requires a DataLoader (re-iterable) providing "
+                "(X_batch, y_batch) tuples."
+            )
+        loader = data
+
+        # Get raw sample batch for initialization
+        raw_sample_X, raw_sample_y = loader.sample_batch()
+        self._validator.validate_inputs(raw_sample_X, raw_sample_y)
+
+        # Preprocess sample batch (cast to jax, drop nans, etc.)
+        sample_X, sample_y = self._preprocess_inputs(raw_sample_X, raw_sample_y)
+
+        if not self._has_constant_scale():
+            warnings.warn(
+                "`stochastic_fit()` will not populate `scale_` for observation models whose scale"
+                " depends on the data (e.g., Gamma, Gaussian), and `score()` will raise after this fit."
+                " Tip: for evaluation and model comparison use `compute_loss(X, y)` instead.",
+                UserWarning,
+            )
+
+        # Initialize params if not provided (using preprocessed batch)
+        if init_params is None:
+            init_params = self._model_specific_initialization(sample_X, sample_y)
+        else:
+            init_params = self._normalize_user_params(init_params, sample_X, sample_y)
+            init_params = self._validator.validate_and_cast_params(init_params)
+            self._validator.validate_consistency(init_params, X=sample_X, y=sample_y)
+
+        self._validator.feature_mask_consistency(
+            getattr(self, "_feature_mask", None), init_params
+        )
+
+        # Wrap data loader to preprocess each batch from now on
+        preprocessed_loader = _PreprocessedDataLoader(loader, self._preprocess_inputs)
+
+        # TODO: Add a streaming version setting the right step- and batch size for SVRG that uses the full data
+        # Run stochastic optimization on the active parameters with the loss closed
+        # over the frozen ones, then recombine. The context is created here so it is
+        # available after the run (for the summary); ``ctx.frozen`` lets ``ctx.params``
+        # expose the complete parameters to callbacks. ``stochastic_run`` sets
+        # ``ctx.solver`` itself.
+        ctx = TrainingContext(model=self)
+
+        active, frozen = self._partition_active(init_params)
+        self._initialize_optimizer_and_state(
+            active, sample_X, sample_y, frozen_params=frozen
+        )
+        ctx.frozen = frozen
+        self._warn_about_estimated_svrg_settings()
+        params, state, aux = self._solver.stochastic_run(
+            active,
+            preprocessed_loader,
+            n_passes=n_passes,
+            callback=_normalize_callbacks(callbacks),
+            ctx=ctx,
+        )
+        params = eqx.combine(params, frozen)
+
+        if tree_utils.pytree_map_and_reduce(
+            lambda x: jnp.any(jnp.isnan(x)), any, params
+        ):
+            raise ValueError(
+                "Solver returned at least one NaN parameter, so solution is invalid!"
+                " Try tuning optimization hyperparameters, specifically try decreasing the `stepsize`."
+            )
+
+        # not warning about non-convergence
+
+        # Store results
+        self._set_model_params(params)
+        self.solver_state_ = state
+        self.aux_ = aux
+        self.stochastic_fit_summary_ = ctx.to_summary()
+
+        # instead of keeping it as None, for some observation models we can set the scale_ easily
+        if self._has_constant_scale():
+            # for these families `estimate_scale` ignores `y`, `predicted_rate`, and `dof_resid`
+            # the sample batch and `dof_resid=1.0` are placeholders just to satisfy the shared signature
+            self.scale_ = self.observation_model.estimate_scale(
+                sample_y,
+                self._predict(params, sample_X),
+                dof_resid=1.0,
+            )
+        else:
+            # TODO: estimate residual dof and data-dependent scale after stochastic_fit
+            self.scale_ = None
+        self.dof_resid_ = None
+
+        return self
+
+    def _warn_about_estimated_svrg_settings(self):
+        """Warn if SVRG settings are estimated on sample data instead of the full dataset."""
+        if not isinstance(self._solver, (WrappedSVRG, WrappedProxSVRG)):
+            return
+
+        batch_size_estimated_for_svrg = False
+        if (
+            self.inverse_link_function in (jax.nn.softplus, softplus)
+            and isinstance(self.observation_model, obs.PoissonObservations)
+            and self.solver_kwargs.get("stepsize", None) is None
+        ):
+            parameters_set = "stepsize"
+            if (
+                isinstance(self.regularizer, Ridge)
+                and self.solver_kwargs.get("batch_size", None) is None
+            ):
+                parameters_set += " and batch size"
+                batch_size_estimated_for_svrg = True
+
+            warnings.warn(
+                f"Attempted to set the optimal {parameters_set} for {self.solver_name} using the loader's"
+                " sample batch instead of the full data, which may be inaccurate."
+                " A way to calculate the optimal SVRG parameters on a full out-of-memory dataset"
+                " will be provided in the future."
+                " As a workaround, calling `model._optimize_solver_params` on the largest possible"
+                " chunk of data might provide better estimates."
+            )
+
+        batch_size_given_for_svrg = (
+            self.solver_kwargs.get("batch_size", None) is not None
+        )
+
+        if batch_size_given_for_svrg or batch_size_estimated_for_svrg:
+            batch_size_source = "given" if batch_size_given_for_svrg else "estimated"
+            warnings.warn(
+                f'{self.solver_name} does not use the {batch_size_source} "batch_size"'
+                " solver argument for stochastic optimization."
+                " Effective batch size is determined by the data loader."
+            )
+
+    def _has_constant_scale(self) -> bool:
+        """
+        Whether the observation model's scale is independent of the data.
+
+        When True, ``stochastic_fit`` can populate ``scale_`` without a
+        finalization pass over the data. When False (Gamma, Gaussian),
+        ``scale_`` is left unset.
+
+        Quick fix until a streaming residual d.o.f. and scale estimation is added.
+        """
+        return isinstance(
+            self.observation_model,
+            (
+                obs.PoissonObservations,
+                obs.BernoulliObservations,
+                obs.CategoricalObservations,
+                obs.NegativeBinomialObservations,
+            ),
+        )
+
+    def _get_model_params(self) -> GLMParams[jnp.ndarray]:
+        """Pack coef_ and intercept_  into a params pytree.
+
+        This method should be overwritten in case the parameter structure changes,
+        or if new regression models will have a different parameter structure.
+        """
+        # Retrieve parameter tree
+        return GLMParams(self.coef_, self.intercept_)
+
+    def _set_model_params(self, params: GLMParams[jnp.ndarray]):
+        """Unpack and store params pytree to coef_ and intercept_.
+
+        This method should be overwritten in case the parameter structure changes,
+        or if new regression models will have a different parameter structure.
+        """
+        # Store parameters
+        self.coef_: DESIGN_INPUT_TYPE = params.coef
+        self.intercept_: jnp.ndarray = params.intercept
+
+    @support_pynapple(conv_type="jax")
+    def simulate(
+        self,
+        random_key: jax.Array,
+        feedforward_input: DESIGN_INPUT_TYPE,
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        """Simulate neural activity in response to a feed-forward input.
+
+        Parameters
+        ----------
+        random_key :
+            jax.random.key for seeding the simulation.
+        feedforward_input :
+            External input predictors to the model, representing factors like convolved currents,
+            light intensities, etc. When not provided, the simulation is done with coupling-only.
+            Array of shape (n_time_bins, n_basis_input) or pytree with leaves of the same shape.
+
+        Returns
+        -------
+        simulated_activity :
+            Simulated observations (spike counts for a Poisson GLM) over time.
+            Shape: ``(n_time_bins, )``.
+        firing_rates :
+            Simulated rates over time. Shape, ``(n_time_bins, )``.
+
+        Raises
+        ------
+        NotFittedError
+            - If the model hasn't been fitted prior to calling this method.
+        ValueError
+            - If the instance has not been previously fitted.
+
+        Examples
+        --------
+        >>> # example input
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
+        >>> # define and fit model
+        >>> import nemos as nmo
+        >>> model = nmo.glm.GLM()
+        >>> model = model.fit(X, y)
+        >>> # generate spikes and rates
+        >>> random_key = jax.random.key(123)
+        >>> Xnew = np.random.normal(size=(20, X.shape[1]))
+        >>> spikes, rates = model.simulate(random_key, Xnew)
+
+        See Also
+        --------
+        :meth:`nemos.glm.GLM.predict`
+            Method to predict rates based on the model's parameters.
+        """
+        # check if the model is fit
+        self._check_is_fit()
+
+        params = self._get_model_params()
+
+        # if all invalid, raise error
+        validation.error_all_invalid(feedforward_input)
+
+        # check input dimensionality
+        self._validator.validate_inputs(X=feedforward_input)
+
+        # validate input and params consistency
+        self._validator.validate_consistency(params, X=feedforward_input)
+        self._validator.feature_mask_consistency(
+            getattr(self, "_feature_mask", None), params
+        )
+
+        # pre-process
+        feedforward_input, _ = self._preprocess_inputs(
+            X=feedforward_input, drop_nans=False
+        )
+
+        predicted_rate = self._predict(params, feedforward_input)
+        return (
+            self._observation_model.sample_generator(
+                key=random_key, predicted_rate=predicted_rate, scale=self.scale_
+            ),
+            predicted_rate,
+        )
+
+    def _estimate_resid_degrees_of_freedom(
+        self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None
+    ) -> jnp.ndarray:
+        """
+        Estimate the degrees of freedom of the residuals.
+
+        Parameters
+        ----------
+        self :
+            A fitted GLM model.
+        X :
+            The design matrix.
+        n_samples :
+            The number of samples observed. If not provided, n_samples is set to ``X.shape[0]``. If the fit is
+            batched, the n_samples could be larger than ``X.shape[0]``.
+
+        Returns
+        -------
+        :
+            An estimate of the degrees of freedom of the residuals.
+        """
+        x_leaves = jax.tree_util.tree_leaves(X)
+        # Convert a pytree to a design-matrix with pytrees
+        X = jnp.hstack(x_leaves)
+
+        if n_samples is None:
+            n_samples = X.shape[0]
+        else:
+            if not isinstance(n_samples, int):
+                raise TypeError(
+                    "`n_samples` must be `None` or of type `int`. Type {type(n_sample)} provided "
+                    "instead!"
+                )
+
+        params = self._get_model_params()
+        # count dof only over the parameters the solver estimates: frozen leaves
+        # (e.g. the intercept when ``fit_intercept=False``) are None in the active
+        # tree and consume no degrees of freedom.
+        active, _ = self._partition_active(params)
+        intercept_dof = 0 if active.intercept is None else 1
+        active_cols = _active_columns(x_leaves, active.coef)
+        # if the regularizer is lasso use the non-zero
+        # coeff as an estimate of the dof
+        # see https://arxiv.org/abs/0712.0881
+        if isinstance(self.regularizer, (GroupLasso, Lasso, ElasticNet)):
+            resid_dof = tree_utils.pytree_map_and_reduce(
+                lambda x: ~jnp.isclose(x, jnp.zeros_like(x)),
+                lambda x: sum([jnp.sum(i, axis=0) for i in x]),
+                active.coef,
+            )
+            return n_samples - resid_dof - intercept_dof
+
+        elif isinstance(self.regularizer, Ridge):
+            # for Ridge, use the tot parameters (estimated features + intercept)
+            return (
+                n_samples - self._n_estimated_features(active_cols) - intercept_dof
+            ) * jnp.ones_like(params.intercept)
+        else:
+            # for UnRegularized, use the rank
+            return (
+                n_samples - self._design_rank(X, active_cols) - intercept_dof
+            ) * jnp.ones_like(params.intercept)
+
+    def _n_estimated_features(self, active_cols: jnp.ndarray) -> jnp.ndarray:
+        """Count the coefficients the model estimates, as a scalar or one per neuron.
+
+        Every active column of the design contributes a coefficient here.
+        ``PopulationGLM`` overrides this: a masked-out feature is not estimated for that
+        neuron.
+        """
+        return jnp.sum(active_cols)
+
+    def _design_rank(self, X: jnp.ndarray, active_cols: jnp.ndarray) -> jnp.ndarray:
+        """Rank of the design the model estimates over, as a scalar or one per neuron.
+
+        The rank, rather than the column count, is what an unpenalized fit consumes:
+        collinear columns share degrees of freedom. Frozen columns are dropped rather
+        than zeroed: a rank is an SVD away and the smaller matrix is the better
+        conditioned one. ``PopulationGLM`` overrides this to take the rank per neuron,
+        since the mask gives each neuron its own design.
+        """
+        X = X[:, active_cols]
+        # every coefficient frozen leaves no design to take the rank of
+        if X.shape[1] == 0:
+            return jnp.asarray(0)
+        return jnp.linalg.matrix_rank(X)
+
+    def _initialize_optimizer_and_state(
+        self,
+        init_params: GLMParams[jnp.ndarray],
+        X: dict[str, jnp.ndarray] | jnp.ndarray,
+        y: jnp.ndarray,
+        frozen_params: GLMParams[jnp.ndarray | None] = None,
+    ) -> SolverState:
+        """Initialize the solver by instantiating its init_state, update and, run methods.
+
+        This method also prepares the solver's state by using the initialized model parameters and data.
+        This setup is ready to be used for running the solver's optimization routines.
+
+        Parameters
+        ----------
+        init_params :
+            Initial parameters for the model.
+        X :
+            The predictors used in the model fitting process. This can include feature matrices or other structures
+            compatible with the model's design.
+        y :
+            The response variables or outputs corresponding to the predictors. Used to initialize parameters when
+            they are not provided.
+
+        Returns
+        -------
+        SolverState
+            The initialized solver state
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
+        >>> model = nmo.glm.GLM()
+        >>> params = model.initialize_params(X, y)
+        >>> opt_state = model.initialize_optimizer_and_state(params, X, y)
+        >>> # Now ready to run optimization or update steps
+        """
+        # ``eqx.partition`` leaves ``None`` on the frozen leaves and jax drops those, so
+        # an empty leaf list means every parameter is fixed and there is nothing to run.
+        if not jax.tree_util.tree_leaves(init_params):
+            return self._no_op_optimizer()
+
+        opt_solver_kwargs = self._optimize_solver_params(X, y)
+        #  set up the solver init/run/update attrs
+        self._solver = self._instantiate_solver(
+            self._compute_loss,
+            init_params=init_params,
+            solver_kwargs=opt_solver_kwargs,
+            frozen_params=frozen_params,
+        )
+        self._optimizer_init_state = self._solver.init_state
+        self._optimizer_update = self._solver.update
+        self._optimizer_run = self._solver.run
+        opt_state = self._optimizer_init_state(init_params, X, y)
+        return opt_state
+
+    @cast_to_jax
+    def update(
+        self,
+        params: GLMUserParams[jnp.ndarray | NDArray],
+        opt_state: SolverState,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        n_samples: Optional[int] = None,
+        **kwargs,
+    ) -> StepResult:
+        """Update the model parameters and solver state.
+
+        This method performs a single optimization step using the model's current solver.
+        It updates the model's coefficients and intercept based on the provided parameters, predictors (X),
+        responses (y), and the current optimization state. This method is particularly useful for iterative
+        model fitting, especially in scenarios where model parameters need to be updated incrementally,
+        such as online learning or when dealing with very large datasets that do not fit into memory at once.
+
+        Parameters
+        ----------
+        params
+            The current model parameters, typically a tuple of coefficients and intercepts.
+        opt_state
+            The current state of the optimizer, encapsulating information necessary for the
+            optimization algorithm to continue from the current state. This includes gradients,
+            step sizes, and other optimizer-specific metrics.
+        X
+            The predictors used in the model fitting process, which may include feature matrices
+            or a pytree of arrays. Shape ``(n_time_bins, n_features)``.
+        y
+            The response variable or output data corresponding to the predictors. Shape ``(n_time_bins,)``.
+        *args
+            Additional positional arguments to be passed to the solver's update method.
+        n_samples
+            The total number of samples. Usually larger than the samples of an individual batch,
+            the ``n_samples`` are used to estimate the scale parameter of the GLM.
+        **kwargs
+            Additional keyword arguments to be passed to the solver's update method.
+
+        Returns
+        -------
+        params
+            Updated model parameters (coefficients, intercepts).
+        state
+            Updated optimizer state.
+
+        Raises
+        ------
+        ValueError
+            If the solver has not been instantiated or if the solver returns NaN values
+            indicating an invalid update step, typically due to numerical instabilities
+            or inappropriate solver configurations.
+
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> import jax
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
+        >>> glm_instance = nmo.glm.GLM()
+        >>> params = glm_instance.initialize_params(X, y)
+        >>> opt_state = glm_instance.initialize_optimizer_and_state(params, X, y)
+        >>> new_params, new_opt_state = glm_instance.update(params, opt_state, X, y)
+
+        """
+        if self._solver is None:
+            raise RuntimeError("Attempt at update when solver was in invalid state.")
+
+        # find non-nans
+        X, y = tree_utils.drop_nans(X, y)
+
+        # grab the data
+        data = X.data if isinstance(X, FeaturePytree) else X
+
+        # wrap into GLM params, this assumes params are well structured,
+        # if initializaiton is done via `initialize_optimizer_and_state` it
+        # should be fine
+        params = self._validator.to_model_params(params)
+
+        active, _ = self._partition_active(params)
+
+        # perform a one-step update
+        updated_params, updated_state, aux = self._optimizer_update(
+            active, opt_state, data, y, *args, **kwargs
+        )
+
+        # the frozen leaves are pinned by the model settings — the same values the
+        # loss closure was built with — not by the params the caller passes in, so
+        # a frozen leaf may be omitted (None) in ``params``.
+        updated_params = eqx.combine(updated_params, self._frozen_values(X, y))
+
+        # store params and state
+        self._set_model_params(updated_params)
+        self.solver_state_ = updated_state
+        self.aux_ = aux
+
+        # estimate the scale
+        self.dof_resid_ = self._estimate_resid_degrees_of_freedom(
+            X, n_samples=n_samples
+        )
+        self.scale_ = self.observation_model.estimate_scale(
+            y, self._predict(updated_params, data), dof_resid=self.dof_resid_
+        )
+
+        return self._validator.from_model_params(updated_params), updated_state
+
+    def _get_optimal_solver_params_config(self):
+        """Return the functions for computing default step and batch size for the solver."""
+        return glm_compute_optimal_stepsize_configs(self)
+
+    def __repr__(self):
+        """Representation of the GLM class."""
+        return format_repr(
+            self,
+            multiline=True,
+            use_name_keys=["inverse_link_function"],
+            array_keys=["classes"],
+        )
+
+    def __sklearn_clone__(self) -> GLM:
+        """Clone the GLM."""
+        params = self.get_params(deep=False)
+        klass = self.__class__(**params)
+        return klass
+
+    def save_params(self, filename: Union[str, Path]):
+        """
+        Save GLM model parameters to a .npz file.
+
+        This method allows to reuse the model parameters. The saved parameters can be loaded back
+        into a GLM instance using the `load_params` function.
+
+        Parameters
+        ----------
+        filename :
+            The name of the file where the model parameters will be saved. The file will be saved in `.npz` format.
+
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> # Create a GLM model with specified parameters
+        >>> solver_args = {"stepsize": 0.1, "maxiter": 1000, "tol": 1e-6}
+        >>> model = nmo.glm.GLM(
+        ...     regularizer="Ridge",
+        ...     regularizer_strength=0.1,
+        ...     observation_model="Gamma",
+        ...     solver_name="BFGS",
+        ...     solver_kwargs=solver_args,
+        ... )
+        >>> for key, value in model.get_params().items():
+        ...     print(f"{key}: {value}")
+        fit_intercept: True
+        fix_params: (None, None)
+        inverse_link_function: <function one_over_x at ...>
+        observation_model: GammaObservations()
+        regularizer: Ridge()
+        regularizer_strength: 0.1...
+        solver_kwargs: {'stepsize': 0.1, 'maxiter': 1000, 'tol': 1e-06}
+        solver_name: BFGS
+        >>> # Save the model parameters to a file
+        >>> model.save_params("model_params.npz")
+        >>> # Load the model from the saved file
+        >>> model = nmo.load_model("model_params.npz")
+        >>> # Model has the same parameters before and after load
+        >>> for key, value in model.get_params().items():  # doctest: +ELLIPSIS
+        ...     print(f"{key}: {value}")
+        fit_intercept: True
+        fix_params: (None, None)
+        inverse_link_function: <function one_over_x at ...>
+        observation_model: GammaObservations()
+        regularizer: Ridge()
+        regularizer_strength: 0.1
+        solver_kwargs: {'maxiter': 1000, 'stepsize': 0.1, 'tol': 1e-06}
+        solver_name: BFGS
+
+        >>> # Saving and loading a custom inverse link function
+        >>> model = nmo.glm.GLM(
+        ...     observation_model="Poisson", inverse_link_function=lambda x: x**2
+        ... )
+        >>> model.save_params("model_params.npz")
+        >>> # Provide a mapping for the custom link function when loading.
+        >>> mapping_dict = {
+        ...     "inverse_link_function": lambda x: x**2,
+        ... }
+        >>> loaded_model = nmo.load_model("model_params.npz", mapping_dict=mapping_dict)
+        >>> # Now the loaded model will have the updated solver_name and solver_kwargs
+        >>> for key, value in loaded_model.get_params().items():
+        ...     print(f"{key}: {value}")
+        fit_intercept: True
+        fix_params: (None, None)
+        inverse_link_function: <function <lambda> at ...>
+        observation_model: PoissonObservations()
+        regularizer: UnRegularized()
+        regularizer_strength: None
+        solver_kwargs: {}
+        solver_name: LBFGS
+        """
+        # initialize saving dictionary
+        fit_attrs = self._get_fit_state()
+        fit_attrs.pop("solver_state_")
+        fit_attrs.pop("stochastic_fit_summary_", None)
+        string_attrs = ["inverse_link_function"]
+
+        self._save_params(filename, fit_attrs, string_attrs)
+
+    def _get_params_shape(self, X, y) -> GLMParams[tuple[int]]:
+        """Infer the parameter shape from validated X and y."""
+        is_population = jnp.ndim(y) > 1
+        n_observations = jnp.shape(y)[1] if is_population else 1
+        extra_shape = (n_observations,) if is_population else ()
+        coef_shapes = jax.tree_util.tree_map(
+            lambda x: (jnp.shape(x)[1], *extra_shape), X
+        )
+        intercept_shape = (n_observations,)
+        return GLMParams(coef=coef_shapes, intercept=intercept_shape)
+
+
+def _var_func_of_mu(model) -> Callable:
+    """Return the variance function V(mu) for a GLM observation model.
+
+    Parameters
+    ----------
+    model :
+        A GLM instance with an ``observation_model`` attribute.
+
+    Returns
+    -------
+    Callable
+        A function mapping the mean ``mu`` to the variance ``V(mu)``.
+
+    Raises
+    ------
+    NotImplementedError
+        If the observation model is not recognized.
+    """
+    obs_name = model.observation_model.__class__.__name__
+    var_funcs = {
+        "PoissonObservations": lambda mu: mu,
+        "GammaObservations": lambda mu: mu**2,
+        "GaussianObservations": lambda mu: jnp.full_like(mu, 0.5),
+        "BernoulliObservations": lambda mu: mu * (1.0 - mu),
+    }
+    if obs_name not in var_funcs:
+        raise NotImplementedError(f"No variance function defined for {obs_name!r}")
+    return var_funcs[obs_name]
+
+
+class PopulationGLM(GLM):
+    """
+    Population Generalized Linear Model.
+
+    This class implements a Generalized Linear Model for a neural population.
+    This GLM implementation allows users to model the activity of a population of neurons based on a
+    combination of exogenous inputs (like convolved currents or light intensities) and a choice of observation model.
+    It is suitable for scenarios where the relationship between predictors and the response
+    variable might be non-linear, and the residuals  don't follow a normal distribution. The predictors must be
+    stored in tabular format, shape (n_timebins, num_features) or as a pytree of arrays of the same shape.
+    Below is a table listing the default and available solvers for each regularizer.
+
+    +---------------+------------------+-------------------------------------------------------+
+    | Regularizer   | Default Solver   | Available Solvers                                     |
+    +===============+==================+=======================================================+
+    | UnRegularized | LBFGS            | GradientDescent, BFGS, LBFGS, NonlinearCG,            |
+    |               |                  | ProximalGradient, SVRG, ProxSVRG, Newton,             |
+    |               |                  | ProximalNewton                                        |
+    +---------------+------------------+-------------------------------------------------------+
+    | Ridge         | Newton           | GradientDescent, BFGS, LBFGS, NonlinearCG,            |
+    |               |                  | ProximalGradient, SVRG, ProxSVRG, Newton,             |
+    |               |                  | ProximalNewton                                        |
+    +---------------+------------------+-------------------------------------------------------+
+    | Lasso         | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |
+    +---------------+------------------+-------------------------------------------------------+
+    | ElasticNet    | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |
+    +---------------+------------------+-------------------------------------------------------+
+    | GroupLasso    | ProximalGradient | ProximalGradient, ProxSVRG, ProximalNewton            |
+    +---------------+------------------+-------------------------------------------------------+
+
+    The default solver for ``Ridge`` is ``Newton``: the ridge penalty makes the Hessian positive
+    definite, so each step is a stable Cholesky solve that converges in a handful of iterations at the
+    feature counts typical of neural GLMs. ``Newton`` is also available for ``UnRegularized`` problems
+    but is not the default there, since the unpenalized Hessian can be singular. A Newton step solves a
+    Hessian system, costing ``O(d**2)`` memory and ``O(d**3)`` compute in the number of features ``d``,
+    so for models with many features ``LBFGS`` is preferable: it is memory-light and more robust on
+    noisy objective landscapes. Switch solver by passing ``solver_name=...`` at initialization.
+
+    **Fitting Large Models**
+
+    For very large models, you may consider using the Stochastic Variance Reduced Gradient
+    :class:`nemos.solvers._svrg.SVRG` or its proximal variant
+    (:class:`nemos.solvers._svrg.ProxSVRG`) solver,
+    which take advantage of batched computation. You can change the solver by passing
+    ``"SVRG"`` or ``"ProxSVRG"`` as ``solver_name`` at model initialization.
+
+    The performance of the SVRG solver depends critically on the choice of ``batch_size`` and ``stepsize``
+    hyperparameters. These parameters control the size of the mini-batches used for gradient computations
+    and the step size for each iteration, respectively. Improper selection of these parameters can lead to slow
+    convergence or even divergence of the optimization process.
+
+    To assist with this, for certain GLM configurations, we provide ``batch_size`` and ``stepsize`` default
+    values that are theoretically guaranteed to ensure fast convergence.
+
+    Below is a list of the configurations for which we can provide guaranteed hyperparameters:
+
+    +---------------------------------------+-----------+-------------+
+    | GLM / PopulationGLM Configuration     | Stepsize  | Batch Size  |
+    +=======================================+===========+=============+
+    | Poisson + soft-plus + UnRegularized   | ✅         | ❌         |
+    +---------------------------------------+-----------+-------------+
+    | Poisson + soft-plus + Ridge           | ✅         | ✅         |
+    +---------------------------------------+-----------+-------------+
+    | Poisson + soft-plus + Lasso           | ✅         | ❌         |
+    +---------------------------------------+-----------+-------------+
+    | Poisson + soft-plus + GroupLasso      | ✅         | ❌         |
+    +---------------------------------------+-----------+-------------+
+
+    Parameters
+    ----------
+    observation_model :
+        Observation model to use. The model describes the distribution of the neural activity.
+        Default is the Poisson model.
+    inverse_link_function :
+        A function that maps the linear combination of predictors into a firing rate. The default depends
+        on the observation model, see the table above.
+    regularizer :
+        Regularization to use for model optimization. Defines the regularization scheme
+        and related parameters.
+        Default is UnRegularized regression.
+    regularizer_strength :
+        Typically a float. Default is None. Sets the regularizer strength.
+        If a user does not pass a value, and it is needed for regularization,
+        a warning will be raised and the strength will default to 1.0.
+        For finer control, the user can pass a pytree that matches the
+        parameter structure to regularize parameters differentially.
+    fit_intercept :
+        When True (default), an intercept term is fit. When False, only the coefficients are fit.
+        An intercept pinned through ``fix_params`` takes precedence over this flag.
+    fix_params :
+        Parameters to hold fixed during fitting, as a ``(coef, intercept)`` tuple with
+        ``coef`` of shape ``(n_features, n_neurons)`` and ``intercept`` of shape
+        ``(n_neurons,)``. An array pins that parameter at the value provided, ``None``
+        leaves it to be learned. When ``X`` is a pytree, ``coef`` mirrors its structure,
+        its leaves have shape ``(n_features_in_leaf, n_neurons)``, and each leaf is
+        pinned or learned on its own. Defaults to ``None``, which learns every parameter.
+    solver_name :
+        Solver to use for model optimization. Defines the optimization scheme and related parameters.
+        The solver must be an appropriate match for the chosen regularizer.
+        Default is ``None``. If no solver specified, one will be chosen based on the regularizer.
+        Please see table above for regularizer/optimizer pairings.
+    solver_kwargs :
+        Optional dictionary for keyword arguments that are passed to the solver when instantiated.
+        E.g. stepsize, tol, acceleration, etc.
+         For details on each solver's kwargs, see `get_accepted_arguments` and `get_solver_documentation`.
+    feature_mask :
+        A mask of 0s and 1s matching the shape of the coefficients: a matrix of shape
+        (num_features, num_neurons), or a PyTree mirroring the structure of ``X`` whose
+        leaves have shape (num_features_in_leaf, num_neurons).
+        The mask will be used to select which features are used as predictors for which neuron.
+
+    Attributes
+    ----------
+    intercept_ :
+        Model baseline linked firing rate parameters, e.g. if the link is the logarithm, the baseline
+        firing rate will be ``jnp.exp(model.intercept_)``.
+    coef_ :
+        Basis coefficients for the model.
+    solver_state_ :
+        State of the solver after fitting. May include details like optimization error.
+    stochastic_fit_summary_ :
+        Summary of the most recent stochastic training run, including the
+        final pass and batch indices and any callback stop reason.
+
+    Raises
+    ------
+    TypeError
+        If provided ``regularizer`` or ``observation_model`` are not valid.
+    TypeError
+        If provided ``feature_mask`` is not an array-like of dimension two.
+
+    Examples
+    --------
+    **Fit a PopulationGLM**
+
+    Basic model fitting for a population of neurons:
+
+    >>> import jax.numpy as jnp
+    >>> import numpy as np
+    >>> import nemos as nmo
+    >>> np.random.seed(123)
+    >>> num_samples, num_features, num_neurons = 100, 3, 2
+    >>> X = np.random.normal(size=(num_samples, num_features))
+    >>> weights = np.array([[0.5, 0.0], [-0.5, -0.5], [0.0, 1.0]])
+    >>> y = np.random.poisson(np.exp(X.dot(weights)))
+    >>> model = nmo.glm.PopulationGLM().fit(X, y)
+    >>> model.coef_.shape
+    (3, 2)
+
+    **Mask Coefficients with an Array**
+
+    Use a feature mask to specify which features predict each neuron.
+    The mask has shape ``(num_features, num_neurons)``:
+
+    >>> feature_mask = np.array([[1, 0], [1, 1], [0, 1]])
+    >>> model = nmo.glm.PopulationGLM(feature_mask=feature_mask).fit(X, y)
+    >>> model.coef_
+    Array(...)
+
+    **Use a Dict of Arrays as Input**
+
+    Features can be passed as a dict (or any JAX pytree). The feature mask
+    should mirror the same structure, each leaf shaped like its coefficients,
+    ``(num_features_in_leaf, num_neurons)``:
+
+    >>> feature_1 = np.random.normal(size=(num_samples, 2))
+    >>> feature_2 = np.random.normal(size=(num_samples, 1))
+    >>> X_dict = {"feature_1": feature_1, "feature_2": feature_2}
+    >>> weights = dict(
+    ...     feature_1=jnp.array([[0.0, 0.5], [0.0, -0.5]]),
+    ...     feature_2=jnp.array([[1.0, 0.0]]),
+    ... )
+    >>> rate = np.exp(
+    ...     X_dict["feature_1"].dot(weights["feature_1"])
+    ...     + X_dict["feature_2"].dot(weights["feature_2"])
+    ... )
+    >>> y = np.random.poisson(rate)
+    >>> feature_mask = {
+    ...     "feature_1": jnp.array([[0, 1], [0, 1]], dtype=jnp.int32),
+    ...     "feature_2": jnp.array([[1, 0]], dtype=jnp.int32),
+    ... }
+    >>> model = nmo.glm.PopulationGLM(feature_mask=feature_mask).fit(X_dict, y)
+    >>> model.coef_
+    {...}
+
+    **Customize the Observation Model**
+
+    Use a Gamma observation model for continuous positive data:
+
+    >>> model = nmo.glm.PopulationGLM(observation_model="Gamma")
+    >>> model.observation_model
+    GammaObservations()
+
+    **Use Regularization**
+
+    Fit with Ridge regularization:
+
+    >>> X = np.random.normal(size=(num_samples, num_features))
+    >>> weights = np.array([[0.5, 0.0], [-0.5, -0.5], [0.0, 1.0]])
+    >>> y = np.random.poisson(np.exp(X.dot(weights)))
+    >>> model = nmo.glm.PopulationGLM(
+    ...     regularizer="Ridge", regularizer_strength=0.1
+    ... ).fit(X, y)
+    >>> model.regularizer
+    Ridge()
+    """
+
+    _validator_class = PopulationGLMValidator
+    # One block per neuron, since the Hessian is assembled by vmapping over the neuron
+    # axis: axis 1 of ``coef``, which is ``(n_features, n_neurons)``, and axis 0 of
+    # ``intercept``. The sign and the per-leaf claims are inherited from ``GLM`` and hold
+    # block by block — each neuron's intercept block is that neuron's sum of weights.
+    _hess_structure = MatrixStructure.BLOCK_DIAGONAL
+    _hess_batch_axes = GLMParams(1, 0, None)
+
+    def __init__(
+        self,
+        observation_model: (
+            REGRESSION_GLM_TYPES
+            | Literal["Poisson", "Gamma", "Gaussian", "Bernoulli", "NegativeBinomial"]
+        ) = "Poisson",
+        inverse_link_function: Optional[Callable] = None,
+        regularizer: Union[str, Regularizer] = "UnRegularized",
+        regularizer_strength: Any = None,
+        fit_intercept: bool = True,
+        fix_params: Optional[GLMUserParams[jnp.ndarray | NDArray | None]] = None,
+        solver_name: str = None,
+        solver_kwargs: dict = None,
+        feature_mask: Optional[jnp.ndarray] = None,
+    ):
+        super().__init__(
+            observation_model=observation_model,
+            inverse_link_function=inverse_link_function,
+            regularizer_strength=regularizer_strength,
+            regularizer=regularizer,
+            fit_intercept=fit_intercept,
+            fix_params=fix_params,
+            solver_name=solver_name,
+            solver_kwargs=solver_kwargs,
+        )
+        self._metadata = None
+        self.feature_mask = feature_mask
+
+    def __sklearn_tags__(self):
+        """Return Population GLM specific estimator tags."""
+        tags = super().__sklearn_tags__()
+        # Tags for y
+        tags.target_tags = TargetTags(
+            required=True, one_d_labels=False, two_d_labels=True
+        )
+        return tags
+
+    @property
+    def feature_mask(self) -> Union[jnp.ndarray, dict[str, jnp.ndarray]]:
+        """
+        Mask indicating which features are used for each neuron.
+
+        The feature mask matches the coefficients (``coef_``) leaf by leaf, in both tree
+        structure and shape:
+
+        - **Array input**: Shape ``(n_features, n_neurons)``. Each entry ``[i, j]``
+          indicates whether feature ``i`` is used for neuron ``j`` (1 = used, 0 = masked).
+
+        - **Pytree**: A pytree with structure matching that of ``coef_``, each leaf shaped
+          like its coefficients, ``(n_features_in_leaf, n_neurons)``. Entry ``[i, j]`` of a
+          leaf indicates whether feature ``i`` of that group is used for neuron ``j``.
+
+        Returns
+        -------
+        jnp.ndarray or dict[str, jnp.ndarray]
+            The feature mask, or None if not set.
+        """
+        return self._feature_mask
+
+    @feature_mask.setter
+    def feature_mask(self, feature_mask: Union[DESIGN_INPUT_TYPE, dict]):
+        # do not allow reassignment after fit
+        if (self.coef_ is not None) and (self.intercept_ is not None):
+            raise AttributeError(
+                "property 'feature_mask' of 'populationGLM' cannot be set after fitting."
+            )
+
+        self._feature_mask = self._validator.validate_and_cast_feature_mask(
+            feature_mask
+        )
+        # the loss and the Hessian read the mask at call time, so a solver built
+        # against the previous mask is stale.
+        self._invalidate_solver()
+
+    @strip_metadata(arg_num=1, arg_name="y")
+    def fit(
+        self,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: ArrayLike,
+        init_params: Optional[GLMUserParams[jnp.ndarray | NDArray]] = None,
+    ):
+        """Fit GLM to the activity of a population of neurons.
+
+        Fit and store the model parameters as attributes ``coef_`` and ``intercept_``.
+        Each neuron can have different predictors. The ``feature_mask`` will determine which
+        feature will be used for which neurons. See the note below for more information on
+        the ``feature_mask``.
+
+        Parameters
+        ----------
+        X :
+            Predictors, array of shape (n_timebins, n_features) or pytree of the same
+            shape.
+        y :
+            Target neural activity arranged in a matrix, shape (n_timebins, n_neurons).
+        init_params :
+            2-tuple of initial parameter values: (coefficients, intercepts). If
+            None, we initialize coefficients with zeros, intercepts with the
+            log of the mean neural activity. coefficients is an array of shape
+            (n_features, n_neurons) or pytree of the same shape, intercepts is an array
+            of shape (n_neurons, )
+
+        Raises
+        ------
+        ValueError
+            If ``init_params`` is not of length two.
+        ValueError
+            If dimensionality of ``init_params`` are not correct.
+        ValueError
+            If ``X`` is not two-dimensional.
+        ValueError
+            If ``y`` is not two-dimensional.
+        ValueError
+            If the ``feature_mask`` is not of the right shape.
+        ValueError
+            If solver returns at least one NaN parameter, which means it found
+            an invalid solution. Try tuning optimization hyperparameters.
+        TypeError
+            If ``init_params`` are not array-like
+        TypeError
+            If ``init_params[i]`` cannot be converted to jnp.ndarray for all i
+
+        Notes
+        -----
+        The ``feature_mask`` is used to select features for each neuron, and it is
+        an NDArray or a PyTree of 0s and 1s. In particular,
+
+        - If the mask is in array format, feature ``i`` is a predictor for neuron ``j`` if
+          ``feature_mask[i, j] == 1``.
+
+        - If the mask is a PyTree, then
+          a leaf is a predictor of neuron ``j`` if the matching leaf in ``feature_mask``
+          is equal to 1.
+
+        Examples
+        --------
+        >>> # Generate sample data
+        >>> import jax.numpy as jnp
+        >>> import numpy as np
+        >>> from nemos.glm import PopulationGLM
+        >>> np.random.seed(0)
+        >>> # Define predictors (X), weights, and neural activity (y)
+        >>> num_samples, num_features, num_neurons = 100, 3, 2
+        >>> X = np.random.normal(size=(num_samples, num_features))
+        >>> # Weights is defined by how each feature influences the output, shape (num_features, num_neurons)
+        >>> weights = np.array([[0.5, 0.0], [-0.5, -0.5], [0.0, 1.0]])
+        >>> # Output y simulates a Poisson distribution based on a linear model between features X and wegihts
+        >>> y = np.random.poisson(np.exp(X.dot(weights)))
+        >>> # Define a feature mask, shape (num_features, num_neurons)
+        >>> feature_mask = jnp.array([[1, 0], [1, 1], [0, 1]])
+        >>> # Create and fit the model
+        >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
+        >>> print(model.coef_.shape)
+        (3, 2)
+        """
+        return super().fit(X, y, init_params)
+
+    def _predict(
+        self, params: GLMParams[jnp.ndarray], X: jnp.ndarray, feature_mask: Any = None
+    ) -> jnp.ndarray:
+        """
+        Predicts firing rates based on given parameters and design matrix.
+
+        This function computes the predicted firing rates using the provided parameters, the feature
+        mask and model design matrix ``X``. It is a streamlined version used internally within
+        optimization routines, where it serves as the loss function. Unlike the ``GLM.predict``
+        method, it does not perform any input validation, assuming that the inputs are pre-validated.
+        The parameters are first element-wise multiplied with the mask, then the canonical
+        linear-non-linear GLM map is applied.
+
+        Parameters
+        ----------
+        params :
+            GLMParams containing the spike basis coefficients and bias terms.
+        X :
+            Predictors.
+
+        Returns
+        -------
+        :
+            The predicted rates. Shape (n_timebins, n_neurons).
+        """
+        if feature_mask is None:
+            feature_mask = self._feature_mask
+        if feature_mask is None:
+            return super()._predict(params, X)
+        return self.inverse_link_function(
+            # First, multiply each feature by its corresponding coefficient,
+            # then sum across all features and add the intercept, before
+            # passing to the inverse link function
+            tree_utils.pytree_map_and_reduce(
+                lambda x, w, m: jnp.einsum(
+                    "ti, i...->t...", x, w * _broadcast_mask_to(m, w)
+                ),
+                sum,
+                X,
+                params.coef,
+                feature_mask,
+            )
+            + params.intercept
+        )
+
+    def _n_estimated_features(self, active_cols: jnp.ndarray) -> jnp.ndarray:
+        """Count the features the mask lets through, per neuron.
+
+        A masked-out coefficient contributes nothing to the rate and is never estimated,
+        so it must not be charged against the residual degrees of freedom. A frozen one
+        is dropped the same way, through ``active_cols``.
+        """
+        if self._feature_mask is None:
+            return super()._n_estimated_features(active_cols)
+        mask = jnp.concatenate(jax.tree_util.tree_leaves(self._feature_mask), axis=0)
+        return jnp.sum(mask[active_cols], axis=0)
+
+    def _design_rank(self, X: jnp.ndarray, active_cols: jnp.ndarray) -> jnp.ndarray:
+        """Rank of each neuron's own design, after its masked columns are dropped.
+
+        Zeroing the masked columns leaves the rank unchanged relative to deleting them,
+        so the per-neuron mask stays a plain array op rather than a boolean index. The
+        frozen columns are the same for every neuron, so those are sliced away once,
+        before the vmap: every rank is then read off a smaller matrix.
+        """
+        if self._feature_mask is None:
+            return super()._design_rank(X, active_cols)
+        mask = jnp.concatenate(jax.tree_util.tree_leaves(self._feature_mask), axis=0)
+        X, mask = X[:, active_cols], mask[active_cols]
+        # every coefficient frozen leaves no design to take the rank of
+        if X.shape[1] == 0:
+            return jnp.zeros(mask.shape[1], dtype=int)
+        return jax.vmap(lambda m: jnp.linalg.matrix_rank(X * m), in_axes=1, out_axes=0)(
+            mask
+        )
+
+    def _get_hess_fn(self, frozen: Optional[GLMParams] = None) -> Callable:
+        # differentiating the combined loss with respect to the active subtree alone
+        # yields the active block of the Hessian directly, no slicing needed.
+        # ``batch_axes`` is prefix-spelled (one entry for all of ``coef``) while the
+        # filter spec is per-leaf, so expand before splitting the axes.
+        spec = tree_utils.tree_filter_like(
+            self._active_filter_spec(), self._hess_batch_axes
+        )
+        active_axis, frozen_axis = self._partition_active(
+            tree_utils.tree_broadcast_prefix(self._hess_batch_axes, spec)
+        )
+
+        def per_neuron(params, X, y, mask, frozen_params):
+            def loss(params):
+                params = eqx.combine(params, frozen_params)
+                rate = self._predict(params, X, feature_mask=mask)
+                return self._observation_model._negative_log_likelihood(y, rate)
+
+            return jax.hessian(loss)(params)
+
+        # the mask mirrors coef, so its neuron axis is coef's
+        vmap_per_neuron = jax.vmap(
+            per_neuron, in_axes=(active_axis, None, 1, 1, frozen_axis)
+        )
+
+        def hess_fn(params, X, y):
+            return vmap_per_neuron(params, X, y, self._feature_mask, frozen)
+
+        return hess_fn
+
+    def __sklearn_clone__(self) -> PopulationGLM:
+        """Clone the PopulationGLM, dropping feature_mask."""
+        params = self.get_params(deep=False)
+        klass = self.__class__(**params)
+        # reattach metadata
+        klass._metadata = self._metadata
+        return klass
