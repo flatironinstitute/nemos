@@ -101,6 +101,7 @@ class RegressorValidator(
     """
 
     expected_param_dims: ReadOnlyDict[Any, int] = None
+    model_param_names: frozenset[str] = frozenset()
     model_class: str = None
     X_dimensionality: int = None
     y_dimensionality: int = None
@@ -504,8 +505,7 @@ class RegressorValidator(
                 f"numpy arrays or None.\nFound invalid types: {invalid_types}"
             )
 
-    @staticmethod
-    def check_complete_param_specs(params: Any, expected_params: list | set):
+    def check_complete_param_specs(self, params: Any):
         """Check complete parameter specifications.
 
         Check that the provided parameter dictionary includes a pytree of
@@ -519,15 +519,15 @@ class RegressorValidator(
             return
         if not isinstance(params, dict):
             return
-        missing = set(expected_params) - set(params.keys())
+        missing = self.model_param_names - set(params.keys())
         if missing:
             raise ValueError(
                 f"The user-provided parameter dictionary is incomplete. Missing fields: {missing}"
             )
-        invalid = set(params.keys()) - set(expected_params)
+        invalid = set(params.keys()) - self.model_param_names
         if invalid:
             raise ValueError(
-                f"Invalid parameter(s) {invalid} provided. Valid parameter names are {expected_params}"
+                f"Invalid parameter(s) {invalid} provided. Valid parameter names are {self.model_param_names}"
             )
 
         def is_none(x):
