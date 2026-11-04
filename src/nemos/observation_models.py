@@ -1373,6 +1373,9 @@ class NegativeBinomialObservations(Observations):
         self,
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
+        # TODO
+        # explicit kwarg and in superclass **kwargs
+        # simplify computing null mod ll
         extra_params: Optional[dict] = None,
         aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
     ) -> jnp.ndarray:
