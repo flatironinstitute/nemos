@@ -720,11 +720,6 @@ class BaseRegressor(
         pass
 
     @abc.abstractmethod
-    def _get_model_params(self) -> ModelParamsT:
-        """Pack coef_ and intercept_  into a params pytree."""
-        pass
-
-    @abc.abstractmethod
     def _set_model_params(self, params: ModelParamsT):
         """Unpack and store params pytree to coef_ and intercept_."""
         pass
@@ -1326,3 +1321,14 @@ class BaseRegressor(
         return jax.tree_util.tree_map(
             lambda s: jnp.empty(s, dtype=dtype), shapes, is_leaf=is_shape_tuple
         )
+
+    @property
+    def param_names(self) -> list[str]:
+        """List the names of the fitted parameters."""
+        return list(self._validator.model_param_names)
+
+    def _get_param_dict(self) -> UserProvidedParamsT:
+        return {name: getattr(self, name + "_", None) for name in self.param_names}
+
+    def _get_model_params(self) -> ModelParamsT:
+        return self._validator.to_model_params(self._get_param_dict())
