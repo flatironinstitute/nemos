@@ -449,10 +449,16 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             link in conv_preserving_inv_links
             or LINK_NAME_TO_FUNC.get(qual_name) in conv_preserving_inv_links
         )
+        non_separable_extras = [
+            k
+            for k, v in self._observation_model.extra_params.items()
+            if not v["separable"]
+        ]
 
         return (
             MatrixProperty.POSITIVE_SEMI_DEFINITE
             if convexity_preserving
+            or all(self.fix_params[k] is not None for k in non_separable_extras)
             else MatrixProperty.SYMMETRIC
         )
 
@@ -532,7 +538,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
     @property
     def fix_params(self) -> GLMUserParams[jnp.ndarray | NDArray | None]:
         """Parameters held fixed during fitting, as a ``(coef, intercept)`` tuple."""
-        return self._validator.from_model_params(self._fix_params)
+        param_dict = self._validator.from_model_params(self._fix_params)
+        return {k: param_dict.get(k) for k in self.param_names}
 
     @fix_params.setter
     def fix_params(self, value: GLMUserParams[jnp.ndarray | NDArray | None] | None):
@@ -1160,11 +1167,11 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         y :
             Target neural activity arranged in a matrix, shape (n_time_bins, ).
         init_params :
-            2-tuple of initial parameter values: (coefficients, intercepts). If
-            None, we initialize coefficients with zeros, intercepts with the
-            log of the mean neural activity. coefficients is an array of shape
-            (n_features,) or pytree of same, intercepts is an array
-            of shape (1, )
+            Dictionary of initial parameter values. The dictionary will always contain
+            ``"coef"`` and ``"intercept"``. Some observation models add addional
+            parameters, see the ``param_names`` attribute of the instantiated model.
+            TODO: add col to table of the obs model with the extra parameters.
+            Add page of docs discussing this.
 
         Raises
         ------
@@ -2425,6 +2432,7 @@ class PopulationGLM(GLM):
         :
             The predicted rates. Shape (n_timebins, n_neurons).
         """
+        # TODO: add convexity check and warn.
         if feature_mask is None:
             feature_mask = self._feature_mask
         if feature_mask is None:
