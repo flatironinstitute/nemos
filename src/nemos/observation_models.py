@@ -95,12 +95,12 @@ class Observations(Base, abc.ABC):
     @property
     def map_from(self):
         """Getter for the map_from parameter of the model."""
-        return {k: v["map_from"] for k, v in self.extra_params.items()}
+        return ReadOnlyDict({k: v["map_from"] for k, v in self.extra_params.items()})
 
     @property
     def map_to(self):
         """Getter for the map_from parameter of the model."""
-        return {k: v["map_to"] for k, v in self.extra_params.items()}
+        return ReadOnlyDict({k: v["map_to"] for k, v in self.extra_params.items()})
 
     @abc.abstractmethod
     def _negative_log_likelihood(
