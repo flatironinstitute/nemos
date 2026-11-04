@@ -126,7 +126,7 @@ def resolve_inverse_link_function(
     inverse_link_function : Callable, str, or None
         The inverse link function specification. Can be:
         - None: use the default from the observation model
-        - str: name of a standard link function (e.g., "identity", "log", "logit")
+        - str: name of a standard link function (e.g., "identity", "exp", "softplus")
         - Callable: a custom inverse link function
     observation_model : Observations
         The observation model instance that provides the default inverse link function.

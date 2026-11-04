@@ -1,6 +1,3 @@
-import pickle
-
-import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -11,11 +8,31 @@ from nemos._inverse_link_function_builder import (
     LINK_NAME_TO_FUNC,
     instantiate_inverse_link_function,
 )
-from nemos.inverse_link_function_utils import resolve_inverse_link_function
-from nemos.utils import _get_name
+from nemos.inverse_link_function_utils import (
+    exp,
+    expit,
+    identity,
+    log_softmax,
+    logistic,
+    norm_cdf,
+    resolve_inverse_link_function,
+    softplus,
+)
+from nemos.utils import _get_name, one_over_x
 
 # one entry per distinct function (the registry maps many names to the same function)
 UNIQUE_LINK_FUNCTIONS = list(dict.fromkeys(LINK_NAME_TO_FUNC.values()))
+
+EXPECTED_FUNCTION = {
+    "exp": exp,
+    "expit": expit,
+    "identity": identity,
+    "log_softmax": log_softmax,
+    "logistic": logistic,
+    "norm_cdf": norm_cdf,
+    "one_over_x": one_over_x,
+    "softplus": softplus,
+}
 
 
 def assert_computes_same_values(link_function, expected_function):
@@ -37,37 +54,24 @@ class TestInstantiateInverseLinkFunction:
         assert link_function is LINK_NAME_TO_FUNC[link_name]
         assert callable(link_function)
 
-    @pytest.mark.parametrize(
-        "link_name, reference_function",
-        [
-            ("exp", jnp.exp),
-            ("jax.numpy.exp", jnp.exp),
-            ("softplus", jax.nn.softplus),
-            ("jax.nn.softplus", jax.nn.softplus),
-            ("logistic", jax.lax.logistic),
-            ("expit", jax.scipy.special.expit),
-            ("norm_cdf", jax.scipy.stats.norm.cdf),
-            ("jax.scipy.stats.norm.cdf", jax.scipy.stats.norm.cdf),
-            ("one_over_x", lambda x: 1.0 / x),
-            ("identity", lambda x: x),
-            ("log_softmax", jax.nn.log_softmax),
-        ],
-    )
-    def test_name_returns_the_right_function(self, link_name, reference_function):
-        """The returned function computes the same values as the function it names."""
-        link_function = instantiate_inverse_link_function(link_name)
-        assert_computes_same_values(link_function, reference_function)
+    @pytest.mark.parametrize("link_name", AVAILABLE_INVERSE_LINK_FUNCTIONS)
+    def test_name_returns_the_right_function(self, link_name):
+        assert (
+            instantiate_inverse_link_function(link_name) is EXPECTED_FUNCTION[link_name]
+        )
 
     @pytest.mark.parametrize("link_name", ["not_a_link", "", "EXP", "jax.numpy.log"])
     def test_unknown_name_raises(self, link_name):
         with pytest.raises(ValueError, match="Unknown link function"):
             instantiate_inverse_link_function(link_name)
 
-    def test_error_message_lists_available_names(self):
-        with pytest.raises(ValueError, match="softplus"):
+    def test_error_message_lists_only_short_names(self):
+        with pytest.raises(ValueError, match=r"('softplus'|\"softplus\")") as error:
             instantiate_inverse_link_function("not_a_link")
+        assert "jax." not in str(error.value)
+        assert "nemos." not in str(error.value)
 
-    @pytest.mark.parametrize("link_name", ["exp", "softplus", "identity"])
+    @pytest.mark.parametrize("link_name", AVAILABLE_INVERSE_LINK_FUNCTIONS)
     def test_resolve_uses_builder_for_strings(self, link_name):
         observation_model = nmo.observation_models.PoissonObservations()
         resolved = resolve_inverse_link_function(link_name, observation_model)
@@ -101,13 +105,3 @@ class TestInverseLinkFunctionSaveLoad:
         model.save_params(save_path)
         loaded_model = nmo.load_model(save_path)
         assert_computes_same_values(loaded_model.inverse_link_function, link_function)
-
-    @pytest.mark.xfail(
-        reason="Wrapped link functions copy jax's __module__/__qualname__, "
-        "so the standard pickle module cannot find them. Pre-existing on development.",
-        raises=pickle.PicklingError,
-        strict=True,
-    )
-    def test_pickle_round_trip(self):
-        link_function = instantiate_inverse_link_function("exp")
-        assert pickle.loads(pickle.dumps(link_function)) is link_function

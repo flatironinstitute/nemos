@@ -44,7 +44,9 @@ LINK_NAME_TO_FUNC = {
     "nemos.inverse_link_function_utils.identity": identity,
 }
 
-AVAILABLE_INVERSE_LINK_FUNCTIONS = list(LINK_NAME_TO_FUNC.keys())
+AVAILABLE_INVERSE_LINK_FUNCTIONS = [
+    name for name in LINK_NAME_TO_FUNC.keys() if "." not in name
+]
 
 
 def instantiate_inverse_link_function(inverse_link_function: str):
