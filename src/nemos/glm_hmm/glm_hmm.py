@@ -56,10 +56,11 @@ from .validation import GLMHMMValidator
 def update_validator_observation_dependent_configs(
     observation_model: Observations, validator: GLMHMMValidator
 ) -> GLMHMMValidator:
-    """Set the validator to/from model parameter mapping.
+    """Set the validator observation dependent configs.
 
     This convenience function sets the validator mappings between the user
-    provided parameter dictionary and the model parameter class.
+    provided parameter dictionary and the model parameter class, and the
+    specific parameter names.
     """
     commons = validator.__class__.model_param_names
     return eqx.tree_at(
@@ -628,17 +629,6 @@ class GLMHMM(
         }
 
     @property
-    def param_names(self) -> list[str]:
-        """List the names of the parameters fitted by the GLM-HMM."""
-        return [
-            "initial_prob",
-            "transition_prob",
-            "coef",
-            "intercept",
-            *self.observation_model.extra_params.keys(),
-        ]
-
-    @property
     def observation_model(self) -> obs.Observations:
         """The observation model governing the emission distribution at each state.
 
@@ -884,7 +874,7 @@ class GLMHMM(
             init_params = self._model_specific_initialization(X, y, session_starts)
         else:
             # TODO: improve initialization and allow partial param specs
-            self._validator.check_complete_param_specs(init_params, self.param_names)
+            self._validator.check_complete_param_specs(init_params)
             init_params = self._validator.validate_and_cast_params(init_params)
             self._validator.validate_consistency(init_params, X=X, y=y)
 
@@ -1584,27 +1574,6 @@ class GLMHMM(
     def _get_optimal_solver_params_config(self):
         """No optimal parameters known for SVRG in GLMHMM."""
         return None, None, None
-
-    def _get_param_dict(self) -> GLMHMMUserParams:
-        params = {
-            "coef": self.coef_,
-            "intercept": self.intercept_,
-            "initial_prob": self.initial_prob_,
-            "transition_prob": self.transition_prob_,
-        }
-        # this is used just after fit, so it is fine for now, however, if obs model changes
-        # then the model params will be incomplete.
-        # side-effect: after fitting, calling is fit after switching obs model from Gamma to Poisson
-        # will return true, the other way around will return false (one extra params in Gamma).
-        extra = {
-            k: getattr(self, k + "_", None)
-            for k in self.observation_model.extra_params.keys()
-        }
-        params.update(extra)
-        return params
-
-    def _get_model_params(self) -> GLMHMMParams:
-        return self._validator.to_model_params(self._get_param_dict())
 
     def _set_model_params(self, params: GLMHMMParams):
         user_params = self._validator.from_model_params(params)
