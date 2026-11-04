@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
-from typing import Any, Callable, List, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Literal, Optional, Tuple, Union
 
 import equinox as eqx
 import jax
@@ -131,6 +131,47 @@ def _glm_hessian_block(
         H = H.at[:-1, :-1].add(jnp.diag(lam))
 
     return H
+
+
+def update_validator_observation_dependent_configs(
+    observation_model: obs.Observations, validator: GLMValidator
+) -> GLMValidator:
+    """Set the validator observation dependent configs.
+
+    This convenience function sets the validator mappings between the user
+    provided parameter dictionary and the model parameter class, and the
+    specific parameter names.
+    """
+    commons = validator.__class__.model_param_names
+    return eqx.tree_at(
+        # selector
+        lambda x: (
+            x.to_model_params,
+            x.from_model_params,
+            x.model_param_names,
+        ),
+        # pytree
+        validator,
+        # replace
+        (
+            ToGLMParams(observation_model.map_to),
+            FromGLMParams(observation_model.map_from),
+            # model_param_names includes only the parameters that are fit
+            # separable parameters such has the scale of the gaussian, are
+            # estimated a posteriori and should not be listed here
+            frozenset(
+                {
+                    *commons,
+                    *[
+                        k
+                        for k, v in observation_model.extra_params.items()
+                        if not v["separable"]
+                    ],
+                }
+            ),
+        ),
+        is_leaf=lambda x: x is None,
+    )
 
 
 class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
@@ -489,14 +530,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         self._solver = None
 
     @property
-    def param_names(self) -> List[str]:
-        """List the names of the parameters fitted by the GLM."""
-        return [
-            "coef",
-            "intercept",
-        ]
-
-    @property
     def fix_params(self) -> GLMUserParams[jnp.ndarray | NDArray | None]:
         """Parameters held fixed during fitting, as a ``(coef, intercept)`` tuple."""
         return self._validator.from_model_params(self._fix_params)
@@ -669,20 +702,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             self._observation_model = instantiate_observation_model(observation)
             self._validate_observation_class(self.observation_model)
             self._invalidate_solver()
-            self._validator = eqx.tree_at(
-                # selector
-                lambda x: (
-                    x.to_model_params,
-                    x.from_model_params,
-                ),
-                # pytree
-                self._validator,
-                # replace
-                (
-                    ToGLMParams(self.observation_model.map_to),
-                    FromGLMParams(self.observation_model.map_from),
-                ),
-                is_leaf=lambda x: x is None,
+            self._validator = update_validator_observation_dependent_configs(
+                self._observation_model, self._validator
             )
             return
         # check that the model has the required attributes
@@ -691,20 +712,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         self._observation_model = observation
         self._validate_observation_class(self.observation_model)
         self._invalidate_solver()
-        self._validator = eqx.tree_at(
-            # selector
-            lambda x: (
-                x.to_model_params,
-                x.from_model_params,
-            ),
-            # pytree
-            self._validator,
-            # replace
-            (
-                ToGLMParams(self.observation_model.map_to),
-                FromGLMParams(self.observation_model.map_from),
-            ),
-            is_leaf=lambda x: x is None,
+        self._validator = update_validator_observation_dependent_configs(
+            self._observation_model, self._validator
         )
 
     def _check_is_fit(self):
@@ -851,9 +860,19 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
         """
         predicted_rate = self._predict(params, X)
-        return self._observation_model._negative_log_likelihood(
-            y, predicted_rate, extra_params=params.extra_params
-        )
+        # if there is an extra param that is not separable, the full likelihood is needed
+        if any(
+            not v["separable"] for v in self._observation_model.extra_params.values()
+        ):
+
+            def loss(*a, **kw):
+                return -self._observation_model.log_likelihood(*a, **kw)
+
+            extras = self._validator.from_model_params(params)
+        else:
+            loss = self._observation_model._negative_log_likelihood
+            extras = None
+        return loss(y, predicted_rate, extra_params=extras)
 
     @cast_to_jax
     def score(
@@ -1075,11 +1094,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
                 frozen_intercept=frozen_intercept,
                 rate_range=self.observation_model.rate_range,
             )
-
-        init_params = eqx.tree_at(
-            lambda p: (p.coef, p.intercept),
-            empty_params,
-            (initial_coef, initial_intercept),
+        extras = jax.tree_util.tree_map(
+            jnp.full_like,
+            empty_params.extra_params,
+            {k: v["default"] for k, v in self._observation_model.extra_params.items()},
+        )
+        # convert to GLMParams which applies mapping to extra params if needed.
+        init_params = self._validator.to_model_params(
+            {"coef": initial_coef, "intercept": initial_intercept, **extras}
         )
 
         self._validator.feature_mask_consistency(
@@ -1188,7 +1210,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
                 self._validator.validate_consistency(init_params, X=X, y=y)
         else:
             # TODO: improve initialization and allow partial param specs
-            self._validator.check_complete_param_specs(init_params, self.param_names)
+            self._validator.check_complete_param_specs(init_params)
             init_params = self._normalize_user_params(init_params, X, y)
             init_params = self._validator.validate_and_cast_params(init_params)
             self._validator.validate_consistency(init_params, X=X, y=y)
@@ -1506,15 +1528,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             ),
         )
 
-    def _get_model_params(self) -> GLMParams[jnp.ndarray]:
-        """Pack coef_ and intercept_  into a params pytree.
-
-        This method should be overwritten in case the parameter structure changes,
-        or if new regression models will have a different parameter structure.
-        """
-        # Retrieve parameter tree
-        return GLMParams(self.coef_, self.intercept_)
-
     def _set_model_params(self, params: GLMParams[jnp.ndarray]):
         """Unpack and store params pytree to coef_ and intercept_.
 
@@ -1522,8 +1535,11 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         or if new regression models will have a different parameter structure.
         """
         # Store parameters
-        self.coef_: DESIGN_INPUT_TYPE = params.coef
-        self.intercept_: jnp.ndarray = params.intercept
+        user_params = self._validator.from_model_params(params)
+        self.coef_: DESIGN_INPUT_TYPE = user_params.pop("coef")
+        self.intercept_: jnp.ndarray = user_params.pop("intercept")
+        for k in user_params.keys():
+            setattr(self, k + "_", user_params[k])
 
     @support_pynapple(conv_type="jax")
     def simulate(
@@ -1579,7 +1595,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         # check if the model is fit
         self._check_is_fit()
 
-        params = self._get_model_params()
+        dict_params = self._get_param_dict()
+        params = self._validator.to_model_params(dict_params)
+        extras = {
+            k: dict_params[k]
+            for k in self._validator.model_param_names
+            - self._validator.__class__.model_param_names
+        }
+        extras["scale"] = getattr(self, "scale_", None)
 
         # if all invalid, raise error
         validation.error_all_invalid(feedforward_input)
@@ -1601,7 +1624,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         predicted_rate = self._predict(params, feedforward_input)
         return (
             self._observation_model.sample_generator(
-                key=random_key, predicted_rate=predicted_rate, scale=self.scale_
+                key=random_key, predicted_rate=predicted_rate, extra_params=extras
             ),
             predicted_rate,
         )
@@ -1964,8 +1987,15 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         coef_shapes = jax.tree_util.tree_map(
             lambda x: (jnp.shape(x)[1], *extra_shape), X
         )
+        extras = (
+            self._validator.model_param_names
+            - self._validator.__class__.model_param_names
+        )
         intercept_shape = (n_observations,)
-        return GLMParams(coef=coef_shapes, intercept=intercept_shape)
+        extra_params_shape = {k: intercept_shape for k in extras}
+        return GLMParams(
+            coef=coef_shapes, intercept=intercept_shape, extra_params=extra_params_shape
+        )
 
 
 def _var_func_of_mu(model) -> Callable:
