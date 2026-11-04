@@ -55,9 +55,9 @@ class ClassifierMixin:
         """
         return claim_nothing(params)
 
-    def set_classes(self, y: ArrayLike) -> ClassifierMixin:
+    def set_classes(self, y: ArrayLike | None) -> ClassifierMixin:
         """
-        Infer unique class labels and set the ``classes_`` attribute.
+        Infer unique class labels and set the ``classes`` attribute.
 
         This method infers class labels from ``y`` and sets up the internal
         encoding/decoding machinery. When labels are the default ``[0, 1, ..., n_classes-1]``,
@@ -67,7 +67,7 @@ class ClassifierMixin:
         ----------
         y
             An array that must contain all the class labels,
-            i.e. ``len(np.unique(y)) == n_classes``.
+            i.e. ``len(np.unique(y)) == n_classes``. If None, it resets the labels.
 
         Raises
         ------
@@ -76,10 +76,15 @@ class ClassifierMixin:
 
         Notes
         -----
-        :meth:`fit` and :meth:`initialize_optimizer_and_state` call ``set_classes`` internally,
-        making sure that the ``classes_`` attribute matches the provided input.
-        If you are fitting in batches by calling :meth:`update`, make sure that the ``classes_``
-        are correctly set by calling ``set_classes`` before starting the :meth:`update` loop.
+        If ``set_classes`` is used to declare class labels, :meth:`fit` keeps them instead of
+        inferring labels from the input ``y``. Manually setting class labels allows the input
+        ``y`` to fit to hold any subset of possible classes. A label outside the set raises an
+        error. Passing ``None`` clears the labels, and the next :meth:`fit` infers the labels
+        from ``y`` again.
+
+        :meth:`initialize_optimizer_and_state` and :meth:`update` do not infer labels. Declare
+        them with ``set_classes`` before an :meth:`update` loop, since a single batch need not
+        contain every class.
 
         Examples
         --------
@@ -94,15 +99,15 @@ class ClassifierMixin:
         Generate sample data where the first batch only contains 2 of 3 classes:
 
         >>> X = np.random.randn(100, 5)
-        >>> y_all_classes = np.array([0, 1, 2])  # all possible classes
-        >>> y_batch1 = np.array([0, 1, 0, 1, 0])  # first batch missing class 2
+        >>> y_all_classes = np.array(["a", "b", "c"])  # all possible classes
+        >>> y_batch1 = np.array(["a", "b", "a", "b", "a"])  # first batch missing "c"
         >>> X_batch1 = X[:5]
 
-        Without ``set_classes``, initialization fails if batch lacks all classes:
+        Without ``set_classes``, the model expects the default integer labels:
 
         >>> init_params = model.initialize_params(X_batch1, y_batch1)
         Traceback (most recent call last):
-        RuntimeError: Classes are not set. Must call ``set_classes`` before calling...
+        ValueError: Expected integer labels when classes are the default...
 
         Call ``set_classes`` first to define all labels, then initialize:
 
@@ -118,20 +123,32 @@ class ClassifierMixin:
         >>> result = model.update(init_params, state, X_batch1, y_batch1)
 
         """
-        self._label_encoder.set_classes(y)
+        if y is None:
+            self._label_encoder.reset()
+            return self
+        self._label_encoder.set_classes(y, declared=True)
         return self
 
     @property
-    def classes_(self) -> NDArray | None:
-        """Class labels, or None if not set."""
-        return self._label_encoder.classes_
+    def classes(self) -> NDArray | int:
+        """Declared class labels, or the number of classes when they are not declared."""
+        return (
+            self.n_classes
+            if not self._label_encoder.declared
+            else self._label_encoder.classes_
+        )
 
-    @classes_.setter
-    def classes_(self, value: NDArray | None) -> None:
+    @classes.setter
+    def classes(self, value: NDArray | None) -> None:
         if value is not None:
-            self._label_encoder.set_classes(value)
+            self._label_encoder.set_classes(value, declared=True)
         else:
             self._label_encoder.reset()
+    
+    @property
+    def classes_(self) -> NDArray | None:
+        """Class labels in use, declared or inferred by :meth:`fit`, or None if not set."""
+        return self._label_encoder.classes_
 
     def compute_loss(
         self,
@@ -189,7 +206,8 @@ class ClassifierMixin:
 
         if not isinstance(value, Number) or value < 2 or not int(value) == value:
             raise ValueError(
-                "The number of classes must be an integer greater than or equal to 2."
+                "The number of classes must be an integer greater than or equal to 2.\n"
+                f"Classes ``{value}`` provided instead."
             )
 
         self._label_encoder = LabelEncoder(int(value))
@@ -259,7 +277,7 @@ class ClassifierMixin:
         y: jnp.ndarray,
     ) -> UserProvidedParamsT:
         """
-        Initialize model parameters for classifier models.
+        Initialize model parameters for categorical GLM.
 
         Initialize coefficients with zeros and intercept by matching the mean class
         proportions. Class labels are automatically converted to one-hot encoding.
@@ -271,7 +289,7 @@ class ClassifierMixin:
         y :
             Class labels, array of shape ``(n_time_bins,)`` for single neuron
             models or ``(n_time_bins, n_neurons)`` for population models. Labels
-            must be a subset of ``classes_``.
+            must be a subset of ``classes``.
 
         Returns
         -------
@@ -280,8 +298,8 @@ class ClassifierMixin:
 
         Notes
         -----
-        All labels in ``y`` must be present in ``classes_``. Passing labels not
-        in ``classes_`` will raise an error.
+        All labels in ``y`` must be present in ``classes``. Passing labels not
+        in ``classes`` will raise an error.
 
         Examples
         --------
@@ -289,7 +307,7 @@ class ClassifierMixin:
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
         >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.ClassifierGLM(n_classes=2)
+        >>> model = nmo.glm.ClassifierGLM(classes=2)
         >>> model.set_classes(y)
         ClassifierGLM(...)
         >>> coef, intercept = model.initialize_params(X, y)
