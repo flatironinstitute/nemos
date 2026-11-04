@@ -110,8 +110,6 @@ glm_for_classification.md
 finegrained_regularization.md
 ```
 
-:::
-
 ::::
 
 ## Feature Engineering

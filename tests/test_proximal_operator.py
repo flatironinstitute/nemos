@@ -12,7 +12,7 @@ from nemos.proximal_operator import (
     prox_none,
     prox_ridge,
 )
-from nemos.tree_utils import tree_full_like
+from nemos.tree_utils import tree_filled_with
 from nemos.utils import get_flattener_unflattener
 
 
@@ -23,7 +23,7 @@ class _TwoLeafModule(eqx.Module):
 
 def _make_dict_data():
     params = {"w": jnp.array([1.0, -2.0, 3.0]), "b": jnp.array([0.5])}
-    strength = tree_full_like(params, 0.5)
+    strength = tree_filled_with(params, 0.5)
     mask = {
         "w": jnp.array([[1, 1, 0], [0, 0, 1]], dtype=float),
         "b": jnp.zeros((2, 1), dtype=float),
@@ -33,7 +33,7 @@ def _make_dict_data():
 
 def _make_eqx_module_data():
     params = _TwoLeafModule(w=jnp.array([1.0, -2.0, 3.0]), b=jnp.array([0.5]))
-    strength = tree_full_like(params, 0.5)
+    strength = tree_filled_with(params, 0.5)
     mask = _TwoLeafModule(
         w=jnp.array([[1, 1, 0], [0, 0, 1]], dtype=float),
         b=jnp.zeros((2, 1), dtype=float),
@@ -43,7 +43,7 @@ def _make_eqx_module_data():
 
 def _make_dict_list_data():
     params = dict(w=[jnp.array([1.0, -2.0, 3.0])], b=jnp.array([0.5]))
-    strength = tree_full_like(params, 0.5)
+    strength = tree_filled_with(params, 0.5)
     mask = dict(
         w=[jnp.array([[1, 1, 0], [0, 0, 1]], dtype=float)],
         b=jnp.zeros((2, 1), dtype=float),
@@ -354,7 +354,7 @@ def test_prox_group_lasso_shrinks_only_masked(example_data_prox_operator):
     n_groups = mask.coef.shape[0]
     mask_array = mask.coef.at[:, 1].set(jnp.zeros(n_groups))
     mask = GLMParams(mask_array, mask.intercept)
-    params_new = prox_group_lasso(params, tree_full_like(params, 0.05), mask)
+    params_new = prox_group_lasso(params, tree_filled_with(params, 0.05), mask)
     # Feature 1 should not be shrunk (no group assignment)
     assert params_new.coef[1] == params.coef[1]
     # Other features should be shrunk
@@ -372,7 +372,7 @@ def test_prox_group_lasso_shrinks_only_masked_multineuron(
     n_neurons = mask.coef.shape[2]
     mask_array = mask.coef.at[:, 1].set(jnp.zeros((n_groups, n_neurons)))
     mask = GLMParams(mask_array, mask.intercept)
-    params_new = prox_group_lasso(params, tree_full_like(params, 0.05), mask)
+    params_new = prox_group_lasso(params, tree_filled_with(params, 0.05), mask)
     # Feature 1 should not be shrunk across all neurons
     assert jnp.all(params_new.coef[1] == params.coef[1])
     # Other features should be shrunk
@@ -400,7 +400,7 @@ def test_prox_group_lasso_dict_structure():
 
     regularizer_strength = 0.1
     result = prox_group_lasso(
-        params, tree_full_like(params, regularizer_strength), mask
+        params, tree_filled_with(params, regularizer_strength), mask
     )
 
     # Check structure preserved
@@ -441,7 +441,7 @@ def test_prox_group_lasso_nested_structure():
 
     regularizer_strength = 0.1
     result = prox_group_lasso(
-        params, tree_full_like(params, regularizer_strength), mask
+        params, tree_filled_with(params, regularizer_strength), mask
     )
 
     # Check nested structure preserved
@@ -509,10 +509,10 @@ def test_prox_group_lasso_equivalence_array_vs_dict():
 
     # Apply prox operator to both versions
     result_array = prox_group_lasso(
-        params_array, tree_full_like(params_array, regularizer_strength), mask_array
+        params_array, tree_filled_with(params_array, regularizer_strength), mask_array
     )
     result_dict = prox_group_lasso(
-        params_dict, tree_full_like(params_dict, regularizer_strength), mask_dict
+        params_dict, tree_filled_with(params_dict, regularizer_strength), mask_dict
     )
 
     # Concatenate dict results to compare with array
@@ -576,7 +576,7 @@ def test_prox_lasso_dict_structure():
 
     regularizer_strength = 0.5
     result = prox_lasso(
-        params, tree_full_like(params, regularizer_strength), scaling=1.0
+        params, tree_filled_with(params, regularizer_strength), scaling=1.0
     )
 
     # Check structure preserved
@@ -695,7 +695,7 @@ def test_prox_elastic_net_pytree_types(make_data):
     """prox_elastic_net preserves structure and shape for dict, eqx.Module, and dict_list pytrees."""
     params, _, _ = make_data()
     # elastic net expects per-leaf (strength, ratio) tuples
-    strength = tree_full_like(params, (0.5, 0.5))
+    strength = tree_filled_with(params, (0.5, 0.5))
     out = prox_elastic_net(params, strength=strength, scaling=1.0)
     assert jax.tree_util.tree_structure(out) == jax.tree_util.tree_structure(params)
     for out_leaf, in_leaf in zip(
@@ -731,25 +731,25 @@ def test_prox_group_lasso_pytree_types(make_data):
 _ELEMENTWISE_PROX_CASES = [
     pytest.param(
         prox_none,
-        lambda params: tree_full_like(params, 0.5),
+        lambda params: tree_filled_with(params, 0.5),
         0.5,
         id="prox_none",
     ),
     pytest.param(
         prox_ridge,
-        lambda params: tree_full_like(params, 0.5),
+        lambda params: tree_filled_with(params, 0.5),
         0.5,
         id="prox_ridge",
     ),
     pytest.param(
         prox_lasso,
-        lambda params: tree_full_like(params, 0.5),
+        lambda params: tree_filled_with(params, 0.5),
         0.5,
         id="prox_lasso",
     ),
     pytest.param(
         prox_elastic_net,
-        lambda params: tree_full_like(params, (0.5, 0.5)),
+        lambda params: tree_filled_with(params, (0.5, 0.5)),
         (0.5, 0.5),
         id="prox_elastic_net",
     ),

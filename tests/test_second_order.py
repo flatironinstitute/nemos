@@ -1,0 +1,589 @@
+"""Machinery the second-order solvers share, tested once for all of them.
+
+``Newton``, ``ProximalNewton`` and ``ProximalLBFGS`` differ in where their direction comes
+from -- a linear solve, a proximal quadratic subproblem on the assembled Hessian, or the
+same subproblem on a limited-memory model -- and agree on everything that happens to the
+direction afterwards: the slope gate, the backtracking search, and how a step that is not
+taken is reported. That shared part lives here; what is specific to one solver, such as
+``Newton``'s identity-shift ladder or how a GLM drives them, stays in its own file.
+
+``solver._line_search`` is an ``ArmijoBacktracking`` for the smooth solver and a
+``TsengYunBacktracking`` for the two proximal ones. Several tests below reach into it,
+so three parts of it are worth stating once:
+
+- ``_slope_descent_value(params, step, grad, fval)`` returns ``(slope, descent, value)``.
+  ``value`` is the objective being decreased, the smooth loss plus the penalty where
+  there is one, and it does not depend on ``step``, so a placeholder step may be passed
+  to read it. ``slope`` is a vector built so that ``tree_dot(slope, step)`` is the
+  Tseng & Yun slope ``grad f . step + P(params + step) - P(params)``; ``descent`` is
+  that contraction. The smooth case returns ``(grad, grad . step, fval)``, the same
+  three roles with an empty penalty, so tests reading them cover all three solvers.
+- ``fun`` is the objective the search evaluates at each trial point, called as
+  ``fun(params, *args)``.
+- ``_line_search`` is the ``optax`` transformation underneath, a static field, so a test
+  starving its budget swaps it with ``dataclasses.replace``.
+
+The state it returns is a ``LineSearchState``: ``linesearch_state`` is ``optax``'s own,
+and ``loss_value`` / ``descent`` / ``step_taken`` are what the solver reads back.
+"""
+
+import dataclasses
+
+import equinox as eqx
+import jax
+import jax.numpy as jnp
+import lineax as lx
+import numpy as np
+import optax
+import pytest
+from optimistix._solver.limited_memory_bfgs import _lbfgs_hessian_operator_fn
+
+from nemos.regularizer import Lasso, Ridge
+from nemos.solvers import Newton, ProximalNewton
+from nemos.solvers._second_order._curvature import LBFGSCurvature
+from nemos.solvers._second_order._lbfgs import ProximalLBFGS
+
+# A point with both zero and non-zero coefficients: the zeros are where the L1 penalty is
+# not differentiable, which is the whole reason the composite slope is needed.
+_KINKED_PARAMS = np.array([0.7, 0.0, -0.4, 0.0, 0.25, 0.1])
+_PENALTY_STRENGTH = 0.01
+
+
+# Squared error, averaged. Its Hessian is the constant ``(2/n) X^T X``, so nothing below
+# depends on a particular curvature.
+def _mse(params, X, y):
+    return jnp.power(y - jnp.dot(X, params), 2).mean()
+
+
+# Both second-order solvers share ``_apply_or_reject``, and the slope reaching it is built
+# differently by each: the plain gradient for the smooth solver, the composite Delta for
+# the proximal one.
+_GATE_CASES = [
+    pytest.param(Newton, Ridge, 0.1, id="Newton-Ridge"),
+    pytest.param(ProximalNewton, Lasso, _PENALTY_STRENGTH, id="ProximalNewton-Lasso"),
+    pytest.param(ProximalLBFGS, Lasso, _PENALTY_STRENGTH, id="ProximalLBFGS-Lasso"),
+]
+
+
+@pytest.mark.parametrize("solver_cls, regularizer_cls, strength", _GATE_CASES)
+@pytest.mark.parametrize(
+    "make_step, slope_sign",
+    [
+        pytest.param(lambda grad: jax.tree.map(lambda g: -g, grad), -1.0, id="descent"),
+        pytest.param(jnp.zeros_like, 0.0, id="stationary"),
+        pytest.param(lambda grad: grad, 1.0, id="ascent"),
+    ],
+)
+@pytest.mark.requires_x64
+def test_second_order_solvers_step_only_on_a_descent_slope(
+    solver_cls, regularizer_cls, strength, make_step, slope_sign
+):
+    """``_apply_or_reject`` runs the line search on a negative slope and on nothing else.
+
+    The gate is ``tree_dot(slope, step)``, a slope rather than a flag, so it has to be
+    compared against zero: a positive value certifies nothing, and the Armijo test it
+    would then run puts its threshold above the current value, accepting an increase.
+    A proximal step with a positive ``Delta`` is what an inexact subproblem solve returns.
+    """
+    np.random.seed(0)
+    X = np.random.normal(size=(200, _KINKED_PARAMS.size))
+    y = np.random.normal(size=200)
+    params = jnp.asarray(_KINKED_PARAMS)
+
+    solver = solver_cls(
+        _mse,
+        regularizer=regularizer_cls(),
+        regularizer_strength=strength,
+        has_aux=False,
+        init_params=params,
+        tol=1e-12,
+    )
+    state = solver.init_state(params, X, y)
+    (fval, _), grad = solver._fval_and_grad(params, X, y)
+    step = make_step(grad)
+
+    updates, new_ls_state = solver._line_search.update(
+        params, step, grad, fval, state.ls_state, X, y
+    )
+    descent = new_ls_state.descent
+    assert np.sign(float(descent)) == slope_sign
+
+    new_params, new_ls_state, no_step_found = solver._apply_or_reject(
+        params, step, grad, state, fval, X, y
+    )
+    # a stationary slope is not a failure: it is the optimum, and the zero step it leaves
+    # behind is what the convergence test is supposed to read
+    assert bool(no_step_found) == (slope_sign > 0)
+
+    if slope_sign < 0:
+        assert not np.allclose(new_params, params), "a descent step must be taken"
+    else:
+        np.testing.assert_array_equal(np.asarray(new_params), np.asarray(params))
+        # the rejected branch returns the state untouched, so the next iteration
+        # restarts the search from the same stepsize
+        np.testing.assert_array_equal(
+            np.asarray(new_ls_state.linesearch_state.learning_rate),
+            np.asarray(state.ls_state.linesearch_state.learning_rate),
+        )
+
+
+@pytest.mark.requires_x64
+def test_prox_newton_reports_a_nan_slope_as_no_step_found():
+    """A diverged subproblem must be reported, not stepped on and not called converged.
+
+    A NaN slope certifies nothing, so the step is rejected. Rejection alone would leave
+    ``y_diff`` at zero for the next Cauchy test to read as convergence, so
+    ``_apply_or_reject`` reports it instead and the iterate stays finite.
+    """
+    np.random.seed(0)
+    X = np.random.normal(size=(200, _KINKED_PARAMS.size))
+    y = np.random.normal(size=200)
+    params = jnp.asarray(_KINKED_PARAMS)
+
+    solver = ProximalNewton(
+        _mse,
+        regularizer=Lasso(),
+        regularizer_strength=_PENALTY_STRENGTH,
+        has_aux=False,
+        init_params=params,
+        tol=1e-12,
+    )
+    state = solver.init_state(params, X, y)
+    (fval, _), grad = solver._fval_and_grad(params, X, y)
+    step = jax.tree.map(lambda g: jnp.full_like(g, jnp.nan), grad)
+
+    updates, new_ls_state = solver._line_search.update(
+        params, step, grad, fval, state.ls_state, X, y
+    )
+    descent = new_ls_state.descent
+    assert np.isnan(float(descent))
+
+    new_params, new_ls_state, no_step_found = solver._apply_or_reject(
+        params, step, grad, state, fval, X, y
+    )
+    assert bool(no_step_found)
+    np.testing.assert_array_equal(np.asarray(new_params), np.asarray(params))
+
+
+# ``no_step_found`` has three producers: a slope that does not certify descent (covered
+# above), a line search that spends its budget without reaching sufficient decrease, and
+# -- at the loop level -- any of them ending the run without claiming convergence.
+_STALL_CASES = [
+    pytest.param(Newton, Ridge, 0.1, id="Newton-Ridge"),
+    pytest.param(ProximalNewton, Lasso, _PENALTY_STRENGTH, id="ProximalNewton-Lasso"),
+    pytest.param(ProximalLBFGS, Lasso, _PENALTY_STRENGTH, id="ProximalLBFGS-Lasso"),
+]
+
+
+def _stall_problem(solver_cls, regularizer_cls, strength, **kwargs):
+    np.random.seed(0)
+    X = np.random.normal(size=(200, _KINKED_PARAMS.size))
+    y = np.random.normal(size=200)
+    params = jnp.asarray(_KINKED_PARAMS)
+    solver = solver_cls(
+        _mse,
+        regularizer=regularizer_cls(),
+        regularizer_strength=strength,
+        has_aux=False,
+        init_params=params,
+        tol=1e-12,
+        **kwargs,
+    )
+    return solver, X, y, params
+
+
+def _starve(line_search, max_backtracking_steps=1):
+    """The same search with a budget too small to rescue any step.
+
+    ``_line_search`` is a static field of an ``eqx.Module``, so it is replaced rather
+    than written through.
+    """
+    return dataclasses.replace(
+        line_search,
+        _line_search=optax.scale_by_backtracking_linesearch(max_backtracking_steps),
+    )
+
+
+@pytest.mark.parametrize("solver_cls, regularizer_cls, strength", _STALL_CASES)
+@pytest.mark.requires_x64
+def test_second_order_solvers_reject_an_exhausted_line_search(
+    solver_cls, regularizer_cls, strength
+):
+    """optax returns its last trial whether or not sufficient decrease was reached.
+
+    Starving ``max_backtracking_steps`` makes it return a trial that raises the
+    objective; ``info.decrease_error`` is positive exactly then, so the step must not be
+    applied. Without the check the iterate moves to that worse point.
+    """
+    solver, X, y, params = _stall_problem(solver_cls, regularizer_cls, strength)
+    solver._line_search = _starve(solver._line_search)
+    state = solver.init_state(params, X, y)
+    (fval, _), grad = solver._fval_and_grad(params, X, y)
+    # far past any stepsize one halving can rescue, and still a descent direction so the
+    # slope gate passes and the line search is the only thing that can reject it
+    step = jax.tree.map(lambda g: -1e6 * g, grad)
+
+    slope, descent, value = solver._line_search._slope_descent_value(
+        params, step, grad, fval
+    )
+    assert float(descent) < 0.0
+
+    new_params, new_ls_state, no_step_found = solver._apply_or_reject(
+        params, step, grad, state, fval, X, y
+    )
+
+    assert float(new_ls_state.linesearch_state.info.decrease_error) > 0.0, (
+        "the search must have failed"
+    )
+    assert bool(no_step_found)
+    np.testing.assert_array_equal(np.asarray(new_params), np.asarray(params))
+    # the trial optax offered was worse than the starting point, which is why the
+    # check is needed
+    value_fn = lambda p: solver._line_search.fun(p, X, y)  # noqa: E731
+    updates, _ = solver._line_search._line_search.update(
+        step,
+        state.ls_state.linesearch_state,
+        params,
+        value=value,
+        grad=slope,
+        value_fn=value_fn,
+    )
+    offered = jax.tree.map(lambda p, u: p + u, params, updates)
+    assert float(value_fn(offered)) > float(value_fn(params))
+
+
+@pytest.mark.parametrize("solver_cls, regularizer_cls, strength", _STALL_CASES)
+@pytest.mark.requires_x64
+def test_second_order_solvers_end_a_stalled_run_without_claiming_convergence(
+    solver_cls, regularizer_cls, strength, monkeypatch
+):
+    """A rejected step ends ``run`` as a stall, distinguishable from a solved run.
+
+    A rejection leaves ``y_diff`` at zero, which ``cauchy_termination`` reads as
+    convergence, so the loop has to stop on ``no_step_found`` instead. ``OptimizationInfo``
+    then reports neither ``converged`` nor ``reached_max_steps``.
+    """
+    solver, X, y, params = _stall_problem(
+        solver_cls, regularizer_cls, strength, maxiter=50
+    )
+    # reject unconditionally, whatever direction the solver produces, so the test
+    # covers how the loop handles a rejection and not one particular cause of it.
+    monkeypatch.setattr(
+        solver_cls,
+        "_apply_or_reject",
+        lambda self, p, step, grad, state, fval, *args: (
+            p,
+            state.ls_state,
+            jnp.array(True),
+        ),
+    )
+
+    final_params, final_state, _ = solver.run(params, X, y)
+
+    assert bool(final_state.no_step_found)
+    assert not bool(final_state.stats.converged)
+    assert not bool(final_state.stats.reached_max_steps)
+    assert int(final_state.stats.num_steps) == 1, "the run must stop on the first stall"
+    np.testing.assert_array_equal(np.asarray(final_params), np.asarray(params))
+
+
+@pytest.mark.requires_x64
+def test_lbfgs_curvature_scales_b0_by_the_gradient_norm_while_history_is_empty():
+    """With no curvature pair the compact operator is the identity, which is unscaled.
+
+    ``B_0 = I`` makes the first direction ``-grad``, whose length is the gradient norm, and
+    a backtracking search with a bounded budget cannot always shorten it. ``initial_scale``
+    is the gradient norm, so the first step is unit length, as SciPy's L-BFGS-B does. Once
+    a pair is stored the compact representation scales itself and this must switch off.
+    """
+    curvature = LBFGSCurvature(history_length=4)
+    params = (jnp.asarray(_KINKED_PARAMS), jnp.zeros(()))
+    grad = jax.tree.map(lambda p: jnp.full_like(p, 3.0), params)
+    grad_norm = float(jnp.sqrt(lx.internal.tree_dot(grad, grad)))
+    v = jax.tree.map(lambda p: jnp.full_like(p, 0.5), params)
+
+    empty = curvature.init(params)
+    # first call: y_diff is zero, so no pair is admitted and the history stays empty
+    _, _, state = curvature.update(
+        empty, params, jax.tree.map(jnp.zeros_like, params), grad
+    )
+    assert int(state.index_start) == 0
+    np.testing.assert_allclose(float(state.initial_scale), grad_norm, rtol=1e-12)
+
+    hvp = curvature.hvp(state, params, v, None)
+    expected = jax.tree.map(lambda x: grad_norm * x, v)
+    for got, want in zip(jax.tree.leaves(hvp), jax.tree.leaves(expected)):
+        np.testing.assert_allclose(np.asarray(got), np.asarray(want), rtol=1e-12)
+
+    # the step now has unit length, where B_0 = I would give one of length ||grad||
+    np.testing.assert_allclose(
+        float(jnp.sqrt(lx.internal.tree_dot(hvp, hvp))) / grad_norm,
+        float(jnp.sqrt(lx.internal.tree_dot(v, v))),
+        rtol=1e-12,
+    )
+
+    # with a pair stored the scale must no longer be applied
+    y_diff = jax.tree.map(lambda p: jnp.full_like(p, 0.1), params)
+    # simulate a gradient change to accept a curvature update:
+    # a necessary condition for the ``update`` to be accepted
+    # is that the difference of grad with ``state.grad_prev`` is non-zero
+    grad = jax.tree.map(lambda x: x + 0.001, grad)
+    _, _, filled = curvature.update(state, params, y_diff, grad)
+    assert int(filled.index_start) == 1
+    for got, want in zip(
+        jax.tree.leaves(curvature.hvp(filled, params, v, None)),
+        jax.tree.leaves(_lbfgs_hessian_operator_fn(v, filled)),
+    ):
+        np.testing.assert_array_equal(np.asarray(got), np.asarray(want))
+
+
+@pytest.mark.requires_x64
+def test_lbfgs_curvature_floors_the_initial_scale_at_sqrt_eps():
+    """A vanishing gradient must not ask for an unbounded first step.
+
+    SciPy caps ``1 / ||d||`` at the f64 constant ``stpmx = 1e10``; the floor here is taken
+    from the parameter dtype instead, so the bound follows the working precision.
+    """
+    curvature = LBFGSCurvature(history_length=4)
+    for dtype in (jnp.float32, jnp.float64):
+        params = (jnp.zeros(3, dtype=dtype), jnp.zeros((), dtype=dtype))
+        zero_grad = jax.tree.map(jnp.zeros_like, params)
+        _, _, state = curvature.update(
+            curvature.init(params),
+            params,
+            jax.tree.map(jnp.zeros_like, params),
+            zero_grad,
+        )
+        expected = float(np.sqrt(np.finfo(np.dtype(dtype).name).eps))
+        np.testing.assert_allclose(float(state.initial_scale), expected, rtol=1e-6)
+        assert state.initial_scale.dtype == dtype, "the lax.cond branches must agree"
+
+
+_HISTORY_LENGTH = 3
+
+
+# Dense BFGS update from B_0 = gamma I, Byrd, Nocedal & Schnabel (1994) eq. (2.17).
+def _dense_bfgs(steps, grad_diffs):
+    gamma = (grad_diffs[-1] @ grad_diffs[-1]) / (steps[-1] @ grad_diffs[-1])
+    hess_approx = gamma * jnp.eye(steps[-1].shape[0])
+    for step, grad_diff in zip(steps, grad_diffs):
+        hess_step = hess_approx @ step
+        hess_approx = (
+            hess_approx
+            - jnp.outer(hess_step, hess_step) / (step @ hess_step)
+            + jnp.outer(grad_diff, grad_diff) / (grad_diff @ step)
+        )
+    return hess_approx
+
+
+# The L-BFGS matrix, assembled column by column from its hvp.
+def _lbfgs_matrix(curvature, state, x):
+    return jnp.stack(
+        [curvature.hvp(state, x, e, None) for e in jnp.eye(x.shape[0])], axis=1
+    )
+
+
+@pytest.mark.parametrize("n_updates", range(1, 2 * _HISTORY_LENGTH + 2))
+@pytest.mark.requires_x64
+def test_lbfgs_curvature_matches_dense_bfgs(n_updates):
+    """The L-BFGS operator equals the dense BFGS matrix over the last stored pairs."""
+    rng = np.random.default_rng(0)
+    A = rng.normal(size=(5, 5))
+    hessian = jnp.asarray(A @ A.T + np.eye(5))
+
+    # loss(x) = 0.5 x^T hessian x, so its gradient is hessian @ x
+    def loss_grad(x):
+        return hessian @ x
+
+    curvature = LBFGSCurvature(history_length=_HISTORY_LENGTH)
+    x = jnp.asarray(rng.normal(size=5))
+    grad = loss_grad(x)
+    # first call: zero step, so no pair is stored, only grad
+    state = curvature.init(x)
+    _, _, state = curvature.update(state, x, jnp.zeros(5), grad)
+
+    steps, grad_diffs = [], []
+    for _ in range(n_updates):
+        step = jnp.asarray(rng.normal(size=5))
+        grad_prev = grad
+        x = x + step
+        grad = loss_grad(x)
+        _, _, state = curvature.update(state, x, step, grad)
+        steps.append(step)
+        grad_diffs.append(grad - grad_prev)
+
+    lbfgs_hess = _lbfgs_matrix(curvature, state, x)
+    expected_hess = _dense_bfgs(steps[-_HISTORY_LENGTH:], grad_diffs[-_HISTORY_LENGTH:])
+    np.testing.assert_allclose(lbfgs_hess, expected_hess, rtol=1e-12, atol=1e-12)
+
+
+@pytest.mark.parametrize(
+    "grad_diff",
+    [
+        pytest.param(-jnp.eye(5)[0], id="negative"),
+        pytest.param(jnp.eye(5)[1], id="zero"),
+        pytest.param(0.5 * jnp.finfo(jnp.float64).eps * jnp.eye(5)[0], id="below-eps"),
+    ],
+)
+@pytest.mark.requires_x64
+def test_lbfgs_curvature_skips_pairs_without_positive_curvature(grad_diff):
+    """A pair with step^T grad_diff <= eps leaves the model unchanged; grad_prev moves."""
+    curvature = LBFGSCurvature(history_length=_HISTORY_LENGTH)
+    # store one valid pair, so the history is not empty
+    x = jnp.zeros(5)
+    grad_prev = jnp.ones(5)
+    state = curvature.init(x)
+    _, _, state = curvature.update(state, x, jnp.zeros(5), grad_prev)
+    step = jnp.arange(1.0, 6.0)
+    x = x + step
+    grad = grad_prev + 2.0 * step
+    _, _, state = curvature.update(state, x, step, grad)
+    hess_before = _lbfgs_matrix(curvature, state, x)
+
+    # step is e_0, so step^T grad_diff is the first entry of grad_diff
+    step = jnp.eye(5)[0]
+    x = x + step
+    new_grad = grad + grad_diff
+    _, _, new_state = curvature.update(state, x, step, new_grad)
+
+    assert int(new_state.index_start) == int(state.index_start)
+    np.testing.assert_array_equal(_lbfgs_matrix(curvature, new_state, x), hess_before)
+    np.testing.assert_array_equal(new_state.grad_prev, new_grad)
+
+
+@pytest.mark.parametrize("solver_cls, regularizer_cls, strength", _STALL_CASES)
+@pytest.mark.requires_x64
+def test_second_order_solvers_do_not_read_a_flat_optimum_as_a_failed_search(
+    solver_cls, regularizer_cls, strength
+):
+    """A search that fails at a stationary point has found the optimum, not a breakdown.
+
+    The Armijo test compares the composite objective at the trial point against its
+    value at the current one. That current value is ``value`` below, what
+    ``_slope_descent_value`` returns: the smooth loss plus the penalty. Near the optimum
+    the difference between the two is smaller than the rounding error on the objective
+    itself, so the comparison carries no information, no trial passes it, and the search
+    spends its whole budget and reports ``decrease_error > 0``. That is the normal way a
+    run ends, and calling it ``no_step_found`` would make every tight run report failure.
+
+    What tells this apart from a direction that actually blew up is the slope. Here it is
+    below ``eps * abs(value)``, the scale at which the objective can no longer be
+    resolved; a blown-up direction arrives with a slope many orders of magnitude above
+    it.
+    """
+    solver, X, y, params = _stall_problem(solver_cls, regularizer_cls, strength)
+    solver._line_search = _starve(solver._line_search)
+    state = solver.init_state(params, X, y)
+    (fval, _), grad = solver._fval_and_grad(params, X, y)
+    # Recreate what the search sees at the optimum: a slope under the rounding scale.
+    eps = np.finfo(np.float64).eps
+    # ``grad`` is a placeholder step here; ``value`` does not depend on it
+    *_, value = solver._line_search._slope_descent_value(params, grad, grad, fval)
+    # along -grad the slope is -step_length * ||grad||^2, so solve for the length
+    step_length = 0.1 * eps * abs(value) / lx.internal.tree_dot(grad, grad)
+    step = jax.tree.map(lambda g: -step_length * g, grad)
+
+    _, descent, _ = solver._line_search._slope_descent_value(params, step, grad, fval)
+    descent = float(descent)
+    assert descent < 0.0
+    assert abs(descent) <= eps * abs(float(value))
+
+    new_params, new_ls_state, no_step_found = solver._apply_or_reject(
+        params, step, grad, state, fval, X, y
+    )
+
+    assert float(new_ls_state.linesearch_state.info.decrease_error) > 0.0, (
+        "the search must have failed"
+    )
+    assert not bool(no_step_found), "a flat optimum is convergence, not a stall"
+    np.testing.assert_array_equal(np.asarray(new_params), np.asarray(params))
+
+
+@pytest.mark.parametrize("solver_cls, regularizer_cls, strength", _STALL_CASES)
+@pytest.mark.requires_x64
+def test_second_order_solvers_converge_at_a_tolerance_below_the_search_noise_floor(
+    solver_cls, regularizer_cls, strength
+):
+    """End to end: a run asking for more precision than the line search can resolve.
+
+    ``tol=1e-12`` on an objective of order one is below the point where the backtracking
+    search stops being able to show decrease, so the last iterations rest on the
+    stationary branch above. The run has to finish as ``converged``, with the iterate at
+    the optimum. Reporting ``no_step_found`` there was the regression, and this test
+    checks for it.
+    """
+    solver, X, y, params = _stall_problem(
+        solver_cls, regularizer_cls, strength, maxiter=500
+    )
+    final_params, final_state, _ = solver.run(params, X, y)
+
+    assert bool(final_state.stats.converged)
+    assert not bool(final_state.no_step_found)
+    assert not bool(final_state.stats.reached_max_steps)
+    assert np.all(np.isfinite(np.asarray(final_params)))
+
+    # and it is the optimum: no descent direction of any length improves the objective.
+    # ``_line_search.fun`` is the penalized objective for all three solvers, which is
+    # the one being minimized -- ``solver.fun`` is the smooth part alone for a proximal
+    # solver, and a step downhill on that is not a counterexample.
+    def objective(c):
+        return float(solver._line_search.fun(c, X, y))
+
+    (fval, _), grad = solver._fval_and_grad(final_params, X, y)
+    for scale in (1e-4, 1e-6, 1e-8):
+        trial = jax.tree.map(lambda p, g: p - scale * g, final_params, grad)
+        assert objective(trial) >= objective(final_params) - 1e-12
+
+
+# Poisson negative log-likelihood. Unlike ``_mse`` its Hessian changes with the iterate,
+# so Newton needs several steps instead of solving the problem in one.
+def _poisson(params, X, y):
+    eta = jnp.dot(X, params)
+    return jnp.mean(jnp.exp(eta) - y * eta)
+
+
+@pytest.mark.parametrize("solver_cls, regularizer_cls, strength", _STALL_CASES)
+@pytest.mark.requires_x64
+def test_second_order_end_to_end(solver_cls, regularizer_cls, strength):
+    np.random.seed(0)
+    X = np.random.normal(size=(200, _KINKED_PARAMS.size))
+    y = np.random.poisson(np.exp(X @ (0.3 * _KINKED_PARAMS))).astype(float)
+    params = jnp.asarray(_KINKED_PARAMS)
+    # Both runs converge in 5 steps, and the last of them is taken at the line-search
+    # noise floor, where its outcome depends on rounding and differs between the two
+    # loops. Stopping at ``maxiter=3`` compares them before that point.
+    kwargs = dict(
+        regularizer=regularizer_cls(),
+        regularizer_strength=strength,
+        has_aux=False,
+        init_params=params,
+        tol=1e-8,
+        maxiter=3,
+    )
+    solver_jit = solver_cls(_poisson, **kwargs)
+    solver_nojit = solver_cls(_poisson, jit=False, **kwargs)
+    final_params_jit, final_state_jit, _ = solver_jit.run(params, X, y)
+    final_params_nojit, final_state_nojit, _ = solver_nojit.run(params, X, y)
+    assert bool(final_state_jit.stats.reached_max_steps), (
+        "the run must still be stepping"
+    )
+    np.testing.assert_allclose(final_params_nojit, final_params_jit)
+    is_float = lambda x: hasattr(x, "dtype") and np.issubdtype(x.dtype, np.floating)
+    state_float_array_jit, state_others_jit = eqx.partition(final_state_jit, is_float)
+    state_float_array_nojit, state_others_nojit = eqx.partition(
+        final_state_nojit, is_float
+    )
+    all_close = jax.tree.map(
+        lambda x, y: bool(np.allclose(x, y)),
+        state_float_array_jit,
+        state_float_array_nojit,
+    )
+    assert all(jax.tree_util.tree_leaves(all_close)), (
+        f"floating point arrays in state aren't close:\n{all_close}"
+    )
+    same = jax.tree.map(
+        lambda x, y: bool(np.equal(x, y)), state_others_jit, state_others_nojit
+    )
+    assert all(jax.tree_util.tree_leaves(same)), (
+        f"non-floating point states aren't matched:\n{same}"
+    )

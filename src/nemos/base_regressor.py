@@ -381,7 +381,7 @@ class BaseRegressor(
         Returns
         -------
         :
-            The tag for the loss Hessian, with the two leaf sets read off the per-leaf
+            The tag for the loss Hessian, with the two leaf sets taken from the per-leaf
             claims. ``Newton`` combines it with the regularizer's tag to pick a linear
             solver; see :func:`~nemos._hess.combine_hessian_tags`.
         """
@@ -509,9 +509,9 @@ class BaseRegressor(
         actively optimized, this returns *what* the remaining leaves are held at
         (tree-prefix with ``None`` on active leaves; ``None`` when nothing is frozen).
         Derived from ``_fix_params`` alone here — its array leaves are the fixed
-        values. Subclasses fold model-specific settings in (e.g. the GLM pins the
+        values. Subclasses fold model-specific settings in (e.g. the GLM holds the
         intercept at zero when ``fit_intercept=False``); ``X`` and ``y`` let them
-        infer the shape of a pinned leaf.
+        infer the shape of a held leaf.
         """
         return self._fix_params
 
@@ -526,7 +526,7 @@ class BaseRegressor(
         User-facing entry points (``fit``, ``initialize_optimizer_and_state``) accept
         parameters in a convenient, possibly *incomplete* form: leaves that the model
         will not learn may be omitted (passed as ``None``) so the user does not have to
-        supply a value for something that is held fixed. This hook is the single seam
+        supply a value for something that is held fixed. This hook is the single place
         where such input is turned into a complete, concrete parameter set, filling in
         the omitted leaves with their fixed defaults (and warning if the user supplied a
         value for a leaf that will not be estimated).
@@ -625,6 +625,15 @@ class BaseRegressor(
             solver_name = self.solver_spec.full_name
         if regularizer is None:
             regularizer = self.regularizer
+        # count the default groups on every parameter, frozen ones included, so a
+        # per-group strength does not depend on what is frozen
+        if (
+            isinstance(regularizer, GroupLasso)
+            and regularizer.mask is None
+            and frozen_params is not None
+        ):
+            full_params = eqx.combine(init_params, frozen_params)
+            regularizer = GroupLasso(mask=regularizer.initialize_mask(full_params))
         if regularizer_strength is None:
             regularizer_strength = self.regularizer_strength
 
@@ -642,24 +651,30 @@ class BaseRegressor(
         else:
             _loss = loss
 
+        # Offer the analytic Hessian to any solver declaring it can use curvature, the
+        # same way ``_supports_stochastic`` declares stochastic support. ``getattr``
+        # covers duck-typed custom solvers that subclass nothing. These are routed
+        # arguments rather than user ones, so they bypass ``_check_solver_kwargs``.
+        if getattr(solver_cls, "_uses_hessian", False):
+            hessian_kwargs = dict(
+                hess_fn=self._get_hess_fn(frozen=frozen_params),
+                hessian_tag=self._resolve_hess_tag(init_params),
+                reg_tag=regularizer._resolve_hess_tag(
+                    init_params, self.regularizer_strength
+                ),
+            )
+        else:
+            hessian_kwargs = {}
+
         solver = solver_cls(
             _loss,
             regularizer,
             regularizer_strength,
             has_aux=self._has_aux,
             init_params=init_params,
+            **hessian_kwargs,
             **solver_kwargs,
         )
-
-        # Offer the analytic Hessian to any solver declaring it can use curvature,
-        # the same way ``_supports_stochastic`` declares stochastic support. ``getattr``
-        # covers duck-typed custom solvers that subclass nothing.
-        if getattr(solver, "_uses_hessian", False):
-            solver.setup_hessian(
-                self._get_hess_fn(frozen=frozen_params),
-                self._resolve_hess_tag(init_params),
-                regularizer._resolve_hess_tag(init_params, self.regularizer_strength),
-            )
 
         # nemos's solvers store a .fun attribute, but it's not necessary for a solver to work.
         # A test relies on having _solver_loss_fun saved, so still check and save it if possible.
@@ -1123,6 +1138,11 @@ class BaseRegressor(
         :
             A dictionary of attribute names and their values.
         """
+
+        def is_read_only_property(name):
+            cls_attr = getattr(self.__class__, name, None)
+            return isinstance(cls_attr, property) and cls_attr.fset is None
+
         set_attr = {
             name: getattr(self, name)
             for name in dir(self)
@@ -1131,15 +1151,8 @@ class BaseRegressor(
             if name.endswith("_")
             and not name.endswith("__")
             and (not callable(getattr(self, name)))
+            and not is_read_only_property(name)
         }
-        # drop attributes that have a private equivalent
-        # those are likely properties without a setter.
-        private_set_attr_names = [
-            name for name in set_attr.keys() if name.startswith("_")
-        ]
-        for name in private_set_attr_names:
-            if name[1:] in set_attr:
-                set_attr.pop(name[1:])
         return set_attr
 
     @staticmethod

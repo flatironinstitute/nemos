@@ -4,6 +4,7 @@ import operator
 from functools import partial, reduce
 from typing import Any, Callable, Optional
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jax.core import Tracer
@@ -275,6 +276,35 @@ def tree_broadcast_prefix(prefix: Any, full: Any) -> Any:
     )
 
 
+def tree_filter_like(pytree: Any, like: Any) -> Any:
+    """Keep the leaves of ``tree`` where ``like`` is not ``None``, replacing the others with ``None``.
+
+    Parameters
+    ----------
+    pytree :
+        Pytree to filter.
+    like :
+        Pytree whose ``None`` leaves mark what to drop. Must be a prefix of ``tree``,
+        with ``None`` treated as a leaf. A ``None`` in ``like`` drops the whole subtree
+        of ``tree`` below it.
+
+    Returns
+    -------
+    :
+        A pytree with the structure of ``tree``, ``None`` where ``like`` is ``None``.
+
+    Examples
+    --------
+    >>> from nemos.tree_utils import tree_filter_like
+    >>> tree_filter_like({"a": 1, "b": 2}, {"a": None, "b": 0})
+    {'a': None, 'b': 2}
+    """
+    spec = jax.tree_util.tree_map(
+        lambda x: x is not None, like, is_leaf=lambda x: x is None
+    )
+    return eqx.filter(pytree, spec)
+
+
 # The following functions are adapted from jaxopt.tree_utils
 
 tree_add = partial(jax.tree_util.tree_map, operator.add)
@@ -317,7 +347,7 @@ def tree_zeros_like(pytree_x):
     return jax.tree_util.tree_map(jnp.zeros_like, pytree_x)
 
 
-def tree_full_like(pytree_x, fill_value):
+def tree_filled_with(pytree_x, fill_value):
     """Create a tree with the same structure as pytree_x and fill it with fill_value."""
     return jax.tree_util.tree_map(lambda _: fill_value, pytree_x)
 

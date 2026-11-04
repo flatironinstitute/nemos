@@ -9,50 +9,59 @@ JAXOPT_AVAILABLE = _find_spec("jaxopt") is not None
 
 if JAXOPT_AVAILABLE:
     from jaxopt import BFGS, LBFGS, GradientDescent, NonlinearCG, ProximalGradient
+else:
+    # The adapters are still defined, so the names in the stub exist; ``JaxoptAdapter``
+    # raises on instantiation when ``_solver_cls`` is None.
+    BFGS = LBFGS = GradientDescent = NonlinearCG = ProximalGradient = None
 
-    class JaxoptGradientDescent(JaxoptStochasticSolverMixin, JaxoptAdapter):
-        """Adapter for jaxopt.GradientDescent."""
 
-        _solver_cls = GradientDescent
+class JaxoptGradientDescent(JaxoptStochasticSolverMixin, JaxoptAdapter):
+    """Adapter for jaxopt.GradientDescent."""
 
-        @property
-        def acceleration_turned_on(self) -> bool:
-            return self.acceleration
+    _solver_cls = GradientDescent
 
-        @property
-        def linesearch_turned_on(self) -> bool:
-            return self.stepsize <= 0.0
+    @property
+    def acceleration_turned_on(self) -> bool:
+        return self.acceleration
 
-    class JaxoptProximalGradient(JaxoptStochasticSolverMixin, JaxoptAdapter):
-        """
-        Adapter for jaxopt.ProximalGradient.
+    @property
+    def linesearch_turned_on(self) -> bool:
+        return self.stepsize <= 0.0
 
-        The `prox` argument passed to `jaxopt.ProximalGradient`
-        is read from the regularizer.
-        """
 
-        _solver_cls = ProximalGradient
-        _proximal = True
+class JaxoptProximalGradient(JaxoptStochasticSolverMixin, JaxoptAdapter):
+    """
+    Adapter for jaxopt.ProximalGradient.
 
-        @property
-        def acceleration_turned_on(self) -> bool:
-            return self.acceleration
+    The `prox` argument passed to `jaxopt.ProximalGradient`
+    is read from the regularizer.
+    """
 
-        @property
-        def linesearch_turned_on(self) -> bool:
-            return self.stepsize <= 0.0
+    _solver_cls = ProximalGradient
+    _proximal = True
 
-    class JaxoptBFGS(JaxoptAdapter):
-        """Adapter for jaxopt.BFGS."""
+    @property
+    def acceleration_turned_on(self) -> bool:
+        return self.acceleration
 
-        _solver_cls = BFGS
+    @property
+    def linesearch_turned_on(self) -> bool:
+        return self.stepsize <= 0.0
 
-    class JaxoptLBFGS(JaxoptAdapter):
-        """Adapter for jaxopt.LBFGS."""
 
-        _solver_cls = LBFGS
+class JaxoptBFGS(JaxoptAdapter):
+    """Adapter for jaxopt.BFGS."""
 
-    class JaxoptNonlinearCG(JaxoptAdapter):
-        """Adapter for jaxopt.NonlinearCG."""
+    _solver_cls = BFGS
 
-        _solver_cls = NonlinearCG
+
+class JaxoptLBFGS(JaxoptAdapter):
+    """Adapter for jaxopt.LBFGS."""
+
+    _solver_cls = LBFGS
+
+
+class JaxoptNonlinearCG(JaxoptAdapter):
+    """Adapter for jaxopt.NonlinearCG."""
+
+    _solver_cls = NonlinearCG

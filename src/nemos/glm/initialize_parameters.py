@@ -134,7 +134,9 @@ def compute_frozen_linear_predictor(X, frozen_coef, frozen_intercept):
             jnp.add,
             jax.tree.map(
                 lambda x1, x2: (
-                    jnp.matmul(x1, x2) if x2 is not None else jnp.array([0.0])
+                    jnp.einsum("tj, j...->t...", x1, x2)
+                    if x2 is not None
+                    else jnp.array([0.0])
                 ),
                 X,
                 frozen_coef,

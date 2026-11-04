@@ -216,7 +216,7 @@ Sometimes, it is useful to restrict the basis to a fixed range. This can help ma
 your basis covers the same range across multiple experimental sessions.
 You can specify a range for the support of your basis by setting the `bounds`
 parameter at initialization of Eval bases.
-Evaluating the basis at any sample outside the bounds will result in a NaN.
+Evaluating the basis at any sample outside the bounds returns `fill_value`, which is NaN by default.
 
 ```{code-cell} ipython3
 bspline_range = nmo.basis.BSplineEval(n_basis_funcs=n_basis, order=order, bounds=(0.2, 0.8))

@@ -480,6 +480,8 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
             getattr(self, "bounds", None),
             use_jax=is_traced(sample_pts),
         )
+        # wrap around the period
+        sample_pts %= 1
         knot_locs = self._generate_knots(is_cyclic=True)
 
         # for cyclic, do not repeat knots
@@ -602,8 +604,10 @@ def mspline(
         spline = jnp.zeros_like(x)
 
     # Special base case of first-order spline basis.
+    # The last interval is closed on the right, so that the upper bound is in the support.
     elif k == 1:
-        spline = jnp.where((x >= T[i]) & (x < T[i + 1]), 1 / (T[i + 1] - T[i]), 0.0)
+        upper = x <= T[i + 1] if T[i + 1] == T[-1] else x < T[i + 1]
+        spline = jnp.where((x >= T[i]) & upper, 1 / (T[i + 1] - T[i]), 0.0)
 
     # General case, defined recursively
     else:
@@ -747,8 +751,8 @@ def bspline_jax(
     Knots are kept in NumPy so that every span is a scalar constant of the
     compiled graph. Sub-expressions are shared across basis elements: without
     it the recursion spawns :math:`2^p` calls per element, which costs
-    compilation time (up to ~5x on the sizes we benchmarked) and buys nothing,
-    since XLA merges the duplicated branches anyway.
+    compilation time (up to ~5x on the sizes we benchmarked) with no runtime
+    gain, since XLA merges the duplicated branches anyway.
 
     Parameters
     ----------
@@ -812,9 +816,13 @@ def bspline_jax(
                 spline -= deg / span_right * basis_element(i + 1, deg - 1, der - 1)
 
         elif deg == 0:
-            spline = jnp.where(
-                (sample_pts >= knots[i]) & (sample_pts < knots[i + 1]), 1.0, 0.0
+            # the last non-empty interval is closed on the right, so that the upper
+            # bound is in the support
+            closed = knots[i] < knots[i + 1] == knots[-1]
+            upper = (sample_pts < knots[i + 1]) | (
+                closed & (sample_pts == knots[i + 1])
             )
+            spline = jnp.where((sample_pts >= knots[i]) & upper, 1.0, 0.0)
 
         else:
             spline = jnp.zeros_like(sample_pts)

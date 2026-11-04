@@ -17,7 +17,7 @@ The [`ClassifierGLM`](nemos.glm.ClassifierGLM) models categorical or discrete ou
 **Key differences from standard GLM:**
 - [`predict`](nemos.glm.ClassifierGLM.predict) returns predicted class labels
 - [`predict_proba`](nemos.glm.ClassifierGLM.predict_proba) returns (log-)probabilities for each class
-- [`set_classes`](nemos.glm.ClassifierGLM.set_classes) set class labels. By Default, classes are assumed to be `{0, ..., n_classes - 1}` however, this assumption can be overridden by calling `set_classes` passing an array of class labels.
+- [`set_classes`](nemos.glm.ClassifierGLM.set_classes) declares the class labels, which can be integers, strings, or any other hashable type. Without it, [`fit`](nemos.glm.ClassifierGLM.fit) infers them from `y`, which must then hold all `n_classes` of them. Once declared, `y` may hold any subset of the labels, and a label outside the set raises. Passing `None` clears the declaration.
 - The `observation_model` parameter cannot be set at model initialization, since [`CategoricalObservations`](nemos.observation_models.CategoricalObservations) is the only compatible observation model.
 
 ## Generate Synthetic Data
