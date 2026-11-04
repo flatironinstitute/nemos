@@ -53,7 +53,7 @@ from .utils import compute_rate_per_state
 from .validation import GLMHMMValidator
 
 
-def set_validator_parameter_converter(
+def update_validator_observation_dependent_configs(
     observation_model: Observations, validator: GLMHMMValidator
 ) -> GLMHMMValidator:
     """Set the validator to/from model parameter mapping.
@@ -61,11 +61,13 @@ def set_validator_parameter_converter(
     This convenience function sets the validator mappings between the user
     provided parameter dictionary and the model parameter class.
     """
+    commons = validator.__class__.model_param_names
     return eqx.tree_at(
         # selector
         lambda x: (
             x.to_model_params,
             x.from_model_params,
+            x.model_param_names,
         ),
         # pytree
         validator,
@@ -73,6 +75,7 @@ def set_validator_parameter_converter(
         (
             ToGLMHMMParams(ToGLMParams(observation_model.map_to)),
             FromGLMHMMParams(FromGLMParams(observation_model.map_from)),
+            frozenset({*commons, *observation_model.extra_params.keys()}),
         ),
         is_leaf=lambda x: x is None,
     )
@@ -669,7 +672,7 @@ class GLMHMM(
         """
         if isinstance(observation, str):
             self._observation_model = instantiate_observation_model(observation)
-            self._validator = set_validator_parameter_converter(
+            self._validator = update_validator_observation_dependent_configs(
                 self._observation_model, self._validator
             )
             return
@@ -677,7 +680,7 @@ class GLMHMM(
         # and that the attribute can be called
         obs.check_observation_model(observation)
         self._observation_model = observation
-        self._validator = set_validator_parameter_converter(
+        self._validator = update_validator_observation_dependent_configs(
             self._observation_model, self._validator
         )
 
