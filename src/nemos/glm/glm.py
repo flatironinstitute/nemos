@@ -847,11 +847,13 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         Returns
         -------
         :
-            The model negative log-likehood. Shape (1,).
+            The model negative log-likelihood. Shape (1,).
 
         """
         predicted_rate = self._predict(params, X)
-        return self._observation_model._negative_log_likelihood(y, predicted_rate)
+        return self._observation_model._negative_log_likelihood(
+            y, predicted_rate, extra_params=params.extra_params
+        )
 
     @cast_to_jax
     def score(
