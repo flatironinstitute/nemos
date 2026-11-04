@@ -423,6 +423,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             return "Newton"
         return super()._resolve_default_solver()
 
+    def _fitting_separable_param_only(self) -> bool:
+        non_separable_extras = [
+            k
+            for k, v in self._observation_model.extra_params.items()
+            if not v["separable"]
+        ]
+        return all(self.fix_params[k] is not None for k in non_separable_extras)
+
     def _resolve_hess_property(self) -> MatrixProperty:
         """Resolve the hessian property.
 
@@ -449,16 +457,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             link in conv_preserving_inv_links
             or LINK_NAME_TO_FUNC.get(qual_name) in conv_preserving_inv_links
         )
-        non_separable_extras = [
-            k
-            for k, v in self._observation_model.extra_params.items()
-            if not v["separable"]
-        ]
 
         return (
             MatrixProperty.POSITIVE_SEMI_DEFINITE
-            if convexity_preserving
-            or all(self.fix_params[k] is not None for k in non_separable_extras)
+            if convexity_preserving or self._fitting_separable_param_only()
             else MatrixProperty.SYMMETRIC
         )
 
@@ -725,9 +727,12 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
-        if (self.coef_ is None) or (self.intercept_ is None):
+        not_fit = [getattr(self, s + "_", None) is None for s in self.param_names]
+        if any(not_fit):
             raise NotFittedError(
-                "This GLM instance is not fitted yet. Call 'fit' with appropriate arguments."
+                "This GLM instance is not fitted yet, some fitted attributes are missing. "
+                "Call 'fit' with appropriate arguments or set the attributes manually.\n"
+                f"Missing attributes are: {not_fit}"
             )
 
     def _predict(
@@ -868,18 +873,18 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         """
         predicted_rate = self._predict(params, X)
         # if there is an extra param that is not separable, the full likelihood is needed
-        if any(
-            not v["separable"] for v in self._observation_model.extra_params.values()
-        ):
+        if self._fitting_separable_param_only():
+            loss = self._observation_model._negative_log_likelihood
+            extras = {}
+        else:
 
             def loss(*a, **kw):
                 return -self._observation_model.log_likelihood(*a, **kw)
 
-            extras = self._validator.from_model_params(params)
-        else:
-            loss = self._observation_model._negative_log_likelihood
-            extras = None
-        return loss(y, predicted_rate, extra_params=extras)
+            param_dict = self._validator.from_model_params(params)
+            extras = self._validator.filter_extra_params(param_dict)
+
+        return loss(y, predicted_rate, **extras)
 
     @cast_to_jax
     def score(
@@ -978,18 +983,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         pseudo-:math:`R^2` equations.
 
         """
+        # this guarantees that any extra distribution parameter is set
         self._check_is_fit()
-        if (
-            score_type in {"log-likelihood", "pseudo-r2-McFadden"}
-            and self.scale_ is None
-            and not self._has_constant_scale()
-        ):
-            raise ValueError(
-                "`score()` requires `scale_`, which is not set. This happens after `stochastic_fit()`"
-                " with an observation model whose scale depends on the data (e.g., Gamma, Gaussian)."
-                " Workaround: use `compute_loss(X, y)` for model comparison as it does not depend on `scale_`."
-            )
-        params = self._get_model_params()
+        # extra params (scale, dispersion) already in original space
+        param_dict = self._get_param_dict()
+        # params is in the transformed space (log(scale), log(dispersion)
+        params = self._validator.to_model_params(param_dict)
+        # extra kwargs are in regular space
+        extras = self._validator.filter_extra_params(param_dict)
 
         self._validator.validate_inputs(X, y)
         X, y = self._preprocess_inputs(X, y, drop_nans=True)
@@ -1002,8 +1003,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             score = self._observation_model.log_likelihood(
                 y,
                 self._predict(params, X),
-                self.scale_,
                 aggregate_sample_scores=aggregate_sample_scores,
+                **extras,
             )
         elif score_type.startswith("pseudo-r2"):
             score = self._observation_model.pseudo_r2(
@@ -1012,6 +1013,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
                 score_type=score_type,
                 scale=self.scale_,
                 aggregate_sample_scores=aggregate_sample_scores,
+                **extras,
             )
         else:
             raise NotImplementedError(
@@ -1104,7 +1106,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         extras = jax.tree_util.tree_map(
             jnp.full_like,
             empty_params.extra_params,
-            {k: v["default"] for k, v in self._observation_model.extra_params.items()},
+            {
+                k: self._observation_model.extra_params[k]["default"]
+                for k in self._validator.extra_param_names
+            },
         )
         # convert to GLMParams which applies mapping to extra params if needed.
         init_params = self._validator.to_model_params(
@@ -1285,8 +1290,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         self._set_model_params(params)
 
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X)
+        extras = self._validator.filter_extra_params(self._get_param_dict())
         self.scale_ = self.observation_model.estimate_scale(
-            y, self._predict(params, data), dof_resid=self.dof_resid_
+            y, self._predict(params, data), dof_resid=self.dof_resid_, **extras
         )
 
         # note that this will include an error value, which is not the same as
@@ -1463,10 +1469,12 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         if self._has_constant_scale():
             # for these families `estimate_scale` ignores `y`, `predicted_rate`, and `dof_resid`
             # the sample batch and `dof_resid=1.0` are placeholders just to satisfy the shared signature
+            extras = self._validator.filter_extra_params(self._get_param_dict())
             self.scale_ = self.observation_model.estimate_scale(
                 sample_y,
                 self._predict(params, sample_X),
                 dof_resid=1.0,
+                **extras,
             )
         else:
             # TODO: estimate residual dof and data-dependent scale after stochastic_fit
@@ -1604,12 +1612,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
         dict_params = self._get_param_dict()
         params = self._validator.to_model_params(dict_params)
-        extras = {
-            k: dict_params[k]
-            for k in self._validator.model_param_names
-            - self._validator.__class__.model_param_names
-        }
-        extras["scale"] = getattr(self, "scale_", None)
+        extras = {k: dict_params[k] for k in self._validator.extra_param_names}
+        if "scale" in self._observation_model.extra_params:
+            extras["scale"] = getattr(self, "scale_", None)
 
         # if all invalid, raise error
         validation.error_all_invalid(feedforward_input)
@@ -1631,7 +1636,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         predicted_rate = self._predict(params, feedforward_input)
         return (
             self._observation_model.sample_generator(
-                key=random_key, predicted_rate=predicted_rate, extra_params=extras
+                key=random_key, predicted_rate=predicted_rate, **extras
             ),
             predicted_rate,
         )
@@ -1881,8 +1886,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(
             X, n_samples=n_samples
         )
+        extras = self._validator.filter_extra_params(self._get_param_dict())
         self.scale_ = self.observation_model.estimate_scale(
-            y, self._predict(updated_params, data), dof_resid=self.dof_resid_
+            y, self._predict(updated_params, data), dof_resid=self.dof_resid_, **extras
         )
 
         return self._validator.from_model_params(updated_params), updated_state
@@ -1994,12 +2000,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         coef_shapes = jax.tree_util.tree_map(
             lambda x: (jnp.shape(x)[1], *extra_shape), X
         )
-        extras = (
-            self._validator.model_param_names
-            - self._validator.__class__.model_param_names
-        )
         intercept_shape = (n_observations,)
-        extra_params_shape = {k: intercept_shape for k in extras}
+        extra_params_shape = {
+            k: intercept_shape for k in self._validator.extra_param_names
+        }
         return GLMParams(
             coef=coef_shapes, intercept=intercept_shape, extra_params=extra_params_shape
         )
@@ -2500,7 +2504,15 @@ class PopulationGLM(GLM):
             def loss(params):
                 params = eqx.combine(params, frozen_params)
                 rate = self._predict(params, X, feature_mask=mask)
-                return self._observation_model._negative_log_likelihood(y, rate)
+                if self._fitting_separable_param_only():
+                    extras = {}
+                    _loss = self._observation_model._negative_log_likelihood
+                else:
+                    _loss = self._observation_model.log_likelihood
+                    extras = self._validator.filter_extra_params(
+                        self._validator.from_model_params(params)
+                    )
+                return _loss(y, rate, **extras)
 
             return jax.hessian(loss)(params)
 

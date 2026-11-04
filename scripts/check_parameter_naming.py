@@ -177,6 +177,7 @@ VALID_PAIRS = [
     {"inner_atol", "inner_rtol"},
     {"validate", "validator"},
     {"dispersion_init", "dispersion_init_kwargs"},
+    {"dispersion_init", "dispersion"},
 ]
 
 
