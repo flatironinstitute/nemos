@@ -38,8 +38,18 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         {
             "coef": 1,
             "intercept": 1,
+            "dispersion": 1,
         }
     )  # this should be (coef.ndim, intercept.ndim)
+    # Shared param names
+    # the attribute should include the names of the
+    # parameters that are fit directly.
+    model_param_names: frozenset[str] = frozenset(
+        {
+            "coef",
+            "intercept",
+        }
+    )
     model_class: str = "GLM"
     X_dimensionality: int = 2
     y_dimensionality: int = 1
@@ -167,8 +177,8 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         """
         if not isinstance(params, dict):
             raise TypeError("Parameters must of dictionary type.")
-        if not params.keys() <= self.expected_param_dims.keys():
-            raise KeyError("Parameters must have key 'coef' or 'intercept'.")
+        if not params.keys() <= self.model_param_names:
+            raise KeyError(f"Parameters must have keys {list(self.model_param_names)}.")
         return params
 
     def validate_consistency(
@@ -329,6 +339,7 @@ class PopulationGLMValidator(GLMValidator):
         {
             "coef": 2,
             "intercept": 1,
+            "dispersion": 1,
         }
     )  # this should be (coef.ndim, intercept.ndim)
     model_class: str = "PopulationGLM"
@@ -409,6 +420,7 @@ class ClassifierGLMValidator(GLMValidator):
         {
             "coef": 2,
             "intercept": 1,
+            "dispersion": 1,
         }
     )  # this should be (coef.ndim, intercept.ndim)
     model_class: str = "ClassifierGLM"
@@ -584,6 +596,7 @@ class PopulationClassifierGLMValidator(ClassifierGLMValidator):
         {
             "coef": 3,
             "intercept": 2,
+            "dispersion": 2,  # Question: 2 or 1??
         }
     )  # this should be (coef.ndim, intercept.ndim)
     model_class: str = "PopulationClassifierGLM"
