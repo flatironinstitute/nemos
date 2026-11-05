@@ -575,7 +575,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         # ``fit_intercept=False`` freezes the intercept at the value
         # ``_normalize_user_params`` fills into the init params (zeros by default).
         if not self._fit_intercept:
-            active = GLMParams(active.coef, False)
+            active = eqx.tree_at(lambda x: x.intercept, active, False)
         return active
 
     def _frozen_values(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> GLMParams:
@@ -994,6 +994,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         params = self._validator.to_model_params(param_dict)
         # extra kwargs are in regular space
         extras = self._validator.filter_extra_params(param_dict)
+        extras = {
+            **extras,
+            **{
+                k: getattr(self, k + "_")
+                for k, v in self._observation_model.extra_params.items()
+                if v["separable"]
+            },
+        }
 
         self._validator.validate_inputs(X, y)
         X, y = self._preprocess_inputs(X, y, drop_nans=True)
@@ -1014,7 +1022,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
                 y,
                 self._predict(params, X),
                 score_type=score_type,
-                scale=self.scale_,
                 aggregate_sample_scores=aggregate_sample_scores,
                 **extras,
             )
@@ -1145,8 +1152,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         """
         if not self._fit_intercept:
             self._validator.check_user_params_structure(init_params)
-            warn = init_params[-1] is not None and not jnp.array_equal(
-                self._frozen_values(X, y).intercept, init_params[-1]
+            warn = init_params["intercept"] is not None and not jnp.array_equal(
+                self._frozen_values(X, y).intercept, init_params["intercept"]
             )
             if warn:
                 warnings.warn(
@@ -1156,7 +1163,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
                     stacklevel=2,
                 )
             zeros = self._frozen_values(X, y).intercept
-            init_params = tuple([*init_params[:-1], zeros])
+            init_params = {"coef": init_params["coef"], "intercept": zeros}
         return init_params
 
     @cast_to_jax
