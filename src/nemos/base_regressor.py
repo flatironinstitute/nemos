@@ -16,7 +16,7 @@ import jax.numpy as jnp
 import numpy as np
 from numpy.typing import NDArray
 
-from . import solvers, tree_utils, utils
+from . import solvers, tree_utils
 from ._hess import (
     HessianTag,
     LeafClaim,
@@ -44,7 +44,14 @@ from .typing import (
     UserProvidedParamsT,
     ValidatorT,
 )
-from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
+from .utils import (
+    _flatten_dict,
+    _get_name,
+    _unpack_params,
+    assert_is_callable,
+    get_env_metadata,
+    is_shape_tuple,
+)
 
 _SOLVER_ARGS_CACHE = {}
 
@@ -681,7 +688,7 @@ class BaseRegressor(
         # But it's not a problem if .fun doesn't exist in user-defined solvers.
         if hasattr(solver, "fun"):
             # check that the loss is Callable
-            utils.assert_is_callable(solver.fun, "solver's loss")
+            assert_is_callable(solver.fun, "solver's loss")
             self._solver_loss_fun = solver.fun
 
         return solver
@@ -1314,9 +1321,6 @@ class BaseRegressor(
             )
 
         dtype = dtype.pop()
-
-        def is_shape_tuple(x):
-            return isinstance(x, tuple) and all(isinstance(i, int) for i in x)
 
         return jax.tree_util.tree_map(
             lambda s: jnp.empty(s, dtype=dtype), shapes, is_leaf=is_shape_tuple
