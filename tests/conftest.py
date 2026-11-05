@@ -347,8 +347,8 @@ def freeze_first_coef_leaf(model, params):
     spec = jax.tree_util.tree_unflatten(
         treedef, [leaves[0]] + [None] * (len(leaves) - 1)
     )
-    model.fix_params = (spec, None)
-    return model.fix_params[0]
+    model.fix_params = {"coef": spec, "intercept": None}
+    return model.fix_params["coef"]
 
 
 DEFAULT_KWARGS = {
@@ -1775,7 +1775,15 @@ def negativeBinomialGLM_model_instantiation():
     rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
     r = 1 / model.observation_model.extra_params["dispersion"]["default"]
     spikes = np.random.poisson(np.random.gamma(shape=r, size=rate.shape) * (r / rate))
-    return X, spikes, model, GLMParams(w_true, b_true), rate
+    return (
+        X,
+        spikes,
+        model,
+        GLMParams(
+            w_true, b_true, extra_params={"dispersion": jnp.full_like(b_true, 1 / r)}
+        ),
+        rate,
+    )
 
 
 @pytest.fixture
