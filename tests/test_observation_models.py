@@ -14,7 +14,11 @@ from nemos._observation_model_builder import (
     AVAILABLE_OBSERVATION_MODELS,
     instantiate_observation_model,
 )
+from nemos._read_only_dict import ReadOnlyDict
 from nemos.glm.initialize_parameters import initialize_intercept_matching_mean_rate
+from nemos.inverse_link_function_utils import exp
+
+OBS_MODEL_EXTRA_KEYS = {"default", "range", "map_to", "map_from", "separable"}
 
 
 @pytest.fixture
@@ -299,26 +303,17 @@ class TestPoissonObservations:
         with expectation:
             model.observation_model.pseudo_r2(y, firing_rate, score_type)
 
-    @pytest.mark.parametrize(
-        "scale, expectation",
-        [
-            (1, does_not_raise()),
-            (
-                "invalid",
-                pytest.raises(
-                    ValueError, match="The `scale` parameter must be of numeric type"
-                ),
-            ),
-        ],
-    )
-    def test_scale_setter(self, scale, expectation, poissonGLM_model_instantiation):
-        _, _, model, _, firing_rate = poissonGLM_model_instantiation
-        with expectation:
-            model.observation_model.scale = scale
+    def test_no_extra(self, poisson_observations):
+        observation_model = poisson_observations()
+        assert len(observation_model.extra_params) == 0
 
-    def test_scale_getter(self, poissonGLM_model_instantiation):
-        _, _, model, _, firing_rate = poissonGLM_model_instantiation
-        assert model.observation_model.scale == 1
+    def test_map_from(self, poisson_observations):
+        observation_model = poisson_observations()
+        assert observation_model.map_from == ReadOnlyDict({})
+
+    def test_map_to(self, poisson_observations):
+        observation_model = poisson_observations()
+        assert observation_model.map_to == ReadOnlyDict({})
 
     @pytest.mark.parametrize(
         "test_value",
@@ -379,6 +374,25 @@ class TestPoissonObservations:
 
 
 class TestGammaObservations:
+    def test_extra_params_values(self, gamma_observations):
+        observation_model = gamma_observations()
+        assert len(observation_model.extra_params) == 1
+        for k, v in observation_model.extra_params.items():
+            assert k == "scale"
+            assert v["range"] == (0, float("inf"))
+            assert v["default"] == 1.0
+            assert v["map_to"] == jnp.log
+            assert v["map_from"] == exp
+            assert v["separable"] is True
+
+    def test_map_from(self, gamma_observations):
+        observation_model = gamma_observations()
+        assert observation_model.map_from == ReadOnlyDict({"scale": exp})
+
+    def test_map_to(self, gamma_observations):
+        observation_model = gamma_observations()
+        assert observation_model.map_to == ReadOnlyDict({"scale": jnp.log})
+
     def test_get_params(self, gamma_observations):
         """Test get_params() returns expected values."""
         observation_model = gamma_observations()
@@ -472,6 +486,18 @@ class TestGammaObservations:
 
 
 class TestBernoulliObservations:
+    def test_no_extra(self, bernoulli_observations):
+        observation_model = bernoulli_observations()
+        assert len(observation_model.extra_params) == 0
+
+    def test_map_from(self, poisson_observations):
+        observation_model = poisson_observations()
+        assert observation_model.map_from == ReadOnlyDict({})
+
+    def test_map_to(self, poisson_observations):
+        observation_model = poisson_observations()
+        assert observation_model.map_to == ReadOnlyDict({})
+
     def test_get_params(self, bernoulli_observations):
         """Test get_params() returns expected values."""
         observation_model = bernoulli_observations()
@@ -556,6 +582,25 @@ class TestBernoulliObservations:
 
 
 class TestNegativeBinomialObservations:
+    def test_extra_params_values(self, negative_binomial_observations):
+        observation_model = negative_binomial_observations()
+        assert len(observation_model.extra_params) == 1
+        for k, v in observation_model.extra_params.items():
+            assert k == "dispersion"
+            assert v["range"] == (0, float("inf"))
+            assert v["default"] == 1.0
+            assert v["map_to"] == jnp.log
+            assert v["map_from"] == exp
+            assert v["separable"] is False
+
+    def test_map_from(self, negative_binomial_observations):
+        observation_model = negative_binomial_observations()
+        assert observation_model.map_from == ReadOnlyDict({"dispersion": exp})
+
+    def test_map_to(self, negative_binomial_observations):
+        observation_model = negative_binomial_observations()
+        assert observation_model.map_to == ReadOnlyDict({"dispersion": jnp.log})
+
     @pytest.mark.requires_x64
     def test_get_params(self, negative_binomial_observations):
         observation_model = negative_binomial_observations()
@@ -641,6 +686,25 @@ class TestNegativeBinomialObservations:
 
 
 class TestGaussianObservations:
+    def test_extra_params_values(self, gaussian_observations):
+        observation_model = gaussian_observations()
+        assert len(observation_model.extra_params) == 1
+        for k, v in observation_model.extra_params.items():
+            assert k == "scale"
+            assert v["range"] == (0, float("inf"))
+            assert v["default"] == 1.0
+            assert v["map_to"] == jnp.log
+            assert v["map_from"] == exp
+            assert v["separable"] is True
+
+    def test_map_from(self, gaussian_observations):
+        observation_model = gaussian_observations()
+        assert observation_model.map_from == ReadOnlyDict({"scale": exp})
+
+    def test_map_to(self, gaussian_observations):
+        observation_model = gaussian_observations()
+        assert observation_model.map_to == ReadOnlyDict({"scale": jnp.log})
+
     def test_get_params(self, gaussian_observations):
         """Test get_params() returns expected values."""
         observation_model = gaussian_observations()
@@ -756,6 +820,18 @@ class TestCategoricalObservations:
         )
         return res
 
+    def test_no_extra(self, categorical_observations):
+        observation_model = categorical_observations()
+        assert len(observation_model.extra_params) == 0
+
+    def test_map_from(self, categorical_observations):
+        observation_model = categorical_observations()
+        assert observation_model.map_from == ReadOnlyDict({})
+
+    def test_map_to(self, categorical_observations):
+        observation_model = categorical_observations()
+        assert observation_model.map_to == ReadOnlyDict({})
+
     def test_get_params(self, categorical_observations):
         """Test get_params() returns expected values."""
         observation_model = categorical_observations()
@@ -851,6 +927,30 @@ class TestCategoricalObservations:
 
 @pytest.mark.parametrize("observation_model_string", AVAILABLE_OBSERVATION_MODELS)
 class TestCommonObservationModels:
+    def test_extra_params_immutable(
+        self, observation_model_string, observation_model_rate_and_samples
+    ):
+        obs, _, _ = observation_model_rate_and_samples
+        with pytest.raises(AttributeError, match="has no attribute 'update'"):
+            obs.extra_params.update({"scale": 1})
+
+        if obs.extra_params:
+            key = list(obs.extra_params.keys())[0]
+            with pytest.raises(TypeError, match="does not support item assignment"):
+                obs.extra_params[key] = 1
+            with pytest.raises(TypeError, match="does not support item assignment"):
+                obs.extra_params[key]["default"] = 2
+
+    def test_extra_params_struct(
+        self, observation_model_string, observation_model_rate_and_samples
+    ):
+        obs, _, _ = observation_model_rate_and_samples
+        assert isinstance(obs.extra_params, ReadOnlyDict)
+        if obs.extra_params:
+            for k, v in obs.extra_params.items():
+                assert isinstance(v, ReadOnlyDict)
+                assert v.keys() == OBS_MODEL_EXTRA_KEYS
+
     @pytest.mark.parametrize("shape", [(10,), (10, 5), (10, 5, 2)])
     @pytest.mark.requires_x64
     def test_likelihood_matching(
