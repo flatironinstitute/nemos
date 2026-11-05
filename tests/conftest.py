@@ -51,16 +51,16 @@ from nemos.basis._basis_mixin import (
 from nemos.glm.params import GLMParams
 from nemos.glm.validation import GLMValidator
 from nemos.glm_hmm.initialize_parameters import random_glm_params_init
-from nemos.glm_hmm.params import GLMHMMModelParams, GLMHMMParams
+from nemos.glm_hmm.params import GLMHMMParams
 from nemos.hmm.hmm import BaseHMM
 from nemos.hmm.initialize_parameters import (
     HMM_INITIALIZATION_FN_DICT,
     sticky_transition_proba_init,
     uniform_initial_proba_init,
 )
-from nemos.hmm.params import HMMParams
+from nemos.hmm.params import HMMParams, from_hmm_params, to_hmm_params
 from nemos.hmm.utils import initialize_session_starts
-from nemos.hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
+from nemos.hmm.validation import HMMValidator
 from nemos.params import ModelParams
 from nemos.regularizer import UnRegularized
 from nemos.solvers import get_solver
@@ -2146,16 +2146,18 @@ def instantiate_glm_hmm_func(
         model.transition_prob_ = None
     else:
         rates, latent_states = None, None
-
+    extras = {k: scale for k in model.observation_model.extra_params}
+    if extras == {}:
+        extras = None
     return ModelFixture(
         X=X,
         y=y,
         model=model,
         params=GLMHMMParams(
-            model_params=GLMHMMModelParams(
+            model_params=GLMParams(
                 coef=coef,
                 intercept=intercept,
-                log_scale=scale,
+                extra_params=extras,
             ),
             hmm_params=HMMParams(
                 log_initial_prob=jnp.log(init_prob),
