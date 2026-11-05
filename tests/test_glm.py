@@ -329,7 +329,9 @@ class TestGLM:
             init_w = jnp.zeros((*par_shape.coef, *(1,) * delta))
 
         with expectation:
-            model.fit(X, y, init_params=(init_w, true_params.intercept))
+            model.fit(
+                X, y, init_params={"coef": init_w, "intercept": true_params.intercept}
+            )
 
     @pytest.mark.parametrize("dim_intercepts", [0, 1, 2, 3, 4])
     @pytest.mark.solver_related
@@ -365,7 +367,7 @@ class TestGLM:
             init_b = jnp.zeros((*par_shape.intercept, *(1,) * delta))
 
         with expectation:
-            model.fit(X, y, init_params=(init_w, init_b))
+            model.fit(X, y, init_params={"coef": init_w, "intercept": init_b})
 
     """
     Parameterization used by test_fit_init_params_type and test_initialize_optimizer_init_params_type.
@@ -378,98 +380,91 @@ class TestGLM:
             (
                 does_not_raise(),
                 {
-                    "GLM": [jnp.zeros((5,)), jnp.zeros((1,))],
-                    "PopulationGLM": [jnp.zeros((5, 3)), jnp.zeros((3,))],
-                    "ClassifierGLM": [jnp.zeros((5, 3)), jnp.zeros((3,))],
-                    "ClassifierPopulationGLM": [
-                        jnp.zeros((5, 3, 3)),
-                        jnp.zeros((3, 3)),
-                    ],
-                },
-            ),
-            (
-                pytest.raises(ValueError, match="Params must have length two."),
-                {
-                    "GLM": [[jnp.zeros((1, 5)), jnp.zeros((1,))]],
-                    "PopulationGLM": [[jnp.zeros((1, 5)), jnp.zeros((3,))]],
-                    "ClassifierGLM": [[jnp.zeros((1, 5)), jnp.zeros((3,))]],
-                    "ClassifierPopulationGLM": [[jnp.zeros((1, 5)), jnp.zeros((3, 3))]],
+                    "GLM": {"coef": jnp.zeros((5,)), "intercept": jnp.zeros((1,))},
+                    "PopulationGLM": {
+                        "coef": jnp.zeros((5, 3)),
+                        "intercept": jnp.zeros((3,)),
+                    },
+                    "ClassifierGLM": {
+                        "coef": jnp.zeros((5, 3)),
+                        "intercept": jnp.zeros((3,)),
+                    },
+                    "ClassifierPopulationGLM": {
+                        "coef": jnp.zeros((5, 3, 3)),
+                        "intercept": jnp.zeros((3, 3)),
+                    },
                 },
             ),
             (
                 pytest.raises(
-                    TypeError, match="GLM params must be a tuple/list of length two"
+                    ValueError,
+                    match="The user-provided parameter dictionary is incomplete",
                 ),
                 {
-                    "GLM": dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))),
-                    "PopulationGLM": dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))),
-                    "ClassifierGLM": dict(p1=jnp.zeros((5, 3)), p2=jnp.zeros((3,))),
-                    "ClassifierPopulationGLM": dict(
-                        p1=jnp.zeros((5, 3, 3)), p2=jnp.zeros((3, 3))
-                    ),
+                    "GLM": {"coef": jnp.zeros((5,))},
+                    "PopulationGLM": {"coef": jnp.zeros((1, 5))},
+                    "ClassifierGLM": {"coef": jnp.zeros((5, 3))},
+                    "ClassifierPopulationGLM": {"coef": jnp.zeros((5, 3))},
                 },
             ),
             (
                 pytest.raises(TypeError, match="X and coef have mismatched structure"),
                 {
-                    "GLM": [
-                        dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))),
-                        jnp.zeros((1,)),
-                    ],
-                    "PopulationGLM": [
-                        dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((2, 3))),
-                        jnp.zeros((3,)),
-                    ],
-                    "ClassifierGLM": [
-                        dict(p1=jnp.zeros((5, 3)), p2=jnp.zeros((1, 3))),
-                        jnp.zeros((3,)),
-                    ],
-                    "ClassifierPopulationGLM": [
-                        dict(p1=jnp.zeros((5, 3, 3)), p2=jnp.zeros((1, 3, 3))),
-                        jnp.zeros((3, 3)),
-                    ],
+                    "GLM": {
+                        "coef": dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))),
+                        "intercept": jnp.zeros((1,)),
+                    },
+                    "PopulationGLM": {
+                        "coef": dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((2, 3))),
+                        "intercept": jnp.zeros((3,)),
+                    },
+                    "ClassifierGLM": {
+                        "coef": dict(p1=jnp.zeros((5, 3)), p2=jnp.zeros((1, 3))),
+                        "intercept": jnp.zeros((3,)),
+                    },
+                    "ClassifierPopulationGLM": {
+                        "coef": dict(p1=jnp.zeros((5, 3, 3)), p2=jnp.zeros((1, 3, 3))),
+                        "intercept": jnp.zeros((3, 3)),
+                    },
                 },
             ),
             (
                 pytest.raises(TypeError, match="X and coef have mismatched structure"),
                 {
-                    "GLM": [
-                        {"p1": jnp.zeros((5,)), "p2": jnp.zeros((5,))},
-                        jnp.zeros((1,)),
-                    ],
-                    "PopulationGLM": [
-                        {"p1": jnp.zeros((3, 3)), "p2": jnp.zeros((3, 2))},
-                        jnp.zeros((3,)),
-                    ],
-                    "ClassifierGLM": [
-                        {"p1": jnp.zeros((5, 3)), "p2": jnp.zeros((5, 3))},
-                        jnp.zeros((3,)),
-                    ],
-                    "ClassifierPopulationGLM": [
-                        {"p1": jnp.zeros((5, 3, 3)), "p2": jnp.zeros((5, 3, 3))},
-                        jnp.zeros((3, 3)),
-                    ],
+                    "GLM": {
+                        "coef": {"p1": jnp.zeros((5,)), "p2": jnp.zeros((5,))},
+                        "intercept": jnp.zeros((1,)),
+                    },
+                    "PopulationGLM": {
+                        "coef": {"p1": jnp.zeros((3, 3)), "p2": jnp.zeros((3, 2))},
+                        "intercept": jnp.zeros((3,)),
+                    },
+                    "ClassifierGLM": {
+                        "coef": {"p1": jnp.zeros((5, 3)), "p2": jnp.zeros((5, 3))},
+                        "intercept": jnp.zeros((3,)),
+                    },
+                    "ClassifierPopulationGLM": {
+                        "coef": {
+                            "p1": jnp.zeros((5, 3, 3)),
+                            "p2": jnp.zeros((5, 3, 3)),
+                        },
+                        "intercept": jnp.zeros((3, 3)),
+                    },
                 },
             ),
             # Model-independent invalid params - single value used for all models
-            (pytest.raises(ValueError, match="Params must have length two."), 0),
+            (pytest.raises(TypeError, match="Parameters must of dictionary type"), 0),
             (
                 pytest.raises(
-                    TypeError, match="GLM params must be a tuple/list of length two"
+                    TypeError, match="Failed to convert parameters to JAX arrays"
                 ),
-                {0, 1},
+                {"coef": jnp.zeros((1, 5)), "intercept": ""},
             ),
             (
                 pytest.raises(
                     TypeError, match="Failed to convert parameters to JAX arrays"
                 ),
-                [jnp.zeros((1, 5)), ""],
-            ),
-            (
-                pytest.raises(
-                    TypeError, match="Failed to convert parameters to JAX arrays"
-                ),
-                ["", jnp.zeros((1,))],
+                {"coef": "", "intercept": jnp.zeros((1,))},
             ),
         ],
     )
@@ -483,7 +478,7 @@ class TestGLM:
         """
         model_name = model.__class__.__name__
         if isinstance(init_params_by_model, dict):
-            return init_params_by_model[model_name]
+            return init_params_by_model.get(model_name, init_params_by_model)
         return init_params_by_model
 
     @pytest.mark.parametrize(*fit_init_params_type_init_params)
@@ -539,7 +534,7 @@ class TestGLM:
         init_w = jnp.zeros(wrong_coef_shape)
         init_b = jnp.zeros(par_shape.intercept)
         with expectation:
-            model.fit(X, y, init_params=(init_w, init_b))
+            model.fit(X, y, init_params={"coef": init_w, "intercept": init_b})
 
     #######################
     # Test model.score
@@ -864,7 +859,9 @@ class TestGLM:
                 par_shape.coef + (1,) * (dim_weights - len(par_shape.coef))
             )
         with expectation:
-            model.initialize_optimizer_and_state((init_w, true_params.intercept), X, y)
+            model.initialize_optimizer_and_state(
+                {"coef": init_w, "intercept": true_params.intercept}, X, y
+            )
 
     @pytest.mark.parametrize("dim_intercepts", [0, 1, 2, 3])
     @pytest.mark.solver_related
@@ -910,7 +907,9 @@ class TestGLM:
 
         init_w = jnp.zeros(par_shape.coef)
         with expectation:
-            model.initialize_optimizer_and_state((init_w, init_b), X, y)
+            model.initialize_optimizer_and_state(
+                {"coef": init_w, "intercept": init_b}, X, y
+            )
 
     @pytest.mark.parametrize(*fit_init_params_type_init_params)
     @pytest.mark.solver_related
@@ -963,7 +962,9 @@ class TestGLM:
         init_w = jnp.zeros(wrong_coef_shape)
         init_b = jnp.zeros(par_shape.intercept)
         with expectation:
-            model.initialize_optimizer_and_state((init_w, init_b), X, y)
+            model.initialize_optimizer_and_state(
+                {"coef": init_w, "intercept": init_b}, X, y
+            )
 
     #######################
     # Test model.simulate
@@ -1135,7 +1136,7 @@ class TestGLM:
                 },
                 # coef pinned, intercept left learnable: a spec with both an array and a
                 # ``None`` leaf, the latter being the fragile half of the round-trip
-                (jnp.ones((3,)), None),
+                {"coef": jnp.ones((3,)), "intercept": None},
             ),
             (
                 nmo.glm.PopulationGLM,
@@ -1146,7 +1147,7 @@ class TestGLM:
                     "dof_resid_": 3,
                     "aux_": None,
                 },
-                (jnp.ones((3, 1)), None),
+                {"coef": jnp.ones((3, 1)), "intercept": None},
             ),
             (
                 nmo.glm.ClassifierGLM,
@@ -1158,7 +1159,7 @@ class TestGLM:
                     "aux_": None,
                     "classes": np.array([2, 3]),
                 },
-                (jnp.ones((3, 2)), None),
+                {"coef": jnp.ones((3, 2)), "intercept": None},
             ),
             (
                 nmo.glm.ClassifierPopulationGLM,
@@ -1170,7 +1171,7 @@ class TestGLM:
                     "aux_": None,
                     "classes": np.array([2, 3]),
                 },
-                (jnp.ones((3, 1, 2)), None),
+                {"coef": jnp.ones((3, 1, 2)), "intercept": None},
             ),
         ],
     )
@@ -1244,7 +1245,13 @@ class TestGLM:
             if isinstance(init_val, (int, float, str, type(None))):
                 assert init_val == load_val, f"{key} mismatch: {init_val} != {load_val}"
             elif isinstance(init_val, dict):
-                assert init_val == load_val, (
+                tree = jax.tree_util.tree_map(
+                    lambda x, y: jnp.all(x == y),
+                    init_val,
+                    load_val,
+                    is_leaf=lambda x: x is None,
+                )
+                assert all(jax.tree_util.tree_leaves(tree)), (
                     f"{key} dict mismatch: {init_val} != {load_val}"
                 )
             elif isinstance(init_val, (np.ndarray, jnp.ndarray)):
@@ -1726,7 +1733,7 @@ class TestNormalizeUserParams:
         """With ``fit_intercept=True`` the user params are returned unchanged."""
         X, y, model, true_params, _ = poissonGLM_model_instantiation
         model.fit_intercept = True
-        init_params = (true_params.coef, true_params.intercept)
+        init_params = {"coef": true_params.coef, "intercept": true_params.intercept}
         assert model._normalize_user_params(init_params, X, y) is init_params
 
     @pytest.mark.filterwarnings("error::UserWarning")
@@ -1748,15 +1755,15 @@ class TestNormalizeUserParams:
         intercept = true_params.intercept + 5.0 if supply_intercept else None
 
         with expectation:
-            coef, out_intercept = model._normalize_user_params(
-                (true_params.coef, intercept),
+            norm_params = model._normalize_user_params(
+                {"coef": true_params.coef, "intercept": intercept},
                 X.astype(np.float32),
                 y.astype(np.float32),
             )
 
-        np.testing.assert_array_equal(coef, true_params.coef)
+        np.testing.assert_array_equal(norm_params["coef"], true_params.coef)
         np.testing.assert_array_equal(
-            out_intercept, jnp.zeros_like(true_params.intercept)
+            norm_params["intercept"], jnp.zeros_like(true_params.intercept)
         )
 
     @pytest.mark.parametrize("n_elements", [1, 3])
@@ -1766,8 +1773,8 @@ class TestNormalizeUserParams:
         """A user-params tuple whose length is not two is rejected."""
         X, y, model, true_params, _ = poissonGLM_model_instantiation
         model.fit_intercept = False
-        bad_params = (true_params.coef,) * n_elements
-        with pytest.raises(ValueError, match="length two"):
+        bad_params = {"coef": true_params.coef}
+        with pytest.raises(ValueError, match="The user-provided parameter dictionary"):
             model._normalize_user_params(bad_params, X, y)
 
 
@@ -1936,9 +1943,16 @@ class TestHessianTag:
         if freeze == "coef_leaf":
             freeze_first_coef_leaf(model, true_params)
         elif freeze != "none":
-            model.fix_params = (
-                true_params.coef if freeze in ("coef", "both") else None,
-                true_params.intercept if freeze in ("intercept", "both") else None,
+            model.fix_params = dict(
+                [
+                    ("coef", true_params.coef if freeze in ("coef", "both") else None),
+                    (
+                        "intercept",
+                        true_params.intercept
+                        if freeze in ("intercept", "both")
+                        else None,
+                    ),
+                ]
             )
 
     @pytest.mark.parametrize(
@@ -1954,7 +1968,13 @@ class TestHessianTag:
         Cholesky solve quietly turning into a least-squares one.
         """
         model = instantiate_base_regressor_subclass.model
-        assert model._resolve_hess_property() is MatrixProperty.POSITIVE_SEMI_DEFINITE
+        if any(
+            not v["separable"] for v in model.observation_model.extra_params.values()
+        ):
+            prop = MatrixProperty.SYMMETRIC
+        else:
+            prop = MatrixProperty.POSITIVE_SEMI_DEFINITE
+        assert model._resolve_hess_property() is prop
 
     @pytest.mark.parametrize(
         "instantiate_base_regressor_subclass", _UNDECLARED_LINK, indirect=True
@@ -2085,11 +2105,13 @@ class TestFitInterceptIterative:
         or more update steps, while the coefficients are updated."""
         X, y, model, true_params, _ = request.getfixturevalue(model_fixture)
         model.fit_intercept = False
-        coef0, _ = model.initialize_params(X, y)
+        coef0 = model.initialize_params(X, y)["coef"]
         # omit the frozen intercept on setup (the sanctioned input); no warning
-        state = model.initialize_optimizer_and_state((coef0, None), X, y)
+        state = model.initialize_optimizer_and_state(
+            {"coef": coef0, "intercept": None}, X, y
+        )
 
-        params = (coef0, None)
+        params = {"coef": coef0, "intercept": None}
         for _ in range(n_updates):
             params, state = model.update(params, state, X, y)
 
@@ -2103,13 +2125,15 @@ class TestFitInterceptIterative:
         solver, so a subsequent update raises instead of using the stale solver."""
         X, y, model, true_params, _ = request.getfixturevalue(model_fixture)
         model.fit_intercept = False
-        coef0, _ = model.initialize_params(X, y)
-        state = model.initialize_optimizer_and_state((coef0, None), X, y)
+        coef0 = model.initialize_params(X, y)["coef"]
+        state = model.initialize_optimizer_and_state(
+            {"coef": coef0, "intercept": None}, X, y
+        )
 
         model.fit_intercept = True  # flip -> invalidates the solver
 
         with pytest.raises(RuntimeError, match="invalid state"):
-            model.update((coef0, None), state, X, y)
+            model.update({"coef": coef0, "intercept": None}, state, X, y)
 
 
 @pytest.mark.parametrize("glm_type", ["", "population_"])
@@ -2309,7 +2333,7 @@ class TestGLMObservationModel:
             inverse_link_function = "logistic"
             solver_name = default_solver_name
         elif "negativeBinomial" in model_instantiation:
-            observation_model = "NegativeBinomialObservations(scale=1.0)"
+            observation_model = "NegativeBinomialObservations()"
             inverse_link_function = "exp"
             solver_name = lbfgs_solver_name
         elif "gaussian" in model_instantiation:
@@ -2388,9 +2412,28 @@ class TestGLMObservationModel:
         # fit both models
         model.solver_kwargs.update(dict(tol=1e-12, maxiter=10**5))
         model_tree.solver_kwargs.update(dict(tol=1e-12, maxiter=10**5))
-        model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
+        extra = (
+            {"dispersion": jnp.ones_like(true_params.intercept)}
+            if "dispersion" in model.observation_model.extra_params
+            else {}
+        )
+        model.fit(
+            X,
+            y,
+            init_params={
+                "coef": true_params.coef,
+                "intercept": true_params.intercept,
+                **extra,
+            },
+        )
         model_tree.fit(
-            X_tree, y, init_params=(true_params_tree.coef, true_params_tree.intercept)
+            X_tree,
+            y,
+            init_params={
+                "coef": true_params_tree.coef,
+                "intercept": true_params_tree.intercept,
+                **extra,
+            },
         )
 
         # get the flat parameters
@@ -2433,6 +2476,7 @@ class TestGLMObservationModel:
         )
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
+        model.dispersion_ = jnp.ones_like(true_params.intercept)
         with expectation:
             model.score(X, y, score_type=score_type)
 
@@ -2451,6 +2495,7 @@ class TestGLMObservationModel:
         # set model coeff
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
+        model.dispersion_ = jnp.ones_like(true_params.intercept)
         if is_population_model(model):
             model._feature_mask = initialize_feature_mask_for_population_glm(
                 X, y.shape[1], coef=true_params.coef
@@ -2481,6 +2526,8 @@ class TestGLMObservationModel:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
+        if "dispersion" not in model.observation_model.extra_params:
+            return
         params = model.initialize_params(X, y)
         state = model.initialize_optimizer_and_state(params, X, y)
         assert model.coef_ is None
@@ -2515,6 +2562,7 @@ class TestGLMObservationModel:
         )
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
+        model.dispersion_ = jnp.ones_like(true_params.intercept)
         if is_population_model(model):
             model._feature_mask = initialize_feature_mask_for_population_glm(
                 X, y.shape[1], coef=true_params.coef
@@ -2549,7 +2597,8 @@ class TestGLMObservationModel:
         )
         model.coef_ = params.coef
         model.intercept_ = params.intercept
-        model.scale_ = model.observation_model.scale
+        model.scale_ = jnp.ones_like(params.intercept)
+        model.dispersion_ = jnp.ones_like(params.intercept)
         if is_population_model(model):
             model._feature_mask = initialize_feature_mask_for_population_glm(
                 X, y.shape[1], coef=params.coef
@@ -2890,14 +2939,15 @@ class TestGLMObservationModel:
         else:
             X = {f"{k}": np.ones(s) for k, s in enumerate(X_shape)}
         y = y[: y_shape[0]]
-        coef, intercept = model.initialize_params(X, y)
+        prs = model.initialize_params(X, y)
         coef_shape, intercept_shape = self._get_expected_par_shape(X, y, model)
 
         if any(
-            c.shape != s for c, s in zip(jax.tree_util.tree_leaves(coef), coef_shape)
+            c.shape != s
+            for c, s in zip(jax.tree_util.tree_leaves(prs["coef"]), coef_shape)
         ):
             raise ValueError("Shape mismatch coefficients")
-        if intercept.shape != intercept_shape:
+        if prs["intercept"].shape != intercept_shape:
             raise ValueError("Shape mismatch intercepts")
 
     @pytest.mark.parametrize("pytree_x_factory", _PYTREE_X_FACTORIES)
@@ -2907,8 +2957,10 @@ class TestGLMObservationModel:
         """Coef tree structure matches X structure after initialize_params with pytree X."""
         _, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
         X = pytree_x_factory(y.shape[0])
-        coef, _ = model.initialize_params(X, y)
-        assert jax.tree_util.tree_structure(coef) == jax.tree_util.tree_structure(X)
+        params = model.initialize_params(X, y)
+        assert jax.tree_util.tree_structure(
+            params["coef"]
+        ) == jax.tree_util.tree_structure(X)
 
     @pytest.mark.parametrize("pytree_x_factory", _PYTREE_X_FACTORIES)
     @pytest.mark.solver_related
@@ -2930,7 +2982,7 @@ class TestGLMObservationModel:
 
     @pytest.mark.solver_related
     def test_get_model_params_round_trip(
-        self, request, glm_type, model_instantiation, mock_glm_fit
+        self, request, glm_type, model_instantiation, mock_glm_optimizer_run
     ):
         """get_model_params returns the fitted coef_ and intercept_."""
         X, y, model, _, _ = request.getfixturevalue(glm_type + model_instantiation)
@@ -2939,7 +2991,7 @@ class TestGLMObservationModel:
             jnp.array_equal,
             all,
             model.get_model_params(),
-            (model.coef_, model.intercept_),
+            {k: getattr(model, k + "_") for k in model._validator.model_param_names},
         )
 
     @pytest.mark.parametrize("pytree_x_factory", _PYTREE_X_FACTORIES)
@@ -2960,7 +3012,7 @@ class TestGLMObservationModel:
             jnp.array_equal,
             all,
             model.get_model_params(),
-            (model.coef_, model.intercept_),
+            {k: getattr(model, k + "_") for k in model._validator.model_param_names},
         )
 
     @pytest.mark.parametrize(
@@ -2993,7 +3045,8 @@ class TestGLMObservationModel:
         X = pytree_x_factory(y.shape[0])
         model.fit(X, y)
 
-        coef, _ = model.get_model_params()
+        prs = model.get_model_params()
+        coef = prs["coef"]
         before = deepcopy(model.coef_)
 
         mutate_coef(coef)
@@ -4734,7 +4787,11 @@ class TestNegativeBinomialGLM:
         )
         # intialize to true params
         model.inverse_link_function = inv_link
-        model.fit(X, y, init_params=(true_params.coef, true_params.intercept))
+        model.fit(
+            X,
+            y,
+            init_params={"coef": true_params.coef, "intercept": true_params.intercept},
+        )
 
     def test_score_glm(self, inv_link, request, glm_type, model_instantiation):
         """
@@ -5308,13 +5365,17 @@ class TestClassifierGLM:
 
         # Compute loss with default labels
         model.set_classes(np.arange(model.n_classes))
-        loss_default = model.compute_loss((model.coef_, model.intercept_), X, y)
+        loss_default = model.compute_loss(
+            {"coef": model.coef_, "intercept": model.intercept_}, X, y
+        )
 
         # Compute loss with string labels
         label = np.array([chr(i) for i in range(ord("a"), ord("a") + model.n_classes)])
         model.set_classes(label)
         y_label = model._label_encoder.decode(y)
-        loss_label = model.compute_loss((model.coef_, model.intercept_), X, y_label)
+        loss_label = model.compute_loss(
+            {"coef": model.coef_, "intercept": model.intercept_}, X, y_label
+        )
 
         assert jnp.allclose(loss_default, loss_label)
 
