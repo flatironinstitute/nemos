@@ -20,10 +20,10 @@ _ANALYTICAL_SCALE_UPDATE: dict[Type[Observations], Callable] = {
 }
 
 
-def map_from(extra_params: dict | None, observation_model: Observations):
+def map_from(extra_params: dict | None, observation_model: Observations) -> dict:
     """Convenience wrapping mapping wrapper."""
     if extra_params is None:
-        return extra_params
+        return {}
     return {
         k: observation_model.extra_params[k]["map_from"](p)
         for k, p in extra_params.items()
@@ -234,12 +234,12 @@ def prepare_estep_log_likelihood(
         Log-likelihood function vmapped over states for E-step.
         Signature: (y, rate, scale) -> log_likelihood per state
     """
-    # Vectorize over the states axis
-    state_axes = 2 if is_population_glm else 1
+    # Vectorize over the states axis, currently hard-coded: state as last axis
+    state_axes = -1
 
     def log_likelihood_per_sample(x, z, s):
         return observation_model.log_likelihood(
-            x, z, extra_params=s, aggregate_sample_scores=lambda v: v
+            x, z, aggregate_sample_scores=lambda v: v, **s
         )
 
     if has_no_extra_params(observation_model):
@@ -252,7 +252,7 @@ def prepare_estep_log_likelihood(
     else:
         vmap_log_likelihood_per_sample = jax.vmap(
             log_likelihood_per_sample,
-            in_axes=(None, state_axes, state_axes - 1),
+            in_axes=(None, state_axes, state_axes),
             out_axes=state_axes,
         )
 
@@ -332,7 +332,7 @@ def prepare_mstep_nll_objective_param(
         Objective function for optimizing GLM coefficients and intercept.
         Signature: (glm_params, design_matrix, observations, posteriors) -> scalar
     """
-    state_axes = 2 if is_population_glm else 1
+    state_axes = -1
 
     if all(v["separable"] for v in observation_model.extra_params.values()):
 
@@ -351,13 +351,13 @@ def prepare_mstep_nll_objective_param(
 
         def negative_log_likelihood_per_sample(x, z, s):
             return -1 * observation_model.log_likelihood(
-                x, z, extra_params=s, aggregate_sample_scores=lambda v: v
+                x, z, aggregate_sample_scores=lambda v: v, **s
             )
 
         # assume all extra params have the same shape
         negative_log_likelihood = jax.vmap(
             negative_log_likelihood_per_sample,
-            in_axes=(None, state_axes, state_axes - 1),
+            in_axes=(None, state_axes, state_axes),
             out_axes=state_axes,
         )
 
@@ -398,16 +398,16 @@ def prepare_mstep_nll_objective_extra_params(
         Objective function for optimizing scale parameters.
         Signature: (scale, observations, predicted_rate, posteriors) -> scalar
     """
-    state_axes = 2 if is_population_glm else 1
+    state_axes = -1
 
     def norm_negative_log_likelihood_per_sample(x, z, s):
         return -1 * observation_model.log_likelihood(
-            x, z, extra_params=s, aggregate_sample_scores=lambda v: v
+            x, z, aggregate_sample_scores=lambda v: v, **s
         )
 
     norm_negative_log_likelihood = jax.vmap(
         norm_negative_log_likelihood_per_sample,
-        in_axes=(None, state_axes, state_axes - 1),
+        in_axes=(None, state_axes, state_axes),
         out_axes=state_axes,
     )
 

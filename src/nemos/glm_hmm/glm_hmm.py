@@ -1065,7 +1065,7 @@ class GLMHMM(
 
             # sample observation
             y_t = self._observation_model.sample_generator(
-                key=obs_key, predicted_rate=rate, extra_params=state_extra_params
+                key=obs_key, predicted_rate=rate, **state_extra_params
             )
 
             return state_idx, (y_t, rate, state_idx)
