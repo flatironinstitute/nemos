@@ -100,6 +100,10 @@ class FromGLMParams(eqx.Module):
             {} if glm_params.extra_params is None else glm_params.extra_params
         )
         user_params.update(
-            {k: self.map_from.get(k, identity)(v) for k, v in extra_params.items()}
+            {
+                k: self.map_from.get(k, identity)(v)
+                for k, v in extra_params.items()
+                if v is not None
+            }
         )
         return user_params
