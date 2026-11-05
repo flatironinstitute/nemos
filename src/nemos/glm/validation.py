@@ -390,6 +390,22 @@ class PopulationGLMValidator(GLMValidator):
                     f"Intercept has shape {params.intercept.shape}, "
                     f"but y has {n_neurons} neurons"
                 )
+            matches = jax.tree_util.tree_map(
+                lambda x: x.shape == (n_neurons,), params.extra_params
+            )
+            if not all(jax.tree_util.tree_leaves(matches)):
+                msg = (
+                    f"Inconsistent number of neurons. y has {n_neurons} neurons, "
+                    "but the following parameters have shapes:"
+                )
+                msg += "".join(
+                    [
+                        "\n- '{}': {}".format(k, v.shape)
+                        for k, v in params.extra_params.items()
+                    ]
+                )
+                msg += f"\ninstead of ({n_neurons},)."
+                raise ValueError(msg)
 
     def additional_validation_param_specs(
         self, params: GLMParams[jnp.ndarray | NDArray], **kwargs

@@ -460,7 +460,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
         return (
             MatrixProperty.POSITIVE_SEMI_DEFINITE
-            if convexity_preserving or self._fitting_separable_param_only()
+            if convexity_preserving and self._fitting_separable_param_only()
             else MatrixProperty.SYMMETRIC
         )
 
@@ -1103,19 +1103,23 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
                 frozen_intercept=frozen_intercept,
                 rate_range=self.observation_model.rate_range,
             )
-        extras = jax.tree_util.tree_map(
-            jnp.full_like,
-            empty_params.extra_params,
-            {
-                k: self._observation_model.extra_params[k]["default"]
-                for k in self._validator.extra_param_names
-            },
-        )
+        if empty_params.extra_params is not None:
+            extras = jax.tree_util.tree_map(
+                jnp.full_like,
+                empty_params.extra_params,
+                {
+                    k: self._observation_model.extra_params[k]["default"]
+                    for k in self._validator.extra_param_names
+                },
+            )
+        else:
+            extras = {}
         # convert to GLMParams which applies mapping to extra params if needed.
         init_params = self._validator.to_model_params(
             {"coef": initial_coef, "intercept": initial_intercept, **extras}
         )
-
+        # prioritize frozen
+        init_params = eqx.combine(frozen, init_params)
         self._validator.feature_mask_consistency(
             getattr(self, "_feature_mask", None), init_params
         )
@@ -2001,9 +2005,12 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             lambda x: (jnp.shape(x)[1], *extra_shape), X
         )
         intercept_shape = (n_observations,)
-        extra_params_shape = {
-            k: intercept_shape for k in self._validator.extra_param_names
-        }
+        extra_params_shape = (
+            {k: intercept_shape for k in self._validator.extra_param_names}
+            if self._validator.extra_param_names
+            else None
+        )
+
         return GLMParams(
             coef=coef_shapes, intercept=intercept_shape, extra_params=extra_params_shape
         )
@@ -2252,7 +2259,12 @@ class PopulationGLM(GLM):
     # ``intercept``. The sign and the per-leaf claims are inherited from ``GLM`` and hold
     # block by block — each neuron's intercept block is that neuron's sum of weights.
     _hess_structure = MatrixStructure.BLOCK_DIAGONAL
-    _hess_batch_axes = GLMParams(1, 0, None)
+
+    @property
+    def _hess_batch_axes(self):
+        if self._validator.extra_param_names:
+            return GLMParams(1, 0, 0)
+        return GLMParams(1, 0, None)
 
     def __init__(
         self,
@@ -2493,11 +2505,10 @@ class PopulationGLM(GLM):
         # yields the active block of the Hessian directly, no slicing needed.
         # ``batch_axes`` is prefix-spelled (one entry for all of ``coef``) while the
         # filter spec is per-leaf, so expand before splitting the axes.
-        spec = tree_utils.tree_filter_like(
-            self._active_filter_spec(), self._hess_batch_axes
-        )
+        batch_axes = self._hess_batch_axes
+        spec = tree_utils.tree_filter_like(self._active_filter_spec(), batch_axes)
         active_axis, frozen_axis = self._partition_active(
-            tree_utils.tree_broadcast_prefix(self._hess_batch_axes, spec)
+            tree_utils.tree_broadcast_prefix(batch_axes, spec)
         )
 
         def per_neuron(params, X, y, mask, frozen_params):
