@@ -306,18 +306,11 @@ class BaseHMM(
         )
         self._model_setup(**kwargs)
 
-    @property
-    def n_states(self) -> int:
-        """Number of hidden states of the HMM."""
-        return self._n_states
-
-    @n_states.setter
-    def n_states(self, n_states: int):
-        """Set the number of hidden states and validator."""
+    def _set_n_states(self, n_states: int):
+        """Check and set internal _n_states."""
         # quick sanity check and assignment
         if isinstance(n_states, int) and n_states > 0:
             self._n_states = n_states
-            self._validator = self._validator_class(n_states=n_states)
             return
 
         # further checks for other valid numeric types (like non-negative float with no-decimals)
@@ -338,7 +331,24 @@ class BaseHMM(
                 f"n_states must be a positive integer. ``{n_states}`` provided instead."
             )
         self._n_states = int_n_states
-        self._validator = self._validator_class(n_states=n_states)
+
+    @property
+    def n_states(self) -> int:
+        """Number of hidden states of the HMM."""
+        return self._n_states
+
+    @n_states.setter
+    def n_states(self, n_states: int):
+        """Set the number of hidden states and validator."""
+        if (hasattr(self, "_n_states") is False) or (self._n_states != n_states):
+            self._set_n_states(n_states)
+        self._validator = self._validator_class(
+            extra_params=self._get_validator_extra_params()
+        )
+
+    def _get_validator_extra_params(self) -> dict:
+        """Get validator extra parameters."""
+        return {"n_states": self._n_states}
 
     @property
     def maxiter(self):
@@ -735,6 +745,7 @@ class BaseHMM(
         """
         # filter for non-nans, grab data if needed
         data, y, session_starts = self._preprocess_inputs(X, y, session_starts)
+
         # safe conversion to jax arrays of float
         (params,) = tree_utils.tree_astype(params, dtype=y.dtype)
 
@@ -749,6 +760,53 @@ class BaseHMM(
             log_likelihood_func=self._log_likelihood,
         )
         return -jnp.sum(log_norm)
+
+    def compute_loss(
+        self,
+        params: HMMUserProvidedParamsT,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        session_starts: Optional[ArrayLike] = None,
+    ) -> jnp.ndarray:
+        """Compute the loss function for an HMM model.
+
+        This method validates inputs and converts user-provided parameters to the internal
+        representation before computing the loss.
+
+        Parameters
+        ----------
+        params
+            Parameter tuple of (coefficients, intercept, scale, initial_proba, transition_proba).
+        X
+            Input data, array of shape ``(n_time_bins, n_features)`` or pytree of same.
+        y :
+            Observations, shape ``(n_time_bins,)`` for single observation or
+            ``(n_time_bins, n_observations)`` for population.
+        session_starts :
+            Optional array indicating user-provided session boundaries. Can be:
+            - a boolean array indicating session starts, shape ``(n_samples,)``
+            - an integer array of indices marking session starts, shape ``(n_sessions,)``
+            - a pynapple.IntervalSet marking session epochs (requires either X or y to be a
+            pynapple Tsd or TsdFrame to get timestamps)
+            If None, creates a default array treating all data as one session.
+
+        Returns
+        -------
+        loss
+            The loss value (negative log-likelihood).
+
+        Raises
+        ------
+        ValueError
+            If inputs or parameters have incompatible shapes or invalid values.
+        """
+        # validate inputs and session boundaries
+        session_starts = self._validator.validate_and_cast_inputs(
+            X=X, y=y, session_starts=session_starts
+        )
+        params = self._validator.validate_and_cast_params(params)
+        self._validator.validate_consistency(params, X=X, y=y)
+        return self._compute_loss(params, X, y, session_starts)
 
     def score(
         self,

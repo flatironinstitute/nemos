@@ -18,14 +18,14 @@ def _make_wrapper(func, name, description):
     """Create a wrapper function with combined docstrings."""
 
     @functools.wraps(func)
-    def wrapper(x):
-        return func(x)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
 
     # Combine the custom description with original docstring
     original_doc = func.__doc__ or "No docstring available."
     wrapper.__doc__ = f"""{description}
 
-Wrapper of `{func.__module__}.{func.__name__}`. Below the original jax docstring.
+Wrapper of `{func.__module__}.{func.__name__}`. Below is the original jax docstring.
 
 {original_doc}"""
 
