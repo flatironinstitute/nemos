@@ -220,7 +220,7 @@ class Observations(Base, abc.ABC):
     @abc.abstractmethod
     def deviance(
         self,
-        observations: jnp.ndarray,
+        y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         **kwargs,
     ):
@@ -228,7 +228,7 @@ class Observations(Base, abc.ABC):
 
         Parameters
         ----------
-        observations:
+        y:
             The observations. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
         predicted_rate:
             The predicted firing rates. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
@@ -611,7 +611,7 @@ class PoissonObservations(Observations):
 
     def deviance(
         self,
-        observations: jnp.ndarray,
+        y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         **_,
     ) -> jnp.ndarray:
@@ -619,7 +619,7 @@ class PoissonObservations(Observations):
 
         Parameters
         ----------
-        observations:
+        y:
             The observations. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
         predicted_rate:
             The predicted firing rates. Shape ``(n_time_bins, )``  or ``(n_time_bins, n_neurons)`` for
@@ -649,9 +649,9 @@ class PoissonObservations(Observations):
         """
         # this takes care of 0s in the log
         ratio = jnp.clip(
-            observations / predicted_rate, jnp.finfo(predicted_rate.dtype).eps, jnp.inf
+            y / predicted_rate, jnp.finfo(predicted_rate.dtype).eps, jnp.inf
         )
-        deviance = 2 * (observations * jnp.log(ratio) - (observations - predicted_rate))
+        deviance = 2 * (y * jnp.log(ratio) - (y - predicted_rate))
         return deviance
 
     def pseudo_r2(
@@ -888,7 +888,7 @@ class GammaObservations(Observations):
 
     def deviance(
         self,
-        observations: jnp.ndarray,
+        y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Optional[jnp.ndarray] = None,
     ) -> jnp.ndarray:
@@ -896,7 +896,7 @@ class GammaObservations(Observations):
 
         Parameters
         ----------
-        observations:
+        y:
             The observations. Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
         predicted_rate:
             The predicted firing rates. Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
@@ -926,10 +926,8 @@ class GammaObservations(Observations):
         """
         if scale is None:
             scale = self.extra_params["scale"]["default"]
-        y_mu = jnp.clip(observations / predicted_rate, min=jnp.finfo(float).eps)
-        resid_dev = 2 * (
-            -jnp.log(y_mu) + (observations - predicted_rate) / predicted_rate
-        )
+        y_mu = jnp.clip(y / predicted_rate, min=jnp.finfo(float).eps)
+        resid_dev = 2 * (-jnp.log(y_mu) + (y - predicted_rate) / predicted_rate)
         return resid_dev / scale
 
     def estimate_scale(
@@ -1158,7 +1156,7 @@ class BernoulliObservations(Observations):
 
     def deviance(
         self,
-        observations: jnp.ndarray,
+        y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         **_,
     ) -> jnp.ndarray:
@@ -1166,14 +1164,12 @@ class BernoulliObservations(Observations):
 
         Parameters
         ----------
-        observations:
+        y:
             The binary observations. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_observations)`` for population
             models (i.e. multiple observations).
         predicted_rate:
             The predicted rate (success probability). Shape ``(n_time_bins, )``  or ``(n_time_bins, n_observations)``
             for population models (i.e. multiple observations).
-        scale:
-            Scale parameter of the model. For Bernoulli should be equal to 1.
 
         Returns
         -------
@@ -1198,16 +1194,14 @@ class BernoulliObservations(Observations):
         """
         # this takes care of 0s in the log
         ratio1 = jnp.clip(
-            observations / predicted_rate, jnp.finfo(predicted_rate.dtype).eps, jnp.inf
+            y / predicted_rate, jnp.finfo(predicted_rate.dtype).eps, jnp.inf
         )
         ratio2 = jnp.clip(
-            (1 - observations) / (1 - predicted_rate),
+            (1 - y) / (1 - predicted_rate),
             jnp.finfo(predicted_rate.dtype).eps,
             jnp.inf,
         )
-        deviance = 2 * (
-            observations * jnp.log(ratio1) + (1 - observations) * jnp.log(ratio2)
-        )
+        deviance = 2 * (y * jnp.log(ratio1) + (1 - y) * jnp.log(ratio2))
         return deviance
 
     def estimate_scale(
@@ -1594,7 +1588,7 @@ class NegativeBinomialObservations(Observations):
 
     def deviance(
         self,
-        observations: jnp.ndarray,
+        y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         dispersion: Optional[jnp.ndarray] = None,
     ) -> jnp.ndarray:
@@ -1606,7 +1600,7 @@ class NegativeBinomialObservations(Observations):
 
         Parameters
         ----------
-        observations:
+        y:
             Observed count data. Shape ``(n_time_bins,)`` or ``(n_time_bins, n_observations).``
         predicted_rate:
             Predicted mean count of the Negative Binomial distribution. Shape matches `observations`.
@@ -1636,10 +1630,10 @@ class NegativeBinomialObservations(Observations):
         """
         if dispersion is None:
             dispersion = jnp.array(self.extra_params["dispersion"]["default"])
-        factor = (predicted_rate * dispersion + 1) / (observations * dispersion + 1)
-        y_mu = observations / predicted_rate
+        factor = (predicted_rate * dispersion + 1) / (y * dispersion + 1)
+        y_mu = y / predicted_rate
         y_mu = jnp.clip(y_mu, min=jnp.finfo(predicted_rate.dtype).eps)
-        term1 = observations * jnp.log(y_mu * factor)
+        term1 = y * jnp.log(y_mu * factor)
         term2 = jnp.log(factor) / dispersion
         return 2 * (term1 + term2)
 
@@ -1884,7 +1878,7 @@ class GaussianObservations(Observations):
 
     def deviance(
         self,
-        observations: jnp.ndarray,
+        y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         scale: Optional[jnp.ndarray] = None,
     ) -> jnp.ndarray:
@@ -1892,7 +1886,7 @@ class GaussianObservations(Observations):
 
         Parameters
         ----------
-        observations:
+        y:
             The observations. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
         predicted_rate:
             The predicted firing rates. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
@@ -1918,7 +1912,7 @@ class GaussianObservations(Observations):
         """
         if scale is None:
             scale = self.extra_params["scale"]["default"]
-        resid_dev = jnp.power(observations - predicted_rate, 2)
+        resid_dev = jnp.power(y - predicted_rate, 2)
         return resid_dev / scale
 
     def estimate_scale(
@@ -2144,7 +2138,7 @@ class CategoricalObservations(Observations):
 
     def deviance(
         self,
-        observations: jnp.ndarray,
+        y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         **_,
     ) -> jnp.ndarray:
@@ -2152,7 +2146,7 @@ class CategoricalObservations(Observations):
 
         Parameters
         ----------
-        observations:
+        y:
             One-hot encoded categories. Shape ``(n_time_bins, n_categories)`` or
             ``(n_time_bins, n_neurons, n_categories)``.
         predicted_rate:
@@ -2181,7 +2175,7 @@ class CategoricalObservations(Observations):
         """
         # For categorical, saturated model has log-likelihood = 0
         # Deviance = 2 * (LL_saturated - LL_model) = -2 * LL_model
-        nll = self._negative_log_likelihood(observations, predicted_rate, identity)
+        nll = self._negative_log_likelihood(y, predicted_rate, identity)
         return 2 * nll
 
     def estimate_scale(
