@@ -1,3 +1,4 @@
+import inspect
 import math
 import warnings
 from contextlib import nullcontext as does_not_raise
@@ -17,8 +18,20 @@ from nemos._observation_model_builder import (
 from nemos._read_only_dict import ReadOnlyDict
 from nemos.glm.initialize_parameters import initialize_intercept_matching_mean_rate
 from nemos.inverse_link_function_utils import exp
+from nemos.observation_models import Observations
 
 OBS_MODEL_EXTRA_KEYS = {"default", "range", "map_to", "map_from", "separable"}
+
+
+@pytest.fixture()
+def methods_with_extras():
+    methods = inspect.getmembers(Observations, predicate=inspect.isfunction)
+    return [
+        meth_name
+        for (meth_name, meth) in methods
+        if ("kwargs" in inspect.signature(meth).parameters)
+        and not meth_name.startswith("_")
+    ]
 
 
 @pytest.fixture
@@ -604,9 +617,7 @@ class TestNegativeBinomialObservations:
     @pytest.mark.requires_x64
     def test_get_params(self, negative_binomial_observations):
         observation_model = negative_binomial_observations()
-        assert observation_model.get_params() == {
-            "scale": 1.0,
-        }
+        assert observation_model.get_params() == {}
 
     @pytest.mark.requires_x64
     def test_deviance_against_statsmodels(
@@ -614,7 +625,7 @@ class TestNegativeBinomialObservations:
     ):
         _, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
         dev = sm.families.NegativeBinomial(
-            alpha=model.observation_model.scale
+            alpha=model.observation_model.extra_params["dispersion"]["default"]
         ).deviance(y, firing_rate)
         dev_model = model.observation_model.deviance(y, firing_rate).sum()
         if not np.allclose(dev, dev_model):
@@ -622,7 +633,7 @@ class TestNegativeBinomialObservations:
 
     def test_loglikelihood_against_scipy(self, negativeBinomialGLM_model_instantiation):
         _, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
-        r = 1.0 / model.observation_model.scale
+        r = 1.0 / model.observation_model.extra_params["dispersion"]["default"]
         p = r / (r + firing_rate)
         ll_model = model.observation_model.log_likelihood(y, firing_rate)
         ll_scipy = sts.nbinom.logpmf(y, r, p).mean()
@@ -641,7 +652,7 @@ class TestNegativeBinomialObservations:
         ll_model = model.observation_model.log_likelihood(
             y, firing_rate, aggregate_sample_scores=lambda x: x
         )
-        r = 1.0 / model.observation_model.scale
+        r = 1.0 / model.observation_model.extra_params["dispersion"]["default"]
         p = r / (r + firing_rate)
         ll_scipy = sts.nbinom.logpmf(y, r, p)
         if not np.allclose(ll_model, ll_scipy):
@@ -653,9 +664,11 @@ class TestNegativeBinomialObservations:
         gkey, pkey = jax.random.split(key_array)
         p = np.random.rand(10)
         counts = model.observation_model.sample_generator(
-            key_array, p, scale=model.observation_model.scale
+            key_array,
+            p,
+            dispersion=model.observation_model.extra_params["dispersion"]["default"],
         )
-        r = 1.0 / model.observation_model.scale
+        r = 1.0 / model.observation_model.extra_params["dispersion"]["default"]
         gamma_sample = jax.random.gamma(gkey, r, shape=p.shape) * (p / r)
         expected_counts = jax.random.poisson(pkey, gamma_sample)
         if not jnp.allclose(counts, expected_counts):
@@ -668,13 +681,15 @@ class TestNegativeBinomialObservations:
         mdl = sm.GLM(
             y,
             sm.add_constant(X),
-            family=sm.families.NegativeBinomial(alpha=model.observation_model.scale),
+            family=sm.families.NegativeBinomial(
+                alpha=model.observation_model.extra_params["dispersion"]["default"]
+            ),
         ).fit()
         pr2_sms = mdl.pseudo_rsquared("mcf")
         pr2_model = model.observation_model.pseudo_r2(
             y,
             mdl.mu,
-            scale=model.observation_model.scale,
+            dispersion=model.observation_model.extra_params["dispersion"]["default"],
             score_type="pseudo-r2-McFadden",
         )
         if not np.allclose(pr2_model, pr2_sms, atol=1e-5):
@@ -682,7 +697,7 @@ class TestNegativeBinomialObservations:
 
     def test_repr_out(self):
         obs = nmo.observation_models.NegativeBinomialObservations()
-        assert repr(obs) == "NegativeBinomialObservations(scale=1.0)"
+        assert repr(obs) == "NegativeBinomialObservations()"
 
 
 class TestGaussianObservations:
@@ -927,6 +942,23 @@ class TestCategoricalObservations:
 
 @pytest.mark.parametrize("observation_model_string", AVAILABLE_OBSERVATION_MODELS)
 class TestCommonObservationModels:
+    def test_signature(self, observation_model_rate_and_samples, methods_with_extras):
+        obs, _, _ = observation_model_rate_and_samples
+        for meth_name in methods_with_extras:
+            for key in obs.extra_params:
+                if key == "scale" and meth_name == "estimate_scale":
+                    # scale is not an input of its own estimation method
+                    continue
+                assert key in inspect.signature(getattr(obs, meth_name)).parameters, (
+                    f"Method {meth_name} does not have expose keyword parameter {key}"
+                )
+                assert (
+                    inspect.signature(getattr(obs, meth_name)).parameters[key].default
+                    is None
+                ), f"Method {meth_name} does have a concrete default"
+            if not obs.extra_params:
+                assert "_" in inspect.signature(getattr(obs, meth_name)).parameters
+
     def test_extra_params_immutable(
         self, observation_model_string, observation_model_rate_and_samples
     ):
@@ -1030,42 +1062,6 @@ class TestCommonObservationModels:
         else:
             n_samp = math.prod(y.shape)
         assert np.allclose(sm, mn * n_samp)
-
-    def test_scale_getter(
-        self, observation_model_string, observation_model_rate_and_samples
-    ):
-        obs, y, rate = observation_model_rate_and_samples
-        assert obs.scale == 1
-
-    @pytest.mark.parametrize(
-        "scale, expectation",
-        [
-            (1, does_not_raise()),
-            (
-                "invalid",
-                pytest.raises(
-                    ValueError, match="The `scale` parameter must be of numeric type"
-                ),
-            ),
-        ],
-    )
-    def test_scale_setter(
-        self,
-        scale,
-        expectation,
-        observation_model_string,
-        observation_model_rate_and_samples,
-    ):
-        obs, y, rate = observation_model_rate_and_samples
-        with expectation:
-            obs.scale = scale
-
-    def test_separable_scale_is_set(self, observation_model_rate_and_samples):
-        """Test that the `_separable_scale` attribute is set and is a boolean for all observation models."""
-        obs, y, rate = observation_model_rate_and_samples
-        assert (obs._separable_scale is not None) and (
-            type(obs._separable_scale) is bool
-        )
 
     @pytest.mark.parametrize(
         "score_type, expectation",
@@ -1351,7 +1347,7 @@ def test_method_not_returning_scalar(method_name, return_value):
     [
         (jnp.array([1.0, 2.0]), "too few elements"),
         (jnp.array([1.0, 2.0, 3.0, 4.0]), "too many elements"),
-        (jnp.array([[1.0, 2.0, 3.0]]), "wrong dimensionality"),
+        (jnp.array([[[1.0, 2.0, 3.0]]]), "must preserve the input"),
     ],
 )
 def test_sample_generator_wrong_shape(return_value, description):

@@ -71,7 +71,6 @@ class Observations(Base, abc.ABC):
     @staticmethod
     def _compute_null_model_predicted_rate(
         y: jnp.ndarray,
-        **kwargs,
     ):
         return jnp.ones(y.shape, dtype=float) * y.mean(axis=0)
 
@@ -392,7 +391,7 @@ class Observations(Base, abc.ABC):
         model_dev_t = self.deviance(y, predicted_rate, **kwargs)
         model_deviance = aggregate_sample_scores(model_dev_t)
 
-        null_mu = self._compute_null_model_predicted_rate(y, **kwargs)
+        null_mu = self._compute_null_model_predicted_rate(y)
         null_dev_t = self.deviance(y, null_mu, **kwargs)
         null_deviance = aggregate_sample_scores(null_dev_t)
         return (null_deviance - model_deviance) / null_deviance
@@ -426,7 +425,7 @@ class Observations(Base, abc.ABC):
             whereas a value closer to 0 suggests that the model doesn't improve much over the null model.
         """
         # ruff: noqa D403
-        mean_y = self._compute_null_model_predicted_rate(y, **kwargs)
+        mean_y = self._compute_null_model_predicted_rate(y)
         ll_null = self.log_likelihood(
             y,
             mean_y,
@@ -655,6 +654,24 @@ class PoissonObservations(Observations):
         deviance = 2 * (observations * jnp.log(ratio) - (observations - predicted_rate))
         return deviance
 
+    def pseudo_r2(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        score_type: Literal[
+            "pseudo-r2-McFadden", "pseudo-r2-Cohen"
+        ] = "pseudo-r2-McFadden",
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+        **_,
+    ) -> jnp.ndarray:
+        r"""Pseudo-:math:`R^2` calculation for a GLM."""
+        return super().pseudo_r2(
+            y,
+            predicted_rate,
+            score_type,
+            aggregate_sample_scores=aggregate_sample_scores,
+        )
+
     def estimate_scale(
         self,
         y: jnp.ndarray,
@@ -686,6 +703,16 @@ class PoissonObservations(Observations):
             The DOF of the residuals.
         """
         return jnp.ones_like(jnp.atleast_1d(y[0]))
+
+    def likelihood(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+        **_,
+    ):
+        r"""Compute the observation model likelihood."""
+        return super().likelihood(y, predicted_rate, aggregate_sample_scores)
 
 
 class GammaObservations(Observations):
@@ -817,6 +844,18 @@ class GammaObservations(Observations):
             norm - k * self._negative_log_likelihood(y, predicted_rate, lambda x: x)
         )
 
+    def likelihood(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+        scale: Optional[jnp.ndarray] = None,
+    ):
+        r"""Compute the Gamma likelihood."""
+        return super().likelihood(
+            y, predicted_rate, aggregate_sample_scores, scale=scale
+        )
+
     def sample_generator(
         self,
         key: jax.Array,
@@ -934,6 +973,25 @@ class GammaObservations(Observations):
         return (
             jnp.sum(resid * jnp.power(predicted_rate, -2), axis=0) / dof_resid
         )  # pearson residuals
+
+    def pseudo_r2(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        score_type: Literal[
+            "pseudo-r2-McFadden", "pseudo-r2-Cohen"
+        ] = "pseudo-r2-McFadden",
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+        scale: Optional[Union[float, jnp.ndarray]] = None,
+    ) -> jnp.ndarray:
+        r"""Pseudo-:math:`R^2` calculation for a GLM."""
+        return super().pseudo_r2(
+            y,
+            predicted_rate,
+            score_type,
+            aggregate_sample_scores=aggregate_sample_scores,
+            scale=scale,
+        )
 
 
 class BernoulliObservations(Observations):
@@ -1220,6 +1278,24 @@ class BernoulliObservations(Observations):
             y * predicted_rate + (1 - y) * (1 - predicted_rate)
         )
 
+    def pseudo_r2(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        score_type: Literal[
+            "pseudo-r2-McFadden", "pseudo-r2-Cohen"
+        ] = "pseudo-r2-McFadden",
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+        **_,
+    ) -> jnp.ndarray:
+        r"""Pseudo-:math:`R^2` calculation for a GLM."""
+        return super().pseudo_r2(
+            y,
+            predicted_rate,
+            score_type,
+            aggregate_sample_scores=aggregate_sample_scores,
+        )
+
 
 class NegativeBinomialObservations(Observations):
     r"""
@@ -1407,6 +1483,18 @@ class NegativeBinomialObservations(Observations):
         log_ratio_r = -jnp.log1p(scaled_rate)
         return -aggregate_sample_scores(y * log_ratio_mu + log_ratio_r / dispersion)
 
+    def likelihood(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+        dispersion: Optional[jnp.ndarray] = None,
+    ):
+        r"""Compute the Negative Binomial likelihood."""
+        return super().likelihood(
+            y, predicted_rate, aggregate_sample_scores, dispersion=dispersion
+        )
+
     def log_likelihood(
         self,
         y: jnp.ndarray,
@@ -1592,6 +1680,25 @@ class NegativeBinomialObservations(Observations):
         """
         return jnp.array(1.0)
 
+    def pseudo_r2(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        score_type: Literal[
+            "pseudo-r2-McFadden", "pseudo-r2-Cohen"
+        ] = "pseudo-r2-McFadden",
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+        dispersion: Optional[Union[float, jnp.ndarray]] = None,
+    ) -> jnp.ndarray:
+        r"""Pseudo-:math:`R^2` calculation for a GLM."""
+        return super().pseudo_r2(
+            y,
+            predicted_rate,
+            score_type,
+            aggregate_sample_scores=aggregate_sample_scores,
+            dispersion=dispersion,
+        )
+
 
 class GaussianObservations(Observations):
     """
@@ -1729,6 +1836,18 @@ class GaussianObservations(Observations):
             )
         )
 
+    def likelihood(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+        scale: Optional[jnp.ndarray] = None,
+    ):
+        r"""Compute the Gaussian likelihood."""
+        return super().likelihood(
+            y, predicted_rate, aggregate_sample_scores, scale=scale
+        )
+
     def sample_generator(
         self,
         key: jax.Array,
@@ -1841,6 +1960,25 @@ class GaussianObservations(Observations):
         """
         resid = jnp.power(y - predicted_rate, 2)
         return jnp.sum(resid, axis=0) / dof_resid
+
+    def pseudo_r2(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        score_type: Literal[
+            "pseudo-r2-McFadden", "pseudo-r2-Cohen"
+        ] = "pseudo-r2-McFadden",
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+        scale: Optional[Union[float, jnp.ndarray]] = None,
+    ) -> jnp.ndarray:
+        r"""Pseudo-:math:`R^2` calculation for a GLM."""
+        return super().pseudo_r2(
+            y,
+            predicted_rate,
+            score_type,
+            aggregate_sample_scores=aggregate_sample_scores,
+            scale=scale,
+        )
 
 
 class CategoricalObservations(Observations):
@@ -2122,7 +2260,6 @@ class CategoricalObservations(Observations):
     @staticmethod
     def _compute_null_model_predicted_rate(
         y: jnp.ndarray,
-        **_,
     ):
         freq_per_sample = y.mean(
             axis=0, keepdims=True
@@ -2132,6 +2269,24 @@ class CategoricalObservations(Observations):
             freq_per_sample, jnp.finfo(freq_per_sample.dtype).eps, 1.0
         )
         return jnp.log(freq_per_sample) * jnp.ones_like(y, dtype=float)
+
+    def pseudo_r2(
+        self,
+        y: jnp.ndarray,
+        predicted_rate: jnp.ndarray,
+        score_type: Literal[
+            "pseudo-r2-McFadden", "pseudo-r2-Cohen"
+        ] = "pseudo-r2-McFadden",
+        aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
+        **_,
+    ) -> jnp.ndarray:
+        r"""Pseudo-:math:`R^2` calculation for a GLM."""
+        return super().pseudo_r2(
+            y,
+            predicted_rate,
+            score_type,
+            aggregate_sample_scores=aggregate_sample_scores,
+        )
 
 
 def check_observation_model(observation_model, force_checks=False):
