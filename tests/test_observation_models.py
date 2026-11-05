@@ -949,19 +949,85 @@ class TestCommonObservationModels:
                 if key == "scale" and meth_name == "estimate_scale":
                     # scale is not an input of its own estimation method
                     continue
-                assert key in inspect.signature(getattr(obs, meth_name)).parameters, (
+                params = inspect.signature(getattr(obs, meth_name)).parameters
+                assert key in params, (
                     f"Method {meth_name} does not have expose keyword parameter {key}"
                 )
-                assert (
-                    inspect.signature(getattr(obs, meth_name)).parameters[key].default
-                    is None
-                ), f"Method {meth_name} does have a concrete default"
+                assert params[key].default is None, (
+                    f"Method {meth_name} does have a concrete default"
+                )
+
             if not obs.extra_params:
                 assert "_" in inspect.signature(getattr(obs, meth_name)).parameters
 
-    def test_extra_params_immutable(
-        self, observation_model_string, observation_model_rate_and_samples
+    def test_extra_params_usage(
+        self, methods_with_extras, observation_model_rate_and_samples
     ):
+        import itertools
+        import typing
+
+        obs, y, rate = observation_model_rate_and_samples
+        if not obs.extra_params:
+            pytest.skip(f"No extra params for {obs.__class__}")
+
+        for meth_name in methods_with_extras:
+            method = getattr(obs, meth_name)
+            if meth_name == "estimate_scale":
+                # scale is not an input of its own estimation method
+                # nb doesn't fit  a scale, so it can be skipped
+                continue
+
+            kwargs = {
+                k: v
+                for (k, v) in [
+                    ("y", y),
+                    ("predicted_rate", rate),
+                    ("key", jax.random.key(1)),
+                ]
+                if k in inspect.signature(method).parameters.keys()
+            }
+            signature = inspect.signature(method)
+            extras = []
+
+            for key, val in signature.parameters.items():
+                ann = val.annotation
+                if typing.get_origin(ann) is typing.Literal:
+                    extras.append([(key, a) for a in typing.get_args(ann)])
+
+            if "dof_resid" in signature.parameters:
+                dof_kwarg = {"dof_resid": 100}
+            else:
+                dof_kwarg = {}
+
+            for comb in itertools.product(*extras):
+                extra_kwargs = {k: v for (k, v) in comb}
+                if (
+                    "pseudo-r2-Cohen" in [v for v in extra_kwargs.values()]
+                    and obs.extra_params.get("scale", {"separable": False})["separable"]
+                ):
+                    # scale simplifies when separable
+                    print(f"\nskipping {obs} Choen pseudo r2")
+                    continue
+
+                val = method(
+                    **dof_kwarg,
+                    **kwargs,
+                    **extra_kwargs,
+                    **{k: v["default"] for k, v in obs.extra_params.items()},
+                )
+                val2 = method(
+                    **dof_kwarg,
+                    **kwargs,
+                    **extra_kwargs,
+                    **{k: v["default"] + 1 for k, v in obs.extra_params.items()},
+                )
+                assert not np.allclose(val, val2), (
+                    f"The method {meth_name} disregarded kwargs "
+                    f"{[k for k in obs.extra_params.keys()]}.\nUsed kwargs:\n"
+                    f"{extra_kwargs}"
+                )
+
+    def test_extra_params_immutable(self, observation_model_rate_and_samples):
         obs, _, _ = observation_model_rate_and_samples
         with pytest.raises(AttributeError, match="has no attribute 'update'"):
             obs.extra_params.update({"scale": 1})
@@ -973,9 +1039,7 @@ class TestCommonObservationModels:
             with pytest.raises(TypeError, match="does not support item assignment"):
                 obs.extra_params[key]["default"] = 2
 
-    def test_extra_params_struct(
-        self, observation_model_string, observation_model_rate_and_samples
-    ):
+    def test_extra_params_struct(self, observation_model_rate_and_samples):
         obs, _, _ = observation_model_rate_and_samples
         assert isinstance(obs.extra_params, ReadOnlyDict)
         if obs.extra_params:
