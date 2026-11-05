@@ -6,9 +6,10 @@ from typing import Any, Callable, Dict, Literal, Optional, Protocol, Tuple
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from numpy.typing import NDArray
 
-from ..glm import GLM, ClassifierGLM, ClassifierPopulationGLM, PopulationGLM
+from ..glm import GLM, ClassifierGLM, PopulationGLM
 from ..glm.initialize_parameters import initialize_intercept_matching_mean_rate
 from ..glm.params import GLMUserParams
 from ..hmm.initialize_parameters import (
@@ -185,8 +186,10 @@ class KMeansInitializerGLM(KMeansInitializer):
             self._is_population = False
         elif self._is_categorical:
             if self._y.ndim == 2:
+                n_classes = self._y.shape[1]
                 self._glm_models = {
                     i: ClassifierGLM(
+                        classes = np.arange(n_classes),
                         inverse_link_function=inverse_link_function,
                         **self.glm_kwargs,
                     )
@@ -222,7 +225,6 @@ class KMeansInitializerGLM(KMeansInitializer):
                 )
             if self._is_categorical:
                 y_state = jnp.argmax(y_state, axis=1)
-                model.n_classes = len(jnp.unique(y_state))
             model.fit(X_state, y_state)
         return self
 

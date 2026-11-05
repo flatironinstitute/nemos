@@ -8,6 +8,7 @@ from typing import Optional, Tuple
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from ._hess import LeafClaim, claim_nothing
@@ -319,3 +320,22 @@ class ClassifierMixin:
         y = self._validator.check_and_cast_y_to_integer(y)
         y = jax.nn.one_hot(y, self.n_classes)
         return super().initialize_params(X, y)
+
+    def _setup_classes(self, classes: int | ArrayLike):
+        classes_array = np.asarray(classes)
+        # ``np.asarray`` casts a dict or a string to a 0-D array too, so the dtype
+        # is what separates a count from them
+        if classes_array.ndim == 0 and np.issubdtype(classes_array.dtype, np.number):
+            self.n_classes = classes
+            self._label_encoder.set_classes(np.arange(self.n_classes), declared=False)
+        elif classes_array.ndim == 1 and not np.issubdtype(
+            classes_array.dtype, np.object_
+        ):
+            self.n_classes = len(classes_array)
+            self.set_classes(classes_array)
+        else:
+            raise ValueError(
+                "``classes`` must be a class count or a 1-D array-like of class "
+                f"labels. The provided {classes} was cast to a "
+                f"{classes_array.ndim}-D array of dtype {classes_array.dtype} instead."
+            )

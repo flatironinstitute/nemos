@@ -58,8 +58,8 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
     ----------
     n_states :
         The number of hidden states in the HMM. Must be a positive integer.
-    n_classes :
-        The number of classes. Must be >= 2.
+    classes
+        The number of classes or a list of class labels. In a number, must be >= 2.
     inverse_link_function :
         The inverse link function. Default is ``log_softmax``.
     regularizer :
@@ -157,10 +157,13 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
 
     **Setting Class Labels**
 
-    The :meth:`fit` and :meth:`initialize_optimizer_and_state` methods automatically infer
-    class labels from the provided ``y``. If you set ``coef_`` and ``intercept_`` manually,
-    you must call :meth:`set_classes` before using :meth:`decode_state`, :meth:`smooth_proba`,
-    :meth:`filter_proba`, :meth: `update`, :meth:`simulate`, :meth:`score`, or :meth:`compute_loss`.
+    :meth:`fit` infers the class labels from input ``y``, which must contain the full set
+    of ``n_classes`` labels. Declaring them instead with :meth:`set_classes` lifts that
+    requirement: ``y`` can hold any subset of the declared labels, and a label outside
+    the set raises. Every other method requires the labels to be set already. If assigning
+    ``coef_`` and ``intercept_`` by hand, call :meth:`set_classes` before :meth:`predict`,
+    :meth:`predict_proba`, :meth:`simulate`, :meth:`score`, :meth:`compute_loss`,
+    :meth:`initialize_optimizer_and_state` or :meth:`update`.
 
     Raises
     ------
@@ -258,7 +261,7 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
     def __init__(
         self,
         n_states: int,
-        n_classes: Optional[int] = 2,
+        classes: Optional[int | ArrayLike] = 2,
         inverse_link_function: Optional[Callable[[jnp.ndarray], jnp.ndarray]] = None,
         regularizer: Union[str, Regularizer] = "Ridge",
         regularizer_strength: Any = 1.0,
@@ -276,7 +279,7 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
     ):
         # set _n_states before n_classes so validator can access it
         self._set_n_states(n_states)
-        self.n_classes = n_classes
+        self._setup_classes(classes)
         super().__init__(
             n_states=n_states,
             observation_model=CategoricalObservations(),
@@ -406,7 +409,8 @@ class ClassifierGLMHMM(ClassifierMixin, GLMHMM):
         ...     X, y, session_starts=session_starts
         ... )
         """
-        self.set_classes(y)
+        if not self._label_encoder.declared:
+            self._label_encoder.set_classes(y)
         y = self._label_encoder.encode(y)
         return super().fit(X, y, init_params, session_starts)
 

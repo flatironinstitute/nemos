@@ -328,25 +328,6 @@ class ClassifierGLMMixin(ClassifierMixin):
             params, opt_state, X, y, *args, n_samples=n_samples, **kwargs
         )
 
-    def _setup_classes(self, classes: int | ArrayLike):
-        classes_array = np.asarray(classes)
-        # ``np.asarray`` casts a dict or a string to a 0-D array too, so the dtype
-        # is what separates a count from them
-        if classes_array.ndim == 0 and np.issubdtype(classes_array.dtype, np.number):
-            self.n_classes = classes
-            self._label_encoder.set_classes(np.arange(self.n_classes), declared=False)
-        elif classes_array.ndim == 1 and not np.issubdtype(
-            classes_array.dtype, np.object_
-        ):
-            self.n_classes = len(classes_array)
-            self.set_classes(classes_array)
-        else:
-            raise ValueError(
-                "``classes`` must be a class count or a 1-D array-like of class "
-                f"labels. The provided {classes} was cast to a "
-                f"{classes_array.ndim}-D array of dtype {classes_array.dtype} instead."
-            )
-
 
 class ClassifierGLM(ClassifierGLMMixin, GLM):
     """
@@ -360,7 +341,7 @@ class ClassifierGLM(ClassifierGLMMixin, GLM):
     Parameters
     ----------
     classes
-        The number of classes. Must be >= 2.
+        The number of classes or a list of class labels. In a number, must be >= 2.
     inverse_link_function
         The inverse link function. Default is ``log_softmax``.
     regularizer
