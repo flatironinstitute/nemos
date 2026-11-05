@@ -1016,6 +1016,7 @@ class BaseRegressor(
         """
         self._validator.validate_inputs(X=X, y=y, **kwargs)
         init_params = self._normalize_user_params(init_params, X, y)
+        self._validator.check_complete_param_specs(init_params)
         init_params = self._validator.validate_and_cast_params(init_params)
         self._validator.validate_consistency(init_params, X=X, y=y)
         X, y = self._preprocess_inputs(X, y, drop_nans=True)

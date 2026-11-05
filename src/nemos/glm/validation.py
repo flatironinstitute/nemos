@@ -95,7 +95,7 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
             If intercept does not have shape (1,).
         """
         # check intercept shape
-        if params.intercept.shape != (1,):
+        if params.intercept is not None and params.intercept.shape != (1,):
             raise ValueError(
                 "Intercept term should be a one-dimensional array with shape ``(1,)``."
             )
