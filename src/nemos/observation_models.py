@@ -81,19 +81,6 @@ class Observations(Base, abc.ABC):
         pass
 
     @property
-    def scale(self):
-        """Getter for the scale parameter of the model."""
-        return self._scale
-
-    @scale.setter
-    def scale(self, value: Union[int, float, jnp.ndarray]):
-        """Setter for the scale parameter of the model."""
-        try:
-            self._scale = float(value)
-        except Exception:
-            raise ValueError("The `scale` parameter must be of numeric type.")
-
-    @property
     def map_from(self):
         """Getter for the map_from parameter of the model."""
         return ReadOnlyDict({k: v["map_from"] for k, v in self.extra_params.items()})
