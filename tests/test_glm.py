@@ -1766,17 +1766,6 @@ class TestNormalizeUserParams:
             norm_params["intercept"], jnp.zeros_like(true_params.intercept)
         )
 
-    @pytest.mark.parametrize("n_elements", [1, 3])
-    def test_malformed_structure_raises(
-        self, poissonGLM_model_instantiation, n_elements
-    ):
-        """A user-params tuple whose length is not two is rejected."""
-        X, y, model, true_params, _ = poissonGLM_model_instantiation
-        model.fit_intercept = False
-        bad_params = {"coef": true_params.coef}
-        with pytest.raises(ValueError, match="The user-provided parameter dictionary"):
-            model._normalize_user_params(bad_params, X, y)
-
 
 @pytest.mark.parametrize(
     "glm_class",
@@ -3366,7 +3355,9 @@ class TestPopulationGLM:
         X = rng.normal(size=(10, 2))
         y = rng.poisson(2.0, size=(10, n_neurons))
         # a single pinned intercept for a multi-neuron fit
-        model = nmo.glm.PopulationGLM(fix_params=(None, np.array([1.0])))
+        model = nmo.glm.PopulationGLM(
+            fix_params={"coef": None, "intercept": np.array([1.0])}
+        )
         with pytest.raises(ValueError, match="Inconsistent number of neurons"):
             model.fit(X, y)
 
@@ -3377,7 +3368,7 @@ class TestPopulationGLM:
         X = rng.normal(size=(10, 2))
         y = rng.poisson(2.0, size=(10, n_neurons))
         pinned = np.zeros(n_neurons)
-        model = nmo.glm.PopulationGLM(fix_params=(None, pinned))
+        model = nmo.glm.PopulationGLM(fix_params={"coef": None, "intercept": pinned})
         model.fit(X, y)
         np.testing.assert_allclose(model.intercept_, pinned)
 
@@ -3902,7 +3893,7 @@ def test_dof_resid_after_fit_feature_mask(
     # hand the sparse state to fit as the starting point, leaving the model unfitted
     offset = 1.0 if init_intercept == "other_value" else 0.0
     intercept = model.intercept_ + offset
-    init_params = (model.coef_, intercept)
+    init_params = {"coef": model.coef_, "intercept": intercept}
     model.coef_, model.intercept_ = None, None
     y = np.ones((X.shape[0], _DOF_N_NEURONS))
 
@@ -4067,8 +4058,8 @@ def test_update_nan_drop_at_jit_comp(
             jit_update, jit_state, Xnan, y[:batch_size]
         )
     # make sure there is an update
-    assert not jnp.allclose(params[0], jit_update[0]) or not jnp.allclose(
-        params[1], jit_update[1]
+    assert not jnp.allclose(params["coef"], jit_update["coef"]) or not jnp.allclose(
+        params["intercept"], jit_update["intercept"]
     )
 
     # update without jitting
@@ -4080,8 +4071,8 @@ def test_update_nan_drop_at_jit_comp(
                 nojit_update, nojit_state, Xnan, y[:batch_size]
             )
     # check for equivalence update
-    assert jnp.allclose(nojit_update[0], jit_update[0]) and jnp.allclose(
-        nojit_update[1], jit_update[1]
+    assert jnp.allclose(nojit_update["coef"], jit_update["coef"]) and jnp.allclose(
+        nojit_update["intercept"], jit_update["intercept"]
     )
 
 
@@ -4132,6 +4123,7 @@ class TestPopulationGLMObservationModel:
         )
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
+        model.dispersion_ = jnp.zeros_like(true_params.intercept)
         mn = model.score(X, y, score_type=score_type, aggregate_sample_scores=jnp.mean)
         mn_n = model.score(
             X,
@@ -4562,7 +4554,7 @@ class TestPoissonGLM:
             state = type(state)(
                 solver_state=state.solver_state._replace(
                     full_grad_at_reference_point=loss_grad(
-                        nmo.glm.params.GLMParams(*params), X, y
+                        model._validator.to_model_params(params), X, y
                     )
                 ),
                 stats=state.stats,
@@ -4577,7 +4569,7 @@ class TestPoissonGLM:
 
             state = type(state)(
                 solver_state=state.solver_state._replace(
-                    reference_point=nmo.glm.params.GLMParams(*params)
+                    reference_point=model._validator.to_model_params(params)
                 ),
                 stats=state.stats,
             )
@@ -4790,7 +4782,11 @@ class TestNegativeBinomialGLM:
         model.fit(
             X,
             y,
-            init_params={"coef": true_params.coef, "intercept": true_params.intercept},
+            init_params={
+                "coef": true_params.coef,
+                "intercept": true_params.intercept,
+                "dispersion": jnp.ones_like(true_params.intercept),
+            },
         )
 
     def test_score_glm(self, inv_link, request, glm_type, model_instantiation):
@@ -4804,9 +4800,9 @@ class TestNegativeBinomialGLM:
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
         if is_population_glm_type(glm_type):
-            model.scale_ = np.ones((y.shape[1]))
+            model.dispersion_ = np.ones((y.shape[1]))
         else:
-            model.scale_ = 1.0
+            model.dispersion_ = 1.0
         model.score(X, y)
 
     def test_simulate_glm(self, inv_link, request, glm_type, model_instantiation):
@@ -4819,9 +4815,9 @@ class TestNegativeBinomialGLM:
         model.inverse_link_function = inv_link
         if is_population_glm_type(glm_type):
             model.feature_mask = jnp.ones((X.shape[1], y.shape[1]))
-            model.scale_ = jnp.ones((y.shape[1]))
+            model.dispersion_ = jnp.ones((y.shape[1]))
         else:
-            model.scale_ = 1.0
+            model.dispersion_ = 1.0
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
         ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
@@ -5537,10 +5533,25 @@ def test_glm_set_solver_name_recovers(solver_name, model_instantiation, request)
 
     # Verify reinitialisation fixes it
     init_state = model.initialize_optimizer_and_state(
-        [params.coef, params.intercept], X, y
+        {
+            "coef": params.coef,
+            "intercept": params.intercept,
+            "dispersion": params.extra_params["dispersion"],
+        },
+        X,
+        y,
     )
     with does_not_raise():
-        model.update([params.coef, params.intercept], init_state, X, y)
+        model.update(
+            {
+                "coef": params.coef,
+                "intercept": params.intercept,
+                "dispersion": params.extra_params["dispersion"],
+            },
+            init_state,
+            X,
+            y,
+        )
 
 
 @pytest.mark.parametrize(
@@ -5591,10 +5602,25 @@ def test_glm_set_solver_kwargs_recovers(model_instantiation, request):
 
     # Verify reinitialisation fixes it
     init_state = model.initialize_optimizer_and_state(
-        [params.coef, params.intercept], X, y
+        {
+            "coef": params.coef,
+            "intercept": params.intercept,
+            "dispersion": params.extra_params["dispersion"],
+        },
+        X,
+        y,
     )
     with does_not_raise():
-        model.update([params.coef, params.intercept], init_state, X, y)
+        model.update(
+            {
+                "coef": params.coef,
+                "intercept": params.intercept,
+                "dispersion": params.extra_params["dispersion"],
+            },
+            init_state,
+            X,
+            y,
+        )
 
 
 @pytest.mark.parametrize(
@@ -5645,10 +5671,25 @@ def test_glm_set_regularizer_recovers(model_instantiation, request):
 
     # Verify reinitialisation fixes it
     init_state = model.initialize_optimizer_and_state(
-        [params.coef, params.intercept], X, y
+        {
+            "coef": params.coef,
+            "intercept": params.intercept,
+            "dispersion": params.extra_params["dispersion"],
+        },
+        X,
+        y,
     )
     with does_not_raise():
-        model.update([params.coef, params.intercept], init_state, X, y)
+        model.update(
+            {
+                "coef": params.coef,
+                "intercept": params.intercept,
+                "dispersion": params.extra_params["dispersion"],
+            },
+            init_state,
+            X,
+            y,
+        )
 
 
 @pytest.mark.parametrize(
@@ -5699,10 +5740,25 @@ def test_glm_set_regularizer_strength_recovers(model_instantiation, request):
 
     # Verify reinitialisation fixes it
     init_state = model.initialize_optimizer_and_state(
-        [params.coef, params.intercept], X, y
+        {
+            "coef": params.coef,
+            "intercept": params.intercept,
+            "dispersion": params.extra_params["dispersion"],
+        },
+        X,
+        y,
     )
     with does_not_raise():
-        model.update([params.coef, params.intercept], init_state, X, y)
+        model.update(
+            {
+                "coef": params.coef,
+                "intercept": params.intercept,
+                "dispersion": params.extra_params["dispersion"],
+            },
+            init_state,
+            X,
+            y,
+        )
 
 
 @pytest.mark.parametrize(
@@ -5753,7 +5809,22 @@ def test_glm_set_observation_model_recovers(model_instantiation, request):
 
     # Verify reinitialisation fixes it
     init_state = model.initialize_optimizer_and_state(
-        [params.coef, params.intercept], X, y
+        {
+            "coef": params.coef,
+            "intercept": params.intercept,
+            "dispersion": params.extra_params["dispersion"],
+        },
+        X,
+        y,
     )
     with does_not_raise():
-        model.update([params.coef, params.intercept], init_state, X, y)
+        model.update(
+            {
+                "coef": params.coef,
+                "intercept": params.intercept,
+                "dispersion": params.extra_params["dispersion"],
+            },
+            init_state,
+            X,
+            y,
+        )
