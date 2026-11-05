@@ -316,7 +316,7 @@ class RegressorValidator(
             If any validation step fails.
         """
         if params is None or params == {}:
-            return self.to_model_params(None)
+            return self.to_model_params({k: None for k in self.model_param_names})
 
         self.check_user_params_structure(params)
         self.check_partial_params_specs_type(params)
