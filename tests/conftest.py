@@ -61,6 +61,7 @@ from nemos.hmm.initialize_parameters import (
 from nemos.hmm.params import HMMParams, from_hmm_params, to_hmm_params
 from nemos.hmm.utils import initialize_session_starts
 from nemos.hmm.validation import HMMValidator
+from nemos.observation_models import Observations
 from nemos.params import ModelParams
 from nemos.regularizer import UnRegularized
 from nemos.solvers import get_solver
@@ -372,6 +373,17 @@ CLASS_DEFAULT_KWARGS = {
         "variance": 1.0,
     },
 }
+
+
+@pytest.fixture()
+def methods_with_extras():
+    methods = inspect.getmembers(Observations, predicate=inspect.isfunction)
+    return [
+        meth_name
+        for (meth_name, meth) in methods
+        if ("kwargs" in inspect.signature(meth).parameters)
+        and not meth_name.startswith("_")
+    ]
 
 
 # Array-valued basis attributes, which ``==`` cannot compare inside a dict.

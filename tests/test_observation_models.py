@@ -18,20 +18,8 @@ from nemos._observation_model_builder import (
 from nemos._read_only_dict import ReadOnlyDict
 from nemos.glm.initialize_parameters import initialize_intercept_matching_mean_rate
 from nemos.inverse_link_function_utils import exp
-from nemos.observation_models import Observations
 
 OBS_MODEL_EXTRA_KEYS = {"default", "range", "map_to", "map_from", "separable"}
-
-
-@pytest.fixture()
-def methods_with_extras():
-    methods = inspect.getmembers(Observations, predicate=inspect.isfunction)
-    return [
-        meth_name
-        for (meth_name, meth) in methods
-        if ("kwargs" in inspect.signature(meth).parameters)
-        and not meth_name.startswith("_")
-    ]
 
 
 @pytest.fixture
