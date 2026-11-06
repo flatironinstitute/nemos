@@ -866,6 +866,7 @@ class BaseRegressor(
             If inputs or parameters have incompatible shapes or invalid values.
         """
         self._validator.validate_inputs(X, y)
+        params = self._normalize_user_params(params, X, y)
         params = self._validator.validate_and_cast_params(params)
         self._validator.validate_consistency(params, X, y)
         X, y = self._preprocess_inputs(X, y)
