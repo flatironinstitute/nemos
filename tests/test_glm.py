@@ -5959,3 +5959,135 @@ def test_glm_set_observation_model_recovers(model_instantiation, request):
             X,
             y,
         )
+
+
+@pytest.mark.parametrize("fit_intercept", [True, False])
+@pytest.mark.parametrize("glm_type", ["", "population_"])
+@pytest.mark.parametrize(
+    "model_instantiation",
+    [
+        "gaussianGLM_model_instantiation",
+        "poissonGLM_model_instantiation",
+        "gammaGLM_model_instantiation",
+        "bernoulliGLM_model_instantiation",
+        "negativeBinomialGLM_model_instantiation",
+        "classifierGLM_model_instantiation",
+    ],
+)
+class TestFixParams:
+    def fix_param_names(self, obs):
+        """A corner-case design matrix (n, p), selected by indirect parametrization."""
+        all_pars = ["coef", "intercept"] + [
+            k for k, v in obs.extra_params.items() if not v["separable"]
+        ]
+        combs = [v for v in itertools.combinations(all_pars, 1)] + [
+            v for v in itertools.combinations(all_pars, 2)
+        ]
+        for k in range(3, len(all_pars) + 1):
+            combs += [v for v in itertools.combinations(all_pars, 3)]
+        return combs
+
+    @pytest.mark.parametrize("input_type", ["_pytree", ""])
+    def test_fit(
+        self, fit_intercept, glm_type, model_instantiation, request, input_type
+    ):
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation + input_type
+        )
+        model.fit_intercept = fit_intercept
+        model.solver_kwargs = {"maxiter": 1}
+        params = model.initialize_params(X, y)
+        fix_combs = self.fix_param_names(model.observation_model)
+        for par_names in fix_combs:
+            print(par_names)
+            copy_model = deepcopy(model)
+            fix = params.copy()
+            fix = {k: v for k, v in fix.items() if k not in par_names}
+            if "coef" in fix and isinstance(fix["coef"], dict):
+                fix["coef"][next(k for k in fix["coef"].keys())] = None
+            copy_model.fix_params = fix
+            copy_model.fit(X, y)
+            fit_dict = copy_model._get_param_dict()
+            fit_dict_compare = {
+                k: eqx.filter(
+                    fit_dict[k],
+                    jax.tree_util.tree_map(
+                        lambda x: x is not None, v, is_leaf=lambda x: x is None
+                    ),
+                )
+                for k, v in fix.items()
+            }
+            jax.tree_util.tree_map(np.testing.assert_array_equal, fit_dict_compare, fix)
+
+    @pytest.mark.parametrize("input_type", ["_pytree", ""])
+    def test_update(
+        self, fit_intercept, glm_type, model_instantiation, request, input_type
+    ):
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation + input_type
+        )
+        model.fit_intercept = fit_intercept
+        model.solver_kwargs = {"maxiter": 1}
+        params = model.initialize_params(X, y)
+        fix_combs = self.fix_param_names(model.observation_model)
+        for par_names in fix_combs:
+            print(par_names)
+            copy_model = deepcopy(model)
+            fix = deepcopy(params)
+            fix = {k: v for k, v in fix.items() if k not in par_names}
+            if "coef" in fix and isinstance(fix["coef"], dict):
+                fix["coef"][next(k for k in fix["coef"].keys())] = None
+            copy_model.fix_params = fix
+            state = copy_model.initialize_optimizer_and_state(params, X, y)
+            copy_model.update(params, state, X, y)
+            fit_dict = copy_model._get_param_dict()
+            fit_dict_compare = {
+                k: eqx.filter(
+                    fit_dict[k],
+                    jax.tree_util.tree_map(
+                        lambda x: x is not None, v, is_leaf=lambda x: x is None
+                    ),
+                )
+                for k, v in fix.items()
+            }
+            jax.tree_util.tree_map(np.testing.assert_array_equal, fit_dict_compare, fix)
+
+    @pytest.mark.parametrize("input_type", ["_pytree", ""])
+    @pytest.mark.requires_x64
+    def test_compute_loss(
+        self, fit_intercept, glm_type, model_instantiation, request, input_type
+    ):
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation + input_type
+        )
+        model.fit_intercept = fit_intercept
+        model.solver_kwargs = {"maxiter": 1}
+        params = model.initialize_params(X, y)
+        fix_combs = self.fix_param_names(model.observation_model)
+        for par_names in fix_combs:
+            print(par_names)
+            copy_model = deepcopy(model)
+            fix = deepcopy(params)
+            fix = {k: v for k, v in fix.items() if k not in par_names}
+            if "coef" in fix and isinstance(fix["coef"], dict):
+                fix["coef"][next(k for k in fix["coef"].keys())] = None
+            copy_model.fix_params = fix
+            expand_fix = {
+                k: (
+                    fix[k]
+                    if k in fix
+                    else jax.tree_util.tree_map(lambda _: None, params[k])
+                )
+                for k in params.keys()
+            }
+            fixed, active = eqx.partition(
+                params,
+                jax.tree_util.tree_map(
+                    lambda x: x is not None, expand_fix, is_leaf=lambda x: x is None
+                ),
+            )
+            fixed = jax.tree_util.tree_map(lambda x: x + 1, fixed)
+            param_modified = eqx.combine(active, fixed)
+            val = copy_model.compute_loss(param_modified, X, y)
+            val_orig = model.compute_loss(params, X, y)
+            np.testing.assert_array_equal(val, val_orig)

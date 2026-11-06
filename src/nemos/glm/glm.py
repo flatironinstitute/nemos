@@ -585,7 +585,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         # omitted user input, ``update`` recombines it into the returned params).
         if not self._fit_intercept and frozen.intercept is None:
             zeros = jnp.zeros_like(self._get_empty_params(X, y).intercept)
-            frozen = GLMParams(frozen.coef, zeros)
+            frozen = eqx.tree_at(
+                lambda x: x.intercept, frozen, zeros, is_leaf=lambda x: x is None
+            )
         if frozen.coef is None:
             frozen = eqx.tree_at(
                 lambda p: p.coef,

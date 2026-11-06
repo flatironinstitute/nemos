@@ -331,7 +331,9 @@ class RegressorValidator(
             None,
         )
         self.check_array_dimensions(params, **(dim_kwargs or {}))
-        params = self.to_model_params(params)
+        params = self.to_model_params(
+            {k: params.get(k, None) for k in self.model_param_names}
+        )
         return self.additional_validation_param_specs(params)
 
     def additional_validation_param_specs(
