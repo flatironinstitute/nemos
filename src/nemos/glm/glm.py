@@ -1152,7 +1152,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         """
         if not self._fit_intercept:
             self._validator.check_user_params_structure(init_params)
-            warn = init_params["intercept"] is not None and not jnp.array_equal(
+            warn = init_params.get("intercept") is not None and not jnp.array_equal(
                 self._frozen_values(X, y).intercept, init_params["intercept"]
             )
             if warn:
@@ -1163,7 +1163,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
                     stacklevel=2,
                 )
             zeros = self._frozen_values(X, y).intercept
-            init_params = {"coef": init_params["coef"], "intercept": zeros}
+            init_params = {k: v for k, v in init_params.items() if k != "intercept"}
+            init_params["intercept"] = zeros
         return init_params
 
     @cast_to_jax
@@ -1236,8 +1237,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
                 self._validator.validate_consistency(init_params, X=X, y=y)
         else:
             # TODO: improve initialization and allow partial param specs
-            self._validator.check_complete_param_specs(init_params)
             init_params = self._normalize_user_params(init_params, X, y)
+            self._validator.check_complete_param_specs(init_params)
             init_params = self._validator.validate_and_cast_params(init_params)
             self._validator.validate_consistency(init_params, X=X, y=y)
 

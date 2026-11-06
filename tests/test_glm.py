@@ -2553,11 +2553,11 @@ class TestGLMObservationModel:
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
         model.dispersion_ = 2.0 * jnp.ones_like(true_params.intercept)
-        model.scale_ = jnp.ones_like(true_params.intercept)
-        # set up in stocastic fits
+        model.scale_ = 0.9 * jnp.ones_like(true_params.intercept)
+
+        # set up in stochastic fits
         model.solver_name = "GradientDescent[optimistix]"
         model.solver_kwargs = {"stepsize": 0.001, "acceleration": False, "maxiter": 1}
-        model.regularizer = "Ridge"
         pars = model.initialize_params(X, y)
         state = model.initialize_optimizer_and_state(pars, X, y)
         non_default_kwargs = {
@@ -2606,6 +2606,44 @@ class TestGLMObservationModel:
                     **{n: v for n, v in zip(literal_names, literal_vals)},
                 }
                 method(**kwargs)
+
+    def test_fit_intercept_false_work_with_partial_params(
+        self, request, glm_type, model_instantiation
+    ):
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        if isinstance(
+            model.observation_model, nmo.observation_models.GammaObservations
+        ):
+            model.inverse_link_function = jnp.exp
+        methods = [
+            "initialize_optimizer_and_state",
+            "fit",
+            "stochastic_fit",
+            "compute_loss",
+        ]
+        params = model.initialize_params(X, y)
+        params.pop("intercept")
+        model.fit_intercept = False
+        kwargs = {
+            "X": X,
+            "y": y,
+            "data": ArrayDataLoader(X, y, batch_size=100),
+            "params": params,
+            "init_params": params,
+        }
+        # set up in stochastic fits
+        model.solver_name = "GradientDescent[optimistix]"
+        model.solver_kwargs = {"stepsize": 0.001, "acceleration": False, "maxiter": 1}
+        for meth in methods:
+            method = getattr(model, meth)
+            keys = inspect.signature(method).parameters.keys()
+            filter_kwargs = {k: v for k, v in kwargs.items() if k in keys}
+            try:
+                method(**filter_kwargs)
+            except Exception as e:
+                raise ValueError(f"``{meth}`` raised exception. Model:\n{model}") from e
 
     #####################
     # Test model.update #
