@@ -1,5 +1,8 @@
+import functools
 import inspect
+import itertools
 import re
+import typing
 from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
 from typing import Callable
@@ -23,6 +26,7 @@ from sklearn.linear_model import (
 from sklearn.model_selection import GridSearchCV
 
 import nemos as nmo
+from code_tree_utilities import public_callers_of
 from conftest import (
     OBSERVATION_PER_MODEL,
     freeze_first_coef_leaf,
@@ -31,6 +35,7 @@ from conftest import (
 from nemos._hess import MatrixProperty
 from nemos._observation_model_builder import instantiate_observation_model
 from nemos._regularizer_builder import instantiate_regularizer
+from nemos.batching import ArrayDataLoader
 from nemos.glm.params import GLMParams
 from nemos.inverse_link_function_utils import exp, identity, log_softmax
 from nemos.solvers._no_op import NoOpSolver
@@ -2181,7 +2186,7 @@ class TestGLMObservationModel:
                 elif y.ndim == 2:
                     norm = y.shape[0] * y.shape[1]
                 return (
-                    sm.families.NegativeBinomial(alpha=1.0).loglike(y, mean_firing)
+                    sm.families.NegativeBinomial(alpha=2.0).loglike(y, mean_firing)
                     / norm
                 )
 
@@ -2484,7 +2489,7 @@ class TestGLMObservationModel:
         # set model coeff
         model.coef_ = true_params.coef
         model.intercept_ = true_params.intercept
-        model.dispersion_ = jnp.ones_like(true_params.intercept)
+        model.dispersion_ = 2.0 * jnp.ones_like(true_params.intercept)
         if is_population_model(model):
             model._feature_mask = initialize_feature_mask_for_population_glm(
                 X, y.shape[1], coef=true_params.coef
@@ -2503,6 +2508,104 @@ class TestGLMObservationModel:
                 f"Log-likelihood of {glm_type + model_instantiation} does not match "
                 "that of jax.scipy!"
             )
+
+    # methods_with_extras: conftets.py fixture listing all obs model public methods with
+    # extra parameters
+    def test_obs_model_is_called_with_explicit_extra_parameters(
+        self, monkeypatch, request, glm_type, model_instantiation, methods_with_extras
+    ):
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        if len(model.observation_model.extra_params) == 0:
+            pytest.skip(f"No extra parameters for {model.observation_model}")
+
+        # patch methods
+        def wrapper(orig, sign, *args, **kwargs):
+            bound = sign.bind(*args, **kwargs)
+            bound.apply_defaults()
+            if any(
+                bound.arguments[k] is None for k in model.observation_model.extra_params
+            ):
+                invalid = [
+                    k
+                    for k in model.observation_model.extra_params
+                    if bound.arguments[k] is None
+                ]
+                raise ValueError(
+                    f"Parameter(s) {invalid} was left at its default (None) for method "
+                    f"``{orig.__name__}`` of {model.observation_model}"
+                )
+
+            return orig(*args, **kwargs)
+
+        for method_name in methods_with_extras:
+            if (
+                method_name == "estimate_scale"
+                and "scale" in model.observation_model.extra_params
+            ):
+                continue
+            original = getattr(model.observation_model, method_name)
+            sig = inspect.signature(original)
+            wrap = functools.partial(wrapper, original, sig)
+            monkeypatch.setattr(model.observation_model, method_name, wrap)
+
+        model.coef_ = true_params.coef
+        model.intercept_ = true_params.intercept
+        model.dispersion_ = 2.0 * jnp.ones_like(true_params.intercept)
+        model.scale_ = jnp.ones_like(true_params.intercept)
+        # set up in stocastic fits
+        model.solver_name = "GradientDescent[optimistix]"
+        model.solver_kwargs = {"stepsize": 0.001, "acceleration": False, "maxiter": 1}
+        model.regularizer = "Ridge"
+        pars = model.initialize_params(X, y)
+        state = model.initialize_optimizer_and_state(pars, X, y)
+        non_default_kwargs = {
+            "data": ArrayDataLoader(X, y, batch_size=100),
+            "X": X,
+            "y": y,
+            "random_key": jax.random.PRNGKey(0),
+            "feedforward_input": X,
+            "params": pars,
+            "init_params": pars,
+            "opt_state": state,
+        }
+        methods = public_callers_of(
+            model.__class__,
+            attr_name="_observation_model",
+            target_methods=methods_with_extras,
+        )
+        for k, v in public_callers_of(
+            model.__class__,
+            attr_name="observation_model",
+            target_methods=methods_with_extras,
+        ).items():
+            methods[k].union(v)
+
+        for meth in methods:
+            method = getattr(model, meth)
+            # fit_stochastic drop scales (cannot estimate), reset
+            model.scale_ = 3 * jnp.ones_like(true_params.intercept)
+            sig = inspect.signature(method, eval_str=True)
+            literal_params = {}
+            non_defaults = []
+            for key, val in sig.parameters.items():
+                ann = val.annotation
+                if typing.get_origin(ann) is typing.Literal:
+                    literal_params[key] = [a for a in typing.get_args(ann)]
+                elif val.default is inspect.Parameter.empty:
+                    non_defaults.append(key)
+
+            filter_kwargs = {
+                k: v for k, v in non_default_kwargs.items() if k in non_defaults
+            }
+            literal_names = [k for k in literal_params.keys()]
+            for literal_vals in itertools.product(*literal_params.values()):
+                kwargs = {
+                    **filter_kwargs,
+                    **{n: v for n, v in zip(literal_names, literal_vals)},
+                }
+                method(**kwargs)
 
     #####################
     # Test model.update #
