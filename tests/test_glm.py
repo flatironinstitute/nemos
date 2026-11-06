@@ -5536,7 +5536,6 @@ def test_glm_set_solver_name_recovers(solver_name, model_instantiation, request)
         {
             "coef": params.coef,
             "intercept": params.intercept,
-            "dispersion": params.extra_params["dispersion"],
         },
         X,
         y,
@@ -5546,7 +5545,6 @@ def test_glm_set_solver_name_recovers(solver_name, model_instantiation, request)
             {
                 "coef": params.coef,
                 "intercept": params.intercept,
-                "dispersion": params.extra_params["dispersion"],
             },
             init_state,
             X,
@@ -5605,7 +5603,6 @@ def test_glm_set_solver_kwargs_recovers(model_instantiation, request):
         {
             "coef": params.coef,
             "intercept": params.intercept,
-            "dispersion": params.extra_params["dispersion"],
         },
         X,
         y,
@@ -5615,7 +5612,6 @@ def test_glm_set_solver_kwargs_recovers(model_instantiation, request):
             {
                 "coef": params.coef,
                 "intercept": params.intercept,
-                "dispersion": params.extra_params["dispersion"],
             },
             init_state,
             X,
@@ -5674,7 +5670,6 @@ def test_glm_set_regularizer_recovers(model_instantiation, request):
         {
             "coef": params.coef,
             "intercept": params.intercept,
-            "dispersion": params.extra_params["dispersion"],
         },
         X,
         y,
@@ -5684,7 +5679,6 @@ def test_glm_set_regularizer_recovers(model_instantiation, request):
             {
                 "coef": params.coef,
                 "intercept": params.intercept,
-                "dispersion": params.extra_params["dispersion"],
             },
             init_state,
             X,
@@ -5743,7 +5737,6 @@ def test_glm_set_regularizer_strength_recovers(model_instantiation, request):
         {
             "coef": params.coef,
             "intercept": params.intercept,
-            "dispersion": params.extra_params["dispersion"],
         },
         X,
         y,
@@ -5753,7 +5746,6 @@ def test_glm_set_regularizer_strength_recovers(model_instantiation, request):
             {
                 "coef": params.coef,
                 "intercept": params.intercept,
-                "dispersion": params.extra_params["dispersion"],
             },
             init_state,
             X,
@@ -5812,7 +5804,6 @@ def test_glm_set_observation_model_recovers(model_instantiation, request):
         {
             "coef": params.coef,
             "intercept": params.intercept,
-            "dispersion": params.extra_params["dispersion"],
         },
         X,
         y,
@@ -5822,7 +5813,6 @@ def test_glm_set_observation_model_recovers(model_instantiation, request):
             {
                 "coef": params.coef,
                 "intercept": params.intercept,
-                "dispersion": params.extra_params["dispersion"],
             },
             init_state,
             X,
