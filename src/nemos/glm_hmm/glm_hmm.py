@@ -365,8 +365,8 @@ class GLMHMM(
         maxiter: int = 1000,
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
-        hmm_initialization_funcs: Optional[HMM_INITIALIZATION_FN_DICT] = None,
-        model_initialization_funcs: Optional[GLMHMM_INITIALIZATION_FN_DICT] = None,
+        # hmm_initialization_funcs: Optional[HMM_INITIALIZATION_FN_DICT] = None,
+        # model_initialization_funcs: Optional[GLMHMM_INITIALIZATION_FN_DICT] = None,
     ):
         super().__init__(
             n_states=n_states,
@@ -379,13 +379,13 @@ class GLMHMM(
             maxiter=maxiter,
             tol=tol,
             seed=seed,
-            hmm_initialization_funcs=hmm_initialization_funcs,
+            # hmm_initialization_funcs=hmm_initialization_funcs,
             estep_type=estep_type,
         )
         self.observation_model = observation_model
         self.inverse_link_function = inverse_link_function
 
-        self.model_initialization_funcs = model_initialization_funcs
+        # self.model_initialization_funcs = model_initialization_funcs
 
         # fit attributes
         self.coef_: jnp.ndarray | None = None
@@ -420,18 +420,13 @@ class GLMHMM(
     def setup(
         self,
         initial_proba_init: Optional[
-            Literal["uniform", "random", "dirichlet", "kmeans"] | InitFunctionHMM
+            Literal["uniform", "random", "dirichlet"]
         ] = None,
-        initial_proba_init_kwargs: Optional[dict] = None,
         transition_proba_init: Optional[
-            Literal["sticky", "uniform", "random", "dirichlet", "kmeans"]
-            | InitFunctionHMM
+            Literal["sticky", "uniform", "random", "dirichlet"]
         ] = None,
-        transition_proba_init_kwargs: Optional[dict] = None,
         glm_params_init: Optional[Literal["random", "kmeans"] | InitFunctionGLM] = None,
-        glm_params_init_kwargs: Optional[dict] = None,
         scale_init: Optional[Literal["constant", "kmeans"] | InitFunctionGLM] = None,
-        scale_init_kwargs: Optional[dict] = None,
     ):
         """Configure how :meth:`fit` initializes each model parameter.
 
@@ -444,11 +439,11 @@ class GLMHMM(
         Available built-in initialization functions:
 
         - ``initial_proba_init``: ``"uniform"`` (default), ``"random"``,
-          ``"dirichlet"``, ``"kmeans"``.
+          ``"dirichlet"``.
         - ``transition_proba_init``: ``"sticky"`` (default), ``"uniform"``,
-          ``"random"``, ``"dirichlet"``, ``"kmeans"``.
-        - ``glm_params_init``: ``"random"`` (default), ``"kmeans"``.
-        - ``scale_init``: ``"constant"`` (default), ``"kmeans"``.
+          ``"random"``, ``"dirichlet"``.
+        - ``glm_params_init``: ``"random"`` (default).
+        - ``scale_init``: ``"constant"`` (default).
 
 
         Parameters
@@ -533,13 +528,9 @@ class GLMHMM(
         """
         super().setup(
             initial_proba_init=initial_proba_init,
-            initial_proba_init_kwargs=initial_proba_init_kwargs,
             transition_proba_init=transition_proba_init,
-            transition_proba_init_kwargs=transition_proba_init_kwargs,
             glm_params_init=glm_params_init,
-            glm_params_init_kwargs=glm_params_init_kwargs,
             scale_init=scale_init,
-            scale_init_kwargs=scale_init_kwargs,
         )
 
     def _model_setup(
@@ -558,20 +549,9 @@ class GLMHMM(
         """
         self._model_initialization_funcs = setup_glm_hmm_initialization(
             glm_params_init=glm_params_init,
-            glm_params_init_kwargs=glm_params_init_kwargs,
             scale_init=scale_init,
-            scale_init_kwargs=scale_init_kwargs,
             init_funcs=self._model_initialization_funcs,
         )
-        self._model_use_kmeans = {
-            "glm_params_init": (
-                self._model_initialization_funcs["glm_params_init"]
-                is kmeans_glm_params_init
-            ),
-            "scale_init": (
-                self._model_initialization_funcs["scale_init"] is kmeans_scale_init
-            ),
-        }
 
     @property
     def observation_model(self) -> obs.Observations:
@@ -675,35 +655,35 @@ class GLMHMM(
                 "set the missing attributes."
             )
 
-    def _kmeans_extra_kwargs(self) -> dict:
-        return {
-            "inverse_link_function": self.inverse_link_function,
-            "observation_model": self.observation_model,
-        }
+    # def _kmeans_extra_kwargs(self) -> dict:
+    #     return {
+    #         "inverse_link_function": self.inverse_link_function,
+    #         "observation_model": self.observation_model,
+    #     }
 
-    def _model_params_initialization(
-        self,
-        X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
-        session_starts: jnp.ndarray,
-        random_key: jax.Array,
-    ) -> Tuple[GLMHMMUserParams, bool]:
-        """GLM-HMM initialization."""
-        user_params = generate_glm_hmm_initial_model_params(
-            self._n_states,
-            X,
-            y,
-            inverse_link_function=self._inverse_link_function,
-            observation_model=self._observation_model,
-            session_starts=session_starts,
-            random_key=random_key,
-            init_funcs=self._model_initialization_funcs,
-        )
-        validate_params = any(
-            self._model_initialization_funcs[s]
-            for s in ("glm_params_init_custom", "scale_init_custom")
-        )
-        return user_params, validate_params
+    # def _model_params_initialization(
+    #     self,
+    #     X: DESIGN_INPUT_TYPE,
+    #     y: jnp.ndarray,
+    #     session_starts: jnp.ndarray,
+    #     random_key: jax.Array,
+    # ) -> Tuple[GLMHMMUserParams, bool]:
+    #     """GLM-HMM initialization."""
+    #     user_params = generate_glm_hmm_initial_model_params(
+    #         self._n_states,
+    #         X,
+    #         y,
+    #         inverse_link_function=self._inverse_link_function,
+    #         observation_model=self._observation_model,
+    #         session_starts=session_starts,
+    #         random_key=random_key,
+    #         init_funcs=self._model_initialization_funcs,
+    #     )
+    #     validate_params = any(
+    #         self._model_initialization_funcs[s]
+    #         for s in ("glm_params_init_custom", "scale_init_custom")
+    #     )
+    #     return user_params, validate_params
 
     def fit(
         self,

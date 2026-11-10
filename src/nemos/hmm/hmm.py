@@ -202,78 +202,39 @@ class BaseHMM(
     def _hmm_setup(
         self,
         initial_proba_init: Optional[
-            Literal["uniform", "random", "dirichlet", "kmeans"] | Callable
+            Literal["uniform", "random", "dirichlet"]
         ] = None,
-        initial_proba_init_kwargs: Optional[dict] = None,
         transition_proba_init: Optional[
-            Literal["sticky", "uniform", "random", "dirichlet", "kmeans"] | Callable
+            Literal["sticky", "uniform", "random", "dirichlet"]
         ] = None,
-        transition_proba_init_kwargs: Optional[dict] = None,
     ):
         """
-        Set up the HMM model with specified initialization functions for the initial and transition probabilities.
+        Set which initialization methods to use for the initial and transition probabilities.
 
-        An optional initialization step that allows for users to specify initialization functions other than the
-        defaults for initial and transition probabilities. The user can specify other built-in initialization functions
-        or provide custom ones. If no initialization functions are provided, default initialization will be used.
+        An optional initialization step that allows for users to specify initialization methods other than the
+        defaults for initial and transition probabilities. The user can specify one of the built-in initialization
+        functions listed below.
+        - For initial probabilities: "uniform" (default), "random", "dirichet"
+        - For transition probabilities: "sticky" (default), "uniform", "random", "dirichlet"
 
-        Available built-in initialization functions include:
-        - For initial probabilities: "uniform" (default), "random", "kmeans"
-        - For transition probabilities: "sticky" (default), "uniform", "random", "kmeans"
-
-        Any custom initialization function provided by the user should be a callable that matches the following input
-        (n_states, X, y, session_starts, random_key, **kwargs) and returns an array of the appropriate shape for the
-        parameters it initializes (initial probabilities should return shape (n_states,) and transition probabilities
-        should return shape (n_states, n_states)). Even if the function does not use all the inputs, they should be
-        included in the function signature to ensure compatibility with the setup process.
-
-        An example of a custom initialization function for initial probabilities could be:
-        ```
-        def custom_initial_proba_init(
-            n_states, X, y, session_starts, random_key, min_prob=0.05
-        ):
-            init_prob = jax.random.uniform(random_key, (n_states,), dtype=float)
-            init_prob = init_prob / init_prob.sum()  # normalize to sum to 1
-            init_prob = jnp.clip(
-                init_prob, a_min=min_prob
-            )  # enforce minimum probability
-            return init_prob / init_prob.sum()  # renormalize after clipping
-        ```
+        For any custom changes to the built-in methods, e.g. overriding default optional arguments, for using
+        kmeans initialization, or for any other custom initialization method, the user should generate the 
+        initial parameters externally and provide them as `init_params` to the `fit` method.
 
         Parameters
         ----------
         initial_proba_init :
             A string identifier for a built-in initialization function or a custom callable for initializing the
             initial probabilities of the HMM states.
-        initial_proba_init_kwargs :
-            A dictionary of keyword arguments to pass to the initial probability initialization function.
         transition_proba_init :
             A string identifier for a built-in initialization function or a custom callable for initializing the
             transition probabilities between HMM states.
-        transition_proba_init_kwargs :
-            A dictionary of keyword arguments to pass to the transition probability initialization function.
         """
         self._hmm_initialization_funcs = setup_hmm_initialization(
             initial_proba_init=initial_proba_init,
-            initial_proba_init_kwargs=initial_proba_init_kwargs,
             transition_proba_init=transition_proba_init,
-            transition_proba_init_kwargs=transition_proba_init_kwargs,
             init_funcs=self._hmm_initialization_funcs,
         )
-        # flag for initializing kmeans model at parameter initialization; derived
-        # from the identity of the stored callables so the flag stays accurate when
-        # the dict is set via the hmm_initialization_funcs property (e.g. sklearn
-        # clone) and not only when the string "kmeans" is passed to setup
-        self._hmm_use_kmeans = {
-            "initial_proba_init": (
-                self._hmm_initialization_funcs["initial_proba_init"]
-                is kmeans_initial_proba_init
-            ),
-            "transition_proba_init": (
-                self._hmm_initialization_funcs["transition_proba_init"]
-                is kmeans_transition_proba_init
-            ),
-        }
 
     @abc.abstractmethod
     def _model_setup(self, **kwargs):
@@ -284,13 +245,11 @@ class BaseHMM(
     def setup(
         self,
         initial_proba_init: Optional[
-            Literal["uniform", "random", "dirichlet", "kmeans"] | Callable
+            Literal["uniform", "random", "dirichlet"] 
         ] = None,
-        initial_proba_init_kwargs: Optional[dict] = None,
         transition_proba_init: Optional[
-            Literal["sticky", "uniform", "random", "dirichlet", "kmeans"] | Callable
+            Literal["sticky", "uniform", "random", "dirichlet"]
         ] = None,
-        transition_proba_init_kwargs: Optional[dict] = None,
         **kwargs,
     ):
         """
@@ -298,11 +257,19 @@ class BaseHMM(
 
         This can be overwritten by the child class for custom docstrings.
         """
+        if initial_proba_init not in [None, "uniform", "random", "dirichlet"]:
+            raise ValueError(
+                f"Invalid value for initial_proba_init: {initial_proba_init}. "
+                f"Expected one of [None, 'uniform', 'random', 'dirichlet']."
+            )
+        if transition_proba_init not in [None, "sticky", "uniform", "random", "dirichlet"]:
+            raise ValueError(
+                f"Invalid value for transition_proba_init: {transition_proba_init}. "
+                f"Expected one of [None, 'sticky', 'uniform', 'random', 'dirichlet']."
+            )
         self._hmm_setup(
             initial_proba_init=initial_proba_init,
-            initial_proba_init_kwargs=initial_proba_init_kwargs,
             transition_proba_init=transition_proba_init,
-            transition_proba_init_kwargs=transition_proba_init_kwargs,
         )
         self._model_setup(**kwargs)
 
@@ -544,108 +511,12 @@ class BaseHMM(
         """
         pass
 
-    @property
-    def _use_kmeans(self) -> bool:
-        """Check if kmeans initialization is needed for any HMM parameters."""
-        return (
-            (self._hmm_use_kmeans is not None) and any(self._hmm_use_kmeans.values())
-        ) or (
-            (self._model_use_kmeans is not None)
-            and any(self._model_use_kmeans.values())
-        )
-
-    def _kmeans_extra_kwargs(self) -> dict:
-        """Extra kwargs to initialize the kmeans model. Can be overridden by child classes if needed.
-
-        Any key returned here must also appear as a reserved parameter in the relevant init-function
-        protocol (e.g. ``InitFunctionGLM`` declares ``observation_model``/``inverse_link_function``).
-        That keeps the same value from arriving twice at the initializer constructor.
-        """
-        return {}
-
-    def _kmeans_resolve_model_kwargs(self, use_kmeans, init_funcs) -> dict:
-        """
-        Extract model kmeans kwargs and ensure consistency across relevant init funcs.
-
-        This is not relevant for HMM init funcs, whose kwargs are not needed for the kmeans initializer
-        """
-        kmeans_kwargs = {}
-        for param, use in use_kmeans.items():
-            if use:
-                kwargs = init_funcs.get(f"{param}_kwargs", {})
-                for k, v in kwargs.items():
-                    if k in kmeans_kwargs:
-                        eq = eqx.tree_equal(kmeans_kwargs[k], v)
-                        if eq is None or not bool(eq):
-                            raise ValueError(
-                                f"Inconsistent KMeans init arg '{k}': "
-                                f"{kmeans_kwargs[k]} != {v}"
-                            )
-                    else:
-                        kmeans_kwargs[k] = v
-        return kmeans_kwargs
-
-    def _kmeans_inject_initializer(self, initializer) -> None:
-        """Inject ``initializer`` into every kmeans-using init-func kwargs dict.
-
-        Other constructor-only inputs the model needs (e.g. ``observation_model`` for GLMHMM)
-        reach the init funcs as protocol-required positional arguments at call time, so nothing
-        beyond ``initializer`` is injected here.
-        """
-        if self._hmm_use_kmeans is not None:
-            for param, use_kmeans in self._hmm_use_kmeans.items():
-                if use_kmeans:
-                    self._hmm_initialization_funcs[f"{param}_kwargs"]["initializer"] = (
-                        initializer
-                    )
-        if self._model_use_kmeans is not None:
-            for param, use_kmeans in self._model_use_kmeans.items():
-                if use_kmeans:
-                    self._model_initialization_funcs[f"{param}_kwargs"][
-                        "initializer"
-                    ] = initializer
-
-    def _kmeans_setup_initializer(
-        self, X, y, session_starts=None, random_key: Optional[jax.Array] = None
-    ):
-        """Set up the kmeans initializer if any HMM or model parameters require kmeans initialization."""
-        if self._model_use_kmeans is not None:
-            kmeans_kwargs = self._kmeans_resolve_model_kwargs(
-                self._model_use_kmeans, self._model_initialization_funcs
-            )
-        else:
-            kmeans_kwargs = {}
-
-        model_kwargs = self._kmeans_extra_kwargs()
-
-        initializer = kmeans_kwargs.get(
-            "initializer",
-            self._kmeans_init_class(
-                self.n_states,
-                X,
-                y,
-                session_starts=session_starts,
-                random_key=random_key,
-                **model_kwargs,
-                **kmeans_kwargs,
-            ),
-        )
-        self._kmeans_inject_initializer(initializer)
-
     def _model_specific_initialization(self, X, y, session_starts=None):
         """Model-specific initialization."""
         keys = jax.random.split(self._seed, 3)
         hmm_keys = keys[:2]
         # the model needs to figure out how to split the key internally
         model_key = keys[2]
-
-        # check kmeans kwargs and setup initializer.
-        # fold_in derives an independent key so hmm_keys and model_key are unaffected.
-        if self._use_kmeans:
-            kmeans_key = jax.random.fold_in(self._seed, 0)
-            self._kmeans_setup_initializer(
-                X, y, session_starts=session_starts, random_key=kmeans_key
-            )
 
         hmm_params, validate_hmm = self._hmm_params_initialization(
             X,

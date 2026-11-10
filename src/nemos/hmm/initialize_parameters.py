@@ -665,6 +665,35 @@ def setup_hmm_initialization(
     The function assumes that the function keys are pre-validated, this is convenient because
     different model require different keys.
 
+    Custom callables must satisfy the ``typing.Protocol`` class:
+    - ``initial_proba_init`` and ``transition_proba_init`` must satisfy
+    :class:`~nemos.hmm.initialize_parameters.InitFunctionHMM` and return a
+    ``jnp.ndarray`` of shape ``(n_states,)`` or ``(n_states, n_states)``
+    respectively.
+
+    To inspect a protocol's signature, import and ``help()`` it::
+
+        from nemos.hmm.initialize_parameters import InitFunctionHMM
+        from nemos.glm_hmm.initialize_parameters import InitFunctionGLM
+
+        help(InitFunctionHMM)  # or help(InitFunctionGLM)
+
+    All arguments must appear in the function signature even when unused, so the
+    framework can supply them uniformly.
+
+    An example of a custom initialization function for initial probabilities could be:
+    ```
+    def custom_initial_proba_init(
+        n_states, X, y, session_starts, random_key, min_prob=0.05
+    ):
+        init_prob = jax.random.uniform(random_key, (n_states,), dtype=float)
+        init_prob = init_prob / init_prob.sum()  # normalize to sum to 1
+        init_prob = jnp.clip(
+            init_prob, a_min=min_prob
+        )  # enforce minimum probability
+        return init_prob / init_prob.sum()  # renormalize after clipping
+    ```
+
     Parameters
     ----------
     initial_proba_init :
