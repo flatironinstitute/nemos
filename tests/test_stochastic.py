@@ -409,7 +409,7 @@ class TestGLMStochasticFit:
         # start from wrong initial params that's far from true params
         init_coef = jnp.arange(5)[::-1]
         init_intercept = jnp.zeros(1)
-        init_params = (init_coef, init_intercept)
+        init_params = {"coef": init_coef, "intercept": init_intercept}
 
         model.stochastic_fit(loader, n_passes=1, init_params=init_params)
 
@@ -429,7 +429,10 @@ class TestGLMStochasticFit:
         # get parameters that are close to the optimum
         model_fitted = nmo.glm.GLM(solver_name="LBFGS", solver_kwargs={"tol": 1e-8})
         model_fitted.fit(X, y)
-        final_params = (model_fitted.coef_, model_fitted.intercept_)
+        final_params = {
+            "coef": model_fitted.coef_,
+            "intercept": model_fitted.intercept_,
+        }
 
         # Explicit SolverConvergenceCallback: should stop early
         model_stopping = nmo.glm.GLM(solver_name=solver, solver_kwargs=solver_kwargs)

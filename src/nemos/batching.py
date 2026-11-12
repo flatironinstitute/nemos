@@ -145,7 +145,11 @@ class _BaseArrayDataLoader:
 
         self.arrays = arrays
 
-        if len(set(arr.shape[0] for arr in leaves)) != 1:
+        # this allows batching pytrees that have some empty leaves, this should be discussed
+        if (
+            len(set(arr.shape[0] for arr in jax.tree_util.tree_leaves(self.arrays)))
+            != 1
+        ):
             raise ValueError("All arrays must have same number of samples")
 
         self.shuffle = shuffle
@@ -155,7 +159,7 @@ class _BaseArrayDataLoader:
     @property
     def n_samples(self) -> int:
         """Total number of samples in the dataset."""
-        return jax.tree_util.tree_leaves(self.arrays)[0].shape[0]
+        return jax.tree_util.tree_leaves(self.arrays[0])[0].shape[0]
 
     @property
     def batch_size(self) -> int:
@@ -173,7 +177,7 @@ class _BaseArrayDataLoader:
 
     def _materialize(self, key: slice | np.ndarray) -> tuple[jnp.ndarray, ...]:
         """Load and convert to JAX the rows selected by ``key`` from each array."""
-        return jax.tree_util.tree_map(jnp.asarray, tree_slice(self.arrays, key))
+        return jax.tree_util.tree_map(lambda x: jnp.asarray(x[key]), self.arrays)
 
     def _iter_no_shuffle(self) -> Iterator[tuple[jnp.ndarray, ...]]:
         """Yield contiguous batches in sequential order."""
@@ -312,7 +316,12 @@ class ArrayDataLoader(_BaseArrayDataLoader):
         seed :
             Random seed for shuffling. Default is None.
         """
-        super().__init__(*arrays, batch_size=batch_size, shuffle=shuffle, seed=seed)
+        super().__init__(
+            *jax.tree_util.tree_map(jnp.asarray, arrays),
+            batch_size=batch_size,
+            shuffle=shuffle,
+            seed=seed,
+        )
         self.arrays = jax.tree_util.tree_map(jnp.asarray, self.arrays)
 
     def _iter_shuffle_whole(self) -> Iterator[tuple[jnp.ndarray, ...]]:

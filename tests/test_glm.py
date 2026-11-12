@@ -2509,7 +2509,7 @@ class TestGLMObservationModel:
                 "that of jax.scipy!"
             )
 
-    # methods_with_extras: conftets.py fixture listing all obs model public methods with
+    # methods_with_extras: conftest.py fixture listing all obs model public methods with
     # extra parameters
     def test_obs_model_is_called_with_explicit_extra_parameters(
         self, monkeypatch, request, glm_type, model_instantiation, methods_with_extras
@@ -6091,3 +6091,38 @@ class TestFixParams:
             val = copy_model.compute_loss(param_modified, X, y)
             val_orig = model.compute_loss(params, X, y)
             np.testing.assert_array_equal(val, val_orig)
+
+    @pytest.mark.parametrize("input_type", ["_pytree", ""])
+    def test_stochastic_fit(
+        self, fit_intercept, glm_type, model_instantiation, request, input_type
+    ):
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation + input_type
+        )
+        model.fit_intercept = fit_intercept
+        # set up in stochastic fits
+        model.solver_name = "GradientDescent[optimistix]"
+        model.solver_kwargs = {"stepsize": 0.001, "acceleration": False, "maxiter": 1}
+        params = model.initialize_params(X, y)
+        fix_combs = self.fix_param_names(model.observation_model)
+        loader = ArrayDataLoader(X, y, batch_size=100)
+        for par_names in fix_combs:
+            print(par_names)
+            copy_model = deepcopy(model)
+            fix = params.copy()
+            fix = {k: v for k, v in fix.items() if k not in par_names}
+            if "coef" in fix and isinstance(fix["coef"], dict):
+                fix["coef"][next(k for k in fix["coef"].keys())] = None
+            copy_model.fix_params = fix
+            copy_model.stochastic_fit(loader)
+            fit_dict = copy_model._get_param_dict()
+            fit_dict_compare = {
+                k: eqx.filter(
+                    fit_dict[k],
+                    jax.tree_util.tree_map(
+                        lambda x: x is not None, v, is_leaf=lambda x: x is None
+                    ),
+                )
+                for k, v in fix.items()
+            }
+            jax.tree_util.tree_map(np.testing.assert_array_equal, fit_dict_compare, fix)
