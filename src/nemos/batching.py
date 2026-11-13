@@ -11,11 +11,12 @@ from typing import (
     runtime_checkable,
 )
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 from numpy.typing import ArrayLike
 
-from .tree_utils import get_valid_multitree
+from .tree_utils import get_valid_multitree, tree_slice
 
 BatchData: TypeAlias = tuple[Any, ...]
 
@@ -93,7 +94,7 @@ class _BaseArrayDataLoader:
       order-dependent per-batch processing (e.g. temporal convolution).
     - ``"chunk_and_samples"``: like ``"chunk_order"``, but additionally permutes the
       samples within each batch. Still requires only contiguous reads.
-    - ``"full"``: every sample may land in any batch (requires random access).
+    - ``"full"``: every sample can be assigned to any batch (requires random access).
     """
 
     def __init__(
@@ -125,7 +126,8 @@ class _BaseArrayDataLoader:
             If no arrays are provided, the arrays have mismatched lengths, or
             ``shuffle`` is not a recognized strategy.
         """
-        if len(arrays) == 0:
+        leaves = jax.tree_util.tree_leaves(arrays)
+        if len(leaves) == 0:
             raise ValueError("Provide at least one array.")
 
         if shuffle not in SHUFFLE_STRATEGIES:
@@ -133,9 +135,9 @@ class _BaseArrayDataLoader:
                 f"shuffle must be one of {SHUFFLE_STRATEGIES}, got {shuffle!r}."
             )
 
-        self.arrays = tuple(arrays)
+        self.arrays = arrays
 
-        if len(set(arr.shape[0] for arr in self.arrays)) != 1:
+        if len(set(arr.shape[0] for arr in leaves)) != 1:
             raise ValueError("All arrays must have same number of samples")
 
         self.shuffle = shuffle
@@ -145,7 +147,7 @@ class _BaseArrayDataLoader:
     @property
     def n_samples(self) -> int:
         """Total number of samples in the dataset."""
-        return self.arrays[0].shape[0]
+        return jax.tree_util.tree_leaves(self.arrays)[0].shape[0]
 
     @property
     def batch_size(self) -> int:
@@ -163,7 +165,7 @@ class _BaseArrayDataLoader:
 
     def _materialize(self, key: slice | np.ndarray) -> tuple[jnp.ndarray, ...]:
         """Load and convert to JAX the rows selected by ``key`` from each array."""
-        return tuple(jnp.asarray(arr[key]) for arr in self.arrays)
+        return jax.tree_util.tree_map(jnp.asarray, tree_slice(self.arrays, key))
 
     def _iter_no_shuffle(self) -> Iterator[tuple[jnp.ndarray, ...]]:
         """Yield contiguous batches in sequential order."""
@@ -196,7 +198,7 @@ class _BaseArrayDataLoader:
 
             if shuffle_within:
                 local_perm = self._rng.permutation(end - start)
-                batch = tuple(b[local_perm] for b in batch)
+                batch = tree_slice(batch, local_perm)
 
             yield batch
 
@@ -295,7 +297,7 @@ class ArrayDataLoader(_BaseArrayDataLoader):
             Random seed for shuffling. Default is None.
         """
         super().__init__(
-            *(jnp.asarray(x) for x in arrays),
+            *jax.tree_util.tree_map(jnp.asarray, arrays),
             batch_size=batch_size,
             shuffle=shuffle,
             seed=seed,
@@ -384,7 +386,7 @@ class LazyArrayDataLoader(_BaseArrayDataLoader):
             # i.e. where it ends up after sorting.
             local_perm = np.argsort(np.argsort(batch_idx))
             batch = self._materialize(np.sort(batch_idx))
-            yield tuple(b[local_perm] for b in batch)
+            yield tree_slice(batch, local_perm)
 
 
 class _PreprocessedDataLoader:
