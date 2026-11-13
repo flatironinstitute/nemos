@@ -50,6 +50,35 @@ class SliceOnlyArray:
         raise TypeError("Only sequential slicing is supported")
 
 
+def as_array(x):
+    """Return the array unchanged."""
+    return x
+
+
+def as_dict(x):
+    """Wrap the array in a single-key dict."""
+    return {"X": x}
+
+
+def as_nested(x):
+    """Place the array in several leaves of a nested tree that has an empty subtree."""
+    return {"a": x, "b": (x, None)}
+
+
+TREE_STRUCTURES = [as_array, as_dict, as_nested]
+
+
+def unwrap(X_batch, wrap):
+    """Check that X_batch has the structure of wrap and equal leaves, and return one leaf."""
+    assert jax.tree_util.tree_structure(X_batch) == jax.tree_util.tree_structure(
+        wrap(0)
+    )
+    leaves = jax.tree_util.tree_leaves(X_batch)
+    for leaf in leaves[1:]:
+        np.testing.assert_array_equal(leaf, leaves[0])
+    return leaves[0]
+
+
 class DataLoaderCommonTests:
     """Test common to all DataLoader variants."""
 
@@ -65,9 +94,10 @@ class DataLoaderCommonTests:
         """
         raise NotImplementedError("Overwrite init_loader in child classes.")
 
-    def test_basic_creation_and_n_samples(self):
+    @pytest.mark.parametrize("wrap", TREE_STRUCTURES)
+    def test_basic_creation_and_n_samples(self, wrap):
         """Test creating with X, y and that n_samples is correct."""
-        loader = self.make_loader()
+        loader = self.make_loader(wrap=wrap)
         assert loader.n_samples == N_SAMPLES
 
     def test_basic_creation_and_n_samples_variadic(self):
@@ -75,10 +105,11 @@ class DataLoaderCommonTests:
         loader = self.make_loader(*random_data(), *random_data())
         assert loader.n_samples == N_SAMPLES
 
-    def test_no_arrays_raises(self):
-        """Test that providing no arrays raises error."""
+    @pytest.mark.parametrize("arrays", [(), ({},), (None,), ({"a": None}, [])])
+    def test_no_arrays_raises(self, arrays):
+        """Test that providing no arrays, or only empty pytrees, raises error."""
         with pytest.raises(ValueError, match="Provide at least one array"):
-            self.loader_cls(batch_size=32)
+            self.loader_cls(*arrays, batch_size=32)
 
     def test_invalid_batch_size(self):
         """Test that batch_size <= 0 raises error."""
@@ -92,25 +123,32 @@ class DataLoaderCommonTests:
             X, y = ordered_data()
             self.loader_cls(X[:100], y[:100], batch_size=1000)
 
-    def test_mismatched_samples(self):
-        """Test that mismatched X and y raises error."""
-        X = np.random.randn(100, 5)
-        y = np.random.randn(50)
-
+    @pytest.mark.parametrize(
+        "arrays",
+        [
+            (np.zeros((100, 5)), np.zeros(50)),
+            ({"a": np.zeros((100, 5))}, np.zeros(50)),
+            ({"a": np.zeros((100, 5)), "b": np.zeros((50, 5))}, np.zeros(100)),
+            ({"a": [np.zeros((100, 5)), np.zeros((50, 5))]}, np.zeros(100)),
+        ],
+    )
+    def test_mismatched_samples(self, arrays):
+        """Test that leaves with different numbers of samples raise error."""
         with pytest.raises(ValueError, match="same number of samples"):
-            self.loader_cls(X, y, batch_size=32)
+            self.loader_cls(*arrays, batch_size=32)
 
     @pytest.mark.parametrize(
         "shuffle", ["none", "chunk_order", "chunk_and_samples", "full"]
     )
     @pytest.mark.parametrize("iterate_between_calls", [True, False])
-    def test_sample_batch(self, shuffle, iterate_between_calls):
+    @pytest.mark.parametrize("wrap", TREE_STRUCTURES)
+    def test_sample_batch(self, shuffle, iterate_between_calls, wrap):
         """Test sample_batch yields correct type, shapes, and is deterministic."""
         # check for a non-standard batch size
         batch_size = 14
 
         # any value for shuffle should still be deterministic
-        loader = self.make_loader(shuffle=shuffle, batch_size=batch_size)
+        loader = self.make_loader(shuffle=shuffle, batch_size=batch_size, wrap=wrap)
 
         X_batch1, y_batch1 = loader.sample_batch()
 
@@ -118,6 +156,7 @@ class DataLoaderCommonTests:
             _ = list(iter(loader))
 
         X_batch2, y_batch2 = loader.sample_batch()
+        X_batch1, X_batch2 = unwrap(X_batch1, wrap), unwrap(X_batch2, wrap)
 
         assert isinstance(X_batch1, jnp.ndarray)
         assert isinstance(X_batch2, jnp.ndarray)
@@ -145,7 +184,8 @@ class DataLoaderCommonTests:
         assert batch_data[1].shape == (32,)
         assert batch_data[2].shape == (32, 3)
 
-    def test_sample_batch_skips_invalid_leading_region(self):
+    @pytest.mark.parametrize("wrap", TREE_STRUCTURES)
+    def test_sample_batch_skips_invalid_leading_region(self, wrap):
         """Test that sample_batch skips an all-invalid leading batch (e.g. conv warmup)."""
         batch_size = 32
         X = np.arange(N_SAMPLES * 5, dtype=float).reshape(N_SAMPLES, 5)
@@ -153,23 +193,28 @@ class DataLoaderCommonTests:
         # make the entire first batch invalid, mimicking the NaN warmup of a
         # convolutional basis
         X[:batch_size] = np.nan
-        loader = self.make_loader(X, y, batch_size=batch_size, shuffle="chunk_order")
+        loader = self.make_loader(
+            wrap(X), y, batch_size=batch_size, shuffle="chunk_order"
+        )
 
         X_batch, y_batch = loader.sample_batch()
+        X_batch = unwrap(X_batch, wrap)
 
         assert X_batch.shape == (batch_size, 5)
         # the next contiguous batch, which is fully valid, is returned
         assert not np.any(np.isnan(X_batch))
         np.testing.assert_array_equal(y_batch, y[batch_size : 2 * batch_size])
 
-    def test_sample_batch_all_invalid_falls_back_to_first(self):
+    @pytest.mark.parametrize("wrap", TREE_STRUCTURES)
+    def test_sample_batch_all_invalid_falls_back_to_first(self, wrap):
         """Test that an all-invalid dataset returns the first batch (for downstream error)."""
         batch_size = 32
         X = np.full((N_SAMPLES, 5), np.nan)
         y = np.arange(N_SAMPLES, dtype=float)
-        loader = self.make_loader(X, y, batch_size=batch_size, shuffle="none")
+        loader = self.make_loader(wrap(X), y, batch_size=batch_size, shuffle="none")
 
         X_batch, _ = loader.sample_batch()
+        X_batch = unwrap(X_batch, wrap)
 
         assert X_batch.shape == (batch_size, 5)
         assert np.all(np.isnan(X_batch))
@@ -182,25 +227,27 @@ class DataLoaderCommonTests:
     @pytest.mark.parametrize(
         "shuffle", ["none", "chunk_order", "chunk_and_samples", "full"]
     )
-    def test_one_batch_smaller(self, shuffle):
+    @pytest.mark.parametrize("wrap", TREE_STRUCTURES)
+    def test_one_batch_smaller(self, shuffle, wrap):
         """Test that one of the batches can be smaller than batch_size."""
         batch_size = 32
-        loader = self.make_loader(shuffle=shuffle, batch_size=batch_size)
+        loader = self.make_loader(shuffle=shuffle, batch_size=batch_size, wrap=wrap)
 
-        batch_sizes = set([X_b.shape[0] for X_b, _ in loader])
+        batch_sizes = set([unwrap(X_b, wrap).shape[0] for X_b, _ in loader])
         assert batch_sizes == {batch_size, N_SAMPLES % batch_size}
 
     @pytest.mark.parametrize(
         "shuffle", ["none", "chunk_order", "chunk_and_samples", "full"]
     )
-    def test_iteration_yields_all_data(self, shuffle):
+    @pytest.mark.parametrize("wrap", TREE_STRUCTURES)
+    def test_iteration_yields_all_data(self, shuffle, wrap):
         """Test that iteration covers all samples."""
-        loader = self.make_loader(shuffle=shuffle)
+        loader = self.make_loader(shuffle=shuffle, wrap=wrap)
 
         all_X = []
         all_y = []
         for X_batch, y_batch in loader:
-            all_X.append(X_batch)
+            all_X.append(unwrap(X_batch, wrap))
             all_y.append(y_batch)
 
         X_concat = jnp.concatenate(all_X)
@@ -224,9 +271,10 @@ class DataLoaderCommonTests:
         for x, y, z in loader:
             assert x.shape[0] == y.shape[0] == z.shape[0]
 
-    def test_re_iterable(self):
+    @pytest.mark.parametrize("wrap", TREE_STRUCTURES)
+    def test_re_iterable(self, wrap):
         """Test that DataLoader is re-iterable."""
-        loader = self.make_loader(shuffle="none")
+        loader = self.make_loader(shuffle="none", wrap=wrap)
 
         batches_1 = list(loader)
         batches_2 = list(loader)
@@ -234,7 +282,7 @@ class DataLoaderCommonTests:
         assert len(batches_1) == len(batches_2)
 
         for (X1, y1), (X2, y2) in zip(batches_1, batches_2):
-            np.testing.assert_array_equal(X1, X2)
+            np.testing.assert_array_equal(unwrap(X1, wrap), unwrap(X2, wrap))
             np.testing.assert_array_equal(y1, y2)
 
     @pytest.mark.parametrize("shuffle", ["chunk_order", "chunk_and_samples", "full"])
@@ -259,13 +307,14 @@ class DataLoaderCommonTests:
 
     @pytest.mark.parametrize("shuffle", ["chunk_order", "chunk_and_samples", "full"])
     @pytest.mark.parametrize("seed", [0, 123])
-    def test_same_seed(self, seed, shuffle):
+    @pytest.mark.parametrize("wrap", TREE_STRUCTURES)
+    def test_same_seed(self, seed, shuffle, wrap):
         """Test that two shuffling data loaders with the same seed produce the same order."""
-        loader1 = self.make_loader(shuffle=shuffle, seed=seed)
-        loader2 = self.make_loader(shuffle=shuffle, seed=seed)
+        loader1 = self.make_loader(shuffle=shuffle, seed=seed, wrap=wrap)
+        loader2 = self.make_loader(shuffle=shuffle, seed=seed, wrap=wrap)
 
         for b1, b2 in zip(loader1, loader2):
-            np.testing.assert_array_equal(b1[0], b2[0])
+            np.testing.assert_array_equal(unwrap(b1[0], wrap), unwrap(b2[0], wrap))
             np.testing.assert_array_equal(b1[1], b2[1])
 
     @pytest.mark.parametrize("shuffle", ["chunk_order", "chunk_and_samples", "full"])
@@ -344,19 +393,20 @@ class TestArrayDataLoader(DataLoaderCommonTests):
         # save originals for comparison
         self.X, self.y = X.copy(), y.copy()
 
-        def _make_loader(*args, **kwargs):
+        def _make_loader(*args, wrap=as_array, **kwargs):
             if "batch_size" not in kwargs:
                 kwargs["batch_size"] = 32
             if not args:
-                args = (X, y)
+                args = (wrap(X), y)
             return self.loader_cls(*args, **kwargs)
 
         self.make_loader = _make_loader
 
-    def test_arrays_are_jax(self):
+    @pytest.mark.parametrize("wrap", TREE_STRUCTURES)
+    def test_arrays_are_jax(self, wrap):
         """Test that ArrayDataLoader converts arrays on creation."""
-        loader = self.make_loader()
-        for arr in loader.arrays:
+        loader = self.make_loader(wrap=wrap)
+        for arr in jax.tree_util.tree_leaves(loader.arrays):
             assert isinstance(arr, jnp.ndarray)
 
 
@@ -424,36 +474,40 @@ class TestLazyArrayDataLoader(DataLoaderCommonTests):
 
         self.X, self.y = X_ref.copy(), y_ref.copy()
 
-        def _make_loader(*args, **kwargs):
+        def _make_loader(*args, wrap=as_array, **kwargs):
             if "batch_size" not in kwargs:
                 kwargs["batch_size"] = 32
             if not args:
-                args = (X, y)
+                args = (wrap(X), y)
             return self.loader_cls(*args, **kwargs)
 
         self.make_loader = _make_loader
 
-    def test_no_eager_conversion(self, lazy_arrays):
+    @pytest.mark.parametrize("wrap", TREE_STRUCTURES)
+    def test_no_eager_conversion(self, wrap):
         """Test that arrays are not eagerly converted to JAX on construction."""
-        loader = LazyArrayDataLoader(*lazy_arrays, batch_size=32)
+        loader = self.make_loader(wrap=wrap)
 
-        for arr in loader.arrays:
+        for arr in jax.tree_util.tree_leaves(loader.arrays):
             assert not isinstance(arr, jnp.ndarray)
 
-    def test_batches_are_jax_arrays(self, lazy_arrays):
+    @pytest.mark.parametrize("wrap", TREE_STRUCTURES)
+    def test_batches_are_jax_arrays(self, wrap):
         """Test that yielded batches are JAX arrays."""
-        loader = LazyArrayDataLoader(*lazy_arrays, batch_size=32)
+        loader = self.make_loader(wrap=wrap)
 
         X_batch, y_batch = next(iter(loader))
-        assert isinstance(X_batch, jnp.ndarray)
-        assert isinstance(y_batch, jnp.ndarray)
+        unwrap(X_batch, wrap)
+        for arr in jax.tree_util.tree_leaves((X_batch, y_batch)):
+            assert isinstance(arr, jnp.ndarray)
 
     @pytest.mark.parametrize("shuffle", ["chunk_order", "chunk_and_samples"])
-    def test_slice_only_array(self, shuffle):
+    @pytest.mark.parametrize("wrap", TREE_STRUCTURES)
+    def test_slice_only_array(self, shuffle, wrap):
         """Test that chunk strategies only slice the source arrays, never fancy-index."""
         X = SliceOnlyArray(np.random.randn(100, 5))
         y = SliceOnlyArray(np.random.randn(100))
-        loader = LazyArrayDataLoader(X, y, batch_size=32, shuffle=shuffle)
+        loader = LazyArrayDataLoader(wrap(X), y, batch_size=32, shuffle=shuffle)
 
         # Should not raise — any within-batch shuffle happens after jnp.asarray
         batches = list(loader)
