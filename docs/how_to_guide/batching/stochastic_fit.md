@@ -96,6 +96,15 @@ Data loaders are the standard way of loading data for stochastic optimization. N
 - [`ArrayDataLoader`](nemos.batching.ArrayDataLoader): use with in-memory arrays. Input and output are converted to JAX arrays before use. Useful if data fits into memory, but calculations run out of memory, as well as for quick prototyping.
 - [`LazyArrayDataLoader`](nemos.batching.LazyArrayDataLoader): use with lazy/out-of-memory arrays, such as dask, zarr, HDF5 (used by NWB).
 
+:::{note}
+Both loaders accept pytrees of arrays (e.g. a dictionary of design matrices) in place of single arrays. All leaves must have the same number of samples along axis 0, and each batch has the same tree structure as the input:
+
+```python
+X = {"position": X_position, "history": X_history}
+loader = nmo.batching.ArrayDataLoader(X, spike_trains, batch_size=100)
+```
+:::
+
 +++
 
 Here, even though our data would fit into memory, we pretend that it doesn't for illustration purposes.
