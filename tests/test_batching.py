@@ -138,6 +138,20 @@ class DataLoaderCommonTests:
             self.loader_cls(*arrays, batch_size=32)
 
     @pytest.mark.parametrize(
+        "arrays",
+        [
+            ({"a": np.zeros((100, 5)), "b": 3}, np.zeros(100)),
+            ({"a": np.zeros((100, 5)), "b": "s"}, np.zeros(100)),
+            ({"a": np.zeros((100, 5)), "b": np.array(1.0)}, np.zeros(100)),
+            (np.zeros((100, 5)), [0.0] * 100),
+        ],
+    )
+    def test_non_array_leaves_raise(self, arrays):
+        """Test that scalar, string, 0-d array, and list leaves raise error."""
+        with pytest.raises(ValueError, match="at least one dimension"):
+            self.loader_cls(*arrays, batch_size=32)
+
+    @pytest.mark.parametrize(
         "shuffle", ["none", "chunk_order", "chunk_and_samples", "full"]
     )
     @pytest.mark.parametrize("iterate_between_calls", [True, False])

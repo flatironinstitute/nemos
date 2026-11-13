@@ -123,12 +123,20 @@ class _BaseArrayDataLoader:
         Raises
         ------
         ValueError
-            If no arrays are provided, the arrays have mismatched lengths, or
-            ``shuffle`` is not a recognized strategy.
+            If no arrays are provided, a leaf is not an array with at least one
+            dimension (e.g. a scalar or a list), the arrays have mismatched
+            lengths, or ``shuffle`` is not a recognized strategy.
         """
         leaves = jax.tree_util.tree_leaves(arrays)
         if len(leaves) == 0:
             raise ValueError("Provide at least one array.")
+
+        for leaf in leaves:
+            if len(getattr(leaf, "shape", ())) == 0:
+                raise ValueError(
+                    "Every leaf must be an array with at least one dimension, "
+                    f"got {type(leaf).__name__}."
+                )
 
         if shuffle not in SHUFFLE_STRATEGIES:
             raise ValueError(
@@ -304,12 +312,8 @@ class ArrayDataLoader(_BaseArrayDataLoader):
         seed :
             Random seed for shuffling. Default is None.
         """
-        super().__init__(
-            *jax.tree_util.tree_map(jnp.asarray, arrays),
-            batch_size=batch_size,
-            shuffle=shuffle,
-            seed=seed,
-        )
+        super().__init__(*arrays, batch_size=batch_size, shuffle=shuffle, seed=seed)
+        self.arrays = jax.tree_util.tree_map(jnp.asarray, self.arrays)
 
     def _iter_shuffle_whole(self) -> Iterator[tuple[jnp.ndarray, ...]]:
         """Yield batches from a full permutation via direct fancy indexing."""
