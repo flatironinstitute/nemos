@@ -31,6 +31,7 @@ from .params import ModelParams
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
+from .solvers._keyed_optax_minimizer import keyed_solver
 from .solvers._no_op import NoOpSolver
 from .type_casting import cast_to_jax, is_numpy_array_like
 from .typing import (
@@ -133,6 +134,10 @@ class BaseRegressor(
 
     # overwrite this in subclasses if their objective functions return aux
     _has_aux: bool = False
+
+    # overwrite this in subclasses whose objective needs a fresh PRNG key at every
+    # solver step; the key is passed as the last element of the solver's ``args``
+    _loss_requires_key: bool = False
 
     # user setting: fixed-parameter spec (array leaf = fixed value, None leaf = learn).
     _fix_params: Optional[ModelParamsT] = None
@@ -305,6 +310,7 @@ class BaseRegressor(
             # check if solver str passed is valid for regularizer
             spec = solvers.get_solver(solver_name)
             self._regularizer.check_solver(spec.algo_name)
+            self._check_solver_supports_key(spec.implementation)
             self._solver_spec = spec
         self._invalidate_solver()
 
@@ -448,6 +454,27 @@ class BaseRegressor(
         if undefined_kwargs:
             raise NameError(
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
+            )
+
+    def _check_solver_supports_key(self, solver_class: Type) -> None:
+        """
+        Check that the solver can minimise this model's loss if it needs a PRNG key.
+
+        Solvers that are not optimistix adapters never read the ``keyed_solver``
+        context, so without this check a keyed loss would silently see the same key
+        at every step.
+
+        Raises
+        ------
+        ValueError
+            If the loss needs a key and the solver has no keyed minimiser.
+        """
+        if not self._loss_requires_key:
+            return
+        if getattr(solver_class, "_keyed_solver_cls", None) is None:
+            raise ValueError(
+                f"{self.__class__.__name__} needs a solver that draws a fresh PRNG key "
+                f"at every step, which {solver_class.__name__} does not support."
             )
 
     def _invalidate_solver(self):
@@ -641,6 +668,7 @@ class BaseRegressor(
         solver_cls = solvers.get_solver(solver_name).implementation
 
         self._check_solver_kwargs(solver_cls, solver_kwargs)
+        self._check_solver_supports_key(solver_cls)
 
         if frozen_params is not None:
 
@@ -666,15 +694,16 @@ class BaseRegressor(
         else:
             hessian_kwargs = {}
 
-        solver = solver_cls(
-            _loss,
-            regularizer,
-            regularizer_strength,
-            has_aux=self._has_aux,
-            init_params=init_params,
-            **hessian_kwargs,
-            **solver_kwargs,
-        )
+        with keyed_solver(self._loss_requires_key):
+            solver = solver_cls(
+                _loss,
+                regularizer,
+                regularizer_strength,
+                has_aux=self._has_aux,
+                init_params=init_params,
+                **hessian_kwargs,
+                **solver_kwargs,
+            )
 
         # nemos's solvers store a .fun attribute, but it's not necessary for a solver to work.
         # A test relies on having _solver_loss_fun saved, so still check and save it if possible.
