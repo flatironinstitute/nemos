@@ -242,7 +242,11 @@ class DataLoader(Protocol):
         ...
 ```
 
-NeMoS provides `ArrayDataLoader` for in-memory arrays. For out-of-core data, users can implement their own data loader following the protocol.
+NeMoS provides `ArrayDataLoader` for in-memory arrays and `LazyArrayDataLoader` for out-of-core arrays (dask, zarr, HDF5). Other data sources need a custom data loader that follows the protocol.
+
+:::{note}
+`ArrayDataLoader` and `LazyArrayDataLoader` accept pytrees of arrays as well as arrays. Every leaf must have the same number of samples along axis 0, and each batch has the same tree structure as the input. Code that handles these loaders' batches or `arrays` must work with pytrees: use `jax.tree_util` and `nemos.tree_utils` (e.g. `tree_slice`) instead of iterating over the batch as a tuple of arrays.
+:::
 
 ### Solver-level interface
 

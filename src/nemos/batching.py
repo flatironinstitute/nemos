@@ -110,8 +110,8 @@ class _BaseArrayDataLoader:
         Parameters
         ----------
         *arrays :
-            Input and output arrays (any number), each with the same number of
-            samples along axis 0.
+            Input and output arrays or pytrees of arrays (any number). Every
+            leaf must have the same number of samples along axis 0.
         batch_size :
             Number of samples per batch.
         shuffle :
@@ -271,6 +271,14 @@ class ArrayDataLoader(_BaseArrayDataLoader):
     >>> loader = ArrayDataLoader(X, y, batch_size=32, shuffle="full")
     >>> for X_batch, y_batch in loader:
     ...     pass  # Train on batch
+
+    Pytrees of arrays are batched leaf by leaf, and each batch keeps the input structure.
+
+    >>> X_tree = {"a": jnp.ones((100, 3)), "b": jnp.ones((100, 2))}
+    >>> loader = ArrayDataLoader(X_tree, y, batch_size=32)
+    >>> X_batch, y_batch = loader.sample_batch()
+    >>> X_batch["a"].shape, X_batch["b"].shape
+    ((32, 3), (32, 2))
     """
 
     def __init__(
@@ -286,8 +294,8 @@ class ArrayDataLoader(_BaseArrayDataLoader):
         Parameters
         ----------
         *arrays :
-            Input and output arrays (any number), each an array of
-            shape (n_samples, n_features) or (n_samples, ).
+            Input and output arrays or pytrees of arrays (any number). Every
+            leaf must have the same number of samples along axis 0.
         batch_size :
             Number of samples per batch.
         shuffle :
@@ -358,9 +366,10 @@ class LazyArrayDataLoader(_BaseArrayDataLoader):
         Parameters
         ----------
         *arrays :
-            Input and output arrays (any number). Each must support
-            ``.shape`` and sequential slicing (``arr[start:end]``). The ``"full"``
-            strategy additionally requires support for fancy indexing.
+            Input and output arrays or pytrees of arrays (any number). Every
+            leaf must have the same number of samples along axis 0, and must
+            support ``.shape`` and sequential slicing (``arr[start:end]``). The
+            ``"full"`` strategy additionally requires support for fancy indexing.
         batch_size :
             Number of samples per batch.
         shuffle :
