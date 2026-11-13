@@ -189,7 +189,7 @@ operator. Setting `_proximal = True` changes four things:
 - the line search is handed the composite objective and the Tseng & Yun (2009) slope
   `Delta = grad f^T d + P(b + d) - P(b)`, since `grad F^T d` does not exist where `P` has its kink.
   `optax`'s search only ever contracts the vector it is given with the step, so
-  `ProximalNewton._line_search_inputs` folds `Delta` into that contraction and the stock Armijo
+  `ProximalNewton._line_search_inputs` folds `Delta` into that contraction and the standard Armijo
   search applies unchanged.
 
 Each iteration solves the penalized quadratic subproblem with `FISTA`. The Hessian is never
