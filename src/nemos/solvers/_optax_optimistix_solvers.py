@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Callable, ClassVar
 import optax
 import optimistix as optx
 
+from ._keyed_optax_minimizer import KeyedOptaxMinimiser
 from ._optimistix_adapter import (
     DEFAULT_ATOL,
     DEFAULT_RTOL,
@@ -25,6 +26,7 @@ class AbstractOptimistixOptaxSolver(OptimistixAdapter, abc.ABC):
     """Adapter for optimistix.OptaxMinimiser which is an adapter for Optax solvers."""
 
     _solver_cls = optx.OptaxMinimiser
+    _keyed_solver_cls = KeyedOptaxMinimiser
     # if defined, the docstring is extended to include the documentation of the wrapped Optax solver
     _optax_solver: ClassVar[Callable[..., optax.GradientTransformation]]
 

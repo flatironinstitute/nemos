@@ -31,6 +31,7 @@ from .params import ModelParams
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
+from .solvers._keyed_optax_minimizer import keyed_solver
 from .solvers._no_op import NoOpSolver
 from .type_casting import cast_to_jax, is_numpy_array_like
 from .typing import (
@@ -450,6 +451,35 @@ class BaseRegressor(
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
             )
 
+    @staticmethod
+    def _check_solver_supports_key(solver_class: Type, loss_requires_key: bool) -> None:
+        """
+        Check that the solver can minimise a loss that needs a fresh PRNG key.
+
+        Solvers that are not optimistix adapters never read the ``keyed_solver``
+        context, so without this check a keyed loss would silently see the same key
+        at every step.
+
+        Parameters
+        ----------
+        solver_class :
+            Class of the solver.
+        loss_requires_key :
+            Whether the loss needs a fresh PRNG key at every solver step.
+
+        Raises
+        ------
+        ValueError
+            If the loss needs a key and the solver has no keyed minimiser.
+        """
+        if not loss_requires_key:
+            return
+        if getattr(solver_class, "_keyed_solver_cls", None) is None:
+            raise ValueError(
+                "The loss needs a solver that draws a fresh PRNG key at every step, "
+                f"which {solver_class.__name__} does not support."
+            )
+
     def _invalidate_solver(self):
         self._solver = None
         self._solver_loss_fun = None
@@ -576,6 +606,7 @@ class BaseRegressor(
         regularizer: Optional[Regularizer] = None,
         regularizer_strength: Optional[Any] = None,
         frozen_params: Optional[ModelParamsT] = None,
+        loss_requires_key: bool = False,
     ) -> SolverProtocol:
         """
         Instantiate the solver with the provided loss function.
@@ -609,6 +640,10 @@ class BaseRegressor(
             Optional regularization strength, default is self.regularizer_strength.
         frozen_params:
             Set of fixed parameters that will be combined with actively learned ``init_params``.
+        loss_requires_key:
+            Whether ``loss`` needs a fresh PRNG key at every solver step. If True, the
+            solver is built with its keyed minimiser, and the caller must pass the key
+            as the last element of the solver's ``args``.
 
         Returns
         -------
@@ -641,6 +676,7 @@ class BaseRegressor(
         solver_cls = solvers.get_solver(solver_name).implementation
 
         self._check_solver_kwargs(solver_cls, solver_kwargs)
+        self._check_solver_supports_key(solver_cls, loss_requires_key)
 
         if frozen_params is not None:
 
@@ -666,15 +702,16 @@ class BaseRegressor(
         else:
             hessian_kwargs = {}
 
-        solver = solver_cls(
-            _loss,
-            regularizer,
-            regularizer_strength,
-            has_aux=self._has_aux,
-            init_params=init_params,
-            **hessian_kwargs,
-            **solver_kwargs,
-        )
+        with keyed_solver(loss_requires_key):
+            solver = solver_cls(
+                _loss,
+                regularizer,
+                regularizer_strength,
+                has_aux=self._has_aux,
+                init_params=init_params,
+                **hessian_kwargs,
+                **solver_kwargs,
+            )
 
         # nemos's solvers store a .fun attribute, but it's not necessary for a solver to work.
         # A test relies on having _solver_loss_fun saved, so still check and save it if possible.

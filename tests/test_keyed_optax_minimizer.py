@@ -9,13 +9,27 @@ makes it work inside the optimistix loop.
 no such argument, so the key is always the last entry of ``args``.
 """
 
+from contextlib import nullcontext as does_not_raise
+
 import jax
 import jax.numpy as jnp
 import optax
 import optimistix as optx
 import pytest
 
-from nemos.solvers._keyed_optax_minimizer import KeyedOptaxMinimiser, _KeyedOptaxState
+from nemos.glm import GLM
+from nemos.regularizer import UnRegularized
+from nemos.solvers._keyed_optax_minimizer import (
+    KeyedOptaxMinimiser,
+    _KeyedOptaxState,
+    keyed_solver,
+    use_keyed_solver,
+)
+from nemos.solvers._optax_optimistix_solvers import (
+    OptimistixOptaxGradientDescent,
+    OptimistixOptaxLBFGS,
+)
+from nemos.solvers._optimistix_solvers import OptimistixBFGS
 
 OPTIONS = {}
 TAGS = frozenset()
@@ -269,3 +283,139 @@ class TestMinimise:
         fixed = _minimise(plain, _noisy_quadratic, jax.random.PRNGKey(0))
 
         assert not jnp.allclose(keyed, fixed)
+
+
+class TestKeyedSolverContext:
+    """``keyed_solver`` sets the flag for its block only."""
+
+    def test_default_is_off(self):
+        assert not use_keyed_solver()
+
+    def test_on_inside_off_after(self):
+        with keyed_solver():
+            assert use_keyed_solver()
+        assert not use_keyed_solver()
+
+    def test_disabled_is_a_no_op(self):
+        with keyed_solver(enabled=False):
+            assert not use_keyed_solver()
+
+    def test_reset_after_exception(self):
+        with pytest.raises(RuntimeError):
+            with keyed_solver():
+                raise RuntimeError
+        assert not use_keyed_solver()
+
+    def test_nested_blocks_restore_the_outer_value(self):
+        with keyed_solver():
+            with keyed_solver(enabled=False):
+                assert use_keyed_solver()
+            with keyed_solver():
+                pass
+            assert use_keyed_solver()
+        assert not use_keyed_solver()
+
+
+def _noisy_loss(params, x, key):
+    """Adapter-facing loss: ``fun(params, *args)`` with the key last."""
+    return jnp.sum((params - x) ** 2) + jnp.sum(
+        params * jax.random.normal(key, params.shape)
+    )
+
+
+def _make_adapter(adapter_cls):
+    return adapter_cls(
+        _noisy_loss, UnRegularized(), None, has_aux=False, stepsize=0.1, maxiter=50
+    )
+
+
+OPTAX_ADAPTERS = [OptimistixOptaxGradientDescent, OptimistixOptaxLBFGS]
+
+
+class TestAdapterSelection:
+    """Optimistix adapters pick their inner minimiser from the context, once."""
+
+    @pytest.mark.parametrize("adapter_cls", OPTAX_ADAPTERS)
+    @pytest.mark.parametrize(
+        "keyed, expected_cls",
+        [(False, optx.OptaxMinimiser), (True, KeyedOptaxMinimiser)],
+    )
+    def test_optax_adapters(self, adapter_cls, keyed, expected_cls):
+        with keyed_solver(keyed):
+            adapter = _make_adapter(adapter_cls)
+        assert type(adapter._solver) is expected_cls
+
+    @pytest.mark.parametrize(
+        "keyed, expectation",
+        [(False, does_not_raise()), (True, pytest.raises(TypeError, match="keyed"))],
+    )
+    def test_adapter_without_keyed_minimiser(self, keyed, expectation):
+        with keyed_solver(keyed), expectation:
+            OptimistixBFGS(_noisy_loss, UnRegularized(), None, has_aux=False)
+
+    def test_choice_survives_leaving_the_context(self):
+        """Built inside the context, run outside: the key still rolls."""
+        args = (jnp.full(3, 3.0), jax.random.PRNGKey(0))
+        with keyed_solver():
+            keyed = _make_adapter(OptimistixOptaxGradientDescent)
+        plain = _make_adapter(OptimistixOptaxGradientDescent)
+
+        keyed_params, _, _ = keyed.run(jnp.zeros(3), *args)
+        plain_params, _, _ = plain.run(jnp.zeros(3), *args)
+
+        assert not jnp.allclose(keyed_params, plain_params)
+
+    def test_key_in_args_is_not_a_solver_kwarg(self):
+        accepted = OptimistixOptaxGradientDescent.get_accepted_arguments()
+        assert not {"key_in_args", "keyed", "_keyed_solver_cls"} & accepted
+
+
+class TestModelRouting:
+    """``_instantiate_solver`` decides per call whether the solver is keyed."""
+
+    @pytest.mark.parametrize(
+        "solver_name, expectation",
+        [
+            ("GradientDescent[optax+optimistix]", does_not_raise()),
+            ("LBFGS[optax+optimistix]", does_not_raise()),
+            ("BFGS", pytest.raises(ValueError, match="fresh PRNG key")),
+            ("Newton", pytest.raises(ValueError, match="fresh PRNG key")),
+            ("SVRG", pytest.raises(ValueError, match="fresh PRNG key")),
+        ],
+    )
+    def test_keyed_loss_needs_a_keyed_minimiser(self, solver_name, expectation):
+        model = GLM()
+        with expectation:
+            model._instantiate_solver(
+                model._compute_loss,
+                jnp.zeros(1),
+                solver_name=solver_name,
+                loss_requires_key=True,
+            )
+        assert not use_keyed_solver()
+
+    @pytest.mark.parametrize(
+        "loss_requires_key, expected_cls",
+        [(False, optx.OptaxMinimiser), (True, KeyedOptaxMinimiser)],
+    )
+    def test_instantiate_solver_picks_the_minimiser(
+        self, loss_requires_key, expected_cls
+    ):
+        model = GLM(solver_name="GradientDescent[optax+optimistix]")
+        solver = model._instantiate_solver(
+            model._compute_loss, jnp.zeros(1), loss_requires_key=loss_requires_key
+        )
+        assert type(solver._solver) is expected_cls
+        assert not use_keyed_solver()
+
+    def test_one_model_keyed_and_plain_solvers(self):
+        """As in the GLM-HMM M-step: one keyed solver next to a plain one."""
+        model = GLM(solver_name="GradientDescent[optax+optimistix]")
+        keyed = model._instantiate_solver(
+            model._compute_loss, jnp.zeros(1), loss_requires_key=True
+        )
+        plain = model._instantiate_solver(
+            model._compute_loss, jnp.zeros(1), solver_name="BFGS[optimistix]"
+        )
+        assert type(keyed._solver) is KeyedOptaxMinimiser
+        assert isinstance(plain._solver, optx.BFGS)
