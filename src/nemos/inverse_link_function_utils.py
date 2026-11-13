@@ -11,8 +11,6 @@ import jax.numpy as jnp
 if TYPE_CHECKING:
     from .observation_models import Observations
 
-from .utils import one_over_x
-
 
 def _make_wrapper(func, name, description):
     """Create a wrapper function with combined docstrings."""
@@ -56,72 +54,6 @@ log_softmax = _make_wrapper(
 )
 
 
-LINK_NAME_TO_FUNC = {
-    "exp": exp,
-    "expit": expit,
-    "jax._src.lax.lax.logistic": expit,
-    "jax._src.nn.functions.softplus": softplus,
-    "jax._src.nn.functions.log_softmax": log_softmax,
-    "jax._src.numpy.ufuncs.exp": exp,
-    "jax._src.scipy.special.expit": expit,
-    "jax._src.scipy.stats.norm.cdf": norm_cdf,
-    "jax._src.scipy.stats.norm.norm_cdf": norm_cdf,
-    "jax.lax.logistic": logistic,
-    "jax._src.scipy.special.logistic": logistic,
-    "jax.nn.softplus": softplus,
-    "jax.nn.log_softmax": log_softmax,
-    "jax.numpy.exp": exp,
-    "jax.scipy.special.expit": expit,
-    "jax.scipy.stats.norm.cdf": norm_cdf,
-    "logistic": logistic,
-    "nemos.inverse_link_function_utils.exp": exp,
-    "nemos.inverse_link_function_utils.expit": expit,
-    "nemos.inverse_link_function_utils.logistic": logistic,
-    "nemos.inverse_link_function_utils.norm_cdf": norm_cdf,
-    "nemos.inverse_link_function_utils.one_over_x": one_over_x,
-    "nemos.inverse_link_function_utils.softplus": softplus,
-    "nemos.inverse_link_function_utils.log_softmax": log_softmax,
-    "nemos.utils.one_over_x": one_over_x,
-    "norm.cdf": norm_cdf,
-    "norm_cdf": norm_cdf,
-    "one_over_x": one_over_x,
-    "softplus": softplus,
-    "log_softmax": log_softmax,
-    "identity": identity,
-    "nemos.inverse_link_function_utils.identity": identity,
-}
-
-
-def link_function_from_string(link_name: str):
-    """
-    Get a link function from a given name.
-
-    Parameters
-    ----------
-    link_name:
-        A string representation of the link function, e.g. "jax.numpy.exp".
-
-    Returns
-    -------
-    :
-        The link function corresponding to the provided name.
-
-    Raises
-    ------
-    ValueError:
-        If the provided string does not match any known link function.
-    """
-    if link_name in LINK_NAME_TO_FUNC:
-        return LINK_NAME_TO_FUNC[link_name]
-    else:
-        raise ValueError(
-            f"Unknown link function: {link_name}. "
-            f"Link function must be one of {list(LINK_NAME_TO_FUNC.keys())}"
-            f"if you want to use a custom link function, please provide it as a Callable."
-            f"if you think this is a bug, please open an issue at 'https://github.com/flatironinstitute/nemos/issues'."
-        )
-
-
 def check_inverse_link_function(inverse_link_function: Callable):
     """
     Check if the provided inverse_link_function is usable.
@@ -145,6 +77,8 @@ def check_inverse_link_function(inverse_link_function: Callable):
         If the function does not return a jax.numpy.ndarray,
         or is not differentiable.
     """
+    from ._inverse_link_function_builder import LINK_NAME_TO_FUNC
+
     if inverse_link_function in LINK_NAME_TO_FUNC.values():
         return
 
@@ -192,7 +126,7 @@ def resolve_inverse_link_function(
     inverse_link_function : Callable, str, or None
         The inverse link function specification. Can be:
         - None: use the default from the observation model
-        - str: name of a standard link function (e.g., "identity", "log", "logit")
+        - str: name of a standard link function (e.g., "identity", "exp", "softplus")
         - Callable: a custom inverse link function
     observation_model : Observations
         The observation model instance that provides the default inverse link function.
@@ -227,10 +161,12 @@ def resolve_inverse_link_function(
     >>> custom_fn = lambda x: x**2
     >>> link_fn = resolve_inverse_link_function(custom_fn, obs_model)
     """
+    from ._inverse_link_function_builder import instantiate_inverse_link_function
+
     if inverse_link_function is None:
         return observation_model.default_inverse_link_function
 
     elif isinstance(inverse_link_function, str):
-        return link_function_from_string(inverse_link_function)
+        return instantiate_inverse_link_function(inverse_link_function)
     check_inverse_link_function(inverse_link_function)
     return inverse_link_function

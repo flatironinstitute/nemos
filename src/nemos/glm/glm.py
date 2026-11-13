@@ -16,13 +16,13 @@ from sklearn.utils import InputTags, TargetTags
 from .. import observation_models as obs
 from .. import tree_utils, validation
 from .._hess import LeafClaim, MatrixProperty, MatrixStructure
+from .._inverse_link_function_builder import LINK_NAME_TO_FUNC
 from .._observation_model_builder import instantiate_observation_model
 from ..base_regressor import BaseRegressor, strip_metadata
 from ..batching import DataLoader, _PreprocessedDataLoader, is_data_loader
 from ..callbacks import Callback, TrainingContext, _normalize_callbacks
 from ..exceptions import NotFittedError
 from ..inverse_link_function_utils import (
-    LINK_NAME_TO_FUNC,
     resolve_inverse_link_function,
     softplus,
 )
@@ -223,7 +223,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         Default is the Poisson model. Alternatives are "Gamma", "Bernoulli", "NegativeBinomial" and "Gaussian".
     inverse_link_function :
         A function that maps the linear combination of predictors into a firing rate. The default depends
-        on the observation model, see the table above.
+        on the observation model, see the table above. Can be a callable or one of the following
+        strings: ``"exp"``, ``"softplus"``, ``"logistic"``, ``"expit"``, ``"norm_cdf"``,
+        ``"one_over_x"``, ``"identity"``, ``"log_softmax"``.
     regularizer :
         Regularization to use for model optimization. Defines the regularization scheme
         and related parameters.
@@ -610,8 +612,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             One of:
 
             - ``None`` — use the observation model's default inverse link.
-            - ``str`` — name of a built-in (e.g. ``"identity"``, ``"log"``,
-              ``"logit"``); resolved by
+            - ``str`` — name of a built-in (e.g. ``"identity"``, ``"exp"``,
+              ``"softplus"``); resolved by
               :func:`nemos.inverse_link_function_utils.resolve_inverse_link_function`.
             - ``Callable`` — a custom function. Must be JAX-traceable
               (differentiable) and return a ``jax.numpy.ndarray`` or scalar
@@ -2024,7 +2026,9 @@ class PopulationGLM(GLM):
         Default is the Poisson model.
     inverse_link_function :
         A function that maps the linear combination of predictors into a firing rate. The default depends
-        on the observation model, see the table above.
+        on the observation model, see the table above. Can be a callable or one of the following
+        strings: ``"exp"``, ``"softplus"``, ``"logistic"``, ``"expit"``, ``"norm_cdf"``,
+        ``"one_over_x"``, ``"identity"``, ``"log_softmax"``.
     regularizer :
         Regularization to use for model optimization. Defines the regularization scheme
         and related parameters.
