@@ -452,9 +452,7 @@ class BaseRegressor(
             )
 
     @staticmethod
-    def _check_solver_supports_key(
-        solver_class: Type, loss_requires_key: bool
-    ) -> None:
+    def _check_solver_supports_key(solver_class: Type, loss_requires_key: bool) -> None:
         """
         Check that the solver can minimise a loss that needs a fresh PRNG key.
 

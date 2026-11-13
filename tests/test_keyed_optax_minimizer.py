@@ -415,7 +415,7 @@ class TestModelRouting:
             model._compute_loss, jnp.zeros(1), loss_requires_key=True
         )
         plain = model._instantiate_solver(
-            model._compute_loss, jnp.zeros(1), solver_name="BFGS"
+            model._compute_loss, jnp.zeros(1), solver_name="BFGS[optimistix]"
         )
         assert type(keyed._solver) is KeyedOptaxMinimiser
         assert type(plain._solver) is optx.BFGS
