@@ -23,7 +23,7 @@ from ._aux_helpers import (
     tree_map_inexact_asarray,
     wrap_aux,
 )
-from ._keyed_optax_minimizer import use_keyed_solver
+from ._keyed_optax_minimizer import _KeyedOptaxState, use_keyed_solver
 from ._solver_adapter import SolverAdapter
 
 jax = lazy.load("jax")
@@ -267,6 +267,9 @@ class OptimistixAdapter(SolverAdapter[OptimistixAdapterState]):
         state: OptimistixSolverState,
         num_steps: jax.numpy.ndarray = jax.numpy.array(0),
     ) -> OptimizationInfo:
+        # the keyed minimiser wraps the optax state next to its PRNG key
+        if isinstance(state, _KeyedOptaxState):
+            state = state.solver_state
         function_val = state.f if hasattr(state, "f") else state.f_info.f  # pyright: ignore
 
         return OptimizationInfo(
