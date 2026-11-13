@@ -135,10 +135,6 @@ class BaseRegressor(
     # overwrite this in subclasses if their objective functions return aux
     _has_aux: bool = False
 
-    # overwrite this in subclasses whose objective needs a fresh PRNG key at every
-    # solver step; the key is passed as the last element of the solver's ``args``
-    _loss_requires_key: bool = False
-
     # user setting: fixed-parameter spec (array leaf = fixed value, None leaf = learn).
     _fix_params: Optional[ModelParamsT] = None
 
@@ -310,7 +306,6 @@ class BaseRegressor(
             # check if solver str passed is valid for regularizer
             spec = solvers.get_solver(solver_name)
             self._regularizer.check_solver(spec.algo_name)
-            self._check_solver_supports_key(spec.implementation)
             self._solver_spec = spec
         self._invalidate_solver()
 
@@ -456,25 +451,35 @@ class BaseRegressor(
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
             )
 
-    def _check_solver_supports_key(self, solver_class: Type) -> None:
+    @staticmethod
+    def _check_solver_supports_key(
+        solver_class: Type, loss_requires_key: bool
+    ) -> None:
         """
-        Check that the solver can minimise this model's loss if it needs a PRNG key.
+        Check that the solver can minimise a loss that needs a fresh PRNG key.
 
         Solvers that are not optimistix adapters never read the ``keyed_solver``
         context, so without this check a keyed loss would silently see the same key
         at every step.
+
+        Parameters
+        ----------
+        solver_class :
+            Class of the solver.
+        loss_requires_key :
+            Whether the loss needs a fresh PRNG key at every solver step.
 
         Raises
         ------
         ValueError
             If the loss needs a key and the solver has no keyed minimiser.
         """
-        if not self._loss_requires_key:
+        if not loss_requires_key:
             return
         if getattr(solver_class, "_keyed_solver_cls", None) is None:
             raise ValueError(
-                f"{self.__class__.__name__} needs a solver that draws a fresh PRNG key "
-                f"at every step, which {solver_class.__name__} does not support."
+                "The loss needs a solver that draws a fresh PRNG key at every step, "
+                f"which {solver_class.__name__} does not support."
             )
 
     def _invalidate_solver(self):
@@ -603,6 +608,7 @@ class BaseRegressor(
         regularizer: Optional[Regularizer] = None,
         regularizer_strength: Optional[Any] = None,
         frozen_params: Optional[ModelParamsT] = None,
+        loss_requires_key: bool = False,
     ) -> SolverProtocol:
         """
         Instantiate the solver with the provided loss function.
@@ -636,6 +642,10 @@ class BaseRegressor(
             Optional regularization strength, default is self.regularizer_strength.
         frozen_params:
             Set of fixed parameters that will be combined with actively learned ``init_params``.
+        loss_requires_key:
+            Whether ``loss`` needs a fresh PRNG key at every solver step. If True, the
+            solver is built with its keyed minimiser, and the caller must pass the key
+            as the last element of the solver's ``args``.
 
         Returns
         -------
@@ -668,7 +678,7 @@ class BaseRegressor(
         solver_cls = solvers.get_solver(solver_name).implementation
 
         self._check_solver_kwargs(solver_cls, solver_kwargs)
-        self._check_solver_supports_key(solver_cls)
+        self._check_solver_supports_key(solver_cls, loss_requires_key)
 
         if frozen_params is not None:
 
@@ -694,7 +704,7 @@ class BaseRegressor(
         else:
             hessian_kwargs = {}
 
-        with keyed_solver(self._loss_requires_key):
+        with keyed_solver(loss_requires_key):
             solver = solver_cls(
                 _loss,
                 regularizer,

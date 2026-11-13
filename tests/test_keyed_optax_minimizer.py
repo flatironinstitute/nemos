@@ -370,12 +370,8 @@ class TestAdapterSelection:
         assert not {"key_in_args", "keyed", "_keyed_solver_cls"} & accepted
 
 
-class _KeyedGLM(GLM):
-    _loss_requires_key = True
-
-
 class TestModelRouting:
-    """A model whose loss needs a key only accepts solvers with a keyed minimiser."""
+    """``_instantiate_solver`` decides per call whether the solver is keyed."""
 
     @pytest.mark.parametrize(
         "solver_name, expectation",
@@ -387,16 +383,39 @@ class TestModelRouting:
             ("SVRG", pytest.raises(ValueError, match="fresh PRNG key")),
         ],
     )
-    def test_raises_at_construction(self, solver_name, expectation):
+    def test_keyed_loss_needs_a_keyed_minimiser(self, solver_name, expectation):
+        model = GLM()
         with expectation:
-            _KeyedGLM(solver_name=solver_name)
+            model._instantiate_solver(
+                model._compute_loss,
+                jnp.zeros(1),
+                solver_name=solver_name,
+                loss_requires_key=True,
+            )
+        assert not use_keyed_solver()
 
     @pytest.mark.parametrize(
-        "model_cls, expected_cls",
-        [(GLM, optx.OptaxMinimiser), (_KeyedGLM, KeyedOptaxMinimiser)],
+        "loss_requires_key, expected_cls",
+        [(False, optx.OptaxMinimiser), (True, KeyedOptaxMinimiser)],
     )
-    def test_instantiate_solver_picks_the_minimiser(self, model_cls, expected_cls):
-        model = model_cls(solver_name="GradientDescent[optax+optimistix]")
-        solver = model._instantiate_solver(model._compute_loss, jnp.zeros(1))
+    def test_instantiate_solver_picks_the_minimiser(
+        self, loss_requires_key, expected_cls
+    ):
+        model = GLM(solver_name="GradientDescent[optax+optimistix]")
+        solver = model._instantiate_solver(
+            model._compute_loss, jnp.zeros(1), loss_requires_key=loss_requires_key
+        )
         assert type(solver._solver) is expected_cls
         assert not use_keyed_solver()
+
+    def test_one_model_keyed_and_plain_solvers(self):
+        """As in the GLM-HMM M-step: one keyed solver next to a plain one."""
+        model = GLM(solver_name="GradientDescent[optax+optimistix]")
+        keyed = model._instantiate_solver(
+            model._compute_loss, jnp.zeros(1), loss_requires_key=True
+        )
+        plain = model._instantiate_solver(
+            model._compute_loss, jnp.zeros(1), solver_name="BFGS"
+        )
+        assert type(keyed._solver) is KeyedOptaxMinimiser
+        assert type(plain._solver) is optx.BFGS
