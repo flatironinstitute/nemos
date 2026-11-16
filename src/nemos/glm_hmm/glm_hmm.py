@@ -660,11 +660,23 @@ class GLMHMM(
             :class:`~nemos.observation_models.Observations` interface (checked
             via :func:`nemos.observation_models.check_observation_model`).
         """
+        previous_extra = (
+            []
+            if getattr(self, "_observation_model", None) is None
+            else self._observation_model.extra_params.keys()
+        )
         if isinstance(observation, str):
             self._observation_model = instantiate_observation_model(observation)
             self._validator = update_validator_observation_dependent_configs(
                 self._observation_model, self._validator
             )
+            state_keys = self._get_fit_state().keys()
+            for key in self._observation_model.extra_params.keys():
+                if key not in state_keys:
+                    setattr(self, key + "_", None)
+            for key in previous_extra:
+                if key not in self._observation_model.extra_params.keys():
+                    delattr(self, key + "_")
             return
         # check that the model has the required attributes
         # and that the attribute can be called
@@ -673,6 +685,13 @@ class GLMHMM(
         self._validator = update_validator_observation_dependent_configs(
             self._observation_model, self._validator
         )
+        state_keys = self._get_fit_state().keys()
+        for key in self._observation_model.extra_params.keys():
+            if key not in state_keys:
+                setattr(self, key + "_", None)
+        for key in previous_extra:
+            if key not in self._observation_model.extra_params.keys():
+                delattr(self, key + "_")
 
     @property
     def inverse_link_function(self):
