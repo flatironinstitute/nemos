@@ -2154,14 +2154,18 @@ def instantiate_glm_hmm_func(
     if simulate:
         model.coef_ = coef
         model.intercept_ = intercept
-        model.scale_ = scale
         model.initial_prob_ = init_prob
         model.transition_prob_ = transition_prob
+        extras = model.observation_model.extra_params.keys()
+        for key in extras:
+            default = model.observation_model.extra_params[key]["default"]
+            setattr(model, key + "_", jnp.full_like(model.intercept_, default))
         y, rates, latent_states = run_simulation_glm_hmm(X, model, seed=1234)
         # reset fit attributes so fixture.model is unfitted
         model.coef_ = None
         model.intercept_ = None
-        model.scale_ = None
+        for key in extras:
+            setattr(model, key + "_", None)
         model.initial_prob_ = None
         model.transition_prob_ = None
     else:
