@@ -486,7 +486,8 @@ def test_categorical_missing_classes_initialization(population):
             y,
             rate_range=observation.rate_range,
         )
-    weights = np.where(y.mean(axis=0) == 0, 0.05, y.mean(axis=0))
+    means = y.mean(axis=0)
+    weights = np.where((means == 0) | (means == 1), (10 * means + 0.5) / 11, means)
     probabilities = np.exp(observation.default_inverse_link_function(intercept))
     np.testing.assert_allclose(
         probabilities, weights / weights.sum(axis=-1, keepdims=True), rtol=1e-5
@@ -506,9 +507,10 @@ def test_observation_rate_ranges():
     from nemos import observation_models as obs
 
     assert obs.Observations.rate_range is None
-    for name in ["Poisson", "Gamma", "NegativeBinomial", "Categorical"]:
+    for name in ["Poisson", "Gamma", "NegativeBinomial"]:
         assert getattr(obs, name + "Observations").rate_range == (0, float("inf"))
     assert obs.BernoulliObservations.rate_range == (0, 1)
+    assert obs.CategoricalObservations.rate_range == (0, 1)
     assert obs.GaussianObservations.rate_range == (-float("inf"), float("inf"))
 
 

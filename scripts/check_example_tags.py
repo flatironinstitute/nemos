@@ -33,6 +33,8 @@ EXPECTED_TAGS = {
         "custom components",
         "receptive fields",
         "latent states",
+        "initialization",
+        "model comparison",
     ],
     "data": ["recorded", "simulated"],
 }
