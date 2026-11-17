@@ -1630,9 +1630,15 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         dict_params = self._get_param_dict()
         params = self._validator.to_model_params(dict_params)
         extras = {k: dict_params[k] for k in self._validator.extra_param_names}
-        if "scale" in self._observation_model.extra_params:
-            extras["scale"] = getattr(self, "scale_", None)
-
+        # separable parameter are fit post-hoc, and not included in dict_params
+        # but are needed to fully specify the distribution
+        extras.update(
+            {
+                k: getattr(self, k + "_", None)
+                for k, v in self._observation_model.extra_params.items()
+                if v["separable"]
+            }
+        )
         # if all invalid, raise error
         validation.error_all_invalid(feedforward_input)
 
