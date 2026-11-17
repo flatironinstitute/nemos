@@ -787,7 +787,7 @@ class TestSetupGLMHMMInitialization:
                 "scale_init",
                 "constant",
                 "scale_init_kwargs",
-                {"scale_val": 2.0},
+                {"fill_value": 2.0},
             ),
         ],
     )

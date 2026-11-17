@@ -451,7 +451,7 @@ def test_distribution_boundary_initialization(distribution, numerical, populatio
     X = np.ones((10, 2))
     with warnings.catch_warnings(record=True) as caught:
         params = model.initialize_params(X, y)
-    coef, intercept = params
+    coef, intercept = params["coef"], params["intercept"]
     assert np.isfinite(coef).all()
     assert np.isfinite(intercept).all()
     expected = np.atleast_1d(y.mean(axis=0))
@@ -520,7 +520,9 @@ def test_boundary_initialization_without_intercept(distribution):
     X = np.ones((10, 2))
     y = np.ones(10) if distribution == "Bernoulli" else np.zeros(10)
     with pytest.warns(UserWarning, match="boundary mean activity"):
-        coef, intercept = model.initialize_params(X, y)
+        params = model.initialize_params(X, y)
+    coef = params["coef"]
+    intercept = params["intercept"]
     assert np.isfinite(coef).all()
     expected = 10.5 / 11 if distribution == "Bernoulli" else 0.05
     np.testing.assert_allclose(
