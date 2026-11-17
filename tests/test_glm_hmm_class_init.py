@@ -10,6 +10,7 @@ import pytest
 from sklearn.base import clone
 
 from nemos._inspect_utils import extract_literal_options
+from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
 from nemos.glm_hmm.glm_hmm import GLMHMM
 from nemos.glm_hmm.initialize_parameters import (
     AVAIL_INIT_FUNCTIONS_GLM,
@@ -235,15 +236,19 @@ class TestGLMHMMInit:
         assert model.dirichlet_initial_proba is None
         assert model.dirichlet_transition_proba is None
 
-    def test_fit_attributes_initialized_to_none(self):
-        model = GLMHMM(n_states=3)
+    @pytest.mark.parametrize("obs_model", AVAILABLE_OBSERVATION_MODELS)
+    def test_fit_attributes_initialized_to_none(self, obs_model):
+        model = GLMHMM(n_states=3, observation_model=obs_model)
         assert model.coef_ is None
         assert model.intercept_ is None
-        assert model.scale_ is None
         assert model.initial_prob_ is None
         assert model.transition_prob_ is None
         assert model.solver_state_ is None
         assert model.dof_resid_ is None
+        for k in model.observation_model.extra_params:
+            assert getattr(model, k + "_", 1) is None, (
+                "Attribute `{}_` has not been set".format(k)
+            )
 
     # -------------------------------------------------------------------------
     # repr
@@ -381,16 +386,27 @@ class TestGLMHMMCheckModelIsFit:
     def _set_all_params(self, model):
         model.coef_ = jnp.zeros((3, 2))
         model.intercept_ = jnp.zeros((1, 2))
-        model.scale_ = jnp.ones(2)
+        model.initial_prob_ = jnp.zeros((2,))
+        model.transition_prob_ = jnp.zeros((2, 2))
+        for k in model.observation_model.extra_params:
+            setattr(model, k + "_", jnp.zeros((1, 2)))
 
     def test_passes_when_all_params_set(self):
         model = GLMHMM(n_states=2)
         self._set_all_params(model)
         model._check_model_is_fit()
 
-    @pytest.mark.parametrize("missing_attr", ["coef_", "intercept_", "scale_"])
-    def test_raises_when_attr_is_none(self, missing_attr):
-        model = GLMHMM(n_states=2)
+    @pytest.mark.parametrize(
+        "missing_attr", ["coef_", "intercept_", "scale_", "dispersion_"]
+    )
+    @pytest.mark.parametrize("obs_model", AVAILABLE_OBSERVATION_MODELS)
+    def test_raises_when_attr_is_none(self, missing_attr, obs_model):
+        model = GLMHMM(n_states=2, observation_model=obs_model)
+        if not hasattr(model, missing_attr):
+            pytest.skip(
+                f"skipping attr {missing_attr} for observation {obs_model}, "
+                f"since it is not required."
+            )
         self._set_all_params(model)
         setattr(model, missing_attr, None)
         with pytest.raises(ValueError, match=missing_attr):

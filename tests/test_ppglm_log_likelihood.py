@@ -8,9 +8,11 @@ from jax.flatten_util import ravel_pytree
 from pynapple import IntervalSet
 
 from nemos.basis import RaisedCosineLogEval
-from nemos.glm.validation import to_glm_params
+from nemos.glm.params import ToGLMParams
 from nemos.pp_glm import log_likelihood, utils
 from nemos.pp_glm.data import MCSamplePPGLM, PredictorsPPGLM, SpikesPPGLM
+
+to_glm_params = ToGLMParams(map_to={})
 
 NLL_KWARG_NAMES = (
     "inverse_link_function",
@@ -54,7 +56,7 @@ def create_dataset_constant_rate(recording_time, n_neurons=3, **kwargs):
         axis=0,
     )
     dataset["y"] = jax.tree_util.tree_map(lambda arr: arr[in_epoch], dataset["y"])
-    dataset["params"] = to_glm_params((coef, intercept))
+    dataset["params"] = to_glm_params({"coef": coef, "intercept": intercept})
     dataset["recording_time"] = recording_time
     dataset["M_grid"], dataset["M_widths"] = utils.build_mc_sampling_grid(
         recording_time.values, dataset["M_samples"]
@@ -72,16 +74,16 @@ def create_params(n_neurons, n_basis_funcs, all_to_one=False):
     """Use PP-GLM params structures"""
     if all_to_one:
         return to_glm_params(
-            (
-                jnp.ones(n_neurons * n_basis_funcs),
-                jnp.atleast_1d(jnp.zeros(1)),
-            )
+            {
+                "coef": jnp.ones(n_neurons * n_basis_funcs),
+                "intercept": jnp.atleast_1d(jnp.zeros(1)),
+            }
         )
     return to_glm_params(
-        (
-            jnp.ones((n_neurons * n_basis_funcs, n_neurons)),
-            jnp.atleast_1d(jnp.zeros(n_neurons)),
-        )
+        {
+            "coef": jnp.ones((n_neurons * n_basis_funcs, n_neurons)),
+            "intercept": jnp.atleast_1d(jnp.zeros(n_neurons)),
+        }
     )
 
 
@@ -191,10 +193,10 @@ def create_dataset_single_spike(
     X, y = utils.adjust_indices_and_spike_times(X, history_window, max_window, y)
 
     params = to_glm_params(
-        (
-            jnp.ones((n_neurons * n_basis_funcs, n_neurons)),
-            jnp.atleast_1d(0.0),
-        )
+        {
+            "coef": jnp.ones((n_neurons * n_basis_funcs, n_neurons)),
+            "intercept": jnp.atleast_1d(0.0),
+        }
     )
     return dict(
         params=params,

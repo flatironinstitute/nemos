@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 import warnings
 from pathlib import Path
 from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
@@ -734,8 +735,6 @@ class GLMHMM(
 
     def _check_model_is_fit(self):
         """Ensure the instance has been fitted."""
-        import operator
-
         param_dict = self._get_param_dict()
         is_missing = jax.tree_util.tree_map(
             lambda x: x is None, param_dict, is_leaf=lambda x: x is None

@@ -1,6 +1,7 @@
 """Tests for GLMHMM.fit and related fit-path validation."""
 
 import inspect
+import itertools
 import math
 import warnings
 from contextlib import nullcontext as does_not_raise
@@ -17,7 +18,10 @@ import pytest
 from tests.conftest import instantiate_glm_hmm_func
 
 import nemos as nmo
-from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
+from nemos._observation_model_builder import (
+    AVAILABLE_OBSERVATION_MODELS,
+    instantiate_observation_model,
+)
 from nemos.glm.params import GLMParams
 from nemos.glm_hmm.glm_hmm import GLMHMM
 from nemos.glm_hmm.params import GLMHMMParams
@@ -73,12 +77,20 @@ def _init_params_from_fixture(fixture):
 # ---------------------------------------------------------------------------
 
 
+def fit_attrs_extras():
+    expected_attr_extras = []
+    for obs_name in AVAILABLE_OBSERVATION_MODELS:
+        obs = instantiate_observation_model(obs_name)
+        expected_attr_extras.append(
+            (obs_name, [k + "_" for k in obs.extra_params.keys()])
+        )
+    return expected_attr_extras
+
+
 @pytest.mark.parametrize(
     "instantiate_base_regressor_subclass", INSTANTIATE_MODEL_ONLY, indirect=True
 )
-@pytest.mark.parametrize(
-    "obs_model, extras", [("Bernoulli", []), ("Gaussian", ["scale_"])]
-)
+@pytest.mark.parametrize("obs_model, extras", fit_attrs_extras())
 def test_get_fit_attrs(
     instantiate_base_regressor_subclass, mock_glm_hmm_optimizer_run, obs_model, extras
 ):
@@ -102,9 +114,6 @@ def test_get_fit_attrs(
     n_features = fixture.X.shape[1]
     assert state["coef_"].shape == (n_features, N_STATES)
     assert state["intercept_"].shape == (N_STATES,)
-    scale = state.get("scale_", jnp.ones((N_STATES,)))
-    assert scale.shape == (N_STATES,)
-    assert jnp.all(scale > 0)
     assert state["initial_prob_"].shape == (N_STATES,)
     assert jnp.allclose(state["initial_prob_"].sum(), 1.0)
     assert state["transition_prob_"].shape == (N_STATES, N_STATES)
@@ -113,6 +122,70 @@ def test_get_fit_attrs(
     # mock returns SimpleNamespace(iterations=1, converged=True)
     assert state["solver_state_"].iterations == 1
     assert state["solver_state_"].converged is True
+    # extras (assume open for now, the range border is not specified in the extra_params
+    # metadata, but scale and dispersion has to be 0 < val < inf)
+    for k in extras:
+        val = state[k]
+        assert val.shape == (N_STATES,)
+        range_val = model.observation_model.extra_params[k[:-1]]["range"]
+        assert jnp.all(val > range_val[0])
+        assert jnp.all(val < range_val[1])
+
+
+@pytest.mark.parametrize(
+    "obs_before, obs_after",
+    list(itertools.combinations(AVAILABLE_OBSERVATION_MODELS, 2)),
+)
+def test_obs_model_setter_reconfig_param_names_by_string(obs_before, obs_after):
+    model = nmo.glm_hmm.GLMHMM(3, obs_before)
+    expected = set(
+        ["coef", "intercept", "initial_prob", "transition_prob"]
+        + [k for k in model.observation_model.extra_params]
+    )
+    assert set(model.param_names) == expected
+    model.observation_model = obs_after
+    expected = set(
+        ["coef", "intercept", "initial_prob", "transition_prob"]
+        + [k for k in model.observation_model.extra_params]
+    )
+    assert set(model.param_names) == expected
+
+    # via set params
+    model = nmo.glm_hmm.GLMHMM(3, obs_before)
+    model.set_params(observation_model=obs_after)
+    expected = set(
+        ["coef", "intercept", "initial_prob", "transition_prob"]
+        + [k for k in model.observation_model.extra_params]
+    )
+    assert set(model.param_names) == expected
+
+
+@pytest.mark.parametrize(
+    "obs_before, obs_after",
+    list(itertools.combinations(AVAILABLE_OBSERVATION_MODELS, 2)),
+)
+def test_obs_model_setter_reconfig_param_names_by_object(obs_before, obs_after):
+    model = nmo.glm_hmm.GLMHMM(3, obs_before)
+    expected = set(
+        ["coef", "intercept", "initial_prob", "transition_prob"]
+        + [k for k in model.observation_model.extra_params]
+    )
+    assert set(model.param_names) == expected
+    model.observation_model = instantiate_observation_model(obs_after)
+    expected = set(
+        ["coef", "intercept", "initial_prob", "transition_prob"]
+        + [k for k in model.observation_model.extra_params]
+    )
+    assert set(model.param_names) == expected
+
+    # via set params
+    model = nmo.glm_hmm.GLMHMM(3, obs_before)
+    model.set_params(observation_model=instantiate_observation_model(obs_after))
+    expected = set(
+        ["coef", "intercept", "initial_prob", "transition_prob"]
+        + [k for k in model.observation_model.extra_params]
+    )
+    assert set(model.param_names) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -166,15 +239,20 @@ class TestGLMHMM:
         n_features = X_np.shape[1]
         assert state["coef_"].shape == (n_features, N_STATES)
         assert state["intercept_"].shape == (N_STATES,)
-        scale = state.get("scale_", jnp.ones((N_STATES,)))
-        assert scale.shape == (N_STATES,)
-        assert jnp.all(scale > 0)
         assert state["initial_prob_"].shape == (N_STATES,)
         assert jnp.allclose(state["initial_prob_"].sum(), 1.0)
         assert state["transition_prob_"].shape == (N_STATES, N_STATES)
         assert jnp.allclose(state["transition_prob_"].sum(axis=-1), jnp.ones(N_STATES))
         assert float(jnp.squeeze(state["dof_resid_"])) > 0
         assert isinstance(state["solver_state_"], EMState)
+        # extras (assume open for now, the range border is not specified in the extra_params
+        # metadata, but scale and dispersion has to be 0 < val < inf)
+        for k in model_pynap.observation_model.extra_params:
+            val = state[k]
+            assert val.shape == (N_STATES,)
+            range_val = model_pynap.observation_model.extra_params[k[:-1]]["range"]
+            assert jnp.all(val > range_val[0])
+            assert jnp.all(val < range_val[1])
 
         # Providing an extra session boundary changes the M-step for initial_prob.
         model_single = deepcopy(fixture.model)
@@ -1272,6 +1350,44 @@ class TestSimulate:
             assert call["key"].ndim == 0
             assert call["predicted_rate"].ndim == 0
             assert all(x.ndim == 0 for x in jax.tree_util.tree_leaves(call["extras"]))
+
+    @pytest.mark.parametrize("obs_model", AVAILABLE_OBSERVATION_MODELS)
+    def test_simulate_maps_extra_parameters(self, glm_hmm_data, monkeypatch, obs_model):
+        model = GLMHMM(n_states=glm_hmm_data["n_states"], observation_model=obs_model)
+        if not model.observation_model.extra_params:
+            pytest.skip(f"Observations {obs_model} have no extra parameters.")
+        init_params = filter_params(glm_hmm_data["init_params"], model)
+
+        # replace with a non default val in non-transformed space
+        extra_val = 1.5
+        for k in model.observation_model.extra_params:
+            init_params[k] = jnp.full_like(init_params["intercept"], extra_val)
+
+        for k in init_params:
+            setattr(model, k + "_", init_params[k])
+
+        obs_model = model.observation_model
+        original = obs_model.sample_generator
+        calls = []
+
+        def spy(key, predicted_rate, **extras):
+            calls.append(extras)
+            return original(key=key, predicted_rate=predicted_rate, **extras)
+
+        monkeypatch.setattr(obs_model, "sample_generator", spy)
+        monkeypatch.setattr(jax.lax, "scan", jax.disable_jit()(jax.lax.scan))
+        X_short = jnp.ones((2, glm_hmm_data["X"].shape[1]))
+        with jax.disable_jit():
+            model.simulate(jax.random.key(0), X_short)
+
+        # check that scale is matched.
+        assert all(
+            jnp.all(c[k] == extra_val)
+            for c in calls
+            for k in model.observation_model.extra_params
+        ), (
+            f"The extra parameters used in simulations differ from the provided for observation model {obs_model}."
+        )
 
 
 # ---------------------------------------------------------------------------

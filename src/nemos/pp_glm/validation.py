@@ -1,6 +1,6 @@
 """Validation classes for PPGLM and PopulationPPGLM models."""
 
-from dataclasses import dataclass, field
+from dataclasses import field
 from typing import Any, Callable, Optional, Tuple, TypeAlias, Union
 
 import jax
@@ -8,15 +8,15 @@ import jax.numpy as jnp
 import numpy as np
 from pynapple import IntervalSet, Ts, Tsd, TsGroup
 
+from .._read_only_dict import ReadOnlyDict
 from ..base_validator import RegressorValidator
 from ..glm.params import GLMParams, GLMUserParams
-from ..glm.validation import GLMValidator, from_glm_params, to_glm_params
+from ..glm.validation import GLMValidator
 from .data import PredictorsPPGLM, SpikesPPGLM
 
 TimeSeriesInput: TypeAlias = "Union[np.ndarray, jnp.ndarray, list, dict, Ts, TsGroup]"
 
 
-@dataclass(frozen=True, repr=False)
 class PPGLMValidator(GLMValidator):
     """
     Validator for a single-neuron PP-GLM models.
@@ -31,12 +31,21 @@ class PPGLMValidator(GLMValidator):
     """
 
     n_basis_funcs: int = field(kw_only=True)
-    expected_param_dims: Tuple[int] = (
-        1,
-        1,
+    expected_param_dims: ReadOnlyDict = ReadOnlyDict(
+        {
+            "coef": 1,
+            "intercept": 1,
+        }
     )  # this should be (coef.ndim, intercept.ndim)
-    to_model_params: Callable[[GLMUserParams], GLMParams] = to_glm_params
-    from_model_params: Callable[[GLMParams], GLMUserParams] = from_glm_params
+    # Shared param names
+    # the attribute should include the names of the
+    # parameters that are fit directly.
+    model_param_names: frozenset[str] = frozenset(
+        {
+            "coef",
+            "intercept",
+        }
+    )
     model_class: str = "PPGLM"
     X_dimensionality: int = 2
     y_dimensionality: int = 2
@@ -56,6 +65,8 @@ class PPGLMValidator(GLMValidator):
         *RegressorValidator.params_validation_sequence[3:],
         ("validate_intercept_shape", None),
     )
+    to_model_params: Callable[[GLMUserParams], GLMParams] = None
+    from_model_params: Callable[[GLMParams], GLMUserParams] = None
 
     def validate_consistency(
         self,
@@ -92,7 +103,7 @@ class PPGLMValidator(GLMValidator):
         n_features = int(jnp.unique(X.predictor_ids).size * self.n_basis_funcs)
         empty_coef = jnp.zeros(n_features)
         empty_intercept = jnp.empty((1,))
-        return to_glm_params((empty_coef, empty_intercept))
+        return self.to_glm_params({"coef": empty_coef, "intercept": empty_intercept})
 
     def validate_span(self, X: Tsd, y: Tsd, recording_time: IntervalSet, tol=1.0):
         """Check that X, y, and recording_time are mutually consistent in time support."""
@@ -246,7 +257,6 @@ class PPGLMValidator(GLMValidator):
             self._validate_y_dimensionality(n_series_y)
 
 
-@dataclass(frozen=True, repr=False)
 class PopulationPPGLMValidator(PPGLMValidator):
     """
     Validator for population (multi-neuron) PP-GLM models.
@@ -260,9 +270,12 @@ class PopulationPPGLMValidator(PPGLMValidator):
 
     """
 
-    expected_param_dims: Tuple[int] = (
-        2,
-        1,
+    expected_param_dims: ReadOnlyDict = ReadOnlyDict(
+        {
+            "coef": 2,
+            "intercept": 1,
+            "dispersion": 1,
+        }
     )  # this should be (coef.ndim, intercept.ndim)
     model_class: str = "PopulationPPGLM"
     params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
@@ -332,11 +345,3 @@ class PopulationPPGLMValidator(PPGLMValidator):
                 f"y must contain more than 1 time series for {type(self).__name__}, "
                 f"got {n_series}."
             )
-
-    def get_empty_params(self, X, y) -> GLMParams:
-        """Return the param shape given the input data."""
-        n_features = int(jnp.unique(X.predictor_ids).size * self.n_basis_funcs)
-        n_neurons = jnp.unique(y.neuron_ids).size
-        empty_coef = jnp.zeros((n_features, n_neurons))
-        empty_intercept = jnp.empty((n_neurons,))
-        return to_glm_params((empty_coef, empty_intercept))
