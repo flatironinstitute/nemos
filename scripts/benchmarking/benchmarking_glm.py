@@ -410,7 +410,9 @@ def _solution_quality(
     the regularizer's penalty -- so the two numbers are comparable across every
     solver in the grid regardless of which stopping rule ended the fit.
     """
-    params = model._validator.to_model_params((model.coef_, model.intercept_))
+    params = model._validator.to_model_params(
+        {"coef": model.coef_, "intercept": model.intercept_}
+    )
     strength = config["model_conf"]["regularizer_strength"]
     penalized = model.regularizer.penalized_loss(model._compute_loss, params, strength)
     loss, grad = jax.value_and_grad(penalized)(params, X, y)
