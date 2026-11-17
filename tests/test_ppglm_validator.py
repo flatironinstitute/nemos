@@ -8,7 +8,7 @@ import pynapple as nap
 import pytest
 
 from nemos.base_regressor import BaseRegressor
-from nemos.glm.params import GLMParams
+from nemos.glm.params import FromGLMParams, GLMParams, ToGLMParams
 from nemos.pp_glm.data import PredictorsPPGLM, SpikesPPGLM
 from nemos.pp_glm.validation import PopulationPPGLMValidator, PPGLMValidator
 from nemos.regularizer import Regularizer
@@ -39,7 +39,13 @@ class MockPPGLM(BaseRegressor):
         self.n_basis_funcs = n_basis_funcs
 
         # validator is a frozen dataclass — constructed explicitly with n_basis_funcs
-        self._validator = PPGLMValidator(n_basis_funcs=self.n_basis_funcs)
+        to_model_params = ToGLMParams(map_to={})
+        from_model_params = FromGLMParams(map_from={})
+        self._validator = PPGLMValidator(
+            n_basis_funcs=self.n_basis_funcs,
+            to_model_params=to_model_params,
+            from_model_params=from_model_params,
+        )
 
         self.coef_: Optional[jnp.ndarray] = None
         self.intercept_: Optional[jnp.ndarray] = None
@@ -136,7 +142,13 @@ class MockPPGLM(BaseRegressor):
 class MockPopulationPPGLM(MockPPGLM):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._validator = PopulationPPGLMValidator(n_basis_funcs=self.n_basis_funcs)
+        to_model_params = ToGLMParams(map_to={})
+        from_model_params = FromGLMParams(map_from={})
+        self._validator = PopulationPPGLMValidator(
+            n_basis_funcs=self.n_basis_funcs,
+            to_model_params=to_model_params,
+            from_model_params=from_model_params,
+        )
 
 
 @pytest.fixture
@@ -280,11 +292,15 @@ class TestPPGLMValidator:
         X, y = processed_X_y
         # n_features is 10
         n_features = int(jnp.unique(X.predictor_ids).size * 5)
-        params = validator.to_model_params((jnp.zeros(n_features), jnp.zeros(1)))
+        params = validator.to_model_params(
+            {"coef": jnp.zeros(n_features), "intercept": jnp.zeros(1)}
+        )
         validator.validate_consistency(params, X=X)
 
         # incorrect number of features
-        params = validator.to_model_params((jnp.zeros(5), jnp.zeros(1)))
+        params = validator.to_model_params(
+            {"coef": jnp.zeros(5), "intercept": jnp.zeros(1)}
+        )
         with pytest.raises(ValueError, match="Inconsistent number of features"):
             validator.validate_consistency(params, X=X)
 
@@ -293,12 +309,16 @@ class TestPPGLMValidator:
             times=jnp.array([1.0, 2.0, 3.0]),
             predictor_ids=jnp.array([0, 2, 2]),  # skips id 1
         )
-        params = validator.to_model_params((jnp.zeros(10), jnp.zeros(1)))
+        params = validator.to_model_params(
+            {"coef": jnp.zeros(10), "intercept": jnp.zeros(1)}
+        )
         with pytest.raises(ValueError, match="consecutive"):
             validator.validate_consistency(params, X=X_skipped)
 
         # should not raise if X is None
-        params = validator.to_model_params((jnp.zeros(10), jnp.zeros(1)))
+        params = validator.to_model_params(
+            {"coef": jnp.zeros(10), "intercept": jnp.zeros(1)}
+        )
         validator.validate_consistency(params, X=None)
 
     @pytest.mark.parametrize(
@@ -442,16 +462,6 @@ class TestPPGLMValidator:
         with pytest.raises(ValueError, match="must contain exactly 1"):
             validator.validate_inputs(X=X, y=y_pop)
 
-    def test_get_empty_params(self, validator, processed_X_y):
-        X, y = processed_X_y
-        n_features = int(jnp.unique(X.predictor_ids).size * validator.n_basis_funcs)
-
-        params = validator.get_empty_params(X, y)
-
-        assert params.coef.shape == (n_features,)
-        assert params.intercept.shape == (1,)
-        assert isinstance(params, GLMParams)
-
 
 class TestPopulationPPGLMValidator:
     """Test suite for input validation logic in PopulationPPGLMValidator. Only needed to test consistency for y"""
@@ -462,13 +472,13 @@ class TestPopulationPPGLMValidator:
         n_predictors = int(jnp.unique(X.predictor_ids).size)
         # n_neurons is 1
         params = population_validator.to_model_params(
-            (jnp.zeros((n_predictors * 5, 1)), jnp.zeros(1))
+            {"coef": jnp.zeros((n_predictors * 5, 1)), "intercept": jnp.zeros(1)}
         )
         population_validator.validate_consistency(params, X=X, y=y)
 
         # incorrect number of neurons in coef
         params = population_validator.to_model_params(
-            (jnp.zeros((n_predictors * 5, 2)), jnp.zeros(2))
+            {"coef": jnp.zeros((n_predictors * 5, 2)), "intercept": jnp.zeros(2)}
         )
         with pytest.raises(ValueError, match="Inconsistent number of neurons"):
             population_validator.validate_consistency(params, X=X, y=y)
@@ -482,14 +492,14 @@ class TestPopulationPPGLMValidator:
         )
         n_predictors = int(jnp.unique(X.predictor_ids).size)
         params = population_validator.to_model_params(
-            (jnp.zeros((n_predictors * 5, 2)), jnp.zeros(2))
+            {"coef": jnp.zeros((n_predictors * 5, 2)), "intercept": jnp.zeros(2)}
         )
         with pytest.raises(ValueError, match="Inconsistent neuron IDs"):
             population_validator.validate_consistency(params, X=X, y=y_skipped)
 
         # should not raise if y is None
         params = population_validator.to_model_params(
-            (jnp.zeros((n_predictors * 5, 1)), jnp.zeros(1))
+            {"coef": jnp.zeros((n_predictors * 5, 1)), "intercept": jnp.zeros(1)}
         )
         population_validator.validate_consistency(params, X=X, y=None)
 
@@ -525,14 +535,3 @@ class TestPopulationPPGLMValidator:
         y_single = nap.Ts(np.sort(np.random.uniform(0, 10, 20)))
         with pytest.raises(ValueError, match="must contain more than 1"):
             population_validator.validate_inputs(X=X, y=y_single)
-
-    def test_get_empty_params(self, validator, processed_X_y):
-        X, y = processed_X_y
-        n_features = int(jnp.unique(X.predictor_ids).size * validator.n_basis_funcs)
-        n_neurons = jnp.unique(y.neuron_ids).size
-
-        params = validator.get_empty_params(X, y)
-
-        assert params.coef.shape == (n_features,)
-        assert params.intercept.shape == (n_neurons,)
-        assert isinstance(params, GLMParams)
