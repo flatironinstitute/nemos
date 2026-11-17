@@ -145,10 +145,17 @@ class DataLoaderCommonTests:
             ({"a": np.zeros((100, 5)), "b": np.array(1.0)}, np.zeros(100)),
             (np.zeros((100, 5)), [0.0] * 100),
         ],
+        ids=["int", "string", "scalar", "list"],
     )
-    def test_non_array_leaves_raise(self, arrays):
+    def test_non_array_leaves_raise(self, arrays, request):
         """Test that scalar, string, 0-d array, and list leaves raise error."""
-        with pytest.raises(ValueError, match="at least one dimension"):
+
+        if any(s in request.node.callspec.id for s in ("int", "string", "list")):
+            error_type = TypeError
+        else:
+            error_type = ValueError
+        match = "must be an array with at least"
+        with pytest.raises(error_type, match=match):
             self.loader_cls(*arrays, batch_size=32)
 
     @pytest.mark.parametrize(
