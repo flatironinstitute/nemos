@@ -1929,11 +1929,20 @@ def instantiate_glm_func(
         counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
     else:
         counts, rates = None, None
+    extras = {}
+    for k, v in model.observation_model.extra_params.items():
+        if v["separable"]:
+            continue
+        extras[k] = model.observation_model.map_to[k](
+            jnp.full_like(model.intercept_, v["default"] * 1.1)
+        )
+    if len(extras) == 0:
+        extras = None
     return ModelFixture(
         X=X,
         y=counts,
         model=model,
-        params=GLMParams(model.coef_, model.intercept_),
+        params=GLMParams(model.coef_, model.intercept_, extra_params=extras),
         rates=rates,
         extra=None,
     )
@@ -1973,11 +1982,20 @@ def instantiate_population_glm_func(
         counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
     else:
         counts, rates = None, None
+    extras = {}
+    for k, v in model.observation_model.extra_params.items():
+        if v["separable"]:
+            continue
+        extras[k] = model.observation_model.map_to[k](
+            jnp.full_like(model.intercept_, v["default"] * 1.1)
+        )
+    if len(extras) == 0:
+        extras = None
     return ModelFixture(
         X=X,
         y=counts,
         model=model,
-        params=GLMParams(model.coef_, model.intercept_),
+        params=GLMParams(model.coef_, model.intercept_, extra_params=extras),
         rates=rates,
         extra=None,
     )
@@ -2293,6 +2311,23 @@ def instantiate_base_regressor_subclass(request):
     # would not re-run any potentially heavy setup code (like model.simulate).
     cached_result = deepcopy(_MODEL_CACHE[cache_key])
     return cached_result
+
+
+def _base_regressor_subclass_id(param: dict) -> str:
+    """Generate a readable pytest ID for instantiate_base_regressor_subclass params."""
+    model = param["model"]
+    obs = param["obs_model"]
+    # Handle both string names and instantiated observation model objects
+    obs_name = obs if isinstance(obs, str) else type(obs).__name__
+    sim = "sim" if param["simulate"] else "no_sim"
+
+    parts = [model, obs_name, sim]
+
+    if init_kwargs := param.get("init_kwargs"):
+        kwargs_str = ",".join(f"{k}={v}" for k, v in sorted(init_kwargs.items()))
+        parts.append(kwargs_str)
+
+    return "-".join(parts)
 
 
 # Auto-clear cache after each test module run

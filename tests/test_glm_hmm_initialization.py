@@ -810,15 +810,6 @@ class TestSetupGLMHMMInitialization:
         init_funcs = setup_glm_hmm_initialization()
         assert init_funcs == DEFAULT_INIT_FUNCTIONS_GLMHMM
 
-    # def test_hmm_params_delegated(self):
-    #     """HMM init functions (initial_proba, transition_proba) are set correctly."""
-    #     init_funcs = setup_glm_hmm_initialization(
-    #         initial_proba_init="uniform",
-    #         transition_proba_init="sticky",
-    #     )
-    #     assert init_funcs["initial_proba_init"] == uniform_initial_proba_init
-    #     assert init_funcs["transition_proba_init"] == sticky_transition_proba_init
-
 
 @pytest.mark.parametrize(
     "func_name",
