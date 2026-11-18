@@ -1410,6 +1410,36 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         >>> model = model.stochastic_fit(
         ...     loader, n_passes=10, callbacks=SolverConvergenceCallback()
         ... )
+
+        Observation models whose scale depends on the data (e.g., Gamma, Gaussian) leave
+        ``scale_`` unset after ``stochastic_fit``. If the predicted rate and the counts fit
+        in memory, the scale can be estimated batch by batch, and the log-likelihood computed
+        from the observation model.
+
+        >>> import numpy as np
+        >>> np.random.seed(0)
+        >>> X = np.random.normal(size=(1000, 5))
+        >>> y = X @ np.ones(5) + np.random.normal(size=1000)
+        >>> loader = ArrayDataLoader(X, y, batch_size=100)
+        >>> model = nmo.glm.GLM(
+        ...     observation_model="Gaussian",
+        ...     solver_name="GradientDescent",
+        ...     solver_kwargs={"stepsize": 0.01, "acceleration": False},
+        ... )
+        >>> model = model.stochastic_fit(loader, n_passes=10)
+        >>> rate, counts = [], []
+        >>> for X_batch, y_batch in loader:
+        ...     rate.append(model.predict(X_batch))
+        ...     counts.append(y_batch)
+        >>> rate, counts = jnp.concatenate(rate), jnp.concatenate(counts)
+        >>> # residual degrees of freedom of an unregularized model: samples - features - intercept
+        >>> dof_resid = loader.n_samples - X.shape[1] - 1
+        >>> model.scale_ = model.observation_model.estimate_scale(
+        ...     counts, rate, dof_resid=dof_resid
+        ... )
+        >>> log_likelihood = model.observation_model.log_likelihood(
+        ...     counts, rate, scale=model.scale_
+        ... )
         """
         # Validate solver supports stochastic
         if not getattr(self.solver_spec.implementation, "_supports_stochastic", False):
