@@ -472,7 +472,7 @@ def test_validate_strength_tree_input(regularizer, strength, expectation, check_
 
 @pytest.mark.parametrize(
     "regularizer",
-    [nmo.regularizer.UnRegularized(), nmo.regularizer.Ridge(), nmo.regularizer.Lasso()],
+    [nmo.regularizer.Ridge(), nmo.regularizer.Lasso()],
 )
 @pytest.mark.parametrize("strength", [None, 0.3, np.array(1.0), jnp.array(1.0)])
 def test_validate_strength_structure_scalar_broadcast(regularizer, strength):
@@ -504,7 +504,7 @@ class TwoParams(eqx.Module):
 
 @pytest.mark.parametrize(
     "regularizer",
-    [nmo.regularizer.UnRegularized(), nmo.regularizer.Ridge(), nmo.regularizer.Lasso()],
+    [nmo.regularizer.Ridge(), nmo.regularizer.Lasso()],
 )
 def test_validate_strength_structure_multiple_subtrees_count_mismatch(regularizer):
     """If the number of provided strengths != number of subtrees, raise ValueError."""
@@ -516,7 +516,7 @@ def test_validate_strength_structure_multiple_subtrees_count_mismatch(regularize
 
 @pytest.mark.parametrize(
     "regularizer",
-    [nmo.regularizer.UnRegularized(), nmo.regularizer.Ridge(), nmo.regularizer.Lasso()],
+    [nmo.regularizer.Ridge(), nmo.regularizer.Lasso()],
 )
 @pytest.mark.parametrize(
     "params, strength, expectation",
@@ -827,10 +827,7 @@ class TestUnRegularized:
         assert "strength" in fk
 
         s = fk["strength"]
-        assert isinstance(s, GLMParams)
-        assert isinstance(s.coef, float)
-        assert s.coef == 1.0
-        assert s.intercept is None
+        assert s is None
 
     @pytest.mark.parametrize(
         "solver_name, expectation",
