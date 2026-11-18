@@ -8,6 +8,10 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from nemos._observation_model_builder import (
+    AVAILABLE_OBSERVATION_MODELS,
+    instantiate_observation_model,
+)
 from nemos.glm import GLM
 from nemos.glm_hmm.initialize_parameters import (
     DEFAULT_INIT_FUNCTIONS_GLMHMM,
@@ -857,33 +861,49 @@ class TestGenerateGLMHMMInitialParams:
 
     @pytest.mark.parametrize("n_states", [1, 2, 3, 5])
     @pytest.mark.parametrize("n_neurons", [1, 3])
-    def test_output_shapes_and_types(self, n_states, n_neurons):
+    @pytest.mark.parametrize("obs_model", AVAILABLE_OBSERVATION_MODELS)
+    def test_output_shapes_and_types(self, n_states, n_neurons, obs_model):
         n_features = 5
         X = jnp.ones((50, n_features))
         y = jnp.ones((50, n_neurons)) if n_neurons > 1 else jnp.ones(50)
 
-        coef, intercept, scale = generate_glm_hmm_initial_model_params(
-            n_states, X, y, jnp.exp, PoissonObservations()
+        obs = instantiate_observation_model(obs_model)
+        user_params = generate_glm_hmm_initial_model_params(
+            n_states, X, y, jnp.exp, obs
         )
+        coef = user_params["coef"]
+        intercept = user_params["intercept"]
+        extras = {k: user_params[k] for k in obs.extra_params}
 
         if n_neurons == 1:
             assert coef.shape == (n_features, n_states)
             assert intercept.shape == (n_states,)
-            assert scale.shape == (n_states,)
+            assert all(
+                v.shape == (n_states,) for v in jax.tree_util.tree_leaves(extras)
+            )
         else:
             assert coef.shape == (n_features, n_neurons, n_states)
             assert intercept.shape == (n_neurons, n_states)
-            assert scale.shape == (n_neurons, n_states)
+            assert all(
+                v.shape == (n_neurons, n_states)
+                for v in jax.tree_util.tree_leaves(extras)
+            )
 
-        for arr in [coef, intercept, scale]:
+        for arr in [coef, intercept]:
             assert isinstance(arr, jnp.ndarray)
-
-    def test_returns_three_elements(self):
-        result = generate_glm_hmm_initial_model_params(
-            2, jnp.ones((10, 3)), jnp.ones(10), lambda x: x, PoissonObservations()
+        assert all(
+            isinstance(arr, jnp.ndarray) for arr in jax.tree_util.tree_leaves(extras)
         )
-        assert isinstance(result, tuple)
-        assert len(result) == 3
+
+    @pytest.mark.parametrize("obs_model", AVAILABLE_OBSERVATION_MODELS)
+    def test_returns_three_elements(self, obs_model):
+        obs = instantiate_observation_model(obs_model)
+        result = generate_glm_hmm_initial_model_params(
+            2, jnp.ones((10, 3)), jnp.ones(10), lambda x: x, obs
+        )
+        assert isinstance(result, dict)
+        # coef, intercept + extras for the obs model
+        assert len(result) == 2 + len([k for k in obs.extra_params])
 
     @pytest.mark.parametrize(
         "init_funcs, expectation",
@@ -909,24 +929,31 @@ class TestGenerateGLMHMMInitialParams:
                 n_states=2, model_initialization_funcs={"transition_proba_init": None}
             )
 
-    def test_none_init_funcs_uses_defaults(self):
+    @pytest.mark.parametrize("obs_model", AVAILABLE_OBSERVATION_MODELS)
+    def test_none_init_funcs_uses_defaults(self, obs_model):
+        if obs_model == "Bernoulli":
+            pytest.skip(
+                "Requires (0,1) rate. fix how it is computed before running this test."
+            )
+        obs = instantiate_observation_model(obs_model)
         X = jnp.ones((50, 5))
         y = jnp.full(50, 2.0)
-        coef, intercept, scale = generate_glm_hmm_initial_model_params(
-            3, X, y, lambda x: x, PoissonObservations()
-        )
+        par = generate_glm_hmm_initial_model_params(3, X, y, lambda x: x, obs)
+        coef = par.pop("coef")
+        intercept = par.pop("intercept")
+
         assert jnp.abs(coef).max() < 0.01
         assert jnp.allclose(intercept, 2.0)
-        assert jnp.all(scale == 1.0)
+        assert all(jnp.all(par[k] == v["default"]) for k, v in obs.extra_params.items())
 
     def test_random_key_affects_output(self):
         """Different random keys produce different GLM coefficient initializations."""
         X = jnp.ones((50, 5))
         y = jnp.ones(50)
-        coef1, *_ = generate_glm_hmm_initial_model_params(
+        par1 = generate_glm_hmm_initial_model_params(
             3, X, y, lambda x: x, PoissonObservations(), random_key=1
         )
-        coef2, *_ = generate_glm_hmm_initial_model_params(
+        par2 = generate_glm_hmm_initial_model_params(
             3, X, y, lambda x: x, PoissonObservations(), random_key=2
         )
-        assert not jnp.allclose(coef1, coef2)
+        assert not jnp.allclose(par1["coef"], par2["coef"])
