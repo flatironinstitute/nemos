@@ -408,7 +408,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
     _invalid_observation_types = (obs.CategoricalObservations,)
     _validator_class = GLMValidator
 
-    # default until the instance sets it; read during ``__init__`` before assignment
+    # default until the instance sets it; accessed during ``__init__`` before assignment
     # (e.g. when solver-kwargs validation resolves the default solver).
     _fit_intercept: bool = True
     # full-structure all-None default so the partition helpers never see a bare None
@@ -580,7 +580,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
     def _frozen_values(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> GLMParams:
         frozen = super()._frozen_values(X, y)
-        # ``fit_intercept=False`` pins the intercept at zero; this is the single
+        # ``fit_intercept=False`` fixes the intercept at zero; this is the single
         # source of the pinned value (``_normalize_user_params`` fills it into
         # omitted user input, ``update`` recombines it into the returned params).
         if not self._fit_intercept and frozen.intercept is None:
@@ -988,6 +988,20 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         """
         # this guarantees that any extra distribution parameter is set
         self._check_is_fit()
+        if (
+            score_type in {"log-likelihood", "pseudo-r2-McFadden"}
+            and self.scale_ is None
+            and not self._has_constant_scale()
+        ):
+            raise ValueError(
+                f"Score of type '{score_type}' requires a `scale_`, which is not set. `stochastic_fit()`"
+                f" does not estimate `scale_` for the {self.observation_model.__class__.__name__}"
+                " observation model. Estimate the scale externally and assign it to `model.scale_`."
+                " For example, accumulate the residual variance over batches of data. Or, if the"
+                " predicted rate and the counts fit in memory, compute the rate batch by batch with"
+                " `model.predict` and pass the rate and the counts to"
+                " `model.observation_model.estimate_scale`."
+            )
         # extra params (scale, dispersion) already in original space
         param_dict = self._get_param_dict()
         # params is in the transformed space (log(scale), log(dispersion))
@@ -2157,7 +2171,7 @@ class PopulationGLM(GLM):
     fix_params :
         Parameters to hold fixed during fitting, as a ``(coef, intercept)`` tuple with
         ``coef`` of shape ``(n_features, n_neurons)`` and ``intercept`` of shape
-        ``(n_neurons,)``. An array pins that parameter at the value provided, ``None``
+        ``(n_neurons,)``. An array fixes that parameter at the value provided, ``None``
         leaves it to be learned. When ``X`` is a pytree, ``coef`` mirrors its structure,
         its leaves have shape ``(n_features_in_leaf, n_neurons)``, and each leaf is
         pinned or learned on its own. Defaults to ``None``, which learns every parameter.
@@ -2355,7 +2369,7 @@ class PopulationGLM(GLM):
         self._feature_mask = self._validator.validate_and_cast_feature_mask(
             feature_mask
         )
-        # the loss and the Hessian read the mask at call time, so a solver built
+        # the loss and the Hessian use the mask at call time, so a solver built
         # against the previous mask is stale.
         self._invalidate_solver()
 
@@ -2506,7 +2520,7 @@ class PopulationGLM(GLM):
         Zeroing the masked columns leaves the rank unchanged relative to deleting them,
         so the per-neuron mask stays a plain array op rather than a boolean index. The
         frozen columns are the same for every neuron, so those are sliced away once,
-        before the vmap: every rank is then read off a smaller matrix.
+        before the vmap: every rank is then computed from a smaller matrix.
         """
         if self._feature_mask is None:
             return super()._design_rank(X, active_cols)
