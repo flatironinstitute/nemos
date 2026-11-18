@@ -217,9 +217,12 @@ class TestSpecAlgebra:
         frozen = model._frozen_values(*cast_to_float32((X, y)))
 
         for is_active, frozen_leaf in zip(_leaves(active), _leaves(frozen)):
-            assert bool(is_active) is (frozen_leaf is None), (
-                f"active={is_active!r} but frozen={frozen_leaf!r}"
-            )
+            if is_active is None:
+                assert frozen_leaf is None
+            else:
+                assert bool(is_active) is (frozen_leaf is None), (
+                    f"active={is_active!r} but frozen={frozen_leaf!r}"
+                )
 
     def test_partition_recombines_exactly(
         self, request, model_fixture, coef_mode, intercept_pinned, fit_intercept
