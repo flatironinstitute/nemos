@@ -376,10 +376,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
     **Fix some parameters**
 
     Pin the first feature block's coefficients to ``[1, 1]`` and learn the rest.
-    The ``fix_params`` spec mirrors the ``(coef, intercept)`` structure, with
+    The ``fix_params`` spec mirrors the parameter dictionary structure, with
     ``None`` marking the parameters to learn:
 
-    >>> fix_params = ([jnp.ones((2,)), None], None)
+    >>> fix_params = {"coef": [jnp.ones((2,)), None]}
     >>> model = nmo.glm.GLM(fix_params=fix_params)
     >>> model = model.fit([X[:, :2], X[:, 2:]], y)
     >>> model.coef_[0]
@@ -1962,7 +1962,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         >>> for key, value in model.get_params().items():
         ...     print(f"{key}: {value}")
         fit_intercept: True
-        fix_params: (None, None)
+        fix_params: {...}
         inverse_link_function: <function one_over_x at ...>
         observation_model: GammaObservations()
         regularizer: Ridge()
@@ -1977,7 +1977,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         >>> for key, value in model.get_params().items():  # doctest: +ELLIPSIS
         ...     print(f"{key}: {value}")
         fit_intercept: True
-        fix_params: (None, None)
+        fix_params: {...}
         inverse_link_function: <function one_over_x at ...>
         observation_model: GammaObservations()
         regularizer: Ridge()
@@ -1999,7 +1999,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         >>> for key, value in loaded_model.get_params().items():
         ...     print(f"{key}: {value}")
         fit_intercept: True
-        fix_params: (None, None)
+        fix_params: {...}
         inverse_link_function: <function <lambda> at ...>
         observation_model: PoissonObservations()
         regularizer: UnRegularized()

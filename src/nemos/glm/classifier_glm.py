@@ -535,13 +535,13 @@ class ClassifierMixin:
         >>> import jax.numpy as jnp
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
-        >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.ClassifierGLM(classes=2)
+        >>> y = jnp.array([0, 0, 1, 2])
+        >>> model = nmo.glm.ClassifierGLM(classes=3)
         >>> model.set_classes(y)
         ClassifierGLM(...)
-        >>> coef, intercept = model.initialize_params(X, y)
-        >>> coef.shape
-        (2, 2)
+        >>> params = model.initialize_params(X, y)
+        >>> params["coef"].shape
+        (2, 3)
         """
         self._label_encoder.check_classes_is_set("initialize_params")
         y = self._label_encoder.encode(y)
