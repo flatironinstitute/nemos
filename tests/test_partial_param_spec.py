@@ -10,7 +10,6 @@ from sklearn.base import clone
 import nemos as nmo
 from nemos.batching import ArrayDataLoader
 from nemos.callbacks import Callback
-from nemos.glm.params import GLMParams
 from nemos.solvers._abstract_solver import AbstractSolver
 from nemos.solvers._no_op import NoOpSolver
 from nemos.tree_utils import tree_broadcast_prefix
@@ -143,7 +142,7 @@ def _set_regularizer(model, X, y, name):
     regularizer = name
     if name.startswith("GroupLasso"):
         regularizer = nmo.regularizer.GroupLasso()
-        empty_coef = model._validator.get_empty_params(X, y).coef
+        empty_coef = model._get_empty_params(*cast_to_float32((X, y))).coef
         if name == "GroupLasso-one-group":
             regularizer.mask = jax.tree_util.tree_map(
                 lambda c: jnp.ones((1, *c.shape)), empty_coef
@@ -161,7 +160,10 @@ def _set_regularizer(model, X, y, name):
 def _configure(model, X, y, coef_mode, intercept_pinned, fit_intercept):
     """Apply a spec through the public setters, returning the model."""
     intercept = _pinned_intercept(model, X, y) if intercept_pinned else None
-    model.fix_params = (_coef_spec(model, X, y, coef_mode), intercept)
+    model.fix_params = {
+        "coef": _coef_spec(model, X, y, coef_mode),
+        "intercept": intercept,
+    }
     model.fit_intercept = fit_intercept
     return model
 
@@ -187,7 +189,7 @@ class TestSpecAlgebra:
         else:
             expected = jax.tree_util.tree_map(
                 lambda spec: spec is None,
-                model.fix_params[0],
+                model.fix_params["coef"],
                 is_leaf=lambda x: x is None,
             )
             assert _leaves(active.coef) == _leaves(expected)
@@ -274,7 +276,7 @@ class TestInterceptPrecedence:
         """A pinned intercept is honoured whatever ``fit_intercept`` says."""
         X, y, model = poissonGLM_model_instantiation[:3]
         pinned = _pinned_intercept(model, X, y)
-        model.fix_params = (None, pinned)
+        model.fix_params = {"coef": None, "intercept": pinned}
         model.fit_intercept = fit_intercept
 
         np.testing.assert_array_equal(model._frozen_values(X, y).intercept, pinned)
@@ -352,7 +354,7 @@ def test_user_defined_node_spec_cannot_be_loaded(
     and so cannot carry a parameter spec.
     """
     X, y, model = poissonGLM_model_instantiation[:3]
-    model.fix_params = (CoefModule(jnp.ones((3,)), None), None)
+    model.fix_params = {"coef": CoefModule(jnp.ones((3,)), None), "intercept": None}
 
     path = tmp_path / "model.npz"
     model.save_params(path)
@@ -364,10 +366,10 @@ def test_user_defined_node_spec_cannot_be_loaded(
 def _pin_everything(model, X, y):
     """A ``fix_params`` spec leaving nothing active."""
     empty = model._get_empty_params(*cast_to_float32((X, y)))
-    return (
-        jax.tree_util.tree_map(jnp.ones_like, empty.coef),
-        jnp.full_like(empty.intercept, 0.25),
-    )
+    return {
+        "coef": jax.tree_util.tree_map(jnp.ones_like, empty.coef),
+        "intercept": jnp.full_like(empty.intercept, 0.25),
+    }
 
 
 def _convergence_warnings(recwarn):
@@ -381,28 +383,28 @@ class TestEveryParameterFixed:
     def test_fit_returns_the_pinned_values(self, request, model_fixture):
         """``fit`` skips the solver and reports the fixed values."""
         X, y, model = request.getfixturevalue(model_fixture)[:3]
-        coef, intercept = _pin_everything(model, X, y)
-        model.fix_params = (coef, intercept)
+        pinned = _pin_everything(model, X, y)
+        model.fix_params = pinned
 
         with pytest.warns(UserWarning, match="Every parameter is fixed"):
             model.fit(X, y)
 
-        for got, want in zip(_leaves(model.coef_), _leaves(coef)):
+        for got, want in zip(_leaves(model.coef_), _leaves(pinned["coef"])):
             np.testing.assert_array_equal(got, want)
-        np.testing.assert_array_equal(model.intercept_, intercept)
+        np.testing.assert_array_equal(model.intercept_, pinned["intercept"])
 
     def test_update_returns_the_pinned_values(self, poissonGLM_model_instantiation):
         """A single ``update`` step is the identity when nothing is active."""
         X, y, model = poissonGLM_model_instantiation[:3]
-        coef, intercept = _pin_everything(model, X, y)
-        model.fix_params = (coef, intercept)
+        pinned = _pin_everything(model, X, y)
+        model.fix_params = pinned
 
         with pytest.warns(UserWarning, match="Every parameter is fixed"):
-            state = model.initialize_optimizer_and_state((coef, intercept), X, y)
-            model.update((coef, intercept), state, X, y)
+            state = model.initialize_optimizer_and_state(pinned, X, y)
+            model.update(pinned, state, X, y)
 
-        np.testing.assert_array_equal(model.coef_, coef)
-        np.testing.assert_array_equal(model.intercept_, intercept)
+        np.testing.assert_array_equal(model.coef_, pinned["coef"])
+        np.testing.assert_array_equal(model.intercept_, pinned["intercept"])
 
     def test_fit_does_not_warn_about_convergence(
         self, poissonGLM_model_instantiation, recwarn
@@ -430,8 +432,8 @@ class TestEveryParameterFixed:
     ):
         """Leaving any leaf active restores the normal path, with no warning."""
         X, y, model = poissonGLM_model_instantiation[:3]
-        _, intercept = _pin_everything(model, X, y)
-        model.fix_params = (None, intercept)
+        intercept = _pin_everything(model, X, y)["intercept"]
+        model.fix_params = {"coef": None, "intercept": intercept}
 
         model.fit(X, y)
 
@@ -450,14 +452,14 @@ class TestEveryParameterFixed:
         empty-tree case skips, so no Newton-specific hook is required of the stand-in.
         """
         X, y, model = poissonGLM_model_instantiation[:3]
-        coef, intercept = _pin_everything(model, X, y)
-        model.set_params(fix_params=(coef, intercept), solver_name=solver_name)
+        pinned = _pin_everything(model, X, y)
+        model.set_params(fix_params=pinned, solver_name=solver_name)
 
         with pytest.warns(UserWarning, match="Every parameter is fixed"):
             model.fit(X, y)
 
-        np.testing.assert_array_equal(model.coef_, coef)
-        np.testing.assert_array_equal(model.intercept_, intercept)
+        np.testing.assert_array_equal(model.coef_, pinned["coef"])
+        np.testing.assert_array_equal(model.intercept_, pinned["intercept"])
         assert isinstance(model.solver, NoOpSolver)
 
     def test_stochastic_fit_returns_the_pinned_values(
@@ -465,22 +467,24 @@ class TestEveryParameterFixed:
     ):
         """``stochastic_fit`` reaches the solver directly, so it needs its own coverage."""
         X, y, model = poissonGLM_model_instantiation[:3]
-        coef, intercept = _pin_everything(model, X, y)
-        model.set_params(fix_params=(coef, intercept), solver_name="SVRG")
+        pinned = _pin_everything(model, X, y)
+        model.set_params(fix_params=pinned, solver_name="SVRG")
 
         with pytest.warns(UserWarning, match="Every parameter is fixed"):
             model.stochastic_fit(ArrayDataLoader(X, y, batch_size=32), n_passes=2)
 
-        np.testing.assert_array_equal(model.coef_, coef)
-        np.testing.assert_array_equal(model.intercept_, intercept)
+        np.testing.assert_array_equal(model.coef_, pinned["coef"])
+        np.testing.assert_array_equal(model.intercept_, pinned["intercept"])
 
     def test_stochastic_fit_pins_a_frozen_leaf_exactly(
         self, poissonGLM_model_instantiation, recwarn
     ):
         """With coef free, the real stochastic solver runs and never moves the intercept."""
         X, y, model = poissonGLM_model_instantiation[:3]
-        _, intercept = _pin_everything(model, X, y)
-        model.set_params(fix_params=(None, intercept), solver_name="SVRG")
+        intercept = _pin_everything(model, X, y)["intercept"]
+        model.set_params(
+            fix_params={"coef": None, "intercept": intercept}, solver_name="SVRG"
+        )
 
         model.stochastic_fit(ArrayDataLoader(X, y, batch_size=32), n_passes=2)
 
@@ -566,19 +570,26 @@ class TestFrozenValuesEnterTheObjective:
         """coef converges to the optimum *given* the pinned intercept."""
         X, y, model = poissonGLM_model_instantiation[:3]
         pinned = _pinned_intercept(model, X, y)
-        model.set_params(fix_params=(None, pinned), solver_kwargs={"tol": 1e-12})
+        model.set_params(
+            fix_params={"coef": None, "intercept": pinned}, solver_kwargs={"tol": 1e-12}
+        )
 
         model.fit(X, y)
 
         np.testing.assert_allclose(model.intercept_, pinned)
-        active, _ = model._partition_active(GLMParams(model.coef_, model.intercept_))
+        active, _ = model._partition_active(model._get_model_params())
         zeros = jnp.zeros_like(pinned)
         # float64 with tol=1e-12 converges to a gradient norm of ~1e-13; the bound
         # allows three orders of magnitude above that
         assert _solver_grad_norm(model, active, X, y) < 1e-10
         assert (
             _grad_norm_under_other_spec(
-                model, active, X, y, (None, zeros), (model.coef_, zeros)
+                model,
+                active,
+                X,
+                y,
+                {"coef": None, "intercept": zeros},
+                {"coef": model.coef_, "intercept": zeros},
             )
             > 1e-2
         )
@@ -589,13 +600,15 @@ class TestFrozenValuesEnterTheObjective:
         """The free coef leaves converge to the optimum *given* the pinned leaf."""
         X, y, model = poissonGLM_model_instantiation_pytree[:3]
         spec = _coef_spec(model, X, y, "pin_first")
-        model.set_params(fix_params=(spec, None), solver_kwargs={"tol": 1e-12})
+        model.set_params(
+            fix_params={"coef": spec, "intercept": None}, solver_kwargs={"tol": 1e-12}
+        )
 
         model.fit(X, y)
 
         pinned_key = next(key for key, val in spec.items() if val is not None)
         np.testing.assert_allclose(model.coef_[pinned_key], spec[pinned_key])
-        active, _ = model._partition_active(GLMParams(model.coef_, model.intercept_))
+        active, _ = model._partition_active(model._get_model_params())
         zeroed_spec = {
             key: jnp.zeros_like(val) if key == pinned_key else val
             for key, val in spec.items()
@@ -613,8 +626,8 @@ class TestFrozenValuesEnterTheObjective:
                 active,
                 X,
                 y,
-                (zeroed_spec, None),
-                (zeroed_coef, model.intercept_),
+                {"coef": zeroed_spec, "intercept": None},
+                {"coef": zeroed_coef, "intercept": model.intercept_},
             )
             > 1e-2
         )
@@ -645,10 +658,10 @@ class TestSpecSurvivesSklearnProtocol:
     ):
         """``get_params`` returns the spec passed to ``set_params`` unchanged."""
         X, y, model = request.getfixturevalue(model_fixture)[:3]
-        spec = (
-            _coef_spec(model, X, y, coef_mode),
-            _pinned_intercept(model, X, y) if intercept_pinned else None,
-        )
+        spec = {
+            "coef": _coef_spec(model, X, y, coef_mode),
+            "intercept": _pinned_intercept(model, X, y) if intercept_pinned else None,
+        }
 
         model.set_params(fix_params=spec)
 
@@ -660,7 +673,7 @@ def test_set_params_validates_the_spec(poissonGLM_model_instantiation):
     X, y, model = poissonGLM_model_instantiation[:3]
 
     with pytest.raises(ValueError, match="Intercept term should be"):
-        model.set_params(fix_params=(None, jnp.zeros((5,))))
+        model.set_params(fix_params={"coef": None, "intercept": jnp.zeros((5,))})
 
 
 def test_reassigning_the_spec_invalidates_the_solver(poissonGLM_model_instantiation):
@@ -670,7 +683,7 @@ def test_reassigning_the_spec_invalidates_the_solver(poissonGLM_model_instantiat
     model.initialize_optimizer_and_state(params, X, y)
     assert model._solver is not None
 
-    model.fix_params = (None, _pinned_intercept(model, X, y))
+    model.fix_params = {"coef": None, "intercept": _pinned_intercept(model, X, y)}
 
     assert model._solver is None
     assert model._solver_loss_fun is None
@@ -684,8 +697,8 @@ def test_all_fixed_spec_still_short_circuits_after_reload(
 ):
     """A reloaded all-fixed model round-trips and keeps skipping the solver."""
     X, y, model = poissonGLM_model_instantiation[:3]
-    coef, intercept = _pin_everything(model, X, y)
-    model.fix_params = (coef, intercept)
+    pinned = _pin_everything(model, X, y)
+    model.fix_params = pinned
 
     path = tmp_path / "all_fixed.npz"
     model.save_params(path)
@@ -695,6 +708,6 @@ def test_all_fixed_spec_still_short_circuits_after_reload(
     with pytest.warns(UserWarning, match="Every parameter is fixed"):
         loaded.fit(X, y)
 
-    np.testing.assert_array_equal(loaded.coef_, coef)
-    np.testing.assert_array_equal(loaded.intercept_, intercept)
+    np.testing.assert_array_equal(loaded.coef_, pinned["coef"])
+    np.testing.assert_array_equal(loaded.intercept_, pinned["intercept"])
     assert isinstance(loaded.solver, NoOpSolver)

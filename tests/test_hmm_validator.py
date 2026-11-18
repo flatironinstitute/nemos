@@ -5,8 +5,8 @@ import numpy as np
 import pynapple as nap
 import pytest
 
-from conftest import MockHMM, all_subclasses
-from nemos.hmm.validation import HMMValidator, has_interior_nans
+from conftest import MockHMM
+from nemos.hmm.validation import has_interior_nans
 
 
 def _check_continuity(model, X, y, session_starts=None):
@@ -47,30 +47,6 @@ def _reference_has_interior_nans(is_nan, session_starts):
 
 class TestHMMValidator:
     """Test suite for input validation logic in HMMValidator."""
-
-    def test_user_param_order(self) -> None:
-        """Meta-test.
-
-        Tests that any subclasses of HMMValidator have the correct user parameter order
-        """
-        import importlib
-        import pkgutil
-
-        import nemos
-
-        # Import every submodule so all HMMValidator subclasses get registered.
-        for _, modname, _ in pkgutil.walk_packages(nemos.__path__, prefix="nemos."):
-            importlib.import_module(modname)
-
-        # Filter the classes that are subclasses of 'SuperClass'.
-        subclasses = all_subclasses(HMMValidator)
-
-        for validator in subclasses:
-            n_params = len(validator.model_param_names)
-            user_par = [0.0] * (n_params - 2) + [1.0, 1.0]
-            params = validator.to_model_params(user_par)
-            assert np.all(params.hmm_params.log_initial_prob == 0.0)
-            assert np.all(params.hmm_params.log_transition_prob == 0.0)
 
     @pytest.mark.parametrize(
         "X, y, expectation",

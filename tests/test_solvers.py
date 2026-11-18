@@ -251,7 +251,7 @@ def test_svrg_glm_initialize_state(
         lambda a, b: np.array_equal(a, b),
         all,
         state.solver_state.reference_point,
-        GLMParams(*init_params),
+        glm._validator.to_model_params(init_params),
     )
 
     for f in (

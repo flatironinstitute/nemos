@@ -1118,15 +1118,20 @@ class TestUnRegularized:
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-13}
+        dispersion = 1.5
+        model.fix_params = {
+            "dispersion": jnp.full_like(true_params.intercept, dispersion)
+        }
         init_params = model._model_specific_initialization(X, y)
-        runner = model._instantiate_solver(model._compute_loss, init_params).run
-        params = runner(init_params, X, y)[0]
+        active, frozen = model._partition_active(init_params)
+        runner = model._instantiate_solver(
+            model._compute_loss, active, frozen_params=frozen
+        ).run
+        params = eqx.combine(runner(active, X, y)[0], frozen)
         model_sm = sm.GLM(
             endog=y,
             exog=sm.add_constant(X),
-            family=sm.families.NegativeBinomial(
-                link=link_sm, alpha=model.observation_model.scale
-            ),
+            family=sm.families.NegativeBinomial(link=link_sm, alpha=dispersion),
         )
 
         res_sm = model_sm.fit(cnvrg_tol=10**-12)

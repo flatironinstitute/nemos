@@ -830,7 +830,7 @@ class MockGLM(nmo.glm.GLM):
         pass
 
 
-MockHMMUserParams = Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
+MockHMMUserParams = dict[str, jnp.ndarray]
 
 
 class MockHMMModelParams(ModelParams):
@@ -844,24 +844,20 @@ class MockHMMParams(ModelParams):
 
 def to_mock_params(user_params: MockHMMUserParams) -> MockHMMParams:
     return MockHMMParams(
-        model_params=MockHMMModelParams(user_params[0]),
-        hmm_params=to_hmm_params(user_params[1:]),
+        model_params=MockHMMModelParams(user_params.get("param")),
+        hmm_params=to_hmm_params(
+            {k: user_params.get(k) for k in HMMValidator.model_param_names}
+        ),
     )
 
 
 def from_mock_params(params: MockHMMParams) -> MockHMMUserParams:
-    initial_prob, transition_prob = from_hmm_params(params.hmm_params)
-    return (
-        params.model_params.param,
-        initial_prob,
-        transition_prob,
-    )
+    return {"param": params.model_params.param, **from_hmm_params(params.hmm_params)}
 
 
 class MockHMMValidator(HMMValidator[MockHMMUserParams, MockHMMParams]):
-    model_param_names: Tuple[str] = (
-        "param",
-        *HMMValidator.model_param_names,
+    model_param_names: frozenset[str] = frozenset(
+        {"param", *HMMValidator.model_param_names}
     )
     to_model_params: Callable[[MockHMMUserParams], MockHMMParams] = to_mock_params
     from_model_params: Callable[[MockHMMParams], MockHMMUserParams] = from_mock_params
@@ -929,27 +925,16 @@ class MockHMM(
         if self.param_ is None:
             raise ValueError("Model is not fitted yet.")
 
-    def _get_model_params(self) -> MockHMMParams:
-        return self._validator.to_model_params(
-            (
-                self.param_,
-                self.initial_prob_,
-                self.transition_prob_,
-            )
-        )
-
     def _set_model_params(self, params):
-        param, initial_prob, transition_prob = self._validator.from_model_params(params)
-        self.param_ = param
-        self.initial_prob_ = initial_prob
-        self.transition_prob_ = transition_prob
+        for k, v in self._validator.from_model_params(params).items():
+            setattr(self, k + "_", v)
 
     def _log_likelihood(self, params, X, y):
         return jnp.zeros((y.shape[0], self.n_states))
 
     def _model_params_initialization(self, X, y, session_starts, random_key=None):
         return (
-            jnp.arange(self._n_states),
+            {"param": jnp.arange(self._n_states)},
             False,
         )
 
