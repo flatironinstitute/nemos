@@ -876,7 +876,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
         """
         predicted_rate = self._predict(params, X)
-        if self._fitting_separable_param_only():
+        if all(v["separable"] for v in self._observation_model.extra_params.values()):
             loss = self._observation_model._negative_log_likelihood
             extras = {}
         else:
