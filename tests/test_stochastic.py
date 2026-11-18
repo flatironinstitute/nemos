@@ -283,11 +283,11 @@ class TestCallbackSystem:
         assert cb.events == {"pass_end"}
 
     def test_loss_logger_forwards_compute_loss_args(self):
-        """compute_loss receives (coef, intercept), X_test, y_test."""
+        """compute_loss receives the user param dict, X_test, y_test."""
         cb = TestLossLogger("X", "Y", events="pass_end")
         ctx, calls = _logging_ctx()
         cb.on_pass_end(ctx)
-        assert calls == [(("COEF", "INT"), "X", "Y")]
+        assert calls == [({"coef": "COEF", "intercept": "INT"}, "X", "Y")]
 
     def test_loss_logger_records_tuple(self):
         """Each entry is (event, pass_idx, batch_idx, score)."""
