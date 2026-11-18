@@ -1353,18 +1353,12 @@ class NegativeBinomialObservations(Observations):
     --------
     >>> import nemos as nmo
 
-    Select the observation model by name, which uses the default ``scale``:
+    Select the observation model by name:
 
     >>> nmo.glm.GLM(observation_model="NegativeBinomial").observation_model
-    NegativeBinomialObservations(scale=1.0)
+    NegativeBinomialObservations()
 
-    Pass an instance instead to set the dispersion explicitly:
-
-    >>> obs_model = nmo.observation_models.NegativeBinomialObservations(scale=2.0)
-    >>> nmo.glm.GLM(observation_model=obs_model).observation_model
-    NegativeBinomialObservations(scale=2.0)
-
-    A larger ``scale`` yields more variable counts for the same mean rate:
+    A larger ``dispersion`` yields more variable counts for the same mean rate:
 
     .. plot::
         :include-source: True
@@ -1374,20 +1368,19 @@ class NegativeBinomialObservations(Observations):
         >>> import matplotlib.pyplot as plt
         >>> import numpy as np
         >>> import nemos as nmo
-        >>> obs_low = nmo.observation_models.NegativeBinomialObservations(scale=0.05)
-        >>> obs_high = nmo.observation_models.NegativeBinomialObservations(scale=2.0)
+        >>> obs = nmo.observation_models.NegativeBinomialObservations()
         >>> rate = np.full(1000, fill_value=10.0)
         >>> key = jax.random.PRNGKey(123)
-        >>> samples_low = obs_low.sample_generator(key, rate)
-        >>> samples_high = obs_high.sample_generator(key, rate)
+        >>> samples_low = obs.sample_generator(key, rate, dispersion=0.05)
+        >>> samples_high = obs.sample_generator(key, rate, dispersion=2.0)
         >>> bool(samples_high.var() > samples_low.var())
         True
         >>> _ = plt.subplot(211)
         >>> _, edges, _ = plt.hist(samples_high, bins=50)
-        >>> _ = plt.title("scale = 2.0")
+        >>> _ = plt.title("dispersion = 2.0")
         >>> _ = plt.subplot(212)
         >>> _ = plt.hist(samples_low, bins=edges)
-        >>> _ = plt.title("scale = 0.05")
+        >>> _ = plt.title("dispersion = 0.05")
         >>> plt.tight_layout()
         >>> plt.show()
 
