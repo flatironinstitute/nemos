@@ -876,18 +876,16 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
         """
         predicted_rate = self._predict(params, X)
-        if all(v["separable"] for v in self._observation_model.extra_params.values()):
+        param_dict = self._validator.from_model_params(params)
+        extras = self._validator.filter_extra_params(param_dict)
+        if self._fitting_separable_param_only():
             loss = self._observation_model._negative_log_likelihood
-            extras = {}
         else:
             # if there is an extra param that is not separable,
             # the full likelihood is needed
 
             def loss(*a, **kw):
                 return -self._observation_model.log_likelihood(*a, **kw)
-
-            param_dict = self._validator.from_model_params(params)
-            extras = self._validator.filter_extra_params(param_dict)
 
         return loss(y, predicted_rate, **extras)
 
