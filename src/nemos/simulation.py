@@ -11,7 +11,6 @@ import numpy as np
 from numpy.typing import NDArray
 
 from . import validation
-from .pytrees import FeaturePytree
 
 # Lazy load to avoid importing scipy.stats at module level
 scipy = lazy.load("scipy")
@@ -310,8 +309,6 @@ def simulate_recurrent(
         >>> _ = plt.title("Simulated firing rates")
         >>> _ = plt.show()
     """
-    if isinstance(feedforward_input, FeaturePytree):
-        raise ValueError("simulate_recurrent works only with arrays, not pytrees.")
     # convert to jnp.ndarray of floats
     coupling_basis_matrix = jnp.asarray(coupling_basis_matrix, dtype=float)
     coupling_coef = jnp.asarray(coupling_coef, dtype=float)

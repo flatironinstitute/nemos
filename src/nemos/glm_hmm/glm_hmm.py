@@ -21,7 +21,6 @@ from ..hmm.initialize_parameters import HMM_INITIALIZATION_FN_DICT, InitFunction
 from ..hmm.utils import _check_state_format
 from ..inverse_link_function_utils import resolve_inverse_link_function
 from ..observation_models import Observations
-from ..pytrees import FeaturePytree
 from ..regularizer import GroupLasso, Lasso, Regularizer, Ridge
 from ..tree_utils import pytree_map_and_reduce
 from ..typing import (
@@ -1640,7 +1639,7 @@ class GLMHMM(
             # ensure boolean and first sample is a session start
             session_starts = jnp.array(session_starts, dtype=bool).at[0].set(True)
             # grab the data
-            data = X.data if isinstance(X, FeaturePytree) else X
+            data = X
 
         # wrap into model params (assumes init was done via
         # `initialize_optimizer_and_state` so the EM step function is in place)

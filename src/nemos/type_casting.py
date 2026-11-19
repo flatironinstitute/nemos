@@ -32,7 +32,6 @@ import numpy as np
 from numpy.typing import NDArray
 
 from . import tree_utils
-from .pytrees import FeaturePytree
 
 # Lazy load pynapple to improve import times
 nap = lazy.load("pynapple")
@@ -153,12 +152,6 @@ def is_pynapple_tsd(x: Any) -> bool:
     :
         Indicates the result of the evaluation.
     """
-    if isinstance(x, FeaturePytree):
-        return any(
-            hasattr(d, attr)
-            for attr in ("times", "data", "time_support")
-            for d in x.data.values()
-        )
     return all(hasattr(x, attr) for attr in ["times", "data", "time_support"])
 
 

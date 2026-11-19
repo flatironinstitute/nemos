@@ -348,12 +348,10 @@ class TestRandomGLMParamsInitialization:
         )
         assert jnp.allclose(intercept[0], intercept)
 
-    def test_pytree_x_unwraps_feature_pytree(self):
-        """FeaturePytree X is unwrapped to its underlying dict; coef mirrors that structure."""
-        from nemos.pytrees import FeaturePytree
-
+    def test_pytree_x_dict(self):
+        """Dict X gives a dict coef with matching keys."""
         n_samples, n_states = 30, 3
-        X = FeaturePytree(a=jnp.ones((n_samples, 2)), b=jnp.ones((n_samples, 4)))
+        X = dict(a=jnp.ones((n_samples, 2)), b=jnp.ones((n_samples, 4)))
         y = jnp.ones(n_samples)
         coef, intercept = random_glm_params_init(
             n_states,
@@ -363,7 +361,6 @@ class TestRandomGLMParamsInitialization:
             PoissonObservations(),
             random_key=jax.random.PRNGKey(0),
         )
-        # Line 93-94: FeaturePytree -> X.data (dict).
         assert isinstance(coef, dict)
         assert set(coef) == {"a", "b"}
         assert coef["a"].shape == (2, n_states)
@@ -594,16 +591,13 @@ class TestKMeansInitializerGLM:
         scale = kmeans_scale_init(n_states, X, y, jnp.exp, "Poisson")
         assert scale.shape == expected_shape
 
-    def test_unwraps_feature_pytree_x(self, kmeans_mock):
-        """FeaturePytree X is unwrapped to its underlying dict at __init__ (line 158-159)."""
-        from nemos.pytrees import FeaturePytree
-
+    def test_dict_x(self, kmeans_mock):
+        """Dict X is stored as a dict at __init__."""
         n_states, X_arr, y, _, _ = kmeans_mock
-        X = FeaturePytree(a=jnp.asarray(X_arr))
+        X = dict(a=jnp.asarray(X_arr))
         initializer = KMeansInitializerGLM(
             n_states, X, y, jnp.exp, "Poisson", random_key=0
         )
-        assert not isinstance(initializer._X, FeaturePytree)
         assert isinstance(initializer._X, dict)
         assert "a" in initializer._X
 

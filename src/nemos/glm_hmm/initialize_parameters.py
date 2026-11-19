@@ -19,7 +19,6 @@ from ..hmm.initialize_parameters import (
     _validate_init_funcs_kwargs,
 )
 from ..observation_models import Observations
-from ..pytrees import FeaturePytree
 from ..type_casting import cast_to_jax
 from ..typing import DESIGN_INPUT_TYPE
 from .algorithm_configs import has_fixed_scale
@@ -95,8 +94,6 @@ def random_glm_params_init(
         random_key = jax.random.PRNGKey(123)
     is_one_dim = y.ndim == 1
     n_neurons = 1 if is_one_dim else y.shape[1]
-    if isinstance(X, FeaturePytree):
-        X = X.data
     # small random noisy coef
     coef = jax.tree_util.tree_map(
         lambda x: (
@@ -166,8 +163,6 @@ class KMeansInitializerGLM(KMeansInitializer):
             random_key=random_key,
         )
         self._X = jax.tree_util.tree_map(jnp.asarray, X)
-        if isinstance(self._X, FeaturePytree):
-            self._X = self._X.data
         self._y = jnp.asarray(y)
         self.inverse_link_function = inverse_link_function
         self.observation_model = observation_model

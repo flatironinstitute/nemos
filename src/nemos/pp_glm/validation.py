@@ -47,7 +47,7 @@ class PPGLMValidator(GLMValidator):
             "check_array_dimensions",
             dict(
                 err_message_format="Invalid parameter dimensionality. coef must be an array "
-                "or nemos.pytree.FeaturePytree with array leafs of shape "
+                "or a pytree with array leafs of shape "
                 "(n_features, ). intercept must be of shape (1,)."
                 "\nThe provided coef and intercept have shapes ``{}`` and ``{}`` "
                 "instead."
