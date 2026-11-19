@@ -214,7 +214,6 @@ def prepare_estep_log_likelihood(
         )
 
     if has_fixed_scale(observation_model):
-
         log_likelihood_per_sample = jax.vmap(
             log_likelihood_per_sample,
             in_axes=(None, state_axes, None),
@@ -222,7 +221,6 @@ def prepare_estep_log_likelihood(
         )
 
     else:
-
         log_likelihood_per_sample = jax.vmap(
             log_likelihood_per_sample,
             in_axes=(None, state_axes, state_axes - 1),

@@ -54,6 +54,11 @@ class AbstractSolver(abc.ABC, Generic[SolverState]):
     # Set to True in subclasses that support stochastic optimization
     _supports_stochastic: ClassVar[bool] = False
 
+    # Set to True in solvers that can exploit the model's analytic Hessian. The
+    # machinery lives in ``HessianMixin``, which flips this; only the capability
+    # is declared here.
+    _uses_hessian: ClassVar[bool] = False
+
     @abc.abstractmethod
     def __init__(
         self,

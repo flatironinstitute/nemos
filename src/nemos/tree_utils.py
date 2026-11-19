@@ -4,10 +4,10 @@ import operator
 from functools import partial, reduce
 from typing import Any, Callable, Optional
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jax.core import Tracer
-from jax.flatten_util import ravel_pytree
 
 
 def _get_not_inf(array: jnp.ndarray) -> jnp.ndarray:
@@ -259,7 +259,9 @@ def tree_broadcast_prefix(prefix: Any, full: Any) -> Any:
     Examples
     --------
     >>> from nemos.tree_utils import tree_broadcast_prefix
-    >>> tree_broadcast_prefix({"a": 1, "b": 0}, {"a": {"x": None, "y": None}, "b": None})
+    >>> tree_broadcast_prefix(
+    ...     {"a": 1, "b": 0}, {"a": {"x": None, "y": None}, "b": None}
+    ... )
     {'a': {'x': None, 'y': None}, 'b': None}
     """
     treedef = jax.tree_util.tree_structure(prefix)
@@ -272,6 +274,35 @@ def tree_broadcast_prefix(prefix: Any, full: Any) -> Any:
             )
         ],
     )
+
+
+def tree_filter_like(pytree: Any, like: Any) -> Any:
+    """Keep the leaves of ``tree`` where ``like`` is not ``None``, replacing the others with ``None``.
+
+    Parameters
+    ----------
+    pytree :
+        Pytree to filter.
+    like :
+        Pytree whose ``None`` leaves mark what to drop. Must be a prefix of ``tree``,
+        with ``None`` treated as a leaf. A ``None`` in ``like`` drops the whole subtree
+        of ``tree`` below it.
+
+    Returns
+    -------
+    :
+        A pytree with the structure of ``tree``, ``None`` where ``like`` is ``None``.
+
+    Examples
+    --------
+    >>> from nemos.tree_utils import tree_filter_like
+    >>> tree_filter_like({"a": 1, "b": 2}, {"a": None, "b": 0})
+    {'a': None, 'b': 2}
+    """
+    spec = jax.tree_util.tree_map(
+        lambda x: x is not None, like, is_leaf=lambda x: x is None
+    )
+    return eqx.filter(pytree, spec)
 
 
 # The following functions are adapted from jaxopt.tree_utils
@@ -316,9 +347,38 @@ def tree_zeros_like(pytree_x):
     return jax.tree_util.tree_map(jnp.zeros_like, pytree_x)
 
 
-def tree_full_like(pytree_x, fill_value):
+def tree_filled_with(pytree_x, fill_value):
     """Create a tree with the same structure as pytree_x and fill it with fill_value."""
     return jax.tree_util.tree_map(lambda _: fill_value, pytree_x)
+
+
+def tree_astype(*trees, dtype=None):
+    """Cast every leaf of each tree to ``dtype``.
+
+    ``None`` is an empty pytree node, so ``None`` entries pass through untouched; this
+    makes the helper usable on optional arguments without a guard at the call site.
+
+    Parameters
+    ----------
+    *trees :
+        Trees to cast.
+    dtype :
+        Target dtype. ``None`` (the default) leaves each leaf's own dtype alone.
+
+    Returns
+    -------
+    :
+        Tuple of the cast trees, one per input, each with the structure of its input.
+
+    Examples
+    --------
+    >>> import jax.numpy as jnp
+    >>> from nemos.tree_utils import tree_astype
+    >>> alphas, missing = tree_astype(jnp.ones(3), None, dtype=jnp.float16)
+    >>> alphas.dtype, missing
+    (dtype('float16'), None)
+    """
+    return jax.tree_util.tree_map(lambda x: jnp.asarray(x, dtype=dtype), trees)
 
 
 def has_matching_axis_pytree(*pytree: Any, axis: int = 0):
@@ -338,27 +398,51 @@ def drop_nans(*trees):
     ]
 
 
-def ravel_pytree_nest(pytree):
-    """Batch-last pytree ravel that also supports non-batched pytrees."""
-    leaves = jax.tree.leaves(pytree)
-    batch_dims = [x.shape[-1] for x in leaves if x.ndim > 0]
-    if not batch_dims or not all(b == batch_dims[0] for b in batch_dims):
-        return ravel_pytree(pytree)
+def tree_all_finite(
+    pytree: Any,
+    is_leaf: Optional[Callable[[Any], bool]] = None,
+) -> jnp.ndarray:
+    """
+    Check whether every value in a PyTree is finite.
 
-    N = batch_dims[0]
-    in_axes = jax.tree.map(lambda x: -1 if x.ndim > 0 else None, pytree)
-    sample0 = jax.tree.map(
-        lambda x: jnp.take(x, 0, axis=-1) if x.ndim > 0 else x, pytree
+    A value is finite when it is neither NaN nor positive or negative
+    infinity. This function checks every element of every leaf and returns a
+    scalar JAX boolean. It can be used inside JAX transformations such as
+    ``jax.jit``.
+    An empty PyTree is considered finite.
+
+    Parameters
+    ----------
+    pytree :
+        PyTree with numeric array-like leaves.
+    is_leaf :
+        Optional predicate used to identify custom PyTree leaves.
+
+    Returns
+    -------
+    :
+        A scalar boolean array that is ``True`` when every value in every leaf
+        is finite.
+
+    Examples
+    --------
+    >>> import jax
+    >>> import jax.numpy as jnp
+    >>> from nemos.tree_utils import tree_all_finite
+    >>> tree_all_finite({"a": jnp.array([1.0, 2.0]), "b": jnp.array([3.0])})
+    Array(True, dtype=bool)
+    >>> tree_all_finite({"a": jnp.array([1.0, jnp.nan])})
+    Array(False, dtype=bool)
+    >>> jax.jit(tree_all_finite)({"a": jnp.array([1.0, jnp.inf])})
+    Array(False, dtype=bool)
+    """
+    finite = jax.tree.map(
+        lambda leaf: jnp.all(jnp.isfinite(leaf)),
+        pytree,
+        is_leaf=is_leaf,
     )
-    _, unravel_one = ravel_pytree(sample0)
-
-    flat = jax.vmap(lambda t: ravel_pytree(t)[0], in_axes=(in_axes,))(pytree).reshape(
-        -1
+    return jax.tree.reduce(
+        jnp.logical_and,
+        finite,
+        initializer=jnp.asarray(True),
     )
-
-    out_axes = jax.tree.map(lambda x: -1 if x.ndim > 0 else 0, sample0)
-
-    def unravel(x_flat):
-        return jax.vmap(unravel_one, out_axes=out_axes)(x_flat.reshape(N, -1))
-
-    return flat, unravel

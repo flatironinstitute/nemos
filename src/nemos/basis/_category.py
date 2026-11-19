@@ -105,7 +105,9 @@ class Category(EvalBasisMixin, AtomicBasisMixin, Basis):
 
     >>> basis = Category(["L", "R"])
     >>> X = basis.compute_features(np.array(["L", "R", "L", "R"]))
-    >>> X = X[:, 1:]  # "Tri" is the reference; remaining column is the contrast between "Sq" and "Tri"
+    >>> X = X[
+    ...     :, 1:
+    ... ]  # "Tri" is the reference; remaining column is the contrast between "Sq" and "Tri"
     >>> X
     Array([[0.],
            [1.],

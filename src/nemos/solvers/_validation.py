@@ -107,7 +107,6 @@ def _tiny_ridge_regression_problem(
     n_features: int = 3,
 ):
     """Create a tiny ridge regression problem to quickly test solver implementations with."""
-
     rng = np.random.default_rng(seed)
     X = rng.normal(size=(n_samples, n_features))
     coef = rng.normal(size=(n_features,))
@@ -138,7 +137,6 @@ def _validate_solver_class_on_ridge(
     This checks that required methods can be called with the expected inputs,
     and that they return sensible outputs.
     """
-
     if solver_kwargs is None:
         solver_kwargs = {}
     from ..regularizer import Ridge

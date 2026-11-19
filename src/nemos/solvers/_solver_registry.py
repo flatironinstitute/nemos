@@ -6,12 +6,12 @@ from typing import Type
 
 from ._abstract_solver import SolverProtocol
 from ._fista import OptimistixFISTA, OptimistixNAG
-from ._newton import Newton
 from ._optax_optimistix_solvers import (
     OptimistixOptaxGradientDescent,
     OptimistixOptaxLBFGS,
 )
 from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
+from ._second_order import Newton, ProximalLBFGS, ProximalNewton
 from ._svrg import WrappedProxSVRG, WrappedSVRG
 from ._validation import validate_solver_class
 
@@ -32,7 +32,9 @@ class SolverSpec:
     Examples
     --------
     >>> import nemos as nmo
-    >>> spec = nmo.solvers.SolverSpec("BFGS", "optimistix", nmo.solvers._optimistix_solvers.OptimistixBFGS)
+    >>> spec = nmo.solvers.SolverSpec(
+    ...     "BFGS", "optimistix", nmo.solvers._optimistix_solvers.OptimistixBFGS
+    ... )
     >>> spec.algo_name
     'BFGS'
     >>> spec.backend
@@ -236,7 +238,9 @@ def register(
     Examples
     --------
     >>> import nemos as nmo
-    >>> nmo.solvers.register("FISTA", nmo.solvers._fista.OptimistixFISTA, backend="optimistix")
+    >>> nmo.solvers.register(
+    ...     "FISTA", nmo.solvers._fista.OptimistixFISTA, backend="optimistix"
+    ... )
     """
     if not replace and backend in _registry.get(algo_name, {}):
         raise ValueError(
@@ -327,8 +331,8 @@ def list_available_algorithms() -> list[str]:
     Example
     -------
     >>> import nemos as nmo
-    >>> nmo.solvers.list_available_algorithms()
-    ['GradientDescent', 'ProximalGradient', 'LBFGS', 'BFGS', 'NonlinearCG', 'SVRG', 'ProxSVRG', 'Newton']
+    >>> nmo.solvers.list_available_algorithms()  # doctest: +NORMALIZE_WHITESPACE
+    ['GradientDescent', 'ProximalGradient', ...]
     """
     return list(_registry.keys())
 
@@ -396,9 +400,11 @@ register("NonlinearCG", OptimistixNonlinearCG, "optimistix", default=True)
 register("SVRG", WrappedSVRG, "nemos", default=True)
 register("ProxSVRG", WrappedProxSVRG, "nemos", default=True)
 register("Newton", Newton, "nemos", default=True)
+register("ProximalNewton", ProximalNewton, "nemos", default=True)
 register(
     "GradientDescent", OptimistixOptaxGradientDescent, "optax+optimistix", default=False
 )
+register("ProximalLBFGS", ProximalLBFGS, "nemos", default=True)
 
 if JAXOPT_AVAILABLE:
     from ._jaxopt_solvers import (

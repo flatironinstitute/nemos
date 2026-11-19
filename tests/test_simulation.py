@@ -83,17 +83,17 @@ def test_difference_of_gammas_percentile_params(upper_percentile, expectation):
 @pytest.mark.parametrize("window_size", [0, 1, 2])
 def test_difference_of_gammas_output_shape(window_size):
     result_size = simulation.difference_of_gammas(window_size).size
-    assert (
-        result_size == window_size
-    ), f"Expected output size {window_size}, but got {result_size}"
+    assert result_size == window_size, (
+        f"Expected output size {window_size}, but got {result_size}"
+    )
 
 
 @pytest.mark.parametrize("window_size", [1, 2, 10])
 def test_difference_of_gammas_output_norm(window_size):
     result = simulation.difference_of_gammas(window_size)
-    assert np.allclose(
-        np.linalg.norm(result, ord=2), 1
-    ), "The output of difference_of_gammas is not unit norm."
+    assert np.allclose(np.linalg.norm(result, ord=2), 1), (
+        "The output of difference_of_gammas is not unit norm."
+    )
 
 
 @pytest.mark.parametrize(

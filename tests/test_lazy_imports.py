@@ -11,6 +11,7 @@ To fix a failing test:
    a) For type hints only - use TYPE_CHECKING:
       ```python
       from typing import TYPE_CHECKING
+
       if TYPE_CHECKING:
           import pynapple as nap
       ```
@@ -18,12 +19,15 @@ To fix a failing test:
    b) For runtime usage - use lazy_loader:
       ```python
       import lazy_loader as lazy
+
       nap = lazy.load("pynapple")
       ```
 
    c) For module-level constants that use the lazy module:
       ```python
       _CACHED_VALUE = None
+
+
       def _get_value():
           global _CACHED_VALUE
           if _CACHED_VALUE is None:

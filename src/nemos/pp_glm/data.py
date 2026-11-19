@@ -24,3 +24,4 @@ class MCSamplePPGLM(eqx.Module):
 
     times: Float[Array, "n_samples"]  # noqa: F821
     timestamp_idx: Int[Array, "n_samples"]  # noqa: F821
+    widths: Float[Array, "n_samples"]  # stratum width at each sample  # noqa: F821

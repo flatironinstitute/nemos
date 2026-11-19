@@ -355,3 +355,27 @@ def test_encode_skip_path_pynapple_returns_original(safe, ndim):
         np.testing.assert_array_equal(
             result.get_info("region"), [f"r{i}" for i in range(data.shape[1])]
         )
+
+
+def test_encode_declared_default():
+    encoder = LabelEncoder(len(_SKIP_CLASSES))
+    assert encoder.declared is False
+
+
+def test_encode_declared_reset():
+    encoder = LabelEncoder(len(_SKIP_CLASSES))
+    encoder.declared = True
+    assert encoder.declared is True
+    encoder.reset()
+    assert encoder.declared is False
+
+
+def test_encode_set_classes():
+    encoder = LabelEncoder(len(_SKIP_CLASSES))
+    encoder.set_classes(np.arange(len(_SKIP_CLASSES)), declared=True)
+    assert encoder.declared is True
+    encoder.reset()
+    encoder.set_classes(np.arange(len(_SKIP_CLASSES)), declared=False)
+    assert encoder.declared is False
+    encoder.set_classes(np.arange(len(_SKIP_CLASSES)))
+    assert encoder.declared is False

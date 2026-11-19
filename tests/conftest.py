@@ -31,9 +31,16 @@ import pytest
 import nemos as nmo
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
+from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
 from nemos.base_regressor import BaseRegressor
 from nemos.base_validator import RegressorValidator
-from nemos.basis import AdditiveBasis, Category, CustomBasis, MultiplicativeBasis, Zero
+from nemos.basis import (
+    AdditiveBasis,
+    Category,
+    CustomBasis,
+    MultiplicativeBasis,
+    Zero,
+)
 from nemos.basis._basis import Basis
 from nemos.basis._basis_mixin import (
     AtomicBasisMixin,
@@ -58,7 +65,7 @@ from nemos.hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
 from nemos.params import ModelParams
 from nemos.regularizer import UnRegularized
 from nemos.solvers import get_solver
-from nemos.tree_utils import tree_full_like
+from nemos.tree_utils import tree_filled_with
 
 _totals = defaultdict(float)
 _counts = defaultdict(int)
@@ -224,6 +231,18 @@ def mock_glm_optimizer_run(monkeypatch):
 
 
 @pytest.fixture
+def mock_classifier_glm_optimizer_run(monkeypatch):
+    """Bypass the JAX solver in GLM.fit() while keeping all validation logic."""
+    _make_optimizer_run_patch(monkeypatch, nmo.glm.ClassifierGLM)
+
+
+@pytest.fixture
+def mock_classifier_population_glm_optimizer_run(monkeypatch):
+    """Bypass the JAX solver in GLM.fit() while keeping all validation logic."""
+    _make_optimizer_run_patch(monkeypatch, nmo.glm.ClassifierPopulationGLM)
+
+
+@pytest.fixture
 def mock_glm_hmm_optimizer_run(monkeypatch):
     """Bypass the JAX solver in GLMHMM.fit() while keeping all validation logic."""
     _make_optimizer_run_patch(monkeypatch, nmo.glm_hmm.GLMHMM)
@@ -312,6 +331,27 @@ def initialize_feature_mask_for_population_glm(X, n_neurons: int, coef=None):
     return jax.tree_util.tree_map(lambda x: jnp.ones((x.shape[1], n_neurons)), X)
 
 
+def freeze_first_coef_leaf(model, params):
+    """Pin the first ``coef`` leaf of ``model`` to its value in ``params``.
+
+    Pinning a coefficient leaf rather than the intercept is what leaves part of the
+    ``coef`` subtree active: the intercept is one leaf, so pinning it says nothing about
+    what happens when a subtree is split.
+
+    Returns
+    -------
+    :
+        The ``coef`` spec read back from the model. The setter validates and casts it, so
+        this is the value the pinned leaf is actually held at.
+    """
+    leaves, treedef = jax.tree_util.tree_flatten(params.coef)
+    spec = jax.tree_util.tree_unflatten(
+        treedef, [leaves[0]] + [None] * (len(leaves) - 1)
+    )
+    model.fix_params = (spec, None)
+    return model.fix_params[0]
+
+
 DEFAULT_KWARGS = {
     "n_basis_funcs": 5,
     "frequencies": 4,
@@ -319,6 +359,36 @@ DEFAULT_KWARGS = {
     "decay_rates": np.arange(1, 1 + 5),
     "categories": 4,
 }
+
+# Per-class overrides, for signatures the shared table cannot express. Applied on top of
+# DEFAULT_KWARGS and then filtered to the names the class accepts.
+CLASS_DEFAULT_KWARGS = {
+    # bounds is mandatory here but optional for nine other classes, so it cannot be shared.
+    # lengthscale/eps are picked for a small derived width (5 features, matching
+    # n_basis_funcs elsewhere) rather than for the approximation accuracy TestFourierGP wants.
+    "FourierGP": {
+        "bounds": (0.0, 1.0),
+        "lengthscale": 1.0,
+        "eps": 0.3,
+        "variance": 1.0,
+    },
+}
+
+
+# Array-valued basis attributes, which ``==`` cannot compare inside a dict.
+ARRAY_ATTRIBUTES = ("_decay_rates", "_freq_combinations", "_weights", "_xis")
+
+
+def default_kwargs_for(basis_cls, **overrides) -> dict:
+    """Constructor arguments for any basis: shared table, class overrides, then filtered."""
+    kwargs = {
+        **DEFAULT_KWARGS,
+        **CLASS_DEFAULT_KWARGS.get(basis_cls.__name__, {}),
+        **overrides,
+    }
+    accepted = set(basis_cls._get_param_names())
+    return {k: v for k, v in kwargs.items() if k in accepted}
+
 
 # shut-off conversion warnings
 nap.nap_config.suppress_conversion_warnings = True
@@ -454,6 +524,9 @@ class CombinedBasis(BasisFuncsTesting):
         # Merge with provided  extra kwargs
         kwargs = {**default_kwargs, **kwargs}
 
+        # per-class overrides for signatures the shared table cannot express
+        kwargs = {**CLASS_DEFAULT_KWARGS.get(basis_class.__name__, {}), **kwargs}
+
         if basis_class == AdditiveBasis:
             kwargs_mspline = inspect_utils.trim_kwargs(
                 basis.MSplineEval, kwargs, class_specific_params
@@ -492,7 +565,8 @@ def is_eval_basis(basis_cls) -> bool:
     The mixin is the criterion: it is what actually gives the class its ``Eval`` behaviour,
     so it classifies correctly regardless of naming. The name suffix is kept as a fallback
     for classes that implement the behaviour without the mixin, such as test doubles.
-    ``Zero`` and ``Category`` need no special case -- both carry ``EvalBasisMixin``.
+    ``Zero``, ``Category`` and ``FourierGP`` need no special case -- all carry
+    ``EvalBasisMixin``.
     """
     return issubclass(basis_cls, EvalBasisMixin) or basis_cls.__name__.endswith("Eval")
 
@@ -810,6 +884,7 @@ class MockHMM(
         dirichlet_transition_proba: Union[
             jnp.ndarray | None
         ] = None,  # (n_state, n_state):
+        estep_type="sequential",
         maxiter: int = 1000,
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
@@ -825,6 +900,7 @@ class MockHMM(
             tol=tol,
             seed=seed,
             hmm_initialization_funcs=hmm_initialization_funcs,
+            estep_type=estep_type,
         )
         self.param_: jnp.ndarray | None = None
         self.model_initialization_funcs = model_initialization_funcs
@@ -1166,7 +1242,7 @@ def example_data_prox_operator():
         jnp.ones((n_features)),
         jnp.zeros(1),
     )
-    regularizer_strength = tree_full_like(params, 0.1)
+    regularizer_strength = tree_filled_with(params, 0.1)
     # Mask as PyTree with same structure as params, shape (n_groups, *param_shape)
     # Intercept mask is zeros (not regularized)
     mask = GLMParams(
@@ -1187,7 +1263,7 @@ def example_data_prox_operator_multineuron():
         jnp.ones((n_features, n_neurons)),
         jnp.zeros(n_neurons),
     )
-    regularizer_strength = tree_full_like(params, 0.1)
+    regularizer_strength = tree_filled_with(params, 0.1)
     # Mask as PyTree with same structure as params
     # For multi-neuron: mask shape is (n_groups, n_features, n_neurons)
     # Intercept mask is zeros (not regularized)
@@ -1522,7 +1598,7 @@ def classifierGLM_model_instantiation_pytree(classifierGLM_model_instantiation):
         true_params.intercept,
     )
     model_tree = nmo.glm.ClassifierGLM(
-        n_classes=model.n_classes, regularizer=model.regularizer
+        classes=model.n_classes, regularizer=model.regularizer
     )
     model_tree.set_classes(np.arange(model.n_classes))
     return X_tree, spikes, model_tree, true_params_tree, rate
@@ -1586,7 +1662,7 @@ def population_classifierGLM_model_instantiation_pytree(
         true_params.intercept,
     )
     model_tree = nmo.glm.ClassifierPopulationGLM(
-        n_classes=model.n_classes, regularizer=model.regularizer
+        classes=model.n_classes, regularizer=model.regularizer
     )
     model_tree.set_classes(np.arange(model.n_classes))
     return X_tree, spikes, model_tree, true_params_tree, rate
@@ -1804,21 +1880,23 @@ def instantiate_glm_func(
     regularizer: str = "UnRegularized",
     solver_name: str = None,
     simulate=False,
+    init_kwargs: dict = None,
 ):
     np.random.seed(123)
     n_features = 2
     X = np.ones((500, n_features))
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
-    if obs_model == "Gamma":
-        inv_link = jax.nn.softplus
-    else:
-        inv_link = None
+    # A link passed in ``init_kwargs`` wins; the default below applies only if none was.
+    init_kwargs = dict(init_kwargs or {})
+    init_kwargs.setdefault(
+        "inverse_link_function", jax.nn.softplus if obs_model == "Gamma" else None
+    )
     model = nmo.glm.GLM(
         observation_model=obs_model,
         regularizer=regularizer,
         solver_name=solver_name,
-        inverse_link_function=inv_link,
+        **init_kwargs,
     )
     model.coef_ = np.random.randn(n_features)
     model.intercept_ = np.random.randn(1)
@@ -1846,21 +1924,23 @@ def instantiate_population_glm_func(
     regularizer: str = "UnRegularized",
     solver_name: str = None,
     simulate=False,
+    init_kwargs: dict = None,
 ):
     np.random.seed(123)
     n_features = 2
     X = np.ones((500, n_features))
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
-    if obs_model == "Gamma":
-        inv_link = jax.nn.softplus
-    else:
-        inv_link = None
+    # A link passed in ``init_kwargs`` wins; the default below applies only if none was.
+    init_kwargs = dict(init_kwargs or {})
+    init_kwargs.setdefault(
+        "inverse_link_function", jax.nn.softplus if obs_model == "Gamma" else None
+    )
     model = nmo.glm.PopulationGLM(
         observation_model=obs_model,
         regularizer=regularizer,
         solver_name=solver_name,
-        inverse_link_function=inv_link,
+        **init_kwargs,
     )
     model.coef_ = np.random.randn(n_features, n_neurons)
     model.intercept_ = np.random.randn(n_neurons)
@@ -1884,6 +1964,7 @@ def instantiate_classifier_glm_func(
     regularizer: str = "UnRegularized",
     solver_name: str = None,
     simulate=False,
+    init_kwargs: dict = None,
 ):
     np.random.seed(124)
     n_features = 2
@@ -1892,9 +1973,10 @@ def instantiate_classifier_glm_func(
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
     model = nmo.glm.ClassifierGLM(
-        n_classes=n_classes,
+        classes=n_classes,
         regularizer=regularizer,
         solver_name=solver_name,
+        **(init_kwargs or {}),
     )
     model.coef_ = np.random.randn(n_features, n_classes)
     model.intercept_ = np.random.randn(n_classes)
@@ -1918,6 +2000,7 @@ def instantiate_population_classifier_glm_func(
     regularizer: str = "UnRegularized",
     solver_name: str = None,
     simulate=False,
+    init_kwargs: dict = None,
 ):
     np.random.seed(124)
     n_features = 2
@@ -1926,9 +2009,10 @@ def instantiate_population_classifier_glm_func(
     X[:250, 0] = 0
     X[np.arange(500) % 2 == 1, 1] = 0
     model = nmo.glm.ClassifierPopulationGLM(
-        n_classes=n_classes,
+        classes=n_classes,
         regularizer=regularizer,
         solver_name=solver_name,
+        **(init_kwargs or {}),
     )
     model.set_classes(np.arange(n_classes))
     model.coef_ = np.random.randn(n_features, n_neurons, n_classes)
@@ -2006,6 +2090,7 @@ def instantiate_glm_hmm_func(
     simulate: bool = False,
     solver_kwargs=None,
     maxiter: int = 2,
+    init_kwargs: dict = None,
 ):
     np.random.seed(123)
     if solver_kwargs is None:
@@ -2018,6 +2103,7 @@ def instantiate_glm_hmm_func(
         solver_name=solver_name,
         solver_kwargs=solver_kwargs,
         maxiter=maxiter,
+        **(init_kwargs or {}),
     )
     n_features = 2
     X = np.ones((500, n_features))
@@ -2031,6 +2117,7 @@ def instantiate_glm_hmm_func(
         X=X,
         y=y,
         inverse_link_function=model.inverse_link_function,
+        observation_model=model.observation_model,
         session_starts=None,
         random_key=jax.random.PRNGKey(123),
     )
@@ -2104,6 +2191,15 @@ MODEL_CONFIG = {
 }
 
 
+OBSERVATION_PER_MODEL = {
+    "GLM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
+    "ClassifierGLM": ["Categorical"],
+    "ClassifierPopulationGLM": ["Categorical"],
+    "PopulationGLM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
+    "GLMHMM": ["Bernoulli"],
+}
+
+
 def is_population_model(model) -> bool:
     """Check if a model is a population model using registry instead of string matching."""
     model_name = model.__class__.__name__
@@ -2118,6 +2214,10 @@ def instantiate_base_regressor_subclass(request):
     model_name: str = request.param["model"]
     obs_model: str | nmo.observation_models.Observations = request.param["obs_model"]
     simulate: bool = request.param["simulate"]
+    # Extra keyword arguments for the model constructor, e.g. a specific
+    # ``inverse_link_function``. Part of the cache key: two tests asking for different
+    # ones must not be served the same model.
+    init_kwargs: dict = request.param.get("init_kwargs", None)
 
     # Create cache key (class-scoped). Include the x64 flag: data simulated under
     # one precision must not be served to tests running under the other (the
@@ -2126,6 +2226,7 @@ def instantiate_base_regressor_subclass(request):
         model_name,
         str(obs_model),
         simulate,
+        str(sorted((init_kwargs or {}).items(), key=lambda kv: kv[0])),
         jax.config.jax_enable_x64,
         id(request.cls) if request.cls else id(request.module),
     )
@@ -2133,17 +2234,25 @@ def instantiate_base_regressor_subclass(request):
     # Check cache
     if cache_key not in _MODEL_CACHE:
         if model_name == "GLM":
-            result = instantiate_glm_func(obs_model=obs_model, simulate=simulate)
+            result = instantiate_glm_func(
+                obs_model=obs_model, simulate=simulate, init_kwargs=init_kwargs
+            )
         elif model_name == "PopulationGLM":
             result = instantiate_population_glm_func(
-                obs_model=obs_model, simulate=simulate
+                obs_model=obs_model, simulate=simulate, init_kwargs=init_kwargs
             )
         elif model_name == "ClassifierGLM":
-            result = instantiate_classifier_glm_func(simulate=simulate)
+            result = instantiate_classifier_glm_func(
+                simulate=simulate, init_kwargs=init_kwargs
+            )
         elif model_name == "ClassifierPopulationGLM":
-            result = instantiate_population_classifier_glm_func(simulate=simulate)
+            result = instantiate_population_classifier_glm_func(
+                simulate=simulate, init_kwargs=init_kwargs
+            )
         elif model_name == "GLMHMM":
-            result = instantiate_glm_hmm_func(obs_model=obs_model, simulate=simulate)
+            result = instantiate_glm_hmm_func(
+                obs_model=obs_model, simulate=simulate, init_kwargs=init_kwargs
+            )
         else:
             raise ValueError("model_name {} unknown".format(model_name))
         _MODEL_CACHE[cache_key] = result
@@ -2169,6 +2278,7 @@ _common_solvers = [
     nmo.solvers.SolverSpec("SVRG", "nemos", nmo.solvers.WrappedSVRG),
     nmo.solvers.SolverSpec("ProxSVRG", "nemos", nmo.solvers.WrappedProxSVRG),
     nmo.solvers.SolverSpec("Newton", "nemos", nmo.solvers.Newton),
+    nmo.solvers.SolverSpec("ProximalNewton", "nemos", nmo.solvers.ProximalNewton),
 ]
 _solvers_per_backend = {
     "optimistix": [

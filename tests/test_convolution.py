@@ -18,7 +18,6 @@ def _get_sample_axis_len(time_series, axis=0):
 
 @pytest.mark.parametrize("use_fft", [False, True])
 class TestShiftTimeAxisAndConvolve:
-
     @pytest.mark.parametrize(
         "time_series, check_func, axis",
         [
@@ -138,7 +137,6 @@ class TestShiftTimeAxisAndConvolve:
 
 
 class TestCreateConvolutionalPredictor:
-
     @pytest.mark.parametrize("basis_matrix", [np.zeros((3,) * n) for n in [0, 1, 2, 3]])
     @pytest.mark.parametrize("trial_count_shape", [(1, 30, 2), (2, 10, 20)])
     def test_basis_number_of_dim(self, basis_matrix, trial_count_shape: tuple[int]):

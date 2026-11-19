@@ -74,6 +74,7 @@ For systems equipped with a GPU, you need to specifically install the GPU-enable
 2. **Verify GPU Installation:** To ensure `jax` correctly recognizes your GPU, execute the following in Python:
     ```python
     import jax
+
     print(jax.devices())
     ```
 

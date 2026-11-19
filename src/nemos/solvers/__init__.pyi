@@ -18,12 +18,13 @@ from ._jaxopt_solvers import (
     JaxoptNonlinearCG,
     JaxoptProximalGradient,
 )
-from ._newton import Newton
+from ._keyed_optax_minimizer import KeyedOptaxMinimiser
 from ._optax_optimistix_solvers import (
     OptimistixOptaxGradientDescent,
     OptimistixOptaxLBFGS,
 )
 from ._optimistix_solvers import OptimistixBFGS, OptimistixNonlinearCG
+from ._second_order import CHOLESKY_ERR_MSG, Newton, ProximalLBFGS, ProximalNewton
 from ._solver_doc_helper import get_solver_documentation
 from ._solver_registry import (
     SolverSpec,
@@ -59,6 +60,11 @@ __all__ = [
     "JaxoptLBFGS",
     "JaxoptNonlinearCG",
     "JaxoptProximalGradient",
+    "KeyedOptaxMinimiser",
+    "CHOLESKY_ERR_MSG",
+    "Newton",
+    "ProximalNewton",
+    "ProximalLBFGS",
     "OptimistixOptaxGradientDescent",
     "OptimistixOptaxLBFGS",
     "OptimistixBFGS",

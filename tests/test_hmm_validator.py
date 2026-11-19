@@ -502,4 +502,6 @@ class TestHasInteriorNans:
             session_starts[0] = True
             assert has_interior_nans(is_nan, session_starts) == (
                 _reference_has_interior_nans(is_nan, session_starts)
-            ), f"is_nan={is_nan.astype(int)}, session_starts={session_starts.astype(int)}"
+            ), (
+                f"is_nan={is_nan.astype(int)}, session_starts={session_starts.astype(int)}"
+            )

@@ -220,7 +220,6 @@ def test_instantiate_observation_model(obs_model_string, expectation):
 
 
 class TestPoissonObservations:
-
     def test_get_params(self, poisson_observations):
         """Test get_params() returns expected values."""
         observation_model = poisson_observations()
@@ -351,9 +350,9 @@ class TestPoissonObservations:
             test_value,
         )
 
-        assert np.allclose(
-            result, expected_output
-        ), f"Inverse link function result mismatch: expected {expected_output}, got {result}"
+        assert np.allclose(result, expected_output), (
+            f"Inverse link function result mismatch: expected {expected_output}, got {result}"
+        )
 
     def test_pseudo_r2_vs_statsmodels(self, poissonGLM_model_instantiation):
         """
@@ -380,7 +379,6 @@ class TestPoissonObservations:
 
 
 class TestGammaObservations:
-
     def test_get_params(self, gamma_observations):
         """Test get_params() returns expected values."""
         observation_model = gamma_observations()
@@ -474,7 +472,6 @@ class TestGammaObservations:
 
 
 class TestBernoulliObservations:
-
     def test_get_params(self, bernoulli_observations):
         """Test get_params() returns expected values."""
         observation_model = bernoulli_observations()
@@ -559,7 +556,6 @@ class TestBernoulliObservations:
 
 
 class TestNegativeBinomialObservations:
-
     @pytest.mark.requires_x64
     def test_get_params(self, negative_binomial_observations):
         observation_model = negative_binomial_observations()
@@ -645,7 +641,6 @@ class TestNegativeBinomialObservations:
 
 
 class TestGaussianObservations:
-
     def test_get_params(self, gaussian_observations):
         """Test get_params() returns expected values."""
         observation_model = gaussian_observations()
@@ -748,7 +743,6 @@ class TestGaussianObservations:
 
 
 class TestCategoricalObservations:
-
     @staticmethod
     def log_likelihood(y, log_proba):
         proba = jnp.exp(log_proba)
@@ -857,7 +851,6 @@ class TestCategoricalObservations:
 
 @pytest.mark.parametrize("observation_model_string", AVAILABLE_OBSERVATION_MODELS)
 class TestCommonObservationModels:
-
     @pytest.mark.parametrize("shape", [(10,), (10, 5), (10, 5, 2)])
     @pytest.mark.requires_x64
     def test_likelihood_matching(

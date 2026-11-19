@@ -1,7 +1,7 @@
 """Observation model classes for GLMs."""
 
 import abc
-from typing import Callable, Literal, Union
+from typing import Callable, ClassVar, Literal, Union
 
 import jax
 import jax.numpy as jnp
@@ -9,7 +9,14 @@ from numpy.typing import NDArray
 
 from . import utils
 from .base_class import Base
-from .inverse_link_function_utils import exp, identity, log_softmax, logistic
+from .inverse_link_function_utils import (
+    exp,
+    expit,
+    identity,
+    log_softmax,
+    logistic,
+    softplus,
+)
 
 __all__ = [
     "PoissonObservations",
@@ -44,6 +51,12 @@ class Observations(Base, abc.ABC):
     :class:`~nemos.observation_models.BernoulliObservations`
         A specific implementation of an observation model using the Bernoulli distribution.
     """
+
+    # Open interval of valid means; None leaves custom model initialization unchanged.
+    rate_range: ClassVar[tuple[float, float] | None] = None
+
+    # list link functions that we know preserve convexity of GLM
+    glm_convexity_preserving_links = ()
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -442,6 +455,10 @@ class PoissonObservations(Observations):
 
     """
 
+    rate_range = (0.0, float("inf"))
+
+    glm_convexity_preserving_links = (exp, softplus)
+
     def __init__(self):
         super().__init__()
         self.scale = 1.0
@@ -688,6 +705,10 @@ class GammaObservations(Observations):
 
     """
 
+    rate_range = (0.0, float("inf"))
+
+    glm_convexity_preserving_links = (exp, utils.one_over_x)
+
     def __init__(
         self,
     ):
@@ -912,6 +933,10 @@ class BernoulliObservations(Observations):
     BernoulliObservations()
 
     """
+
+    rate_range = (0.0, 1.0)
+
+    glm_convexity_preserving_links = (logistic, expit)
 
     def __init__(self):
         super().__init__()
@@ -1264,6 +1289,11 @@ class NegativeBinomialObservations(Observations):
 
     """
 
+    rate_range = (0.0, float("inf"))
+
+    # NOTE: softplus makes the problem non-convex!
+    glm_convexity_preserving_links = (exp,)
+
     def __init__(
         self,
         scale=1.0,
@@ -1536,6 +1566,10 @@ class GaussianObservations(Observations):
     GaussianObservations()
 
     """
+
+    rate_range = (-float("inf"), float("inf"))
+
+    glm_convexity_preserving_links = (identity,)
 
     def __init__(
         self,
@@ -1879,7 +1913,6 @@ def check_observation_model(observation_model, force_checks=False):
 
     # Perform checks for each attribute
     for attr_name, check_info in checks.items():
-
         # check if the observation model has the attribute
         utils.assert_has_attribute(observation_model, attr_name)
 
@@ -1929,6 +1962,10 @@ class CategoricalObservations(Observations):
     CategoricalObservations()
 
     """
+
+    rate_range = (0.0, float("inf"))
+
+    glm_convexity_preserving_links = (log_softmax,)
 
     def __init__(self):
         super().__init__()

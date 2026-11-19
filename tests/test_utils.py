@@ -113,9 +113,11 @@ class TestPadding:
     )
     @pytest.mark.parametrize("array", [np.zeros([2, 4, 5])])
     def test_conv_type(self, array, predictor_causality):
-        raise_exception = not (
-            predictor_causality in ["causal", "anti-causal", "acausal"]
-        )
+        raise_exception = predictor_causality not in [
+            "causal",
+            "anti-causal",
+            "acausal",
+        ]
         if raise_exception:
             with pytest.raises(ValueError, match="predictor_causality must be one of"):
                 utils.nan_pad(array, 3, predictor_causality)
@@ -139,15 +141,15 @@ class TestPadding:
                 utils.nan_pad(array, pad_size, "anti-causal")
         else:
             padded = utils.nan_pad(array, pad_size, "causal")
-            assert np.isnan(
-                padded[:pad_size]
-            ).all(), "Missing NaNs at the beginning of the array!"
-            assert not np.isnan(
-                padded[pad_size:]
-            ).all(), "Found NaNs at the end of the array!"
-            assert (
-                padded.shape[0] == array.shape[0] + pad_size
-            ), "Size after padding doesn't match expectation. Should be T + window_size - 1."
+            assert np.isnan(padded[:pad_size]).all(), (
+                "Missing NaNs at the beginning of the array!"
+            )
+            assert not np.isnan(padded[pad_size:]).all(), (
+                "Found NaNs at the end of the array!"
+            )
+            assert padded.shape[0] == array.shape[0] + pad_size, (
+                "Size after padding doesn't match expectation. Should be T + window_size - 1."
+            )
 
     @pytest.mark.parametrize("array", [np.zeros([2, 5, 4])])
     @pytest.mark.parametrize("pad_size", [0, 1, 2, 3, 5, 6])
@@ -160,15 +162,15 @@ class TestPadding:
                 utils.nan_pad(array, pad_size, "anti-causal")
         else:
             padded = utils.nan_pad(array, pad_size, "anti-causal")
-            assert np.isnan(
-                padded[padded.shape[0] - pad_size :]
-            ).all(), "Missing NaNs at the end of the array!"
-            assert not np.isnan(
-                padded[: padded.shape[0] - pad_size]
-            ).any(), "Found NaNs at the beginning of the array!"
-            assert (
-                padded.shape[0] == array.shape[0] + pad_size
-            ), "Size after padding doesn't match expectation. Should be T + window_size - 1."
+            assert np.isnan(padded[padded.shape[0] - pad_size :]).all(), (
+                "Missing NaNs at the end of the array!"
+            )
+            assert not np.isnan(padded[: padded.shape[0] - pad_size]).any(), (
+                "Found NaNs at the beginning of the array!"
+            )
+            assert padded.shape[0] == array.shape[0] + pad_size, (
+                "Size after padding doesn't match expectation. Should be T + window_size - 1."
+            )
 
     @pytest.mark.parametrize("array", [np.zeros([2, 5, 4])])
     @pytest.mark.parametrize("pad_size", [-1, 0.2, 0, 1, 3, 5])
@@ -189,19 +191,19 @@ class TestPadding:
                     message="With acausal filter, pad_size should probably be even",
                 )
                 padded = utils.nan_pad(array, pad_size, "acausal")
-            assert np.isnan(
-                padded[:init_nan]
-            ).all(), "Missing NaNs at the beginning of the array!"
-            assert np.isnan(
-                padded[padded.shape[0] - end_nan :]
-            ).all(), "Missing NaNs at the end of the array!"
+            assert np.isnan(padded[:init_nan]).all(), (
+                "Missing NaNs at the beginning of the array!"
+            )
+            assert np.isnan(padded[padded.shape[0] - end_nan :]).all(), (
+                "Missing NaNs at the end of the array!"
+            )
 
-            assert not np.isnan(
-                padded[init_nan : padded.shape[0] - end_nan]
-            ).any(), "Found NaNs in the middle of the array!"
-            assert (
-                padded.shape[0] == array.shape[0] + pad_size
-            ), "Size after padding doesn't match expectation. Should be T + window_size - 1."
+            assert not np.isnan(padded[init_nan : padded.shape[0] - end_nan]).any(), (
+                "Found NaNs in the middle of the array!"
+            )
+            assert padded.shape[0] == array.shape[0] + pad_size, (
+                "Size after padding doesn't match expectation. Should be T + window_size - 1."
+            )
 
     @pytest.mark.parametrize(
         "dtype, expectation",
@@ -408,9 +410,7 @@ class TestShiftTimeSeries:
             if expectation == does_not_raise():
                 # Check for NaN at the expected location
                 if predictor_causality == "causal":
-                    assert np.isnan(
-                        shifted_series.take(0, axis=axis)
-                    ).all(), (
+                    assert np.isnan(shifted_series.take(0, axis=axis)).all(), (
                         "First element along the axis should be NaN for causal shift."
                     )
                     # Ensure no NaNs elsewhere
@@ -420,9 +420,9 @@ class TestShiftTimeSeries:
                         )
                     ).any(), "Unexpected NaNs found in the array."
                 else:  # anti-causal
-                    assert np.isnan(
-                        shifted_series.take(-1, axis=axis)
-                    ).all(), "Last element along the axis should be NaN for anti-causal shift."
+                    assert np.isnan(shifted_series.take(-1, axis=axis)).all(), (
+                        "Last element along the axis should be NaN for anti-causal shift."
+                    )
                     # Ensure no NaNs elsewhere
                     assert not np.isnan(
                         shifted_series.take(
@@ -435,23 +435,23 @@ class TestShiftTimeSeries:
         time_series = np.random.rand(1, 3, 2, 2).astype(np.float32)
         shifted_series = utils.shift_time_series(time_series, "causal", axis=1)
 
-        assert np.isnan(
-            shifted_series[0, 0]
-        ).all(), "First time bin should be NaN for causal shift"
-        assert np.array_equal(
-            shifted_series[0, 1:], time_series[0, :-1]
-        ), "Causal shift did not work as expected"
+        assert np.isnan(shifted_series[0, 0]).all(), (
+            "First time bin should be NaN for causal shift"
+        )
+        assert np.array_equal(shifted_series[0, 1:], time_series[0, :-1]), (
+            "Causal shift did not work as expected"
+        )
 
     def test_anti_causal_shift(self):
         time_series = np.random.rand(1, 3, 2, 2).astype(np.float32)
         shifted_series = utils.shift_time_series(time_series, "anti-causal", axis=1)
 
-        assert np.isnan(
-            shifted_series[0, -1]
-        ).all(), "Last time bin should be NaN for anti-causal shift"
-        assert np.array_equal(
-            shifted_series[0, :-1], time_series[0, 1:]
-        ), "Anti-causal shift did not work as expected"
+        assert np.isnan(shifted_series[0, -1]).all(), (
+            "Last time bin should be NaN for anti-causal shift"
+        )
+        assert np.array_equal(shifted_series[0, :-1], time_series[0, 1:]), (
+            "Anti-causal shift did not work as expected"
+        )
 
 
 # Sample functions to test
@@ -706,9 +706,9 @@ def test_serialization_complex_params(tmp_path):
     reconstructed = utils._unflatten_dict(dat)
     leaves_orig, struct_orig = jax.tree_util.tree_flatten(complex_params)
     leaves_rec, struct_rec = jax.tree_util.tree_flatten(reconstructed)
-    assert (
-        struct_orig == struct_rec
-    ), f"Tree structure mismatch!\nOriginal:\n{struct_orig}\nReconstructed:\n{struct_rec}"
+    assert struct_orig == struct_rec, (
+        f"Tree structure mismatch!\nOriginal:\n{struct_orig}\nReconstructed:\n{struct_rec}"
+    )
     for l1, l2 in zip(leaves_orig, leaves_rec):
         if hasattr(l1, "ndim"):
             np.testing.assert_equal(l1, l2)

@@ -30,6 +30,7 @@ class _ResetAttrs:
     _skip_encoding: bool = False
     _class_to_index_: dict | None = None
     classes_: NDArray | jnp.ndarray | None = None
+    declared: bool = False
 
 
 class LabelEncoder:
@@ -42,6 +43,7 @@ class LabelEncoder:
         self._skip_encoding: bool = _ResetAttrs._skip_encoding
         self._class_to_index_: dict | None = _ResetAttrs._class_to_index_
         self.classes_: np.ndarray | jnp.ndarray | None = _ResetAttrs.classes_
+        self.declared: bool = _ResetAttrs.declared
 
     @property
     def n_classes(self) -> int:
@@ -58,7 +60,9 @@ class LabelEncoder:
         for f in fields(_ResetAttrs):
             setattr(self, f.name, getattr(_ResetAttrs, f.name))
 
-    def set_classes(self, classes_array: jnp.ndarray | ArrayLike):
+    def set_classes(
+        self, classes_array: jnp.ndarray | ArrayLike, declared: bool = False
+    ):
         """
         Infer unique class labels and set the ``classes_`` attribute.
 
@@ -71,6 +75,8 @@ class LabelEncoder:
         classes_array
             An array that must contain all the class labels,
             i.e. ``len(np.unique(classes_array)) == n_classes``.
+        declared
+            True if classes are user provided, False if internally inferred.
 
         Raises
         ------
@@ -112,6 +118,8 @@ class LabelEncoder:
             self._class_to_index_ = None
         else:
             self._class_to_index_ = {label.item(): i for i, label in enumerate(classes)}
+
+        self.declared = declared
 
     def encode(self, y: ArrayLike, safe=True) -> NDArray[int]:
         """
@@ -270,7 +278,7 @@ class LabelEncoder:
                 valid = list(self._class_to_index_.keys())
                 invalid = [lab for lab in unq_labels if lab not in valid]
                 raise ValueError(
-                    f"Unrecognized label(s) {invalid}. " f"Valid labels are {valid}."
+                    f"Unrecognized label(s) {invalid}. Valid labels are {valid}."
                 ) from e
             return cast_fn(y)
         else:

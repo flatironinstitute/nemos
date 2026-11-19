@@ -15,8 +15,8 @@ from numba import njit
 import nemos as nmo
 
 # Import helpers from conftest
-from conftest import MockRegressor, is_population_model
-from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
+from conftest import OBSERVATION_PER_MODEL, MockRegressor, is_population_model
+from nemos._inverse_link_function_builder import LINK_NAME_TO_FUNC
 from nemos.glm.validation import (
     ClassifierGLMValidator,
     GLMValidator,
@@ -24,7 +24,6 @@ from nemos.glm.validation import (
     PopulationGLMValidator,
 )
 from nemos.glm_hmm.validation import GLMHMMValidator
-from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
 from nemos.solvers._fista import OptimistixNAG
 from nemos.solvers._optax_optimistix_solvers import OptimistixOptaxGradientDescent
 
@@ -76,7 +75,7 @@ HARD_CODED_GET_PARAMS_KEYS = {
         "fit_intercept",
         "fix_params",
         "inverse_link_function",
-        "n_classes",
+        "classes",
         "regularizer",
         "regularizer_strength",
         "solver_kwargs",
@@ -87,7 +86,7 @@ HARD_CODED_GET_PARAMS_KEYS = {
         "fit_intercept",
         "fix_params",
         "inverse_link_function",
-        "n_classes",
+        "classes",
         "regularizer",
         "regularizer_strength",
         "solver_kwargs",
@@ -107,6 +106,7 @@ HARD_CODED_GET_PARAMS_KEYS = {
     "GLMHMM": {
         "dirichlet_initial_proba",
         "dirichlet_transition_proba",
+        "estep_type",
         "hmm_initialization_funcs",
         "inverse_link_function",
         "maxiter",
@@ -120,14 +120,6 @@ HARD_CODED_GET_PARAMS_KEYS = {
         "solver_name",
         "tol",
     },
-}
-
-OBSERVATION_PER_MODEL = {
-    "GLM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
-    "ClassifierGLM": ["Categorical"],
-    "ClassifierPopulationGLM": ["Categorical"],
-    "PopulationGLM": [o for o in AVAILABLE_OBSERVATION_MODELS if o != "Categorical"],
-    "GLMHMM": ["Bernoulli"],
 }
 
 MODEL_WITH_LINK_FUNCTION_REGISTRY = {

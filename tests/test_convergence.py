@@ -15,7 +15,14 @@ pytestmark = pytest.mark.solver_related
 
 @pytest.mark.requires_x64
 @pytest.mark.parametrize(
-    "solver_names", [("GradientDescent", "ProximalGradient"), ("SVRG", "ProxSVRG")]
+    "solver_names",
+    [
+        ("GradientDescent", "ProximalGradient"),
+        ("SVRG", "ProxSVRG"),
+        # the second-order pair: the smooth solver and its proximal counterpart must agree
+        # on a problem where the penalty is smooth (or absent), just as the pairs above do
+        ("Newton", "ProximalNewton"),
+    ],
 )
 def test_unregularized_convergence(solver_names):
     """
@@ -53,7 +60,14 @@ def test_unregularized_convergence(solver_names):
 
 @pytest.mark.requires_x64
 @pytest.mark.parametrize(
-    "solver_names", [("GradientDescent", "ProximalGradient"), ("SVRG", "ProxSVRG")]
+    "solver_names",
+    [
+        ("GradientDescent", "ProximalGradient"),
+        ("SVRG", "ProxSVRG"),
+        # the second-order pair: the smooth solver and its proximal counterpart must agree
+        # on a problem where the penalty is smooth (or absent), just as the pairs above do
+        ("Newton", "ProximalNewton"),
+    ],
 )
 def test_ridge_convergence(solver_names):
     """
@@ -100,7 +114,9 @@ def test_ridge_convergence(solver_names):
 
 
 @pytest.mark.requires_x64
-@pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
+@pytest.mark.parametrize(
+    "solver_name", ["ProximalGradient", "ProxSVRG", "ProximalNewton"]
+)
 def test_lasso_convergence(solver_name):
     """
     Assert that solution found when using ProximalGradient versus Nelder-Mead method using
@@ -147,7 +163,9 @@ def test_lasso_convergence(solver_name):
 
 
 @pytest.mark.requires_x64
-@pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
+@pytest.mark.parametrize(
+    "solver_name", ["ProximalGradient", "ProxSVRG", "ProximalNewton"]
+)
 def test_group_lasso_convergence(solver_name):
     """
     Assert that solution found when using ProximalGradient versus Nelder-Mead method using
