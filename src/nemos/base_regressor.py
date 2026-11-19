@@ -28,7 +28,6 @@ from ._hess import (
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from .base_class import Base
 from .params import ModelParams
-from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
 from .solvers._no_op import NoOpSolver
@@ -895,18 +894,16 @@ class BaseRegressor(
             X, y = res[:2]
             args = res[2:]
 
-        data = X.data if isinstance(X, FeaturePytree) else X
-
         if isinstance(self.regularizer, GroupLasso):
-            if self.regularizer.mask is None and is_numpy_array_like(data)[1]:
+            if self.regularizer.mask is None and is_numpy_array_like(X)[1]:
                 warnings.warn(
                     "Mask has not been set. Defaulting to a single group for all parameters. "
                     "Please see the documentation on GroupLasso regularization for defining a mask."
                 )
             elif self.regularizer.mask is not None:
-                self._wrap_grouplasso_mask(data, y)
+                self._wrap_grouplasso_mask(X, y)
 
-        return data, y, *args
+        return X, y, *args
 
     def _wrap_grouplasso_mask(
         self,

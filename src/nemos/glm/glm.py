@@ -26,7 +26,6 @@ from ..inverse_link_function_utils import (
     resolve_inverse_link_function,
     softplus,
 )
-from ..pytrees import FeaturePytree
 from ..regularizer import ElasticNet, GroupLasso, Lasso, Regularizer, Ridge
 from ..solvers import (
     CHOLESKY_ERR_MSG,
@@ -1001,10 +1000,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             (either as a pytree of arrays or ndarray, matching the structure of X) with shapes (n_features,).
             - The second element is the initialized intercept (bias terms) as an ndarray of shape (1,).
         """
-        if isinstance(X, FeaturePytree):
-            data = X.data
-        else:
-            data = X
+        data = X
 
         frozen = self._frozen_values(X, y)
         frozen_coef = frozen.coef
@@ -1787,7 +1783,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         X, y = tree_utils.drop_nans(X, y)
 
         # grab the data
-        data = X.data if isinstance(X, FeaturePytree) else X
+        data = X
 
         # wrap into GLM params, this assumes params are well structured,
         # if initializaiton is done via `initialize_optimizer_and_state` it

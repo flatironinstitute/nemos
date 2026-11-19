@@ -10,7 +10,6 @@ from numpy.typing import ArrayLike, NDArray
 
 from .. import validation
 from ..base_validator import RegressorValidator
-from ..pytrees import FeaturePytree
 from ..tree_utils import pytree_map_and_reduce, tree_astype
 from ..typing import DESIGN_INPUT_TYPE
 from .params import GLMParams, GLMUserParams
@@ -192,18 +191,11 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         if X is not None:
             # check that X and params.coef have the same structure
             msg = "X and coef have mismatched structure."
-            if isinstance(X, FeaturePytree):
-                data = X.data
-                msg += (
-                    " X was provided as a FeaturePytree, and coef should be a dictionary with matching keys. "
-                    f"X keys are ``{X.keys()}``, the provided coef is {params.coef} instead."
-                )
-            else:
-                data = X
-                msg += (
-                    f" X has pytree structure ``{jax.tree_util.tree_structure(X)}``, "
-                    f"but coef has structure ``{jax.tree_util.tree_structure(params.coef)}``."
-                )
+            data = X
+            msg += (
+                f" X has pytree structure ``{jax.tree_util.tree_structure(X)}``, "
+                f"but coef has structure ``{jax.tree_util.tree_structure(params.coef)}``."
+            )
 
             validation.check_tree_structure(
                 data,
@@ -255,10 +247,6 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
         """
         if feature_mask is None:
             return None
-
-        # Extract data if needed
-        if isinstance(feature_mask, FeaturePytree):
-            feature_mask = feature_mask.data
 
         # Convert values to jnp.asarray
         (feature_mask,) = tree_astype(feature_mask, dtype=data_type)
@@ -538,18 +526,11 @@ class ClassifierGLMValidator(GLMValidator):
         if X is not None:
             # check that X and params.coef have the same structure
             msg = "X and coef have mismatched structure. "
-            if isinstance(X, FeaturePytree):
-                data = X.data
-                msg += (
-                    " X was provided as a FeaturePytree, and coef should be a dictionary with matching keys. "
-                    f"X keys are ``{X.keys()}``, the provided coef is {params.coef} instead."
-                )
-            else:
-                data = X
-                msg += (
-                    f" X has pytree structure ``{jax.tree_util.tree_structure(X)}``, "
-                    f"but coef has structure ``{jax.tree_util.tree_structure(params.coef)}``."
-                )
+            data = X
+            msg += (
+                f" X has pytree structure ``{jax.tree_util.tree_structure(X)}``, "
+                f"but coef has structure ``{jax.tree_util.tree_structure(params.coef)}``."
+            )
 
             validation.check_tree_structure(
                 data,

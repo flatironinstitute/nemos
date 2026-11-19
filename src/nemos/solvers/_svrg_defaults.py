@@ -8,8 +8,6 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
-from .. import pytrees
-
 
 def _convert_to_float(func):
     """
@@ -178,7 +176,7 @@ def glm_softplus_poisson_l_max_and_l(
     y = jnp.max(y, axis=tuple(range(1, y.ndim)))
 
     # concatenate all data if X is a pytree
-    if isinstance(X, (pytrees.FeaturePytree, dict)):
+    if isinstance(X, dict):
         X = jnp.hstack(jax.tree_util.tree_leaves(X))
 
     l_smooth = _glm_softplus_poisson_l_smooth(
