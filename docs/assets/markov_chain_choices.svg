@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 278" width="600" height="278" font-family="Helvetica, Arial, sans-serif" role="img" aria-label="A two-state Markov chain over studying and phone, in which each state has a self-transition probability of 0.8 and a probability of 0.2 of switching to the other state">
+<title>A two-state Markov chain over choices</title>
+<style>
+    .ink { fill: #000000; }
+    .val { font-size: 17px; }
+    .cap { font-size: 13px; fill: #555555; }
+    .sS { fill: #2E63A6; } .sP { fill: #C2611F; }
+    .aS { stroke: #4C82C3; stroke-width: 2.5; fill: none; }
+    .aP { stroke: #E07B39; stroke-width: 2.5; fill: none; }
+</style>
+<defs>
+<marker id="mS" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path fill="#4C82C3" d="M0 0 L10 5 L0 10 z"/></marker>
+<marker id="mP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path fill="#E07B39" d="M0 0 L10 5 L0 10 z"/></marker>
+</defs>
+
+<!-- switches: the off-diagonal of the transition matrix -->
+<path class="aS" d="M188 110 C200 28, 400 28, 412 110" marker-end="url(#mS)"/>
+<text class="ink val sS" x="300" y="38" text-anchor="middle">0.1</text>
+<path class="aP" d="M412 172 C400 254, 200 254, 188 172" marker-end="url(#mP)"/>
+<text class="ink val sP" x="300" y="248" text-anchor="middle">0.1</text>
+
+<!-- self-transitions: the diagonal of the transition matrix -->
+<path class="aS" d="M100 124 C38 108, 38 174, 100 158" marker-end="url(#mS)"/>
+<text class="ink val sS" x="46" y="147" text-anchor="end" font-weight="bold">0.9</text>
+<path class="aP" d="M500 158 C562 174, 562 108, 500 124" marker-end="url(#mP)"/>
+<text class="ink val sP" x="554" y="147" text-anchor="start" font-weight="bold">0.9</text>
+
+<!-- the states -->
+<rect x="100" y="110" width="120" height="62" rx="8" fill="#D8E4F4" stroke="#4C82C3" stroke-width="2.5"/>
+<text class="ink" x="160" y="140" text-anchor="middle" font-size="20" font-weight="bold">L</text>
+<text class="cap" x="160" y="160" text-anchor="middle">choose left</text>
+<rect x="380" y="110" width="120" height="62" rx="8" fill="#FAE0C8" stroke="#E07B39" stroke-width="2.5"/>
+<text class="ink" x="440" y="140" text-anchor="middle" font-size="20" font-weight="bold">R</text>
+<text class="cap" x="440" y="160" text-anchor="middle">choose right</text>
+</svg>

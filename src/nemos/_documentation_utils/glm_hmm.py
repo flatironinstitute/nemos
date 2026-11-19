@@ -16,12 +16,16 @@ from matplotlib.colors import LinearSegmentedColormap
 __all__ = [
     "select_sessions",
     "relabel",
+    "relabel_by_bias",
+    "simulate_glm_hmm",
     "plot_proba_left",
     "plot_glm_weights",
     "plot_transition_matrix",
     "plot_design_matrix",
     "plot_posteriors",
     "plot_accuracy_and_occupancy",
+    "plot_simulated_session",
+    "plot_state_weights",
     "plot_param_recovery",
     "plot_state_inference",
 ]
@@ -108,6 +112,196 @@ def relabel(model):
     model.initial_prob_ = model.initial_prob_[relabel]
     model.transition_prob_ = model.transition_prob_[relabel][:, relabel]
     return model
+
+
+def relabel_by_bias(model):
+    """Reorder the states of a fitted GLM-HMM by their bias, engaged state first.
+
+    The latent-state labels found by EM are arbitrary, so two fits of the same
+    data can agree on everything but the ordering of the states. This puts them
+    in a canonical order: the state with the smallest absolute bias (the
+    engaged state, whose choices track the stimulus) comes first, followed by
+    the remaining states sorted by decreasing bias (biased-left, then
+    biased-right).
+
+    Unlike :func:`relabel`, this does not assume a threshold on the bias
+    magnitude, so it is safe to use on simulated data with arbitrary bias
+    values.
+
+    Parameters
+    ----------
+    model :
+        Fitted GLM-HMM model.
+
+    Returns
+    -------
+    model :
+        GLM-HMM model with states reordered in-place. Because ``smooth_proba``
+        and ``decode_state`` read the fitted attributes, their outputs follow
+        the new ordering too.
+    """
+    intercept = np.asarray(model.intercept_)
+    engaged = int(np.argmin(np.abs(intercept)))
+    biased = sorted(
+        (k for k in range(intercept.shape[0]) if k != engaged),
+        key=lambda k: -intercept[k],
+    )
+    order = np.array([engaged, *biased])
+
+    model.coef_ = model.coef_[:, order]
+    model.intercept_ = model.intercept_[order]
+    model.initial_prob_ = model.initial_prob_[order]
+    model.transition_prob_ = model.transition_prob_[order][:, order]
+    return model
+
+
+def simulate_glm_hmm(X, coef, intercepts, transition_prob, initial_prob, seed=0):
+    """Sample choices and hidden states from a GLM-HMM with known parameters.
+
+    :meth:`GLMHMM.simulate <nemos.glm_hmm.GLMHMM.simulate>` draws from a
+    *fitted* model, so to sample from parameters we choose ourselves we fit a
+    throwaway model on placeholder choices only to populate its fitted
+    attributes, then overwrite those attributes with the ground truth before
+    sampling.
+
+    Parameters
+    ----------
+    X :
+        Design matrix of shape ``(n_samples, n_features)``.
+    coef :
+        Ground-truth GLM weights of shape ``(n_features, n_states)``.
+    intercepts :
+        Ground-truth per-state intercepts (biases) of shape ``(n_states,)``.
+    transition_prob :
+        Ground-truth transition matrix of shape ``(n_states, n_states)``.
+    initial_prob :
+        Ground-truth initial state distribution of shape ``(n_states,)``.
+    seed :
+        Integer seed for the placeholder choices and the sampling.
+
+    Returns
+    -------
+    y :
+        Simulated binary choices of shape ``(n_samples,)``, as floats.
+    z :
+        The (normally hidden) state sequence of shape ``(n_samples,)``, as ints.
+    """
+    import jax
+    import jax.numpy as jnp
+
+    import nemos as nmo
+
+    intercepts = np.asarray(intercepts)
+    n_states = intercepts.shape[0]
+    rng = np.random.default_rng(seed)
+
+    model = nmo.glm_hmm.GLMHMM(
+        n_states=n_states,
+        regularizer="UnRegularized",
+        seed=jax.random.PRNGKey(seed),
+    )
+    # placeholder fit, only to populate the fitted attributes
+    model.fit(X, rng.integers(0, 2, size=X.shape[0]))
+
+    model.coef_ = jnp.asarray(coef, dtype=jnp.float64)
+    model.intercept_ = jnp.asarray(intercepts, dtype=jnp.float64)
+    model.transition_prob_ = jnp.asarray(transition_prob, dtype=jnp.float64)
+    model.initial_prob_ = jnp.asarray(initial_prob, dtype=jnp.float64)
+
+    y, _, z = model.simulate(
+        jax.random.PRNGKey(seed + 1), X, state_format="index"
+    )
+    return np.asarray(y, dtype=float), np.asarray(z).astype(int)
+
+
+def plot_simulated_session(X, y, z_true, state_labels=None, window=(0, 200)):
+    """Show a stretch of simulated trials: the hidden state and the choices.
+
+    The top panel shades each trial by the state that generated it, making the
+    multi-trial "blocks" produced by a sticky transition matrix visible. The
+    bottom panel plots the stimulus against the resulting choice, so the
+    difference between an engaged state (choices track the stimulus) and a
+    biased state (choices ignore it) is visible directly in the data.
+
+    Parameters
+    ----------
+    X :
+        Design matrix of shape ``(n_samples, 1)``: a single signed-evidence
+        predictor.
+    y :
+        Simulated binary choices of shape ``(n_samples,)``.
+    z_true :
+        Ground-truth state sequence of shape ``(n_samples,)``.
+    state_labels :
+        Optional list of ``n_states`` names. Defaults to
+        ``["state 1", "state 2", ...]``.
+    window :
+        ``(start, stop)`` trial range to display. Default ``(0, 200)``.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        The figure with the simulated session.
+    """
+    X = np.asarray(X).reshape(-1)
+    y = np.asarray(y).reshape(-1)
+    z_true = np.asarray(z_true).reshape(-1)
+
+    start, stop = window
+    stop = min(stop, z_true.shape[0])
+    trials = np.arange(start, stop)
+    n_states = int(z_true.max()) + 1
+    if state_labels is None:
+        state_labels = [f"state {k + 1}" for k in range(n_states)]
+
+    # same ordering as plot_param_recovery and plot_state_inference, so a given
+    # state keeps its color across every figure on the page
+    colors = ["#377eb8", "#ff7f00", "#4daf4a", "#984ea3", "#a65628"]
+
+    fig, axes = plt.subplots(
+        2, 1, figsize=(11, 4.5), sharex=True, height_ratios=[1, 3]
+    )
+
+    # ---- panel 1: the hidden state, as contiguous blocks ----
+    ax = axes[0]
+    for k in range(n_states):
+        ax.fill_between(
+            trials,
+            0,
+            1,
+            where=(z_true[start:stop] == k),
+            color=colors[k % len(colors)],
+            step="post",
+            label=state_labels[k],
+        )
+    ax.set_yticks([])
+    ax.set_ylabel("state", rotation=0, ha="right", va="center")
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, 2.0), ncol=n_states, frameon=False)
+    for side in ("left", "right", "top"):
+        ax.spines[side].set_visible(False)
+
+    # ---- panel 2: the stimulus and the choice it produced ----
+    ax = axes[1]
+    # stems rather than a line: at this scale a connected trace is unreadable,
+    # and what matters is the sign of the evidence on each individual trial
+    ax.vlines(trials, 0, X[start:stop], color="0.65", lw=1.0)
+    ax.scatter(
+        trials,
+        np.where(y[start:stop] == 1, 1.35, -1.35),
+        c=[colors[k % len(colors)] for k in z_true[start:stop]],
+        s=9,
+    )
+    ax.axhline(0, color="k", lw=0.6, ls="--")
+    ax.set_yticks([-1.35, 0, 1.35])
+    ax.set_yticklabels(["choice: right", "signed contrast", "choice: left"])
+    ax.set_xlabel("trial")
+    ax.set_xlim(start, stop)
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+
+    plt.tight_layout()
+    plt.show()
+    return fig
 
 
 def plot_proba_left(trials):
@@ -215,6 +409,63 @@ def plot_glm_weights(model, n_states=3):
     if path.exists():
         fig.savefig(path / "plot_07_behavioral_states.svg")
 
+    plt.show()
+    return fig
+
+
+def plot_state_weights(coef, intercepts, state_labels=None):
+    """Plot the per-state GLM weights of a two-covariate GLM-HMM.
+
+    One line per latent state shows the weight the state puts on the stimulus
+    and its bias (intercept), making the difference between a state whose
+    choices follow the stimulus and one that leans to a fixed side visible at a
+    glance. This is the two-covariate counterpart of
+    :func:`plot_glm_weights`, which plots the four covariates of the applied
+    tutorial.
+
+    Parameters
+    ----------
+    coef :
+        Per-state stimulus weights of shape ``(1, n_states)``.
+    intercepts :
+        Per-state intercepts of shape ``(n_states,)``.
+    state_labels :
+        Optional list of ``n_states`` names. Defaults to
+        ``["state 1", "state 2", ...]``.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        The figure with the weight traces.
+    """
+    coef = np.asarray(coef).reshape(-1)
+    intercepts = np.asarray(intercepts).reshape(-1)
+    n_states = intercepts.shape[0]
+    if state_labels is None:
+        state_labels = [f"state {k + 1}" for k in range(n_states)]
+
+    # the palette of plot_simulated_session, so states keep their color
+    colors = ["#377eb8", "#ff7f00", "#4daf4a", "#984ea3", "#a65628"]
+    weights = np.stack([coef, intercepts])  # (2, n_states)
+
+    fig, ax = plt.subplots(figsize=(5, 4))
+    for state in range(n_states):
+        ax.plot(
+            range(2),
+            weights[:, state],
+            color=colors[state % len(colors)],
+            marker="o",
+            lw=1.5,
+            label=state_labels[state],
+        )
+    ax.axhline(y=0, color="k", alpha=0.5, ls="--")
+    ax.set_xticks([0, 1])
+    ax.set_xticklabels(["signed contrast", "bias"])
+    ax.set_xlim(-0.25, 1.25)
+    ax.set_ylabel("GLM weight")
+    ax.set_xlabel("covariate")
+    ax.legend()
+    fig.tight_layout()
     plt.show()
     return fig
 
@@ -562,7 +813,13 @@ def plot_accuracy_and_occupancy(frac_occupancy, accuracies_to_plot):
 
 
 def plot_param_recovery(
-    true_coef, true_intercept, rec_coef, rec_intercept, true_trans, rec_trans
+    true_coef,
+    true_intercept,
+    rec_coef,
+    rec_intercept,
+    true_trans,
+    rec_trans,
+    state_labels=None,
 ):
     """Compare ground-truth and recovered GLM-HMM parameters side by side.
 
@@ -580,6 +837,9 @@ def plot_param_recovery(
     true_trans, rec_trans :
         Ground-truth and recovered transition matrices of shape
         ``(n_states, n_states)``.
+    state_labels :
+        Optional list of ``n_states`` names used in the legend and on the
+        transition-matrix ticks. Defaults to ``["state 1", "state 2", ...]``.
 
     Returns
     -------
@@ -600,39 +860,56 @@ def plot_param_recovery(
     )  # (n_features+1, n_states)
     rec_vals = np.vstack([rec_coef, rec_intercept[None, :]])
     n_params = true_vals.shape[0]
-    param_labels = [f"stim w{i + 1}" for i in range(true_coef.shape[0])] + ["bias"]
+    param_labels = (
+        ["signed contrast"]
+        if true_coef.shape[0] == 1
+        else [f"stim w{i + 1}" for i in range(true_coef.shape[0])]
+    ) + ["bias"]
+    if state_labels is None:
+        state_labels = [f"state {k + 1}" for k in range(n_states)]
 
     fig, axes = plt.subplots(1, 3, figsize=(13, 4))
 
     # ---- panel 1: weights, true vs recovered ----
     ax = axes[0]
     x = np.arange(n_params)
-    width = 0.8 / (2 * n_states)
-    palette = ["#377eb8", "#ff7f00", "#4daf4a", "#984ea3"]
+    # same palette and per-state line style as plot_state_weights, so the true
+    # values here can be read against the ground-truth figure of the overview
+    palette = ["#377eb8", "#ff7f00", "#4daf4a", "#984ea3", "#a65628"]
     for k in range(n_states):
-        offset = (k - n_states / 2) * 2 * width + width / 2
-        ax.bar(
-            x + offset,
+        color = palette[k % len(palette)]
+        ax.plot(
+            x,
             true_vals[:, k],
-            width,
-            color=palette[k % len(palette)],
-            label=f"state {k + 1} true",
+            color=color,
+            marker="o",
+            lw=1.5,
+            label=state_labels[k],
         )
-        ax.bar(
-            x + offset + width,
+        ax.plot(
+            x,
             rec_vals[:, k],
-            width,
-            color=palette[k % len(palette)],
-            alpha=0.45,
-            hatch="//",
-            label=f"state {k + 1} recovered",
+            color=color,
+            marker="o",
+            markerfacecolor="white",
+            lw=1.5,
+            ls=":",
         )
+    # one neutral entry per line style, so the legend stays short
+    ax.plot([], [], color="0.35", lw=1.5, label="true")
+    ax.plot([], [], color="0.35", lw=1.5, ls=":", markerfacecolor="white",
+            marker="o", label="recovered")
+    ax.axhline(0, color="k", alpha=0.5, ls="--", lw=0.8)
     ax.set_xticks(x)
     ax.set_xticklabels(param_labels)
-    ax.axhline(0, color="k", lw=0.6)
-    ax.set_ylabel("weight value")
+    ax.set_xlim(-0.25, n_params - 0.75)
+    ax.set_ylabel("GLM weight")
+    ax.set_xlabel("covariate")
     ax.set_title("GLM weights")
-    ax.legend(fontsize=8, ncol=n_states)
+    # headroom so the legend does not sit on top of the highest line
+    low, high = ax.get_ylim()
+    ax.set_ylim(low, high + 0.32 * (high - low))
+    ax.legend(fontsize=11, ncol=2, loc="upper center", framealpha=0.9)
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
 
@@ -646,9 +923,9 @@ def plot_param_recovery(
             for j in range(n_states):
                 ax.text(j, i, f"{mat[i, j]:.2f}", ha="center", va="center", color="k")
         ax.set_xticks(range(n_states))
-        ax.set_xticklabels([str(i + 1) for i in range(n_states)])
+        ax.set_xticklabels(state_labels, rotation=30, ha="right", fontsize=9)
         ax.set_yticks(range(n_states))
-        ax.set_yticklabels([str(i + 1) for i in range(n_states)])
+        ax.set_yticklabels(state_labels, fontsize=9)
         ax.set_xlabel("state t")
         ax.set_ylabel("state t-1")
         ax.set_title(title)
@@ -659,16 +936,25 @@ def plot_param_recovery(
 
 
 def plot_state_inference(
-    z_true, posteriors, viterbi_states, state_labels=None, window=(0, 200)
+    z_true,
+    posteriors,
+    posterior_states,
+    viterbi_states,
+    state_labels=None,
+    window=(0, 200),
+    stimulus=None,
+    choices=None,
 ):
     """Visualize forward-backward and Viterbi inference against the true states.
 
-    Over a window of trials, the top panel shows the ground-truth state sequence
+    Over a window of time steps, the top panel shows the ground-truth state sequence
     together with the Viterbi (:meth:`decode_state
-    <nemos.glm_hmm.GLMHMM.decode_state>`) path — a single globally consistent
-    sequence — and the bottom panel shows the smoothed per-state posteriors
-    (:meth:`smooth_proba <nemos.glm_hmm.GLMHMM.smooth_proba>`), the per-trial
-    marginals over states.
+    <nemos.glm_hmm.GLMHMM.decode_state>`) path, a single globally consistent
+    sequence, and the second panel shows the smoothed per-state posteriors
+    (:meth:`smooth_proba <nemos.glm_hmm.GLMHMM.smooth_proba>`), the marginals
+    over states at each time step. If ``stimulus`` is given, a third panel shows
+    the stimulus at each time step, colored by the choice when ``choices`` is
+    also given.
 
     Parameters
     ----------
@@ -679,12 +965,18 @@ def plot_state_inference(
         ``(n_samples, n_states)``, aligned so that column ``k`` corresponds to
         state ``k`` in ``z_true`` and ``viterbi_states``.
     viterbi_states :
-        Viterbi-decoded state at each trial, shape ``(n_samples,)``.
+        Viterbi-decoded state at each time step, shape ``(n_samples,)``.
     state_labels :
         Optional list of ``n_states`` names for the y-axis and legend. Defaults
         to ``["state 1", "state 2", ...]``.
     window :
-        ``(start, stop)`` trial range to display. Default ``(0, 200)``.
+        ``(start, stop)`` range of time steps to display. Default ``(0, 200)``.
+    stimulus :
+        Optional signed stimulus at each time step, shape ``(n_samples,)`` or
+        ``(n_samples, 1)``; positive values are stimuli on the left.
+    choices :
+        Optional choice at each time step, shape ``(n_samples,)``, with 1 for
+        left and 0 for right. Used only together with ``stimulus``.
 
     Returns
     -------
@@ -692,10 +984,19 @@ def plot_state_inference(
         The figure with the state-inference comparison.
     """
     a, b = window
-    z_true = np.asarray(z_true)[a:b]
-    posteriors = np.asarray(posteriors)[a:b]
-    viterbi_states = np.asarray(viterbi_states)[a:b]
-    trials = np.arange(a, b)
+    # the state sequences may arrive as JAX arrays, and decode_state returns its
+    # indices as floats, so convert them to integer NumPy arrays here
+    z_true_full = np.asarray(z_true, dtype=int)
+    z_true = z_true_full[a:b]
+    posteriors_full = np.asarray(posteriors)
+    viterbi_full = np.asarray(viterbi_states, dtype=int)
+    posterior_map_full = np.asarray(posterior_states, dtype=int)
+    map_acc = (posterior_map_full == z_true_full).mean()
+    viterbi_acc = (viterbi_full == z_true_full).mean()
+    posteriors = posteriors_full[a:b]
+    viterbi_states = viterbi_full[a:b]
+    posterior_map = posterior_map_full[a:b]
+    time_steps = np.arange(a, b)
     n_states = posteriors.shape[1]
 
     if state_labels is None:
@@ -704,46 +1005,101 @@ def plot_state_inference(
     palette = ["#377eb8", "#ff7f00", "#4daf4a", "#984ea3", "#a65628"]
     colors = [palette[k % len(palette)] for k in range(n_states)]
 
-    fig, axes = plt.subplots(2, 1, figsize=(11, 5), sharex=True)
-
-    ax = axes[0]
-    ax.step(trials, z_true, where="mid", color="k", lw=2, label="true state")
-    ax.step(
-        trials,
-        viterbi_states,
-        where="mid",
-        color="#e41a1c",
-        lw=1.5,
-        ls="--",
-        label="Viterbi (decode_state)",
+    show_stimulus = stimulus is not None
+    height_ratios = [1, 1.2, 0.9] if show_stimulus else [1, 1.2]
+    fig, axes = plt.subplots(
+        len(height_ratios),
+        1,
+        figsize=(11, 5.4 + 2.4 * show_stimulus),
+        sharex=True,
+        gridspec_kw={"height_ratios": height_ratios},
     )
-    ax.set_yticks(range(n_states))
-    ax.set_yticklabels(state_labels)
-    ax.set_ylim(-0.3, n_states - 0.7)
-    ax.legend(loc="upper right", fontsize=9, ncol=2)
-    ax.set_title("Most likely whole sequence vs. ground truth")
-    ax.spines["right"].set_visible(False)
-    ax.spines["top"].set_visible(False)
 
+    # ---- panel 1: the three state sequences, aligned ----
+    ax = axes[0]
+    rows = [
+        ("ground truth", z_true),
+        (f"smooth_proba\n(per-step MAP)\n{map_acc:.1%} correct", posterior_map),
+        (f"decode_state\n(Viterbi)\n{viterbi_acc:.1%} correct", viterbi_states),
+    ]
+    # one bar per time step, centered on it like the posterior steps below, so a
+    # state that lasts a single time step is still drawn
+    for row, (_, seq) in enumerate(rows):
+        ax.bar(
+            time_steps,
+            0.76,
+            width=1.0,
+            bottom=row - 0.38,
+            color=[colors[k] for k in seq],
+            linewidth=0,
+        )
+    # mark the time steps each readout gets wrong, so disagreements are countable
+    for row, (_, seq) in enumerate(rows[1:], start=1):
+        wrong = time_steps[seq != z_true]
+        ax.plot(wrong, np.full(wrong.shape, row + 0.27), marker="|", ms=7,
+                ls="none", color="k", alpha=0.8)
+    ax.set_yticks(range(len(rows)))
+    ax.set_yticklabels([label for label, _ in rows], fontsize=9)
+    # ground truth on top, with room above it for the legend
+    ax.set_ylim(len(rows) - 0.5, -1.3)
+    ax.tick_params(left=False)
+    ax.set_title("Which state was active, by each readout")
+    handles = [
+        plt.Line2D([], [], color=colors[k], lw=6, label=state_labels[k])
+        for k in range(n_states)
+    ]
+    handles.append(
+        plt.Line2D([], [], color="k", marker="|", ms=7, ls="none", alpha=0.8,
+                   label="wrong time step")
+    )
+    ax.legend(handles=handles, loc="upper right", fontsize=9, ncol=len(handles),
+              framealpha=0.9)
+    for side in ("right", "top", "left"):
+        ax.spines[side].set_visible(False)
+
+    # ---- panel 2: the posteriors those readouts come from ----
     ax = axes[1]
     for k in range(n_states):
         ax.step(
-            trials,
+            time_steps,
             posteriors[:, k],
             where="mid",
             color=colors[k],
             lw=2,
             label=f"P({state_labels[k]})",
         )
-    ax.set_ylim(-0.02, 1.02)
+    # room above 1 for the legend
+    ax.set_ylim(-0.02, 1.3)
+    ax.set_yticks([0, 0.5, 1])
     ax.set_ylabel("posterior")
-    ax.set_xlabel("trial")
-    ax.legend(loc="upper right", fontsize=9, ncol=n_states)
-    ax.set_title("Per-trial marginal posteriors (smooth_proba)")
+    ax.legend(loc="upper right", fontsize=9, ncol=n_states, framealpha=0.9)
+    ax.set_title("Marginal posteriors at each time step (smooth_proba)")
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
 
+    # ---- panel 3 (optional): the stimulus, colored by the choice ----
+    if show_stimulus:
+        ax = axes[2]
+        stim = np.asarray(stimulus).reshape(len(z_true_full), -1)[a:b, 0]
+        if choices is None:
+            ax.vlines(time_steps, 0, stim, color="0.5", lw=2.5)
+        else:
+            chose_left = np.asarray(choices)[a:b] == 1
+            ax.vlines(time_steps[chose_left], 0, stim[chose_left], color="0.15",
+                      lw=2.5, label="chose left")
+            ax.vlines(time_steps[~chose_left], 0, stim[~chose_left], color="0.7",
+                      lw=2.5, label="chose right")
+            ax.legend(loc="upper right", fontsize=9, ncol=2, framealpha=0.9)
+        ax.axhline(0, color="k", lw=0.8)
+        # room above the stimuli for the legend
+        lim = np.abs(stim).max()
+        ax.set_ylim(-1.1 * lim, 1.7 * lim)
+        ax.set_ylabel("stimulus\n(− right, + left)")
+        ax.set_title("Stimulus at each time step")
+        ax.spines["right"].set_visible(False)
+        ax.spines["top"].set_visible(False)
+
+    axes[-1].set_xlabel("time step")
     plt.tight_layout()
     plt.show()
-    return fig
     return fig

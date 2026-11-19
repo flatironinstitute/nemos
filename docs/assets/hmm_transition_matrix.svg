@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 470" width="1120" height="470" font-family="Helvetica, Arial, sans-serif" role="img" aria-label="The initial state distribution and transition matrix of a three-state hidden Markov model, with the transition matrix redrawn as a state diagram">
+<title>Initial and transition probabilities of a three-state HMM</title>
+<style>
+    .ink { fill: #000000; }
+    .lbl { font-size: 17px; fill: #444444; }
+    .eq  { font-size: 20px; }
+    .val { font-size: 17px; }
+    .hdr { font-size: 13px; fill: #666666; }
+    .var { font-style: italic; }
+    .sub { font-size: 13px; }
+    .bracket { stroke: #000000; stroke-width: 2; fill: none; }
+    .s1 { fill: #C2611F; } .s2 { fill: #37803A; } .s3 { fill: #2E63A6; }
+    .a1 { stroke: #E07B39; stroke-width: 2.5; fill: none; }
+    .a2 { stroke: #4F9E4F; stroke-width: 2.5; fill: none; }
+    .a3 { stroke: #4C82C3; stroke-width: 2.5; fill: none; }
+</style>
+<defs>
+<marker id="t1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path fill="#E07B39" d="M0 0 L10 5 L0 10 z"/></marker>
+<marker id="t2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path fill="#4F9E4F" d="M0 0 L10 5 L0 10 z"/></marker>
+<marker id="t3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path fill="#4C82C3" d="M0 0 L10 5 L0 10 z"/></marker>
+</defs>
+
+<!-- ================= left: the two probability tables ================= -->
+
+<text class="lbl" x="24" y="116">initial state probability</text>
+<text class="ink eq" x="24" y="160"><tspan class="var">p</tspan>(<tspan class="var">z</tspan><tspan class="sub" dy="4">1</tspan><tspan dy="-4">) =</tspan></text>
+
+<rect x="116" y="138" width="62" height="34" rx="4" fill="#FAE0C8" stroke="#E07B39" stroke-width="2"/>
+<text class="ink val" x="147" y="161" text-anchor="middle">0.85</text>
+<rect x="186" y="138" width="62" height="34" rx="4" fill="#DDEFDA" stroke="#4F9E4F" stroke-width="2"/>
+<text class="ink val" x="217" y="161" text-anchor="middle">0.10</text>
+<rect x="256" y="138" width="62" height="34" rx="4" fill="#D8E4F4" stroke="#4C82C3" stroke-width="2"/>
+<text class="ink val" x="287" y="161" text-anchor="middle">0.05</text>
+<path class="bracket" d="M110 132 h-6 v46 h6"/>
+<path class="bracket" d="M324 132 h6 v46 h-6"/>
+
+<text class="lbl" x="24" y="232">transition probability</text>
+<text class="ink eq" x="24" y="276"><tspan class="var">p</tspan>(<tspan class="var">z</tspan><tspan class="sub" dy="4">t</tspan><tspan dy="-4"> | </tspan><tspan class="var">z</tspan><tspan class="sub" dy="4">t−1</tspan><tspan dy="-4">) =</tspan></text>
+
+<text class="hdr" x="217" y="294" text-anchor="middle">to state</text>
+<text class="hdr" x="147" y="310" text-anchor="middle">z = 1</text>
+<text class="hdr" x="217" y="310" text-anchor="middle">z = 2</text>
+<text class="hdr" x="287" y="310" text-anchor="middle">z = 3</text>
+
+<text class="hdr s1" x="96" y="341" text-anchor="end">from z = 1</text>
+<rect x="116" y="318" width="62" height="34" rx="4" fill="#FAE0C8" stroke="#E07B39" stroke-width="2"/>
+<text class="ink val" x="147" y="341" text-anchor="middle" font-weight="bold">0.94</text>
+<rect x="186" y="318" width="62" height="34" rx="4" fill="#FAE0C8" stroke="#E07B39" stroke-width="2"/>
+<text class="ink val" x="217" y="341" text-anchor="middle">0.03</text>
+<rect x="256" y="318" width="62" height="34" rx="4" fill="#FAE0C8" stroke="#E07B39" stroke-width="2"/>
+<text class="ink val" x="287" y="341" text-anchor="middle">0.03</text>
+
+<text class="hdr s2" x="96" y="379" text-anchor="end">from z = 2</text>
+<rect x="116" y="356" width="62" height="34" rx="4" fill="#DDEFDA" stroke="#4F9E4F" stroke-width="2"/>
+<text class="ink val" x="147" y="379" text-anchor="middle">0.05</text>
+<rect x="186" y="356" width="62" height="34" rx="4" fill="#DDEFDA" stroke="#4F9E4F" stroke-width="2"/>
+<text class="ink val" x="217" y="379" text-anchor="middle" font-weight="bold">0.90</text>
+<rect x="256" y="356" width="62" height="34" rx="4" fill="#DDEFDA" stroke="#4F9E4F" stroke-width="2"/>
+<text class="ink val" x="287" y="379" text-anchor="middle">0.05</text>
+
+<text class="hdr s3" x="96" y="417" text-anchor="end">from z = 3</text>
+<rect x="116" y="394" width="62" height="34" rx="4" fill="#D8E4F4" stroke="#4C82C3" stroke-width="2"/>
+<text class="ink val" x="147" y="417" text-anchor="middle">0.05</text>
+<rect x="186" y="394" width="62" height="34" rx="4" fill="#D8E4F4" stroke="#4C82C3" stroke-width="2"/>
+<text class="ink val" x="217" y="417" text-anchor="middle">0.05</text>
+<rect x="256" y="394" width="62" height="34" rx="4" fill="#D8E4F4" stroke="#4C82C3" stroke-width="2"/>
+<text class="ink val" x="287" y="417" text-anchor="middle" font-weight="bold">0.90</text>
+
+<path class="bracket" d="M110 312 h-6 v122 h6"/>
+<path class="bracket" d="M324 312 h6 v122 h-6"/>
+
+<line x1="600" y1="90" x2="600" y2="440" stroke="#DDDDDD" stroke-width="2"/>
+
+<!-- ================= right: the same matrix as a state diagram ================= -->
+<g transform="translate(620 0)">
+<text class="lbl" x="260" y="32" text-anchor="middle">the same transition matrix, as a state diagram</text>
+
+<!-- long-range arcs, drawn first so they sit behind the boxes -->
+<path class="a1" d="M62 240 C60 25, 460 25, 458 240" marker-end="url(#t1)"/>
+<text class="ink val s1" x="260" y="70" text-anchor="middle">0.03</text>
+<path class="a3" d="M458 260 C460 440, 60 440, 62 260" marker-end="url(#t3)"/>
+<text class="ink val s3" x="260" y="424" text-anchor="middle">0.05</text>
+
+<path class="a1" d="M140 223 C152 95, 220 95, 232 223" marker-end="url(#t1)"/>
+<text class="ink val s1" x="186" y="118" text-anchor="middle">0.03</text>
+<path class="a2" d="M290 223 C302 95, 370 95, 382 223" marker-end="url(#t2)"/>
+<text class="ink val s2" x="336" y="118" text-anchor="middle">0.05</text>
+
+<path class="a2" d="M232 277 C220 366, 152 366, 140 277" marker-end="url(#t2)"/>
+<text class="ink val s2" x="186" y="366" text-anchor="middle">0.05</text>
+<path class="a3" d="M382 277 C370 366, 302 366, 290 277" marker-end="url(#t3)"/>
+<text class="ink val s3" x="336" y="366" text-anchor="middle">0.05</text>
+
+<!-- self-transitions: the diagonal of the matrix -->
+<path class="a1" d="M88 223 C62 155, 158 155, 132 223" marker-end="url(#t1)"/>
+<text class="ink s1" x="110" y="208" text-anchor="middle" font-size="15" font-weight="bold">0.94</text>
+<path class="a2" d="M238 223 C212 155, 308 155, 282 223" marker-end="url(#t2)"/>
+<text class="ink s2" x="260" y="208" text-anchor="middle" font-size="15" font-weight="bold">0.90</text>
+<path class="a3" d="M388 223 C362 155, 458 155, 432 223" marker-end="url(#t3)"/>
+<text class="ink s3" x="410" y="208" text-anchor="middle" font-size="15" font-weight="bold">0.90</text>
+
+<!-- the states -->
+<rect x="62" y="223" width="96" height="54" rx="8" fill="#FAE0C8" stroke="#E07B39" stroke-width="2.5"/>
+<text class="ink" x="110" y="257" text-anchor="middle" font-size="20" font-weight="bold">z = 1</text>
+<rect x="212" y="223" width="96" height="54" rx="8" fill="#DDEFDA" stroke="#4F9E4F" stroke-width="2.5"/>
+<text class="ink" x="260" y="257" text-anchor="middle" font-size="20" font-weight="bold">z = 2</text>
+<rect x="362" y="223" width="96" height="54" rx="8" fill="#D8E4F4" stroke="#4C82C3" stroke-width="2.5"/>
+<text class="ink" x="410" y="257" text-anchor="middle" font-size="20" font-weight="bold">z = 3</text>
+</g>
+</svg>
