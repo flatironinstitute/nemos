@@ -23,6 +23,7 @@ from ._aux_helpers import (
     tree_map_inexact_asarray,
     wrap_aux,
 )
+from ._keyed_optax_minimizer import _KeyedOptaxState, use_keyed_solver
 from ._solver_adapter import SolverAdapter
 
 jax = lazy.load("jax")
@@ -80,9 +81,14 @@ class OptimistixAdapter(SolverAdapter[OptimistixAdapterState]):
 
     The `maxiter` default is taken from `DEFAULT_MAXITER`, which subclasses may
     override to set solver-specific defaults.
+
+    Subclasses that can minimise a loss drawing a fresh PRNG key at every step set
+    `_keyed_solver_cls`, which is used instead of `_solver_cls` when the adapter is
+    constructed inside a `keyed_solver` context.
     """
 
     _solver_cls: ClassVar[Type]
+    _keyed_solver_cls: ClassVar[Type | None] = None
     _solver: optx.AbstractMinimiser
     DEFAULT_MAXITER: ClassVar[int] = DEFAULT_MAX_STEPS
 
@@ -141,7 +147,12 @@ class OptimistixAdapter(SolverAdapter[OptimistixAdapterState]):
         # make custom adjustments such as adding a derived "while_loop_kind" parameter for FISTA
         solver_init_kwargs = self.adjust_solver_init_kwargs(solver_init_kwargs)
 
-        self._solver = self._solver_cls(
+        # read the flag here, once: run and update execute outside the context
+        solver_cls = self._keyed_solver_cls if use_keyed_solver() else self._solver_cls
+        if solver_cls is None:
+            raise TypeError(f"{type(self).__name__} cannot minimise a keyed loss.")
+
+        self._solver = solver_cls(
             atol=tol,
             rtol=rtol,
             norm=self.config.norm,
@@ -256,6 +267,9 @@ class OptimistixAdapter(SolverAdapter[OptimistixAdapterState]):
         state: OptimistixSolverState,
         num_steps: jax.numpy.ndarray = jax.numpy.array(0),
     ) -> OptimizationInfo:
+        # the keyed minimiser wraps the optax state next to its PRNG key
+        if isinstance(state, _KeyedOptaxState):
+            state = state.solver_state
         function_val = state.f if hasattr(state, "f") else state.f_info.f  # pyright: ignore
 
         return OptimizationInfo(
