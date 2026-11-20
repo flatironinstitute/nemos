@@ -112,7 +112,7 @@ def _compute_log_lambda_y(
     max_window: int,
     n_predictors: int,
     chunk_size: int,
-    remat=True,
+    remat: bool = True,
 ) -> jnp.ndarray:
     """
     Compute the log-firing rates at the observed spike times.
@@ -193,6 +193,7 @@ def _compute_mc_estimate(
     max_window: int,
     n_predictors: int,
     chunk_size: int,
+    remat: bool = True,
 ) -> jnp.ndarray:
     """
     Compute the firing rates at the Monte Carlo sample points.
@@ -220,6 +221,9 @@ def _compute_mc_estimate(
         Number of predictors that defines the number of segments.
     chunk_size :
         Number of evaluation points processed per scan.
+    remat :
+        Apply jax.remat to the scan body. If true, checkpoints are not
+        stored for the backward pass compute. Memory safe, but slower.
 
     Returns
     -------
@@ -228,7 +232,7 @@ def _compute_mc_estimate(
     """
     chunked, valid = utils._reshape_and_pad_eval_points(mc_samples, chunk_size)
 
-    def body(lam_sum, chunk):
+    def _body(lam_sum, chunk):
         samples, is_valid = chunk
 
         A = _compute_design_matrix(
@@ -245,6 +249,12 @@ def _compute_mc_estimate(
         return lam_sum + jnp.sum(jnp.where(is_valid, weighted, 0.0)), None
 
     init = jnp.zeros((), dtype=X.times.dtype)
+
+    if remat:
+        body = jax.remat(_body)
+    else:
+        body = _body
+
     mc_estimate, _ = jax.lax.scan(body, init, (chunked, valid))
 
     return mc_estimate
@@ -383,6 +393,7 @@ def _negative_log_likelihood(
         max_window,
         n_predictors,
         scan_size,
+        remat=remat,
     )
 
     nll_sum = mc_estimate - log_lambda_y
