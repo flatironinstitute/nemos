@@ -79,7 +79,7 @@ def generate_data_gaussian(request):
     obs = nmo.observation_models.GaussianObservations()
 
     log_likelihood_fn = prepare_estep_log_likelihood(
-        is_population_glm, obs, inv_link_func
+        is_population_glm, False, obs, inv_link_func
     )
     expected_negative_log_likelihood_scale = prepare_mstep_nll_objective_scale(
         is_population_glm=is_population_glm,
@@ -184,6 +184,7 @@ class TestAnalyticMStepScale:
         update = get_analytical_scale_update(obs, is_population_glm=is_population_glm)
         nll_fcn = prepare_mstep_nll_objective_param(
             is_population_glm=is_population_glm,
+            is_categorical_glm=False,
             observation_model=obs,
             inverse_link_function=inv_link_func,
         )
