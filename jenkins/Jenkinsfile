@@ -27,7 +27,13 @@ catchError {
           // complaint. LANG alone was not enough: it is outranked by the LC_ALL
           // the pod already exports. RUBYOPT does not consult the locale at all.
           "LC_ALL=C.UTF-8",
-          "RUBYOPT=-EUTF-8"
+          "RUBYOPT=-EUTF-8",
+          // platformdirs refuses to create a private cache when any ancestor of it
+          // is writable by other users without the sticky bit. /home/jenkins/agent
+          // is, so every path under $WORKSPACE fails, and `import pynwb` raises
+          // PermissionError while building its typemap cache. /tmp is root-owned
+          // and sticky, which the check accepts.
+          "XDG_CACHE_HOME=/tmp/xdg-cache"
         ]) {
           sh '''#!/bin/bash -ex
             python3.12 -m venv $HOME/venv
