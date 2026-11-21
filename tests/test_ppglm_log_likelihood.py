@@ -1168,3 +1168,69 @@ class TestJit:
         )
 
         assert jnp.isfinite(jitted(*args, **kwargs))
+
+
+def grad_temp_bytes(dataset, remat):
+    """XLA scratch memory of the compiled loss gradient, from its static buffer assignment."""
+    kwargs = nll_kwargs(dataset, remat=remat)
+
+    def loss(params):
+        return log_likelihood._compute_loss(
+            params, dataset["X"], dataset["y"], dataset["random_key"], **kwargs
+        )
+
+    compiled = jax.jit(jax.grad(loss)).lower(dataset["params"]).compile()
+    return compiled.memory_analysis().temp_size_in_bytes
+
+
+@pytest.mark.requires_x64
+class TestRemat:
+    @pytest.mark.parametrize(
+        "all_to_one", [True, False], ids=["single_neuron", "population"]
+    )
+    def test_remat_does_not_change_loss_or_grad(self, all_to_one):
+        """Recomputing the scan body in the backward pass gives the same loss and gradient."""
+        dataset = create_dataset(history_window=0.1, all_to_one=all_to_one)
+        args = (dataset["params"], dataset["X"], dataset["y"], dataset["random_key"])
+
+        def value_and_grad(remat):
+            return jax.value_and_grad(log_likelihood._compute_loss)(
+                *args, **nll_kwargs(dataset, remat=remat)
+            )
+
+        loss_remat, grad_remat = value_and_grad(True)
+        loss_plain, grad_plain = value_and_grad(False)
+
+        np.testing.assert_allclose(loss_remat, loss_plain)
+        np.testing.assert_allclose(grad_remat.coef, grad_plain.coef)
+        np.testing.assert_allclose(grad_remat.intercept, grad_plain.intercept)
+
+    @pytest.mark.parametrize(
+        "small, large",
+        [
+            # same rate, so that max_window does not change with n_spikes
+            (
+                dict(n_spikes=2_000, sim_time=5.0),
+                dict(n_spikes=8_000, sim_time=20.0),
+            ),
+            (dict(M_samples=2_000), dict(M_samples=8_000)),
+        ],
+        ids=["n_spikes", "M_samples"],
+    )
+    def test_remat_keeps_grad_memory_flat(self, small, large):
+        """Without remat the gradient stores a design-matrix row per evaluation point; with remat it does not."""
+        common = dict(n_neurons=10, n_basis_funcs=4, scan_size=100, history_window=0.1)
+        row_bytes = common["n_neurons"] * common["n_basis_funcs"] * 8  # float64
+        added_points = next(
+            large[k] - small[k] for k in ("n_spikes", "M_samples") if k in small
+        )
+
+        def bytes_per_added_point(remat):
+            small_bytes = grad_temp_bytes(create_dataset(**common, **small), remat)
+            large_bytes = grad_temp_bytes(create_dataset(**common, **large), remat)
+            return (large_bytes - small_bytes) / added_points
+
+        # without remat, the scan keeps every chunk's design matrix for the backward pass
+        assert bytes_per_added_point(remat=False) >= row_bytes
+        # with remat, only O(1) scalars per point remain (MC times, indices, widths, mask)
+        assert bytes_per_added_point(remat=True) < 8 * 8
