@@ -21,7 +21,7 @@ from .._observation_model_builder import (
 from .._params_builder import AVAILABLE_PARAM_CONTAINERS, instantiate_param_container
 from .._regularizer_builder import AVAILABLE_REGULARIZERS, instantiate_regularizer
 from ..glm import GLM, ClassifierGLM, ClassifierPopulationGLM, PopulationGLM
-from ..glm_hmm import GLMHMM
+from ..glm_hmm import GLMHMM, ClassifierGLMHMM
 from ..utils import _get_name, _unflatten_dict, get_env_metadata
 from ..validation import _suggest_keys
 
@@ -31,6 +31,7 @@ MODEL_REGISTRY = {
     "nemos.glm.classifier_glm.ClassifierGLM": ClassifierGLM,
     "nemos.glm.classifier_glm.ClassifierPopulationGLM": ClassifierPopulationGLM,
     "nemos.glm_hmm.glm_hmm.GLMHMM": GLMHMM,
+    "nemos.glm_hmm.classifier_glm_hmm.ClassifierGLMHMM": ClassifierGLMHMM,
 }
 
 ERROR_MSG_OVERRIDE_NOT_ALLOWED = (
