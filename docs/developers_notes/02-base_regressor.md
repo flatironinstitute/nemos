@@ -28,6 +28,7 @@ For subclasses derived from `BaseRegressor` to function correctly, they must imp
 8. `_set_model_params`: Unpack the internal parameter representation and store as sklearn-style attributes (`coef_`, `intercept_`).
 9. `save_params`: Serialize and save model parameters to disk.
 10. `_get_optimal_solver_params_config`: Return functions for computing default step size and batch size for the solver.
+11. `_get_params_shape`: Return the internal parameter representation with shape tuples as leaves, inferred from `X` and `y`. The concrete `_get_empty_params` builds the empty parameters from it, with the dtype of `X` and `y`.
 
 ## Parameter Representation and Validation
 

@@ -313,7 +313,7 @@ def initialize_constant_coef_matching_mean_rate(
         ``PopulationGLM``.
     empty_coef :
         A pytree matching the target coefficient structure and shapes (e.g. as returned
-        by the validator's ``get_empty_params``). Used only for its leaf shapes.
+        by the model's ``_get_empty_params``). Used only for its leaf shapes.
     frozen_coef :
         Pytree including the fixed valued model coefficients.
     eps :
