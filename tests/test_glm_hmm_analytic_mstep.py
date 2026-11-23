@@ -8,7 +8,7 @@ from nemos.glm.params import GLMParams
 from nemos.glm_hmm.algorithm_configs import (
     get_analytical_scale_update,
     prepare_estep_log_likelihood,
-    prepare_mstep_nll_objective_extra_params,
+    prepare_mstep_nll_objective_obs_params,
     prepare_mstep_nll_objective_param,
 )
 from nemos.glm_hmm.params import GLMHMMParams
@@ -81,7 +81,7 @@ def generate_data_gaussian(request):
     log_likelihood_fn = prepare_estep_log_likelihood(
         is_population_glm, obs, inv_link_func
     )
-    expected_negative_log_likelihood_scale = prepare_mstep_nll_objective_extra_params(
+    expected_negative_log_likelihood_scale = prepare_mstep_nll_objective_obs_params(
         is_population_glm=is_population_glm,
         observation_model=obs,
     )
@@ -217,7 +217,7 @@ class TestAnalyticMStepScale:
             new_model_params, _, _ = solver.run(glm_parms, X, y, posteriors)
             predicted_rate = compute_rate_per_state(X, new_model_params, inv_link_func)
             # Update scale parameters using analytical update
-            new_extra_params, _, _ = update(
+            new_obs_params, _, _ = update(
                 params.obs_params,
                 y,
                 predicted_rate,
@@ -227,7 +227,7 @@ class TestAnalyticMStepScale:
                 GLMParams(
                     coef=new_model_params.coef,
                     intercept=new_model_params.intercept,
-                    obs_params=new_extra_params,
+                    obs_params=new_obs_params,
                 ),
                 None,
                 None,
@@ -251,7 +251,7 @@ class TestAnalyticMStepScale:
             new_model_params, _, _ = solver.run(glm_params, X, y, posteriors)
             predicted_rate = compute_rate_per_state(X, new_model_params, inv_link_func)
             # Update scale parameters using separate solver
-            new_extra_params, _, _ = solver_scale.run(
+            new_obs_params, _, _ = solver_scale.run(
                 params.obs_params,
                 y,
                 predicted_rate,
@@ -261,7 +261,7 @@ class TestAnalyticMStepScale:
                 GLMParams(
                     coef=new_model_params.coef,
                     intercept=new_model_params.intercept,
-                    obs_params=new_extra_params,
+                    obs_params=new_obs_params,
                 ),
                 None,
                 None,

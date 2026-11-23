@@ -15,7 +15,7 @@ from nemos.glm_hmm.algorithm_configs import (
     posterior_weighted_glm_negative_log_likelihood,
     prepare_estep_log_likelihood,
     prepare_mstep_nll_for_analytical_scale,
-    prepare_mstep_nll_objective_extra_params,
+    prepare_mstep_nll_objective_obs_params,
     prepare_mstep_nll_objective_param,
     prepare_mstep_update_fn,
 )
@@ -67,10 +67,10 @@ _BACKWARD = {
 ESTEP_TYPE = pytest.mark.parametrize("estep_type", tuple(FORWARD_BACKWARD))
 
 
-def _make_glm_params(coef, intercept, observation_model, **extra_params):
+def _make_glm_params(coef, intercept, observation_model, **obs_params):
     """Build GLMParams with the extra params declared by the observation model."""
     extras = {
-        k: extra_params.get(k, jnp.full(intercept.shape, v.map_to(v.default)))
+        k: obs_params.get(k, jnp.full(intercept.shape, v.map_to(v.default)))
         for k, v in observation_model.extra_params.items()
     }
     return GLMParams(coef, intercept, obs_params=extras or None)
@@ -419,7 +419,7 @@ def generate_data_multi_state(request):
     """
     np.random.seed(44)
     obs_model: Observations = request.param["observations"]
-    extra_params: dict = request.param.get("extra_params", {})
+    obs_params: dict = request.param.get("obs_params", {})
     inv_link = request.param.get("inv_link", None)
     if inv_link is None:
         inv_link = obs_model.default_inverse_link_function
@@ -434,7 +434,7 @@ def generate_data_multi_state(request):
     coef, intercept = np.random.randn(2, n_states), np.random.randn(n_states)
 
     extras = {}
-    for k, v in extra_params.items():
+    for k, v in obs_params.items():
         extras[k] = np.full_like(intercept, v)
 
     X = np.random.randn(n_samples, 2)
@@ -459,7 +459,7 @@ def generate_data_multi_state(request):
         X,
         y,
         obs_model,
-        extra_params,
+        obs_params,
         inv_link,
     )
 
@@ -469,7 +469,7 @@ def generate_data_multi_state_population(request):
     """Generate synthetic multi-state population HMM data for testing."""
     np.random.seed(44)
     obs_model: Observations = request.param["observations"]
-    extra_params: dict = request.param.get("extra_params", {})
+    obs_params: dict = request.param.get("obs_params", {})
     inv_link = request.param.get("inv_link", None)
     if inv_link is None:
         inv_link = obs_model.default_inverse_link_function
@@ -487,7 +487,7 @@ def generate_data_multi_state_population(request):
     )
 
     extras = {}
-    for k, v in extra_params.items():
+    for k, v in obs_params.items():
         extras[k] = np.full_like(intercept, v)
 
     X = np.random.randn(n_samples, 2)
@@ -512,7 +512,7 @@ def generate_data_multi_state_population(request):
         X,
         y,
         obs_model,
-        extra_params,
+        obs_params,
         inv_link,
     )
 
@@ -723,7 +723,7 @@ class TestForwardBackward:
             X,
             y,
             obs,
-            extra_params,
+            obs_params,
             inv_link,
         ) = generate_data_multi_state
         log_likelihood = jax.vmap(
@@ -767,7 +767,7 @@ class TestForwardBackward:
             X,
             y,
             obs,
-            extra_params,
+            obs_params,
             inv_link,
         ) = generate_data_multi_state
         log_likelihood = jax.vmap(
@@ -1138,7 +1138,7 @@ class TestMStep:
             X,
             y,
             obs,
-            extra_params,
+            obs_params,
             inv_link,
         ) = generate_data_multi_state
         _, solver = prepare_partial_hmm_nll_single_neuron(
@@ -1236,7 +1236,7 @@ class TestMStep:
             X,
             y,
             obs,
-            extra_params,
+            obs_params,
             inv_link,
         ) = generate_data_multi_state
         _, solver = prepare_partial_hmm_nll_single_neuron(
@@ -1298,7 +1298,7 @@ class TestMStep:
             X,
             y,
             obs,
-            extra_params,
+            obs_params,
             inv_link,
         ) = generate_data_multi_state
         _, solver = prepare_partial_hmm_nll_single_neuron(
@@ -1357,7 +1357,7 @@ class TestMStep:
             X,
             y,
             obs,
-            extra_params,
+            obs_params,
             inv_link,
         ) = generate_data_multi_state
         _, solver = prepare_partial_hmm_nll_single_neuron(
@@ -1439,7 +1439,7 @@ class TestMStep:
             X,
             y,
             obs,
-            extra_params,
+            obs_params,
             inv_link,
         ) = generate_data_multi_state
         _, solver = prepare_partial_hmm_nll_single_neuron(
@@ -1742,32 +1742,32 @@ class TestMStep:
             {"observations": BernoulliObservations(), "inv_link": None},
             {
                 "observations": GaussianObservations(),
-                "extra_params": {"scale": 1.0},
+                "obs_params": {"scale": 1.0},
                 "inv_link": None,
             },
             {
                 "observations": GaussianObservations(),
-                "extra_params": {"scale": 2.0},
+                "obs_params": {"scale": 2.0},
                 "inv_link": None,
             },
             {
                 "observations": GammaObservations(),
-                "extra_params": {"scale": 1.0},
+                "obs_params": {"scale": 1.0},
                 "inv_link": jnp.exp,
             },
             {
                 "observations": GammaObservations(),
-                "extra_params": {"scale": 2.0},
+                "obs_params": {"scale": 2.0},
                 "inv_link": jnp.exp,
             },
             {
                 "observations": NegativeBinomialObservations(),
-                "extra_params": {"dispersion": 1.0},
+                "obs_params": {"dispersion": 1.0},
                 "inv_link": None,
             },
             {
                 "observations": NegativeBinomialObservations(),
-                "extra_params": {"dispersion": 2.0},
+                "obs_params": {"dispersion": 2.0},
                 "inv_link": None,
             },
         ],
@@ -1783,7 +1783,7 @@ class TestMStep:
             X,
             y,
             obs,
-            extra_params,
+            obs_params,
             inv_link,
         ) = generate_data_multi_state
         new_sess = jnp.asarray(new_sess, dtype=bool)
@@ -1883,7 +1883,7 @@ class TestMStep:
         )
 
         if obs.extra_params and all(v.separable for v in obs.extra_params.values()):
-            objective_extras = prepare_mstep_nll_objective_extra_params(False, obs)
+            objective_extras = prepare_mstep_nll_objective_obs_params(False, obs)
             extras = new_glm_params.obs_params
             solver = setup_solver(objective_extras, init_params=extras, tol=1e-8)
 
@@ -2216,7 +2216,7 @@ def test_e_and_m_step_for_population(generate_data_multi_state_population, estep
         X,
         y,
         obs,
-        extra_params,
+        obs_params,
         inv_link,
     ) = generate_data_multi_state_population
 
@@ -2712,7 +2712,7 @@ class TestConvergence:
         assert all(
             jnp.all(jnp.isfinite(x))
             for x in jax.tree_util.tree_leaves(learned_params.model_params.obs_params)
-        ), "Final extra_params contains non-finite values"
+        ), "Final obs_params contains non-finite values"
 
     @pytest.mark.requires_x64
     @ESTEP_TYPE
@@ -2888,7 +2888,7 @@ class TestCompilation:
             X,
             y,
             obs,
-            extra_params,
+            obs_params,
             inv_link,
         ) = generate_data_multi_state
 
@@ -3029,7 +3029,7 @@ class TestCompilation:
             X,
             y,
             obs,
-            extra_params,
+            obs_params,
             inv_link,
         ) = generate_data_multi_state
         _, solver = prepare_partial_hmm_nll_single_neuron(
@@ -3195,7 +3195,7 @@ class TestCompilation:
             X,
             y,
             obs,
-            extra_params,
+            obs_params,
             inv_link,
         ) = generate_data_multi_state
         likelihood_func = prepare_estep_log_likelihood(
@@ -3306,7 +3306,7 @@ class TestPytreeSupport:
             X,
             y,
             obs,
-            extra_params,
+            obs_params,
             inv_link,
         ) = generate_data_multi_state
         # Split X and coef into dictionaries
@@ -3387,7 +3387,7 @@ class TestPytreeSupport:
             X,
             y,
             obs,
-            extra_params,
+            obs_params,
             inv_link,
         ) = generate_data_multi_state
         # Split X and coef into dictionaries
@@ -3458,7 +3458,7 @@ class TestPytreeSupport:
             X,
             y,
             obs,
-            extra_params,
+            obs_params,
             inv_link,
         ) = generate_data_multi_state
         # Split X and coef into dictionaries
@@ -3779,7 +3779,7 @@ class TestEMExtraParamsOptimization:
                 X, new_model_params, obs.default_inverse_link_function
             )
             # Update scale parameters using analytical update
-            new_extra_params, _, _ = scale_update_fn(
+            new_obs_params, _, _ = scale_update_fn(
                 params.obs_params,
                 y,
                 predicted_rate,
@@ -3790,7 +3790,7 @@ class TestEMExtraParamsOptimization:
                     new_model_params.coef,
                     new_model_params.intercept,
                     obs,
-                    **new_extra_params,
+                    **new_obs_params,
                 ),
                 None,
                 None,
@@ -3924,7 +3924,7 @@ class TestEMExtraParamsOptimization:
                 X, new_model_params, obs.default_inverse_link_function
             )
             # Update scale parameters using analytical update
-            new_extra_params, _, _ = scale_update_fn(
+            new_obs_params, _, _ = scale_update_fn(
                 params.obs_params,
                 y,
                 predicted_rate,
@@ -3935,7 +3935,7 @@ class TestEMExtraParamsOptimization:
                     new_model_params.coef,
                     new_model_params.intercept,
                     obs,
-                    **new_extra_params,
+                    **new_obs_params,
                 ),
                 None,
                 None,
@@ -3996,7 +3996,7 @@ class TestEMExtraParamsOptimization:
         # Prepare EM components
         likelihood_func = prepare_estep_log_likelihood(False, obs, jnp.exp)
         nll_params = prepare_mstep_nll_objective_param(False, obs, jnp.exp)
-        nll_scale = prepare_mstep_nll_objective_extra_params(False, obs)
+        nll_scale = prepare_mstep_nll_objective_obs_params(False, obs)
 
         solver_params = setup_solver(
             nll_params,
@@ -4029,7 +4029,7 @@ class TestEMExtraParamsOptimization:
             )
             predicted_rate = compute_rate_per_state(X, new_model_params, jnp.exp)
             # Update scale parameters using separate solver
-            new_extra_params, _, _ = solver_scale.run(
+            new_obs_params, _, _ = solver_scale.run(
                 params.obs_params,
                 y,
                 predicted_rate,
@@ -4040,7 +4040,7 @@ class TestEMExtraParamsOptimization:
                     new_model_params.coef,
                     new_model_params.intercept,
                     obs,
-                    **new_extra_params,
+                    **new_obs_params,
                 ),
                 None,
                 None,
@@ -4179,7 +4179,7 @@ class TestEMExtraParamsOptimization:
                 X, new_model_params, obs.default_inverse_link_function
             )
             # Update scale parameters using analytical update
-            new_extra_params, _, _ = scale_update_fn(
+            new_obs_params, _, _ = scale_update_fn(
                 params.obs_params,
                 y,
                 predicted_rate,
@@ -4190,7 +4190,7 @@ class TestEMExtraParamsOptimization:
                     new_model_params.coef,
                     new_model_params.intercept,
                     obs,
-                    **new_extra_params,
+                    **new_obs_params,
                 ),
                 None,
                 None,

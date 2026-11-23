@@ -61,13 +61,13 @@ class ToGLMParams(eqx.Module):
         coef = user_params.pop("coef", None)
         intercept = user_params.pop("intercept", None)
         if user_params != {}:
-            extra_params = {
+            obs_params = {
                 k: self.map_to.get(k, identity)(p) if p is not None else None
                 for k, p in user_params.items()
             }
         else:
-            extra_params = None
-        return GLMParams(coef, intercept, extra_params)
+            obs_params = None
+        return GLMParams(coef, intercept, obs_params)
 
 
 class FromGLMParams(eqx.Module):
@@ -96,11 +96,11 @@ class FromGLMParams(eqx.Module):
         in user_params.
         """
         user_params = {"coef": glm_params.coef, "intercept": glm_params.intercept}
-        extra_params = {} if glm_params.obs_params is None else glm_params.obs_params
+        obs_params = {} if glm_params.obs_params is None else glm_params.obs_params
         user_params.update(
             {
                 k: self.map_from.get(k, identity)(v)
-                for k, v in extra_params.items()
+                for k, v in obs_params.items()
                 if v is not None
             }
         )

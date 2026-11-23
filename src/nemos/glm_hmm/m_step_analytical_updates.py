@@ -12,7 +12,7 @@ from .utils import Array
 
 @partial(jax.jit, static_argnames=["negative_log_likelihood_func"])
 def _m_step_scale_gaussian_observations(
-    extra_params: Array, y, rate, posteriors, negative_log_likelihood_func
+    obs_params: Array, y, rate, posteriors, negative_log_likelihood_func
 ) -> Tuple[Array, None, None]:
     r"""
     Analytical M-step update for Gaussian observation model scale (variance).
@@ -24,7 +24,7 @@ def _m_step_scale_gaussian_observations(
 
     Parameters
     ----------
-    extra_params :
+    obs_params :
         Current log-scale parameter values in a dict, shape ``(n_states,)`` for single observations
         or ``(n_neurons, n_states)`` for population data. Not used in computation
         but required to match the signature of numerical optimization methods.
@@ -75,5 +75,5 @@ def _m_step_scale_gaussian_observations(
         optimized_log_scale = jnp.squeeze(
             jnp.log(expected_nll) - jnp.log(sum_posteriors), axis=0
         )
-    extra_params = eqx.tree_at(lambda x: x["scale"], extra_params, optimized_log_scale)
-    return extra_params, None, None
+    obs_params = eqx.tree_at(lambda x: x["scale"], obs_params, optimized_log_scale)
+    return obs_params, None, None

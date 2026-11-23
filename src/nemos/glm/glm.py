@@ -886,7 +886,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         """
         predicted_rate = self._predict(params, X)
         param_dict = self._validator.from_model_params(params)
-        extras = self._validator.filter_extra_params(param_dict)
+        extras = self._validator.filter_obs_params(param_dict)
         if self._fitting_separable_param_only():
             loss = self._observation_model._negative_log_likelihood
         else:
@@ -1002,7 +1002,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         # params is in the transformed space (log(scale), log(dispersion))
         params = self._validator.to_model_params(param_dict)
         # extra kwargs are in regular space
-        extras = self._validator.filter_extra_params(param_dict)
+        extras = self._validator.filter_obs_params(param_dict)
         extras = {
             **extras,
             **{
@@ -1128,7 +1128,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
                 empty_params.obs_params,
                 {
                     k: self._observation_model.extra_params[k].default
-                    for k in self._validator.extra_param_names
+                    for k in self._validator.obs_param_names
                 },
             )
         else:
@@ -1314,7 +1314,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         self._set_model_params(params)
 
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X)
-        extras = self._validator.filter_extra_params(self._get_param_dict())
+        extras = self._validator.filter_obs_params(self._get_param_dict())
         self.scale_ = self.observation_model.estimate_scale(
             y, self._predict(params, data), dof_resid=self.dof_resid_, **extras
         )
@@ -1523,7 +1523,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         if self._has_constant_scale():
             # for these families `estimate_scale` ignores `y`, `predicted_rate`, and `dof_resid`
             # the sample batch and `dof_resid=1.0` are placeholders just to satisfy the shared signature
-            extras = self._validator.filter_extra_params(self._get_param_dict())
+            extras = self._validator.filter_obs_params(self._get_param_dict())
             self.scale_ = self.observation_model.estimate_scale(
                 sample_y,
                 self._predict(params, sample_X),
@@ -1666,7 +1666,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
         dict_params = self._get_param_dict()
         params = self._validator.to_model_params(dict_params)
-        extras = {k: dict_params[k] for k in self._validator.extra_param_names}
+        extras = {k: dict_params[k] for k in self._validator.obs_param_names}
         # separable parameter are fit post-hoc, and not included in dict_params
         # but are needed to fully specify the distribution
         extras.update(
@@ -1946,7 +1946,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(
             X, n_samples=n_samples
         )
-        extras = self._validator.filter_extra_params(self._get_param_dict())
+        extras = self._validator.filter_obs_params(self._get_param_dict())
         self.scale_ = self.observation_model.estimate_scale(
             y, self._predict(updated_params, data), dof_resid=self.dof_resid_, **extras
         )
@@ -2061,16 +2061,16 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             lambda x: (jnp.shape(x)[1], *extra_shape), X
         )
         intercept_shape = (n_observations,)
-        extra_params_shape = (
-            {k: intercept_shape for k in self._validator.extra_param_names}
-            if self._validator.extra_param_names
+        obs_params_shape = (
+            {k: intercept_shape for k in self._validator.obs_param_names}
+            if self._validator.obs_param_names
             else None
         )
 
         return GLMParams(
             coef=coef_shapes,
             intercept=intercept_shape,
-            obs_params=extra_params_shape,
+            obs_params=obs_params_shape,
         )
 
 
@@ -2322,7 +2322,7 @@ class PopulationGLM(GLM):
 
     @property
     def _hess_batch_axes(self):
-        if self._validator.extra_param_names:
+        if self._validator.obs_param_names:
             return GLMParams(1, 0, 0)
         return GLMParams(1, 0, None)
 
@@ -2580,7 +2580,7 @@ class PopulationGLM(GLM):
                     _loss = self._observation_model._negative_log_likelihood
                 else:
                     _loss = self._observation_model.log_likelihood
-                    extras = self._validator.filter_extra_params(
+                    extras = self._validator.filter_obs_params(
                         self._validator.from_model_params(params)
                     )
                 return _loss(y, rate, **extras)

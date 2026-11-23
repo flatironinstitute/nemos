@@ -20,13 +20,12 @@ _ANALYTICAL_SCALE_UPDATE: dict[Type[Observations], Callable] = {
 }
 
 
-def map_from(extra_params: dict | None, observation_model: Observations) -> dict:
+def map_from(obs_params: dict | None, observation_model: Observations) -> dict:
     """Convenience wrapping mapping wrapper."""
-    if extra_params is None:
+    if obs_params is None:
         return {}
     return {
-        k: observation_model.extra_params[k].map_from(p)
-        for k, p in extra_params.items()
+        k: observation_model.extra_params[k].map_from(p) for k, p in obs_params.items()
     }
 
 
@@ -40,7 +39,7 @@ def _posterior_weighted_objective_impl(
     predicted_rate: Array,
     posteriors: Array,
     negative_log_likelihood_func: Callable,
-    extra_params: dict | None = None,
+    obs_params: dict | None = None,
     observation_model: Observations | None = None,
 ):
     """
@@ -64,8 +63,8 @@ def _posterior_weighted_objective_impl(
     negative_log_likelihood_func :
         Function computing negative log-likelihood. Must accept ``(y, predicted_rate)``
         or ``(y, predicted_rate, scale)`` depending on whether scale is provided.
-    extra_params :
-        Optional extra_params parameters for distributions that require them,
+    obs_params :
+        Optional observation model parameters for distributions that require them,
         shape ``(n_states,)`` or ``(n_neurons, n_states)``.
     observation_model:
         Observation model to use.
@@ -82,11 +81,11 @@ def _posterior_weighted_objective_impl(
     sums negative log-likelihoods across neurons before weighting by posteriors,
     assuming conditional independence of neurons given the latent state.
     """
-    if extra_params is None:
+    if obs_params is None:
         nll = negative_log_likelihood_func(y, predicted_rate)
     else:
         nll = negative_log_likelihood_func(
-            y, predicted_rate, map_from(extra_params, observation_model)
+            y, predicted_rate, map_from(obs_params, observation_model)
         )
 
     if nll.ndim > 2:
@@ -152,14 +151,14 @@ def posterior_weighted_glm_negative_log_likelihood(
         predicted_rate,
         posteriors,
         negative_log_likelihood_func,
-        extra_params=glm_params.obs_params,
+        obs_params=glm_params.obs_params,
         observation_model=observation_model,
     )
 
 
 @partial(jax.jit, static_argnames=["negative_log_likelihood_func", "observation_model"])
 def posterior_weighted_glm_negative_log_likelihood_scale(
-    extra_params: dict,
+    obs_params: dict,
     y: Array,
     predicted_rate: Array,
     posteriors: Array,
@@ -179,8 +178,8 @@ def posterior_weighted_glm_negative_log_likelihood_scale(
 
     Parameters
     ----------
-    extra_params:
-        Extra parameters for the GLM observation.
+    obs_params:
+        Observation model parameters of the GLM.
     y:
         Target responses.
     predicted_rate:
@@ -204,7 +203,7 @@ def posterior_weighted_glm_negative_log_likelihood_scale(
         predicted_rate,
         posteriors,
         negative_log_likelihood_func,
-        extra_params=extra_params,
+        obs_params=obs_params,
         observation_model=observation_model,
     )
 
@@ -258,8 +257,8 @@ def prepare_estep_log_likelihood(
 
     def log_likelihood(params, X, y):
         rate = compute_rate_per_state(X, params, inverse_link_function)
-        extra_params = map_from(params.obs_params, observation_model)
-        log_like = vmap_log_likelihood_per_sample(y, rate, extra_params)
+        obs_params = map_from(params.obs_params, observation_model)
+        log_like = vmap_log_likelihood_per_sample(y, rate, obs_params)
         if is_population_glm:
             # Multi-neuron case: sum log-likelihoods across neurons
             log_like = log_like.sum(axis=1)
@@ -375,7 +374,7 @@ def prepare_mstep_nll_objective_param(
     return objective
 
 
-def prepare_mstep_nll_objective_extra_params(
+def prepare_mstep_nll_objective_obs_params(
     is_population_glm: bool,
     observation_model: Observations,
 ) -> Callable:
@@ -411,9 +410,9 @@ def prepare_mstep_nll_objective_extra_params(
         out_axes=state_axes,
     )
 
-    def objective(extra_params: dict, observations, predicted_rate, posteriors):
+    def objective(obs_params: dict, observations, predicted_rate, posteriors):
         return posterior_weighted_glm_negative_log_likelihood_scale(
-            extra_params,
+            obs_params,
             observations,
             predicted_rate,
             posteriors,
@@ -527,7 +526,7 @@ def prepare_mstep_update_fn(
         )
         # if no analytical update exists, prepare numerical optimization objective and update function
         if scale_update_fn is None:
-            objective_scale = prepare_mstep_nll_objective_extra_params(
+            objective_scale = prepare_mstep_nll_objective_obs_params(
                 is_population_glm, observation_model
             )
             # force scale to be unregularized and fit with LBFGS
@@ -547,7 +546,7 @@ def prepare_mstep_update_fn(
             predicted_rate = compute_rate_per_state(
                 X, new_glm_params, inverse_link_function=inverse_link_function
             )
-            new_extra_params, state_extra_params, aux_extra_params = scale_update_fn(
+            new_obs_params, state_obs_params, aux_obs_params = scale_update_fn(
                 params.obs_params, y, predicted_rate, posteriors
             )
 
@@ -555,10 +554,10 @@ def prepare_mstep_update_fn(
                 GLMParams(
                     new_glm_params.coef,
                     new_glm_params.intercept,
-                    obs_params=new_extra_params,
+                    obs_params=new_obs_params,
                 ),
-                (state_params, state_extra_params),
-                (aux_params, aux_extra_params),
+                (state_params, state_obs_params),
+                (aux_params, aux_obs_params),
             )
 
         return update_fn

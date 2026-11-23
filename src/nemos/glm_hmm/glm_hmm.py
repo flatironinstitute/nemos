@@ -1046,7 +1046,7 @@ class GLMHMM(
         # unpack log probabilities directly (avoid exp then log in categorical)
         log_initial_prob = params.hmm_params.log_initial_prob
         log_transition_prob = params.hmm_params.log_transition_prob
-        extra_params = map_from(params.model_params.obs_params, self.observation_model)
+        obs_params = map_from(params.model_params.obs_params, self.observation_model)
 
         # pre-compute rates for all states: (n_time_bins, n_states) or (n_time_bins, n_neurons, n_states)
         all_rates = compute_rate_per_state(
@@ -1072,16 +1072,16 @@ class GLMHMM(
             )
             state_idx = jax.random.categorical(state_key, log_state_probs)
 
-            # get rate and extra params for sampled state
+            # get rate and observation model params for sampled state
             # handles both (n_states,) and (n_neurons, n_states)
             rate = rates_t[..., state_idx]
-            state_extra_params = jax.tree_util.tree_map(
-                lambda p: p[..., state_idx], extra_params
+            state_obs_params = jax.tree_util.tree_map(
+                lambda p: p[..., state_idx], obs_params
             )
 
             # sample observation
             y_t = self._observation_model.sample_generator(
-                key=obs_key, predicted_rate=rate, **state_extra_params
+                key=obs_key, predicted_rate=rate, **state_obs_params
             )
 
             return state_idx, (y_t, rate, state_idx)
@@ -1817,11 +1817,11 @@ class GLMHMM(
         coef_shapes = jax.tree_util.tree_map(
             lambda x: (jnp.shape(x)[1], *extra_shape), X
         )
-        extra_params = {
+        obs_params = {
             k: extra_shape for k in self.observation_model.extra_params.keys()
         }
         glm_params = GLMParams(
-            coef=coef_shapes, intercept=extra_shape, obs_params=extra_params
+            coef=coef_shapes, intercept=extra_shape, obs_params=obs_params
         )
         hmm_params = HMMParams(
             log_initial_prob=(n_states,), log_transition_prob=(n_states, n_states)

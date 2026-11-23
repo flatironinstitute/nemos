@@ -552,13 +552,13 @@ class RegressorValidator(
                 f"The following parameter(s) include None values:\n{empty_field}"
             )
 
-    def filter_extra_params(self, params: UserProvidedParamsT):
-        """Filter a user param dictionary and return only the extra parameters."""
-        return {k: params.get(k) for k in self.extra_param_names}
+    def filter_obs_params(self, params: UserProvidedParamsT):
+        """Filter a user param dictionary and return only the observation model parameters."""
+        return {k: params.get(k) for k in self.obs_param_names}
 
     @property
-    def extra_param_names(self) -> frozenset:
-        """Return the names of the extra parameters.
+    def obs_param_names(self) -> frozenset:
+        """Return the names of the observation model parameters.
 
         Usually, those are distribution specific fitted parameters, like
         ``dispersion`` for a negative binomial distribution.
