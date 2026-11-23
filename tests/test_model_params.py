@@ -23,7 +23,12 @@ import nemos
 from conftest import all_subclasses
 from nemos._hess import HessianTag, MatrixProperty, MatrixStructure
 from nemos._inspect_utils import is_abstract
-from nemos.glm.params import GLMParams
+from nemos._observation_model_builder import (
+    AVAILABLE_OBSERVATION_MODELS,
+    instantiate_observation_model,
+)
+from nemos.glm.params import GLMParams, GLMUserParams
+from nemos.glm_hmm.params import GLMHMMUserParams
 from nemos.params import ModelParams
 from nemos.regularizer import Ridge, UnRegularized
 
@@ -98,6 +103,21 @@ def test_regularizable_subtrees_preserve_leaf_identity(params_cls):
             "Regularizer._resolve_hess_tag writes the per-leaf claims back with "
             "eqx.tree_at, which relies on identity preservation."
         )
+
+
+@pytest.mark.metatest
+@pytest.mark.parametrize("user_params_cls", [GLMUserParams, GLMHMMUserParams])
+@pytest.mark.parametrize("observation_model", AVAILABLE_OBSERVATION_MODELS)
+def test_user_params_type_every_declared_extra_param(
+    observation_model, user_params_cls
+):
+    """Every extra parameter an observation model declares is a key of the user params."""
+    declared = instantiate_observation_model(observation_model).extra_params.keys()
+    missing = set(declared) - set(user_params_cls.__annotations__)
+    assert not missing, (
+        f"{user_params_cls.__name__} has no key for the {sorted(missing)} parameter(s) "
+        f"declared by the {observation_model} observation model."
+    )
 
 
 class _FullyCoveredParams(ModelParams):
