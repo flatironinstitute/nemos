@@ -96,14 +96,14 @@ class GLMHMMValidator(HMMValidator[GLMHMMUserParams, GLMHMMParams]):
         Does not validate y since it's 1D (single neuron, no neuron axis to check).
         """
         self._glm_validator.validate_consistency(params.model_params, X, y)
-        has_extras = params.model_params.extra_params is not None
+        has_extras = params.model_params.obs_extra_params is not None
         invalid = has_extras and any(
             v.shape != params.model_params.intercept.shape
-            for v in params.model_params.extra_params.values()
+            for v in params.model_params.obs_extra_params.values()
         )
         if invalid:
             shapes = jax.tree_util.tree_map(
-                lambda x: x.shape, params.model_params.extra_params
+                lambda x: x.shape, params.model_params.obs_extra_params
             )
             raise ValueError(
                 "The distribution extra parameters and the intercept must be of shape ``(n_neurons,)``."

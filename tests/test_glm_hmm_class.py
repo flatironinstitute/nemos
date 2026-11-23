@@ -65,7 +65,7 @@ def _init_params_from_fixture(fixture):
         "transition_prob": jnp.exp(fixture.params.hmm_params.log_transition_prob),
     }
     for key in fixture.model.observation_model.extra_params.keys():
-        value = fixture.params.model_params.extra_params[key]
+        value = fixture.params.model_params.obs_extra_params[key]
         params[key] = fixture.model.observation_model.extra_params[key]["map_from"](
             value
         )
@@ -488,12 +488,12 @@ def _make_model_params(n_features, n_states, n_neurons=None, model=None):
         return GLMParams(
             coef=jnp.zeros((n_features, n_states)),
             intercept=jnp.zeros((n_states,)),
-            extra_params=extras,
+            obs_extra_params=extras,
         )
     return GLMParams(
         coef=jnp.zeros((n_features, n_neurons, n_states)),
         intercept=jnp.zeros((n_neurons, n_states)),
-        extra_params=extras,
+        obs_extra_params=extras,
     )
 
 
@@ -2345,7 +2345,7 @@ class TestGLMHMMParamsContainer:
             model_params=GLMParams(
                 coef=coef,
                 intercept=jnp.zeros(n_states),
-                extra_params={"scale": jnp.zeros(n_states)},
+                obs_extra_params={"scale": jnp.zeros(n_states)},
             ),
             hmm_params=HMMParams(
                 log_initial_prob=jnp.log(jnp.ones(n_states) / n_states),
@@ -2615,7 +2615,7 @@ class TestGetEmptyParams:
         assert empty.model_params.intercept.shape == (N_STATES,)
 
     def test_scale_shape(self, empty):
-        assert empty.model_params.extra_params["scale"].shape == (N_STATES,)
+        assert empty.model_params.obs_extra_params["scale"].shape == (N_STATES,)
 
     def test_log_initial_prob_shape(self, empty):
         assert empty.hmm_params.log_initial_prob.shape == (N_STATES,)
@@ -2638,7 +2638,7 @@ class TestGetEmptyParams:
             model_params=GLMParams(
                 coef=(N_FEATURES, *model_shape),
                 intercept=model_shape,
-                extra_params={"scale": model_shape},
+                obs_extra_params={"scale": model_shape},
             ),
             hmm_params=HMMParams(
                 log_initial_prob=(N_STATES,),

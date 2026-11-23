@@ -1777,7 +1777,9 @@ def negativeBinomialGLM_model_instantiation():
         spikes,
         model,
         GLMParams(
-            w_true, b_true, extra_params={"dispersion": jnp.full_like(b_true, 1 / r)}
+            w_true,
+            b_true,
+            obs_extra_params={"dispersion": jnp.full_like(b_true, 1 / r)},
         ),
         rate,
     )
@@ -1927,7 +1929,7 @@ def instantiate_glm_func(
         X=X,
         y=counts,
         model=model,
-        params=GLMParams(model.coef_, model.intercept_, extra_params=extras),
+        params=GLMParams(model.coef_, model.intercept_, obs_extra_params=extras),
         rates=rates,
         extra=None,
     )
@@ -1980,7 +1982,7 @@ def instantiate_population_glm_func(
         X=X,
         y=counts,
         model=model,
-        params=GLMParams(model.coef_, model.intercept_, extra_params=extras),
+        params=GLMParams(model.coef_, model.intercept_, obs_extra_params=extras),
         rates=rates,
         extra=None,
     )
@@ -2184,7 +2186,7 @@ def instantiate_glm_hmm_func(
             model_params=GLMParams(
                 coef=coef,
                 intercept=intercept,
-                extra_params=extras,
+                obs_extra_params=extras,
             ),
             hmm_params=HMMParams(
                 log_initial_prob=jnp.log(init_prob),

@@ -391,7 +391,7 @@ class PopulationGLMValidator(GLMValidator):
                     f"but y has {n_neurons} neurons"
                 )
             matches = jax.tree_util.tree_map(
-                lambda x: x.shape == (n_neurons,), params.extra_params
+                lambda x: x.shape == (n_neurons,), params.obs_extra_params
             )
             if not all(jax.tree_util.tree_leaves(matches)):
                 msg = (
@@ -401,7 +401,7 @@ class PopulationGLMValidator(GLMValidator):
                 msg += "".join(
                     [
                         "\n- '{}': {}".format(k, v.shape)
-                        for k, v in params.extra_params.items()
+                        for k, v in params.obs_extra_params.items()
                     ]
                 )
                 msg += f"\ninstead of ({n_neurons},)."

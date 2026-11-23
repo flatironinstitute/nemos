@@ -141,8 +141,8 @@ class _FullyCoveredParams(ModelParams):
         ),
         pytest.param(
             GLMParams,
-            GLMParams(coef=False, intercept=True, extra_params=True),
-            GLMParams(coef=True, intercept=False, extra_params=False),
+            GLMParams(coef=False, intercept=True, obs_extra_params=True),
+            GLMParams(coef=True, intercept=False, obs_extra_params=False),
             id="partial-coverage",
         ),
     ],
@@ -171,26 +171,26 @@ def test_ridge_certifies_the_leaves_its_penalty_reaches(
     [
         pytest.param(
             0.1,
-            GLMParams(coef=False, intercept=True, extra_params=True),
-            GLMParams(coef=True, intercept=False, extra_params=False),
+            GLMParams(coef=False, intercept=True, obs_extra_params=True),
+            GLMParams(coef=True, intercept=False, obs_extra_params=False),
             id="positive-scalar",
         ),
         pytest.param(
             jnp.array([1.0, 2.0, 3.0]),
-            GLMParams(coef=False, intercept=True, extra_params=True),
-            GLMParams(coef=True, intercept=False, extra_params=False),
+            GLMParams(coef=False, intercept=True, obs_extra_params=True),
+            GLMParams(coef=True, intercept=False, obs_extra_params=False),
             id="positive-array",
         ),
         pytest.param(
             0.0,
-            GLMParams(coef=True, intercept=True, extra_params=True),
-            GLMParams(coef=False, intercept=False, extra_params=False),
+            GLMParams(coef=True, intercept=True, obs_extra_params=True),
+            GLMParams(coef=False, intercept=False, obs_extra_params=False),
             id="zero-scalar",
         ),
         pytest.param(
             jnp.array([1.0, 0.0, 2.0]),
-            GLMParams(coef=False, intercept=True, extra_params=True),
-            GLMParams(coef=False, intercept=False, extra_params=False),
+            GLMParams(coef=False, intercept=True, obs_extra_params=True),
+            GLMParams(coef=False, intercept=False, obs_extra_params=False),
             id="array-with-a-zero",
         ),
     ],
@@ -220,6 +220,6 @@ def test_unregularized_resolves_the_zero_tag():
     assert UnRegularized()._resolve_hess_tag(params, None) == HessianTag(
         structure=MatrixStructure.DIAGONAL,
         property=MatrixProperty.POSITIVE_SEMI_DEFINITE,
-        flat_on=GLMParams(coef=True, intercept=True, extra_params=True),
-        definite_on=GLMParams(coef=False, intercept=False, extra_params=False),
+        flat_on=GLMParams(coef=True, intercept=True, obs_extra_params=True),
+        definite_on=GLMParams(coef=False, intercept=False, obs_extra_params=False),
     )

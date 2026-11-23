@@ -16,7 +16,7 @@ class GLMParams[LeafT](ModelParams[LeafT]):
 
     coef: PyTree[LeafT]
     intercept: LeafT
-    extra_params: Optional[dict[str, LeafT]] = None
+    obs_extra_params: Optional[dict[str, LeafT]] = None
 
     @staticmethod
     def regularizable_subtrees() -> list[Callable[["GLMParams[LeafT]"], PyTree[LeafT]]]:
@@ -55,7 +55,7 @@ class ToGLMParams(eqx.Module):
         This function transform the parameters according to the dictionary of
         callables ``map_to``. If a user parameter key is in map_to, the corresponding
         parameter value will be transformed via map_to[key](value) before being stored
-        in GLMParams.extra_params.
+        in GLMParams.obs_extra_params.
         """
         user_params = {} if user_params is None else user_params.copy()
         coef = user_params.pop("coef", None)
@@ -97,7 +97,7 @@ class FromGLMParams(eqx.Module):
         """
         user_params = {"coef": glm_params.coef, "intercept": glm_params.intercept}
         extra_params = (
-            {} if glm_params.extra_params is None else glm_params.extra_params
+            {} if glm_params.obs_extra_params is None else glm_params.obs_extra_params
         )
         user_params.update(
             {
