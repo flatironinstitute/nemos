@@ -1,5 +1,6 @@
 import itertools
 from functools import partial
+from unittest.mock import MagicMock
 
 import jax
 import jax.numpy as jnp
@@ -7,11 +8,13 @@ import numpy as np
 import pytest
 from hmmlearn import hmm
 
+from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
 from nemos.fetch import fetch_data
 from nemos.glm import GLM
 from nemos.glm.params import GLMParams
 from nemos.glm_hmm.algorithm_configs import (
     get_analytical_scale_update,
+    map_from,
     posterior_weighted_glm_negative_log_likelihood,
     prepare_estep_log_likelihood,
     prepare_mstep_nll_for_analytical_scale,
@@ -19,6 +22,7 @@ from nemos.glm_hmm.algorithm_configs import (
     prepare_mstep_nll_objective_param,
     prepare_mstep_update_fn,
 )
+from nemos.glm_hmm.glm_hmm import GLMHMM
 from nemos.glm_hmm.params import GLMHMMParams, HMMParams
 from nemos.glm_hmm.utils import compute_rate_per_state
 from nemos.hmm.expectation_maximization import (
@@ -612,6 +616,31 @@ def lagrange_mult_loss(param, args, loss, **kwargs):
         constraint = proba.sum() - 1
     lagrange_mult_term = (lam * constraint).sum()
     return loss(proba, args, **kwargs) + lagrange_mult_term
+
+
+@pytest.mark.parametrize("observation_model", AVAILABLE_OBSERVATION_MODELS)
+def test_map_from_matches_validator(observation_model, monkeypatch):
+    """The algorithms map through ``Observations.map_from`` and match the validator output."""
+    model = GLMHMM(2, observation_model=observation_model)
+    obs = model.observation_model
+    obs_params = {k: jnp.array([-0.5, 0.3]) for k in obs.extra_params} or None
+    params = GLMHMMParams(
+        model_params=GLMParams(jnp.zeros((1, 2)), jnp.zeros(2), obs_params),
+        hmm_params=HMMParams(jnp.log(jnp.full(2, 0.5)), jnp.log(jnp.full((2, 2), 0.5))),
+    )
+    user_params = model._validator.from_model_params(params)
+    expected = {k: user_params[k] for k in obs.extra_params}
+
+    spies = {k: MagicMock(side_effect=f) for k, f in obs.map_from.items()}
+    monkeypatch.setattr(type(obs), "map_from", property(lambda self: spies))
+    actual = map_from(obs_params, obs)
+
+    for k, spy in spies.items():
+        spy.assert_called_once()
+        assert spy.call_args.args[0] is obs_params[k]
+    assert actual.keys() == expected.keys()
+    for k in expected:
+        np.testing.assert_array_equal(actual[k], expected[k])
 
 
 @ESTEP_TYPE

@@ -24,9 +24,7 @@ def map_from(obs_params: dict | None, observation_model: Observations) -> dict:
     """Convenience wrapping mapping wrapper."""
     if obs_params is None:
         return {}
-    return {
-        k: observation_model.extra_params[k].map_from(p) for k, p in obs_params.items()
-    }
+    return {k: observation_model.map_from[k](p) for k, p in obs_params.items()}
 
 
 def has_no_extra_params(observation_model: Observations) -> bool:
