@@ -729,14 +729,23 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             self._observation_model, self._validator
         )
 
-    def _check_is_fit(self):
-        """Ensure the instance has been fitted."""
-        not_fit = [getattr(self, s + "_", None) is None for s in self.param_names]
-        if any(not_fit):
+    def _check_is_fit(self, needs_obs_params: bool = True):
+        """Ensure the instance has been fitted.
+
+        With ``needs_obs_params``, the parameters declared by the observation model
+        (e.g. ``scale``, ``dispersion``) are required too.
+        """
+        obs_params = self._observation_model.extra_params
+        needed = [k for k in self.param_names if k not in obs_params]
+        if needs_obs_params:
+            needed += list(obs_params)
+        missing = [k + "_" for k in needed if getattr(self, k + "_", None) is None]
+        if missing:
             raise NotFittedError(
                 "This GLM instance is not fitted yet, some fitted attributes are missing. "
                 "Call 'fit' with appropriate arguments or set the attributes manually.\n"
-                f"Missing attributes are: {not_fit}"
+                f"Needed attributes are: {[k + '_' for k in needed]}.\n"
+                f"Missing attributes are: {missing}"
             )
 
     def _predict(
@@ -829,7 +838,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             using the GLM as a recurrent network (feed-forward + coupling).
         """
         # check that the model is fitted
-        self._check_is_fit()
+        self._check_is_fit(needs_obs_params=False)
         # extract model params
         params = self._get_model_params()
 
@@ -988,20 +997,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         """
         # this guarantees that any extra distribution parameter is set
         self._check_is_fit()
-        if (
-            score_type in {"log-likelihood", "pseudo-r2-McFadden"}
-            and self.scale_ is None
-            and not self._has_constant_scale()
-        ):
-            raise ValueError(
-                f"Score of type '{score_type}' requires a `scale_`, which is not set. `stochastic_fit()`"
-                f" does not estimate `scale_` for the {self.observation_model.__class__.__name__}"
-                " observation model. Estimate the scale externally and assign it to `model.scale_`."
-                " For example, accumulate the residual variance over batches of data. Or, if the"
-                " predicted rate and the counts fit in memory, compute the rate batch by batch with"
-                " `model.predict` and pass the rate and the counts to"
-                " `model.observation_model.estimate_scale`."
-            )
         # extra params (scale, dispersion) already in original space
         param_dict = self._get_param_dict()
         # params is in the transformed space (log(scale), log(dispersion))

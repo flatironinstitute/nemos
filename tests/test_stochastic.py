@@ -21,6 +21,7 @@ from nemos.callbacks import (
     TrainingContext,
     _normalize_callbacks,
 )
+from nemos.exceptions import NotFittedError
 from nemos.regularizer import UnRegularized
 
 _stochastic_solver_names = [
@@ -836,7 +837,7 @@ class TestGLMStochasticFit:
     def test_stochastic_fit_warns_and_score_raises_for_data_dependent_scale(
         self, simple_data, obs_name, y_transform
     ):
-        """stochastic_fit warns and score raises when the observation model's scale depends on the data."""
+        """stochastic_fit warns, score and simulate raise, and predict works when the scale depends on the data."""
         X, y = simple_data
         y = y_transform(y)
         loader = ArrayDataLoader(X, y, batch_size=32)
@@ -852,8 +853,13 @@ class TestGLMStochasticFit:
         assert model.scale_ is None
         assert model.dof_resid_ is None
 
-        with pytest.raises(ValueError, match="scale_"):
-            model.score(X, y)
+        missing = r"Missing attributes are: \['scale_'\]"
+        for score_type in ["log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"]:
+            with pytest.raises(NotFittedError, match=missing):
+                model.score(X, y, score_type=score_type)
+        with pytest.raises(NotFittedError, match=missing):
+            model.simulate(jax.random.PRNGKey(0), X)
+        assert jnp.all(jnp.isfinite(model.predict(X)))
 
     def test_classifier_categorical_score_works_after_stochastic_fit(self):
         """ClassifierGLM uses the categorical constant-scale path after stochastic_fit."""
