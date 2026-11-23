@@ -73,7 +73,7 @@ def _make_glm_params(coef, intercept, observation_model, **extra_params):
         k: extra_params.get(k, jnp.full(intercept.shape, v["map_to"](v["default"])))
         for k, v in observation_model.extra_params.items()
     }
-    return GLMParams(coef, intercept, obs_extra_params=extras or None)
+    return GLMParams(coef, intercept, obs_params=extras or None)
 
 
 def setup_solver(
@@ -1856,7 +1856,7 @@ class TestMStep:
             new_glm_params = GLMParams(
                 new_glm_params.coef,
                 new_glm_params.intercept,
-                obs_extra_params=init_model_params.obs_extra_params,
+                obs_params=init_model_params.obs_params,
             )
         else:
             solver = setup_solver(objective, init_params=init_model_params, tol=1e-8)
@@ -1884,7 +1884,7 @@ class TestMStep:
 
         if obs.extra_params and all(v["separable"] for v in obs.extra_params.values()):
             objective_extras = prepare_mstep_nll_objective_extra_params(False, obs)
-            extras = new_glm_params.obs_extra_params
+            extras = new_glm_params.obs_params
             solver = setup_solver(objective_extras, init_params=extras, tol=1e-8)
 
             new_extras, _, _ = solver.run(extras, y, predicted_rate, posteriors)
@@ -1908,7 +1908,7 @@ class TestMStep:
                 "M-step for GLM scale prob did not increase likelihood"
             )
         else:
-            new_extras = new_glm_params.obs_extra_params or {}
+            new_extras = new_glm_params.obs_params or {}
 
         params = GLMHMMParams(
             hmm_params=HMMParams(None, None),
@@ -2711,9 +2711,7 @@ class TestConvergence:
         )
         assert all(
             jnp.all(jnp.isfinite(x))
-            for x in jax.tree_util.tree_leaves(
-                learned_params.model_params.obs_extra_params
-            )
+            for x in jax.tree_util.tree_leaves(learned_params.model_params.obs_params)
         ), "Final extra_params contains non-finite values"
 
     @pytest.mark.requires_x64
@@ -3782,7 +3780,7 @@ class TestEMExtraParamsOptimization:
             )
             # Update scale parameters using analytical update
             new_extra_params, _, _ = scale_update_fn(
-                params.obs_extra_params,
+                params.obs_params,
                 y,
                 predicted_rate,
                 posteriors,
@@ -3824,7 +3822,7 @@ class TestEMExtraParamsOptimization:
         assert final_state.iterations > 0, "EM should have run at least one iteration"
 
         # Verify scale was updated (should differ from initialization)
-        final_scale = jnp.exp(final_params.model_params.obs_extra_params["scale"])
+        final_scale = jnp.exp(final_params.model_params.obs_params["scale"])
         assert not jnp.allclose(final_scale, init_scale, atol=0.1), (
             "Scale should have been updated from initialization"
         )
@@ -3888,7 +3886,7 @@ class TestEMExtraParamsOptimization:
                     new_model_params.coef,
                     new_model_params.intercept,
                     obs,
-                    **params.obs_extra_params,
+                    **params.obs_params,
                 ),
                 None,
                 None,
@@ -3927,7 +3925,7 @@ class TestEMExtraParamsOptimization:
             )
             # Update scale parameters using analytical update
             new_extra_params, _, _ = scale_update_fn(
-                params.obs_extra_params,
+                params.obs_params,
                 y,
                 predicted_rate,
                 posteriors,
@@ -3954,7 +3952,7 @@ class TestEMExtraParamsOptimization:
             maxiter=50,
             tol=1e-5,
         )
-        final_scale = jnp.exp(final_params.model_params.obs_extra_params["scale"])
+        final_scale = jnp.exp(final_params.model_params.obs_params["scale"])
 
         # Verify both converged
         assert state_no_scale.iterations > 0
@@ -4032,7 +4030,7 @@ class TestEMExtraParamsOptimization:
             predicted_rate = compute_rate_per_state(X, new_model_params, jnp.exp)
             # Update scale parameters using separate solver
             new_extra_params, _, _ = solver_scale.run(
-                params.obs_extra_params,
+                params.obs_params,
                 y,
                 predicted_rate,
                 posteriors,
@@ -4064,7 +4062,7 @@ class TestEMExtraParamsOptimization:
         assert final_state.iterations > 0, "EM should have run at least one iteration"
 
         # Verify scale was updated
-        final_scale = jnp.exp(final_params.model_params.obs_extra_params["scale"])
+        final_scale = jnp.exp(final_params.model_params.obs_params["scale"])
         assert not jnp.allclose(final_scale, init_scale, atol=0.1), (
             "Scale should have been updated from initialization"
         )
@@ -4130,9 +4128,7 @@ class TestEMExtraParamsOptimization:
         assert final_state.iterations > 0, "EM should have run at least one iteration"
 
         # Verify dispersion was updated
-        final_dispersion = jnp.exp(
-            final_params.model_params.obs_extra_params["dispersion"]
-        )
+        final_dispersion = jnp.exp(final_params.model_params.obs_params["dispersion"])
         assert not jnp.allclose(final_dispersion, init_dispersion, atol=0.1), (
             "Dispersion should have been updated from initialization"
         )
@@ -4184,7 +4180,7 @@ class TestEMExtraParamsOptimization:
             )
             # Update scale parameters using analytical update
             new_extra_params, _, _ = scale_update_fn(
-                params.obs_extra_params,
+                params.obs_params,
                 y,
                 predicted_rate,
                 posteriors,
@@ -4226,7 +4222,7 @@ class TestEMExtraParamsOptimization:
         assert final_state.iterations > 0, "EM should have run at least one iteration"
 
         # Verify scale shape (n_neurons, n_states)
-        final_scale = jnp.exp(final_params.model_params.obs_extra_params["scale"])
+        final_scale = jnp.exp(final_params.model_params.obs_params["scale"])
         n_neurons = data["y"].shape[1]
         assert final_scale.shape == (
             n_neurons,

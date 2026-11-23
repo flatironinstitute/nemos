@@ -613,7 +613,7 @@ class TestNegativeBinomialObservations:
     ):
         _, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
         dev = sm.families.NegativeBinomial(
-            alpha=model.observation_model.obs_extra_params["dispersion"]["default"]
+            alpha=model.observation_model.obs_params["dispersion"]["default"]
         ).deviance(y, firing_rate)
         dev_model = model.observation_model.deviance(y, firing_rate).sum()
         if not np.allclose(dev, dev_model):
@@ -621,7 +621,7 @@ class TestNegativeBinomialObservations:
 
     def test_loglikelihood_against_scipy(self, negativeBinomialGLM_model_instantiation):
         _, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
-        r = 1.0 / model.observation_model.obs_extra_params["dispersion"]["default"]
+        r = 1.0 / model.observation_model.obs_params["dispersion"]["default"]
         p = r / (r + firing_rate)
         ll_model = model.observation_model.log_likelihood(y, firing_rate)
         ll_scipy = sts.nbinom.logpmf(y, r, p).mean()
@@ -640,7 +640,7 @@ class TestNegativeBinomialObservations:
         ll_model = model.observation_model.log_likelihood(
             y, firing_rate, aggregate_sample_scores=lambda x: x
         )
-        r = 1.0 / model.observation_model.obs_extra_params["dispersion"]["default"]
+        r = 1.0 / model.observation_model.obs_params["dispersion"]["default"]
         p = r / (r + firing_rate)
         ll_scipy = sts.nbinom.logpmf(y, r, p)
         if not np.allclose(ll_model, ll_scipy):
@@ -654,11 +654,9 @@ class TestNegativeBinomialObservations:
         counts = model.observation_model.sample_generator(
             key_array,
             p,
-            dispersion=model.observation_model.obs_extra_params["dispersion"][
-                "default"
-            ],
+            dispersion=model.observation_model.obs_params["dispersion"]["default"],
         )
-        r = 1.0 / model.observation_model.obs_extra_params["dispersion"]["default"]
+        r = 1.0 / model.observation_model.obs_params["dispersion"]["default"]
         gamma_sample = jax.random.gamma(gkey, r, shape=p.shape) * (p / r)
         expected_counts = jax.random.poisson(pkey, gamma_sample)
         if not jnp.allclose(counts, expected_counts):
@@ -672,16 +670,14 @@ class TestNegativeBinomialObservations:
             y,
             sm.add_constant(X),
             family=sm.families.NegativeBinomial(
-                alpha=model.observation_model.obs_extra_params["dispersion"]["default"]
+                alpha=model.observation_model.obs_params["dispersion"]["default"]
             ),
         ).fit()
         pr2_sms = mdl.pseudo_rsquared("mcf")
         pr2_model = model.observation_model.pseudo_r2(
             y,
             mdl.mu,
-            dispersion=model.observation_model.obs_extra_params["dispersion"][
-                "default"
-            ],
+            dispersion=model.observation_model.obs_params["dispersion"]["default"],
             score_type="pseudo-r2-McFadden",
         )
         if not np.allclose(pr2_model, pr2_sms, atol=1e-5):
@@ -937,7 +933,7 @@ class TestCommonObservationModels:
     def test_signature(self, observation_model_rate_and_samples, methods_with_extras):
         obs, _, _ = observation_model_rate_and_samples
         for meth_name in methods_with_extras:
-            for key in obs.obs_extra_params:
+            for key in obs.obs_params:
                 if key == "scale" and meth_name == "estimate_scale":
                     # scale is not an input of its own estimation method
                     continue
@@ -945,11 +941,11 @@ class TestCommonObservationModels:
                 assert key in params, (
                     f"Method {meth_name} does not have expose keyword parameter {key}"
                 )
-                assert params[key].default == obs.obs_extra_params[key]["default"], (
+                assert params[key].default == obs.obs_params[key]["default"], (
                     f"Method {meth_name} default for {key} does not match the declared default"
                 )
 
-            if not obs.obs_extra_params:
+            if not obs.obs_params:
                 assert "_" in inspect.signature(getattr(obs, meth_name)).parameters
 
     def test_extra_params_usage(
@@ -959,7 +955,7 @@ class TestCommonObservationModels:
         import typing
 
         obs, y, rate = observation_model_rate_and_samples
-        if not obs.obs_extra_params:
+        if not obs.obs_params:
             pytest.skip(f"No extra params for {obs.__class__}")
 
         for meth_name in methods_with_extras:
@@ -995,9 +991,7 @@ class TestCommonObservationModels:
                 extra_kwargs = {k: v for (k, v) in comb}
                 if (
                     "pseudo-r2-Cohen" in [v for v in extra_kwargs.values()]
-                    and obs.obs_extra_params.get("scale", {"separable": False})[
-                        "separable"
-                    ]
+                    and obs.obs_params.get("scale", {"separable": False})["separable"]
                 ):
                     # scale simplifies when separable
                     print(f"\nskipping {obs} Choen pseudo r2")
@@ -1007,37 +1001,37 @@ class TestCommonObservationModels:
                     **dof_kwarg,
                     **kwargs,
                     **extra_kwargs,
-                    **{k: v["default"] for k, v in obs.obs_extra_params.items()},
+                    **{k: v["default"] for k, v in obs.obs_params.items()},
                 )
                 val2 = method(
                     **dof_kwarg,
                     **kwargs,
                     **extra_kwargs,
-                    **{k: v["default"] + 1 for k, v in obs.obs_extra_params.items()},
+                    **{k: v["default"] + 1 for k, v in obs.obs_params.items()},
                 )
                 assert not np.allclose(val, val2), (
                     f"The method {meth_name} disregarded kwargs "
-                    f"{[k for k in obs.obs_extra_params.keys()]}.\nUsed kwargs:\n"
+                    f"{[k for k in obs.obs_params.keys()]}.\nUsed kwargs:\n"
                     f"{extra_kwargs}"
                 )
 
     def test_extra_params_immutable(self, observation_model_rate_and_samples):
         obs, _, _ = observation_model_rate_and_samples
         with pytest.raises(AttributeError, match="has no attribute 'update'"):
-            obs.obs_extra_params.update({"scale": 1})
+            obs.obs_params.update({"scale": 1})
 
-        if obs.obs_extra_params:
-            key = list(obs.obs_extra_params.keys())[0]
+        if obs.obs_params:
+            key = list(obs.obs_params.keys())[0]
             with pytest.raises(TypeError, match="does not support item assignment"):
-                obs.obs_extra_params[key] = 1
+                obs.obs_params[key] = 1
             with pytest.raises(TypeError, match="does not support item assignment"):
-                obs.obs_extra_params[key]["default"] = 2
+                obs.obs_params[key]["default"] = 2
 
     def test_extra_params_struct(self, observation_model_rate_and_samples):
         obs, _, _ = observation_model_rate_and_samples
-        assert isinstance(obs.obs_extra_params, ReadOnlyDict)
-        if obs.obs_extra_params:
-            for k, v in obs.obs_extra_params.items():
+        assert isinstance(obs.obs_params, ReadOnlyDict)
+        if obs.obs_params:
+            for k, v in obs.obs_params.items():
                 assert isinstance(v, ReadOnlyDict)
                 assert v.keys() == OBS_MODEL_EXTRA_KEYS
 

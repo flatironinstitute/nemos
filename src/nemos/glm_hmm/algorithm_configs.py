@@ -152,7 +152,7 @@ def posterior_weighted_glm_negative_log_likelihood(
         predicted_rate,
         posteriors,
         negative_log_likelihood_func,
-        extra_params=glm_params.obs_extra_params,
+        extra_params=glm_params.obs_params,
         observation_model=observation_model,
     )
 
@@ -258,7 +258,7 @@ def prepare_estep_log_likelihood(
 
     def log_likelihood(params, X, y):
         rate = compute_rate_per_state(X, params, inverse_link_function)
-        extra_params = map_from(params.obs_extra_params, observation_model)
+        extra_params = map_from(params.obs_params, observation_model)
         log_like = vmap_log_likelihood_per_sample(y, rate, extra_params)
         if is_population_glm:
             # Multi-neuron case: sum log-likelihoods across neurons
@@ -533,7 +533,7 @@ def prepare_mstep_update_fn(
             # force scale to be unregularized and fit with LBFGS
             scale_update_fn = setup_solver(
                 objective_scale,
-                init_params=init_params.obs_extra_params,
+                init_params=init_params.obs_params,
                 solver_name="LBFGS",
                 regularizer=UnRegularized(),
             ).run
@@ -548,14 +548,14 @@ def prepare_mstep_update_fn(
                 X, new_glm_params, inverse_link_function=inverse_link_function
             )
             new_extra_params, state_extra_params, aux_extra_params = scale_update_fn(
-                params.obs_extra_params, y, predicted_rate, posteriors
+                params.obs_params, y, predicted_rate, posteriors
             )
 
             return (
                 GLMParams(
                     new_glm_params.coef,
                     new_glm_params.intercept,
-                    obs_extra_params=new_extra_params,
+                    obs_params=new_extra_params,
                 ),
                 (state_params, state_extra_params),
                 (aux_params, aux_extra_params),

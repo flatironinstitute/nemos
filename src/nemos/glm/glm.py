@@ -1127,10 +1127,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
                 frozen_intercept=frozen_intercept,
                 rate_range=self.observation_model.rate_range,
             )
-        if empty_params.obs_extra_params is not None:
+        if empty_params.obs_params is not None:
             extras = jax.tree_util.tree_map(
                 jnp.full_like,
-                empty_params.obs_extra_params,
+                empty_params.obs_params,
                 {
                     k: self._observation_model.extra_params[k]["default"]
                     for k in self._validator.extra_param_names
@@ -2075,7 +2075,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         return GLMParams(
             coef=coef_shapes,
             intercept=intercept_shape,
-            obs_extra_params=extra_params_shape,
+            obs_params=extra_params_shape,
         )
 
 

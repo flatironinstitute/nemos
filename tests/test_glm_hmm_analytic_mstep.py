@@ -104,9 +104,7 @@ def generate_data_gaussian(request):
             model_params=GLMParams(
                 glm_params.coef,
                 glm_params.intercept,
-                obs_extra_params={
-                    "scale": jnp.zeros((*y_shape, n_states)).astype(float)
-                },
+                obs_params={"scale": jnp.zeros((*y_shape, n_states)).astype(float)},
             ),
         ),
         X,
@@ -209,7 +207,7 @@ class TestAnalyticMStepScale:
             model_params=GLMParams(
                 glm_params.coef,
                 glm_params.intercept,
-                obs_extra_params={"scale": jnp.zeros_like(glm_params.intercept)},
+                obs_params={"scale": jnp.zeros_like(glm_params.intercept)},
             ),
         )
 
@@ -220,7 +218,7 @@ class TestAnalyticMStepScale:
             predicted_rate = compute_rate_per_state(X, new_model_params, inv_link_func)
             # Update scale parameters using analytical update
             new_extra_params, _, _ = update(
-                params.obs_extra_params,
+                params.obs_params,
                 y,
                 predicted_rate,
                 posteriors,
@@ -229,7 +227,7 @@ class TestAnalyticMStepScale:
                 GLMParams(
                     coef=new_model_params.coef,
                     intercept=new_model_params.intercept,
-                    obs_extra_params=new_extra_params,
+                    obs_params=new_extra_params,
                 ),
                 None,
                 None,
@@ -254,7 +252,7 @@ class TestAnalyticMStepScale:
             predicted_rate = compute_rate_per_state(X, new_model_params, inv_link_func)
             # Update scale parameters using separate solver
             new_extra_params, _, _ = solver_scale.run(
-                params.obs_extra_params,
+                params.obs_params,
                 y,
                 predicted_rate,
                 posteriors,
@@ -263,7 +261,7 @@ class TestAnalyticMStepScale:
                 GLMParams(
                     coef=new_model_params.coef,
                     intercept=new_model_params.intercept,
-                    obs_extra_params=new_extra_params,
+                    obs_params=new_extra_params,
                 ),
                 None,
                 None,

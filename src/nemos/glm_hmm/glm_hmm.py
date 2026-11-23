@@ -1046,9 +1046,7 @@ class GLMHMM(
         # unpack log probabilities directly (avoid exp then log in categorical)
         log_initial_prob = params.hmm_params.log_initial_prob
         log_transition_prob = params.hmm_params.log_transition_prob
-        extra_params = map_from(
-            params.model_params.obs_extra_params, self.observation_model
-        )
+        extra_params = map_from(params.model_params.obs_params, self.observation_model)
 
         # pre-compute rates for all states: (n_time_bins, n_states) or (n_time_bins, n_neurons, n_states)
         all_rates = compute_rate_per_state(
@@ -1823,7 +1821,7 @@ class GLMHMM(
             k: extra_shape for k in self.observation_model.extra_params.keys()
         }
         glm_params = GLMParams(
-            coef=coef_shapes, intercept=extra_shape, obs_extra_params=extra_params
+            coef=coef_shapes, intercept=extra_shape, obs_params=extra_params
         )
         hmm_params = HMMParams(
             log_initial_prob=(n_states,), log_transition_prob=(n_states, n_states)
