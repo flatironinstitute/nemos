@@ -2438,6 +2438,28 @@ class TestGetEmptyParams:
         assert empty.hmm_params.log_transition_prob.shape == (N_STATES, N_STATES)
 
     @pytest.mark.parametrize(
+        "y, model_shape",
+        [
+            (np.zeros(20), (N_STATES,)),
+            (np.zeros((20, 4)), (4, N_STATES)),
+        ],
+    )
+    def test_params_shape(self, y, model_shape):
+        shapes = GLMHMM(N_STATES)._get_params_shape(np.ones((20, N_FEATURES)), y)
+        expected = GLMHMMParams(
+            model_params=GLMHMMModelParams(
+                coef=(N_FEATURES, *model_shape),
+                intercept=model_shape,
+                log_scale=model_shape,
+            ),
+            hmm_params=HMMParams(
+                log_initial_prob=(N_STATES,),
+                log_transition_prob=(N_STATES, N_STATES),
+            ),
+        )
+        assert shapes == expected
+
+    @pytest.mark.parametrize(
         "X, y, expectation",
         [
             (
