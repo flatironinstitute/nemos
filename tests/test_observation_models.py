@@ -941,8 +941,8 @@ class TestCommonObservationModels:
                 assert key in params, (
                     f"Method {meth_name} does not have expose keyword parameter {key}"
                 )
-                assert params[key].default is None, (
-                    f"Method {meth_name} does have a concrete default"
+                assert params[key].default == obs.extra_params[key]["default"], (
+                    f"Method {meth_name} default for {key} does not match the declared default"
                 )
 
             if not obs.extra_params:

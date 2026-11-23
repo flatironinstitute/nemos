@@ -1,7 +1,7 @@
 """Observation model classes for GLMs."""
 
 import abc
-from typing import Callable, ClassVar, Literal, Union, Optional
+from typing import Callable, ClassVar, Literal, Union
 
 import jax
 import jax.numpy as jnp
@@ -812,7 +812,7 @@ class GammaObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
-        scale: Optional[jnp.ndarray] = None,
+        scale: Union[float, jnp.ndarray] = 1.0,
     ):
         r"""Compute the Gamma negative log-likelihood.
 
@@ -836,8 +836,6 @@ class GammaObservations(Observations):
             The Gamma negative log-likelihood. Shape (1,).
 
         """
-        if scale is None:
-            scale = self.extra_params["scale"]["default"]
         k = 1 / scale
         norm = (k - 1) * jnp.log(y) + k * jnp.log(k) - jax.scipy.special.gammaln(k)
         return aggregate_sample_scores(
@@ -849,7 +847,7 @@ class GammaObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
-        scale: Optional[jnp.ndarray] = None,
+        scale: Union[float, jnp.ndarray] = 1.0,
     ):
         r"""Compute the Gamma likelihood."""
         return super().likelihood(
@@ -860,7 +858,7 @@ class GammaObservations(Observations):
         self,
         key: jax.Array,
         predicted_rate: jnp.ndarray,
-        scale: Optional[jnp.ndarray] = None,
+        scale: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
         """
         Sample from the Gamma distribution.
@@ -882,15 +880,13 @@ class GammaObservations(Observations):
         jnp.ndarray
             Random numbers generated from the Gamma distribution based on the `predicted_rate` and the `scale`.
         """
-        if scale is None:
-            scale = self.extra_params["scale"]["default"]
         return jax.random.gamma(key, predicted_rate / scale) * scale
 
     def deviance(
         self,
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
-        scale: Optional[jnp.ndarray] = None,
+        scale: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
         r"""Compute the residual deviance for a Gamma model.
 
@@ -924,8 +920,6 @@ class GammaObservations(Observations):
         log-likelihood. Lower values of deviance indicate a better fit.
 
         """
-        if scale is None:
-            scale = self.extra_params["scale"]["default"]
         y_mu = jnp.clip(y / predicted_rate, min=jnp.finfo(float).eps)
         resid_dev = 2 * (-jnp.log(y_mu) + (y - predicted_rate) / predicted_rate)
         return resid_dev / scale
@@ -980,7 +974,7 @@ class GammaObservations(Observations):
             "pseudo-r2-McFadden", "pseudo-r2-Cohen"
         ] = "pseudo-r2-McFadden",
         aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
-        scale: Optional[Union[float, jnp.ndarray]] = None,
+        scale: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
         r"""Pseudo-:math:`R^2` calculation for a GLM."""
         return super().pseudo_r2(
@@ -1420,7 +1414,7 @@ class NegativeBinomialObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
-        dispersion: Optional[jnp.ndarray] = None,
+        dispersion: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
         r"""Compute the Negative Binomial negative log-likelihood.
 
@@ -1458,8 +1452,6 @@ class NegativeBinomialObservations(Observations):
             + y \log\left(\frac{\mu}{r + \mu}\right)
 
         """
-        if dispersion is None:
-            dispersion = jnp.array(self.extra_params["dispersion"]["default"])
 
         predicted_rate = jnp.clip(
             predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
@@ -1475,7 +1467,7 @@ class NegativeBinomialObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
-        dispersion: Optional[jnp.ndarray] = None,
+        dispersion: Union[float, jnp.ndarray] = 1.0,
     ):
         r"""Compute the Negative Binomial likelihood."""
         return super().likelihood(
@@ -1487,7 +1479,7 @@ class NegativeBinomialObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
-        dispersion: Optional[jnp.ndarray] = None,
+        dispersion: Union[float, jnp.ndarray] = 1.0,
     ):
         r"""Compute the Negative Binomial log-likelihood.
 
@@ -1512,8 +1504,6 @@ class NegativeBinomialObservations(Observations):
         :
             The log-likelihood of the Negative Binomial model. Shape ``(1,)``.
         """
-        if dispersion is None:
-            dispersion = jnp.array(self.extra_params["dispersion"]["default"])
         ll_unnormalized = -self._negative_log_likelihood(
             y,
             predicted_rate,
@@ -1531,7 +1521,7 @@ class NegativeBinomialObservations(Observations):
         self,
         key: jax.Array,
         predicted_rate: jnp.ndarray,
-        dispersion: Optional[jnp.ndarray] = None,
+        dispersion: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
         r"""
         Sample from the Negative Binomial distribution.
@@ -1567,8 +1557,6 @@ class NegativeBinomialObservations(Observations):
         For more information, see the `Negative Binomial distribution on Wikipedia
         <https://en.wikipedia.org/wiki/Negative_binomial_distribution#Gamma%E2%80%93Poisson_mixture>`_.
         """
-        if dispersion is None:
-            dispersion = jnp.array(self.extra_params["dispersion"]["default"])
         r = 1.0 / dispersion
         gamma_key, poisson_key = jax.random.split(key)
 
@@ -1583,7 +1571,7 @@ class NegativeBinomialObservations(Observations):
         self,
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
-        dispersion: Optional[jnp.ndarray] = None,
+        dispersion: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
         r"""Compute the residual deviance for a Negative Binomial model.
 
@@ -1621,8 +1609,6 @@ class NegativeBinomialObservations(Observations):
         where :math:`y` is the observed data, :math:`\hat{y}` is the predicted data, and :math:`\text{LL}` is
         the model log-likelihood.
         """
-        if dispersion is None:
-            dispersion = jnp.array(self.extra_params["dispersion"]["default"])
         factor = (predicted_rate * dispersion + 1) / (y * dispersion + 1)
         y_mu = y / predicted_rate
         y_mu = jnp.clip(y_mu, min=jnp.finfo(predicted_rate.dtype).eps)
@@ -1635,7 +1621,7 @@ class NegativeBinomialObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         dof_resid: Union[float, jnp.ndarray],
-        dispersion: Optional[jnp.ndarray] = None,
+        dispersion: Union[float, jnp.ndarray] = 1.0,
     ) -> Union[float, jnp.ndarray]:
         r"""
         Return the scale parameter of the distribution.
@@ -1675,7 +1661,7 @@ class NegativeBinomialObservations(Observations):
             "pseudo-r2-McFadden", "pseudo-r2-Cohen"
         ] = "pseudo-r2-McFadden",
         aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
-        dispersion: Optional[Union[float, jnp.ndarray]] = None,
+        dispersion: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
         r"""Pseudo-:math:`R^2` calculation for a GLM."""
         return super().pseudo_r2(
@@ -1781,7 +1767,7 @@ class GaussianObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
-        scale: Optional[jnp.ndarray] = None,
+        scale: Union[float, jnp.ndarray] = 1.0,
     ):
         r"""Compute the Gaussian negative log-likelihood.
 
@@ -1812,8 +1798,6 @@ class GaussianObservations(Observations):
         :
             The Gaussian log-likelihood. Shape ``(1,)``.
         """
-        if scale is None:
-            scale = self.extra_params["scale"]["default"]
         norm = -0.5 * jnp.log(2 * jnp.pi * scale)
         return aggregate_sample_scores(
             norm
@@ -1828,7 +1812,7 @@ class GaussianObservations(Observations):
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
         aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
-        scale: Optional[jnp.ndarray] = None,
+        scale: Union[float, jnp.ndarray] = 1.0,
     ):
         r"""Compute the Gaussian likelihood."""
         return super().likelihood(
@@ -1839,7 +1823,7 @@ class GaussianObservations(Observations):
         self,
         key: jax.Array,
         predicted_rate: jnp.ndarray,
-        scale: Optional[jnp.ndarray] = None,
+        scale: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
         """
         Sample from the Gaussian distribution.
@@ -1862,8 +1846,6 @@ class GaussianObservations(Observations):
         jnp.ndarray
             Random numbers generated from the Gaussian distribution based on the ``predicted_rate`` and the ``scale``.
         """
-        if scale is None:
-            scale = self.extra_params["scale"]["default"]
         return (
             jax.random.normal(key, shape=predicted_rate.shape) * jnp.sqrt(scale)
             + predicted_rate
@@ -1873,7 +1855,7 @@ class GaussianObservations(Observations):
         self,
         y: jnp.ndarray,
         predicted_rate: jnp.ndarray,
-        scale: Optional[jnp.ndarray] = None,
+        scale: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
         r"""Compute the residual deviance for a Gaussian model.
 
@@ -1903,8 +1885,6 @@ class GaussianObservations(Observations):
         the scale (variance) of the model. Lower values of deviance indicate a better fit.
 
         """
-        if scale is None:
-            scale = self.extra_params["scale"]["default"]
         resid_dev = jnp.power(y - predicted_rate, 2)
         return resid_dev / scale
 
@@ -1956,7 +1936,7 @@ class GaussianObservations(Observations):
             "pseudo-r2-McFadden", "pseudo-r2-Cohen"
         ] = "pseudo-r2-McFadden",
         aggregate_sample_scores: Callable = lambda x: jnp.sum(jnp.mean(x, axis=0)),
-        scale: Optional[Union[float, jnp.ndarray]] = None,
+        scale: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
         r"""Pseudo-:math:`R^2` calculation for a GLM."""
         return super().pseudo_r2(
