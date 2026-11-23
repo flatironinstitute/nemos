@@ -143,7 +143,7 @@ def _set_regularizer(model, X, y, name):
     regularizer = name
     if name.startswith("GroupLasso"):
         regularizer = nmo.regularizer.GroupLasso()
-        empty_coef = model._validator.get_empty_params(X, y).coef
+        empty_coef = model._get_empty_params(*cast_to_float32((X, y))).coef
         if name == "GroupLasso-one-group":
             regularizer.mask = jax.tree_util.tree_map(
                 lambda c: jnp.ones((1, *c.shape)), empty_coef

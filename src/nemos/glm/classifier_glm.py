@@ -645,7 +645,7 @@ class ClassifierMixin:
 
         Note that y must be already 1-hot encoded.
         """
-        is_population = jnp.ndim(y) > 2  # valid only for 1-hot encoded
+        is_population = isinstance(self, ClassifierPopulationGLM)
         n_observations = jnp.shape(y)[1] if is_population else 1
         extra_shape = (
             (n_observations, self.n_classes) if is_population else (self.n_classes,)
