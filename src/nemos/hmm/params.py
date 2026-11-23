@@ -27,8 +27,7 @@ HMMUserParams = dict[str, LeafT]
 def to_hmm_params(user_params: HMMUserParams) -> HMMParams:
     """Map from HMMUserParams to HMMParams.
 
-    Converts user-provided parameters (scale and probabilities in regular space)
-    to internal model parameters (log_scale and log probabilities).
+    Converts user-provided probabilities to internal log probabilities.
     """
     return HMMParams(
         **{
@@ -48,8 +47,8 @@ def re_normalize(value):
 def from_hmm_params(params: HMMParams) -> HMMUserParams:
     """Map from HMMParams to HMMUserParams.
 
-    Converts internal model parameters (log_scale and log probabilities)
-    to user-facing parameters (scale and probabilities in regular space).
+    Converts internal log probabilities to user-facing probabilities,
+    re-normalized to sum to 1.
     """
     return {
         k[4:]: re_normalize(getattr(params, k))

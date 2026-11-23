@@ -8,7 +8,6 @@ AVAILABLE_PARAM_CONTAINERS = [
     "GLMParams",
     "HMMParams",
     "GLMHMMParams",
-    "GLMHMMModelParams",
 ]
 
 # Mapping for O(1) lookup

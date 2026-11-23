@@ -513,7 +513,7 @@ def prepare_mstep_update_fn(
     if observation_model.extra_params and all(
         v.separable for v in observation_model.extra_params.values()
     ):
-        # GLM params solver only needs coef and intercept — exclude log_scale
+        # GLM params solver only needs coef and intercept — exclude obs_params
         glm_init_params = GLMParams(init_params.coef, init_params.intercept)
         params_update_fn = setup_solver(
             objective_param, init_params=glm_init_params

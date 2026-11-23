@@ -470,7 +470,7 @@ def _spy_call_order(monkeypatch, container, *attr_names):
 
 
 def _make_model_params(n_features, n_states, n_neurons=None, model=None):
-    """Build a minimal GLMHMMModelParams (zeros). ``n_neurons=None`` for single-neuron."""
+    """Build minimal GLM-HMM model params, a GLMParams of zeros. ``n_neurons=None`` for single-neuron."""
     if model is not None and len(model.observation_model.extra_params) != 0:
         extras = {}
         if n_neurons is not None:
@@ -580,7 +580,7 @@ class TestSolverConfiguration:
         )
         # Fixed scale → else branch in prepare_mstep_update_fn → exactly one solver call.
         assert len(calls) == 1
-        # Joint path passes full GLMHMMModelParams (coef, intercept, log_scale) to the solver.
+        # Joint path passes the full GLMParams (coef, intercept, obs_params) to the solver.
         assert isinstance(calls[0]["init_params"], GLMParams)
 
     def test_gaussian_separable_scale_smoke(

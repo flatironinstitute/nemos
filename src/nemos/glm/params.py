@@ -76,7 +76,7 @@ class FromGLMParams(eqx.Module):
     map_from: Dict[str, Callable]
 
     def __call__(self, glm_params: GLMParams[LeafT]) -> GLMUserParams:
-        """Convert user parameter dictionary to GLMParams.
+        """Convert GLMParams to a user parameter dictionary.
 
         Parameters
         ----------
@@ -92,7 +92,7 @@ class FromGLMParams(eqx.Module):
         This function transform the parameters according to the dictionary of
         callables ``map_from``.
         If a parameter key is in map_from, the corresponding
-        parameter value will be transformed via map_to[key](value) before being stored
+        parameter value will be transformed via map_from[key](value) before being stored
         in user_params.
         """
         user_params = {"coef": glm_params.coef, "intercept": glm_params.intercept}
