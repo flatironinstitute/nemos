@@ -1962,9 +1962,7 @@ class TestHessianTag:
         Cholesky solve quietly turning into a least-squares one.
         """
         model = instantiate_base_regressor_subclass.model
-        if any(
-            not v["separable"] for v in model.observation_model.extra_params.values()
-        ):
+        if any(not v.separable for v in model.observation_model.extra_params.values()):
             prop = MatrixProperty.SYMMETRIC
         else:
             prop = MatrixProperty.POSITIVE_SEMI_DEFINITE
@@ -5978,7 +5976,7 @@ class TestFixParams:
     def fix_param_names(self, obs):
         """A corner-case design matrix (n, p), selected by indirect parametrization."""
         all_pars = ["coef", "intercept"] + [
-            k for k, v in obs.extra_params.items() if not v["separable"]
+            k for k, v in obs.extra_params.items() if not v.separable
         ]
         combs = [v for v in itertools.combinations(all_pars, 1)] + [
             v for v in itertools.combinations(all_pars, 2)

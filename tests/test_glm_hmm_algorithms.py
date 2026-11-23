@@ -70,7 +70,7 @@ ESTEP_TYPE = pytest.mark.parametrize("estep_type", tuple(FORWARD_BACKWARD))
 def _make_glm_params(coef, intercept, observation_model, **extra_params):
     """Build GLMParams with the extra params declared by the observation model."""
     extras = {
-        k: extra_params.get(k, jnp.full(intercept.shape, v["map_to"](v["default"])))
+        k: extra_params.get(k, jnp.full(intercept.shape, v.map_to(v.default)))
         for k, v in observation_model.extra_params.items()
     }
     return GLMParams(coef, intercept, obs_params=extras or None)
@@ -1847,7 +1847,7 @@ class TestMStep:
         initial_log_like = updated_log_like
         init_model_params = _make_glm_params(coef, intercept, obs)
         objective = prepare_mstep_nll_objective_param(False, obs, inv_link)
-        if obs.extra_params and all(v["separable"] for v in obs.extra_params.values()):
+        if obs.extra_params and all(v.separable for v in obs.extra_params.values()):
             glm_init_params = GLMParams(
                 init_model_params.coef, init_model_params.intercept
             )
@@ -1882,7 +1882,7 @@ class TestMStep:
             X, new_glm_params, inverse_link_function=inv_link
         )
 
-        if obs.extra_params and all(v["separable"] for v in obs.extra_params.values()):
+        if obs.extra_params and all(v.separable for v in obs.extra_params.values()):
             objective_extras = prepare_mstep_nll_objective_extra_params(False, obs)
             extras = new_glm_params.obs_params
             solver = setup_solver(objective_extras, init_params=extras, tol=1e-8)

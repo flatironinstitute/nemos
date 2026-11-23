@@ -661,7 +661,7 @@ def generate_glm_hmm_initial_model_params(
 
         init_kwargs = glm_init_funcs.get(f"{param_name}_init_kwargs") or {}
         if f"{param_name}_value" not in init_kwargs:
-            init_kwargs["fill_value"] = param_specs["default"]
+            init_kwargs["fill_value"] = param_specs.default
 
         user_params[param_name] = init_fn(
             n_states=n_states,

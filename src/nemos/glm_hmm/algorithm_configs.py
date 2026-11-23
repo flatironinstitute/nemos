@@ -25,7 +25,7 @@ def map_from(extra_params: dict | None, observation_model: Observations) -> dict
     if extra_params is None:
         return {}
     return {
-        k: observation_model.extra_params[k]["map_from"](p)
+        k: observation_model.extra_params[k].map_from(p)
         for k, p in extra_params.items()
     }
 
@@ -334,7 +334,7 @@ def prepare_mstep_nll_objective_param(
     """
     state_axes = -1
 
-    if all(v["separable"] for v in observation_model.extra_params.values()):
+    if all(v.separable for v in observation_model.extra_params.values()):
 
         def negative_log_likelihood_per_sample(x, z):
             return observation_model._negative_log_likelihood(
@@ -514,7 +514,7 @@ def prepare_mstep_update_fn(
 
     # if scale is separable and needs to be optimized, get update function for optimizing scale
     if observation_model.extra_params and all(
-        v["separable"] for v in observation_model.extra_params.values()
+        v.separable for v in observation_model.extra_params.values()
     ):
         # GLM params solver only needs coef and intercept — exclude log_scale
         glm_init_params = GLMParams(init_params.coef, init_params.intercept)

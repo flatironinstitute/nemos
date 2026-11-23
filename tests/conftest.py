@@ -1770,7 +1770,7 @@ def negativeBinomialGLM_model_instantiation():
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.GLM(observation_model, regularizer=regularizer, solver_name="LBFGS")
     rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
-    r = 1 / model.observation_model.extra_params["dispersion"]["default"]
+    r = 1 / model.observation_model.extra_params["dispersion"].default
     spikes = np.random.poisson(np.random.gamma(shape=r, size=rate.shape) * (r / rate))
     return (
         X,
@@ -1918,10 +1918,10 @@ def instantiate_glm_func(
         counts, rates = None, None
     extras = {}
     for k, v in model.observation_model.extra_params.items():
-        if v["separable"]:
+        if v.separable:
             continue
         extras[k] = model.observation_model.map_to[k](
-            jnp.full_like(model.intercept_, v["default"] * 1.1)
+            jnp.full_like(model.intercept_, v.default * 1.1)
         )
     if len(extras) == 0:
         extras = None
@@ -1971,10 +1971,10 @@ def instantiate_population_glm_func(
         counts, rates = None, None
     extras = {}
     for k, v in model.observation_model.extra_params.items():
-        if v["separable"]:
+        if v.separable:
             continue
         extras[k] = model.observation_model.map_to[k](
-            jnp.full_like(model.intercept_, v["default"] * 1.1)
+            jnp.full_like(model.intercept_, v.default * 1.1)
         )
     if len(extras) == 0:
         extras = None
@@ -2163,7 +2163,7 @@ def instantiate_glm_hmm_func(
         model.transition_prob_ = transition_prob
         extras = model.observation_model.extra_params.keys()
         for key in extras:
-            default = model.observation_model.extra_params[key]["default"]
+            default = model.observation_model.extra_params[key].default
             setattr(model, key + "_", jnp.full_like(model.intercept_, default))
         y, rates, latent_states = run_simulation_glm_hmm(X, model, seed=1234)
         # reset fit attributes so fixture.model is unfitted

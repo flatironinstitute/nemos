@@ -66,9 +66,7 @@ def _init_params_from_fixture(fixture):
     }
     for key in fixture.model.observation_model.extra_params.keys():
         value = fixture.params.model_params.obs_params[key]
-        params[key] = fixture.model.observation_model.extra_params[key]["map_from"](
-            value
-        )
+        params[key] = fixture.model.observation_model.extra_params[key].map_from(value)
     return params
 
 
@@ -127,7 +125,7 @@ def test_get_fit_attrs(
     for k in extras:
         val = state[k]
         assert val.shape == (N_STATES,)
-        range_val = model.observation_model.extra_params[k[:-1]]["range"]
+        range_val = model.observation_model.extra_params[k[:-1]].range
         assert jnp.all(val > range_val[0])
         assert jnp.all(val < range_val[1])
 
@@ -250,7 +248,7 @@ class TestGLMHMM:
         for k in model_pynap.observation_model.extra_params:
             val = state[k]
             assert val.shape == (N_STATES,)
-            range_val = model_pynap.observation_model.extra_params[k[:-1]]["range"]
+            range_val = model_pynap.observation_model.extra_params[k[:-1]].range
             assert jnp.all(val > range_val[0])
             assert jnp.all(val < range_val[1])
 
@@ -480,7 +478,7 @@ def _make_model_params(n_features, n_states, n_neurons=None, model=None):
         else:
             shape = (n_states,)
         for k, val in model.observation_model.extra_params.items():
-            default = val["map_to"](val["default"])
+            default = val.map_to(val.default)
             extras[k] = jnp.full(shape, default)
     else:
         extras = None

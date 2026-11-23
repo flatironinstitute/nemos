@@ -165,7 +165,7 @@ def update_validator_observation_dependent_configs(
                     *[
                         k
                         for k, v in observation_model.extra_params.items()
-                        if not v["separable"]
+                        if not v.separable
                     ],
                 }
             ),
@@ -429,7 +429,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         non_separable_extras = [
             k
             for k, v in self._observation_model.extra_params.items()
-            if not v["separable"]
+            if not v.separable
         ]
         return all(self.fix_params[k] is not None for k in non_separable_extras)
 
@@ -1013,7 +1013,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             **{
                 k: getattr(self, k + "_")
                 for k, v in self._observation_model.extra_params.items()
-                if v["separable"]
+                if v.separable
             },
         }
 
@@ -1132,7 +1132,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
                 jnp.full_like,
                 empty_params.obs_params,
                 {
-                    k: self._observation_model.extra_params[k]["default"]
+                    k: self._observation_model.extra_params[k].default
                     for k in self._validator.extra_param_names
                 },
             )
@@ -1678,7 +1678,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             {
                 k: getattr(self, k + "_", None)
                 for k, v in self._observation_model.extra_params.items()
-                if v["separable"]
+                if v.separable
             }
         )
         # if all invalid, raise error

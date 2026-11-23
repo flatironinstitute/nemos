@@ -1,3 +1,4 @@
+import dataclasses
 import inspect
 import math
 import warnings
@@ -18,8 +19,7 @@ from nemos._observation_model_builder import (
 from nemos._read_only_dict import ReadOnlyDict
 from nemos.glm.initialize_parameters import initialize_intercept_matching_mean_rate
 from nemos.inverse_link_function_utils import exp
-
-OBS_MODEL_EXTRA_KEYS = {"default", "range", "map_to", "map_from", "separable"}
+from nemos.observation_models import ExtraParam
 
 
 @pytest.fixture
@@ -380,11 +380,11 @@ class TestGammaObservations:
         assert len(observation_model.extra_params) == 1
         for k, v in observation_model.extra_params.items():
             assert k == "scale"
-            assert v["range"] == (0, float("inf"))
-            assert v["default"] == 1.0
-            assert v["map_to"] == jnp.log
-            assert v["map_from"] == exp
-            assert v["separable"] is True
+            assert v.range == (0, float("inf"))
+            assert v.default == 1.0
+            assert v.map_to == jnp.log
+            assert v.map_from == exp
+            assert v.separable is True
 
     def test_map_from(self, gamma_observations):
         observation_model = gamma_observations()
@@ -588,11 +588,11 @@ class TestNegativeBinomialObservations:
         assert len(observation_model.extra_params) == 1
         for k, v in observation_model.extra_params.items():
             assert k == "dispersion"
-            assert v["range"] == (0, float("inf"))
-            assert v["default"] == 1.0
-            assert v["map_to"] == jnp.log
-            assert v["map_from"] == exp
-            assert v["separable"] is False
+            assert v.range == (0, float("inf"))
+            assert v.default == 1.0
+            assert v.map_to == jnp.log
+            assert v.map_from == exp
+            assert v.separable is False
 
     def test_map_from(self, negative_binomial_observations):
         observation_model = negative_binomial_observations()
@@ -613,7 +613,7 @@ class TestNegativeBinomialObservations:
     ):
         _, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
         dev = sm.families.NegativeBinomial(
-            alpha=model.observation_model.extra_params["dispersion"]["default"]
+            alpha=model.observation_model.extra_params["dispersion"].default
         ).deviance(y, firing_rate)
         dev_model = model.observation_model.deviance(y, firing_rate).sum()
         if not np.allclose(dev, dev_model):
@@ -621,7 +621,7 @@ class TestNegativeBinomialObservations:
 
     def test_loglikelihood_against_scipy(self, negativeBinomialGLM_model_instantiation):
         _, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
-        r = 1.0 / model.observation_model.extra_params["dispersion"]["default"]
+        r = 1.0 / model.observation_model.extra_params["dispersion"].default
         p = r / (r + firing_rate)
         ll_model = model.observation_model.log_likelihood(y, firing_rate)
         ll_scipy = sts.nbinom.logpmf(y, r, p).mean()
@@ -640,7 +640,7 @@ class TestNegativeBinomialObservations:
         ll_model = model.observation_model.log_likelihood(
             y, firing_rate, aggregate_sample_scores=lambda x: x
         )
-        r = 1.0 / model.observation_model.extra_params["dispersion"]["default"]
+        r = 1.0 / model.observation_model.extra_params["dispersion"].default
         p = r / (r + firing_rate)
         ll_scipy = sts.nbinom.logpmf(y, r, p)
         if not np.allclose(ll_model, ll_scipy):
@@ -654,9 +654,9 @@ class TestNegativeBinomialObservations:
         counts = model.observation_model.sample_generator(
             key_array,
             p,
-            dispersion=model.observation_model.extra_params["dispersion"]["default"],
+            dispersion=model.observation_model.extra_params["dispersion"].default,
         )
-        r = 1.0 / model.observation_model.extra_params["dispersion"]["default"]
+        r = 1.0 / model.observation_model.extra_params["dispersion"].default
         gamma_sample = jax.random.gamma(gkey, r, shape=p.shape) * (p / r)
         expected_counts = jax.random.poisson(pkey, gamma_sample)
         if not jnp.allclose(counts, expected_counts):
@@ -670,14 +670,14 @@ class TestNegativeBinomialObservations:
             y,
             sm.add_constant(X),
             family=sm.families.NegativeBinomial(
-                alpha=model.observation_model.extra_params["dispersion"]["default"]
+                alpha=model.observation_model.extra_params["dispersion"].default
             ),
         ).fit()
         pr2_sms = mdl.pseudo_rsquared("mcf")
         pr2_model = model.observation_model.pseudo_r2(
             y,
             mdl.mu,
-            dispersion=model.observation_model.extra_params["dispersion"]["default"],
+            dispersion=model.observation_model.extra_params["dispersion"].default,
             score_type="pseudo-r2-McFadden",
         )
         if not np.allclose(pr2_model, pr2_sms, atol=1e-5):
@@ -694,11 +694,11 @@ class TestGaussianObservations:
         assert len(observation_model.extra_params) == 1
         for k, v in observation_model.extra_params.items():
             assert k == "scale"
-            assert v["range"] == (0, float("inf"))
-            assert v["default"] == 1.0
-            assert v["map_to"] == jnp.log
-            assert v["map_from"] == exp
-            assert v["separable"] is True
+            assert v.range == (0, float("inf"))
+            assert v.default == 1.0
+            assert v.map_to == jnp.log
+            assert v.map_from == exp
+            assert v.separable is True
 
     def test_map_from(self, gaussian_observations):
         observation_model = gaussian_observations()
@@ -941,7 +941,7 @@ class TestCommonObservationModels:
                 assert key in params, (
                     f"Method {meth_name} does not have expose keyword parameter {key}"
                 )
-                assert params[key].default == obs.extra_params[key]["default"], (
+                assert params[key].default == obs.extra_params[key].default, (
                     f"Method {meth_name} default for {key} does not match the declared default"
                 )
 
@@ -991,7 +991,8 @@ class TestCommonObservationModels:
                 extra_kwargs = {k: v for (k, v) in comb}
                 if (
                     "pseudo-r2-Cohen" in [v for v in extra_kwargs.values()]
-                    and obs.extra_params.get("scale", {"separable": False})["separable"]
+                    and "scale" in obs.extra_params
+                    and obs.extra_params["scale"].separable
                 ):
                     # scale simplifies when separable
                     print(f"\nskipping {obs} Choen pseudo r2")
@@ -1001,13 +1002,13 @@ class TestCommonObservationModels:
                     **dof_kwarg,
                     **kwargs,
                     **extra_kwargs,
-                    **{k: v["default"] for k, v in obs.extra_params.items()},
+                    **{k: v.default for k, v in obs.extra_params.items()},
                 )
                 val2 = method(
                     **dof_kwarg,
                     **kwargs,
                     **extra_kwargs,
-                    **{k: v["default"] + 1 for k, v in obs.extra_params.items()},
+                    **{k: v.default + 1 for k, v in obs.extra_params.items()},
                 )
                 assert not np.allclose(val, val2), (
                     f"The method {meth_name} disregarded kwargs "
@@ -1024,16 +1025,14 @@ class TestCommonObservationModels:
             key = list(obs.extra_params.keys())[0]
             with pytest.raises(TypeError, match="does not support item assignment"):
                 obs.extra_params[key] = 1
-            with pytest.raises(TypeError, match="does not support item assignment"):
-                obs.extra_params[key]["default"] = 2
+            with pytest.raises(dataclasses.FrozenInstanceError):
+                obs.extra_params[key].default = 2
 
     def test_extra_params_struct(self, observation_model_rate_and_samples):
         obs, _, _ = observation_model_rate_and_samples
         assert isinstance(obs.extra_params, ReadOnlyDict)
-        if obs.extra_params:
-            for k, v in obs.extra_params.items():
-                assert isinstance(v, ReadOnlyDict)
-                assert v.keys() == OBS_MODEL_EXTRA_KEYS
+        for v in obs.extra_params.values():
+            assert isinstance(v, ExtraParam)
 
     @pytest.mark.parametrize("shape", [(10,), (10, 5), (10, 5, 2)])
     @pytest.mark.requires_x64

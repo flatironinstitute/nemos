@@ -944,7 +944,7 @@ class TestGenerateGLMHMMInitialParams:
 
         assert jnp.abs(coef).max() < 0.01
         assert jnp.allclose(intercept, 2.0)
-        assert all(jnp.all(par[k] == v["default"]) for k, v in obs.extra_params.items())
+        assert all(jnp.all(par[k] == v.default) for k, v in obs.extra_params.items())
 
     def test_random_key_affects_output(self):
         """Different random keys produce different GLM coefficient initializations."""

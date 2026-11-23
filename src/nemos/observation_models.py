@@ -1,6 +1,7 @@
 """Observation model classes for GLMs."""
 
 import abc
+from dataclasses import dataclass
 from typing import Callable, ClassVar, Literal, Union
 
 import jax
@@ -31,6 +32,17 @@ __all__ = [
 
 def __dir__():
     return __all__
+
+
+@dataclass(frozen=True)
+class ExtraParam:
+    """Declaration of an observation model parameter other than the mean."""
+
+    range: tuple[float, float]
+    default: float
+    map_from: Callable
+    map_to: Callable
+    separable: bool
 
 
 class Observations(Base, abc.ABC):
@@ -82,12 +94,12 @@ class Observations(Base, abc.ABC):
     @property
     def map_from(self):
         """Getter for the map_from parameter of the model."""
-        return ReadOnlyDict({k: v["map_from"] for k, v in self.extra_params.items()})
+        return ReadOnlyDict({k: v.map_from for k, v in self.extra_params.items()})
 
     @property
     def map_to(self):
         """Getter for the map_from parameter of the model."""
-        return ReadOnlyDict({k: v["map_to"] for k, v in self.extra_params.items()})
+        return ReadOnlyDict({k: v.map_to for k, v in self.extra_params.items()})
 
     @abc.abstractmethod
     def _negative_log_likelihood(
@@ -748,14 +760,12 @@ class GammaObservations(Observations):
 
     extra_params = ReadOnlyDict(
         {
-            "scale": ReadOnlyDict(
-                {
-                    "range": (0, float("inf")),
-                    "default": 1.0,
-                    "map_from": exp,
-                    "map_to": jnp.log,
-                    "separable": True,
-                }
+            "scale": ExtraParam(
+                range=(0, float("inf")),
+                default=1.0,
+                map_from=exp,
+                map_to=jnp.log,
+                separable=True,
             )
         },
     )
@@ -1383,14 +1393,12 @@ class NegativeBinomialObservations(Observations):
     # declaring params
     extra_params = ReadOnlyDict(
         {
-            "dispersion": ReadOnlyDict(
-                {
-                    "range": (0, float("inf")),
-                    "default": 1.0,
-                    "map_from": exp,
-                    "map_to": jnp.log,
-                    "separable": False,
-                }
+            "dispersion": ExtraParam(
+                range=(0, float("inf")),
+                default=1.0,
+                map_from=exp,
+                map_to=jnp.log,
+                separable=False,
             )
         },
     )
@@ -1707,14 +1715,12 @@ class GaussianObservations(Observations):
     # declaring params
     extra_params = ReadOnlyDict(
         {
-            "scale": ReadOnlyDict(
-                {
-                    "range": (0, float("inf")),
-                    "default": 1.0,
-                    "map_from": exp,
-                    "map_to": jnp.log,
-                    "separable": True,
-                }
+            "scale": ExtraParam(
+                range=(0, float("inf")),
+                default=1.0,
+                map_from=exp,
+                map_to=jnp.log,
+                separable=True,
             )
         },
     )
