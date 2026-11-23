@@ -1461,7 +1461,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             warnings.warn(
                 "`stochastic_fit()` will not populate `scale_` for observation models whose scale"
                 " depends on the data (e.g., Gamma, Gaussian), and `score()` will raise after this fit."
-                " Tip: for evaluation and model comparison use `compute_loss(X, y)` instead.",
+                " Tip: for an unnormalized negative log-likelihood, which does not need `scale_`,"
+                " call `compute_loss(model.get_model_params(), X, y)` instead.",
                 UserWarning,
             )
 

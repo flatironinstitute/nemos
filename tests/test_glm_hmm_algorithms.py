@@ -1967,9 +1967,6 @@ class TestMStep:
         jax.tree_util.tree_map(
             np.testing.assert_allclose, new_params.model_params, new_glm_params
         )
-        # np.testing.assert_allclose(
-        #     new_params.model_scale.log_scale, new_scale
-        # )
         np.testing.assert_allclose(
             jnp.exp(new_params.hmm_params.log_initial_prob),
             jnp.exp(new_log_initial_prob),

@@ -527,8 +527,8 @@ class TestRoundTrip:
         valid_user_params = filter_params(
             valid_user_params, validator.model_param_names
         )
-        # to_model_params stores scale directly as log_scale;
-        # from_model_params returns exp(log_scale).
+        # to_model_params stores the obs params in log space;
+        # from_model_params maps them back with exp.
         internal = validator.to_model_params(valid_user_params)
         result = validator.from_model_params(internal)
         for k in extra_names:
