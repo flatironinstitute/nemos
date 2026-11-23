@@ -41,9 +41,9 @@ MODEL_REGISTRY = {
 
 VALIDATOR_REGISTRY = {
     "GLM": GLMValidator(),
-    "ClassifierGLM": ClassifierGLMValidator(extra_params={"n_classes": 4}),
+    "ClassifierGLM": ClassifierGLMValidator(config={"n_classes": 4}),
     "ClassifierPopulationGLM": PopulationClassifierGLMValidator(
-        extra_params={"n_classes": 4}
+        config={"n_classes": 4}
     ),
     "PopulationGLM": PopulationGLMValidator(),
     "GLMHMM": GLMHMMValidator(n_states=3),  # n_states=3 matches the fixture default

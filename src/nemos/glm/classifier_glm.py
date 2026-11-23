@@ -227,12 +227,10 @@ class ClassifierMixin:
         self._label_encoder = LabelEncoder(int(value))
 
         # reset validator.
-        self._validator = self._validator_class(
-            extra_params=self._get_validator_extra_params()
-        )
+        self._validator = self._validator_class(config=self._get_validator_config())
 
-    def _get_validator_extra_params(self) -> dict:
-        """Get validator extra parameters."""
+    def _get_validator_config(self) -> dict:
+        """Get validator configuration."""
         return {"n_classes": self._label_encoder.n_classes}
 
     def _preprocess_inputs(

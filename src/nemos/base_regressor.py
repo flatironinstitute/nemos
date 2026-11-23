@@ -1198,8 +1198,8 @@ class BaseRegressor(
         return set_attr
 
     @staticmethod
-    def _get_validator_extra_params() -> dict | None:
-        """Get validator extra parameters.
+    def _get_validator_config() -> dict | None:
+        """Get validator configuration.
 
         Provide instance specific validator configuration if needed.
         """

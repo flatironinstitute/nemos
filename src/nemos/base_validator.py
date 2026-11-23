@@ -105,7 +105,7 @@ class RegressorValidator(
     model_class: str = None
     X_dimensionality: int = None
     y_dimensionality: int = None
-    extra_params: Optional[dict] = None
+    config: Optional[dict] = None
 
     # tuples [(meth, kwargs), (meth,), ]
     params_validation_sequence: Tuple[

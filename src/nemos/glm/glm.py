@@ -522,7 +522,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             solver_kwargs=solver_kwargs,
         )
         self._validator: GLMValidator = self._validator_class(
-            extra_params=self._get_validator_extra_params(),
+            config=self._get_validator_config(),
         )
         self.observation_model = observation_model
         self.inverse_link_function = inverse_link_function

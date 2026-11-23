@@ -2631,12 +2631,14 @@ class TestGetEmptyParams:
         ],
     )
     def test_params_shape(self, y, model_shape):
-        shapes = GLMHMM(N_STATES)._get_params_shape(np.ones((20, N_FEATURES)), y)
+        shapes = GLMHMM(N_STATES, "Gaussian")._get_params_shape(
+            np.ones((20, N_FEATURES)), y
+        )
         expected = GLMHMMParams(
-            model_params=GLMHMMModelParams(
+            model_params=GLMParams(
                 coef=(N_FEATURES, *model_shape),
                 intercept=model_shape,
-                log_scale=model_shape,
+                extra_params={"scale": model_shape},
             ),
             hmm_params=HMMParams(
                 log_initial_prob=(N_STATES,),

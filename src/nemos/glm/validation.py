@@ -33,7 +33,7 @@ class GLMValidator(RegressorValidator[GLMUserParams, GLMParams]):
     and input data.
     """
 
-    extra_params: dict = None
+    config: dict = None
     expected_param_dims: ReadOnlyDict[Any, int] = ReadOnlyDict(
         {
             "coef": 1,
@@ -431,7 +431,7 @@ class ClassifierGLMValidator(GLMValidator):
     - 1D output y: shape (n_samples,) containing integer class labels
     """
 
-    extra_params: Dict[Literal["n_classes"], int] = eqx.field(kw_only=True)
+    config: Dict[Literal["n_classes"], int] = eqx.field(kw_only=True)
     expected_param_dims: ReadOnlyDict[Any, int] = ReadOnlyDict(
         {
             "coef": 2,
@@ -491,7 +491,7 @@ class ClassifierGLMValidator(GLMValidator):
             Format string for intercept error message. Should have 3 placeholders:
             expected_class_dim, n_classes, actual_shape.
         """
-        n_classes = self.extra_params["n_classes"]
+        n_classes = self.config["n_classes"]
         for key, pytree in params.items():
             # Check coef last dimension
             param_class_mismatch = pytree_map_and_reduce(
@@ -517,13 +517,13 @@ class ClassifierGLMValidator(GLMValidator):
     ) -> GLMParams[jnp.ndarray | NDArray]:
         """Check that a fixed intercept's class dimension matches ``n_classes``.
 
-        The last axis of the intercept is ``n_classes`` (known from ``extra_params``),
+        The last axis of the intercept is ``n_classes`` (known from ``config``),
         so it can be checked at setter time. For the population classifier the neuron
         axis is left to ``validate_consistency`` at fit time. ``check_array_dimensions``
         already enforces the intercept ndim.
         """
         if params.intercept is not None:
-            n_classes = self.extra_params["n_classes"]
+            n_classes = self.config["n_classes"]
             if params.intercept.shape[-1] != n_classes:
                 raise ValueError(
                     f"intercept last dimension must be n_classes = {n_classes}. "
