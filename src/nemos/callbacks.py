@@ -356,7 +356,7 @@ class TestLossLogger(Callback):
 
     def _log_test_score(self, event: str, ctx: TrainingContext) -> None:
         test_score = ctx.model.compute_loss(
-            (ctx.params.coef, ctx.params.intercept),
+            {"coef": ctx.params.coef, "intercept": ctx.params.intercept},
             self.X_test,
             self.y_test,
         )

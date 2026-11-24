@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import abc
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Generic, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Generic, Optional, Tuple
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from pynapple import Tsd, TsdFrame
 
 from . import utils
+from ._read_only_dict import ReadOnlyDict
 from .base_class import Base
 from .tree_utils import pytree_map_and_reduce
 from .type_casting import all_same_time_info, is_pynapple_tsd
@@ -26,8 +27,9 @@ from .validation import (
 )
 
 
-@dataclass(frozen=True)
-class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParamsT]):
+class RegressorValidator(
+    abc.ABC, eqx.Module, Base, Generic[UserProvidedParamsT, ModelParamsT]
+):
     """
     Base class for validating regressor models' parameters, inputs, and consistency.
 
@@ -98,13 +100,12 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         Names of parameter validation methods to call in order.
     """
 
-    expected_param_dims: Tuple[int] = None
+    expected_param_dims: ReadOnlyDict[Any, int] = None
+    model_param_names: frozenset[str] = frozenset()
     model_class: str = None
-    to_model_params: Callable[[UserProvidedParamsT], ModelParamsT] = None
-    from_model_params: Callable[[ModelParamsT], UserProvidedParamsT] = None
     X_dimensionality: int = None
     y_dimensionality: int = None
-    extra_params: Optional[dict] = None
+    config: Optional[dict] = None
 
     # tuples [(meth, kwargs), (meth,), ]
     params_validation_sequence: Tuple[
@@ -115,6 +116,8 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         ("check_array_dimensions", None),
         ("to_model_params", None),
     )
+    to_model_params: Callable[[UserProvidedParamsT | None], ModelParamsT] = None
+    from_model_params: Callable[[ModelParamsT], UserProvidedParamsT] = None
 
     @abc.abstractmethod
     def check_user_params_structure(
@@ -151,22 +154,6 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         """
         return params
 
-    @staticmethod
-    def wrap_user_params(params: UserProvidedParamsT) -> List:
-        """Wrap user provided parameters into a list.
-
-        Notes
-        -----
-        The output list should be of the same length as ``self.expected_array_dims``, one element
-        per parameter. The user parameter structure is verified by ``self.check_user_params_structure``,
-        if the structure is valid, the output list should have the expected length. May need re-implementation
-        for complex parameter logic.
-
-        """
-        if hasattr(params, "ndim"):
-            return [params]
-        return list(params)
-
     def check_array_dimensions(
         self,
         params: UserProvidedParamsT,
@@ -198,9 +185,8 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         ValueError
             If any array has unexpected dimensionality.
         """
-        for par, exp_dim in zip(
-            self.wrap_user_params(params), self.expected_param_dims
-        ):
+        for key, par in params.items():
+            exp_dim = self.expected_param_dims[key]
             if par is None:
                 continue
             dim_match = pytree_map_and_reduce(lambda x: x.ndim == exp_dim, all, par)
@@ -329,8 +315,8 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
         ValueError, TypeError
             If any validation step fails.
         """
-        if params is None:
-            return self.to_model_params([None] * len(self.expected_param_dims))
+        if params is None or params == {}:
+            return self.to_model_params({k: None for k in self.model_param_names})
 
         self.check_user_params_structure(params)
         self.check_partial_params_specs_type(params)
@@ -345,7 +331,9 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
             None,
         )
         self.check_array_dimensions(params, **(dim_kwargs or {}))
-        params = self.to_model_params(params)
+        params = self.to_model_params(
+            {k: params.get(k, None) for k in self.model_param_names}
+        )
         return self.additional_validation_param_specs(params)
 
     def additional_validation_param_specs(
@@ -518,3 +506,61 @@ class RegressorValidator(abc.ABC, Base, Generic[UserProvidedParamsT, ModelParams
                 "Invalid parameter specification found. Parameters can be jax arrays, "
                 f"numpy arrays or None.\nFound invalid types: {invalid_types}"
             )
+
+    def check_complete_param_specs(self, params: Any):
+        """Check complete parameter specifications.
+
+        Check that the provided parameter dictionary includes a pytree of
+        non-empty values. This method should be called before any validation of
+        the parameter structure.
+        Note that a misspecified parameter which is not a dictionary won't raise
+        here. The dictionary structure is enforced elsewhere, and therefore here we
+        return directly when the parameters are not a dictionary.
+        """
+        if params is None:
+            return
+        if not isinstance(params, dict):
+            return
+        missing = self.model_param_names - set(params.keys())
+        if missing:
+            raise ValueError(
+                f"The user-provided parameter dictionary is incomplete. Missing fields: {missing}"
+            )
+        invalid = set(params.keys()) - self.model_param_names
+        if invalid:
+            raise ValueError(
+                f"Invalid parameter(s) {invalid} provided. Valid parameter names are {self.model_param_names}"
+            )
+
+        def is_none(x):
+            return x is None
+
+        empty = pytree_map_and_reduce(
+            is_none,
+            any,
+            params,
+            is_leaf=is_none,
+        )
+        if empty:
+            empty_field = dict(
+                (k, v)
+                for k, v in params.items()
+                if pytree_map_and_reduce(is_none, any, v, is_leaf=is_none)
+            )
+            raise ValueError(
+                "The provided parameters include None values. All provided parameters must be PyTrees of arrays. "
+                f"The following parameter(s) include None values:\n{empty_field}"
+            )
+
+    def filter_obs_params(self, params: UserProvidedParamsT):
+        """Filter a user param dictionary and return only the observation model parameters."""
+        return {k: params.get(k) for k in self.obs_param_names}
+
+    @property
+    def obs_param_names(self) -> frozenset:
+        """Return the names of the observation model parameters.
+
+        Usually, those are distribution specific fitted parameters, like
+        ``dispersion`` for a negative binomial distribution.
+        """
+        return self.model_param_names - self.__class__.model_param_names

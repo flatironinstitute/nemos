@@ -16,7 +16,7 @@ import jax.numpy as jnp
 import numpy as np
 from numpy.typing import NDArray
 
-from . import solvers, tree_utils, utils
+from . import solvers, tree_utils
 from ._hess import (
     HessianTag,
     LeafClaim,
@@ -45,7 +45,14 @@ from .typing import (
     UserProvidedParamsT,
     ValidatorT,
 )
-from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
+from .utils import (
+    _flatten_dict,
+    _get_name,
+    _unpack_params,
+    assert_is_callable,
+    get_env_metadata,
+    is_shape_tuple,
+)
 
 _SOLVER_ARGS_CACHE = {}
 
@@ -718,7 +725,7 @@ class BaseRegressor(
         # But it's not a problem if .fun doesn't exist in user-defined solvers.
         if hasattr(solver, "fun"):
             # check that the loss is Callable
-            utils.assert_is_callable(solver.fun, "solver's loss")
+            assert_is_callable(solver.fun, "solver's loss")
             self._solver_loss_fun = solver.fun
 
         return solver
@@ -754,11 +761,6 @@ class BaseRegressor(
         feedforward_input: DESIGN_INPUT_TYPE,
     ):
         """Simulate neural activity in response to a feed-forward input and recurrent activity."""
-        pass
-
-    @abc.abstractmethod
-    def _get_model_params(self) -> ModelParamsT:
-        """Pack coef_ and intercept_  into a params pytree."""
         pass
 
     @abc.abstractmethod
@@ -864,9 +866,11 @@ class BaseRegressor(
             If inputs or parameters have incompatible shapes or invalid values.
         """
         self._validator.validate_inputs(X, y)
+        params = self._normalize_user_params(params, X, y)
         params = self._validator.validate_and_cast_params(params)
         self._validator.validate_consistency(params, X, y)
         X, y = self._preprocess_inputs(X, y)
+        params = eqx.combine(self._fix_params, params)
         return self._compute_loss(params, X, y, *args, **kwargs)
 
     @abc.abstractmethod
@@ -1051,6 +1055,7 @@ class BaseRegressor(
         """
         self._validator.validate_inputs(X=X, y=y, **kwargs)
         init_params = self._normalize_user_params(init_params, X, y)
+        self._validator.check_complete_param_specs(init_params)
         init_params = self._validator.validate_and_cast_params(init_params)
         self._validator.validate_consistency(init_params, X=X, y=y)
         X, y = self._preprocess_inputs(X, y, drop_nans=True)
@@ -1193,8 +1198,8 @@ class BaseRegressor(
         return set_attr
 
     @staticmethod
-    def _get_validator_extra_params() -> dict | None:
-        """Get validator extra parameters.
+    def _get_validator_config() -> dict | None:
+        """Get validator configuration.
 
         Provide instance specific validator configuration if needed.
         """
@@ -1357,9 +1362,17 @@ class BaseRegressor(
 
         dtype = dtype.pop()
 
-        def is_shape_tuple(x):
-            return isinstance(x, tuple) and all(isinstance(i, int) for i in x)
-
         return jax.tree_util.tree_map(
             lambda s: jnp.empty(s, dtype=dtype), shapes, is_leaf=is_shape_tuple
         )
+
+    @property
+    def param_names(self) -> list[str]:
+        """List the names of the fitted parameters."""
+        return list(self._validator.model_param_names)
+
+    def _get_param_dict(self) -> UserProvidedParamsT:
+        return {name: getattr(self, name + "_", None) for name in self.param_names}
+
+    def _get_model_params(self) -> ModelParamsT:
+        return self._validator.to_model_params(self._get_param_dict())

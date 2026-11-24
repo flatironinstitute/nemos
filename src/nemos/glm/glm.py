@@ -42,7 +42,7 @@ from .initialize_parameters import (
     initialize_constant_coef_matching_mean_rate,
     initialize_intercept_matching_mean_rate,
 )
-from .params import GLMParams, GLMUserParams
+from .params import FromGLMParams, GLMParams, GLMUserParams, ToGLMParams
 from .validation import (
     GLMValidator,
     PopulationGLMValidator,
@@ -131,6 +131,47 @@ def _glm_hessian_block(
         H = H.at[:-1, :-1].add(jnp.diag(lam))
 
     return H
+
+
+def update_validator_observation_dependent_configs(
+    observation_model: obs.Observations, validator: GLMValidator
+) -> GLMValidator:
+    """Set the validator observation dependent configs.
+
+    This convenience function sets the validator mappings between the user
+    provided parameter dictionary and the model parameter class, and the
+    specific parameter names.
+    """
+    commons = validator.__class__.model_param_names
+    return eqx.tree_at(
+        # selector
+        lambda x: (
+            x.to_model_params,
+            x.from_model_params,
+            x.model_param_names,
+        ),
+        # pytree
+        validator,
+        # replace
+        (
+            ToGLMParams(observation_model.map_to),
+            FromGLMParams(observation_model.map_from),
+            # model_param_names includes only the parameters that are fit
+            # separable parameters such has the scale of the gaussian, are
+            # estimated a posteriori and should not be listed here
+            frozenset(
+                {
+                    *commons,
+                    *[
+                        k
+                        for k, v in observation_model.extra_params.items()
+                        if not v.separable
+                    ],
+                }
+            ),
+        ),
+        is_leaf=lambda x: x is None,
+    )
 
 
 class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
@@ -240,12 +281,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         When True (default), an intercept term is fit. When False, only the coefficients are fit.
         An intercept pinned through ``fix_params`` takes precedence over this flag.
     fix_params :
-        Parameters to hold fixed during fitting, as a ``(coef, intercept)`` tuple with
-        ``coef`` of shape ``(n_features,)`` and ``intercept`` of shape ``(1,)``. An array
-        pins that parameter at the value provided, ``None`` leaves it to be learned. When
-        ``X`` is a pytree, ``coef`` mirrors its structure, its leaves have shape
-        ``(n_features_in_leaf,)``, and each leaf is pinned or learned on its own.
-        Defaults to ``None``, which learns every parameter.
+        A dictionary, keys could be "coef" or "intercept", values are PyTree of
+         arrays with the parameters that will be fixed.
     solver_name :
         Solver to use for model optimization. Defines the optimization scheme and related parameters.
         The solver must be an appropriate match for the chosen regularizer.
@@ -339,10 +376,10 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
     **Fix some parameters**
 
     Pin the first feature block's coefficients to ``[1, 1]`` and learn the rest.
-    The ``fix_params`` spec mirrors the ``(coef, intercept)`` structure, with
+    The ``fix_params`` spec mirrors the parameter dictionary structure, with
     ``None`` marking the parameters to learn:
 
-    >>> fix_params = ([jnp.ones((2,)), None], None)
+    >>> fix_params = {"coef": [jnp.ones((2,)), None]}
     >>> model = nmo.glm.GLM(fix_params=fix_params)
     >>> model = model.fit([X[:, :2], X[:, 2:]], y)
     >>> model.coef_[0]
@@ -371,7 +408,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
     _invalid_observation_types = (obs.CategoricalObservations,)
     _validator_class = GLMValidator
 
-    # default until the instance sets it; read during ``__init__`` before assignment
+    # default until the instance sets it; accessed during ``__init__`` before assignment
     # (e.g. when solver-kwargs validation resolves the default solver).
     _fit_intercept: bool = True
     # full-structure all-None default so the partition helpers never see a bare None
@@ -387,6 +424,14 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         ):
             return "Newton"
         return super()._resolve_default_solver()
+
+    def _fitting_separable_param_only(self) -> bool:
+        non_separable_extras = [
+            k
+            for k, v in self._observation_model.extra_params.items()
+            if not v.separable
+        ]
+        return all(self.fix_params[k] is not None for k in non_separable_extras)
 
     def _resolve_hess_property(self) -> MatrixProperty:
         """Resolve the hessian property.
@@ -417,7 +462,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
 
         return (
             MatrixProperty.POSITIVE_SEMI_DEFINITE
-            if convexity_preserving
+            if convexity_preserving and self._fitting_separable_param_only()
             else MatrixProperty.SYMMETRIC
         )
 
@@ -476,12 +521,12 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
         )
+        self._validator: GLMValidator = self._validator_class(
+            config=self._get_validator_config(),
+        )
         self.observation_model = observation_model
         self.inverse_link_function = inverse_link_function
 
-        self._validator: GLMValidator = self._validator_class(
-            extra_params=self._get_validator_extra_params()
-        )
         self.fit_intercept = fit_intercept
         self.fix_params = fix_params
 
@@ -497,7 +542,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
     @property
     def fix_params(self) -> GLMUserParams[jnp.ndarray | NDArray | None]:
         """Parameters held fixed during fitting, as a ``(coef, intercept)`` tuple."""
-        return self._validator.from_model_params(self._fix_params)
+        param_dict = self._validator.from_model_params(self._fix_params)
+        return {k: param_dict.get(k) for k in self.param_names}
 
     @fix_params.setter
     def fix_params(self, value: GLMUserParams[jnp.ndarray | NDArray | None] | None):
@@ -529,17 +575,19 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         # ``fit_intercept=False`` freezes the intercept at the value
         # ``_normalize_user_params`` fills into the init params (zeros by default).
         if not self._fit_intercept:
-            active = GLMParams(active.coef, False)
+            active = eqx.tree_at(lambda x: x.intercept, active, False)
         return active
 
     def _frozen_values(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> GLMParams:
         frozen = super()._frozen_values(X, y)
-        # ``fit_intercept=False`` pins the intercept at zero; this is the single
+        # ``fit_intercept=False`` fixes the intercept at zero; this is the single
         # source of the pinned value (``_normalize_user_params`` fills it into
         # omitted user input, ``update`` recombines it into the returned params).
         if not self._fit_intercept and frozen.intercept is None:
             zeros = jnp.zeros_like(self._get_empty_params(X, y).intercept)
-            frozen = GLMParams(frozen.coef, zeros)
+            frozen = eqx.tree_at(
+                lambda x: x.intercept, frozen, zeros, is_leaf=lambda x: x is None
+            )
         if frozen.coef is None:
             frozen = eqx.tree_at(
                 lambda p: p.coef,
@@ -667,6 +715,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             self._observation_model = instantiate_observation_model(observation)
             self._validate_observation_class(self.observation_model)
             self._invalidate_solver()
+            self._validator = update_validator_observation_dependent_configs(
+                self._observation_model, self._validator
+            )
             return
         # check that the model has the required attributes
         # and that the attribute can be called
@@ -674,12 +725,27 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         self._observation_model = observation
         self._validate_observation_class(self.observation_model)
         self._invalidate_solver()
+        self._validator = update_validator_observation_dependent_configs(
+            self._observation_model, self._validator
+        )
 
-    def _check_is_fit(self):
-        """Ensure the instance has been fitted."""
-        if (self.coef_ is None) or (self.intercept_ is None):
+    def _check_is_fit(self, needs_obs_params: bool = True):
+        """Ensure the instance has been fitted.
+
+        With ``needs_obs_params``, the parameters declared by the observation model
+        (e.g. ``scale``, ``dispersion``) are required too.
+        """
+        obs_params = self._observation_model.extra_params
+        needed = [k for k in self.param_names if k not in obs_params]
+        if needs_obs_params:
+            needed += list(obs_params)
+        missing = [k + "_" for k in needed if getattr(self, k + "_", None) is None]
+        if missing:
             raise NotFittedError(
-                "This GLM instance is not fitted yet. Call 'fit' with appropriate arguments."
+                "This GLM instance is not fitted yet, some fitted attributes are missing. "
+                "Call 'fit' with appropriate arguments or set the attributes manually.\n"
+                f"Needed attributes are: {[k + '_' for k in needed]}.\n"
+                f"Missing attributes are: {missing}"
             )
 
     def _predict(
@@ -772,7 +838,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             using the GLM as a recurrent network (feed-forward + coupling).
         """
         # check that the model is fitted
-        self._check_is_fit()
+        self._check_is_fit(needs_obs_params=False)
         # extract model params
         params = self._get_model_params()
 
@@ -815,11 +881,22 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         Returns
         -------
         :
-            The model negative log-likehood. Shape (1,).
+            The model negative log-likelihood. Shape (1,).
 
         """
         predicted_rate = self._predict(params, X)
-        return self._observation_model._negative_log_likelihood(y, predicted_rate)
+        param_dict = self._validator.from_model_params(params)
+        extras = self._validator.filter_obs_params(param_dict)
+        if self._fitting_separable_param_only():
+            loss = self._observation_model._negative_log_likelihood
+        else:
+            # if there is an extra param that is not separable,
+            # the full likelihood is needed
+
+            def loss(*a, **kw):
+                return -self._observation_model.log_likelihood(*a, **kw)
+
+        return loss(y, predicted_rate, **extras)
 
     @cast_to_jax
     def score(
@@ -918,18 +995,22 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         pseudo-:math:`R^2` equations.
 
         """
+        # this guarantees that any extra distribution parameter is set
         self._check_is_fit()
-        if (
-            score_type in {"log-likelihood", "pseudo-r2-McFadden"}
-            and self.scale_ is None
-            and not self._has_constant_scale()
-        ):
-            raise ValueError(
-                "`score()` requires `scale_`, which is not set. This happens after `stochastic_fit()`"
-                " with an observation model whose scale depends on the data (e.g., Gamma, Gaussian)."
-                " Workaround: use `compute_loss(X, y)` for model comparison as it does not depend on `scale_`."
-            )
-        params = self._get_model_params()
+        # extra params (scale, dispersion) already in original space
+        param_dict = self._get_param_dict()
+        # params is in the transformed space (log(scale), log(dispersion))
+        params = self._validator.to_model_params(param_dict)
+        # extra kwargs are in regular space
+        extras = self._validator.filter_obs_params(param_dict)
+        extras = {
+            **extras,
+            **{
+                k: getattr(self, k + "_")
+                for k, v in self._observation_model.extra_params.items()
+                if v.separable
+            },
+        }
 
         self._validator.validate_inputs(X, y)
         X, y = self._preprocess_inputs(X, y, drop_nans=True)
@@ -942,16 +1023,16 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             score = self._observation_model.log_likelihood(
                 y,
                 self._predict(params, X),
-                self.scale_,
                 aggregate_sample_scores=aggregate_sample_scores,
+                **extras,
             )
         elif score_type.startswith("pseudo-r2"):
             score = self._observation_model.pseudo_r2(
                 y,
                 self._predict(params, X),
                 score_type=score_type,
-                scale=self.scale_,
                 aggregate_sample_scores=aggregate_sample_scores,
+                **extras,
             )
         else:
             raise NotImplementedError(
@@ -1041,13 +1122,23 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
                 frozen_intercept=frozen_intercept,
                 rate_range=self.observation_model.rate_range,
             )
-
-        init_params = eqx.tree_at(
-            lambda p: (p.coef, p.intercept),
-            empty_params,
-            (initial_coef, initial_intercept),
+        if empty_params.obs_params is not None:
+            extras = jax.tree_util.tree_map(
+                jnp.full_like,
+                empty_params.obs_params,
+                {
+                    k: self._observation_model.extra_params[k].default
+                    for k in self._validator.obs_param_names
+                },
+            )
+        else:
+            extras = {}
+        # convert to GLMParams which applies mapping to extra params if needed.
+        init_params = self._validator.to_model_params(
+            {"coef": initial_coef, "intercept": initial_intercept, **extras}
         )
-
+        # prioritize frozen
+        init_params = eqx.combine(frozen, init_params)
         self._validator.feature_mask_consistency(
             getattr(self, "_feature_mask", None), init_params
         )
@@ -1070,8 +1161,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         """
         if not self._fit_intercept:
             self._validator.check_user_params_structure(init_params)
-            warn = init_params[-1] is not None and not jnp.array_equal(
-                self._frozen_values(X, y).intercept, init_params[-1]
+            warn = init_params.get("intercept") is not None and not jnp.array_equal(
+                self._frozen_values(X, y).intercept, init_params["intercept"]
             )
             if warn:
                 warnings.warn(
@@ -1081,7 +1172,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
                     stacklevel=2,
                 )
             zeros = self._frozen_values(X, y).intercept
-            init_params = tuple([*init_params[:-1], zeros])
+            init_params = {k: v for k, v in init_params.items() if k != "intercept"}
+            init_params["intercept"] = zeros
         return init_params
 
     @cast_to_jax
@@ -1104,11 +1196,11 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         y :
             Target neural activity arranged in a matrix, shape (n_time_bins, ).
         init_params :
-            2-tuple of initial parameter values: (coefficients, intercepts). If
-            None, we initialize coefficients with zeros, intercepts with the
-            log of the mean neural activity. coefficients is an array of shape
-            (n_features,) or pytree of same, intercepts is an array
-            of shape (1, )
+            Dictionary of initial parameter values. The dictionary will always contain
+            ``"coef"`` and ``"intercept"``. Some observation models add addional
+            parameters, see the ``param_names`` attribute of the instantiated model.
+            TODO: add col to table of the obs model with the extra parameters.
+            Add page of docs discussing this.
 
         Raises
         ------
@@ -1153,7 +1245,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             if jax.tree_util.tree_leaves(self._fix_params):
                 self._validator.validate_consistency(init_params, X=X, y=y)
         else:
+            # TODO: improve initialization and allow partial param specs
             init_params = self._normalize_user_params(init_params, X, y)
+            self._validator.check_complete_param_specs(init_params)
             init_params = self._validator.validate_and_cast_params(init_params)
             self._validator.validate_consistency(init_params, X=X, y=y)
 
@@ -1220,8 +1314,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         self._set_model_params(params)
 
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X)
+        extras = self._validator.filter_obs_params(self._get_param_dict())
         self.scale_ = self.observation_model.estimate_scale(
-            y, self._predict(params, data), dof_resid=self.dof_resid_
+            y, self._predict(params, data), dof_resid=self.dof_resid_, **extras
         )
 
         # note that this will include an error value, which is not the same as
@@ -1310,6 +1405,36 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         >>> model = model.stochastic_fit(
         ...     loader, n_passes=10, callbacks=SolverConvergenceCallback()
         ... )
+
+        Observation models whose scale depends on the data (e.g., Gamma, Gaussian) leave
+        ``scale_`` unset after ``stochastic_fit``. If the predicted rate and the counts fit
+        in memory, the scale can be estimated batch by batch, and the log-likelihood computed
+        from the observation model.
+
+        >>> import numpy as np
+        >>> np.random.seed(0)
+        >>> X = np.random.normal(size=(1000, 5))
+        >>> y = X @ np.ones(5) + np.random.normal(size=1000)
+        >>> loader = ArrayDataLoader(X, y, batch_size=100)
+        >>> model = nmo.glm.GLM(
+        ...     observation_model="Gaussian",
+        ...     solver_name="GradientDescent",
+        ...     solver_kwargs={"stepsize": 0.01, "acceleration": False},
+        ... )
+        >>> model = model.stochastic_fit(loader, n_passes=10)
+        >>> rate, counts = [], []
+        >>> for X_batch, y_batch in loader:
+        ...     rate.append(model.predict(X_batch))
+        ...     counts.append(y_batch)
+        >>> rate, counts = jnp.concatenate(rate), jnp.concatenate(counts)
+        >>> # residual degrees of freedom of an unregularized model: samples - features - intercept
+        >>> dof_resid = loader.n_samples - X.shape[1] - 1
+        >>> model.scale_ = model.observation_model.estimate_scale(
+        ...     counts, rate, dof_resid=dof_resid
+        ... )
+        >>> log_likelihood = model.observation_model.log_likelihood(
+        ...     counts, rate, scale=model.scale_
+        ... )
         """
         # Validate solver supports stochastic
         if not getattr(self.solver_spec.implementation, "_supports_stochastic", False):
@@ -1336,7 +1461,8 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             warnings.warn(
                 "`stochastic_fit()` will not populate `scale_` for observation models whose scale"
                 " depends on the data (e.g., Gamma, Gaussian), and `score()` will raise after this fit."
-                " Tip: for evaluation and model comparison use `compute_loss(X, y)` instead.",
+                " Tip: for an unnormalized negative log-likelihood, which does not need `scale_`,"
+                " call `compute_loss(model.get_model_params(), X, y)` instead.",
                 UserWarning,
             )
 
@@ -1398,10 +1524,12 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         if self._has_constant_scale():
             # for these families `estimate_scale` ignores `y`, `predicted_rate`, and `dof_resid`
             # the sample batch and `dof_resid=1.0` are placeholders just to satisfy the shared signature
+            extras = self._validator.filter_obs_params(self._get_param_dict())
             self.scale_ = self.observation_model.estimate_scale(
                 sample_y,
                 self._predict(params, sample_X),
                 dof_resid=1.0,
+                **extras,
             )
         else:
             # TODO: estimate residual dof and data-dependent scale after stochastic_fit
@@ -1470,15 +1598,6 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             ),
         )
 
-    def _get_model_params(self) -> GLMParams[jnp.ndarray]:
-        """Pack coef_ and intercept_  into a params pytree.
-
-        This method should be overwritten in case the parameter structure changes,
-        or if new regression models will have a different parameter structure.
-        """
-        # Retrieve parameter tree
-        return GLMParams(self.coef_, self.intercept_)
-
     def _set_model_params(self, params: GLMParams[jnp.ndarray]):
         """Unpack and store params pytree to coef_ and intercept_.
 
@@ -1486,8 +1605,11 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         or if new regression models will have a different parameter structure.
         """
         # Store parameters
-        self.coef_: DESIGN_INPUT_TYPE = params.coef
-        self.intercept_: jnp.ndarray = params.intercept
+        user_params = self._validator.from_model_params(params)
+        self.coef_: DESIGN_INPUT_TYPE = user_params.pop("coef")
+        self.intercept_: jnp.ndarray = user_params.pop("intercept")
+        for k in user_params.keys():
+            setattr(self, k + "_", user_params[k])
 
     @support_pynapple(conv_type="jax")
     def simulate(
@@ -1543,8 +1665,18 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         # check if the model is fit
         self._check_is_fit()
 
-        params = self._get_model_params()
-
+        dict_params = self._get_param_dict()
+        params = self._validator.to_model_params(dict_params)
+        extras = {k: dict_params[k] for k in self._validator.obs_param_names}
+        # separable parameter are fit post-hoc, and not included in dict_params
+        # but are needed to fully specify the distribution
+        extras.update(
+            {
+                k: getattr(self, k + "_", None)
+                for k, v in self._observation_model.extra_params.items()
+                if v.separable
+            }
+        )
         # if all invalid, raise error
         validation.error_all_invalid(feedforward_input)
 
@@ -1565,7 +1697,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         predicted_rate = self._predict(params, feedforward_input)
         return (
             self._observation_model.sample_generator(
-                key=random_key, predicted_rate=predicted_rate, scale=self.scale_
+                key=random_key, predicted_rate=predicted_rate, **extras
             ),
             predicted_rate,
         )
@@ -1815,8 +1947,9 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(
             X, n_samples=n_samples
         )
+        extras = self._validator.filter_obs_params(self._get_param_dict())
         self.scale_ = self.observation_model.estimate_scale(
-            y, self._predict(updated_params, data), dof_resid=self.dof_resid_
+            y, self._predict(updated_params, data), dof_resid=self.dof_resid_, **extras
         )
 
         return self._validator.from_model_params(updated_params), updated_state
@@ -1867,7 +2000,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         >>> for key, value in model.get_params().items():
         ...     print(f"{key}: {value}")
         fit_intercept: True
-        fix_params: (None, None)
+        fix_params: {...}
         inverse_link_function: <function one_over_x at ...>
         observation_model: GammaObservations()
         regularizer: Ridge()
@@ -1882,7 +2015,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         >>> for key, value in model.get_params().items():  # doctest: +ELLIPSIS
         ...     print(f"{key}: {value}")
         fit_intercept: True
-        fix_params: (None, None)
+        fix_params: {...}
         inverse_link_function: <function one_over_x at ...>
         observation_model: GammaObservations()
         regularizer: Ridge()
@@ -1904,7 +2037,7 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
         >>> for key, value in loaded_model.get_params().items():
         ...     print(f"{key}: {value}")
         fit_intercept: True
-        fix_params: (None, None)
+        fix_params: {...}
         inverse_link_function: <function <lambda> at ...>
         observation_model: PoissonObservations()
         regularizer: UnRegularized()
@@ -1929,7 +2062,17 @@ class GLM(BaseRegressor[GLMUserParams, GLMParams, GLMValidator]):
             lambda x: (jnp.shape(x)[1], *extra_shape), X
         )
         intercept_shape = (n_observations,)
-        return GLMParams(coef=coef_shapes, intercept=intercept_shape)
+        obs_params_shape = (
+            {k: intercept_shape for k in self._validator.obs_param_names}
+            if self._validator.obs_param_names
+            else None
+        )
+
+        return GLMParams(
+            coef=coef_shapes,
+            intercept=intercept_shape,
+            obs_params=obs_params_shape,
+        )
 
 
 def _var_func_of_mu(model) -> Callable:
@@ -2056,7 +2199,7 @@ class PopulationGLM(GLM):
     fix_params :
         Parameters to hold fixed during fitting, as a ``(coef, intercept)`` tuple with
         ``coef`` of shape ``(n_features, n_neurons)`` and ``intercept`` of shape
-        ``(n_neurons,)``. An array pins that parameter at the value provided, ``None``
+        ``(n_neurons,)``. An array fixes that parameter at the value provided, ``None``
         leaves it to be learned. When ``X`` is a pytree, ``coef`` mirrors its structure,
         its leaves have shape ``(n_features_in_leaf, n_neurons)``, and each leaf is
         pinned or learned on its own. Defaults to ``None``, which learns every parameter.
@@ -2177,7 +2320,12 @@ class PopulationGLM(GLM):
     # ``intercept``. The sign and the per-leaf claims are inherited from ``GLM`` and hold
     # block by block — each neuron's intercept block is that neuron's sum of weights.
     _hess_structure = MatrixStructure.BLOCK_DIAGONAL
-    _hess_batch_axes = GLMParams(1, 0)
+
+    @property
+    def _hess_batch_axes(self):
+        if self._validator.obs_param_names:
+            return GLMParams(1, 0, 0)
+        return GLMParams(1, 0, None)
 
     def __init__(
         self,
@@ -2249,7 +2397,7 @@ class PopulationGLM(GLM):
         self._feature_mask = self._validator.validate_and_cast_feature_mask(
             feature_mask
         )
-        # the loss and the Hessian read the mask at call time, so a solver built
+        # the loss and the Hessian use the mask at call time, so a solver built
         # against the previous mask is stale.
         self._invalidate_solver()
 
@@ -2361,6 +2509,7 @@ class PopulationGLM(GLM):
         :
             The predicted rates. Shape (n_timebins, n_neurons).
         """
+        # TODO: add convexity check and warn.
         if feature_mask is None:
             feature_mask = self._feature_mask
         if feature_mask is None:
@@ -2399,7 +2548,7 @@ class PopulationGLM(GLM):
         Zeroing the masked columns leaves the rank unchanged relative to deleting them,
         so the per-neuron mask stays a plain array op rather than a boolean index. The
         frozen columns are the same for every neuron, so those are sliced away once,
-        before the vmap: every rank is then read off a smaller matrix.
+        before the vmap: every rank is then computed from a smaller matrix.
         """
         if self._feature_mask is None:
             return super()._design_rank(X, active_cols)
@@ -2417,17 +2566,25 @@ class PopulationGLM(GLM):
         # yields the active block of the Hessian directly, no slicing needed.
         # ``batch_axes`` is prefix-spelled (one entry for all of ``coef``) while the
         # filter spec is per-leaf, so expand before splitting the axes.
+        batch_axes = self._hess_batch_axes
+        spec = tree_utils.tree_filter_like(self._active_filter_spec(), batch_axes)
         active_axis, frozen_axis = self._partition_active(
-            tree_utils.tree_broadcast_prefix(
-                self._hess_batch_axes, self._active_filter_spec()
-            )
+            tree_utils.tree_broadcast_prefix(batch_axes, spec)
         )
 
         def per_neuron(params, X, y, mask, frozen_params):
             def loss(params):
                 params = eqx.combine(params, frozen_params)
                 rate = self._predict(params, X, feature_mask=mask)
-                return self._observation_model._negative_log_likelihood(y, rate)
+                if self._fitting_separable_param_only():
+                    extras = {}
+                    _loss = self._observation_model._negative_log_likelihood
+                else:
+                    _loss = self._observation_model.log_likelihood
+                    extras = self._validator.filter_obs_params(
+                        self._validator.from_model_params(params)
+                    )
+                return _loss(y, rate, **extras)
 
             return jax.hessian(loss)(params)
 

@@ -609,20 +609,19 @@ class TestHMMInitialParams:
         """Test that _hmm_params_initialization returns expected default parameters and validation flag."""
         model = MockHMM(n_states=3)
 
-        (initial_prob, transition_prob), validate_params = (
-            model._hmm_params_initialization(
-                None,
-                None,
-                None,
-                random_key_pair=jax.random.split(jax.random.PRNGKey(0), 2),
-            )
+        hmm_params, validate_params = model._hmm_params_initialization(
+            None,
+            None,
+            None,
+            random_key_pair=jax.random.split(jax.random.PRNGKey(0), 2),
         )
 
         assert jnp.allclose(
-            initial_prob, DEFAULT_INIT_FUNCTIONS["initial_proba_init"](3)
+            hmm_params["initial_prob"], DEFAULT_INIT_FUNCTIONS["initial_proba_init"](3)
         )
         assert jnp.allclose(
-            transition_prob, DEFAULT_INIT_FUNCTIONS["transition_proba_init"](3)
+            hmm_params["transition_prob"],
+            DEFAULT_INIT_FUNCTIONS["transition_proba_init"](3),
         )
         assert validate_params is False
 
@@ -633,10 +632,10 @@ class TestHMMInitialParams:
                 jnp.full((n_states,), 1.0) / n_states
             )
         )
-        (initial_prob, _), validate_params = model._hmm_params_initialization(
+        hmm_params, validate_params = model._hmm_params_initialization(
             None, None, None, random_key_pair=jax.random.split(jax.random.PRNGKey(0), 2)
         )
-        assert jnp.allclose(initial_prob, jnp.full((3,), 1.0) / 3)
+        assert jnp.allclose(hmm_params["initial_prob"], jnp.full((3,), 1.0) / 3)
         assert validate_params is True
 
         model = MockHMM(n_states=3)
@@ -645,10 +644,10 @@ class TestHMMInitialParams:
                 jnp.full((n_states, n_states), 1.0) / n_states
             )
         )
-        (_, transition_prob), validate_params = model._hmm_params_initialization(
+        hmm_params, validate_params = model._hmm_params_initialization(
             None, None, None, random_key_pair=jax.random.split(jax.random.PRNGKey(0), 2)
         )
-        assert jnp.allclose(transition_prob, jnp.full((3, 3), 1.0) / 3)
+        assert jnp.allclose(hmm_params["transition_prob"], jnp.full((3, 3), 1.0) / 3)
         assert validate_params is True
 
     def test__model_specific_initialization_defaults(self):

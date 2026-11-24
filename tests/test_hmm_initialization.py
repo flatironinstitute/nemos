@@ -708,13 +708,18 @@ class TestGenerateHMMInitParams:
         result2 = generate_hmm_initial_params(
             n_states=3, X=None, y=None, session_starts=None
         )
-        assert jnp.allclose(jnp.vstack(result1), jnp.vstack(result2))
+        for k in result2:
+            assert jnp.allclose(result1[k], result2[k])
 
     @pytest.mark.parametrize("n_states", [1, 2, 3, 5])
     def test_output_shapes_and_types(self, n_states):
         """Test that output shapes and types are correct."""
-        initial_prob, transition_prob = generate_hmm_initial_params(
+        result = generate_hmm_initial_params(
             n_states=n_states, X=None, y=None, session_starts=None
+        )
+        initial_prob, transition_prob = (
+            result["initial_prob"],
+            result["transition_prob"],
         )
 
         assert initial_prob.shape == (n_states,)

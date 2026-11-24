@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import field
 from typing import Any, Optional, Tuple
 
 import jax
@@ -14,7 +14,7 @@ from .. import validation
 from ..base_validator import RegressorValidator
 from ..type_casting import is_pynapple_tsd
 from ..typing import DESIGN_INPUT_TYPE, ArrayLike
-from .params import HMMModelParamsT, HMMParams, HMMUserParams, HMMUserProvidedParamsT
+from .params import HMMModelParamsT, HMMUserProvidedParamsT
 from .utils import (
     initialize_session_starts,
     shift_nan_session_starts,
@@ -99,38 +99,11 @@ def has_interior_nans(is_nan: ArrayLike, session_starts: ArrayLike) -> bool:
     return n_runs > np.count_nonzero(n_valid_per_session)
 
 
-def to_hmm_params(user_params: HMMUserParams) -> HMMParams:
-    """Map from HMMUserParams to HMMParams.
-
-    Converts user-provided parameters (scale and probabilities in regular space)
-    to internal model parameters (log_scale and log probabilities).
-    """
-    return HMMParams(*(jnp.log(p) for p in user_params))
-
-
-def from_hmm_params(params: HMMParams) -> HMMUserParams:
-    """Map from HMMParams to HMMUserParams.
-
-    Converts internal model parameters (log_scale and log probabilities)
-    to user-facing parameters (scale and probabilities in regular space).
-    """
-    # exponentiate and re-normalize
-    initial_prob = jnp.exp(params.log_initial_prob)
-    initial_prob /= initial_prob.sum()
-    transition_prob = jnp.exp(params.log_transition_prob)
-    transition_prob /= transition_prob.sum(axis=1, keepdims=True)
-    return (
-        initial_prob,
-        transition_prob,
-    )
-
-
-@dataclass(frozen=True, repr=False)
 class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
     """Validate HMM parameters. Meant to be used as a mixin class for models that use HMMs."""
 
     n_states: int = field(kw_only=True)  # keyword only and required.
-    model_param_names: Tuple[str] = ("initial_prob", "transition_prob")
+    model_param_names: set[str] = frozenset({"initial_prob", "transition_prob"})
     model_class: str = "HMM"
     params_validation_sequence: Tuple[Tuple[str, None] | Tuple[str, dict[str, Any]]] = (
         ("check_init_and_transition_prob_shape", None),
@@ -168,16 +141,11 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
         ValueError
             If parameters do not have length two.
         """
-        validation.check_length(
-            params,
-            len(self.model_param_names),
-            f"Params must have length {len(self.model_param_names)}: "
-            f"({', '.join(self.model_param_names)}).",
-        )
-        if not isinstance(params, (tuple, list)):
-            raise TypeError(
-                f"{self.model_class} params must be a tuple/list of length {len(self.model_param_names)}, "
-                f"({', '.join(self.model_param_names)})."
+        if not isinstance(params, dict):
+            raise TypeError("Parameters must of dictionary type.")
+        if not params.keys() <= self.model_param_names:
+            raise KeyError(
+                "Parameters must have key 'initial_prob' or 'transition_prob'."
             )
         return params
 
@@ -185,13 +153,19 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
         self, params: HMMUserProvidedParamsT
     ) -> HMMUserProvidedParamsT:
         """Check initial and transition probabilities shape."""
-        initial_prob, transition_prob = self.wrap_user_params(params)[-2:]
-        if initial_prob.shape != (self.n_states,):
+        initial_prob, transition_prob = (
+            params.get("initial_prob"),
+            params.get("transition_prob"),
+        )
+        if (initial_prob is not None) and initial_prob.shape != (self.n_states,):
             raise ValueError(
                 f"initial_prob must be a 1-dimensional array of shape ``({self.n_states},)``. "
                 f"Provided initial_prob is of shape ``{initial_prob.shape}`` instead."
             )
-        if transition_prob.shape != (self.n_states, self.n_states):
+        if (transition_prob is not None) and transition_prob.shape != (
+            self.n_states,
+            self.n_states,
+        ):
             raise ValueError(
                 f"transition_prob must be a 2-dimensional array of shape ``({self.n_states}, {self.n_states})``."
                 f"Provided transition_prob is of shape ``{transition_prob.shape}`` instead."
@@ -202,13 +176,18 @@ class HMMValidator(RegressorValidator[HMMUserProvidedParamsT, HMMModelParamsT]):
         self, params: HMMUserProvidedParamsT
     ) -> HMMUserProvidedParamsT:
         """Check that initial and transition probability sum to 1."""
-        initial_prob, transition_prob = self.wrap_user_params(params)[-2:]
+        initial_prob, transition_prob = (
+            params.get("initial_prob"),
+            params.get("transition_prob"),
+        )
 
-        if not jnp.allclose(initial_prob.sum(), 1):
+        if (initial_prob is not None) and not jnp.allclose(initial_prob.sum(), 1):
             raise ValueError(
                 f"initial_prob must sum to 1, but got sum = {initial_prob.sum()}. "
             )
-        if not jnp.allclose(jnp.sum(transition_prob, axis=1), 1):
+        if (transition_prob is not None) and not jnp.allclose(
+            jnp.sum(transition_prob, axis=1), 1
+        ):
             row_sums = jnp.sum(transition_prob, axis=1)
             raise ValueError(
                 f"transition_prob matrix rows must sum to 1 over columns, but got sum = {row_sums}. "

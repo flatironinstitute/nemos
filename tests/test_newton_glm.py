@@ -368,7 +368,7 @@ def test_population_glm_hess_fn_drops_frozen_leaves(freeze, request):
         assert hess.intercept is None
         assert all(row.intercept is None for row in hess.coef.values())
     else:
-        pinned = sorted(model.fix_params[0])[0]
+        pinned = sorted(model.fix_params["coef"])[0]
         assert active.coef[pinned] is None
         assert hess.coef[pinned] is None
         # the frozen leaf is dropped as a column too, not just as a row
@@ -556,9 +556,15 @@ def _full_autodiff_model(model):
     not one block per neuron, so it neither has a block structure nor a batch axis to name.
     """
     full_model = deepcopy(model)
-    full_model._get_hess_fn = lambda frozen=None: None
-    full_model._hess_structure = MatrixStructure.FULL
-    full_model._hess_batch_axes = None
+    full_model.__class__ = type(
+        f"FullAutodiff{type(model).__name__}",
+        (type(model),),
+        {
+            "_get_hess_fn": lambda self, frozen=None: None,
+            "_hess_structure": MatrixStructure.FULL,
+            "_hess_batch_axes": None,
+        },
+    )
     return full_model
 
 
@@ -680,7 +686,7 @@ def test_newton_population_glm_block_hessian_matches_full(
     model.initialize_optimizer_and_state(p0, X, y)
     full_model.initialize_optimizer_and_state(p0, X, y)
 
-    p = GLMParams(*p0)
+    p = model._validator.to_model_params(p0)
 
     H_full = full_model._solver.curvature.hessian_fn(p, X, y)
     H_block = model._solver.curvature.hessian_fn(p, X, y)
@@ -851,7 +857,7 @@ def test_newton_population_classifier_glm_block_hessian_matches_full(
 
     # encode the labels exactly as ``update`` does before handing off to the solver
     y_enc = jax.nn.one_hot(model._label_encoder.encode(y, safe=False), model.n_classes)
-    p = GLMParams(*p0)
+    p = model._validator.to_model_params(p0)
 
     # full: nested GLMParams coupling every (neuron, class); block: leading axis batches neurons
     H_full = full_model._solver.curvature.hessian_fn(p, X, y_enc)
@@ -957,7 +963,7 @@ def test_newton_unbatched_model_hessian_matches_differentiated_loss(
 
     p0 = model.initialize_params(X, y)
     model.initialize_optimizer_and_state(p0, X, y)
-    p = GLMParams(*p0)
+    p = model._validator.to_model_params(p0)
 
     jax.tree.map(
         lambda a, b: np.testing.assert_allclose(a, b, atol=1e-8),
@@ -1065,7 +1071,7 @@ def test_population_glm_hess_structure():
     ``intercept``.
     """
     assert PopulationGLM._hess_structure is MatrixStructure.BLOCK_DIAGONAL
-    assert PopulationGLM._hess_batch_axes == GLMParams(1, 0)
+    assert PopulationGLM()._hess_batch_axes == GLMParams(1, 0)
 
 
 @pytest.mark.parametrize(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 import warnings
 from pathlib import Path
 from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
@@ -15,6 +16,7 @@ from numpy.typing import ArrayLike, NDArray
 from .. import observation_models as obs
 from .. import tree_utils
 from .._observation_model_builder import instantiate_observation_model
+from ..glm.params import FromGLMParams, GLMParams, ToGLMParams
 from ..hmm.expectation_maximization import EMState, em_hmm, em_step
 from ..hmm.hmm import FORWARD_BACKWARD, BaseHMM
 from ..hmm.initialize_parameters import HMM_INITIALIZATION_FN_DICT, InitFunctionHMM
@@ -32,7 +34,11 @@ from ..typing import (
     StepResult,
 )
 from ..utils import format_repr
-from .algorithm_configs import prepare_estep_log_likelihood, prepare_mstep_update_fn
+from .algorithm_configs import (
+    map_from,
+    prepare_estep_log_likelihood,
+    prepare_mstep_update_fn,
+)
 from .initialize_parameters import (
     DEFAULT_INIT_FUNCTIONS_GLMHMM,
     GLMHMM_INITIALIZATION_FN_DICT,
@@ -43,9 +49,38 @@ from .initialize_parameters import (
     kmeans_scale_init,
     setup_glm_hmm_initialization,
 )
-from .params import GLMHMMModelParams, GLMHMMParams, GLMHMMUserParams
+from .params import FromGLMHMMParams, GLMHMMParams, GLMHMMUserParams, ToGLMHMMParams
 from .utils import compute_rate_per_state
 from .validation import GLMHMMValidator
+
+
+def update_validator_observation_dependent_configs(
+    observation_model: Observations, validator: GLMHMMValidator
+) -> GLMHMMValidator:
+    """Set the validator observation dependent configs.
+
+    This convenience function sets the validator mappings between the user
+    provided parameter dictionary and the model parameter class, and the
+    specific parameter names.
+    """
+    commons = validator.__class__.model_param_names
+    return eqx.tree_at(
+        # selector
+        lambda x: (
+            x.to_model_params,
+            x.from_model_params,
+            x.model_param_names,
+        ),
+        # pytree
+        validator,
+        # replace
+        (
+            ToGLMHMMParams(ToGLMParams(observation_model.map_to)),
+            FromGLMHMMParams(FromGLMParams(observation_model.map_from)),
+            frozenset({*commons, *observation_model.extra_params.keys()}),
+        ),
+        is_leaf=lambda x: x is None,
+    )
 
 
 class GLMHMM(
@@ -183,8 +218,10 @@ class GLMHMM(
         GLM intercepts (bias terms) for each state, shape ``(n_states,)``.
     solver_state_ :
         State of the solver after fitting. May include details like optimization error.
-    scale_ :
-        Scale parameter for the observation model, shape ``(n_states,)``.
+    scale_ (optional):
+        Scale parameter for the observation model if Gaussian or Gamma, shape ``(n_states,)``.
+    dispersion_ (optional):
+        Dispersion parameter for the observation model if NegativeBinomial, shape ``(n_states,)``.
     dof_resid_ :
         Degrees of freedom for the residuals.
 
@@ -392,7 +429,9 @@ class GLMHMM(
         self.coef_: jnp.ndarray | None = None
         self.intercept_: jnp.ndarray | None = None
         self.solver_state_: NamedTuple | None = None
-        self.scale_: jnp.ndarray | None = None
+        # add extra attr conditionally
+        for k in self.observation_model.extra_params.keys():
+            setattr(self, k + "_", None)
         self.dof_resid_: int | None = None
 
         # cache the log-like
@@ -433,6 +472,8 @@ class GLMHMM(
         glm_params_init_kwargs: Optional[dict] = None,
         scale_init: Optional[Literal["constant", "kmeans"] | InitFunctionGLM] = None,
         scale_init_kwargs: Optional[dict] = None,
+        dispersion_init: Optional[Literal["constant"] | InitFunctionGLM] = None,
+        dispersion_init_kwargs: Optional[dict] = None,
     ):
         """Configure how :meth:`fit` initializes each model parameter.
 
@@ -450,6 +491,7 @@ class GLMHMM(
           ``"random"``, ``"dirichlet"``, ``"kmeans"``.
         - ``glm_params_init``: ``"random"`` (default), ``"kmeans"``.
         - ``scale_init``: ``"constant"`` (default), ``"kmeans"``.
+        - ``dispersion_init``: ``"constant"`` (default).
 
 
         Parameters
@@ -471,10 +513,17 @@ class GLMHMM(
             Extra keyword arguments forwarded to ``glm_params_init``.
         scale_init :
             Built-in name or custom callable used to initialize the scale parameter
-            of the observation model (e.g. variance for Gaussian, dispersion for
-            NegativeBinomial). Ignored by observation models without a scale.
+            of the observation model (e.g. variance for Gaussian).
+            Ignored by observation models without a scale.
         scale_init_kwargs :
             Extra keyword arguments forwarded to ``scale_init``.
+        dispersion_init :
+            Built-in name or custom callable used to initialize the dispersion parameter
+            of the observation model (for NegativeBinomial).
+            Ignored by observation models without a dispersion.
+        dispersion_init_kwargs :
+            Extra keyword arguments forwarded to ``dispersion_init``.
+
 
         Raises
         ------
@@ -491,11 +540,11 @@ class GLMHMM(
           :class:`~nemos.hmm.initialize_parameters.InitFunctionHMM` and return a
           ``jnp.ndarray`` of shape ``(n_states,)`` or ``(n_states, n_states)``
           respectively.
-        - ``glm_params_init`` and ``scale_init`` must satisfy
+        - ``glm_params_init``, ``scale_init``, and ``dispersion_init`` must satisfy
           :class:`~nemos.glm_hmm.initialize_parameters.InitFunctionGLM`.
           ``glm_params_init`` returns ``(coef, intercept)`` matched to the design
-          and ``n_states``; ``scale_init`` returns the scale array for the
-          observation model.
+          and ``n_states``; ``scale_init`` and ``dispersion_init`` return
+          the scale array and the dispersion array of the observation model.
 
         To inspect a protocol's signature, import and ``help()`` it::
 
@@ -541,6 +590,8 @@ class GLMHMM(
             glm_params_init_kwargs=glm_params_init_kwargs,
             scale_init=scale_init,
             scale_init_kwargs=scale_init_kwargs,
+            dispersion_init=dispersion_init,
+            dispersion_init_kwargs=dispersion_init_kwargs,
         )
 
     def _model_setup(
@@ -549,6 +600,8 @@ class GLMHMM(
         glm_params_init_kwargs=None,
         scale_init: Optional[str | Callable] = None,
         scale_init_kwargs=None,
+        dispersion_init: Optional[str | Callable] = None,
+        dispersion_init_kwargs=None,
     ):
         """Validate and set GLM-side initialization functions.
 
@@ -563,6 +616,8 @@ class GLMHMM(
             scale_init=scale_init,
             scale_init_kwargs=scale_init_kwargs,
             init_funcs=self._model_initialization_funcs,
+            dispersion_init=dispersion_init,
+            dispersion_init_kwargs=dispersion_init_kwargs,
         )
         self._model_use_kmeans = {
             "glm_params_init": (
@@ -606,13 +661,38 @@ class GLMHMM(
             :class:`~nemos.observation_models.Observations` interface (checked
             via :func:`nemos.observation_models.check_observation_model`).
         """
+        previous_extra = (
+            []
+            if getattr(self, "_observation_model", None) is None
+            else self._observation_model.extra_params.keys()
+        )
         if isinstance(observation, str):
             self._observation_model = instantiate_observation_model(observation)
+            self._validator = update_validator_observation_dependent_configs(
+                self._observation_model, self._validator
+            )
+            state_keys = self._get_fit_state().keys()
+            for key in self._observation_model.extra_params.keys():
+                if key not in state_keys:
+                    setattr(self, key + "_", None)
+            for key in previous_extra:
+                if key not in self._observation_model.extra_params.keys():
+                    delattr(self, key + "_")
             return
         # check that the model has the required attributes
         # and that the attribute can be called
         obs.check_observation_model(observation)
         self._observation_model = observation
+        self._validator = update_validator_observation_dependent_configs(
+            self._observation_model, self._validator
+        )
+        state_keys = self._get_fit_state().keys()
+        for key in self._observation_model.extra_params.keys():
+            if key not in state_keys:
+                setattr(self, key + "_", None)
+        for key in previous_extra:
+            if key not in self._observation_model.extra_params.keys():
+                delattr(self, key + "_")
 
     @property
     def inverse_link_function(self):
@@ -655,21 +735,12 @@ class GLMHMM(
 
     def _check_model_is_fit(self):
         """Ensure the instance has been fitted."""
-        flat_params = [
-            self.coef_,
-            self.intercept_,
-            self.scale_,
-        ]
-        is_missing = [x is None for x in flat_params]
-        if any(is_missing):
-            param_labels = [
-                "coef_",
-                "intercept_",
-                "scale_",
-            ]
-            missing_params = [
-                p for p, missing in zip(param_labels, is_missing) if missing
-            ]
+        param_dict = self._get_param_dict()
+        is_missing = jax.tree_util.tree_map(
+            lambda x: x is None, param_dict, is_leaf=lambda x: x is None
+        )
+        if jax.tree_util.tree_reduce(operator.or_, is_missing):
+            missing_params = [k + "_" for k, v in is_missing.items() if v]
             raise ValueError(
                 "This GLMHMM instance is not fitted yet. The following attributes are not set:"
                 f" {missing_params}.\nPlease fit the GLM-HMM model first or "
@@ -820,6 +891,8 @@ class GLMHMM(
         if init_params is None:
             init_params = self._model_specific_initialization(X, y, session_starts)
         else:
+            # TODO: improve initialization and allow partial param specs
+            self._validator.check_complete_param_specs(init_params)
             init_params = self._validator.validate_and_cast_params(init_params)
             self._validator.validate_consistency(init_params, X=X, y=y)
 
@@ -973,7 +1046,7 @@ class GLMHMM(
         # unpack log probabilities directly (avoid exp then log in categorical)
         log_initial_prob = params.hmm_params.log_initial_prob
         log_transition_prob = params.hmm_params.log_transition_prob
-        scale = jnp.exp(params.model_params.log_scale)
+        obs_params = map_from(params.model_params.obs_params, self.observation_model)
 
         # pre-compute rates for all states: (n_time_bins, n_states) or (n_time_bins, n_neurons, n_states)
         all_rates = compute_rate_per_state(
@@ -999,14 +1072,16 @@ class GLMHMM(
             )
             state_idx = jax.random.categorical(state_key, log_state_probs)
 
-            # get rate and scale for sampled state
+            # get rate and observation model params for sampled state
             # handles both (n_states,) and (n_neurons, n_states)
             rate = rates_t[..., state_idx]
-            state_scale = scale[..., state_idx]
+            state_obs_params = jax.tree_util.tree_map(
+                lambda p: p[..., state_idx], obs_params
+            )
 
             # sample observation
             y_t = self._observation_model.sample_generator(
-                key=obs_key, predicted_rate=rate, scale=state_scale
+                key=obs_key, predicted_rate=rate, **state_obs_params
             )
 
             return state_idx, (y_t, rate, state_idx)
@@ -1440,8 +1515,10 @@ class GLMHMM(
         """Save GLM-HMM model parameters and fit state to a .npz file.
 
         Persists hyperparameters returned by :meth:`get_params` together with the
-        fitted attributes (``coef_``, ``intercept_``, ``scale_``, ``initial_prob_``,
-        ``transition_prob_``, ``dof_resid_``). The ``solver_state_`` is intentionally
+        fitted attributes (``coef_``, ``intercept_``, ``initial_prob_``,
+        ``transition_prob_``, ``dof_resid_``, and optionally distribution specific
+        parameters such as ``scale_`` or ``dispersion_``).
+        The ``solver_state_`` is intentionally
         excluded as it is solver-specific and not needed to reuse the fitted model.
         The file can be reloaded with :func:`nemos.load_model`.
 
@@ -1514,26 +1591,14 @@ class GLMHMM(
         """No optimal parameters known for SVRG in GLMHMM."""
         return None, None, None
 
-    def _get_model_params(self) -> GLMHMMParams:
-        return self._validator.to_model_params(
-            (
-                self.coef_,
-                self.intercept_,
-                self.scale_,
-                self.initial_prob_,
-                self.transition_prob_,
-            )
-        )
-
     def _set_model_params(self, params: GLMHMMParams):
-        coef, intercept, scale, initial_prob, transition_prob = (
-            self._validator.from_model_params(params)
-        )
-        self.coef_ = coef
-        self.intercept_ = intercept
-        self.scale_ = scale
-        self.initial_prob_ = initial_prob
-        self.transition_prob_ = transition_prob
+        user_params = self._validator.from_model_params(params)
+        self.coef_ = user_params.pop("coef")
+        self.intercept_ = user_params.pop("intercept")
+        self.initial_prob_ = user_params.pop("initial_prob")
+        self.transition_prob_ = user_params.pop("transition_prob")
+        for k in user_params.keys():
+            setattr(self, k + "_", user_params[k])
 
     def update(
         self,
@@ -1551,8 +1616,9 @@ class GLMHMM(
 
         Performs one E-step / M-step pair starting from the supplied parameters and
         EM state, updates the model's fitted attributes (``coef_``, ``intercept_``,
-        ``scale_``, ``initial_prob_``, ``transition_prob_``, ``solver_state_``,
-        ``dof_resid_``) in place, and returns the updated parameter tuple and EM
+         ``initial_prob_``, ``transition_prob_``, ``solver_state_``,
+        ``dof_resid_``, and distribution specific extra parameters such as ``scale_``
+        or ``dispersion_``) in place, and returns the updated parameter tuple and EM
         state. Intended for callers that need fine-grained control over EM
         iteration (e.g. checkpointing, custom convergence criteria) instead of the
         bundled :meth:`fit` loop.
@@ -1568,9 +1634,14 @@ class GLMHMM(
         Parameters
         ----------
         params :
-            Current model parameters as a 5-tuple
-            ``(coef, intercept, scale, initial_prob, transition_prob)`` matching
-            the structure produced by :meth:`initialize_params`.
+            Current model parameters as a dictionary with keys:
+                - "coef"
+                - "intercept"
+                - "initial_prob"
+                - "transition_prob"
+                - "scale" (only for Gamma and Gaussian)
+                - "dispersion" (only for NegativeBinomial)
+            matching the structure produced by :meth:`initialize_params`.
         opt_state :
             EM state returned by :meth:`initialize_optimizer_and_state` or by the
             previous call to :meth:`update`.
@@ -1746,8 +1817,11 @@ class GLMHMM(
         coef_shapes = jax.tree_util.tree_map(
             lambda x: (jnp.shape(x)[1], *extra_shape), X
         )
-        glm_params = GLMHMMModelParams(
-            coef=coef_shapes, intercept=extra_shape, log_scale=extra_shape
+        obs_params = {
+            k: extra_shape for k in self.observation_model.extra_params.keys()
+        }
+        glm_params = GLMParams(
+            coef=coef_shapes, intercept=extra_shape, obs_params=obs_params
         )
         hmm_params = HMMParams(
             log_initial_prob=(n_states,), log_transition_prob=(n_states, n_states)

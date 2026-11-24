@@ -472,7 +472,7 @@ def test_validate_strength_tree_input(regularizer, strength, expectation, check_
 
 @pytest.mark.parametrize(
     "regularizer",
-    [nmo.regularizer.UnRegularized(), nmo.regularizer.Ridge(), nmo.regularizer.Lasso()],
+    [nmo.regularizer.Ridge(), nmo.regularizer.Lasso()],
 )
 @pytest.mark.parametrize("strength", [None, 0.3, np.array(1.0), jnp.array(1.0)])
 def test_validate_strength_structure_scalar_broadcast(regularizer, strength):
@@ -504,7 +504,7 @@ class TwoParams(eqx.Module):
 
 @pytest.mark.parametrize(
     "regularizer",
-    [nmo.regularizer.UnRegularized(), nmo.regularizer.Ridge(), nmo.regularizer.Lasso()],
+    [nmo.regularizer.Ridge(), nmo.regularizer.Lasso()],
 )
 def test_validate_strength_structure_multiple_subtrees_count_mismatch(regularizer):
     """If the number of provided strengths != number of subtrees, raise ValueError."""
@@ -516,7 +516,7 @@ def test_validate_strength_structure_multiple_subtrees_count_mismatch(regularize
 
 @pytest.mark.parametrize(
     "regularizer",
-    [nmo.regularizer.UnRegularized(), nmo.regularizer.Ridge(), nmo.regularizer.Lasso()],
+    [nmo.regularizer.Ridge(), nmo.regularizer.Lasso()],
 )
 @pytest.mark.parametrize(
     "params, strength, expectation",
@@ -827,10 +827,7 @@ class TestUnRegularized:
         assert "strength" in fk
 
         s = fk["strength"]
-        assert isinstance(s, GLMParams)
-        assert isinstance(s.coef, float)
-        assert s.coef == 1.0
-        assert s.intercept is None
+        assert s is None
 
     @pytest.mark.parametrize(
         "solver_name, expectation",
@@ -1118,15 +1115,20 @@ class TestUnRegularized:
         model.set_params(regularizer=self.cls())
         model.solver_name = solver_name
         model.solver_kwargs = {"tol": 10**-13}
+        dispersion = 1.5
+        model.fix_params = {
+            "dispersion": jnp.full_like(true_params.intercept, dispersion)
+        }
         init_params = model._model_specific_initialization(X, y)
-        runner = model._instantiate_solver(model._compute_loss, init_params).run
-        params = runner(init_params, X, y)[0]
+        active, frozen = model._partition_active(init_params)
+        runner = model._instantiate_solver(
+            model._compute_loss, active, frozen_params=frozen
+        ).run
+        params = eqx.combine(runner(active, X, y)[0], frozen)
         model_sm = sm.GLM(
             endog=y,
             exog=sm.add_constant(X),
-            family=sm.families.NegativeBinomial(
-                link=link_sm, alpha=model.observation_model.scale
-            ),
+            family=sm.families.NegativeBinomial(link=link_sm, alpha=dispersion),
         )
 
         res_sm = model_sm.fit(cnvrg_tol=10**-12)

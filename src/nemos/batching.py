@@ -127,17 +127,6 @@ class _BaseArrayDataLoader:
             dimension (e.g. a scalar or a list), the arrays have mismatched
             lengths, or ``shuffle`` is not a recognized strategy.
         """
-        leaves = jax.tree_util.tree_leaves(arrays)
-        if len(leaves) == 0:
-            raise ValueError("Provide at least one array.")
-
-        for leaf in leaves:
-            if len(getattr(leaf, "shape", ())) == 0:
-                raise ValueError(
-                    "Every leaf must be an array with at least one dimension, "
-                    f"got {type(leaf).__name__}."
-                )
-
         if shuffle not in SHUFFLE_STRATEGIES:
             raise ValueError(
                 f"shuffle must be one of {SHUFFLE_STRATEGIES}, got {shuffle!r}."
@@ -145,7 +134,11 @@ class _BaseArrayDataLoader:
 
         self.arrays = arrays
 
-        if len(set(arr.shape[0] for arr in leaves)) != 1:
+        # this allows batching pytrees that have some empty leaves, this should be discussed
+        if (
+            len(set(arr.shape[0] for arr in jax.tree_util.tree_leaves(self.arrays)))
+            != 1
+        ):
             raise ValueError("All arrays must have same number of samples")
 
         self.shuffle = shuffle
@@ -155,7 +148,7 @@ class _BaseArrayDataLoader:
     @property
     def n_samples(self) -> int:
         """Total number of samples in the dataset."""
-        return jax.tree_util.tree_leaves(self.arrays)[0].shape[0]
+        return jax.tree_util.tree_leaves(self.arrays[0])[0].shape[0]
 
     @property
     def batch_size(self) -> int:
@@ -173,7 +166,7 @@ class _BaseArrayDataLoader:
 
     def _materialize(self, key: slice | np.ndarray) -> tuple[jnp.ndarray, ...]:
         """Load and convert to JAX the rows selected by ``key`` from each array."""
-        return jax.tree_util.tree_map(jnp.asarray, tree_slice(self.arrays, key))
+        return jax.tree_util.tree_map(lambda x: jnp.asarray(x[key]), self.arrays)
 
     def _iter_no_shuffle(self) -> Iterator[tuple[jnp.ndarray, ...]]:
         """Yield contiguous batches in sequential order."""
@@ -262,6 +255,31 @@ class _BaseArrayDataLoader:
         # return invalid first batch and let downstream fail
         return first_batch
 
+    @staticmethod
+    def _prepare_leaves(*arrays, cast_to_jax=False):
+        leaves = jax.tree_util.tree_leaves(arrays)
+        if len(leaves) == 0:
+            raise ValueError("Provide at least one array.")
+
+        for leaf in leaves:
+            if not hasattr(leaf, "shape"):
+                raise TypeError(
+                    "Invalid``arrays`` provided. Every leaf in ``arrays`` "
+                    "must be an array with at least one dimension, "
+                    f"got {type(leaf).__name__}."
+                )
+
+            elif len(leaf.shape) == 0:
+                raise ValueError(
+                    "Invalid``arrays`` provided. Every leaf in ``arrays`` "
+                    "must be an array with at least one dimension, got a 0-dimensional (scalar)"
+                    " array instead."
+                )
+
+        if cast_to_jax:
+            arrays = tuple(jax.tree_util.tree_map(jnp.asarray, a) for a in arrays)
+        return arrays
+
 
 class ArrayDataLoader(_BaseArrayDataLoader):
     """
@@ -312,7 +330,13 @@ class ArrayDataLoader(_BaseArrayDataLoader):
         seed :
             Random seed for shuffling. Default is None.
         """
-        super().__init__(*arrays, batch_size=batch_size, shuffle=shuffle, seed=seed)
+        arrays = self._prepare_leaves(*arrays, cast_to_jax=True)
+        super().__init__(
+            *jax.tree_util.tree_map(jnp.asarray, arrays),
+            batch_size=batch_size,
+            shuffle=shuffle,
+            seed=seed,
+        )
         self.arrays = jax.tree_util.tree_map(jnp.asarray, self.arrays)
 
     def _iter_shuffle_whole(self) -> Iterator[tuple[jnp.ndarray, ...]]:
@@ -382,6 +406,7 @@ class LazyArrayDataLoader(_BaseArrayDataLoader):
         seed :
             Random seed for shuffling. Default is None.
         """
+        self._prepare_leaves(*arrays, cast_to_jax=False)
         super().__init__(*arrays, batch_size=batch_size, shuffle=shuffle, seed=seed)
 
     def _iter_shuffle_whole(self) -> Iterator[tuple[jnp.ndarray, ...]]:

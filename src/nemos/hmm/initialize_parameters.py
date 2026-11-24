@@ -1046,7 +1046,7 @@ def generate_hmm_initial_params(
         **transition_proba_init_kwargs,
     )
 
-    return initial_probs, transition_matrix
+    return {"initial_prob": initial_probs, "transition_prob": transition_matrix}
 
 
 def _resolve_dirichlet_priors(

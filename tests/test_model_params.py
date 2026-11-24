@@ -23,7 +23,12 @@ import nemos
 from conftest import all_subclasses
 from nemos._hess import HessianTag, MatrixProperty, MatrixStructure
 from nemos._inspect_utils import is_abstract
-from nemos.glm.params import GLMParams
+from nemos._observation_model_builder import (
+    AVAILABLE_OBSERVATION_MODELS,
+    instantiate_observation_model,
+)
+from nemos.glm.params import GLMParams, GLMUserParams
+from nemos.glm_hmm.params import GLMHMMUserParams
 from nemos.params import ModelParams
 from nemos.regularizer import Ridge, UnRegularized
 
@@ -100,6 +105,21 @@ def test_regularizable_subtrees_preserve_leaf_identity(params_cls):
         )
 
 
+@pytest.mark.metatest
+@pytest.mark.parametrize("user_params_cls", [GLMUserParams, GLMHMMUserParams])
+@pytest.mark.parametrize("observation_model", AVAILABLE_OBSERVATION_MODELS)
+def test_user_params_type_every_declared_extra_param(
+    observation_model, user_params_cls
+):
+    """Every extra parameter an observation model declares is a key of the user params."""
+    declared = instantiate_observation_model(observation_model).extra_params.keys()
+    missing = set(declared) - set(user_params_cls.__annotations__)
+    assert not missing, (
+        f"{user_params_cls.__name__} has no key for the {sorted(missing)} parameter(s) "
+        f"declared by the {observation_model} observation model."
+    )
+
+
 class _FullyCoveredParams(ModelParams):
     """Params whose single subtree covers every leaf."""
 
@@ -121,8 +141,8 @@ class _FullyCoveredParams(ModelParams):
         ),
         pytest.param(
             GLMParams,
-            GLMParams(coef=False, intercept=True),
-            GLMParams(coef=True, intercept=False),
+            GLMParams(coef=False, intercept=True, obs_params=True),
+            GLMParams(coef=True, intercept=False, obs_params=False),
             id="partial-coverage",
         ),
     ],
@@ -151,26 +171,26 @@ def test_ridge_certifies_the_leaves_its_penalty_reaches(
     [
         pytest.param(
             0.1,
-            GLMParams(coef=False, intercept=True),
-            GLMParams(coef=True, intercept=False),
+            GLMParams(coef=False, intercept=True, obs_params=True),
+            GLMParams(coef=True, intercept=False, obs_params=False),
             id="positive-scalar",
         ),
         pytest.param(
             jnp.array([1.0, 2.0, 3.0]),
-            GLMParams(coef=False, intercept=True),
-            GLMParams(coef=True, intercept=False),
+            GLMParams(coef=False, intercept=True, obs_params=True),
+            GLMParams(coef=True, intercept=False, obs_params=False),
             id="positive-array",
         ),
         pytest.param(
             0.0,
-            GLMParams(coef=True, intercept=True),
-            GLMParams(coef=False, intercept=False),
+            GLMParams(coef=True, intercept=True, obs_params=True),
+            GLMParams(coef=False, intercept=False, obs_params=False),
             id="zero-scalar",
         ),
         pytest.param(
             jnp.array([1.0, 0.0, 2.0]),
-            GLMParams(coef=False, intercept=True),
-            GLMParams(coef=False, intercept=False),
+            GLMParams(coef=False, intercept=True, obs_params=True),
+            GLMParams(coef=False, intercept=False, obs_params=False),
             id="array-with-a-zero",
         ),
     ],
@@ -200,6 +220,6 @@ def test_unregularized_resolves_the_zero_tag():
     assert UnRegularized()._resolve_hess_tag(params, None) == HessianTag(
         structure=MatrixStructure.DIAGONAL,
         property=MatrixProperty.POSITIVE_SEMI_DEFINITE,
-        flat_on=GLMParams(coef=True, intercept=True),
-        definite_on=GLMParams(coef=False, intercept=False),
+        flat_on=GLMParams(coef=True, intercept=True, obs_params=True),
+        definite_on=GLMParams(coef=False, intercept=False, obs_params=False),
     )

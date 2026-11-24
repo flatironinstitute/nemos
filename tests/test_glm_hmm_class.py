@@ -1,6 +1,7 @@
 """Tests for GLMHMM.fit and related fit-path validation."""
 
 import inspect
+import itertools
 import math
 import warnings
 from contextlib import nullcontext as does_not_raise
@@ -17,9 +18,13 @@ import pytest
 from tests.conftest import instantiate_glm_hmm_func
 
 import nemos as nmo
+from nemos._observation_model_builder import (
+    AVAILABLE_OBSERVATION_MODELS,
+    instantiate_observation_model,
+)
 from nemos.glm.params import GLMParams
 from nemos.glm_hmm.glm_hmm import GLMHMM
-from nemos.glm_hmm.params import GLMHMMModelParams, GLMHMMParams
+from nemos.glm_hmm.params import GLMHMMParams
 from nemos.glm_hmm.validation import GLMHMMValidator
 from nemos.hmm.expectation_maximization import EMState
 from nemos.hmm.hmm import FORWARD_BACKWARD, BaseHMM
@@ -48,18 +53,21 @@ N_FEATURES = 2
 
 
 # ---------------------------------------------------------------------------
-# Shared helper: build a valid 5-tuple of init params from the fixture
+# Shared helper: build a valid dict of init params from the fixture
 # ---------------------------------------------------------------------------
 
 
 def _init_params_from_fixture(fixture):
-    return (
-        fixture.params.model_params.coef,
-        fixture.params.model_params.intercept,
-        fixture.params.model_params.log_scale,
-        jnp.exp(fixture.params.hmm_params.log_initial_prob),
-        jnp.exp(fixture.params.hmm_params.log_transition_prob),
-    )
+    params = {
+        "coef": fixture.params.model_params.coef,
+        "intercept": fixture.params.model_params.intercept,
+        "initial_prob": jnp.exp(fixture.params.hmm_params.log_initial_prob),
+        "transition_prob": jnp.exp(fixture.params.hmm_params.log_transition_prob),
+    }
+    for key in fixture.model.observation_model.extra_params.keys():
+        value = fixture.params.model_params.obs_params[key]
+        params[key] = fixture.model.observation_model.extra_params[key].map_from(value)
+    return params
 
 
 # ---------------------------------------------------------------------------
@@ -67,10 +75,23 @@ def _init_params_from_fixture(fixture):
 # ---------------------------------------------------------------------------
 
 
+def fit_attrs_extras():
+    expected_attr_extras = []
+    for obs_name in AVAILABLE_OBSERVATION_MODELS:
+        obs = instantiate_observation_model(obs_name)
+        expected_attr_extras.append(
+            (obs_name, [k + "_" for k in obs.extra_params.keys()])
+        )
+    return expected_attr_extras
+
+
 @pytest.mark.parametrize(
     "instantiate_base_regressor_subclass", INSTANTIATE_MODEL_ONLY, indirect=True
 )
-def test_get_fit_attrs(instantiate_base_regressor_subclass, mock_glm_hmm_optimizer_run):
+@pytest.mark.parametrize("obs_model, extras", fit_attrs_extras())
+def test_get_fit_attrs(
+    instantiate_base_regressor_subclass, mock_glm_hmm_optimizer_run, obs_model, extras
+):
     """_get_fit_state returns all-None before fit, all non-None after fit."""
     fixture = instantiate_base_regressor_subclass
     expected_state = {
@@ -78,19 +99,19 @@ def test_get_fit_attrs(instantiate_base_regressor_subclass, mock_glm_hmm_optimiz
         "dof_resid_": None,
         "initial_prob_": None,
         "intercept_": None,
-        "scale_": None,
         "solver_state_": None,
         "transition_prob_": None,
     }
+    expected_state.update({k: None for k in extras})
+    model = fixture.model
+    model.observation_model = obs_model
     assert fixture.model._get_fit_state() == expected_state
-    fixture.model.fit(fixture.X, fixture.y)
-    state = fixture.model._get_fit_state()
+    model.fit(fixture.X, fixture.y)
+    state = model._get_fit_state()
     assert state.keys() == expected_state.keys()
     n_features = fixture.X.shape[1]
     assert state["coef_"].shape == (n_features, N_STATES)
     assert state["intercept_"].shape == (N_STATES,)
-    assert state["scale_"].shape == (N_STATES,)
-    assert jnp.all(state["scale_"] > 0)
     assert state["initial_prob_"].shape == (N_STATES,)
     assert jnp.allclose(state["initial_prob_"].sum(), 1.0)
     assert state["transition_prob_"].shape == (N_STATES, N_STATES)
@@ -99,6 +120,70 @@ def test_get_fit_attrs(instantiate_base_regressor_subclass, mock_glm_hmm_optimiz
     # mock returns SimpleNamespace(iterations=1, converged=True)
     assert state["solver_state_"].iterations == 1
     assert state["solver_state_"].converged is True
+    # extras (assume open for now, the range border is not specified in the extra_params
+    # metadata, but scale and dispersion has to be 0 < val < inf)
+    for k in extras:
+        val = state[k]
+        assert val.shape == (N_STATES,)
+        range_val = model.observation_model.extra_params[k[:-1]].range
+        assert jnp.all(val > range_val[0])
+        assert jnp.all(val < range_val[1])
+
+
+@pytest.mark.parametrize(
+    "obs_before, obs_after",
+    list(itertools.combinations(AVAILABLE_OBSERVATION_MODELS, 2)),
+)
+def test_obs_model_setter_reconfig_param_names_by_string(obs_before, obs_after):
+    model = nmo.glm_hmm.GLMHMM(3, obs_before)
+    expected = set(
+        ["coef", "intercept", "initial_prob", "transition_prob"]
+        + [k for k in model.observation_model.extra_params]
+    )
+    assert set(model.param_names) == expected
+    model.observation_model = obs_after
+    expected = set(
+        ["coef", "intercept", "initial_prob", "transition_prob"]
+        + [k for k in model.observation_model.extra_params]
+    )
+    assert set(model.param_names) == expected
+
+    # via set params
+    model = nmo.glm_hmm.GLMHMM(3, obs_before)
+    model.set_params(observation_model=obs_after)
+    expected = set(
+        ["coef", "intercept", "initial_prob", "transition_prob"]
+        + [k for k in model.observation_model.extra_params]
+    )
+    assert set(model.param_names) == expected
+
+
+@pytest.mark.parametrize(
+    "obs_before, obs_after",
+    list(itertools.combinations(AVAILABLE_OBSERVATION_MODELS, 2)),
+)
+def test_obs_model_setter_reconfig_param_names_by_object(obs_before, obs_after):
+    model = nmo.glm_hmm.GLMHMM(3, obs_before)
+    expected = set(
+        ["coef", "intercept", "initial_prob", "transition_prob"]
+        + [k for k in model.observation_model.extra_params]
+    )
+    assert set(model.param_names) == expected
+    model.observation_model = instantiate_observation_model(obs_after)
+    expected = set(
+        ["coef", "intercept", "initial_prob", "transition_prob"]
+        + [k for k in model.observation_model.extra_params]
+    )
+    assert set(model.param_names) == expected
+
+    # via set params
+    model = nmo.glm_hmm.GLMHMM(3, obs_before)
+    model.set_params(observation_model=instantiate_observation_model(obs_after))
+    expected = set(
+        ["coef", "intercept", "initial_prob", "transition_prob"]
+        + [k for k in model.observation_model.extra_params]
+    )
+    assert set(model.param_names) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -152,14 +237,20 @@ class TestGLMHMM:
         n_features = X_np.shape[1]
         assert state["coef_"].shape == (n_features, N_STATES)
         assert state["intercept_"].shape == (N_STATES,)
-        assert state["scale_"].shape == (N_STATES,)
-        assert jnp.all(state["scale_"] > 0)
         assert state["initial_prob_"].shape == (N_STATES,)
         assert jnp.allclose(state["initial_prob_"].sum(), 1.0)
         assert state["transition_prob_"].shape == (N_STATES, N_STATES)
         assert jnp.allclose(state["transition_prob_"].sum(axis=-1), jnp.ones(N_STATES))
         assert float(jnp.squeeze(state["dof_resid_"])) > 0
         assert isinstance(state["solver_state_"], EMState)
+        # extras (assume open for now, the range border is not specified in the extra_params
+        # metadata, but scale and dispersion has to be 0 < val < inf)
+        for k in model_pynap.observation_model.extra_params:
+            val = state[k]
+            assert val.shape == (N_STATES,)
+            range_val = model_pynap.observation_model.extra_params[k[:-1]].range
+            assert jnp.all(val > range_val[0])
+            assert jnp.all(val < range_val[1])
 
         # Providing an extra session boundary changes the M-step for initial_prob.
         model_single = deepcopy(fixture.model)
@@ -177,6 +268,7 @@ class TestGLMHMM:
             model_single.initial_prob_, model_multi.initial_prob_
         )
 
+    # TODO: remove this test once the k-means is dropped or moved.
     def test_kmeans_initialized_once(
         self, mock_glm_hmm_optimizer_run, instantiate_base_regressor_subclass
     ):
@@ -193,7 +285,9 @@ class TestGLMHMM:
                 fixture.params.model_params.coef,
                 fixture.params.model_params.intercept,
             )
-            inst.scale.return_value = jnp.exp(fixture.params.model_params.log_scale)
+            inst.scale.return_value = jnp.ones_like(
+                fixture.params.model_params.intercept
+            )
             inst.initial_probability.return_value = jnp.exp(
                 fixture.params.hmm_params.log_initial_prob
             )
@@ -244,9 +338,22 @@ def glm_hmm_data():
         X=X,
         y=y,
         session_starts=session_starts,
-        init_params=(coef, intercept, scale, init_prob, trans_prob),
+        init_params=dict(
+            coef=coef,
+            intercept=intercept,
+            scale=scale,
+            initial_prob=init_prob,
+            transition_prob=trans_prob,
+            dispersion=scale,
+        ),
         n_states=s,
     )
+
+
+def filter_params(params: dict, model):
+    defaults = ["coef", "intercept", "initial_prob", "transition_prob"]
+    extras = list(model.observation_model.extra_params.keys())
+    return {k: v for k, v in params.items() if k in defaults + extras}
 
 
 class TestFitInterceptDeferred:
@@ -270,7 +377,8 @@ class TestFitInterceptDeferred:
         passing None: the GLM-HMM ignores it."""
         model = GLMHMM(n_states=glm_hmm_data["n_states"], observation_model="Bernoulli")
         X, y = glm_hmm_data["X"], glm_hmm_data["y"]
-        casted = model._validator.validate_and_cast_params(glm_hmm_data["init_params"])
+        params = filter_params(glm_hmm_data["init_params"], model)
+        casted = model._validator.validate_and_cast_params(params)
 
         state_none = model._initialize_optimizer_and_state(
             casted, X, y, frozen_params=None
@@ -361,18 +469,29 @@ def _spy_call_order(monkeypatch, container, *attr_names):
     return order
 
 
-def _make_model_params(n_features, n_states, n_neurons=None):
-    """Build a minimal GLMHMMModelParams (zeros). ``n_neurons=None`` for single-neuron."""
+def _make_model_params(n_features, n_states, n_neurons=None, model=None):
+    """Build minimal GLM-HMM model params, a GLMParams of zeros. ``n_neurons=None`` for single-neuron."""
+    if model is not None and len(model.observation_model.extra_params) != 0:
+        extras = {}
+        if n_neurons is not None:
+            shape = (n_states, n_neurons)
+        else:
+            shape = (n_states,)
+        for k, val in model.observation_model.extra_params.items():
+            default = val.map_to(val.default)
+            extras[k] = jnp.full(shape, default)
+    else:
+        extras = None
     if n_neurons is None:
-        return GLMHMMModelParams(
+        return GLMParams(
             coef=jnp.zeros((n_features, n_states)),
             intercept=jnp.zeros((n_states,)),
-            log_scale=jnp.zeros((n_states,)),
+            obs_params=extras,
         )
-    return GLMHMMModelParams(
+    return GLMParams(
         coef=jnp.zeros((n_features, n_neurons, n_states)),
         intercept=jnp.zeros((n_neurons, n_states)),
-        log_scale=jnp.zeros((n_neurons, n_states)),
+        obs_params=extras,
     )
 
 
@@ -441,7 +560,7 @@ class TestSolverConfiguration:
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
         assert len(calls) == 1
         primary = calls[0]
@@ -457,12 +576,12 @@ class TestSolverConfiguration:
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
         # Fixed scale → else branch in prepare_mstep_update_fn → exactly one solver call.
         assert len(calls) == 1
-        # Joint path passes full GLMHMMModelParams (coef, intercept, log_scale) to the solver.
-        assert isinstance(calls[0]["init_params"], GLMHMMModelParams)
+        # Joint path passes the full GLMParams (coef, intercept, obs_params) to the solver.
+        assert isinstance(calls[0]["init_params"], GLMParams)
 
     def test_gaussian_separable_scale_smoke(
         self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
@@ -472,9 +591,9 @@ class TestSolverConfiguration:
         n, k, s = 100, 2, 3
         X = np.ones((n, k))
         y = rng.standard_normal(n)
-        init_params = glm_hmm_data["init_params"]
 
         model = GLMHMM(n_states=s, observation_model="Gaussian")
+        init_params = filter_params(glm_hmm_data["init_params"], model)
         calls = _spy_instantiate_solver(monkeypatch)
         model.fit(X, y, init_params=init_params)
         # Separable path with analytical scale update → one solver call (params only, no scale).
@@ -740,7 +859,7 @@ class TestFitDelegation:
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
 
         mock.assert_called_once()
@@ -756,7 +875,11 @@ class TestFitDelegation:
         X = glm_hmm_data["X"]
 
         model = GLMHMM(n_states=glm_hmm_data["n_states"])
-        model.fit(X, glm_hmm_data["y"], init_params=glm_hmm_data["init_params"])
+        model.fit(
+            X,
+            glm_hmm_data["y"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
+        )
 
         default_session_starts = jnp.zeros(n, dtype=bool).at[0].set(True)
         mock = MagicMock(return_value=default_session_starts)
@@ -777,7 +900,7 @@ class TestFitDelegation:
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
 
         assert len(calls) == 1
@@ -798,7 +921,11 @@ class TestFitDelegation:
         X = glm_hmm_data["X"]
 
         model = GLMHMM(n_states=glm_hmm_data["n_states"])
-        model.fit(X, glm_hmm_data["y"], init_params=glm_hmm_data["init_params"])
+        model.fit(
+            X,
+            glm_hmm_data["y"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
+        )
 
         calls = _spy_calls(monkeypatch, GLMHMMValidator, "check_is_continuous")
         stub_glmhmm_simulate(n)
@@ -819,7 +946,7 @@ class TestFitDelegation:
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
         assert len(calls) == 1
         _, kwargs = calls[0]
@@ -832,15 +959,16 @@ class TestFitDelegation:
         """fit(init_params=...) validates the user-provided params via the validator."""
         calls = _spy_calls(monkeypatch, GLMHMMValidator, "validate_and_cast_params")
         model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        p0 = filter_params(glm_hmm_data["init_params"], model)
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=p0,
         )
         assert len(calls) == 1
         # args = (validator_self, init_params) when patched on the class
         args, _ = calls[0]
-        assert args[1] is glm_hmm_data["init_params"]
+        assert args[1] is p0
 
     def test_fit_default_init_skips_validate_and_cast_params(
         self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
@@ -947,30 +1075,32 @@ class TestValidationSequence:
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
         return model
 
     def test_fit(self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch):
         order = _spy_call_order(monkeypatch, GLMHMMValidator, *VALIDATION_SEQUENCE)
 
-        GLMHMM(n_states=glm_hmm_data["n_states"]).fit(
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
 
         assert order == VALIDATION_SEQUENCE
 
     def test_update(self, glm_hmm_data, patch_optimizer_update, monkeypatch):
         patch_optimizer_update(GLMHMM)
+
+        model = GLMHMM(n_states=glm_hmm_data["n_states"])
         X, y, session_starts, init_params = (
             glm_hmm_data["X"],
             glm_hmm_data["y"],
             glm_hmm_data["session_starts"],
-            glm_hmm_data["init_params"],
+            filter_params(glm_hmm_data["init_params"], model),
         )
-        model = GLMHMM(n_states=glm_hmm_data["n_states"])
 
         # spy before initialize_optimizer_and_state, where validate_inputs is called
         order = _spy_call_order(monkeypatch, GLMHMMValidator, *VALIDATION_SEQUENCE)
@@ -1018,7 +1148,7 @@ class TestEstimateResidDegreesOfFreedom:
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
         with pytest.raises(
             TypeError, match="`n_samples` must either `None` or of type `int`"
@@ -1038,7 +1168,7 @@ class TestEstimateResidDegreesOfFreedom:
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
         # Noop optimizer leaves coef at zeros → resid_dof=0.
         # dof_intercept_and_hmm = n_states*1 + (n_states-1) + (n_states-1)*n_states = 3+2+6 = 11
@@ -1068,7 +1198,11 @@ class TestSimulate:
         X = glm_hmm_data["X"]
         n = X.shape[0]
         model = GLMHMM(n_states=glm_hmm_data["n_states"])
-        model.fit(X, glm_hmm_data["y"], init_params=glm_hmm_data["init_params"])
+        model.fit(
+            X,
+            glm_hmm_data["y"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
+        )
 
         mock_vapi = MagicMock(
             return_value=(
@@ -1104,7 +1238,7 @@ class TestSimulate:
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
         with expectation:
             model.simulate(
@@ -1117,7 +1251,7 @@ class TestSimulate:
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
         X = glm_hmm_data["X"]
         n, n_states = X.shape[0], glm_hmm_data["n_states"]
@@ -1139,7 +1273,7 @@ class TestSimulate:
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
         X = glm_hmm_data["X"]
         key = jax.random.key(42)
@@ -1157,7 +1291,7 @@ class TestSimulate:
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
         X = glm_hmm_data["X"]
         n = X.shape[0]
@@ -1172,8 +1306,9 @@ class TestSimulate:
 
         assert bool(captured["session_starts"][0]) is True
 
+    @pytest.mark.parametrize("obs_model", AVAILABLE_OBSERVATION_MODELS)
     def test_simulate_sample_generator_receives_key_rate_scale(
-        self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch
+        self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch, obs_model
     ):
         """_simulate calls obs model sample_generator with scalar key, rate, and scale per step.
 
@@ -1181,21 +1316,26 @@ class TestSimulate:
         the selected-state slice reduces each to a scalar.  Disable JIT so the scan
         body runs as a Python loop and the spy sees concrete values.
         """
-        model = GLMHMM(n_states=glm_hmm_data["n_states"])
+        if obs_model == "Categorical":
+            pytest.skip(
+                "Categorical observation model not allowed for the GLMHMM class."
+            )
+
+        model = GLMHMM(n_states=glm_hmm_data["n_states"], observation_model=obs_model)
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
         X_short = jnp.ones((2, glm_hmm_data["X"].shape[1]))
 
-        obs_model = model._observation_model
+        obs_model = model.observation_model
         original = obs_model.sample_generator
         calls = []
 
-        def spy(key, predicted_rate, scale):
-            calls.append(dict(key=key, predicted_rate=predicted_rate, scale=scale))
-            return original(key=key, predicted_rate=predicted_rate, scale=scale)
+        def spy(key, predicted_rate, **extras):
+            calls.append(dict(key=key, predicted_rate=predicted_rate, extras=extras))
+            return original(key=key, predicted_rate=predicted_rate, **extras)
 
         monkeypatch.setattr(obs_model, "sample_generator", spy)
 
@@ -1207,7 +1347,45 @@ class TestSimulate:
             # after state selection inside simulate_step, each is a scalar
             assert call["key"].ndim == 0
             assert call["predicted_rate"].ndim == 0
-            assert call["scale"].ndim == 0
+            assert all(x.ndim == 0 for x in jax.tree_util.tree_leaves(call["extras"]))
+
+    @pytest.mark.parametrize("obs_model", AVAILABLE_OBSERVATION_MODELS)
+    def test_simulate_maps_extra_parameters(self, glm_hmm_data, monkeypatch, obs_model):
+        model = GLMHMM(n_states=glm_hmm_data["n_states"], observation_model=obs_model)
+        if not model.observation_model.extra_params:
+            pytest.skip(f"Observations {obs_model} have no extra parameters.")
+        init_params = filter_params(glm_hmm_data["init_params"], model)
+
+        # replace with a non default val in non-transformed space
+        extra_val = 1.5
+        for k in model.observation_model.extra_params:
+            init_params[k] = jnp.full_like(init_params["intercept"], extra_val)
+
+        for k in init_params:
+            setattr(model, k + "_", init_params[k])
+
+        obs_model = model.observation_model
+        original = obs_model.sample_generator
+        calls = []
+
+        def spy(key, predicted_rate, **extras):
+            calls.append(extras)
+            return original(key=key, predicted_rate=predicted_rate, **extras)
+
+        monkeypatch.setattr(obs_model, "sample_generator", spy)
+        monkeypatch.setattr(jax.lax, "scan", jax.disable_jit()(jax.lax.scan))
+        X_short = jnp.ones((2, glm_hmm_data["X"].shape[1]))
+        with jax.disable_jit():
+            model.simulate(jax.random.key(0), X_short)
+
+        # check that scale is matched.
+        assert all(
+            jnp.all(c[k] == extra_val)
+            for c in calls
+            for k in model.observation_model.extra_params
+        ), (
+            f"The extra parameters used in simulations differ from the provided for observation model {obs_model}."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1237,7 +1415,9 @@ class TestLogLikelihood:
         else:
             y = jnp.asarray(rng.integers(0, 2, size=(n_samples, n_neurons)))
         model = GLMHMM(n_states=2)
-        ll = model._log_likelihood(_make_model_params(n_features, 2, n_neurons), X, y)
+        ll = model._log_likelihood(
+            _make_model_params(n_features, 2, n_neurons, model=model), X, y
+        )
         assert ll.shape == (n_samples, 2)
         assert jnp.all(jnp.isfinite(ll))
 
@@ -1247,7 +1427,7 @@ class TestLogLikelihood:
 
         calls = _spy_calls(monkeypatch, glm_hmm_module, "prepare_estep_log_likelihood")
         model = GLMHMM(n_states=2)
-        params = _make_model_params(2, 2)
+        params = _make_model_params(2, 2, model=model)
         X = jnp.zeros((10, 2))
         y = jnp.zeros(10)
 
@@ -1266,10 +1446,10 @@ class TestLogLikelihood:
         calls = _spy_calls(monkeypatch, glm_hmm_module, "prepare_estep_log_likelihood")
         model = GLMHMM(n_states=2)
         model._log_likelihood(
-            _make_model_params(2, 2), jnp.zeros((10, 2)), jnp.zeros(10)
+            _make_model_params(2, 2, model=model), jnp.zeros((10, 2)), jnp.zeros(10)
         )
         model._log_likelihood(
-            _make_model_params(2, 2, n_neurons=3),
+            _make_model_params(2, 2, n_neurons=3, model=model),
             jnp.zeros((10, 2)),
             jnp.zeros((10, 3)),
         )
@@ -1296,7 +1476,7 @@ class TestLogLikelihood:
 
         calls = _spy_calls(monkeypatch, glm_hmm_module, "prepare_estep_log_likelihood")
         model = GLMHMM(n_states=2)
-        params = _make_model_params(2, 2)
+        params = _make_model_params(2, 2, model=model)
         X = jnp.zeros((10, 2))
         y = jnp.zeros(10)
 
@@ -1336,12 +1516,14 @@ class TestEMConfiguration:
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
         assert len(calls) == 1
         _, kwargs = calls[0]
         assert kwargs["observation_model"] is model._observation_model
-        p = model._validator.to_model_params(glm_hmm_data["init_params"])
+        p = model._validator.to_model_params(
+            filter_params(glm_hmm_data["init_params"], model)
+        )
         assert eqx.tree_equal(p.model_params, kwargs["init_params"])
         assert kwargs["inverse_link_function"] is model._inverse_link_function
 
@@ -1360,7 +1542,7 @@ class TestEMConfiguration:
             inverse_link_function=jax.nn.softplus,
         )
         model._log_likelihood(
-            _make_model_params(2, 2), jnp.zeros((10, 2)), jnp.zeros(10)
+            _make_model_params(2, 2, model=model), jnp.zeros((10, 2)), jnp.zeros(10)
         )
         assert len(calls) == 1
         args, _ = calls[0]
@@ -1378,7 +1560,7 @@ class TestEMConfiguration:
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
         assert len(calls) == 1
         _, kwargs = calls[0]
@@ -1413,7 +1595,7 @@ class TestEMConfiguration:
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
 
         opt_run = captured["optimizer_run"]
@@ -1444,7 +1626,7 @@ class TestEMConfiguration:
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
 
         assert (
@@ -1512,7 +1694,7 @@ class TestDirichletPriorRouting:
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
 
         for partial_fn in (captured["run"], captured["update"]):
@@ -1530,7 +1712,7 @@ class TestDirichletPriorRouting:
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
 
         assert len(calls) == 1
@@ -1548,7 +1730,7 @@ class TestDirichletPriorRouting:
 
         calls = _spy_calls(monkeypatch, glm_hmm_module, "em_step")
         model = self._model(glm_hmm_data)
-        params = glm_hmm_data["init_params"]
+        params = filter_params(glm_hmm_data["init_params"], model)
         state = model.initialize_optimizer_and_state(
             params, glm_hmm_data["X"], glm_hmm_data["y"]
         )
@@ -1572,7 +1754,7 @@ class TestDirichletPriorRouting:
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
 
         assert len(calls) == 1
@@ -1600,7 +1782,7 @@ class TestDirichletPriorRouting:
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
 
         # each log holds one (args, kwargs) pair per call, in call order
@@ -1639,7 +1821,7 @@ class TestDirichletPriorRouting:
         X, y, params = (
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            glm_hmm_data["init_params"],
+            filter_params(glm_hmm_data["init_params"], model),
         )
         if entry_point == "fit":
             model.fit(X, y, init_params=params)
@@ -1671,7 +1853,7 @@ class TestDirichletPriorRouting:
 
         calls = _spy_calls(monkeypatch, glm_hmm_module, "em_step")
         model = self._model(glm_hmm_data, with_priors=False)
-        params = glm_hmm_data["init_params"]
+        params = filter_params(glm_hmm_data["init_params"], model)
         state = model.initialize_optimizer_and_state(
             params, glm_hmm_data["X"], glm_hmm_data["y"]
         )
@@ -1703,7 +1885,7 @@ class TestDirichletPriorRouting:
             pytest.skip("jax build does not expose the jit cache size")
 
         model = self._model(glm_hmm_data)
-        params = glm_hmm_data["init_params"]
+        params = filter_params(glm_hmm_data["init_params"], model)
         state = model.initialize_optimizer_and_state(
             params, glm_hmm_data["X"], glm_hmm_data["y"]
         )
@@ -1728,18 +1910,18 @@ class TestDirichletPriorRouting:
         alphas_init = np.ones(n_states)
         alphas_init[0] = strong
         alphas_trans = np.eye(n_states) * strong + 1.0
-
-        fit_kwargs = dict(
-            X=glm_hmm_data["X"],
-            y=glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
-        )
         model = GLMHMM(
             n_states=n_states,
             maxiter=5,
             dirichlet_initial_proba=alphas_init,
             dirichlet_transition_proba=alphas_trans,
-        ).fit(**fit_kwargs)
+        )
+        fit_kwargs = dict(
+            X=glm_hmm_data["X"],
+            y=glm_hmm_data["y"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
+        )
+        model.fit(**fit_kwargs)
         flat = GLMHMM(n_states=n_states, maxiter=5).fit(**fit_kwargs)
 
         # the prior mode: all initial mass on state 0, self-transitions only
@@ -1887,18 +2069,17 @@ class TestUpdateFitEquivalence:
         init_scale = jnp.ones((s,))
         init_initial_prob = jnp.ones(s) / s
         init_transition_prob = jnp.ones((s, s)) / s
-        init_params = (
-            init_coef,
-            init_intercept,
-            init_scale,
-            init_initial_prob,
-            init_transition_prob,
+        init_params = dict(
+            coef=init_coef,
+            intercept=init_intercept,
+            scale=init_scale,
+            initial_prob=init_initial_prob,
+            transition_prob=init_transition_prob,
         )
-
-        n_steps = 3
-
         # --- path A: fit with maxiter=n_steps ---
+        n_steps = 3
         model_fit = GLMHMM(n_states=s, maxiter=n_steps, tol=1e-300, seed=seed)
+        init_params = filter_params(init_params, model_fit)
         model_fit.fit(X, y, init_params=init_params)
 
         # --- path B: manual update loop ---
@@ -1947,7 +2128,7 @@ class TestUpdate:
             init_params, opt_state, d["X"], d["y"], d["session_starts"]
         )
 
-        assert len(params) == 5
+        assert len(params) == 4
         assert all(v is not None for v in model._get_fit_state().values())
 
     def test_update_safe_calls_validate_inputs(self, glm_hmm_data, monkeypatch):
@@ -2159,10 +2340,10 @@ class TestGLMHMMParamsContainer:
             n_features, n_states
         )
         params = GLMHMMParams(
-            model_params=GLMHMMModelParams(
+            model_params=GLMParams(
                 coef=coef,
                 intercept=jnp.zeros(n_states),
-                log_scale=jnp.zeros(n_states),
+                obs_params={"scale": jnp.zeros(n_states)},
             ),
             hmm_params=HMMParams(
                 log_initial_prob=jnp.log(jnp.ones(n_states) / n_states),
@@ -2195,7 +2376,7 @@ class TestInferenceMethods:
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
         )
         return model
 
@@ -2334,7 +2515,7 @@ class TestEStepRouting:
         model.fit(
             glm_hmm_data["X"],
             glm_hmm_data["y"],
-            init_params=glm_hmm_data["init_params"],
+            init_params=filter_params(glm_hmm_data["init_params"], model),
             session_starts=glm_hmm_data["session_starts"],
         )
         return model
@@ -2375,7 +2556,9 @@ class TestEStepRouting:
         """The optimizer partials are dropped, the E-step being bound into them."""
         model = GLMHMM(n_states=glm_hmm_data["n_states"], observation_model="Bernoulli")
         model.initialize_optimizer_and_state(
-            glm_hmm_data["init_params"], glm_hmm_data["X"], glm_hmm_data["y"]
+            filter_params(glm_hmm_data["init_params"], model),
+            glm_hmm_data["X"],
+            glm_hmm_data["y"],
         )
         assert model._optimizer_run is not None
 
@@ -2391,11 +2574,12 @@ class TestEStepRouting:
         switch would be silently ignored here.
         """
         X, y = glm_hmm_data["X"], glm_hmm_data["y"]
+        model = GLMHMM(n_states=glm_hmm_data["n_states"], observation_model="Bernoulli")
         init_params, session_starts = (
-            glm_hmm_data["init_params"],
+            filter_params(glm_hmm_data["init_params"], model),
             glm_hmm_data["session_starts"],
         )
-        model = GLMHMM(n_states=glm_hmm_data["n_states"], observation_model="Bernoulli")
+
         model.initialize_optimizer_and_state(init_params, X, y)  # binds sequential
 
         model.estep_type = "associative"
@@ -2414,7 +2598,7 @@ class TestGetEmptyParams:
 
     @pytest.fixture
     def empty(self):
-        model = GLMHMM(N_STATES)
+        model = GLMHMM(N_STATES, "Gaussian")
         X = np.ones((20, N_FEATURES))
         y = np.zeros(20)
         return model._get_empty_params(X, y)
@@ -2428,8 +2612,8 @@ class TestGetEmptyParams:
     def test_intercept_shape(self, empty):
         assert empty.model_params.intercept.shape == (N_STATES,)
 
-    def test_log_scale_shape(self, empty):
-        assert empty.model_params.log_scale.shape == (N_STATES,)
+    def test_scale_shape(self, empty):
+        assert empty.model_params.obs_params["scale"].shape == (N_STATES,)
 
     def test_log_initial_prob_shape(self, empty):
         assert empty.hmm_params.log_initial_prob.shape == (N_STATES,)
@@ -2445,12 +2629,14 @@ class TestGetEmptyParams:
         ],
     )
     def test_params_shape(self, y, model_shape):
-        shapes = GLMHMM(N_STATES)._get_params_shape(np.ones((20, N_FEATURES)), y)
+        shapes = GLMHMM(N_STATES, "Gaussian")._get_params_shape(
+            np.ones((20, N_FEATURES)), y
+        )
         expected = GLMHMMParams(
-            model_params=GLMHMMModelParams(
+            model_params=GLMParams(
                 coef=(N_FEATURES, *model_shape),
                 intercept=model_shape,
-                log_scale=model_shape,
+                obs_params={"scale": model_shape},
             ),
             hmm_params=HMMParams(
                 log_initial_prob=(N_STATES,),

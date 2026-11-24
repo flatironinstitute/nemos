@@ -21,6 +21,7 @@ from nemos.callbacks import (
     TrainingContext,
     _normalize_callbacks,
 )
+from nemos.exceptions import NotFittedError
 from nemos.regularizer import UnRegularized
 
 _stochastic_solver_names = [
@@ -283,11 +284,11 @@ class TestCallbackSystem:
         assert cb.events == {"pass_end"}
 
     def test_loss_logger_forwards_compute_loss_args(self):
-        """compute_loss receives (coef, intercept), X_test, y_test."""
+        """compute_loss receives the user param dict, X_test, y_test."""
         cb = TestLossLogger("X", "Y", events="pass_end")
         ctx, calls = _logging_ctx()
         cb.on_pass_end(ctx)
-        assert calls == [(("COEF", "INT"), "X", "Y")]
+        assert calls == [({"coef": "COEF", "intercept": "INT"}, "X", "Y")]
 
     def test_loss_logger_records_tuple(self):
         """Each entry is (event, pass_idx, batch_idx, score)."""
@@ -409,7 +410,7 @@ class TestGLMStochasticFit:
         # start from wrong initial params that's far from true params
         init_coef = jnp.arange(5)[::-1]
         init_intercept = jnp.zeros(1)
-        init_params = (init_coef, init_intercept)
+        init_params = {"coef": init_coef, "intercept": init_intercept}
 
         model.stochastic_fit(loader, n_passes=1, init_params=init_params)
 
@@ -429,7 +430,10 @@ class TestGLMStochasticFit:
         # get parameters that are close to the optimum
         model_fitted = nmo.glm.GLM(solver_name="LBFGS", solver_kwargs={"tol": 1e-8})
         model_fitted.fit(X, y)
-        final_params = (model_fitted.coef_, model_fitted.intercept_)
+        final_params = {
+            "coef": model_fitted.coef_,
+            "intercept": model_fitted.intercept_,
+        }
 
         # Explicit SolverConvergenceCallback: should stop early
         model_stopping = nmo.glm.GLM(solver_name=solver, solver_kwargs=solver_kwargs)
@@ -833,7 +837,7 @@ class TestGLMStochasticFit:
     def test_stochastic_fit_warns_and_score_raises_for_data_dependent_scale(
         self, simple_data, obs_name, y_transform
     ):
-        """stochastic_fit warns and score raises when the observation model's scale depends on the data."""
+        """stochastic_fit warns, score and simulate raise, and predict works when the scale depends on the data."""
         X, y = simple_data
         y = y_transform(y)
         loader = ArrayDataLoader(X, y, batch_size=32)
@@ -849,8 +853,13 @@ class TestGLMStochasticFit:
         assert model.scale_ is None
         assert model.dof_resid_ is None
 
-        with pytest.raises(ValueError, match="scale_"):
-            model.score(X, y)
+        missing = r"Missing attributes are: \['scale_'\]"
+        for score_type in ["log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"]:
+            with pytest.raises(NotFittedError, match=missing):
+                model.score(X, y, score_type=score_type)
+        with pytest.raises(NotFittedError, match=missing):
+            model.simulate(jax.random.PRNGKey(0), X)
+        assert jnp.all(jnp.isfinite(model.predict(X)))
 
     def test_classifier_categorical_score_works_after_stochastic_fit(self):
         """ClassifierGLM uses the categorical constant-scale path after stochastic_fit."""
