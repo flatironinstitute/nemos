@@ -1888,7 +1888,7 @@ class TestMStep:
                 obs_params=init_model_params.obs_params,
             )
         else:
-            solver = setup_solver(objective, init_params=init_model_params, tol=1e-8)
+            solver = setup_solver(objective, init_params=init_model_params)
             new_glm_params, state, _ = solver.run(init_model_params, X, y, posteriors)
 
         _, _, _, updated_log_like, _, _ = forward_backward(

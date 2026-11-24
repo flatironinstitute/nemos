@@ -2409,6 +2409,8 @@ class TestGLMObservationModel:
             if "dispersion" in model.observation_model.extra_params
             else {}
         )
+        model.fix_params = extra
+        model_tree.fix_params = extra
         model.fit(
             X,
             y,
@@ -4364,7 +4366,11 @@ class TestPopulationGLMObservationModel:
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
         )
-        model = nmo.glm.PopulationGLM(**kwargs)
+        has_dispersion = "dispersion" in model_class.observation_model.extra_params
+        model = nmo.glm.PopulationGLM(
+            **kwargs,
+            fix_params=({"dispersion": np.ones(y.shape[1])} if has_dispersion else {}),
+        )
         model.fit(X, y)
         coef_vectorized = np.vstack(jax.tree_util.tree_leaves(model.coef_))
 
@@ -4373,7 +4379,10 @@ class TestPopulationGLMObservationModel:
         # loop over neuron
         kwargs.pop("feature_mask")
         for k in range(y.shape[1]):
-            model_single_neu = nmo.glm.GLM(**kwargs)
+            model_single_neu = nmo.glm.GLM(
+                **kwargs,
+                fix_params={"dispersion": np.ones(1)} if has_dispersion else {},
+            )
             if isinstance(mask_bool, dict):
                 X_neu = {}
                 for key, xx in X.items():
