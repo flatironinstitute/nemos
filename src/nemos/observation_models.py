@@ -1302,11 +1302,7 @@ class NegativeBinomialObservations(Observations):
     This model represents a Negative Binomial distribution [4]_ commonly used to model overdispersed
     count data [5]_ [6]_ (i.e., data where the variance exceeds the mean), which cannot be captured by a
     standard Poisson model. The distribution is parameterized by the predicted mean rate
-    (:math:`\mu`) and a fixed dispersion parameter (:math:`\phi`) or `scale` of the model.
-
-    **Important:** the scale parameter must be estimated from the data for accurately capturing the
-    dispersion. In the context of NeMoS GLM, estimation can be achieved by cross-validating the
-    ``scale`` parameter. One may use scikit-learn :ref:`GridSearchCV <sklearn-how-to>` for example.
+    (:math:`\mu`) and a dispersion parameter (:math:`\phi`).
 
     The variance of the Negative Binomial distribution under this parameterization is:
 
@@ -1317,7 +1313,7 @@ class NegativeBinomialObservations(Observations):
     where :math:`\mu` is the predicted mean, and :math:`\phi` is the dispersion parameter. This
     formulation corresponds to the Negative Binomial as a Gamma–Poisson mixture.
 
-    The scale parameter :math:`\phi` is related to the canonical Negative Binomial
+    The dispersion parameter :math:`\phi` is related to the canonical Negative Binomial
     shape parameter `r` as:
 
     .. math::
@@ -1328,20 +1324,15 @@ class NegativeBinomialObservations(Observations):
     Poisson distribution. This makes the model flexible for handling both equidispersed
     (Poisson-like) and overdispersed data.
 
-    Parameters
-    ----------
-    scale :
-        The dispersion parameter :math:`\phi`. Lower values correspond to lower overdispersion, and as
-        :math:`\phi \to 0`, the model behaves like a Poisson. The shape parameter of
-        the Negative Binomial is given by `r = 1 / scale`.
-
     Notes
     -----
     This class is not meant to be used on its own. It is intended to be passed to a model
     such as :class:`~nemos.glm.GLM`, which relies on it to compute the log-likelihood and
-    to set the default inverse link function. Note that ``scale`` is not estimated during the
-    fit: the value provided at initialization is used as-is, so it has to be chosen beforehand,
-    for example by cross-validation as described above.
+    to set the default inverse link function. By default, the dispersion is learned together with
+    the coefficients, and the fitted value is stored in the model's ``dispersion_`` attribute.
+    Learning the dispersion makes the objective non-convex. To keep the objective convex, fix the
+    dispersion through the model's ``fix_params`` argument and select its value by cross-validation,
+    for example with scikit-learn :ref:`GridSearchCV <sklearn-how-to>`.
 
     References
     ----------
@@ -1366,7 +1357,7 @@ class NegativeBinomialObservations(Observations):
 
     .. plot::
         :include-source: True
-        :caption: Effect of the scale parameter on the sampled counts.
+        :caption: Effect of the dispersion parameter on the sampled counts.
 
         >>> import jax
         >>> import matplotlib.pyplot as plt
@@ -1450,7 +1441,7 @@ class NegativeBinomialObservations(Observations):
         Notes
         -----
         The Negative Binomial distribution models overdispersed count data.
-        The likelihood assumes the mean-parameterized form with dispersion `r = 1 / scale`.
+        The likelihood assumes the mean-parameterized form with shape `r = 1 / dispersion`.
 
         The log-likelihood is computed (up to a constant) using:
 
@@ -1505,7 +1496,6 @@ class NegativeBinomialObservations(Observations):
             Function that aggregates the log-likelihood across samples (e.g., jnp.mean or jnp.sum).
         dispersion :
             The dispersion parameter of the distribution. It is related to the shape ``r`` as ``r = 1 / dispersion``.
-            Default is the scale provided at initialization ``self.dispersion``.
 
         Returns
         -------
@@ -1535,7 +1525,7 @@ class NegativeBinomialObservations(Observations):
         Sample from the Negative Binomial distribution.
 
         This method generates random count data from the Negative Binomial distribution based on the predicted rate
-        and scale (dispersion).
+        and dispersion.
 
         Parameters
         ----------
@@ -1545,7 +1535,7 @@ class NegativeBinomialObservations(Observations):
             The predicted mean of the Negative Binomial distribution. Shape ``(n_time_bins,)`` or
             ``(n_time_bins, n_observations)``.
         dispersion :
-            Dispersion parameter of the distribution. Smaller values imply higher variance.
+            Dispersion parameter of the distribution. Larger values imply higher variance.
 
         Returns
         -------
@@ -1634,10 +1624,9 @@ class NegativeBinomialObservations(Observations):
         r"""
         Return the scale parameter of the distribution.
 
-        The ``scale`` parameter of the Negative Binomial distribution is set
-        at initialization and affect the likelihood landscape. This implies
-        that the ``scale`` parameter cannot be estimated post-hoc without
-        re-fitting a model.
+        For a given dispersion, the Negative Binomial is a one-parameter exponential
+        family with scale equal to 1. The dispersion is a separate parameter of the
+        model, learned during the fit.
 
         Note that the arguments of this method are not used but are kept for
         API consistency—i.e., all ``Observations.estimate_scale`` methods
@@ -1651,13 +1640,6 @@ class NegativeBinomialObservations(Observations):
             The predicted mean of the distribution.
         dof_resid :
             The DOF of the residuals.
-
-        Notes
-        -----
-        NeMoS currently does not support joint estimation of scale and mean for the negative binomial.
-        For alternatives, see the R package MASS
-        `glm.nb <https://www.rdocumentation.org/packages/MASS/versions/7.3-65/topics/glm.nb>`_
-        for more details.
         """
         return jnp.array(1.0)
 
