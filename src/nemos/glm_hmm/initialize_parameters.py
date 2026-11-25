@@ -11,12 +11,34 @@ from numpy.typing import NDArray
 from ..glm import GLM, PopulationGLM
 from ..glm.initialize_parameters import initialize_intercept_matching_mean_rate
 from ..glm.params import GLMUserParams
-from ..hmm.initialize_parameters import KMeansInitializer
+from ..hmm.initialize_parameters import (
+    KMeansInitializer,
+    dirichlet_initial_proba_init,
+    dirichlet_transition_proba_init,
+    random_initial_proba_init,
+    random_transition_proba_init,
+    sticky_transition_proba_init,
+    uniform_initial_proba_init,
+    uniform_transition_proba_init,
+)
 from ..observation_models import Observations
 from ..pytrees import FeaturePytree
 from ..type_casting import cast_to_jax
 from ..typing import DESIGN_INPUT_TYPE
 from .algorithm_configs import has_no_extra_params
+
+__all__ = [
+    "KMeansInitializerGLM",
+    "constant_parameter_init",
+    "dirichlet_initial_proba_init",
+    "dirichlet_transition_proba_init",
+    "random_glm_params_init",
+    "random_initial_proba_init",
+    "random_transition_proba_init",
+    "sticky_transition_proba_init",
+    "uniform_initial_proba_init",
+    "uniform_transition_proba_init",
+]
 
 
 @cast_to_jax(dtype=None)

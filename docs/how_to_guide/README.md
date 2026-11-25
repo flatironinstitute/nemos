@@ -126,6 +126,16 @@ initial_params_glm_hmm.md
 
 :::
 
+:::{grid-item-card}
+
+```{toctree}
+:maxdepth: 2
+
+glm_hmm_init_functions.md
+```
+
+:::
+
 ::::
 
 ## Feature Engineering
