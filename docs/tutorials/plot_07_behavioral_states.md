@@ -522,12 +522,6 @@ The default observation model for the GLM-HMM is Bernoulli, but Categorical (Mul
 
 For more information, refer to Escola et al. (2011) <span id="cite4"></span><a href="#ref4">[4]</a>.
 ```
-____
-If you don't set up any initialization settings, you would use the NeMoS defaults:
-- ``"glm_params_init"``: ``"random"`` - small random coefficients, mean-rate intercept
-- ``"scale_init"``: ``"constant"`` - scale initialized to 1.0
-- ``"initial_proba_init"``: ``"uniform"`` - equal probability for all states
-- ``"transition_proba_init"``: ``"sticky"`` - high self-transition probability (0.95)
 
 ```{admonition} Importance of initial parameters in GLM-HMMs
 :class: question dropdown
