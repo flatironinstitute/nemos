@@ -112,6 +112,22 @@ finegrained_regularization.md
 
 ::::
 
+## GLM-HMM
+
+::::{grid} 1 2 3 3
+
+:::{grid-item-card}
+
+```{toctree}
+:maxdepth: 2
+
+initial_params_glm_hmm.md
+```
+
+:::
+
+::::
+
 ## Feature Engineering
 
 ::::{grid} 1 2 3 3
