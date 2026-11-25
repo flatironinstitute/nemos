@@ -19,7 +19,6 @@ from .._observation_model_builder import instantiate_observation_model
 from ..glm.params import FromGLMParams, GLMParams, ToGLMParams
 from ..hmm.expectation_maximization import EMState, em_hmm, em_step
 from ..hmm.hmm import FORWARD_BACKWARD, BaseHMM
-from ..hmm.initialize_parameters import HMM_INITIALIZATION_FN_DICT, InitFunctionHMM
 from ..hmm.params import HMMParams
 from ..hmm.utils import _check_state_format
 from ..inverse_link_function_utils import resolve_inverse_link_function
@@ -42,11 +41,7 @@ from .algorithm_configs import (
 from .initialize_parameters import (
     DEFAULT_INIT_FUNCTIONS_GLMHMM,
     GLMHMM_INITIALIZATION_FN_DICT,
-    InitFunctionGLM,
     KMeansInitializerGLM,
-    generate_glm_hmm_initial_model_params,
-    kmeans_glm_params_init,
-    kmeans_scale_init,
     setup_glm_hmm_initialization,
 )
 from .params import FromGLMHMMParams, GLMHMMParams, GLMHMMUserParams, ToGLMHMMParams
@@ -193,16 +188,6 @@ class GLMHMM(
     seed :
         JAX PRNG key for random number generation during initialization. Default is
         ``jax.random.PRNGKey(123)``.
-    hmm_initialization_funcs : dict, optional
-        Dictionary of initialization functions for HMM probabilities (initial and
-        transition). Included for scikit-learn compatibility; prefer configuring via the
-        :meth:`setup` method after construction. If ``None``, defaults from
-        ``DEFAULT_INIT_FUNCTIONS`` are used.
-    model_initialization_funcs : dict, optional
-        Dictionary of initialization functions for the GLM-specific parameters
-        (coefficients, intercept, and scale). Included for scikit-learn compatibility;
-        prefer configuring via the :meth:`setup` method after construction. If ``None``,
-        defaults from ``DEFAULT_INIT_FUNCTIONS_GLMHMM`` are used.
 
     Attributes
     ----------
@@ -457,132 +442,6 @@ class GLMHMM(
             self._log_like_cache[cache_key] = ll_func
         return ll_func(params, X, y)
 
-    def setup(
-        self,
-        initial_proba_init: Optional[
-            Literal["uniform", "random", "dirichlet"]
-        ] = None,
-        transition_proba_init: Optional[
-            Literal["sticky", "uniform", "random", "dirichlet"]
-        ] = None,
-        glm_params_init: Optional[Literal["random", "kmeans"] | InitFunctionGLM] = None,
-        scale_init: Optional[Literal["constant", "kmeans"] | InitFunctionGLM] = None,
-        dispersion_init: Optional[Literal["constant"] | InitFunctionGLM] = None,
-    ):
-        """Configure how :meth:`fit` initializes each model parameter.
-
-        Calling :meth:`setup` is optional: if it is never called, fitting starts from
-        the default initializers listed below. Use it to change the initialization
-        strategy by providing either the name of a built-in initialization function
-        or a custom callable. Each argument left as ``None`` keeps the previously
-        configured value; only the parameters you supply are updated.
-
-        Available built-in initialization functions:
-
-        - ``initial_proba_init``: ``"uniform"`` (default), ``"random"``,
-          ``"dirichlet"``.
-        - ``transition_proba_init``: ``"sticky"`` (default), ``"uniform"``,
-          ``"random"``, ``"dirichlet"``.
-        - ``glm_params_init``: ``"random"`` (default).
-        - ``scale_init``: ``"constant"`` (default).
-        - ``dispersion_init``: ``"constant"`` (default).
-
-
-        Parameters
-        ----------
-        initial_proba_init :
-            Built-in name or custom callable used to initialize the initial-state
-            probabilities (shape ``(n_states,)``).
-        initial_proba_init_kwargs :
-            Extra keyword arguments forwarded to ``initial_proba_init``.
-        transition_proba_init :
-            Built-in name or custom callable used to initialize the transition matrix
-            (shape ``(n_states, n_states)``).
-        transition_proba_init_kwargs :
-            Extra keyword arguments forwarded to ``transition_proba_init``.
-        glm_params_init :
-            Built-in name or custom callable used to initialize the per-state GLM
-            coefficients and intercepts.
-        glm_params_init_kwargs :
-            Extra keyword arguments forwarded to ``glm_params_init``.
-        scale_init :
-            Built-in name or custom callable used to initialize the scale parameter
-            of the observation model (e.g. variance for Gaussian).
-            Ignored by observation models without a scale.
-        scale_init_kwargs :
-            Extra keyword arguments forwarded to ``scale_init``.
-        dispersion_init :
-            Built-in name or custom callable used to initialize the dispersion parameter
-            of the observation model (for NegativeBinomial).
-            Ignored by observation models without a dispersion.
-        dispersion_init_kwargs :
-            Extra keyword arguments forwarded to ``dispersion_init``.
-
-
-        Raises
-        ------
-        ValueError
-            If a custom callable's signature is incompatible with the protocol
-            above, or if a ``*_kwargs`` entry contains keys that don't match the
-            corresponding initializer's signature.
-
-        Notes
-        -----
-        Custom callables must satisfy one of two ``typing.Protocol`` classes:
-
-        - ``initial_proba_init`` and ``transition_proba_init`` must satisfy
-          :class:`~nemos.hmm.initialize_parameters.InitFunctionHMM` and return a
-          ``jnp.ndarray`` of shape ``(n_states,)`` or ``(n_states, n_states)``
-          respectively.
-        - ``glm_params_init``, ``scale_init``, and ``dispersion_init`` must satisfy
-          :class:`~nemos.glm_hmm.initialize_parameters.InitFunctionGLM`.
-          ``glm_params_init`` returns ``(coef, intercept)`` matched to the design
-          and ``n_states``; ``scale_init`` and ``dispersion_init`` return
-          the scale array and the dispersion array of the observation model.
-
-        To inspect a protocol's signature, import and ``help()`` it::
-
-            from nemos.hmm.initialize_parameters import InitFunctionHMM
-            from nemos.glm_hmm.initialize_parameters import InitFunctionGLM
-
-            help(InitFunctionHMM)  # or help(InitFunctionGLM)
-
-        All arguments must appear in the function signature even when unused, so the
-        framework can supply them uniformly.
-
-        Examples
-        --------
-        Switch a parameter to a different built-in scheme by passing its label:
-
-        >>> from nemos.glm_hmm import GLMHMM
-        >>> model = GLMHMM(n_states=3)
-        >>> model.setup(initial_proba_init="random", glm_params_init="kmeans")
-
-        Plug in a custom callable matching the GLM-side protocol:
-
-        >>> import jax.numpy as jnp
-        >>> def my_glm_init(
-        ...     n_states,
-        ...     X,
-        ...     y,
-        ...     inverse_link_function,
-        ...     observation_model,
-        ...     session_starts,
-        ...     random_key,
-        ... ):
-        ...     coef = jnp.zeros((X.shape[1], n_states))
-        ...     intercept = jnp.zeros((n_states,))
-        ...     return coef, intercept
-        >>> model.setup(glm_params_init=my_glm_init)
-        """
-        super().setup(
-            initial_proba_init=initial_proba_init,
-            transition_proba_init=transition_proba_init,
-            glm_params_init=glm_params_init,
-            scale_init=scale_init,
-            dispersion_init=dispersion_init,
-        )
-
     def _model_setup(
         self,
         glm_params_init: Optional[str | Callable] = None,
@@ -773,9 +632,7 @@ class GLMHMM(
         How parameters are initialized:
 
         - If ``init_params`` is ``None`` (typical), the per-state GLM parameters
-          and HMM probabilities are produced by the initializers configured via
-          :meth:`setup` (or the package defaults when :meth:`setup` was never
-          called).
+          and HMM probabilities are produced by the default initializers.
         - If ``init_params`` is provided, it bypasses the initializers entirely.
           It must be a 5-tuple ``(coef, intercept, scale, initial_prob,
           transition_prob)`` whose shapes are consistent with ``X``, ``y``, and
@@ -795,8 +652,7 @@ class GLMHMM(
         init_params :
             Optional explicit initial parameters as a 5-tuple
             ``(coef, intercept, scale, initial_prob, transition_prob)``. When
-            ``None`` (default), the initializers configured by :meth:`setup`
-            (or the defaults) are used.
+            ``None`` (default), the default initializers are used.
         session_starts :
             Optional session boundaries for the HMM. Accepts:
 
@@ -855,7 +711,6 @@ class GLMHMM(
 
         See Also
         --------
-        setup : Configure the initializers used when ``init_params is None``.
         update : Run a single EM iteration (advanced, manual loop).
         """
         # validate inputs, cast the session boundaries shifting markers off NaN samples,
@@ -1526,36 +1381,6 @@ class GLMHMM(
         ...     model.save_params(path)
         ...     loaded = nmo.load_model(path)
         >>> bool(np.allclose(model.coef_, loaded.coef_))
-        True
-
-        Round-trip with a custom GLM-params initializer. Pass it back as a partial
-        dict under ``model_initialization_funcs``; remaining slots fall back to the
-        saved (built-in) names:
-
-        >>> import jax.numpy as jnp
-        >>> def my_glm_init(
-        ...     n_states,
-        ...     X,
-        ...     y,
-        ...     inverse_link_function,
-        ...     observation_model,
-        ...     session_starts,
-        ...     random_key,
-        ... ):
-        ...     return jnp.zeros((X.shape[1], n_states)), jnp.zeros((n_states,))
-        >>> model = nmo.glm_hmm.GLMHMM(n_states=2)
-        >>> model.setup(glm_params_init=my_glm_init)
-        >>> _ = model.fit(X, y)
-        >>> with tempfile.TemporaryDirectory() as d:
-        ...     path = os.path.join(d, "glmhmm.npz")
-        ...     model.save_params(path)
-        ...     loaded = nmo.load_model(
-        ...         path,
-        ...         mapping_dict={
-        ...             "model_initialization_funcs": {"glm_params_init": my_glm_init},
-        ...         },
-        ...     )
-        >>> loaded.model_initialization_funcs["glm_params_init"] is my_glm_init
         True
         """
         # initialize saving dictionary

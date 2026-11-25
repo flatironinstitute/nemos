@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import abc
 from numbers import Number
-from typing import Any, Callable, Generic, Literal, Optional, Tuple, TypeVar, Union
+from typing import Any, Generic, Literal, Optional, Tuple, TypeVar, Union
 
-import equinox as eqx
 import jax
 import jax.numpy as jnp
 import lazy_loader as lazy
@@ -37,8 +36,6 @@ from .initialize_parameters import (
     _resolve_dirichlet_priors,
     _validate_init_funcs_keys,
     generate_hmm_initial_params,
-    kmeans_initial_proba_init,
-    kmeans_transition_proba_init,
     setup_hmm_initialization,
 )
 from .params import HMMModelParamsT, HMMUserParams, HMMUserProvidedParamsT
@@ -119,10 +116,7 @@ class BaseHMM(
         JAX PRNG key for random number generation during initialization. Default is
         ``jax.random.PRNGKey(123)``.
     hmm_initialization_funcs :
-        Dictionary specifying the initialization functions for the HMM parameters. This parameter is
-        included at initialization for scikit-learn compatibility; however, users should set up the
-        initialization functions using the :meth:`~nemos.hmm.hmm.BaseHMM.setup` method after model
-        instantiation.
+        Dictionary specifying the initialization functions for the HMM parameters.
     estep_type:
         How the forward-backward recursions of the E-step are evaluated. ``"sequential"``
         steps through the time bins one at a time; ``"associative"`` uses
@@ -201,9 +195,7 @@ class BaseHMM(
 
     def _hmm_setup(
         self,
-        initial_proba_init: Optional[
-            Literal["uniform", "random", "dirichlet"]
-        ] = None,
+        initial_proba_init: Optional[Literal["uniform", "random", "dirichlet"]] = None,
         transition_proba_init: Optional[
             Literal["sticky", "uniform", "random", "dirichlet"]
         ] = None,
@@ -218,7 +210,7 @@ class BaseHMM(
         - For transition probabilities: "sticky" (default), "uniform", "random", "dirichlet"
 
         For any custom changes to the built-in methods, e.g. overriding default optional arguments, for using
-        kmeans initialization, or for any other custom initialization method, the user should generate the 
+        kmeans initialization, or for any other custom initialization method, the user should generate the
         initial parameters externally and provide them as `init_params` to the `fit` method.
 
         Parameters
@@ -241,37 +233,6 @@ class BaseHMM(
         """Model-specific setup of initialization functions."""
         # self._model_use_kmeans and self._model_initialization_funcs must be set here
         pass
-
-    def setup(
-        self,
-        initial_proba_init: Optional[
-            Literal["uniform", "random", "dirichlet"] 
-        ] = None,
-        transition_proba_init: Optional[
-            Literal["sticky", "uniform", "random", "dirichlet"]
-        ] = None,
-        **kwargs,
-    ):
-        """
-        Set up the HMM-based model, including HMM and model-specific setup.
-
-        This can be overwritten by the child class for custom docstrings.
-        """
-        if initial_proba_init not in [None, "uniform", "random", "dirichlet"]:
-            raise ValueError(
-                f"Invalid value for initial_proba_init: {initial_proba_init}. "
-                f"Expected one of [None, 'uniform', 'random', 'dirichlet']."
-            )
-        if transition_proba_init not in [None, "sticky", "uniform", "random", "dirichlet"]:
-            raise ValueError(
-                f"Invalid value for transition_proba_init: {transition_proba_init}. "
-                f"Expected one of [None, 'sticky', 'uniform', 'random', 'dirichlet']."
-            )
-        self._hmm_setup(
-            initial_proba_init=initial_proba_init,
-            transition_proba_init=transition_proba_init,
-        )
-        self._model_setup(**kwargs)
 
     @property
     def n_states(self) -> int:

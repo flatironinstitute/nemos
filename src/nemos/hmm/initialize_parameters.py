@@ -688,9 +688,7 @@ def setup_hmm_initialization(
     ):
         init_prob = jax.random.uniform(random_key, (n_states,), dtype=float)
         init_prob = init_prob / init_prob.sum()  # normalize to sum to 1
-        init_prob = jnp.clip(
-            init_prob, a_min=min_prob
-        )  # enforce minimum probability
+        init_prob = jnp.clip(init_prob, a_min=min_prob)  # enforce minimum probability
         return init_prob / init_prob.sum()  # renormalize after clipping
     ```
 
