@@ -45,6 +45,30 @@ jax.config.update("jax_enable_x64", True)
 
 NeMoS provides additional initialization functions in `nemos.glm_hmm`. Call them to build the parameters and pass the result to `fit`.
 
+Initial probabilities, `"initial_prob"`:
+
+- `uniform_initial_proba_init`: each state has probability `1 / n_states` (default).
+- `random_initial_proba_init`: uniform random draws, normalized to sum to one.
+- `dirichlet_initial_proba_init`: a draw from a Dirichlet distribution with concentration `alphas`.
+
+Transition probabilities, `"transition_prob"`:
+
+- `sticky_transition_proba_init`: `prob_stay` on the diagonal, the rest split evenly across the other states (default, `prob_stay=0.95`).
+- `uniform_transition_proba_init`: every transition has probability `1 / n_states`.
+- `random_transition_proba_init`: uniform random draws, each row normalized to sum to one.
+- `dirichlet_transition_proba_init`: each row drawn from a Dirichlet distribution with concentration `alphas`.
+
+GLM parameters:
+
+- `random_glm_params_init`: `"coef"` drawn from a normal distribution with standard deviation `std_dev`, `"intercept"` set to the link function of the mean of `y` (default, `std_dev=0.001`).
+- `constant_parameter_init`: `"scale"` or `"dispersion"` filled with `fill_value` (default, `fill_value=1.0`).
+
+All parameters at once:
+
+- `KMeansInitializerGLM`: assigns states with k-means and fits one GLM per state.
+
+The two examples below show the random probabilities and the k-means initialization.
+
 ```{code-cell} ipython3
 import numpy as np
 import nemos as nmo
