@@ -930,3 +930,7 @@ def get_flattener_unflattener(parameter_tree: Pytree):
         return jax.tree_util.tree_unflatten(struct, split_params)
 
     return flattener, unflattener
+
+
+def is_shape_tuple(x):
+    return isinstance(x, tuple) and all(isinstance(i, int) for i in x)

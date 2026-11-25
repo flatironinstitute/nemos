@@ -17,7 +17,6 @@ import pkgutil
 import re
 from collections import defaultdict, namedtuple
 from copy import deepcopy
-from dataclasses import dataclass
 from functools import partial
 from types import SimpleNamespace
 from typing import Any, Callable, Literal, Optional, Tuple, Union
@@ -52,16 +51,17 @@ from nemos.basis._basis_mixin import (
 from nemos.glm.params import GLMParams
 from nemos.glm.validation import GLMValidator
 from nemos.glm_hmm.initialize_parameters import random_glm_params_init
-from nemos.glm_hmm.params import GLMHMMModelParams, GLMHMMParams
+from nemos.glm_hmm.params import GLMHMMParams
 from nemos.hmm.hmm import BaseHMM
 from nemos.hmm.initialize_parameters import (
     HMM_INITIALIZATION_FN_DICT,
     sticky_transition_proba_init,
     uniform_initial_proba_init,
 )
-from nemos.hmm.params import HMMParams
+from nemos.hmm.params import HMMParams, from_hmm_params, to_hmm_params
 from nemos.hmm.utils import initialize_session_starts
-from nemos.hmm.validation import HMMValidator, from_hmm_params, to_hmm_params
+from nemos.hmm.validation import HMMValidator
+from nemos.observation_models import Observations
 from nemos.params import ModelParams
 from nemos.regularizer import UnRegularized
 from nemos.solvers import get_solver
@@ -348,8 +348,8 @@ def freeze_first_coef_leaf(model, params):
     spec = jax.tree_util.tree_unflatten(
         treedef, [leaves[0]] + [None] * (len(leaves) - 1)
     )
-    model.fix_params = (spec, None)
-    return model.fix_params[0]
+    model.fix_params = {"coef": spec, "intercept": None}
+    return model.fix_params["coef"]
 
 
 DEFAULT_KWARGS = {
@@ -373,6 +373,17 @@ CLASS_DEFAULT_KWARGS = {
         "variance": 1.0,
     },
 }
+
+
+@pytest.fixture()
+def methods_with_extras():
+    methods = inspect.getmembers(Observations, predicate=inspect.isfunction)
+    return [
+        meth_name
+        for (meth_name, meth) in methods
+        if ("kwargs" in inspect.signature(meth).parameters)
+        and not meth_name.startswith("_")
+    ]
 
 
 # Array-valued basis attributes, which ``==`` cannot compare inside a dict.
@@ -769,6 +780,9 @@ class MockRegressor(BaseRegressor):
     def _model_specific_initialization(self, *args, **kwargs):
         pass
 
+    def _get_params_shape(self, X, y):
+        pass
+
 
 class MockRegressorNested(MockRegressor):
     def __init__(self, other_param: int, std_param: int = 0):
@@ -816,7 +830,7 @@ class MockGLM(nmo.glm.GLM):
         pass
 
 
-MockHMMUserParams = Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
+MockHMMUserParams = dict[str, jnp.ndarray]
 
 
 class MockHMMModelParams(ModelParams):
@@ -830,25 +844,20 @@ class MockHMMParams(ModelParams):
 
 def to_mock_params(user_params: MockHMMUserParams) -> MockHMMParams:
     return MockHMMParams(
-        model_params=MockHMMModelParams(user_params[0]),
-        hmm_params=to_hmm_params(user_params[1:]),
+        model_params=MockHMMModelParams(user_params.get("param")),
+        hmm_params=to_hmm_params(
+            {k: user_params.get(k) for k in HMMValidator.model_param_names}
+        ),
     )
 
 
 def from_mock_params(params: MockHMMParams) -> MockHMMUserParams:
-    initial_prob, transition_prob = from_hmm_params(params.hmm_params)
-    return (
-        params.model_params.param,
-        initial_prob,
-        transition_prob,
-    )
+    return {"param": params.model_params.param, **from_hmm_params(params.hmm_params)}
 
 
-@dataclass(frozen=True, repr=False)
 class MockHMMValidator(HMMValidator[MockHMMUserParams, MockHMMParams]):
-    model_param_names: Tuple[str] = (
-        "param",
-        *HMMValidator.model_param_names,
+    model_param_names: frozenset[str] = frozenset(
+        {"param", *HMMValidator.model_param_names}
     )
     to_model_params: Callable[[MockHMMUserParams], MockHMMParams] = to_mock_params
     from_model_params: Callable[[MockHMMParams], MockHMMUserParams] = from_mock_params
@@ -916,27 +925,16 @@ class MockHMM(
         if self.param_ is None:
             raise ValueError("Model is not fitted yet.")
 
-    def _get_model_params(self) -> MockHMMParams:
-        return self._validator.to_model_params(
-            (
-                self.param_,
-                self.initial_prob_,
-                self.transition_prob_,
-            )
-        )
-
     def _set_model_params(self, params):
-        param, initial_prob, transition_prob = self._validator.from_model_params(params)
-        self.param_ = param
-        self.initial_prob_ = initial_prob
-        self.transition_prob_ = transition_prob
+        for k, v in self._validator.from_model_params(params).items():
+            setattr(self, k + "_", v)
 
     def _log_likelihood(self, params, X, y):
         return jnp.zeros((y.shape[0], self.n_states))
 
     def _model_params_initialization(self, X, y, session_starts, random_key=None):
         return (
-            jnp.arange(self._n_states),
+            {"param": jnp.arange(self._n_states)},
             False,
         )
 
@@ -967,6 +965,9 @@ class MockHMM(
         pass
 
     def score(self, *args, **kwargs):
+        pass
+
+    def _get_params_shape(self, *args, **kwargs):
         pass
 
 
@@ -1769,9 +1770,19 @@ def negativeBinomialGLM_model_instantiation():
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.GLM(observation_model, regularizer=regularizer, solver_name="LBFGS")
     rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
-    r = 1 / model.observation_model.scale
+    r = 1 / model.observation_model.extra_params["dispersion"].default
     spikes = np.random.poisson(np.random.gamma(shape=r, size=rate.shape) * (r / rate))
-    return X, spikes, model, GLMParams(w_true, b_true), rate
+    return (
+        X,
+        spikes,
+        model,
+        GLMParams(
+            w_true,
+            b_true,
+            obs_params={"dispersion": jnp.full_like(b_true, 1 / r)},
+        ),
+        rate,
+    )
 
 
 @pytest.fixture
@@ -1905,11 +1916,20 @@ def instantiate_glm_func(
         counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
     else:
         counts, rates = None, None
+    extras = {}
+    for k, v in model.observation_model.extra_params.items():
+        if v.separable:
+            continue
+        extras[k] = model.observation_model.map_to[k](
+            jnp.full_like(model.intercept_, v.default * 1.1)
+        )
+    if len(extras) == 0:
+        extras = None
     return ModelFixture(
         X=X,
         y=counts,
         model=model,
-        params=GLMParams(model.coef_, model.intercept_),
+        params=GLMParams(model.coef_, model.intercept_, obs_params=extras),
         rates=rates,
         extra=None,
     )
@@ -1949,11 +1969,20 @@ def instantiate_population_glm_func(
         counts, rates = model.simulate(jax.random.PRNGKey(1234), X)
     else:
         counts, rates = None, None
+    extras = {}
+    for k, v in model.observation_model.extra_params.items():
+        if v.separable:
+            continue
+        extras[k] = model.observation_model.map_to[k](
+            jnp.full_like(model.intercept_, v.default * 1.1)
+        )
+    if len(extras) == 0:
+        extras = None
     return ModelFixture(
         X=X,
         y=counts,
         model=model,
-        params=GLMParams(model.coef_, model.intercept_),
+        params=GLMParams(model.coef_, model.intercept_, obs_params=extras),
         rates=rates,
         extra=None,
     )
@@ -2130,28 +2159,34 @@ def instantiate_glm_hmm_func(
     if simulate:
         model.coef_ = coef
         model.intercept_ = intercept
-        model.scale_ = scale
         model.initial_prob_ = init_prob
         model.transition_prob_ = transition_prob
+        extras = model.observation_model.extra_params.keys()
+        for key in extras:
+            default = model.observation_model.extra_params[key].default
+            setattr(model, key + "_", jnp.full_like(model.intercept_, default))
         y, rates, latent_states = run_simulation_glm_hmm(X, model, seed=1234)
         # reset fit attributes so fixture.model is unfitted
         model.coef_ = None
         model.intercept_ = None
-        model.scale_ = None
+        for key in extras:
+            setattr(model, key + "_", None)
         model.initial_prob_ = None
         model.transition_prob_ = None
     else:
         rates, latent_states = None, None
-
+    extras = {k: scale for k in model.observation_model.extra_params}
+    if extras == {}:
+        extras = None
     return ModelFixture(
         X=X,
         y=y,
         model=model,
         params=GLMHMMParams(
-            model_params=GLMHMMModelParams(
+            model_params=GLMParams(
                 coef=coef,
                 intercept=intercept,
-                log_scale=scale,
+                obs_params=extras,
             ),
             hmm_params=HMMParams(
                 log_initial_prob=jnp.log(init_prob),
@@ -2263,6 +2298,23 @@ def instantiate_base_regressor_subclass(request):
     # would not re-run any potentially heavy setup code (like model.simulate).
     cached_result = deepcopy(_MODEL_CACHE[cache_key])
     return cached_result
+
+
+def _base_regressor_subclass_id(param: dict) -> str:
+    """Generate a readable pytest ID for instantiate_base_regressor_subclass params."""
+    model = param["model"]
+    obs = param["obs_model"]
+    # Handle both string names and instantiated observation model objects
+    obs_name = obs if isinstance(obs, str) else type(obs).__name__
+    sim = "sim" if param["simulate"] else "no_sim"
+
+    parts = [model, obs_name, sim]
+
+    if init_kwargs := param.get("init_kwargs"):
+        kwargs_str = ",".join(f"{k}={v}" for k, v in sorted(init_kwargs.items()))
+        parts.append(kwargs_str)
+
+    return "-".join(parts)
 
 
 # Auto-clear cache after each test module run

@@ -1,10 +1,14 @@
 """GLM parameter definitions and type aliases."""
 
-from typing import Callable
+from typing import Callable, Dict, NotRequired, Optional, TypedDict
 
+import equinox as eqx
 from jaxtyping import PyTree
+from numpy.typing import ArrayLike
 
+from ..inverse_link_function_utils import identity
 from ..params import ModelParams
+from ..typing import LeafT
 
 
 class GLMParams[LeafT](ModelParams[LeafT]):
@@ -12,6 +16,7 @@ class GLMParams[LeafT](ModelParams[LeafT]):
 
     coef: PyTree[LeafT]
     intercept: LeafT
+    obs_params: Optional[dict[str, LeafT]] = None
 
     @staticmethod
     def regularizable_subtrees() -> list[Callable[["GLMParams[LeafT]"], PyTree[LeafT]]]:
@@ -19,4 +24,84 @@ class GLMParams[LeafT](ModelParams[LeafT]):
         return [lambda p: p.coef]
 
 
-type GLMUserParams[LeafT] = tuple[PyTree[LeafT], LeafT]
+class GLMUserParams(TypedDict):
+    """GLM user parameters."""
+
+    coef: NotRequired[PyTree[ArrayLike]]
+    intercept: NotRequired[ArrayLike]
+    scale: NotRequired[ArrayLike]
+    dispersion: NotRequired[ArrayLike]
+
+
+class ToGLMParams(eqx.Module):
+    """Callable mapping from user dict to GLMParams."""
+
+    map_to: Dict[str, Callable]
+
+    def __call__(self, user_params: GLMUserParams) -> GLMParams[LeafT]:
+        """Convert user params to GLM params.
+
+        Parameters
+        ----------
+        user_params:
+            The user parameters as a dictionary.
+
+        Returns
+        -------
+            The GLMParams.
+
+        Notes
+        -----
+        This function transform the parameters according to the dictionary of
+        callables ``map_to``. If a user parameter key is in map_to, the corresponding
+        parameter value will be transformed via map_to[key](value) before being stored
+        in GLMParams.obs_params.
+        """
+        user_params = {} if user_params is None else user_params.copy()
+        coef = user_params.pop("coef", None)
+        intercept = user_params.pop("intercept", None)
+        if user_params != {}:
+            obs_params = {
+                k: self.map_to.get(k, identity)(p) if p is not None else None
+                for k, p in user_params.items()
+            }
+        else:
+            obs_params = None
+        return GLMParams(coef, intercept, obs_params)
+
+
+class FromGLMParams(eqx.Module):
+    """Callable mapping from GLMParams to user dict."""
+
+    map_from: Dict[str, Callable]
+
+    def __call__(self, glm_params: GLMParams[LeafT]) -> GLMUserParams:
+        """Convert GLMParams to a user parameter dictionary.
+
+        Parameters
+        ----------
+        glm_params:
+            The model parameters as a GLMParams.
+
+        Returns
+        -------
+            The dictionary of user parameters.
+
+        Notes
+        -----
+        This function transform the parameters according to the dictionary of
+        callables ``map_from``.
+        If a parameter key is in map_from, the corresponding
+        parameter value will be transformed via map_from[key](value) before being stored
+        in user_params.
+        """
+        user_params = {"coef": glm_params.coef, "intercept": glm_params.intercept}
+        obs_params = {} if glm_params.obs_params is None else glm_params.obs_params
+        user_params.update(
+            {
+                k: self.map_from.get(k, identity)(v)
+                for k, v in obs_params.items()
+                if v is not None
+            }
+        )
+        return user_params

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import contextvars
 import inspect
+from contextlib import contextmanager
 from typing import Any, ClassVar
 
 import equinox as eqx
@@ -8,6 +10,41 @@ import jax
 import jax.numpy as jnp
 import optimistix as optx
 from optimistix import OptaxMinimiser
+
+_use_keyed_solver = contextvars.ContextVar("_use_keyed_solver", default=False)
+
+
+def use_keyed_solver() -> bool:
+    """Return True when inside a :func:`keyed_solver` context."""
+    return _use_keyed_solver.get()
+
+
+@contextmanager
+def keyed_solver(enabled: bool = True):
+    """Make the solver adapters constructed in this context use their keyed minimiser.
+
+    An adapter reads the flag once, in ``__init__``, and keeps its choice afterwards,
+    so ``run`` and ``update`` may be called outside the context. An adapter that has
+    no keyed minimiser raises at construction.
+
+    Token-based set/reset makes it exception-safe, correctly nested, and isolated
+    per thread / async context. Wrap only the single solver construction, never a
+    whole method body, so incidental constructions are not accidentally keyed.
+
+    Parameters
+    ----------
+    enabled :
+        When False, this is a no-op and the plain minimiser is used. Lets a call
+        site request the keyed minimiser conditionally.
+    """
+    if not enabled:
+        yield
+        return
+    token = _use_keyed_solver.set(True)
+    try:
+        yield
+    finally:
+        _use_keyed_solver.reset(token)
 
 
 def _append_optimistix_doc(parent_method):

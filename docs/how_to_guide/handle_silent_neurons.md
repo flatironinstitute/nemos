@@ -117,7 +117,10 @@ The example below makes this happen with a population in which neuron 0 fires a 
 X_silent = np.random.default_rng(0).normal(size=(40, 2))
 y_silent = np.zeros((40, 3))
 y_silent[[1, 5, 7], 0] = 1
-init_silent = (np.zeros((2, 3)), np.array([-4.0, -1000.0, -1000.0]))
+init_silent = {
+    "coef": np.zeros((2, 3)),
+    "intercept": np.array([-4.0, -1000.0, -1000.0]),
+}
 
 silent_model = nmo.glm.PopulationGLM(
     solver_name="Newton",

@@ -15,7 +15,13 @@ from numba import njit
 import nemos as nmo
 
 # Import helpers from conftest
-from conftest import OBSERVATION_PER_MODEL, MockRegressor, is_population_model
+from conftest import (
+    OBSERVATION_PER_MODEL,
+    MockRegressor,
+    _base_regressor_subclass_id,
+    is_population_model,
+)
+from nemos._inverse_link_function_builder import LINK_NAME_TO_FUNC
 from nemos.glm.validation import (
     ClassifierGLMValidator,
     GLMValidator,
@@ -23,7 +29,6 @@ from nemos.glm.validation import (
     PopulationGLMValidator,
 )
 from nemos.glm_hmm.validation import GLMHMMValidator
-from nemos.inverse_link_function_utils import LINK_NAME_TO_FUNC
 from nemos.solvers._fista import OptimistixNAG
 from nemos.solvers._optax_optimistix_solvers import OptimistixOptaxGradientDescent
 
@@ -36,19 +41,19 @@ MODEL_REGISTRY = {
 
 VALIDATOR_REGISTRY = {
     "GLM": GLMValidator(),
-    "ClassifierGLM": ClassifierGLMValidator(extra_params={"n_classes": 4}),
+    "ClassifierGLM": ClassifierGLMValidator(config={"n_classes": 4}),
     "ClassifierPopulationGLM": PopulationClassifierGLMValidator(
-        extra_params={"n_classes": 4}
+        config={"n_classes": 4}
     ),
     "PopulationGLM": PopulationGLMValidator(),
     "GLMHMM": GLMHMMValidator(n_states=3),  # n_states=3 matches the fixture default
 }
 
-INIT_PARAM_LENGTH = {
-    "GLM": 2,
+MAX_PARAM_LENGTH = {
+    "GLM": 3,
     "ClassifierGLM": 2,
     "ClassifierPopulationGLM": 2,
-    "PopulationGLM": 2,
+    "PopulationGLM": 3,
     "GLMHMM": 5,
 }
 
@@ -211,14 +216,38 @@ _MODEL_PYTREE_X_CASES = [
 ]
 
 
+@pytest.fixture
+def initial_param_length(instantiate_base_regressor_subclass):
+    fixture = instantiate_base_regressor_subclass
+    model = fixture.model
+    return len(model.param_names)
+
+
+@pytest.fixture
+def validator(instantiate_base_regressor_subclass):
+    model = instantiate_base_regressor_subclass.model
+    validator = VALIDATOR_REGISTRY[model.__class__.__name__]
+    orig_validator = model._validator
+    return eqx.tree_at(
+        lambda x: (x.to_model_params, x.from_model_params, x.model_param_names),
+        validator,
+        (
+            orig_validator.to_model_params,
+            orig_validator.from_model_params,
+            orig_validator.model_param_names,
+        ),
+        is_leaf=lambda x: x is None,
+    )
+
+
 def _valid_init_params(fixture):
     """Return the canonical user-facing init_params tuple for any model fixture.
 
     Uses VALIDATOR_REGISTRY so the returned tuple has the right length and
     structure for the model (e.g. 2-tuple for GLM, 5-tuple for GLMHMM).
     """
-    model_name = fixture.model.__class__.__name__
-    return VALIDATOR_REGISTRY[model_name].from_model_params(fixture.params)
+    from_model_params = fixture.model._validator.from_model_params
+    return from_model_params(fixture.params)
 
 
 def _solver_params(model_params, model_name):
@@ -385,6 +414,7 @@ def test_all_defaults_assigned():
     "instantiate_base_regressor_subclass",
     INSTANTIATE_MODEL_ONLY,
     indirect=True,
+    ids=_base_regressor_subclass_id,
 )
 def test_validate_lower_dimensional_data_X(instantiate_base_regressor_subclass):
     """Test behavior with lower-dimensional input data."""
@@ -402,6 +432,7 @@ def test_validate_lower_dimensional_data_X(instantiate_base_regressor_subclass):
     "instantiate_base_regressor_subclass",
     INSTANTIATE_MODEL_ONLY,
     indirect=True,
+    ids=_base_regressor_subclass_id,
 )
 def test_preprocess_fit_higher_dimensional_data_y(instantiate_base_regressor_subclass):
     """Test behavior with higher-dimensional input data."""
@@ -421,6 +452,7 @@ def test_preprocess_fit_higher_dimensional_data_y(instantiate_base_regressor_sub
     "instantiate_base_regressor_subclass",
     INSTANTIATE_MODEL_ONLY,
     indirect=True,
+    ids=_base_regressor_subclass_id,
 )
 def test_validate_higher_dimensional_data_X(instantiate_base_regressor_subclass):
     """Test behavior with higher-dimensional input data."""
@@ -455,6 +487,7 @@ def test_instantiate_solver_backend_selection(solver_name, expected_class):
     "instantiate_base_regressor_subclass",
     INSTANTIATE_MODEL_ONLY,
     indirect=True,
+    ids=_base_regressor_subclass_id,
 )
 class TestModelCommons:
     """
@@ -620,9 +653,8 @@ class TestModelCommons:
         # For flat models this is the full model_params; for nested models (GLMHMM)
         # the solver only sees the GLM sub-params. SOLVER_PARAMS_REGISTRY encodes
         # that difference so no model-specific branching is needed here.
-        full_params = VALIDATOR_REGISTRY[model_name].to_model_params(
-            _valid_init_params(fixture)
-        )
+        to_model_params = fixture.model._validator.to_model_params
+        full_params = to_model_params(_valid_init_params(fixture))
         sp = _solver_params(full_params, model_name)
         struct = jax.tree_util.tree_structure(sp)
         mask = jax.tree_util.tree_unflatten(struct, [None] * struct.num_leaves)
@@ -857,6 +889,7 @@ class TestModelCommons:
     "instantiate_base_regressor_subclass",
     INSTANTIATE_MODEL_ONLY_LINK,
     indirect=True,
+    ids=_base_regressor_subclass_id,
 )
 class TestLinkFunctionModels:
     def test_non_differentiable_inverse_link(self, instantiate_base_regressor_subclass):
@@ -1064,6 +1097,7 @@ class TestLinkFunctionModels:
         for m in MODEL_REGISTRY.keys()
     ],
     indirect=True,
+    ids=_base_regressor_subclass_id,
 )
 class TestObservationModel:
     @pytest.mark.parametrize(
@@ -1108,6 +1142,7 @@ class TestObservationModel:
     "instantiate_base_regressor_subclass",
     INSTANTIATE_MODEL_ONLY,
     indirect=True,
+    ids=_base_regressor_subclass_id,
 )
 def test_simulate_requires_fit(instantiate_base_regressor_subclass):
     """simulate() raises before fit is called.
@@ -1135,6 +1170,7 @@ def test_simulate_requires_fit(instantiate_base_regressor_subclass):
         for m in MODEL_REGISTRY.keys()
     ],
     indirect=True,
+    ids=_base_regressor_subclass_id,
 )
 class TestModelSimulation:
     @pytest.fixture(autouse=True)
@@ -1145,33 +1181,44 @@ class TestModelSimulation:
 
     @pytest.mark.parametrize(
         "n_params",
-        list(range(max(INIT_PARAM_LENGTH.values()) + 2)),
+        list(range(max(MAX_PARAM_LENGTH.values()) + 2)),
     )
     @pytest.mark.solver_related
-    def test_fit_param_length(self, n_params, instantiate_base_regressor_subclass):
+    def test_fit_param_length(
+        self, n_params, instantiate_base_regressor_subclass, initial_param_length
+    ):
         """
         Test the `fit` method with different numbers of initial parameters.
         Check for correct number of parameters.
         """
         fixture = instantiate_base_regressor_subclass
         X, y, model = fixture.X, fixture.y, fixture.model
-        model_name = model.__class__.__name__
-        expectation = (
-            pytest.raises(
-                ValueError,
-                match="Params must have length.",
-            )
-            if n_params != INIT_PARAM_LENGTH[model_name]
-            else does_not_raise()
-        )
-
         full_params = _valid_init_params(fixture)
-        if n_params < INIT_PARAM_LENGTH[model_name]:
-            init_params = full_params[:n_params]
-        else:
-            init_params = full_params + (full_params[0],) * (
-                n_params - INIT_PARAM_LENGTH[model_name]
+        if n_params < initial_param_length:
+            init_params = {
+                k: v for i, (k, v) in enumerate(full_params.items()) if i < n_params
+            }
+            expectation = pytest.raises(
+                ValueError,
+                match="parameter dictionary is incomplete",
             )
+
+        else:
+            delta_params = n_params - initial_param_length
+            init_params = full_params.copy()
+            first_param = next(iter(full_params.values()))
+            init_params.update(
+                {f"invalid_{i}": first_param for i in range(delta_params)}
+            )
+            expectation = (
+                pytest.raises(
+                    ValueError,
+                    match="Invalid parameter",
+                )
+                if delta_params > 0
+                else does_not_raise()
+            )
+
         with expectation:
             model.fit(X, y, init_params=init_params)
 
@@ -1365,14 +1412,21 @@ class TestModelSimulation:
     "instantiate_base_regressor_subclass",
     INSTANTIATE_MODEL_ONLY,
     indirect=True,
+    ids=_base_regressor_subclass_id,
 )
 class TestModelValidator:
     @pytest.mark.parametrize(
         "n_params",
-        list(range(max(INIT_PARAM_LENGTH.values()) + 2)),
+        list(range(max(MAX_PARAM_LENGTH.values()) + 2)),
     )
     @pytest.mark.solver_related
-    def test_validate_param_length(self, n_params, instantiate_base_regressor_subclass):
+    def test_validate_param_length(
+        self,
+        n_params,
+        instantiate_base_regressor_subclass,
+        initial_param_length,
+        validator,
+    ):
         """
         Test the `_initialize_optimizer_and_state` method with different numbers of initial parameters.
         Check for correct number of parameters.
@@ -1388,23 +1442,31 @@ class TestModelValidator:
 
         model_name = model.__class__.__name__
         y = np.zeros(DEFAULT_OBS_SHAPE[model_name])
-        expectation = (
-            pytest.raises(
-                ValueError,
-                match="Params must have length",
-            )
-            if n_params != INIT_PARAM_LENGTH[model_name]
-            else does_not_raise()
-        )
-
         full_params = _valid_init_params(fixture)
-        if n_params < INIT_PARAM_LENGTH[model_name]:
-            init_params = full_params[:n_params]
-        else:
-            init_params = full_params + (full_params[0],) * (
-                n_params - INIT_PARAM_LENGTH[model_name]
+        if n_params < initial_param_length:
+            init_params = {
+                k: v for i, (k, v) in enumerate(full_params.items()) if i < n_params
+            }
+            expectation = pytest.raises(
+                ValueError,
+                match="parameter dictionary is incomplete|The provided parameters include None",
             )
-        validator = VALIDATOR_REGISTRY[model_name]
+
+        else:
+            delta_params = n_params - initial_param_length
+            init_params = full_params.copy()
+            first_param = next(iter(full_params.values()))
+            init_params.update(
+                {f"invalid_{i}": first_param for i in range(delta_params)}
+            )
+            expectation = (
+                pytest.raises(
+                    KeyError,
+                    match="Parameters must have key",
+                )
+                if delta_params > 0
+                else does_not_raise()
+            )
         with expectation:
             params = validator.validate_and_cast_params(init_params)
             user_params = validator.from_model_params(params)
@@ -1423,7 +1485,7 @@ class TestModelValidator:
     )
     @pytest.mark.solver_related
     def test_validate_x_dimensionality(
-        self, delta_dim, expectation, instantiate_base_regressor_subclass
+        self, delta_dim, expectation, instantiate_base_regressor_subclass, validator
     ):
         """
         Test the `validate_inputs` method with X input data of different dimensionalities.
@@ -1437,7 +1499,6 @@ class TestModelValidator:
             X = np.zeros((X.shape[0],))
         elif delta_dim == 1:
             X = np.zeros((X.shape[0], 1, X.shape[1]))
-        validator = VALIDATOR_REGISTRY[model.__class__.__name__]
         with expectation:
             validator.validate_inputs(X, y)
 
@@ -1485,7 +1546,11 @@ class TestModelValidator:
     )
     @pytest.mark.solver_related
     def test_validate_feature_consistency_x(
-        self, delta_n_features, expectation, instantiate_base_regressor_subclass
+        self,
+        delta_n_features,
+        expectation,
+        instantiate_base_regressor_subclass,
+        validator,
     ):
         """
         Test the `validate_consistency` method for inconsistencies between data features and model's expectations.
@@ -1497,7 +1562,6 @@ class TestModelValidator:
         y = _add_zeros(y)
         for i in range(getattr(model, "n_classes", 0)):
             y[i] = i
-        validator = VALIDATOR_REGISTRY[model.__class__.__name__]
         params = model.initialize_params(X, y)
         params = validator.to_model_params(params)
         if delta_n_features == 1:
@@ -1528,7 +1592,7 @@ class TestModelValidator:
     )
     @pytest.mark.solver_related
     def test_validate_time_points_x(
-        self, delta_tp, expectation, instantiate_base_regressor_subclass
+        self, delta_tp, expectation, instantiate_base_regressor_subclass, validator
     ):
         """
         Test the `validate_inputs` method for inconsistencies in time-points in data X.
@@ -1539,7 +1603,6 @@ class TestModelValidator:
         X, model = fixture.X, fixture.model
         y = np.zeros(DEFAULT_OBS_SHAPE[model.__class__.__name__])
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
-        validator = VALIDATOR_REGISTRY[model.__class__.__name__]
         with expectation:
             validator.validate_inputs(X, y)
 

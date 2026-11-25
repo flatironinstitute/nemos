@@ -16,7 +16,7 @@ import jax.numpy as jnp
 import numpy as np
 from numpy.typing import NDArray
 
-from . import solvers, tree_utils, utils
+from . import solvers, tree_utils
 from ._hess import (
     HessianTag,
     LeafClaim,
@@ -31,6 +31,7 @@ from .params import ModelParams
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Regularizer
 from .solvers import SolverProtocol, SolverSpec
+from .solvers._keyed_optax_minimizer import keyed_solver
 from .solvers._no_op import NoOpSolver
 from .type_casting import cast_to_jax, is_numpy_array_like
 from .typing import (
@@ -44,7 +45,14 @@ from .typing import (
     UserProvidedParamsT,
     ValidatorT,
 )
-from .utils import _flatten_dict, _get_name, _unpack_params, get_env_metadata
+from .utils import (
+    _flatten_dict,
+    _get_name,
+    _unpack_params,
+    assert_is_callable,
+    get_env_metadata,
+    is_shape_tuple,
+)
 
 _SOLVER_ARGS_CACHE = {}
 
@@ -450,6 +458,35 @@ class BaseRegressor(
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
             )
 
+    @staticmethod
+    def _check_solver_supports_key(solver_class: Type, loss_requires_key: bool) -> None:
+        """
+        Check that the solver can minimise a loss that needs a fresh PRNG key.
+
+        Solvers that are not optimistix adapters never read the ``keyed_solver``
+        context, so without this check a keyed loss would silently see the same key
+        at every step.
+
+        Parameters
+        ----------
+        solver_class :
+            Class of the solver.
+        loss_requires_key :
+            Whether the loss needs a fresh PRNG key at every solver step.
+
+        Raises
+        ------
+        ValueError
+            If the loss needs a key and the solver has no keyed minimiser.
+        """
+        if not loss_requires_key:
+            return
+        if getattr(solver_class, "_keyed_solver_cls", None) is None:
+            raise ValueError(
+                "The loss needs a solver that draws a fresh PRNG key at every step, "
+                f"which {solver_class.__name__} does not support."
+            )
+
     def _invalidate_solver(self):
         self._solver = None
         self._solver_loss_fun = None
@@ -576,6 +613,7 @@ class BaseRegressor(
         regularizer: Optional[Regularizer] = None,
         regularizer_strength: Optional[Any] = None,
         frozen_params: Optional[ModelParamsT] = None,
+        loss_requires_key: bool = False,
     ) -> SolverProtocol:
         """
         Instantiate the solver with the provided loss function.
@@ -609,6 +647,10 @@ class BaseRegressor(
             Optional regularization strength, default is self.regularizer_strength.
         frozen_params:
             Set of fixed parameters that will be combined with actively learned ``init_params``.
+        loss_requires_key:
+            Whether ``loss`` needs a fresh PRNG key at every solver step. If True, the
+            solver is built with its keyed minimiser, and the caller must pass the key
+            as the last element of the solver's ``args``.
 
         Returns
         -------
@@ -641,6 +683,7 @@ class BaseRegressor(
         solver_cls = solvers.get_solver(solver_name).implementation
 
         self._check_solver_kwargs(solver_cls, solver_kwargs)
+        self._check_solver_supports_key(solver_cls, loss_requires_key)
 
         if frozen_params is not None:
 
@@ -666,22 +709,23 @@ class BaseRegressor(
         else:
             hessian_kwargs = {}
 
-        solver = solver_cls(
-            _loss,
-            regularizer,
-            regularizer_strength,
-            has_aux=self._has_aux,
-            init_params=init_params,
-            **hessian_kwargs,
-            **solver_kwargs,
-        )
+        with keyed_solver(loss_requires_key):
+            solver = solver_cls(
+                _loss,
+                regularizer,
+                regularizer_strength,
+                has_aux=self._has_aux,
+                init_params=init_params,
+                **hessian_kwargs,
+                **solver_kwargs,
+            )
 
         # nemos's solvers store a .fun attribute, but it's not necessary for a solver to work.
         # A test relies on having _solver_loss_fun saved, so still check and save it if possible.
         # But it's not a problem if .fun doesn't exist in user-defined solvers.
         if hasattr(solver, "fun"):
             # check that the loss is Callable
-            utils.assert_is_callable(solver.fun, "solver's loss")
+            assert_is_callable(solver.fun, "solver's loss")
             self._solver_loss_fun = solver.fun
 
         return solver
@@ -717,11 +761,6 @@ class BaseRegressor(
         feedforward_input: DESIGN_INPUT_TYPE,
     ):
         """Simulate neural activity in response to a feed-forward input and recurrent activity."""
-        pass
-
-    @abc.abstractmethod
-    def _get_model_params(self) -> ModelParamsT:
-        """Pack coef_ and intercept_  into a params pytree."""
         pass
 
     @abc.abstractmethod
@@ -827,9 +866,11 @@ class BaseRegressor(
             If inputs or parameters have incompatible shapes or invalid values.
         """
         self._validator.validate_inputs(X, y)
+        params = self._normalize_user_params(params, X, y)
         params = self._validator.validate_and_cast_params(params)
         self._validator.validate_consistency(params, X, y)
         X, y = self._preprocess_inputs(X, y)
+        params = eqx.combine(self._fix_params, params)
         return self._compute_loss(params, X, y, *args, **kwargs)
 
     @abc.abstractmethod
@@ -923,7 +964,7 @@ class BaseRegressor(
         """
         import equinox as eqx
 
-        model_pars = self._validator.get_empty_params(data, y)
+        model_pars = self._get_empty_params(data, y)
         # composite models solve only a sub-pytree; flat models solve the full
         # params. The regularizer and its mask act at the solved level.
         solver_subtree = getattr(
@@ -1014,6 +1055,7 @@ class BaseRegressor(
         """
         self._validator.validate_inputs(X=X, y=y, **kwargs)
         init_params = self._normalize_user_params(init_params, X, y)
+        self._validator.check_complete_param_specs(init_params)
         init_params = self._validator.validate_and_cast_params(init_params)
         self._validator.validate_consistency(init_params, X=X, y=y)
         X, y = self._preprocess_inputs(X, y, drop_nans=True)
@@ -1156,8 +1198,8 @@ class BaseRegressor(
         return set_attr
 
     @staticmethod
-    def _get_validator_extra_params() -> dict | None:
-        """Get validator extra parameters.
+    def _get_validator_config() -> dict | None:
+        """Get validator configuration.
 
         Provide instance specific validator configuration if needed.
         """
@@ -1289,3 +1331,48 @@ class BaseRegressor(
     def _repr_html_(self) -> str:
         """HTML representation of the model."""
         return self._repr_mimebundle_().get("text/html", repr(self))
+
+    @abc.abstractmethod
+    def _get_params_shape(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> ModelParamsT:
+        """Return a pytree of model parameters with the expected shape.
+
+        Returns the ModelParams tree with leaves being shape tuples.
+        """
+        pass
+
+    def _get_empty_params(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> ModelParamsT:
+        """Create a Pytree of empty model parameters.
+
+        General method creating a parameter pytree. The parameter leaves dtype is
+        inferred from the input data (X, y), the shape and structure is retrieved
+        by the `_get_params_shape` abstract method.
+        """
+        shapes = self._get_params_shape(X, y)
+        # rely on the assumption that all dtypes should match when this is called.
+        # that means that X and y needs to be cast already to float.
+        dtype = set(
+            jax.tree_util.tree_leaves(jax.tree_util.tree_map(lambda x: x.dtype, (X, y)))
+        )
+        # sanity check that should catch internal violation of the
+        # homogeneity of the dtype.
+        if len(dtype) != 1:
+            raise ValueError(
+                "X and y have mixed dtypes. Before calling this method cast to the same dtype."
+            )
+
+        dtype = dtype.pop()
+
+        return jax.tree_util.tree_map(
+            lambda s: jnp.empty(s, dtype=dtype), shapes, is_leaf=is_shape_tuple
+        )
+
+    @property
+    def param_names(self) -> list[str]:
+        """List the names of the fitted parameters."""
+        return list(self._validator.model_param_names)
+
+    def _get_param_dict(self) -> UserProvidedParamsT:
+        return {name: getattr(self, name + "_", None) for name in self.param_names}
+
+    def _get_model_params(self) -> ModelParamsT:
+        return self._validator.to_model_params(self._get_param_dict())

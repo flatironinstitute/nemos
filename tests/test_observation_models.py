@@ -1,3 +1,5 @@
+import dataclasses
+import inspect
 import math
 import warnings
 from contextlib import nullcontext as does_not_raise
@@ -14,7 +16,10 @@ from nemos._observation_model_builder import (
     AVAILABLE_OBSERVATION_MODELS,
     instantiate_observation_model,
 )
+from nemos._read_only_dict import ReadOnlyDict
 from nemos.glm.initialize_parameters import initialize_intercept_matching_mean_rate
+from nemos.inverse_link_function_utils import exp
+from nemos.observation_models import ExtraParam
 
 
 @pytest.fixture
@@ -299,26 +304,17 @@ class TestPoissonObservations:
         with expectation:
             model.observation_model.pseudo_r2(y, firing_rate, score_type)
 
-    @pytest.mark.parametrize(
-        "scale, expectation",
-        [
-            (1, does_not_raise()),
-            (
-                "invalid",
-                pytest.raises(
-                    ValueError, match="The `scale` parameter must be of numeric type"
-                ),
-            ),
-        ],
-    )
-    def test_scale_setter(self, scale, expectation, poissonGLM_model_instantiation):
-        _, _, model, _, firing_rate = poissonGLM_model_instantiation
-        with expectation:
-            model.observation_model.scale = scale
+    def test_no_extra(self, poisson_observations):
+        observation_model = poisson_observations()
+        assert len(observation_model.extra_params) == 0
 
-    def test_scale_getter(self, poissonGLM_model_instantiation):
-        _, _, model, _, firing_rate = poissonGLM_model_instantiation
-        assert model.observation_model.scale == 1
+    def test_map_from(self, poisson_observations):
+        observation_model = poisson_observations()
+        assert observation_model.map_from == ReadOnlyDict({})
+
+    def test_map_to(self, poisson_observations):
+        observation_model = poisson_observations()
+        assert observation_model.map_to == ReadOnlyDict({})
 
     @pytest.mark.parametrize(
         "test_value",
@@ -379,6 +375,25 @@ class TestPoissonObservations:
 
 
 class TestGammaObservations:
+    def test_extra_params_values(self, gamma_observations):
+        observation_model = gamma_observations()
+        assert len(observation_model.extra_params) == 1
+        for k, v in observation_model.extra_params.items():
+            assert k == "scale"
+            assert v.range == (0, float("inf"))
+            assert v.default == 1.0
+            assert v.map_to == jnp.log
+            assert v.map_from == exp
+            assert v.separable is True
+
+    def test_map_from(self, gamma_observations):
+        observation_model = gamma_observations()
+        assert observation_model.map_from == ReadOnlyDict({"scale": exp})
+
+    def test_map_to(self, gamma_observations):
+        observation_model = gamma_observations()
+        assert observation_model.map_to == ReadOnlyDict({"scale": jnp.log})
+
     def test_get_params(self, gamma_observations):
         """Test get_params() returns expected values."""
         observation_model = gamma_observations()
@@ -472,6 +487,18 @@ class TestGammaObservations:
 
 
 class TestBernoulliObservations:
+    def test_no_extra(self, bernoulli_observations):
+        observation_model = bernoulli_observations()
+        assert len(observation_model.extra_params) == 0
+
+    def test_map_from(self, poisson_observations):
+        observation_model = poisson_observations()
+        assert observation_model.map_from == ReadOnlyDict({})
+
+    def test_map_to(self, poisson_observations):
+        observation_model = poisson_observations()
+        assert observation_model.map_to == ReadOnlyDict({})
+
     def test_get_params(self, bernoulli_observations):
         """Test get_params() returns expected values."""
         observation_model = bernoulli_observations()
@@ -556,12 +583,29 @@ class TestBernoulliObservations:
 
 
 class TestNegativeBinomialObservations:
+    def test_extra_params_values(self, negative_binomial_observations):
+        observation_model = negative_binomial_observations()
+        assert len(observation_model.extra_params) == 1
+        for k, v in observation_model.extra_params.items():
+            assert k == "dispersion"
+            assert v.range == (0, float("inf"))
+            assert v.default == 1.0
+            assert v.map_to == jnp.log
+            assert v.map_from == exp
+            assert v.separable is False
+
+    def test_map_from(self, negative_binomial_observations):
+        observation_model = negative_binomial_observations()
+        assert observation_model.map_from == ReadOnlyDict({"dispersion": exp})
+
+    def test_map_to(self, negative_binomial_observations):
+        observation_model = negative_binomial_observations()
+        assert observation_model.map_to == ReadOnlyDict({"dispersion": jnp.log})
+
     @pytest.mark.requires_x64
     def test_get_params(self, negative_binomial_observations):
         observation_model = negative_binomial_observations()
-        assert observation_model.get_params() == {
-            "scale": 1.0,
-        }
+        assert observation_model.get_params() == {}
 
     @pytest.mark.requires_x64
     def test_deviance_against_statsmodels(
@@ -569,7 +613,7 @@ class TestNegativeBinomialObservations:
     ):
         _, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
         dev = sm.families.NegativeBinomial(
-            alpha=model.observation_model.scale
+            alpha=model.observation_model.extra_params["dispersion"].default
         ).deviance(y, firing_rate)
         dev_model = model.observation_model.deviance(y, firing_rate).sum()
         if not np.allclose(dev, dev_model):
@@ -577,7 +621,7 @@ class TestNegativeBinomialObservations:
 
     def test_loglikelihood_against_scipy(self, negativeBinomialGLM_model_instantiation):
         _, y, model, _, firing_rate = negativeBinomialGLM_model_instantiation
-        r = 1.0 / model.observation_model.scale
+        r = 1.0 / model.observation_model.extra_params["dispersion"].default
         p = r / (r + firing_rate)
         ll_model = model.observation_model.log_likelihood(y, firing_rate)
         ll_scipy = sts.nbinom.logpmf(y, r, p).mean()
@@ -596,7 +640,7 @@ class TestNegativeBinomialObservations:
         ll_model = model.observation_model.log_likelihood(
             y, firing_rate, aggregate_sample_scores=lambda x: x
         )
-        r = 1.0 / model.observation_model.scale
+        r = 1.0 / model.observation_model.extra_params["dispersion"].default
         p = r / (r + firing_rate)
         ll_scipy = sts.nbinom.logpmf(y, r, p)
         if not np.allclose(ll_model, ll_scipy):
@@ -608,9 +652,11 @@ class TestNegativeBinomialObservations:
         gkey, pkey = jax.random.split(key_array)
         p = np.random.rand(10)
         counts = model.observation_model.sample_generator(
-            key_array, p, scale=model.observation_model.scale
+            key_array,
+            p,
+            dispersion=model.observation_model.extra_params["dispersion"].default,
         )
-        r = 1.0 / model.observation_model.scale
+        r = 1.0 / model.observation_model.extra_params["dispersion"].default
         gamma_sample = jax.random.gamma(gkey, r, shape=p.shape) * (p / r)
         expected_counts = jax.random.poisson(pkey, gamma_sample)
         if not jnp.allclose(counts, expected_counts):
@@ -623,13 +669,15 @@ class TestNegativeBinomialObservations:
         mdl = sm.GLM(
             y,
             sm.add_constant(X),
-            family=sm.families.NegativeBinomial(alpha=model.observation_model.scale),
+            family=sm.families.NegativeBinomial(
+                alpha=model.observation_model.extra_params["dispersion"].default
+            ),
         ).fit()
         pr2_sms = mdl.pseudo_rsquared("mcf")
         pr2_model = model.observation_model.pseudo_r2(
             y,
             mdl.mu,
-            scale=model.observation_model.scale,
+            dispersion=model.observation_model.extra_params["dispersion"].default,
             score_type="pseudo-r2-McFadden",
         )
         if not np.allclose(pr2_model, pr2_sms, atol=1e-5):
@@ -637,10 +685,29 @@ class TestNegativeBinomialObservations:
 
     def test_repr_out(self):
         obs = nmo.observation_models.NegativeBinomialObservations()
-        assert repr(obs) == "NegativeBinomialObservations(scale=1.0)"
+        assert repr(obs) == "NegativeBinomialObservations()"
 
 
 class TestGaussianObservations:
+    def test_extra_params_values(self, gaussian_observations):
+        observation_model = gaussian_observations()
+        assert len(observation_model.extra_params) == 1
+        for k, v in observation_model.extra_params.items():
+            assert k == "scale"
+            assert v.range == (0, float("inf"))
+            assert v.default == 1.0
+            assert v.map_to == jnp.log
+            assert v.map_from == exp
+            assert v.separable is True
+
+    def test_map_from(self, gaussian_observations):
+        observation_model = gaussian_observations()
+        assert observation_model.map_from == ReadOnlyDict({"scale": exp})
+
+    def test_map_to(self, gaussian_observations):
+        observation_model = gaussian_observations()
+        assert observation_model.map_to == ReadOnlyDict({"scale": jnp.log})
+
     def test_get_params(self, gaussian_observations):
         """Test get_params() returns expected values."""
         observation_model = gaussian_observations()
@@ -756,6 +823,18 @@ class TestCategoricalObservations:
         )
         return res
 
+    def test_no_extra(self, categorical_observations):
+        observation_model = categorical_observations()
+        assert len(observation_model.extra_params) == 0
+
+    def test_map_from(self, categorical_observations):
+        observation_model = categorical_observations()
+        assert observation_model.map_from == ReadOnlyDict({})
+
+    def test_map_to(self, categorical_observations):
+        observation_model = categorical_observations()
+        assert observation_model.map_to == ReadOnlyDict({})
+
     def test_get_params(self, categorical_observations):
         """Test get_params() returns expected values."""
         observation_model = categorical_observations()
@@ -851,6 +930,110 @@ class TestCategoricalObservations:
 
 @pytest.mark.parametrize("observation_model_string", AVAILABLE_OBSERVATION_MODELS)
 class TestCommonObservationModels:
+    def test_signature(self, observation_model_rate_and_samples, methods_with_extras):
+        obs, _, _ = observation_model_rate_and_samples
+        for meth_name in methods_with_extras:
+            for key in obs.extra_params:
+                if key == "scale" and meth_name == "estimate_scale":
+                    # scale is not an input of its own estimation method
+                    continue
+                params = inspect.signature(getattr(obs, meth_name)).parameters
+                assert key in params, (
+                    f"Method {meth_name} does not have expose keyword parameter {key}"
+                )
+                assert params[key].default == obs.extra_params[key].default, (
+                    f"Method {meth_name} default for {key} does not match the declared default"
+                )
+
+            if not obs.extra_params:
+                assert "_" in inspect.signature(getattr(obs, meth_name)).parameters
+
+    def test_extra_params_usage(
+        self, methods_with_extras, observation_model_rate_and_samples
+    ):
+        import itertools
+        import typing
+
+        obs, y, rate = observation_model_rate_and_samples
+        if not obs.extra_params:
+            pytest.skip(f"No extra params for {obs.__class__}")
+
+        for meth_name in methods_with_extras:
+            method = getattr(obs, meth_name)
+            if meth_name == "estimate_scale":
+                # scale is not an input of its own estimation method
+                # nb doesn't fit  a scale, so it can be skipped
+                continue
+
+            kwargs = {
+                k: v
+                for (k, v) in [
+                    ("y", y),
+                    ("predicted_rate", rate),
+                    ("key", jax.random.key(1)),
+                ]
+                if k in inspect.signature(method).parameters.keys()
+            }
+            signature = inspect.signature(method)
+            extras = []
+
+            for key, val in signature.parameters.items():
+                ann = val.annotation
+                if typing.get_origin(ann) is typing.Literal:
+                    extras.append([(key, a) for a in typing.get_args(ann)])
+
+            if "dof_resid" in signature.parameters:
+                dof_kwarg = {"dof_resid": 100}
+            else:
+                dof_kwarg = {}
+
+            for comb in itertools.product(*extras):
+                extra_kwargs = {k: v for (k, v) in comb}
+                if (
+                    "pseudo-r2-Cohen" in [v for v in extra_kwargs.values()]
+                    and "scale" in obs.extra_params
+                    and obs.extra_params["scale"].separable
+                ):
+                    # scale simplifies when separable
+                    print(f"\nskipping {obs} Choen pseudo r2")
+                    continue
+
+                val = method(
+                    **dof_kwarg,
+                    **kwargs,
+                    **extra_kwargs,
+                    **{k: v.default for k, v in obs.extra_params.items()},
+                )
+                val2 = method(
+                    **dof_kwarg,
+                    **kwargs,
+                    **extra_kwargs,
+                    **{k: v.default + 1 for k, v in obs.extra_params.items()},
+                )
+                assert not np.allclose(val, val2), (
+                    f"The method {meth_name} disregarded kwargs "
+                    f"{[k for k in obs.extra_params.keys()]}.\nUsed kwargs:\n"
+                    f"{extra_kwargs}"
+                )
+
+    def test_extra_params_immutable(self, observation_model_rate_and_samples):
+        obs, _, _ = observation_model_rate_and_samples
+        with pytest.raises(AttributeError, match="has no attribute 'update'"):
+            obs.extra_params.update({"scale": 1})
+
+        if obs.extra_params:
+            key = list(obs.extra_params.keys())[0]
+            with pytest.raises(TypeError, match="does not support item assignment"):
+                obs.extra_params[key] = 1
+            with pytest.raises(dataclasses.FrozenInstanceError):
+                obs.extra_params[key].default = 2
+
+    def test_extra_params_struct(self, observation_model_rate_and_samples):
+        obs, _, _ = observation_model_rate_and_samples
+        assert isinstance(obs.extra_params, ReadOnlyDict)
+        for v in obs.extra_params.values():
+            assert isinstance(v, ExtraParam)
+
     @pytest.mark.parametrize("shape", [(10,), (10, 5), (10, 5, 2)])
     @pytest.mark.requires_x64
     def test_likelihood_matching(
@@ -930,42 +1113,6 @@ class TestCommonObservationModels:
         else:
             n_samp = math.prod(y.shape)
         assert np.allclose(sm, mn * n_samp)
-
-    def test_scale_getter(
-        self, observation_model_string, observation_model_rate_and_samples
-    ):
-        obs, y, rate = observation_model_rate_and_samples
-        assert obs.scale == 1
-
-    @pytest.mark.parametrize(
-        "scale, expectation",
-        [
-            (1, does_not_raise()),
-            (
-                "invalid",
-                pytest.raises(
-                    ValueError, match="The `scale` parameter must be of numeric type"
-                ),
-            ),
-        ],
-    )
-    def test_scale_setter(
-        self,
-        scale,
-        expectation,
-        observation_model_string,
-        observation_model_rate_and_samples,
-    ):
-        obs, y, rate = observation_model_rate_and_samples
-        with expectation:
-            obs.scale = scale
-
-    def test_separable_scale_is_set(self, observation_model_rate_and_samples):
-        """Test that the `_separable_scale` attribute is set and is a boolean for all observation models."""
-        obs, y, rate = observation_model_rate_and_samples
-        assert (obs._separable_scale is not None) and (
-            type(obs._separable_scale) is bool
-        )
 
     @pytest.mark.parametrize(
         "score_type, expectation",
@@ -1251,7 +1398,7 @@ def test_method_not_returning_scalar(method_name, return_value):
     [
         (jnp.array([1.0, 2.0]), "too few elements"),
         (jnp.array([1.0, 2.0, 3.0, 4.0]), "too many elements"),
-        (jnp.array([[1.0, 2.0, 3.0]]), "wrong dimensionality"),
+        (jnp.array([[[1.0, 2.0, 3.0]]]), "must preserve the input"),
     ],
 )
 def test_sample_generator_wrong_shape(return_value, description):

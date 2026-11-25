@@ -227,12 +227,10 @@ class ClassifierMixin:
         self._label_encoder = LabelEncoder(int(value))
 
         # reset validator.
-        self._validator = self._validator_class(
-            extra_params=self._get_validator_extra_params()
-        )
+        self._validator = self._validator_class(config=self._get_validator_config())
 
-    def _get_validator_extra_params(self) -> dict:
-        """Get validator extra parameters."""
+    def _get_validator_config(self) -> dict:
+        """Get validator configuration."""
         return {"n_classes": self._label_encoder.n_classes}
 
     def _preprocess_inputs(
@@ -535,13 +533,13 @@ class ClassifierMixin:
         >>> import jax.numpy as jnp
         >>> import nemos as nmo
         >>> X = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
-        >>> y = jnp.array([0, 0, 1, 1])
-        >>> model = nmo.glm.ClassifierGLM(classes=2)
+        >>> y = jnp.array([0, 0, 1, 2])
+        >>> model = nmo.glm.ClassifierGLM(classes=3)
         >>> model.set_classes(y)
         ClassifierGLM(...)
-        >>> coef, intercept = model.initialize_params(X, y)
-        >>> coef.shape
-        (2, 2)
+        >>> params = model.initialize_params(X, y)
+        >>> params["coef"].shape
+        (2, 3)
         """
         self._label_encoder.check_classes_is_set("initialize_params")
         y = self._label_encoder.encode(y)
@@ -639,6 +637,21 @@ class ClassifierMixin:
                 f"labels. The provided {classes} was cast to a "
                 f"{classes_array.ndim}-D array of dtype {classes_array.dtype} instead."
             )
+
+    def _get_params_shape(self, X, y) -> GLMParams[tuple[int]]:
+        """Infer the parameter shape from validated X and y.
+
+        Note that y must be already 1-hot encoded.
+        """
+        is_population = isinstance(self, ClassifierPopulationGLM)
+        n_observations = jnp.shape(y)[1] if is_population else 1
+        extra_shape = (
+            (n_observations, self.n_classes) if is_population else (self.n_classes,)
+        )
+        coef_shapes = jax.tree_util.tree_map(
+            lambda x: (jnp.shape(x)[1], *extra_shape), X
+        )
+        return GLMParams(coef=coef_shapes, intercept=extra_shape)
 
 
 class ClassifierGLM(ClassifierMixin, GLM):

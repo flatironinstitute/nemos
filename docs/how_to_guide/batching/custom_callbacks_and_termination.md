@@ -145,7 +145,7 @@ class EarlyStoppingCallback(nmo.callbacks.Callback):
     def on_pass_end(self, ctx: nmo.callbacks.TrainingContext) -> None:
         """Check whether test loss has improved and request stop if patience exceeded."""
         current_loss = ctx.model.compute_loss(
-            (ctx.params.coef, ctx.params.intercept),
+            {"coef": ctx.params.coef, "intercept": ctx.params.intercept},
             self.X_test,
             self.y_test,
         )

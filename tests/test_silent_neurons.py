@@ -88,7 +88,10 @@ def test_newton_cholesky_failure_has_actionable_message():
         solver_kwargs={"linear_solver": "cholesky"},
     )
     # Underflow makes the silent-neuron intercept Hessian exactly singular.
-    initial = (np.zeros((2, 3)), np.array([-4.0, -1000.0, -1000.0]))
+    initial = {
+        "coef": np.zeros((2, 3)),
+        "intercept": np.array([-4.0, -1000.0, -1000.0]),
+    }
     with pytest.raises(ValueError, match="solver_kwargs=.*identity_shift") as exc:
         model.fit(X, y, init_params=initial)
     assert "'linear_solver': 'eigh'" in str(exc.value)

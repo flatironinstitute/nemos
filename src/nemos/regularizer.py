@@ -163,6 +163,7 @@ def apply_operator(func, params, *args, filter_kwargs=None, **kwargs):
             where,
             params,
             func(where(params), *args, **kwargs, **subtree_kwargs),
+            is_leaf=lambda x: x is None,
         )
 
     return params
@@ -694,6 +695,30 @@ class UnRegularized(Regularizer):
 
     def _validate_strength(self, strength: Any):
         return None
+
+    def _validate_strength_structure(self, params: Any, strength: Any):
+        return strength
+
+    def _penalization(self, params: Any, filter_kwargs: dict) -> jnp.ndarray:
+        return jnp.array(0.0)
+
+    def get_proximal_operator(self, params: Any, strength: Any) -> ProximalOperator:
+        """
+        Retrieve the proximal operator.
+
+        Parameters
+        ----------
+        params:
+            The parameters to be regularized.
+        strength:
+            The regularization strength.
+
+        Returns
+        -------
+        :
+            The proximal operator, applying regularization to the provided parameters.
+        """
+        return self._proximal_operator
 
     def _resolve_hess_tag(self, params: Any, strength: Any) -> HessianTag:
         """Describe the penalty's Hessian, which is the zero matrix.

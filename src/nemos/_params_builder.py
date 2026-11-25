@@ -1,14 +1,13 @@
 """Utility functions for creating parameter container objects."""
 
 from .glm.params import GLMParams
-from .glm_hmm.params import GLMHMMModelParams, GLMHMMParams
+from .glm_hmm.params import GLMHMMParams
 from .hmm.params import HMMParams
 
 AVAILABLE_PARAM_CONTAINERS = [
     "GLMParams",
     "HMMParams",
     "GLMHMMParams",
-    "GLMHMMModelParams",
 ]
 
 # Mapping for O(1) lookup
@@ -16,7 +15,6 @@ _PARAM_CONTAINER_MAP = {
     "GLMParams": GLMParams,
     "HMMParams": HMMParams,
     "GLMHMMParams": GLMHMMParams,
-    "GLMHMMModelParams": GLMHMMModelParams,
 }
 
 
