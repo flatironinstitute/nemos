@@ -38,10 +38,7 @@ from .algorithm_configs import (
     prepare_estep_log_likelihood,
     prepare_mstep_update_fn,
 )
-from .initialize_parameters import (
-    KMeansInitializerGLM,
-    generate_glm_hmm_initial_model_params,
-)
+from .initialize_parameters import generate_glm_hmm_initial_model_params
 from .params import FromGLMHMMParams, GLMHMMParams, GLMHMMUserParams, ToGLMHMMParams
 from .utils import compute_rate_per_state
 from .validation import GLMHMMValidator
@@ -353,7 +350,6 @@ class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMMValidator]):
     """
 
     _validator_class = GLMHMMValidator
-    _kmeans_init_class = KMeansInitializerGLM
 
     def __init__(
         self,

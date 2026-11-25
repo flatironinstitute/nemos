@@ -1,27 +1,19 @@
 """Tests for hmm/initialize_parameters.py"""
 
-from contextlib import nullcontext as does_not_raise
-from unittest.mock import patch
-
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-import sklearn.cluster
 from sklearn.datasets import make_blobs
 
 from nemos.hmm.initialize_parameters import (
-    DEFAULT_INIT_FUNCTIONS,
     KMeansInitializer,
     _resolve_dirichlet_priors,
     dirichlet_initial_proba_init,
     dirichlet_transition_proba_init,
     generate_hmm_initial_params,
-    kmeans_initial_proba_init,
-    kmeans_transition_proba_init,
     random_initial_proba_init,
     random_transition_proba_init,
-    setup_hmm_initialization,
     sticky_transition_proba_init,
     uniform_initial_proba_init,
     uniform_transition_proba_init,
@@ -332,12 +324,11 @@ class TestKMeansInitialization:
     def test_output_shape_and_type(self, n_states, pytree, population):
         X, y = [[], []], [[], []]
         X[0], X[1], y[0], y[1], session_starts, _, _ = generate_kmeans_data(n_states)
-        initial_prob = kmeans_initial_proba_init(
+        initializer = KMeansInitializer(
             n_states, X[pytree], y[population], session_starts
         )
-        transition_prob = kmeans_transition_proba_init(
-            n_states, X[pytree], y[population], session_starts
-        )
+        initial_prob = initializer.initial_probability()
+        transition_prob = initializer.transition_probability()
 
         assert initial_prob.shape == (n_states,)
         assert transition_prob.shape == (n_states, n_states)
@@ -350,366 +341,24 @@ class TestKMeansInitialization:
         n_states = 5
         X, _, y, _, session_starts, _, _ = generate_kmeans_data(n_states)
 
-        initial_prob1 = kmeans_initial_proba_init(
+        initializer1 = KMeansInitializer(
             n_states, X, y, session_starts, random_key=jax.random.PRNGKey(1)
         )
-        transition_prob1 = kmeans_transition_proba_init(
-            n_states, X, y, session_starts, random_key=jax.random.PRNGKey(1)
-        )
+        initial_prob1 = initializer1.initial_probability()
+        transition_prob1 = initializer1.transition_probability()
 
-        initial_prob2 = kmeans_initial_proba_init(
+        initializer2 = KMeansInitializer(
             n_states, X, y, session_starts, random_key=jax.random.PRNGKey(2)
         )
-        transition_prob2 = kmeans_transition_proba_init(
-            n_states, X, y, session_starts, random_key=jax.random.PRNGKey(2)
-        )
+        initial_prob2 = initializer2.initial_probability()
+        transition_prob2 = initializer2.transition_probability()
 
         assert not jnp.allclose(initial_prob1, initial_prob2)
         assert not jnp.allclose(transition_prob1, transition_prob2)
 
-    def test_shared_initializer(self):
-        """Test that k-means initializer is used when specified in setup_hmm_initialization."""
-        n_states = 5
-        X, _, y, _, session_starts, _, _ = generate_kmeans_data(n_states)
-        default_initializer = KMeansInitializer(n_states, X, y, session_starts)
-
-        original_fit = sklearn.cluster.KMeans.fit
-        # use mock fit to assert that kmeans is only called once at initializer construction
-        with patch.object(
-            sklearn.cluster.KMeans, "fit", autospec=True, side_effect=original_fit
-        ) as mock_fit:
-            used_initializer = KMeansInitializer(
-                n_states, X, y, session_starts, random_key=jax.random.PRNGKey(2)
-            )
-            # initial probability
-            init_prob = kmeans_initial_proba_init(
-                n_states, X, y, session_starts, initializer=used_initializer
-            )
-            assert not jnp.allclose(
-                init_prob, default_initializer.initial_probability()
-            )
-            assert jnp.allclose(init_prob, used_initializer.initial_probability())
-            # transition probability
-            transition_prob = kmeans_transition_proba_init(
-                n_states, X, y, session_starts, initializer=used_initializer
-            )
-            assert not jnp.allclose(
-                transition_prob, default_initializer.transition_probability()
-            )
-            assert jnp.allclose(
-                transition_prob, used_initializer.transition_probability()
-            )
-            assert mock_fit.call_count == 1
-
-
-class TestSetupHMMInitialization:
-    """Test setup_hmm_initialization function for validating initialization protocols"""
-
-    @pytest.mark.parametrize(
-        "init_str, expectation, method",
-        [
-            ("uniform", does_not_raise(), uniform_initial_proba_init),
-            ("random", does_not_raise(), random_initial_proba_init),
-            ("kmeans", does_not_raise(), kmeans_initial_proba_init),
-            (None, does_not_raise(), DEFAULT_INIT_FUNCTIONS["initial_proba_init"]),
-            (
-                "invalid",
-                pytest.raises(ValueError, match="Invalid initialization"),
-                None,
-            ),
-            (
-                ["invalid"],
-                pytest.raises(TypeError, match="either a string or a callable"),
-                None,
-            ),
-        ],
-    )
-    def test_initial_proba_init_str(self, init_str, expectation, method):
-        with expectation:
-            init_funcs = setup_hmm_initialization(initial_proba_init=init_str)
-            # check that the correct function is set in init_funcs
-            assert init_funcs["initial_proba_init"] == method
-
-    @pytest.mark.parametrize(
-        "init_func, expectation",
-        [
-            (
-                lambda n_states, X, y, session_starts, random_key: (
-                    jnp.ones((n_states,)) / n_states
-                ),
-                does_not_raise(),
-            ),
-            (
-                lambda n_states: jnp.ones((n_states,)) / n_states,
-                pytest.raises(ValueError, match="must have the parameters"),
-            ),
-        ],
-    )
-    def test_initial_proba_init_custom(self, init_func, expectation):
-        with expectation:
-            init_funcs = setup_hmm_initialization(initial_proba_init=init_func)
-            # check that the correct function is set in init_funcs
-            assert init_funcs["initial_proba_init"] == init_func
-
-    @pytest.mark.parametrize(
-        "init_str, expectation, method",
-        [
-            ("sticky", does_not_raise(), sticky_transition_proba_init),
-            ("uniform", does_not_raise(), uniform_transition_proba_init),
-            ("random", does_not_raise(), random_transition_proba_init),
-            ("kmeans", does_not_raise(), kmeans_transition_proba_init),
-            (None, does_not_raise(), DEFAULT_INIT_FUNCTIONS["transition_proba_init"]),
-            (
-                "invalid",
-                pytest.raises(ValueError, match="Invalid initialization"),
-                None,
-            ),
-        ],
-    )
-    def test_transition_proba_init_str(self, init_str, expectation, method):
-        with expectation:
-            init_funcs = setup_hmm_initialization(transition_proba_init=init_str)
-            # check that the correct function is set in init_funcs
-            assert init_funcs["transition_proba_init"] == method
-
-    @pytest.mark.parametrize(
-        "init_func, expectation",
-        [
-            (
-                lambda n_states, X, y, session_starts, random_key: (
-                    jnp.ones((n_states, n_states)) / n_states
-                ),
-                does_not_raise(),
-            ),
-            (
-                lambda n_states: jnp.ones((n_states, n_states)) / n_states,
-                pytest.raises(ValueError, match="must have the parameters"),
-            ),
-        ],
-    )
-    def test_transition_proba_init_custom(self, init_func, expectation):
-        with expectation:
-            init_funcs = setup_hmm_initialization(transition_proba_init=init_func)
-            # check that the correct function is set in init_funcs
-            assert init_funcs["transition_proba_init"] == init_func
-
-    @pytest.mark.parametrize(
-        "key", ["initial_proba_init_kwargs", "transition_proba_init_kwargs"]
-    )
-    @pytest.mark.parametrize("kwargs", ["n_states", "X", "y", "random_key"])
-    def test_init_kwargs_reserved(self, key, kwargs):
-        with pytest.raises(
-            ValueError, match=f"Keyword argument '{kwargs}' is reserved"
-        ):
-            setup_hmm_initialization(**{key: {kwargs: 123}})
-
-    @pytest.fixture
-    def custom_init_func(self, init_func, key):
-        if init_func:
-            return lambda n_states, X, y, session_starts, random_key, extra_key=2: (
-                jnp.ones(
-                    shape=((n_states, n_states) if "transition" in key else (n_states,))
-                )
-                / n_states
-            )
-        else:
-            return None
-
-    @pytest.mark.parametrize(
-        "key", ["initial_proba_init_kwargs", "transition_proba_init_kwargs"]
-    )
-    @pytest.mark.parametrize(
-        "init_func, init_kwargs, expectation",
-        [
-            (0, {"prob_stay": 0.7}, "transition_only"),
-            (
-                0,
-                {"extra_key": 123},
-                pytest.raises(ValueError, match="Invalid keyword argument"),
-            ),
-            (
-                1,
-                {"extra_key": 123},
-                does_not_raise(),
-            ),
-            (
-                1,
-                {
-                    "extra_key": 123,
-                    "another_key": 456,
-                },
-                pytest.raises(ValueError, match="Invalid keyword argument"),
-            ),
-        ],
-    )
-    def test_init_kwargs(
-        self, key, init_func, custom_init_func, init_kwargs, expectation
-    ):
-        if expectation == "transition_only":
-            if key == "initial_proba_init_kwargs":
-                expectation = pytest.raises(
-                    ValueError, match="Invalid keyword argument"
-                )
-            else:
-                expectation = does_not_raise()
-        with expectation:
-            init_funcs = setup_hmm_initialization(
-                **{key[:-7]: custom_init_func, key: init_kwargs}
-            )
-            # check that the kwargs are set
-            assert init_funcs[key] == init_kwargs
-
-    @pytest.mark.parametrize(
-        "key1, value1, key2, value2",
-        [
-            (
-                "initial_proba_init",
-                "kmeans",
-                "initial_proba_init_kwargs",
-                {"minimum_prob": 0.1},
-            ),
-            (
-                "transition_proba_init",
-                "sticky",
-                "transition_proba_init_kwargs",
-                {"prob_stay": 0.7},
-            ),
-            (
-                "initial_proba_init",
-                lambda n_states, X, y, session_starts, random_key, extra_kwarg=1: (
-                    jnp.ones((n_states,)) / n_states
-                ),
-                "initial_proba_init_kwargs",
-                {"extra_kwarg": 2},
-            ),
-            (
-                "transition_proba_init",
-                lambda n_states, X, y, session_starts, random_key, extra_kwarg=1: (
-                    jnp.ones((n_states, n_states)) / n_states
-                ),
-                "transition_proba_init_kwargs",
-                {"extra_kwarg": 2},
-            ),
-            (
-                "transition_proba_init",
-                "random",
-                "initial_proba_init",
-                "random",
-            ),
-        ],
-    )
-    def test_update_init_funcs(self, key1, value1, key2, value2):
-        first_dict = setup_hmm_initialization(**{key1: value1})
-        second_dict = setup_hmm_initialization(**{key2: value2}, init_funcs=first_dict)
-        assert first_dict[key1] == second_dict[key1]
-        assert first_dict[key2] != second_dict[key2]
-
-    @pytest.mark.parametrize(
-        "key, value",
-        [
-            (
-                "initial_proba_init",
-                "random",
-            ),
-            (
-                "transition_proba_init",
-                "random",
-            ),
-            (
-                "initial_proba_init",
-                lambda n_states, X, y, session_starts, random_key: (
-                    jnp.ones((n_states,)) / n_states
-                ),
-            ),
-            (
-                "transition_proba_init",
-                lambda n_states, X, y, session_starts, random_key: (
-                    jnp.ones((n_states, n_states)) / n_states
-                ),
-            ),
-        ],
-    )
-    def test_reset_init_kwargs(self, key, value):
-        first_dict = setup_hmm_initialization(
-            **{key: "kmeans", key + "_kwargs": {"minimum_prob": 0.1}}
-        )
-        second_dict = setup_hmm_initialization(**{key: value}, init_funcs=first_dict)
-        assert first_dict[key + "_kwargs"] == {"minimum_prob": 0.1}
-        assert second_dict[key + "_kwargs"] == {}
-
-    def test_default_initialization(self):
-        """Test that default initialization functions are set correctly."""
-        # I'm putting this at the end to make sure that the default dictionary is not modified by other tests
-        init_funcs = setup_hmm_initialization()
-        assert init_funcs == DEFAULT_INIT_FUNCTIONS
-
-    @pytest.mark.parametrize("n_states", [2, 3, 5])
-    @pytest.mark.parametrize(
-        "init_key, kwargs_key, wrong_alphas_factory",
-        [
-            # initial proba expects (n_states,); pass 2D → wrong
-            (
-                "initial_proba_init",
-                "initial_proba_init_kwargs",
-                lambda n: jnp.ones((n, n)),
-            ),
-            # transition proba expects (n_states, n_states); pass 1D → wrong
-            (
-                "transition_proba_init",
-                "transition_proba_init_kwargs",
-                lambda n: jnp.ones(n),
-            ),
-        ],
-    )
-    def test_alphas_wrong_shape_via_setup(
-        self, n_states, init_key, kwargs_key, wrong_alphas_factory
-    ):
-        """Wrong alphas shape in init_kwargs raises ValueError through setup_hmm_initialization."""
-        with pytest.raises(ValueError, match="must have shape"):
-            setup_hmm_initialization(
-                **{
-                    init_key: "dirichlet",
-                    kwargs_key: {"alphas": wrong_alphas_factory(n_states)},
-                },
-                n_states=n_states,
-            )
-
-    @pytest.mark.parametrize("n_states", [2, 3])
-    def test_alphas_correct_shape_via_setup(self, n_states):
-        """Correctly shaped alphas accepted without error through setup_hmm_initialization."""
-        init_funcs = setup_hmm_initialization(
-            initial_proba_init="dirichlet",
-            initial_proba_init_kwargs={"alphas": jnp.ones(n_states)},
-            transition_proba_init="dirichlet",
-            transition_proba_init_kwargs={"alphas": jnp.ones((n_states, n_states))},
-            n_states=n_states,
-        )
-        assert init_funcs["initial_proba_init_kwargs"]["alphas"].shape == (n_states,)
-        assert init_funcs["transition_proba_init_kwargs"]["alphas"].shape == (
-            n_states,
-            n_states,
-        )
-
 
 class TestGenerateHMMInitParams:
     """Test generate_hmm_initial_params function"""
-
-    def test_init_funcs_none_values(self):
-        """Test that None values in init_funcs are replaced by defaults."""
-        init_funcs = {
-            "initial_proba_init": None,
-            "initial_proba_init_kwargs": None,
-            "transition_proba_init": None,
-            "transition_proba_init_kwargs": None,
-        }
-        result1 = generate_hmm_initial_params(
-            n_states=3, X=None, y=None, session_starts=None, init_funcs=init_funcs
-        )
-        result2 = generate_hmm_initial_params(
-            n_states=3, X=None, y=None, session_starts=None
-        )
-        for k in result2:
-            assert jnp.allclose(result1[k], result2[k])
 
     @pytest.mark.parametrize("n_states", [1, 2, 3, 5])
     def test_output_shapes_and_types(self, n_states):

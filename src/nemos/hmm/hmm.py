@@ -29,7 +29,6 @@ from ..typing import (
     DESIGN_INPUT_TYPE,
 )
 from .initialize_parameters import (
-    KMeansInitializer,
     _resolve_dirichlet_priors,
     generate_hmm_initial_params,
 )
@@ -123,7 +122,6 @@ class BaseHMM(
     """
 
     _validator_class: type[HMMValidatorT]
-    _kmeans_init_class = KMeansInitializer
 
     def __init__(
         self,

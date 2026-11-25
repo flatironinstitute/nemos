@@ -1,7 +1,6 @@
 """Tests for glm_hmm/initialize_parameters.py"""
 
 from contextlib import nullcontext as does_not_raise
-from unittest.mock import create_autospec
 
 import jax
 import jax.numpy as jnp
@@ -14,136 +13,13 @@ from nemos._observation_model_builder import (
 )
 from nemos.glm import GLM
 from nemos.glm_hmm.initialize_parameters import (
-    DEFAULT_INIT_FUNCTIONS_GLMHMM,
     KMeansInitializerGLM,
     constant_parameter_init,
     generate_glm_hmm_initial_model_params,
-    kmeans_glm_params_init,
-    kmeans_scale_init,
     random_glm_params_init,
-    setup_glm_hmm_initialization,
 )
 from nemos.inverse_link_function_utils import resolve_inverse_link_function
 from nemos.observation_models import BernoulliObservations, PoissonObservations
-
-# =============================================================================
-# Mock infrastructure
-# =============================================================================
-
-
-# GLM-type templates: 7 mandatory params
-# (n_states, X, y, inverse_link_function, observation_model, session_starts, random_key)
-def _glm_template_no_extra(
-    n_states,
-    X,
-    y,
-    inverse_link_function,
-    observation_model,
-    session_starts,
-    random_key,
-):
-    pass
-
-
-def _glm_template_one_extra(
-    n_states,
-    X,
-    y,
-    inverse_link_function,
-    observation_model,
-    session_starts,
-    random_key,
-    param1=None,
-):
-    pass
-
-
-def _glm_template_two_extra(
-    n_states,
-    X,
-    y,
-    inverse_link_function,
-    observation_model,
-    session_starts,
-    random_key,
-    param1=None,
-    param2=None,
-):
-    pass
-
-
-def _glm_template_special(
-    n_states,
-    X,
-    y,
-    inverse_link_function,
-    observation_model,
-    session_starts,
-    random_key,
-    my_special_param=None,
-):
-    pass
-
-
-# HMM-type templates: 5 mandatory params
-# (n_states, X, y, session_starts, random_key)
-def _hmm_template_no_extra(n_states, X, y, session_starts, random_key):
-    pass
-
-
-def _hmm_template_one_extra(n_states, X, y, session_starts, random_key, param1=None):
-    pass
-
-
-def _hmm_template_two_extra(
-    n_states, X, y, session_starts, random_key, param1=None, param2=None
-):
-    pass
-
-
-def _hmm_template_special(
-    n_states, X, y, session_starts, random_key, my_special_param=None
-):
-    pass
-
-
-_GLM_TEMPLATES = {
-    "no_extra": _glm_template_no_extra,
-    "one_extra": _glm_template_one_extra,
-    "two_extra": _glm_template_two_extra,
-    "special": _glm_template_special,
-}
-_HMM_TEMPLATES = {
-    "no_extra": _hmm_template_no_extra,
-    "one_extra": _hmm_template_one_extra,
-    "two_extra": _hmm_template_two_extra,
-    "special": _hmm_template_special,
-}
-
-_GLM_FUNC_NAMES = {"glm_params_init", "scale_init"}
-_ALL_FUNC_NAMES = [
-    "glm_params_init",
-    "scale_init",
-    "initial_proba_init",
-    "transition_proba_init",
-]
-
-MOCK_VALID_KWARGS = {
-    "one_extra": {"param1": 0.5},
-    "two_extra": {"param1": 0.5, "param2": 0.5},
-}
-
-
-def _get_mock(func_name, template_type):
-    """Get a mock with the correct signature for the given function name."""
-    templates = _GLM_TEMPLATES if func_name in _GLM_FUNC_NAMES else _HMM_TEMPLATES
-    return create_autospec(templates[template_type], return_value=None)
-
-
-def _get_mock_registry(template_type="one_extra"):
-    """Get a mock registry where all functions share the same template type."""
-    return {fn: _get_mock(fn, template_type) for fn in _ALL_FUNC_NAMES}
-
 
 # =============================================================================
 # Tests for random_glm_params_init
@@ -488,21 +364,6 @@ class TestKMeansInitializerGLM:
         scale = initializer.scale()
         assert scale.shape == expected_shape
 
-    def test_shared_initializer(self, kmeans_mock):
-        """Providing a pre-built initializer skips creating a new one."""
-        n_states, X, y, _, _ = kmeans_mock
-        initializer = KMeansInitializerGLM(
-            n_states, X, y, jnp.exp, "Poisson", random_key=7
-        )
-        result = kmeans_glm_params_init(
-            n_states, X, y, jnp.exp, "Poisson", initializer=initializer
-        )
-        expected = initializer.glm_params()
-        coef_r, int_r = result
-        coef_e, int_e = expected
-        assert jnp.allclose(coef_r, coef_e)
-        assert jnp.allclose(int_r, int_e)
-
     def test_empty_state_raises(self, kmeans_mock):
         """fit() raises when KMeans leaves a state with zero assigned samples."""
         n_states, X, y, _, _ = kmeans_mock
@@ -514,21 +375,6 @@ class TestKMeansInitializerGLM:
         initializer.states = jax.nn.one_hot(labels, num_classes=n_states)
         with pytest.raises(ValueError, match="0 samples to state"):
             initializer.fit()
-
-    def test_kmeans_glm_params_init_constructs_default_initializer(self, kmeans_mock):
-        """initializer=None, random_key=None hits the construction branch in
-        ``kmeans_glm_params_init`` (lines 285-298)."""
-        n_states, X, y, n_features, _ = kmeans_mock
-        coef, intercept = kmeans_glm_params_init(n_states, X, y, jnp.exp, "Poisson")
-        assert coef.shape == (n_features, n_states)
-        assert intercept.shape == (n_states,)
-
-    def test_kmeans_scale_init_constructs_default_initializer(self, kmeans_mock):
-        """initializer=None, random_key=None hits the construction branch in
-        ``kmeans_scale_init`` (lines 342-354)."""
-        n_states, X, y, _, expected_shape = kmeans_mock
-        scale = kmeans_scale_init(n_states, X, y, jnp.exp, "Poisson")
-        assert scale.shape == expected_shape
 
     def test_unwraps_feature_pytree_x(self, kmeans_mock):
         """FeaturePytree X is unwrapped to its underlying dict at __init__ (line 158-159)."""
@@ -592,189 +438,6 @@ class TestKMeansInitializerGLM:
 
 
 # =============================================================================
-# Tests for setup_glm_hmm_initialization
-# =============================================================================
-
-
-class TestSetupGLMHMMInitialization:
-    """Test setup_glm_hmm_initialization for GLM-specific initialization functions."""
-
-    @pytest.mark.parametrize(
-        "init_str, expectation, method",
-        [
-            ("random", does_not_raise(), random_glm_params_init),
-            ("kmeans", does_not_raise(), kmeans_glm_params_init),
-            (None, does_not_raise(), DEFAULT_INIT_FUNCTIONS_GLMHMM["glm_params_init"]),
-            (
-                "sticky",
-                pytest.raises(ValueError, match="Invalid initialization"),
-                None,
-            ),
-            (
-                ["invalid"],
-                pytest.raises(TypeError, match="either a string or a callable"),
-                None,
-            ),
-        ],
-    )
-    def test_glm_params_init_str(self, init_str, expectation, method):
-        with expectation:
-            init_funcs = setup_glm_hmm_initialization(glm_params_init=init_str)
-            assert init_funcs["glm_params_init"] == method
-
-    @pytest.mark.parametrize(
-        "init_str, expectation, method",
-        [
-            ("constant", does_not_raise(), constant_parameter_init),
-            ("kmeans", does_not_raise(), kmeans_scale_init),
-            (None, does_not_raise(), DEFAULT_INIT_FUNCTIONS_GLMHMM["scale_init"]),
-            (
-                "sticky",
-                pytest.raises(ValueError, match="Invalid initialization"),
-                None,
-            ),
-        ],
-    )
-    def test_scale_init_str(self, init_str, expectation, method):
-        with expectation:
-            init_funcs = setup_glm_hmm_initialization(scale_init=init_str)
-            assert init_funcs["scale_init"] == method
-
-    @pytest.mark.parametrize(
-        "init_func, expectation",
-        [
-            (
-                lambda n_states, X, y, inverse_link_function, observation_model, session_starts, random_key: (
-                    jnp.zeros((1, n_states)),
-                    jnp.zeros(n_states),
-                ),
-                does_not_raise(),
-            ),
-            (
-                lambda n_states: (jnp.zeros((1, n_states)), jnp.zeros(n_states)),
-                pytest.raises(ValueError, match="must have the parameters"),
-            ),
-        ],
-    )
-    def test_glm_params_init_custom(self, init_func, expectation):
-        with expectation:
-            init_funcs = setup_glm_hmm_initialization(glm_params_init=init_func)
-            assert init_funcs["glm_params_init"] == init_func
-
-    @pytest.mark.parametrize(
-        "init_func, expectation",
-        [
-            (
-                lambda n_states, X, y, inverse_link_function, observation_model, session_starts, random_key: (
-                    jnp.ones(n_states)
-                ),
-                does_not_raise(),
-            ),
-            (
-                lambda n_states: jnp.ones(n_states),
-                pytest.raises(ValueError, match="must have the parameters"),
-            ),
-        ],
-    )
-    def test_scale_init_custom(self, init_func, expectation):
-        with expectation:
-            init_funcs = setup_glm_hmm_initialization(scale_init=init_func)
-            assert init_funcs["scale_init"] == init_func
-
-    @pytest.mark.parametrize(
-        "kwarg_name",
-        ["n_states", "X", "y", "inverse_link_function", "session_starts", "random_key"],
-    )
-    def test_glm_params_init_kwargs_reserved(self, kwarg_name):
-        with pytest.raises(
-            ValueError, match=f"Keyword argument '{kwarg_name}' is reserved"
-        ):
-            setup_glm_hmm_initialization(glm_params_init_kwargs={kwarg_name: 123})
-
-    @pytest.mark.parametrize(
-        "kwarg_name",
-        ["n_states", "X", "y", "inverse_link_function", "session_starts", "random_key"],
-    )
-    def test_scale_init_kwargs_reserved(self, kwarg_name):
-        with pytest.raises(
-            ValueError, match=f"Keyword argument '{kwarg_name}' is reserved"
-        ):
-            setup_glm_hmm_initialization(scale_init_kwargs={kwarg_name: 123})
-
-    @pytest.mark.parametrize(
-        "key, init_str, kwargs_key, kwargs_val",
-        [
-            (
-                "glm_params_init",
-                "random",
-                "glm_params_init_kwargs",
-                {"std_dev": 0.01},
-            ),
-            (
-                "scale_init",
-                "constant",
-                "scale_init_kwargs",
-                {"fill_value": 2.0},
-            ),
-        ],
-    )
-    def test_reset_kwargs_when_func_changes(
-        self, key, init_str, kwargs_key, kwargs_val
-    ):
-        """Providing a new init function resets its kwargs to {}."""
-        first = setup_glm_hmm_initialization(**{key: init_str, kwargs_key: kwargs_val})
-        second = setup_glm_hmm_initialization(
-            **{key: init_str},
-            init_funcs={
-                k: v for k, v in first.items() if k in DEFAULT_INIT_FUNCTIONS_GLMHMM
-            },
-        )
-        assert first[kwargs_key] == kwargs_val
-        assert second[kwargs_key] == {}
-
-    def test_default_initialization(self):
-        """No-arg call returns DEFAULT_INIT_FUNCTIONS_GLMHMM."""
-        init_funcs = setup_glm_hmm_initialization()
-        assert init_funcs == DEFAULT_INIT_FUNCTIONS_GLMHMM
-
-
-@pytest.mark.parametrize(
-    "func_name",
-    ["glm_params_init", "scale_init"],
-)
-class TestSetupGLMHMMInitializationKwargs:
-    """Test kwargs validation in setup_glm_hmm_initialization via mock registries."""
-
-    def test_none_returns_empty_kwargs(self, func_name, recwarn):
-        mock_registry = _get_mock_registry("one_extra")
-        init_funcs = setup_glm_hmm_initialization(
-            **{func_name: mock_registry[func_name]}
-        )
-        assert init_funcs[func_name + "_kwargs"] == {}
-
-    @pytest.mark.parametrize(
-        "template_type, extra_kwargs",
-        [
-            ("one_extra", {"param1": 0.5}),
-            ("two_extra", {"param1": 0.5, "param2": 0.5}),
-        ],
-    )
-    def test_valid_kwargs_accepted(self, func_name, template_type, extra_kwargs):
-        mock_func = _get_mock(func_name, template_type)
-        init_funcs = setup_glm_hmm_initialization(
-            **{func_name: mock_func, func_name + "_kwargs": extra_kwargs}
-        )
-        assert init_funcs[func_name + "_kwargs"] == extra_kwargs
-
-    def test_invalid_kwarg_raises(self, func_name):
-        mock_func = _get_mock(func_name, "one_extra")
-        with pytest.raises(ValueError, match="Invalid keyword argument"):
-            setup_glm_hmm_initialization(
-                **{func_name: mock_func, func_name + "_kwargs": {"invalid_param": 0.5}}
-            )
-
-
-# =============================================================================
 # Tests for generate_glm_hmm_initial_model_params
 # =============================================================================
 
@@ -827,24 +490,6 @@ class TestGenerateGLMHMMInitialParams:
         assert isinstance(result, dict)
         # coef, intercept + extras for the obs model
         assert len(result) == 2 + len([k for k in obs.extra_params])
-
-    @pytest.mark.parametrize(
-        "init_funcs, expectation",
-        [
-            ({}, does_not_raise()),
-            ({"glm_params_init": random_glm_params_init}, does_not_raise()),
-        ],
-    )
-    def test_init_funcs_key_validation(self, init_funcs, expectation):
-        with expectation:
-            generate_glm_hmm_initial_model_params(
-                3,
-                jnp.ones((10, 5)),
-                jnp.ones(10),
-                lambda x: x,
-                PoissonObservations(),
-                init_funcs=init_funcs,
-            )
 
     @pytest.mark.parametrize("obs_model", AVAILABLE_OBSERVATION_MODELS)
     def test_none_init_funcs_uses_defaults(self, obs_model):

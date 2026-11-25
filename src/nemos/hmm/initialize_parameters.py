@@ -1,8 +1,7 @@
 """Initialization functions and related utility functions for HMMs."""
 
-import inspect
 from types import MappingProxyType
-from typing import Any, Callable, Literal, Optional, Protocol, Tuple
+from typing import Any, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -11,56 +10,10 @@ from numpy.typing import NDArray
 
 from ..type_casting import is_numpy_array_like
 from ..typing import DESIGN_INPUT_TYPE
-from ..utils import _get_name
-from ..validation import _suggest_keys
 from .params import HMMUserParams
 from .utils import initialize_session_starts
 
 sklearn = lazy.load("sklearn")
-
-
-class InitFunctionHMM(Protocol):
-    """Protocol for HMM probability initialization functions (initial and transition)."""
-
-    def __call__(
-        self,
-        n_states: int,
-        X: DESIGN_INPUT_TYPE,
-        y: NDArray | jnp.ndarray,
-        session_starts: NDArray | jnp.ndarray,
-        random_key: jax.Array,
-        **kwargs: Any,
-    ) -> jnp.ndarray:
-        """Initialize HMM probabilities."""
-        ...
-
-
-def _get_protocol_parameters(protocol) -> set[str]:
-    """Get the required parameters for the initialization function based on the protocol."""
-    protocol_sig = inspect.signature(protocol.__call__)
-    return {
-        name
-        for name, param in protocol_sig.parameters.items()
-        if name != "self"
-        and param.kind
-        not in (
-            inspect.Parameter.VAR_POSITIONAL,
-            inspect.Parameter.VAR_KEYWORD,
-        )
-    }
-
-
-HMM_INITIALIZATION_FN_DICT = dict[
-    Literal[
-        "initial_proba_init",
-        "initial_proba_init_kwargs",
-        "initial_proba_init_custom",
-        "transition_proba_init",
-        "transition_proba_init_kwargs",
-        "transition_proba_init_custom",
-    ],
-    InitFunctionHMM | dict[str, Any] | bool,
-]
 
 
 def sticky_transition_proba_init(
@@ -523,474 +476,12 @@ class KMeansInitializer:
         return transition_matrix / transition_matrix.sum(axis=1, keepdims=True)
 
 
-def kmeans_initial_proba_init(
-    n_states: int,
-    X: DESIGN_INPUT_TYPE,
-    y: NDArray | jnp.ndarray,
-    session_starts: Optional[jnp.ndarray] = None,
-    minimum_prob: float = 0.02,
-    random_key: jax.random.PRNGKey = jax.random.PRNGKey(123),
-    initializer: Optional[KMeansInitializer] = None,
-):
-    """
-    Initialize initial state probabilities using KMeans clustering.
-
-    This function creates an instance of the KMeansInitializer class (if not provided) and uses it to compute the
-    initial state probabilities based on the assigned states from KMeans clustering.
-
-    Parameters
-    ----------
-    n_states :
-        Number of HMM states.
-    X :
-        Predictor data (e.g., model design for GLM) of shape (n_samples, n_features).
-    y :
-        Output data (e.g., neural activity) of shape (n_samples,).
-    session_starts :
-        Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
-        (default), it is assumed that all data belongs to a single session.
-    minimum_prob :
-        Minimum probability added to each state to avoid zero probabilities.
-        Note that probabilities will be renormalized after adding this minimum value, so the final
-        probabilities will not be exactly this value.
-    random_key :
-        Random key for reproducibility of KMeans initialization.
-    initializer :
-        Optional instance of KMeansInitializer to use for computing initial probabilities.
-
-    Returns
-    -------
-    initial_probs :
-        Initial state probability vector of shape (n_states,) that sums to 1.
-    """
-    if initializer is None:
-        initializer = KMeansInitializer(n_states, X, y, session_starts, random_key)
-    return initializer.initial_probability(minimum_prob=minimum_prob)
-
-
-def kmeans_transition_proba_init(
-    n_states: int,
-    X: DESIGN_INPUT_TYPE,
-    y: NDArray | jnp.ndarray,
-    session_starts: Optional[jnp.ndarray] = None,
-    minimum_prob: float = 0.02,
-    random_key: jax.Array = jax.random.PRNGKey(123),
-    initializer: Optional[KMeansInitializer] = None,
-):
-    """
-    Initialize transition probabilities using KMeans clustering.
-
-    This function creates an instance of the KMeansInitializer class (if not provided) and uses it to compute the
-    transition probabilities based on the assigned states from KMeans clustering.
-
-    Parameters
-    ----------
-    n_states :
-        Number of HMM states.
-    X :
-        Predictor data (e.g., model design for GLM) of shape (n_samples, n_features).
-    y :
-        Output data (e.g., neural activity) of shape (n_samples,).
-    session_starts :
-        Optional boolean array of shape (n_samples,) indicating the start of new sessions. If None
-        (default), it is assumed that all data belongs to a single session.
-    minimum_prob :
-        Minimum probability added to each state to avoid zero probabilities.
-        Note that probabilities will be renormalized after adding this minimum value, so the final
-        probabilities will not be exactly this value.
-    random_key :
-        Random key for reproducibility of KMeans initialization.
-    initializer :
-        Optional instance of KMeansInitializer to use for computing initial probabilities.
-
-    Returns
-    -------
-    transition_matrix :
-        Transition probability matrix of shape (n_states, n_states) computed from KMeans assigned states.
-    """
-    if initializer is None:
-        initializer = KMeansInitializer(n_states, X, y, session_starts, random_key)
-    return initializer.transition_probability(minimum_prob=minimum_prob)
-
-
-AVAILABLE_INIT_FUNCTIONS = MappingProxyType(
-    {
-        "initial_proba_init": MappingProxyType(
-            {
-                "uniform": uniform_initial_proba_init,
-                "random": random_initial_proba_init,
-                "dirichlet": dirichlet_initial_proba_init,
-                "kmeans": kmeans_initial_proba_init,
-            }
-        ),
-        "transition_proba_init": MappingProxyType(
-            {
-                "sticky": sticky_transition_proba_init,
-                "uniform": uniform_transition_proba_init,
-                "random": random_transition_proba_init,
-                "dirichlet": dirichlet_transition_proba_init,
-                "kmeans": kmeans_transition_proba_init,
-            }
-        ),
-    }
-)
-
-DEFAULT_INIT_FUNCTIONS: HMM_INITIALIZATION_FN_DICT = MappingProxyType(
+DEFAULT_INIT_FUNCTIONS = MappingProxyType(
     {
         "initial_proba_init": uniform_initial_proba_init,
-        "initial_proba_init_kwargs": {},
-        "initial_proba_init_custom": False,
         "transition_proba_init": sticky_transition_proba_init,
-        "transition_proba_init_kwargs": {},
-        "transition_proba_init_custom": False,
     }
 )
-
-
-def setup_hmm_initialization(
-    initial_proba_init: Optional[str | Callable] = None,
-    initial_proba_init_kwargs: Optional[dict] = None,
-    transition_proba_init: Optional[str | Callable] = None,
-    transition_proba_init_kwargs: Optional[dict] = None,
-    init_funcs: Optional[dict | HMM_INITIALIZATION_FN_DICT] = None,
-    n_states: Optional[int] = None,
-) -> HMM_INITIALIZATION_FN_DICT:
-    """
-    Set up HMM initialization functions based on user input, merging with defaults.
-
-    This function takes user-specified initialization functions (either as strings for built-in functions or callables
-    for custom functions) for both initial state probabilities and transition probabilities, and merges
-    them with default initialization functions for ones that are not provided. It ensures that the provided functions
-    and kwargs are valid and conform to expected signatures.
-    The function assumes that the function keys are pre-validated, this is convenient because
-    different model require different keys.
-
-    Custom callables must satisfy the ``typing.Protocol`` class:
-    - ``initial_proba_init`` and ``transition_proba_init`` must satisfy
-    :class:`~nemos.hmm.initialize_parameters.InitFunctionHMM` and return a
-    ``jnp.ndarray`` of shape ``(n_states,)`` or ``(n_states, n_states)``
-    respectively.
-
-    To inspect a protocol's signature, import and ``help()`` it::
-
-        from nemos.hmm.initialize_parameters import InitFunctionHMM
-        from nemos.glm_hmm.initialize_parameters import InitFunctionGLM
-
-        help(InitFunctionHMM)  # or help(InitFunctionGLM)
-
-    All arguments must appear in the function signature even when unused, so the
-    framework can supply them uniformly.
-
-    An example of a custom initialization function for initial probabilities could be:
-    ```
-    def custom_initial_proba_init(
-        n_states, X, y, session_starts, random_key, min_prob=0.05
-    ):
-        init_prob = jax.random.uniform(random_key, (n_states,), dtype=float)
-        init_prob = init_prob / init_prob.sum()  # normalize to sum to 1
-        init_prob = jnp.clip(init_prob, a_min=min_prob)  # enforce minimum probability
-        return init_prob / init_prob.sum()  # renormalize after clipping
-    ```
-
-    Parameters
-    ----------
-    initial_proba_init :
-        User-specified initialization function for initial state probabilities. Can be a string key for built-in
-        functions or a custom callable. If None, the default build-in function will be used.
-    initial_proba_init_kwargs :
-        Keyword arguments to pass to the initial state probability initialization function.
-    transition_proba_init :
-        User-specified initialization function for transition probabilities. Can be a string key for built-in functions
-        or a custom callable. If None, the default built-in function will be used.
-    transition_proba_init_kwargs :
-        Keyword arguments to pass to the transition probability initialization function.
-    init_funcs :
-        Existing dictionary of initialization functions to update. If None, a fresh copy of
-        ``default_init_dict`` is used. Keys must already be validated before calling this function;
-        use :func:`_validate_init_funcs_keys` upstream (e.g., in the class setter).
-    n_states :
-        Number of HMM states. When provided, ``alphas`` in the init kwargs is validated
-        via :func:`_resolve_dirichlet_priors` (same check as the model property setter).
-
-    Returns
-    -------
-    init_funcs :
-        Updated dictionary of initialization functions based on provided inputs.
-    """
-    if init_funcs is None:
-        init_funcs = DEFAULT_INIT_FUNCTIONS.copy()
-    else:
-        init_funcs = init_funcs.copy()
-
-    # Resolve string-valued slots (written by save_params) back to callables and
-    # set *_custom = False so the validate-params guard treats them as built-ins.
-    _resolve_existing_slots(
-        init_funcs,
-        ("initial_proba_init", "transition_proba_init"),
-        AVAILABLE_INIT_FUNCTIONS,
-        InitFunctionHMM,
-    )
-
-    # update functions and kwargs for init prob and transition prob
-    # if a function is passed but not kwargs, kwargs will be reset
-    # if kwargs are passed but not function, kwargs will be validated against existing function in init_funcs
-    if initial_proba_init is not None:
-        (
-            init_funcs["initial_proba_init"],
-            init_funcs["initial_proba_init_kwargs"],
-            init_funcs["initial_proba_init_custom"],
-        ) = _resolve_init_funcs(
-            "initial_proba_init", initial_proba_init, initial_proba_init_kwargs
-        )
-    elif initial_proba_init_kwargs is not None:
-        init_funcs["initial_proba_init_kwargs"] = _validate_init_funcs_kwargs(
-            init_funcs["initial_proba_init"], initial_proba_init_kwargs
-        )
-    if n_states is not None and "alphas" in init_funcs["initial_proba_init_kwargs"]:
-        init_funcs["initial_proba_init_kwargs"]["alphas"] = _resolve_dirichlet_priors(
-            init_funcs["initial_proba_init_kwargs"]["alphas"], (n_states,)
-        )
-    if transition_proba_init is not None:
-        (
-            init_funcs["transition_proba_init"],
-            init_funcs["transition_proba_init_kwargs"],
-            init_funcs["transition_proba_init_custom"],
-        ) = _resolve_init_funcs(
-            "transition_proba_init", transition_proba_init, transition_proba_init_kwargs
-        )
-    elif transition_proba_init_kwargs is not None:
-        init_funcs["transition_proba_init_kwargs"] = _validate_init_funcs_kwargs(
-            init_funcs["transition_proba_init"], transition_proba_init_kwargs
-        )
-    if n_states is not None and "alphas" in init_funcs["transition_proba_init_kwargs"]:
-        init_funcs["transition_proba_init_kwargs"]["alphas"] = (
-            _resolve_dirichlet_priors(
-                init_funcs["transition_proba_init_kwargs"]["alphas"],
-                (n_states, n_states),
-            )
-        )
-
-    return init_funcs
-
-
-def _validate_init_funcs_keys(
-    init_funcs: dict | HMM_INITIALIZATION_FN_DICT | None,
-    default_init_dict: Optional[dict[str, Callable]] = None,
-) -> HMM_INITIALIZATION_FN_DICT | None:
-    """Validate that the keys in the init_funcs dictionary are as expected. Set missing values to defaults."""
-    if default_init_dict is None:
-        default_init_dict = DEFAULT_INIT_FUNCTIONS.copy()
-    if init_funcs is None:
-        return default_init_dict
-    unexpected_keys = init_funcs.keys() - default_init_dict.keys()
-    if unexpected_keys:
-        suggested_keys = _suggest_keys(unexpected_keys, default_init_dict.keys())
-        error_msg = (
-            (
-                f" Unexpected key: '{key}'. Did you mean '{suggestion}'?"
-                if suggestion
-                else f" Unknown key: '{key}'"
-            )
-            for key, suggestion in suggested_keys
-        )
-        raise KeyError(
-            "Unexpected or unknown keys found in 'init_funcs' dictionary. \n"
-            + "\n".join(error_msg)
-        )
-    # resolve with defaults and make copy
-    init_funcs = default_init_dict | init_funcs
-    return init_funcs
-
-
-def _resolution_was_noop(value: dict, resolved: dict) -> bool:
-    """Check that resolving ``value`` left keys and value identities unchanged.
-
-    Used by the ``*_initialization_funcs`` setters to keep the caller's dict when
-    resolution changed nothing, so sklearn clone's identity round-trip
-    (``get_params -> __init__ -> get_params``) holds.
-    """
-    return value.keys() == resolved.keys() and all(
-        value[k] is resolved[k] for k in value
-    )
-
-
-def _resolve_existing_slots(
-    init_funcs: dict,
-    slot_keys: Tuple[str, ...],
-    available_init_funcs: dict,
-    protocol,
-) -> None:
-    """Resolve string-valued slots against the registry in place.
-
-    This function exists primarily to support the IO round-trip: ``save_params``
-    serialises built-in callables as their fully-qualified name strings. When
-    ``load_model`` reconstructs the init-funcs dict and feeds it back through the
-    setup path, those string slots must be converted back to callables before any
-    new user-provided values are applied. Crucially, resolving a string always sets
-    ``*_custom = False``, which prevents the validate-params guard from treating a
-    built-in initializer as a custom one that requires extra validation.
-
-    Callable slots are left untouched so direct constructor-dict assignment remains
-    a lenient pass-through.
-    """
-    for slot in slot_keys:
-        value = init_funcs.get(slot)
-        if not isinstance(value, str):
-            continue
-        resolved, resolved_kwargs, is_custom = _resolve_init_funcs(
-            slot,
-            value,
-            init_funcs.get(f"{slot}_kwargs"),
-            available_init_funcs,
-            protocol,
-        )
-        init_funcs[slot] = resolved
-        init_funcs[f"{slot}_kwargs"] = resolved_kwargs
-        init_funcs[f"{slot}_custom"] = is_custom
-
-
-def _resolve_init_funcs(
-    key: str,
-    value: str | Callable,
-    kwargs: Optional[dict] = None,
-    available_init_funcs: dict[str, Callable] = None,
-    protocol=InitFunctionHMM,
-) -> Tuple[InitFunctionHMM, dict, bool]:
-    """
-    Validate a provided initialization function.
-
-    This function checks if the provided value is a valid string key for a built-in initialization function or
-    validates the function if it is a custom callable.
-
-    Parameters
-    ----------
-    key :
-        The name of the parameter being initialized (e.g., 'initial_proba_init' or 'transition_proba_init').
-    value :
-        The user-provided initialization function, either as a string key for built-in functions or as a custom
-        callable.
-    kwargs :
-        Optional keyword arguments to pass to the initialization function.
-    available_init_funcs:
-        Dictionary of available initialization functions and their kwargs (if any) to be used for initialization.
-    protocol :
-        The protocol that the custom function should conform to. This is used to check the required parameters in the
-        function signature.
-
-    Returns
-    -------
-    :
-        Validated initialization function and its kwargs (if any) to be used for HMM parameter initialization.
-
-    Raises
-    ------
-    ValueError
-        If the provided string key does not correspond to a valid built-in function or if the custom function does not
-        have the expected signature.
-    TypeError
-        If the provided value is neither a string nor a callable function.
-    """
-    if available_init_funcs is None:
-        available_init_funcs = AVAILABLE_INIT_FUNCTIONS
-    if isinstance(value, str):
-        resolved = available_init_funcs[key].get(value)
-        if resolved is None:
-            # fall back to matching by fully-qualified name; this is what
-            # save_params writes for native init funcs.
-            for fn in available_init_funcs[key].values():
-                if _get_name(fn) == value:
-                    resolved = fn
-                    break
-        if resolved is None:
-            raise ValueError(
-                f"Invalid initialization function name '{value}' for '{key}'. "
-                f"Available options are: {list(available_init_funcs[key].keys())}."
-            )
-        kwargs = _validate_init_funcs_kwargs(resolved, kwargs, protocol)
-        return resolved, kwargs, False
-    elif callable(value):
-        return _validate_custom_init_func(value, kwargs, protocol)
-    else:
-        raise TypeError(
-            f"Initialization function for '{key}' must be either a string or a callable. "
-            f"Got {type(value)} instead."
-        )
-
-
-def _validate_init_funcs_kwargs(
-    func: InitFunctionHMM, kwargs: dict | None, protocol=InitFunctionHMM
-) -> dict:
-    """Validate that the provided kwargs match the expected signature of the initialization functions."""
-    if kwargs is None:
-        return {}
-
-    reserved_params = _get_protocol_parameters(protocol)
-    for key in reserved_params:
-        if key in kwargs:
-            raise ValueError(
-                f"Keyword argument '{key}' is reserved and should not be provided in kwargs for initialization "
-                "functions."
-            )
-
-    sig = inspect.signature(func)
-    bads = kwargs.keys() - sig.parameters.keys()
-    if bads:
-        raise ValueError(
-            f"Invalid keyword argument for initialization function '{func.__name__}'. "
-            f"Unexpected keys: {sorted(bads)}. "
-            f"Expected parameters are: {sorted(sig.parameters.keys())}."
-        )
-    return kwargs
-
-
-def _validate_custom_init_func(
-    func: Callable,
-    kwargs: Optional[dict] = None,
-    protocol=InitFunctionHMM,
-) -> Tuple[InitFunctionHMM, dict, bool]:
-    """
-    Validate a custom initialization function against the expected signature.
-
-    Checks that the provided function is callable and has the required input parameters (n_states, seed) and correct
-    output shape.
-
-    Parameters
-    ----------
-    func :
-        The user-provided initialization function to validate.
-    kwargs :
-        Optional keyword arguments to pass to the initialization function.
-    protocol :
-        The protocol that the custom function should conform to. This is used to check the required parameters in the
-        function signature.
-
-    Returns
-    -------
-    func :
-        The validated initialization function.
-    kwargs :
-        The validated kwargs to be passed to the initialization function.
-    is_custom :
-        A boolean indicating that this is a custom initialization function (always True for this function).
-
-    Raises
-    ------
-    ValueError
-        If the function does not have the expected signature.
-    ValueError
-        If the function does not return an array of the expected shape.
-    """
-    required_params = _get_protocol_parameters(protocol)
-    sig = inspect.signature(func)
-    missing = required_params - sig.parameters.keys()
-    if missing:
-        raise ValueError(
-            f"Custom initialization function must have the parameters {sorted(required_params)}. "
-            f"Missing: {sorted(missing)}."
-        )
-    kwargs = _validate_init_funcs_kwargs(func, kwargs, protocol)
-
-    return func, kwargs, True
 
 
 def generate_hmm_initial_params(
@@ -999,13 +490,9 @@ def generate_hmm_initial_params(
     y: NDArray | jnp.ndarray,
     session_starts: NDArray | jnp.ndarray,
     random_key_pair: jax.Array = jax.random.split(jax.random.PRNGKey(1234), 2),
-    init_funcs: Optional[dict] = None,
 ) -> HMMUserParams:
     """
-    Generate initial HMM parameters using the provided initialization functions.
-
-    This function calls the specified initialization functions for initial state probabilities
-    stored in the `init_funcs` dictionary passing `n_states` and any additional stored kwargs.
+    Generate initial HMM parameters using the default initialization functions.
 
     Parameters
     ----------
@@ -1021,10 +508,6 @@ def generate_hmm_initial_params(
         Optional pair of keys for random number generation, if needed by the initialization functions.
         This function assumes already formatted keys as contract, preventing silent bugs such as keys
         not being formatted appropriately by upstream models.
-    init_funcs :
-        Dictionary containing the initialization functions and their kwargs for both initial state probabilities
-        and transition probabilities. This dictionary can be set up using the `setup_hmm_initialization` function.
-        If not provided, or if specific functions are missing, defaults will be used.
 
     Returns
     -------
@@ -1032,45 +515,20 @@ def generate_hmm_initial_params(
         ``HMMUserParams`` tuple of ``(initial_probs, transition_matrix)`` where
         ``initial_probs`` has shape ``(n_states,)`` summing to 1, and
         ``transition_matrix`` has shape ``(n_states, n_states)`` with rows summing to 1.
-
-    See Also
-    --------
-    :func:`nemos.hmm.setup_hmm_initialization`
-        Function to set up the initialization functions and their kwargs based on user input.
     """
-    # check for unexpected/unknown keys in init_funcs if user provided dictionary not made by setup_hmm_initialization
-    init_funcs = DEFAULT_INIT_FUNCTIONS.copy() if init_funcs is None else init_funcs
-
-    # grab initial probability initialization function
-    # fallback to defaults if set to None
-    initial_proba_init = (
-        init_funcs["initial_proba_init"] or DEFAULT_INIT_FUNCTIONS["initial_proba_init"]
-    )
-    # set to empty kwargs if set to None
-    initial_proba_init_kwargs = init_funcs["initial_proba_init_kwargs"] or {}
-
-    # do the same for transition matrix
-    transition_proba_init = (
-        init_funcs["transition_proba_init"]
-        or DEFAULT_INIT_FUNCTIONS["transition_proba_init"]
-    )
-    transition_proba_init_kwargs = init_funcs["transition_proba_init_kwargs"] or {}
-
-    initial_probs = initial_proba_init(
+    initial_probs = DEFAULT_INIT_FUNCTIONS["initial_proba_init"](
         n_states=n_states,
         X=X,
         y=y,
         session_starts=session_starts,
         random_key=random_key_pair[0],
-        **initial_proba_init_kwargs,
     )
-    transition_matrix = transition_proba_init(
+    transition_matrix = DEFAULT_INIT_FUNCTIONS["transition_proba_init"](
         n_states=n_states,
         X=X,
         y=y,
         session_starts=session_starts,
         random_key=random_key_pair[1],
-        **transition_proba_init_kwargs,
     )
 
     return {"initial_prob": initial_probs, "transition_prob": transition_matrix}
