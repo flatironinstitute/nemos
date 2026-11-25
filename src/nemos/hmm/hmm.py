@@ -29,14 +29,9 @@ from ..typing import (
     DESIGN_INPUT_TYPE,
 )
 from .initialize_parameters import (
-    DEFAULT_INIT_FUNCTIONS,
-    HMM_INITIALIZATION_FN_DICT,
     KMeansInitializer,
-    _resolution_was_noop,
     _resolve_dirichlet_priors,
-    _validate_init_funcs_keys,
     generate_hmm_initial_params,
-    setup_hmm_initialization,
 )
 from .params import HMMModelParamsT, HMMUserParams, HMMUserProvidedParamsT
 from .utils import _check_state_format
@@ -44,7 +39,6 @@ from .validation import HMMValidator
 
 nap = lazy.load("pynapple")
 
-MODEL_INITIALIZATION_FN_DICT_T = TypeVar("MODEL_INITIALIZATION_FN_DICT_T")
 HMMValidatorT = TypeVar("HMMValidatorT", bound="HMMValidator")
 
 FORWARD_PASS = {
@@ -68,7 +62,6 @@ class BaseHMM(
     Generic[
         HMMModelParamsT,
         HMMUserProvidedParamsT,
-        MODEL_INITIALIZATION_FN_DICT_T,
         HMMValidatorT,
     ],
 ):
@@ -115,8 +108,6 @@ class BaseHMM(
     seed :
         JAX PRNG key for random number generation during initialization. Default is
         ``jax.random.PRNGKey(123)``.
-    hmm_initialization_funcs :
-        Dictionary specifying the initialization functions for the HMM parameters.
     estep_type:
         How the forward-backward recursions of the E-step are evaluated. ``"sequential"``
         steps through the time bins one at a time; ``"associative"`` uses
@@ -132,7 +123,6 @@ class BaseHMM(
     """
 
     _validator_class: type[HMMValidatorT]
-    _model_default_init_dict: MODEL_INITIALIZATION_FN_DICT_T
     _kmeans_init_class = KMeansInitializer
 
     def __init__(
@@ -149,7 +139,6 @@ class BaseHMM(
         maxiter: int = 1000,
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
-        hmm_initialization_funcs: Optional[HMM_INITIALIZATION_FN_DICT] = None,
         estep_type: Literal["sequential", "associative"] = "sequential",
     ):
         super().__init__(
@@ -171,7 +160,6 @@ class BaseHMM(
         self.transition_prob_: Optional[jnp.ndarray] = None
         self.initial_prob_: Optional[jnp.ndarray] = None
 
-        self.hmm_initialization_funcs = hmm_initialization_funcs
         self.estep_type = estep_type
 
     @property
@@ -192,47 +180,6 @@ class BaseHMM(
         # instantiated, so an already-built solver would keep running the previous
         # algorithm. The inference paths read self._estep_type live and are unaffected.
         self._invalidate_solver()
-
-    def _hmm_setup(
-        self,
-        initial_proba_init: Optional[Literal["uniform", "random", "dirichlet"]] = None,
-        transition_proba_init: Optional[
-            Literal["sticky", "uniform", "random", "dirichlet"]
-        ] = None,
-    ):
-        """
-        Set which initialization methods to use for the initial and transition probabilities.
-
-        An optional initialization step that allows for users to specify initialization methods other than the
-        defaults for initial and transition probabilities. The user can specify one of the built-in initialization
-        functions listed below.
-        - For initial probabilities: "uniform" (default), "random", "dirichet"
-        - For transition probabilities: "sticky" (default), "uniform", "random", "dirichlet"
-
-        For any custom changes to the built-in methods, e.g. overriding default optional arguments, for using
-        kmeans initialization, or for any other custom initialization method, the user should generate the
-        initial parameters externally and provide them as `init_params` to the `fit` method.
-
-        Parameters
-        ----------
-        initial_proba_init :
-            A string identifier for a built-in initialization function or a custom callable for initializing the
-            initial probabilities of the HMM states.
-        transition_proba_init :
-            A string identifier for a built-in initialization function or a custom callable for initializing the
-            transition probabilities between HMM states.
-        """
-        self._hmm_initialization_funcs = setup_hmm_initialization(
-            initial_proba_init=initial_proba_init,
-            transition_proba_init=transition_proba_init,
-            init_funcs=self._hmm_initialization_funcs,
-        )
-
-    @abc.abstractmethod
-    def _model_setup(self, **kwargs):
-        """Model-specific setup of initialization functions."""
-        # self._model_use_kmeans and self._model_initialization_funcs must be set here
-        pass
 
     @property
     def n_states(self) -> int:
@@ -358,54 +305,6 @@ class BaseHMM(
             )
         self._seed = value
 
-    @property
-    def hmm_initialization_funcs(self) -> HMM_INITIALIZATION_FN_DICT | None:
-        """Dictionary of initialization functions for HMM parameters."""
-        return self._hmm_initialization_funcs
-
-    @hmm_initialization_funcs.setter
-    def hmm_initialization_funcs(self, value: HMM_INITIALIZATION_FN_DICT | None):
-        """
-        Set the dictionary of initialization functions for HMM parameters.
-
-        Validates keys against the HMM-specific DEFAULT_INIT_FUNCTIONS and merges
-        with defaults before storing. Calls :meth:`_hmm_setup` afterward to apply any
-        function/kwargs updates. May be called directly or via ``__init__``.
-        """
-        # always key validated in a model dependent way
-        self._hmm_initialization_funcs = _validate_init_funcs_keys(
-            value, DEFAULT_INIT_FUNCTIONS
-        )
-        self._hmm_setup()
-        if value is not None and _resolution_was_noop(
-            value, self._hmm_initialization_funcs
-        ):
-            self._hmm_initialization_funcs = value
-
-    @property
-    def model_initialization_funcs(self) -> MODEL_INITIALIZATION_FN_DICT_T | None:
-        """Dictionary of initialization functions for model parameters."""
-        return self._model_initialization_funcs
-
-    @model_initialization_funcs.setter
-    def model_initialization_funcs(self, value: MODEL_INITIALIZATION_FN_DICT_T | None):
-        """
-        Set the dictionary of initialization functions for model parameters.
-
-        Validates keys against the model-specific ``_model_default_init_dict`` and merges
-        with defaults before storing. Calls :meth:`_model_setup` afterward to apply any
-        function/kwargs updates. May be called directly or via ``__init__``.
-        """
-        # always key validated in a model dependent way
-        self._model_initialization_funcs = _validate_init_funcs_keys(
-            value, self._model_default_init_dict
-        )
-        self._model_setup()
-        if value is not None and _resolution_was_noop(
-            value, self._model_initialization_funcs
-        ):
-            self._model_initialization_funcs = value
-
     def _hmm_params_initialization(
         self,
         X: DESIGN_INPUT_TYPE,
@@ -439,7 +338,6 @@ class BaseHMM(
             y,
             session_starts,
             random_key_pair=random_key_pair,
-            init_funcs=self._hmm_initialization_funcs,
         )
 
     @abc.abstractmethod

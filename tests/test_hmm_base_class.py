@@ -247,64 +247,6 @@ class TestHMMInit:
             MockHMM(n_states=3, dirichlet_transition_proba=alphas)
 
     # -------------------------------------------------------------------------
-    # initialization_funcs setter tests
-    # -------------------------------------------------------------------------
-    def test_initialization_funcs_none_uses_defaults(self):
-        """Test that no setting uses default initialization functions."""
-        model = MockHMM(n_states=2)
-        assert model.hmm_initialization_funcs == DEFAULT_INIT_FUNCTIONS
-
-    def test_initialization_funcs_modified(self):
-        """Test that modified initialization funcs are preserved."""
-
-        def custom_func(n_states, X, y, random_key, extra_arg):
-            return jnp.full((n_states,), 1.0) / n_states
-
-        init_funcs = {
-            "initial_proba_init": custom_func,
-            "initial_proba_init_kwargs": {"extra_arg": "value"},
-        }
-        model = MockHMM(n_states=2, hmm_initialization_funcs=init_funcs)
-        assert model.hmm_initialization_funcs == DEFAULT_INIT_FUNCTIONS | init_funcs
-
-    @pytest.mark.parametrize(
-        "init_funcs, expectation",
-        [
-            (
-                {"invalid_key": None},
-                pytest.raises(KeyError, match="[Uu]nknown key"),
-            ),
-            (
-                {"initial_prob_init": None},
-                pytest.raises(KeyError, match="Did you mean"),
-            ),
-        ],
-    )
-    def test_initialization_funcs_invalid_key_via_init(self, init_funcs, expectation):
-        """Test that invalid/misspelled keys raise KeyError when passed via constructor."""
-        with expectation:
-            MockHMM(n_states=2, hmm_initialization_funcs=init_funcs)
-
-    @pytest.mark.parametrize(
-        "init_funcs, expectation",
-        [
-            (
-                {"invalid_key": None},
-                pytest.raises(KeyError, match="[Uu]nknown key"),
-            ),
-            (
-                {"initial_prob_init": None},
-                pytest.raises(KeyError, match="Did you mean"),
-            ),
-        ],
-    )
-    def test_initialization_funcs_invalid_key_via_setter(self, init_funcs, expectation):
-        """Test that invalid/misspelled keys raise KeyError when assigned via setter."""
-        model = MockHMM(n_states=2)
-        with expectation:
-            model.hmm_initialization_funcs = init_funcs
-
-    # -------------------------------------------------------------------------
     # Default values tests
     # -------------------------------------------------------------------------
     def test_default_values(self):
@@ -356,17 +298,6 @@ class TestHMMInitialParams:
             model_params.hmm_params.log_transition_prob,
             jnp.log(DEFAULT_INIT_FUNCTIONS["transition_proba_init"](3)),
         )
-
-    def test_kmeans_inconsistent_kwargs_raises(self):
-        """_kmeans_resolve_model_kwargs raises when the same kwarg has conflicting values."""
-        model = MockHMM(n_states=3)
-        use_kmeans = {"param_a": True, "param_b": True}
-        init_funcs = {
-            "param_a_kwargs": {"minimum_prob": 0.01},
-            "param_b_kwargs": {"minimum_prob": 0.05},
-        }
-        with pytest.raises(ValueError, match="Inconsistent KMeans init arg"):
-            model._kmeans_resolve_model_kwargs(use_kmeans, init_funcs)
 
 
 class TestHMMNewSession:

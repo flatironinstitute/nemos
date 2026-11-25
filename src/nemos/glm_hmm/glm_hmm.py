@@ -39,11 +39,8 @@ from .algorithm_configs import (
     prepare_mstep_update_fn,
 )
 from .initialize_parameters import (
-    DEFAULT_INIT_FUNCTIONS_GLMHMM,
-    GLMHMM_INITIALIZATION_FN_DICT,
     KMeansInitializerGLM,
     generate_glm_hmm_initial_model_params,
-    setup_glm_hmm_initialization,
 )
 from .params import FromGLMHMMParams, GLMHMMParams, GLMHMMUserParams, ToGLMHMMParams
 from .utils import compute_rate_per_state
@@ -79,11 +76,7 @@ def update_validator_observation_dependent_configs(
     )
 
 
-class GLMHMM(
-    BaseHMM[
-        GLMHMMUserParams, GLMHMMParams, GLMHMM_INITIALIZATION_FN_DICT, GLMHMMValidator
-    ]
-):
+class GLMHMM(BaseHMM[GLMHMMUserParams, GLMHMMParams, GLMHMMValidator]):
     r"""Generalized Linear Model with Hidden Markov Model (GLM-HMM).
 
     This model combines a Generalized Linear Model (GLM) with a Hidden Markov Model (HMM) to capture
@@ -226,13 +219,6 @@ class GLMHMM(
         If provided ``regularizer`` or ``observation_model`` are not valid.
     TypeError
         If ``seed`` is not a valid JAX PRNG key.
-    KeyError
-        If ``hmm_initialization_funcs`` or ``model_initialization_funcs`` contains keys
-        that are not valid for their respective default dictionary.
-    ValueError
-        If any ``*_kwargs`` entry in either initialization-funcs dictionary contains
-        keyword arguments that don't match the signature of the corresponding
-        initialization function.
     ValueError
         If ``maxiter`` is not a positive integer.
     ValueError
@@ -367,7 +353,6 @@ class GLMHMM(
     """
 
     _validator_class = GLMHMMValidator
-    _model_default_init_dict = DEFAULT_INIT_FUNCTIONS_GLMHMM
     _kmeans_init_class = KMeansInitializerGLM
 
     def __init__(
@@ -389,8 +374,6 @@ class GLMHMM(
         maxiter: int = 1000,
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
-        # hmm_initialization_funcs: Optional[HMM_INITIALIZATION_FN_DICT] = None,
-        # model_initialization_funcs: Optional[GLMHMM_INITIALIZATION_FN_DICT] = None,
     ):
         super().__init__(
             n_states=n_states,
@@ -403,13 +386,10 @@ class GLMHMM(
             maxiter=maxiter,
             tol=tol,
             seed=seed,
-            # hmm_initialization_funcs=hmm_initialization_funcs,
             estep_type=estep_type,
         )
         self.observation_model = observation_model
         self.inverse_link_function = inverse_link_function
-
-        # self.model_initialization_funcs = model_initialization_funcs
 
         # fit attributes
         self.coef_: jnp.ndarray | None = None
@@ -442,30 +422,6 @@ class GLMHMM(
             )
             self._log_like_cache[cache_key] = ll_func
         return ll_func(params, X, y)
-
-    def _model_setup(
-        self,
-        glm_params_init: Optional[str | Callable] = None,
-        glm_params_init_kwargs=None,
-        scale_init: Optional[str | Callable] = None,
-        scale_init_kwargs=None,
-        dispersion_init: Optional[str | Callable] = None,
-        dispersion_init_kwargs=None,
-    ):
-        """Validate and set GLM-side initialization functions.
-
-        Derives ``_model_use_kmeans`` from the identity of the stored callables so the
-        flag stays accurate regardless of whether the user passed the string ``"kmeans"``
-        or the kmeans callable directly (e.g. when set via the
-        ``model_initialization_funcs`` property).
-        """
-        self._model_initialization_funcs = setup_glm_hmm_initialization(
-            glm_params_init=glm_params_init,
-            scale_init=scale_init,
-            init_funcs=self._model_initialization_funcs,
-            dispersion_init=dispersion_init,
-            dispersion_init_kwargs=dispersion_init_kwargs,
-        )
 
     @property
     def observation_model(self) -> obs.Observations:

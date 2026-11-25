@@ -23,79 +23,8 @@ from nemos.glm_hmm.initialize_parameters import (
     random_glm_params_init,
     setup_glm_hmm_initialization,
 )
-from nemos.glm_hmm.validation import GLMHMMValidator
-from nemos.hmm.hmm import BaseHMM
 from nemos.inverse_link_function_utils import resolve_inverse_link_function
 from nemos.observation_models import BernoulliObservations, PoissonObservations
-
-# =============================================================================
-# Minimal GLMHMM mock for key-validation tests (exercises initialization_funcs setter)
-# =============================================================================
-
-
-class MockGLMHMM(BaseHMM):
-    _validator_class = GLMHMMValidator
-    _model_default_init_dict = DEFAULT_INIT_FUNCTIONS_GLMHMM
-
-    def __init__(
-        self, n_states, hmm_initialization_funcs=None, model_initialization_funcs=None
-    ):
-        BaseHMM.__init__(
-            self, n_states=n_states, hmm_initialization_funcs=hmm_initialization_funcs
-        )
-        self.model_initialization_funcs = model_initialization_funcs
-        self.coef_ = self.intercept_ = self.scale_ = None
-
-    def _model_setup(self, **kwargs):
-        self._model_initialization_funcs = setup_glm_hmm_initialization(
-            init_funcs=self._model_initialization_funcs,
-        )
-
-    def _check_model_is_fit(self):
-        pass
-
-    def _get_model_params(self):
-        pass
-
-    def _set_model_params(self, params):
-        pass
-
-    def _log_likelihood(self, params, X, y):
-        pass
-
-    def _model_params_initialization(self, X, y, session_starts, random_key=None):
-        pass
-
-    def fit(self, *a, **kw):
-        pass
-
-    def _initialize_optimizer_and_state(self, *a, **kw):
-        pass
-
-    def _compute_loss(self, *a, **kw):
-        pass
-
-    def _get_optimal_solver_params_config(self, *a, **kw):
-        pass
-
-    def predict(self, *a, **kw):
-        pass
-
-    def simulate(self, *a, **kw):
-        pass
-
-    def save_params(self, *a, **kw):
-        pass
-
-    def update(self, *a, **kw):
-        pass
-
-    def score(self, *a, **kw):
-        pass
-
-    def _get_params_shape(self, *a, **kw):
-        pass
-
 
 # =============================================================================
 # Mock infrastructure
@@ -772,12 +701,6 @@ class TestSetupGLMHMMInitialization:
         ):
             setup_glm_hmm_initialization(scale_init_kwargs={kwarg_name: 123})
 
-    def test_unknown_init_funcs_key(self):
-        with pytest.raises(KeyError, match="Unexpected or unknown keys"):
-            MockGLMHMM(
-                n_states=2, model_initialization_funcs={"initial_proba_init": None}
-            )
-
     @pytest.mark.parametrize(
         "key, init_str, kwargs_key, kwargs_val",
         [
@@ -921,12 +844,6 @@ class TestGenerateGLMHMMInitialParams:
                 lambda x: x,
                 PoissonObservations(),
                 init_funcs=init_funcs,
-            )
-
-    def test_init_funcs_unknown_key_raises(self):
-        with pytest.raises(KeyError, match="Unexpected or unknown keys"):
-            MockGLMHMM(
-                n_states=2, model_initialization_funcs={"transition_proba_init": None}
             )
 
     @pytest.mark.parametrize("obs_model", AVAILABLE_OBSERVATION_MODELS)

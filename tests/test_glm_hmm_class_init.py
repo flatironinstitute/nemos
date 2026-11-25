@@ -1,6 +1,6 @@
 """Tests for GLMHMM class __init__ and property setters."""
 
-from unittest.mock import MagicMock, create_autospec, patch
+from unittest.mock import MagicMock, patch
 
 import jax
 import jax.numpy as jnp
@@ -10,66 +10,10 @@ from sklearn.base import clone
 
 from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
 from nemos.glm_hmm.glm_hmm import GLMHMM
-from nemos.glm_hmm.initialize_parameters import (
-    DEFAULT_INIT_FUNCTIONS_GLMHMM,
-    kmeans_glm_params_init,
-    kmeans_scale_init,
-)
-from nemos.hmm.initialize_parameters import (
-    DEFAULT_INIT_FUNCTIONS,
-    random_initial_proba_init,
-    uniform_transition_proba_init,
-)
 
 # =============================================================================
-# Mock infrastructure
+# Helpers
 # =============================================================================
-
-
-def _glm_mock_template(
-    n_states, X, y, inverse_link_function, session_starts, random_key, param1=None
-):
-    pass
-
-
-def _hmm_mock_template(n_states, X, y, session_starts, random_key, param1=None):
-    pass
-
-
-_HMM_FUNC_NAMES = ["initial_proba_init", "transition_proba_init"]
-_MODEL_FUNC_NAMES = ["glm_params_init", "scale_init"]
-FUNC_NAMES = _MODEL_FUNC_NAMES + _HMM_FUNC_NAMES
-_GLM_FUNC_NAMES = set(_MODEL_FUNC_NAMES)
-MOCK_VALID_KWARGS = {"param1": 0.5}
-
-_PATCH_PATH_HMM = "nemos.hmm.hmm.setup_hmm_initialization"
-_PATCH_PATH_MODEL = "nemos.glm_hmm.glm_hmm.setup_glm_hmm_initialization"
-
-
-VALID_STRINGS = {
-    "glm_params_init": "kmeans",
-    "scale_init": "kmeans",
-    "initial_proba_init": "random",
-    "transition_proba_init": "uniform",
-}
-
-VALID_STRINGS_EXPECTED_FUNCS = {
-    "glm_params_init": kmeans_glm_params_init,
-    "scale_init": kmeans_scale_init,
-    "initial_proba_init": random_initial_proba_init,
-    "transition_proba_init": uniform_transition_proba_init,
-}
-
-
-def _get_mock_func(func_name):
-    template = (
-        _glm_mock_template if func_name in _GLM_FUNC_NAMES else _hmm_mock_template
-    )
-    return create_autospec(template, return_value=None)
-
-
-def _get_mock_registry():
-    return {fn: _get_mock_func(fn) for fn in FUNC_NAMES}
 
 
 def _get_defining_class_and_prop(attr):
@@ -148,67 +92,6 @@ class TestGLMHMMInit:
         custom_link = lambda x: x**2
         model = GLMHMM(n_states=2, inverse_link_function=custom_link)
         assert model.inverse_link_function is custom_link
-
-    # -------------------------------------------------------------------------
-    # initialization_funcs setters (HMM and model pipelines)
-    # -------------------------------------------------------------------------
-    def test_init_funcs_none_uses_defaults(self):
-        """Without explicit init-funcs args, both pipelines load their defaults."""
-        model = GLMHMM(n_states=2)
-        assert dict(model.hmm_initialization_funcs) == dict(DEFAULT_INIT_FUNCTIONS)
-        assert dict(model.model_initialization_funcs) == dict(
-            DEFAULT_INIT_FUNCTIONS_GLMHMM
-        )
-
-    def test_hmm_initialization_funcs_passed_through_setter(self):
-        """Custom callable in hmm_initialization_funcs reaches setup_hmm_initialization."""
-        mock_func = _get_mock_func("initial_proba_init")
-        with patch(_PATCH_PATH_HMM) as mock_setup:
-            mock_setup.return_value = dict(DEFAULT_INIT_FUNCTIONS)
-            GLMHMM(
-                n_states=2,
-                hmm_initialization_funcs={"initial_proba_init": mock_func},
-            )
-        # at least one call from the setter; the most recent one carries the custom func
-        # in the merged init_funcs dict
-        assert mock_setup.call_args.kwargs["init_funcs"]["initial_proba_init"] is (
-            mock_func
-        )
-
-    def test_model_initialization_funcs_passed_through_setter(self):
-        """Custom callable in model_initialization_funcs reaches setup_glm_hmm_initialization."""
-        mock_func = _get_mock_func("glm_params_init")
-        with patch(_PATCH_PATH_MODEL) as mock_setup:
-            mock_setup.return_value = dict(DEFAULT_INIT_FUNCTIONS_GLMHMM)
-            GLMHMM(
-                n_states=2,
-                model_initialization_funcs={"glm_params_init": mock_func},
-            )
-        assert mock_setup.call_args.kwargs["init_funcs"]["glm_params_init"] is mock_func
-
-    # -------------------------------------------------------------------------
-    # _model_use_kmeans flag — derived from function identity
-    # -------------------------------------------------------------------------
-    def test_model_use_kmeans_false_by_default(self):
-        model = GLMHMM(n_states=2)
-        assert model._model_use_kmeans == {
-            "glm_params_init": False,
-            "scale_init": False,
-        }
-
-    @pytest.mark.parametrize(
-        "key, kmeans_callable",
-        [
-            ("glm_params_init", kmeans_glm_params_init),
-            ("scale_init", kmeans_scale_init),
-        ],
-    )
-    def test_model_use_kmeans_true_via_callable_in_init_dict(
-        self, key, kmeans_callable
-    ):
-        """Passing the kmeans callable directly in model_initialization_funcs sets the flag."""
-        model = GLMHMM(n_states=2, model_initialization_funcs={key: kmeans_callable})
-        assert model._model_use_kmeans[key] is True
 
     # -------------------------------------------------------------------------
     # Default values and fit attributes
@@ -292,26 +175,8 @@ class TestGLMHMMCheckModelIsFit:
 
 
 # =============================================================================
-# TestGLMHMMSklearnClone — identity round-trip of the init-func dicts
+# TestGLMHMMSklearnClone — whole-state round-trip through sklearn clone
 # =============================================================================
-
-
-def _get_custom_func(func_name):
-    # plain functions, not autospec mocks: sklearn clone deepcopies params, and
-    # deepcopy preserves identity for functions but returns a new object for mocks
-    return _glm_mock_template if func_name in _GLM_FUNC_NAMES else _hmm_mock_template
-
-
-def _init_funcs_attr(func_name):
-    return (
-        "model_initialization_funcs"
-        if func_name in _GLM_FUNC_NAMES
-        else "hmm_initialization_funcs"
-    )
-
-
-def _use_kmeans_attr(func_name):
-    return "_model_use_kmeans" if func_name in _GLM_FUNC_NAMES else "_hmm_use_kmeans"
 
 
 def _filter_attributes(obj, exclude_keys):
@@ -356,54 +221,8 @@ def compare_hmm_models(m1, m2):
 
 
 class TestGLMHMMSklearnClone:
-    """``sklearn.base.clone`` rebuilds the model from ``get_params`` and requires
-    each param of the rebuilt model to be the same object it passed to ``__init__``;
-    the ``*_initialization_funcs`` setters must therefore round-trip an already
-    resolved dict container by identity."""
+    """``sklearn.base.clone`` rebuilds the model from ``get_params``."""
 
     def test_clone_default(self):
         model = GLMHMM(n_states=2)
-        compare_hmm_models(model, clone(model))
-
-    @pytest.mark.parametrize("func_name", FUNC_NAMES)
-    @pytest.mark.parametrize(
-        "value_kind, kwargs",
-        [
-            ("string", None),
-            ("string", {}),
-            ("kmeans", None),
-            ("custom", None),
-            ("custom", {}),
-            ("custom", MOCK_VALID_KWARGS),
-        ],
-    )
-    def test_clone_single_func(self, func_name, value_kind, kwargs):
-        if value_kind == "kmeans":
-            value = "kmeans"
-        elif value_kind == "string":
-            value = VALID_STRINGS[func_name]
-        else:
-            value = _get_custom_func(func_name)
-        config = {func_name: value}
-        if kwargs is not None:
-            config[f"{func_name}_kwargs"] = kwargs
-        model = GLMHMM(n_states=2, **{_init_funcs_attr(func_name): config})
-        cloned = clone(model)
-        compare_hmm_models(model, cloned)
-        if value_kind == "kmeans":
-            # the use-kmeans flag must survive the get_params -> __init__ round
-            # trip, not just the callable itself
-            assert getattr(cloned, _use_kmeans_attr(func_name))[func_name]
-
-    def test_clone_all_funcs_custom(self):
-        hmm_config, model_config = {}, {}
-        for func_name in FUNC_NAMES:
-            config = model_config if func_name in _GLM_FUNC_NAMES else hmm_config
-            config[func_name] = _get_custom_func(func_name)
-            config[f"{func_name}_kwargs"] = dict(MOCK_VALID_KWARGS)
-        model = GLMHMM(
-            n_states=2,
-            hmm_initialization_funcs=hmm_config,
-            model_initialization_funcs=model_config,
-        )
         compare_hmm_models(model, clone(model))

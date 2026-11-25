@@ -54,7 +54,6 @@ from nemos.glm_hmm.initialize_parameters import random_glm_params_init
 from nemos.glm_hmm.params import GLMHMMParams
 from nemos.hmm.hmm import BaseHMM
 from nemos.hmm.initialize_parameters import (
-    HMM_INITIALIZATION_FN_DICT,
     sticky_transition_proba_init,
     uniform_initial_proba_init,
 )
@@ -874,17 +873,8 @@ class MockHMMValidator(HMMValidator[MockHMMUserParams, MockHMMParams]):
         return True
 
 
-class MockHMM(
-    BaseHMM[
-        MockHMMParams, MockHMMUserParams, HMM_INITIALIZATION_FN_DICT, MockHMMValidator
-    ]
-):
+class MockHMM(BaseHMM[MockHMMParams, MockHMMUserParams, MockHMMValidator]):
     _validator_class = MockHMMValidator
-    _model_default_init_dict = {
-        "param_init": None,
-        "param_init_kwargs": {},
-        "param_init_custom": False,
-    }
 
     def __init__(
         self,
@@ -897,8 +887,6 @@ class MockHMM(
         maxiter: int = 1000,
         tol: float = 1e-8,
         seed=jax.random.PRNGKey(123),
-        hmm_initialization_funcs: HMM_INITIALIZATION_FN_DICT = None,
-        model_initialization_funcs: HMM_INITIALIZATION_FN_DICT = None,
     ):
         BaseHMM.__init__(
             self,
@@ -908,18 +896,9 @@ class MockHMM(
             maxiter=maxiter,
             tol=tol,
             seed=seed,
-            hmm_initialization_funcs=hmm_initialization_funcs,
             estep_type=estep_type,
         )
         self.param_: jnp.ndarray | None = None
-        self.model_initialization_funcs = model_initialization_funcs
-
-    def _model_setup(
-        self,
-        param_init: Optional[str | Callable] = None,
-        param_init_kwargs: Optional[dict] = None,
-    ):
-        self._model_use_kmeans = {"param_init": param_init == "kmeans"}
 
     def _check_model_is_fit(self):
         if self.param_ is None:
