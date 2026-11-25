@@ -42,6 +42,7 @@ from .initialize_parameters import (
     DEFAULT_INIT_FUNCTIONS_GLMHMM,
     GLMHMM_INITIALIZATION_FN_DICT,
     KMeansInitializerGLM,
+    generate_glm_hmm_initial_model_params,
     setup_glm_hmm_initialization,
 )
 from .params import FromGLMHMMParams, GLMHMMParams, GLMHMMUserParams, ToGLMHMMParams
@@ -584,35 +585,23 @@ class GLMHMM(
                 "set the missing attributes."
             )
 
-    # def _kmeans_extra_kwargs(self) -> dict:
-    #     return {
-    #         "inverse_link_function": self.inverse_link_function,
-    #         "observation_model": self.observation_model,
-    #     }
-
-    # def _model_params_initialization(
-    #     self,
-    #     X: DESIGN_INPUT_TYPE,
-    #     y: jnp.ndarray,
-    #     session_starts: jnp.ndarray,
-    #     random_key: jax.Array,
-    # ) -> Tuple[GLMHMMUserParams, bool]:
-    #     """GLM-HMM initialization."""
-    #     user_params = generate_glm_hmm_initial_model_params(
-    #         self._n_states,
-    #         X,
-    #         y,
-    #         inverse_link_function=self._inverse_link_function,
-    #         observation_model=self._observation_model,
-    #         session_starts=session_starts,
-    #         random_key=random_key,
-    #         init_funcs=self._model_initialization_funcs,
-    #     )
-    #     validate_params = any(
-    #         self._model_initialization_funcs[s]
-    #         for s in ("glm_params_init_custom", "scale_init_custom")
-    #     )
-    #     return user_params, validate_params
+    def _model_params_initialization(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        session_starts: jnp.ndarray,
+        random_key: jax.Array,
+    ) -> GLMHMMUserParams:
+        """GLM-HMM initialization."""
+        return generate_glm_hmm_initial_model_params(
+            self._n_states,
+            X,
+            y,
+            inverse_link_function=self._inverse_link_function,
+            observation_model=self._observation_model,
+            session_starts=session_starts,
+            random_key=random_key,
+        )
 
     def fit(
         self,

@@ -7,7 +7,7 @@ import warnings
 from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import equinox as eqx
 import jax
@@ -268,35 +268,6 @@ class TestGLMHMM:
             model_single.initial_prob_, model_multi.initial_prob_
         )
 
-    # TODO: remove this test once the k-means is dropped or moved.
-    def test_kmeans_initialized_once(
-        self, mock_glm_hmm_optimizer_run, instantiate_base_regressor_subclass
-    ):
-        fixture = instantiate_base_regressor_subclass
-        fixture.model.setup(
-            scale_init="kmeans",
-            glm_params_init="kmeans",
-            initial_proba_init="kmeans",
-            transition_proba_init="kmeans",
-        )
-        with patch.object(GLMHMM, "_kmeans_init_class") as MockClass:
-            inst = MockClass.return_value
-            inst.glm_params.return_value = (
-                fixture.params.model_params.coef,
-                fixture.params.model_params.intercept,
-            )
-            inst.scale.return_value = jnp.ones_like(
-                fixture.params.model_params.intercept
-            )
-            inst.initial_probability.return_value = jnp.exp(
-                fixture.params.hmm_params.log_initial_prob
-            )
-            inst.transition_probability.return_value = jnp.exp(
-                fixture.params.hmm_params.log_transition_prob
-            )
-            fixture.model.fit(fixture.X, fixture.y)
-            assert MockClass.call_count == 1
-
     def test_fit_calls_validate_consistency(
         self,
         instantiate_base_regressor_subclass,
@@ -493,42 +464,6 @@ def _make_model_params(n_features, n_states, n_neurons=None, model=None):
         intercept=jnp.zeros((n_neurons, n_states)),
         obs_params=extras,
     )
-
-
-# Custom init callables exercising every slot's *_custom path. Each returns a
-# shape-correct, valid output so fit() can continue without extra mocking.
-
-
-def _custom_glm_params_init(
-    n_states,
-    X,
-    y,
-    inverse_link_function,
-    observation_model,
-    session_starts,
-    random_key,
-):
-    return jnp.zeros((X.shape[1], n_states)), jnp.zeros((n_states,))
-
-
-def _custom_scale_init(
-    n_states,
-    X,
-    y,
-    inverse_link_function,
-    observation_model,
-    session_starts,
-    random_key,
-):
-    return jnp.ones((n_states,))
-
-
-def _custom_initial_proba_init(n_states, X, y, session_starts, random_key):
-    return jnp.ones((n_states,)) / n_states
-
-
-def _custom_transition_proba_init(n_states, X, y, session_starts, random_key):
-    return jnp.full((n_states, n_states), 1.0 / n_states)
 
 
 class TestSolverConfiguration:
@@ -1004,10 +939,8 @@ class TestFitDelegation:
             "observation_model",
             "session_starts",
             "random_key",
-            "init_funcs",
         }
         assert kwargs["inverse_link_function"] is model._inverse_link_function
-        assert kwargs["init_funcs"] is model._model_initialization_funcs
         # session_starts: default is a length-n boolean array with first entry True
         n = glm_hmm_data["X"].shape[0]
         expected_session_starts = jnp.zeros(n, dtype=bool).at[0].set(True)
@@ -1015,34 +948,6 @@ class TestFitDelegation:
         # random_key: a jax PRNG key
         assert isinstance(kwargs["random_key"], jax.Array)
         assert kwargs["random_key"].dtype == jax.random.PRNGKey(0).dtype
-
-    @pytest.mark.parametrize(
-        "setup_kwargs",
-        [
-            pytest.param(
-                {"glm_params_init": _custom_glm_params_init}, id="glm_params_init"
-            ),
-            pytest.param({"scale_init": _custom_scale_init}, id="scale_init"),
-            pytest.param(
-                {"initial_proba_init": _custom_initial_proba_init},
-                id="initial_proba_init",
-            ),
-            pytest.param(
-                {"transition_proba_init": _custom_transition_proba_init},
-                id="transition_proba_init",
-            ),
-        ],
-    )
-    def test_fit_custom_init_func_triggers_validate_and_cast_params(
-        self, glm_hmm_data, mock_glm_hmm_optimizer_run, monkeypatch, setup_kwargs
-    ):
-        """Any custom init function on any of the four slots makes ``validate_params``
-        True, so fit(init_params=None) routes through validate_and_cast_params."""
-        model = GLMHMM(n_states=glm_hmm_data["n_states"])
-        model.setup(**setup_kwargs)
-        calls = _spy_calls(monkeypatch, GLMHMMValidator, "validate_and_cast_params")
-        model.fit(glm_hmm_data["X"], glm_hmm_data["y"])
-        assert len(calls) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -1970,19 +1875,6 @@ def _collect_params(model, *, skip_solver_state=True):
     return params
 
 
-def _custom_glm_init(
-    n_states,
-    X,
-    y,
-    inverse_link_function,
-    observation_model,
-    session_starts,
-    random_key,
-):
-    """Custom GLM-params initializer used to exercise the custom-callable path."""
-    return jnp.zeros((X.shape[1], n_states)), jnp.zeros((n_states,))
-
-
 @pytest.fixture(scope="module")
 def fitted_glmhmm():
     f = instantiate_glm_hmm_func(simulate=False)
@@ -1990,16 +1882,8 @@ def fitted_glmhmm():
     return f.model
 
 
-@pytest.fixture(scope="module")
-def fitted_glmhmm_custom():
-    f = instantiate_glm_hmm_func(simulate=False)
-    f.model.setup(glm_params_init=_custom_glm_init)
-    f.model.fit(f.X, f.y, init_params=_init_params_from_fixture(f))
-    return f.model
-
-
 class TestGLMHMMSaveLoad:
-    """save_params / load_model round-trip with native and custom initializers."""
+    """save_params / load_model round-trip."""
 
     def test_native_round_trip(self, fitted_glmhmm, tmp_path):
         """All params and fit-state survive a save/load cycle with default initializers."""
@@ -2008,41 +1892,6 @@ class TestGLMHMMSaveLoad:
         loaded = nmo.load_model(save_path)
 
         _assert_params_equal(_collect_params(fitted_glmhmm), _collect_params(loaded))
-
-    def test_custom_callable_requires_mapping(self, fitted_glmhmm_custom, tmp_path):
-        """Custom callable can't be resolved from name alone; load raises a clear error."""
-        save_path = tmp_path / "glmhmm.npz"
-        fitted_glmhmm_custom.save_params(save_path)
-
-        with pytest.raises(
-            ValueError, match="Failed to instantiate model class"
-        ) as excinfo:
-            nmo.load_model(save_path)
-        assert "glm_params_init" in str(excinfo.value.__cause__)
-
-    @pytest.mark.parametrize(
-        "mapping_dict",
-        [
-            {"model_initialization_funcs": {"glm_params_init": _custom_glm_init}},
-            {"model_initialization_funcs__glm_params_init": _custom_glm_init},
-        ],
-        ids=["nested-dict", "sklearn-key"],
-    )
-    def test_custom_callable_mapping(
-        self, fitted_glmhmm_custom, tmp_path, mapping_dict
-    ):
-        """Both mapping_dict formats resolve the custom callable and preserve all params."""
-        save_path = tmp_path / "glmhmm.npz"
-        fitted_glmhmm_custom.save_params(save_path)
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)
-            loaded = nmo.load_model(save_path, mapping_dict=mapping_dict)
-
-        assert loaded.model_initialization_funcs["glm_params_init"] is _custom_glm_init
-        _assert_params_equal(
-            _collect_params(fitted_glmhmm_custom), _collect_params(loaded)
-        )
 
 
 # ---------------------------------------------------------------------------

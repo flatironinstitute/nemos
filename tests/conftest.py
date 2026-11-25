@@ -933,10 +933,7 @@ class MockHMM(
         return jnp.zeros((y.shape[0], self.n_states))
 
     def _model_params_initialization(self, X, y, session_starts, random_key=None):
-        return (
-            {"param": jnp.arange(self._n_states)},
-            False,
-        )
+        return {"param": jnp.arange(self._n_states)}
 
     def fit(self, X, y, session_starts=None, init_params=None):
         session_starts = initialize_session_starts(X, y, session_starts)

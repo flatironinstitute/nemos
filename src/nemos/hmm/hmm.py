@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import abc
 from numbers import Number
-from typing import Any, Generic, Literal, Optional, Tuple, TypeVar, Union
+from typing import Any, Generic, Literal, Optional, TypeVar, Union
 
 import jax
 import jax.numpy as jnp
@@ -412,7 +412,7 @@ class BaseHMM(
         y: jnp.ndarray,
         session_starts: jnp.ndarray,
         random_key_pair: jax.Array,
-    ) -> Tuple[HMMUserParams, bool]:
+    ) -> HMMUserParams:
         """
         Initialize HMM parameters (initial and transition probabilities).
 
@@ -431,11 +431,9 @@ class BaseHMM(
         Returns
         -------
         :
-            Tuple of ``(hmm_params, validate_params)`` where ``hmm_params`` is an
-            ``HMMUserParams`` and ``validate_params`` is True when custom initialization
-            functions were used (requiring downstream parameter validation).
+            The initial HMM parameters as ``HMMUserParams``.
         """
-        hmm_params = generate_hmm_initial_params(
+        return generate_hmm_initial_params(
             self._n_states,
             X,
             y,
@@ -443,10 +441,6 @@ class BaseHMM(
             random_key_pair=random_key_pair,
             init_funcs=self._hmm_initialization_funcs,
         )
-        validate_params = self._hmm_initialization_funcs.get(
-            "initial_proba_init_custom", True
-        ) or self._hmm_initialization_funcs.get("transition_proba_init_custom", True)
-        return hmm_params, validate_params
 
     @abc.abstractmethod
     def _model_params_initialization(self, X, y, session_starts, random_key: jax.Array):
@@ -467,8 +461,7 @@ class BaseHMM(
         Returns
         -------
         :
-            Tuple of ``(model_params, validate_model)`` where ``validate_model`` is True
-            when the initialized parameters require downstream validation.
+            The initial model-specific parameters.
         """
         pass
 
@@ -479,25 +472,19 @@ class BaseHMM(
         # the model needs to figure out how to split the key internally
         model_key = keys[2]
 
-        hmm_params, validate_hmm = self._hmm_params_initialization(
+        hmm_params = self._hmm_params_initialization(
             X,
             y,
             session_starts,
             random_key_pair=hmm_keys,
         )
-        model_params, validate_model = self._model_params_initialization(
+        model_params = self._model_params_initialization(
             X,
             y,
             session_starts,
             random_key=model_key,
         )
-        user_params = {**hmm_params, **model_params}
-        if validate_hmm or validate_model:
-            model_params = self._validator.validate_and_cast_params(user_params)
-            self._validator.validate_consistency(model_params, X=X, y=y)
-            return model_params
-        else:
-            return self._validator.to_model_params(user_params)
+        return self._validator.to_model_params({**hmm_params, **model_params})
 
     def _check_hmm_is_fit(self):
         """Ensure the HMM parameters have been fitted."""

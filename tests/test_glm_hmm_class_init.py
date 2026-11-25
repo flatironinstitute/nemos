@@ -1,6 +1,5 @@
-"""Tests for GLMHMM class __init__, property setters, and setup method."""
+"""Tests for GLMHMM class __init__ and property setters."""
 
-import itertools
 from unittest.mock import MagicMock, create_autospec, patch
 
 import jax
@@ -9,17 +8,14 @@ import numpy as np
 import pytest
 from sklearn.base import clone
 
-from nemos._inspect_utils import extract_literal_options
 from nemos._observation_model_builder import AVAILABLE_OBSERVATION_MODELS
 from nemos.glm_hmm.glm_hmm import GLMHMM
 from nemos.glm_hmm.initialize_parameters import (
-    AVAIL_INIT_FUNCTIONS_GLM,
     DEFAULT_INIT_FUNCTIONS_GLMHMM,
     kmeans_glm_params_init,
     kmeans_scale_init,
 )
 from nemos.hmm.initialize_parameters import (
-    AVAILABLE_INIT_FUNCTIONS,
     DEFAULT_INIT_FUNCTIONS,
     random_initial_proba_init,
     uniform_transition_proba_init,
@@ -48,10 +44,6 @@ MOCK_VALID_KWARGS = {"param1": 0.5}
 
 _PATCH_PATH_HMM = "nemos.hmm.hmm.setup_hmm_initialization"
 _PATCH_PATH_MODEL = "nemos.glm_hmm.glm_hmm.setup_glm_hmm_initialization"
-
-
-def _patch_path_for(func_name):
-    return _PATCH_PATH_MODEL if func_name in _GLM_FUNC_NAMES else _PATCH_PATH_HMM
 
 
 VALID_STRINGS = {
@@ -204,12 +196,6 @@ class TestGLMHMMInit:
             "scale_init": False,
         }
 
-    @pytest.mark.parametrize("key", _MODEL_FUNC_NAMES)
-    def test_model_use_kmeans_true_via_string(self, key):
-        model = GLMHMM(n_states=2)
-        model.setup(**{key: "kmeans"})
-        assert model._model_use_kmeans[key] is True
-
     @pytest.mark.parametrize(
         "key, kmeans_callable",
         [
@@ -262,119 +248,6 @@ class TestGLMHMMInit:
         assert repr_str.startswith("GLMHMM(")
         assert obs_model in repr_str
         assert "n_states" in repr_str
-
-
-# =============================================================================
-# TestGLMHMMSetup — setup() method: arg routing and result storage
-# =============================================================================
-
-
-class TestGLMHMMSetup:
-    """``setup()`` splits HMM keys (-> setup_hmm_initialization) from
-    model keys (-> setup_glm_hmm_initialization). Each pipeline is patched
-    independently below."""
-
-    @pytest.mark.parametrize("func_name", FUNC_NAMES)
-    def test_setup_forwards_args_to_correct_pipeline(self, func_name):
-        """Each key reaches the setup function for its own pipeline with its kwargs."""
-        mock_func = _get_mock_func(func_name)
-        mock_result = MagicMock()
-        model = GLMHMM(n_states=2)
-        with patch(_patch_path_for(func_name)) as mock_setup:
-            mock_setup.return_value = mock_result
-            model.setup(
-                **{func_name: mock_func, func_name + "_kwargs": MOCK_VALID_KWARGS}
-            )
-        assert mock_setup.call_args.kwargs[func_name] is mock_func
-        assert mock_setup.call_args.kwargs[func_name + "_kwargs"] == MOCK_VALID_KWARGS
-
-    @pytest.mark.parametrize("func_name", FUNC_NAMES)
-    def test_setup_stores_pipeline_result(self, func_name):
-        """The return of the relevant setup_* fn is stored on the matching attr."""
-        mock_func = _get_mock_func(func_name)
-        mock_result = MagicMock()
-        model = GLMHMM(n_states=2)
-        with patch(_patch_path_for(func_name)) as mock_setup:
-            mock_setup.return_value = mock_result
-            model.setup(**{func_name: mock_func})
-        if func_name in _GLM_FUNC_NAMES:
-            assert model._model_initialization_funcs is mock_result
-        else:
-            assert model._hmm_initialization_funcs is mock_result
-
-    @pytest.mark.parametrize(
-        "provided_names",
-        [
-            list(combo)
-            for r in range(2, len(FUNC_NAMES) + 1)
-            for combo in itertools.combinations(FUNC_NAMES, r)
-        ],
-    )
-    def test_setup_partial_args_forwarded(self, provided_names):
-        """Each pipeline receives only its own keys; the rest stay at None."""
-        mock_funcs = {fn: _get_mock_func(fn) for fn in provided_names}
-        model = GLMHMM(n_states=2)
-        with patch(_PATCH_PATH_HMM) as mock_hmm, patch(_PATCH_PATH_MODEL) as mock_model:
-            mock_hmm.return_value = MagicMock()
-            mock_model.return_value = MagicMock()
-            model.setup(**{fn: mock_funcs[fn] for fn in provided_names})
-
-        def assert_pipeline(mock_setup, pipeline_keys):
-            for fn in pipeline_keys:
-                expected = mock_funcs[fn] if fn in provided_names else None
-                assert mock_setup.call_args.kwargs[fn] is expected
-
-        assert_pipeline(mock_hmm, _HMM_FUNC_NAMES)
-        assert_pipeline(mock_model, _MODEL_FUNC_NAMES)
-
-    @pytest.mark.parametrize("func_name", FUNC_NAMES)
-    def test_setup_consecutive_calls_thread_init_funcs(self, func_name):
-        """A second setup() targeting a different key in the same pipeline sees
-        the first call's result as ``init_funcs`` — so previously configured
-        keys are preserved across calls."""
-        pipeline = (
-            _MODEL_FUNC_NAMES if func_name in _GLM_FUNC_NAMES else _HMM_FUNC_NAMES
-        )
-        other_key = next(k for k in pipeline if k != func_name)
-
-        first_result = MagicMock()
-        model = GLMHMM(n_states=2)
-        patch_path = _patch_path_for(func_name)
-
-        with patch(patch_path) as mock_setup:
-            mock_setup.return_value = first_result
-            model.setup(**{func_name: _get_mock_func(func_name)})
-
-        with patch(patch_path) as mock_setup:
-            mock_setup.return_value = MagicMock()
-            model.setup(**{other_key: _get_mock_func(other_key)})
-            assert mock_setup.call_args.kwargs["init_funcs"] is first_result
-
-    # -------------------------------------------------------------------------
-    # Literal-vs-registry consistency
-    # -------------------------------------------------------------------------
-    @pytest.mark.parametrize(
-        "param_name, registry",
-        [
-            ("initial_proba_init", AVAILABLE_INIT_FUNCTIONS["initial_proba_init"]),
-            (
-                "transition_proba_init",
-                AVAILABLE_INIT_FUNCTIONS["transition_proba_init"],
-            ),
-            ("glm_params_init", AVAIL_INIT_FUNCTIONS_GLM["glm_params_init"]),
-            ("scale_init", AVAIL_INIT_FUNCTIONS_GLM["scale_init"]),
-        ],
-    )
-    def test_setup_literal_options_match_registry(self, param_name, registry):
-        """``setup()`` Literal annotations must enumerate exactly the built-in
-        string aliases declared in the init-function registries. If a new
-        built-in is added (or one is removed) without updating the signature,
-        this test fails — preventing silent drift."""
-        literals = extract_literal_options(GLMHMM.setup, param_name)
-        assert literals == set(registry.keys()), (
-            f"Literal options for {param_name!r} in GLMHMM.setup ({literals}) "
-            f"differ from registered keys ({set(registry.keys())})."
-        )
 
 
 # =============================================================================
